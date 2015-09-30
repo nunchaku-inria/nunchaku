@@ -1,0 +1,16 @@
+
+#use "topfind";;
+#require "containers";;
+#require "sequence";;
+
+print_endline "load nunchaku..." ;;
+#directory "_build/src/core";;
+#load "nunchaku_core.cma";;
+
+#directory "_build/src/parsers/";;
+#load "nunchaku_parsers.cma";;
+#install_printer NunAST.print_ty;;
+#install_printer NunAST.print_term;;
+#install_printer NunAST.print_statement;;
+
+print_endline "done.";;
