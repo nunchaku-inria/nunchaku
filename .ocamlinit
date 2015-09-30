@@ -1,6 +1,8 @@
 
 #use "topfind";;
 #require "containers";;
+#require "containers.iter";;
+#require "unix";;
 #require "sequence";;
 
 print_endline "load nunchaku..." ;;

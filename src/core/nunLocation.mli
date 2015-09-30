@@ -41,6 +41,8 @@ val to_string : t -> string
 
 val print_opt : Format.formatter -> t option -> unit
 
+val to_string_opt : t option -> string
+
 (** {2 Value bundled with Location} *)
 
 type 'a with_loc = {

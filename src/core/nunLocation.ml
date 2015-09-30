@@ -80,6 +80,8 @@ let print_opt out = function
   | None -> Format.fprintf out "<no location>"
   | Some pos -> print out pos
 
+let to_string_opt = CCFormat.to_string print_opt
+
 (** {2 Value bundled with Location} *)
 
 type 'a with_loc = {

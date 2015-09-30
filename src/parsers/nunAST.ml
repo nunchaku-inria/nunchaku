@@ -6,10 +6,13 @@
 module Loc = NunLocation
 
 exception ParseError of Loc.t
+exception SyntaxError of string * Loc.t option
 
 let () = Printexc.register_printer
   (function
     | ParseError loc -> Some ("parse error at " ^ Loc.to_string loc)
+    | SyntaxError (msg, loc) ->
+        Some (Printf.sprintf "syntax error: %s at %s" msg (Loc.to_string_opt loc))
     | _ -> None
   )
 
@@ -46,6 +49,17 @@ let fun_l ?loc vars t = List.fold_right (fun v t -> fun_ ?loc v t) vars t
 
 let decl ?loc v t = Loc.with_loc ?loc (Decl(v,t))
 let def ?loc v t = Loc.with_loc ?loc (Def (v,t))
+
+(* all elements are distinct? *)
+let rec all_diff_ = function
+  | [_] | [] -> true
+  | x :: tail -> not (List.mem x tail) && all_diff_ tail
+
+(* [def_l v vars t] is [def v (fun vars => t)] *)
+let def_l ?loc v vars t =
+  if not (all_diff_ (v::vars)) then raise (SyntaxError ("non-linear pattern", loc));
+  def ?loc v (fun_l ?loc vars t)
+
 let axiom ?loc t = Loc.with_loc ?loc (Axiom t)
 
 let pf = Format.fprintf

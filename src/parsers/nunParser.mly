@@ -121,10 +121,10 @@ statement:
       let loc = L.mk_pos $startpos $endpos in
       A.decl ~loc v t
     }
-  | DEF v=raw_var EQDEF t=term DOT
+  | DEF v=raw_var l=raw_var* EQDEF t=term DOT
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.def ~loc v t
+      A.def_l ~loc v l t
     }
   | AXIOM t=term DOT
     {
