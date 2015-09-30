@@ -1,7 +1,7 @@
 S src/core
-S src/parse/
+S src/parsers/
 B _build/src/core
-B _build/src/parse
+B _build/src/parsers
 PKG containers
 PKG sequence
 FLG -w +a -w -4 -w -44
