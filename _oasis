@@ -12,18 +12,23 @@ AlphaFeatures: compiled_setup_ml, ocamlbuild_more_args
 
 Synopsis:    A counter-example finder for higher-order logic
 
+XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain'"
+
 Library "nunchaku_core"
   Path:             src/core/
-  Modules:          NunVar, NunIntf, NunUtils
-  BuildDepends:     containers
+  Modules:          NunVar, NunLocation, NunIntf, NunUtils
+  Install:          true
+  BuildDepends:     containers, sequence
 
 Library "nunchaku_parsers"
   Path:             src/parsers/
   Modules:          NunLexer, NunParser, NunAST
+  Install:          true
   BuildTools:       menhir
+  BuildDepends:     nunchaku_core
 
 Executable nunchaku
-  Path:             src/main
+  Path:             src/main/
   Install:          true
   CompiledObject:   native
   MainIs:           nunchaku.ml
