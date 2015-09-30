@@ -1,0 +1,13 @@
+= Nunchaku
+
+A counter-example finder for higher-order logic, designed to be used from
+various proof assistants. A spiritual successor to Nitpick.
+
+NOTE: currently in initial development phase, not ready for use.
+
+== License
+
+Free software under the BSD license. See file 'LICENSE' for more details.
+
+
+
