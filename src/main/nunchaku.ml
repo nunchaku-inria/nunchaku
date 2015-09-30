@@ -48,6 +48,6 @@ let () =
   E.catch (main ())
     ~ok:(fun () -> exit 0)
     ~err:(fun msg ->
-      Utils.debugf 1 "error: %s" msg;
+      Utils.debugf 0 "%s" msg;
       exit 1
     )
