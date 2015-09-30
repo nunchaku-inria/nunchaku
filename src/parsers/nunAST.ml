@@ -87,3 +87,7 @@ let print_statement out st = match Loc.get st with
   | Def (v, t) -> pf out "@[def %s := %a.@]" v print_term t
   | Axiom t -> pf out "@[axiom %a.@]" print_term t
 
+let print_statement_list out l =
+  Format.fprintf out "@[<v>%a@]"
+    (CCFormat.list ~start:"" ~stop:"" ~sep:"" print_statement) l
+

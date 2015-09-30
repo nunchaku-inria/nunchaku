@@ -16,6 +16,8 @@ type ty = NunAST.ty
 
 val parse_file : string -> statement list or_error
 
+val parse_stdin : unit -> statement list or_error
+
 val ty_of_string : string -> ty or_error
 
 val ty_of_string_exn : string -> ty

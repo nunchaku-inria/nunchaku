@@ -82,6 +82,14 @@ rule token = parse
     with e ->
       E.fail (Printexc.to_string e)
 
+  let parse_stdin () =
+    try
+      let lexbuf = Lexing.from_channel stdin in
+      Loc.set_file lexbuf "<stdin>"; (* for error reporting *)
+      E.return (NunParser.parse_statement_list token lexbuf)
+    with e ->
+      E.fail (Printexc.to_string e)
+
   let parse_str_ p s = p token (Lexing.from_string s)
 
   let try_parse_ p s =
