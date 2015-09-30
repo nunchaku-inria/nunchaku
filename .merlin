@@ -1,0 +1,6 @@
+S src/core
+S src/parse/
+B _build/src/core
+B _build/src/parse
+PKG containers
+FLG -w +a -w -4 -w -44
