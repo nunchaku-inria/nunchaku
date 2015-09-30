@@ -18,7 +18,7 @@ Library "nunchaku_core"
   Path:             src/core/
   Modules:          NunVar, NunLocation, NunIntf, NunUtils, NunTransform
   Install:          true
-  BuildDepends:     containers, containers.iter, sequence
+  BuildDepends:     containers, containers.iter, sequence, unix
 
 Library "nunchaku_parsers"
   Path:             src/parsers/
