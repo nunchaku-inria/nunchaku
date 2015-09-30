@@ -89,6 +89,8 @@ type 'a with_loc = {
 
 let with_loc ?loc value = {loc; value; }
 
+let get {value; _} = value
+
 (** {2 Lexbuf} *)
 
 let set_file buf filename =

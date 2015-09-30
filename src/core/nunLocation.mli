@@ -51,6 +51,9 @@ type 'a with_loc = {
 val with_loc: ?loc:t -> 'a -> 'a with_loc
 (** [with_loc ?loc x] makes a value with the given location *)
 
+val get : 'a with_loc -> 'a
+(** Extract the value *)
+
 (** {2 Lexbuf}
 
   Utils to set/get the file in a lexbuf *)

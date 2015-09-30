@@ -36,11 +36,13 @@
 %start <NunAST.statement> parse_statement
 %start <NunAST.statement list> parse_statement_list
 %start <NunAST.term> parse_term
+%start <NunAST.ty> parse_ty
 
 %%
 
 parse_statement: s=statement EOI {s}
 parse_term: t=term EOI {t}
+parse_ty: t=ty EOI {t}
 parse_statement_list: l=list(statement) EOI { l }
 
 ty_var:
@@ -59,17 +61,26 @@ atomic_ty:
   | v=ty_var { v }
   | LEFT_PAREN t=ty RIGHT_PAREN { t }
 
-ty:
+/* application */
+app_ty:
   | t=atomic_ty { t }
   | t=atomic_ty u=atomic_ty+
     {
       let loc = L.mk_pos $startpos $endpos in
       A.ty_app ~loc t u
     }
-  | t=atomic_ty ARROW u=ty
+
+ty:
+  | t=app_ty {t}
+  | t=app_ty ARROW u=ty
     {
       let loc = L.mk_pos $startpos $endpos in
       A.ty_arrow ~loc t u
+    }
+  | error
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      raise (A.ParseError loc)
     }
 
 /* variable without a location */
@@ -98,6 +109,11 @@ term:
       let loc = L.mk_pos $startpos $endpos in
       A.fun_l ~loc vars t
     }
+  | error
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      raise (A.ParseError loc)
+    }
 
 statement:
   | DECL v=raw_var COLUMN t=ty DOT
@@ -114,6 +130,11 @@ statement:
     {
       let loc = L.mk_pos $startpos $endpos in
       A.axiom ~loc t
+    }
+  | error
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      raise (A.ParseError loc)
     }
 
 %%

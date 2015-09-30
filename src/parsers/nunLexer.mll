@@ -57,35 +57,43 @@ rule token = parse
 
 {
   module E = CCError
+  module Loc = NunLocation
 
   type 'a or_error = [`Ok of 'a | `Error of string ]
 
   type statement = NunAST.statement
   type term = NunAST.term
+  type ty = NunAST.ty
 
-  let parse_file s =
+  let () = Printexc.register_printer
+    (function
+      | LexError msg -> Some ("lexing error: " ^ msg )
+      | _ -> None
+    )
+
+  let parse_file file =
     try
-      CCIO.with_in s
+      CCIO.with_in file
         (fun ic ->
           let lexbuf = Lexing.from_channel ic in
+          Loc.set_file lexbuf file; (* for error reporting *)
           E.return (NunParser.parse_statement_list token lexbuf)
         )
     with e ->
       E.fail (Printexc.to_string e)
 
-  let term_of_string s : NunAST.term or_error =
-    try E.return (NunParser.parse_term token (Lexing.from_string s))
-    with
-    | NunParser.Error -> E.fail "parse error"
-    | LexError msg -> E.fail msg
+  let parse_str_ p s = p token (Lexing.from_string s)
 
-  let term_of_string_exn s = E.get_exn (term_of_string s)
+  let try_parse_ p s =
+    try E.return (parse_str_ p s)
+    with e -> E.fail (Printexc.to_string e)
 
-  let statement_of_string s : NunAST.statement or_error =
-    try E.return (NunParser.parse_statement token (Lexing.from_string s))
-    with
-    | NunParser.Error -> E.fail "parse error"
-    | LexError msg -> E.fail msg
+  let ty_of_string = try_parse_ NunParser.parse_ty
+  let ty_of_string_exn = parse_str_ NunParser.parse_ty
 
-  let statement_of_string_exn s = E.get_exn (statement_of_string s)
+  let term_of_string = try_parse_ NunParser.parse_term
+  let term_of_string_exn = parse_str_ NunParser.parse_term
+
+  let statement_of_string = try_parse_ NunParser.parse_statement
+  let statement_of_string_exn = parse_str_ NunParser.parse_statement
 }
