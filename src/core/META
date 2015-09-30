@@ -1,0 +1,12 @@
+# OASIS_START
+# DO NOT EDIT (digest: 4178f453839ddc128f40b099efe24cb8)
+version = "0.1"
+description = "A counter-example finder for higher-order logic"
+requires = "containers sequence"
+archive(byte) = "nunchaku.cma"
+archive(byte, plugin) = "nunchaku.cma"
+archive(native) = "nunchaku.cmxa"
+archive(native, plugin) = "nunchaku.cmxs"
+exists_if = "nunchaku.cma"
+# OASIS_STOP
+

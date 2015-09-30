@@ -1,0 +1,11 @@
+# OASIS_START
+# DO NOT EDIT (digest: 76f53989fec9be61f2a231eb113a58aa)
+version = "0.1"
+description = "A counter-example finder for higher-order logic"
+archive(byte) = "nunchaku_parsers.cma"
+archive(byte, plugin) = "nunchaku_parsers.cma"
+archive(native) = "nunchaku_parsers.cmxa"
+archive(native, plugin) = "nunchaku_parsers.cmxs"
+exists_if = "nunchaku_parsers.cma"
+# OASIS_STOP
+
