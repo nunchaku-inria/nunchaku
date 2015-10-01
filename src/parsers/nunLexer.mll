@@ -57,6 +57,7 @@ rule token = parse
   | "and" { AND }
   | "true" { LOGIC_TRUE }
   | "false" { LOGIC_FALSE }
+  | "forall" { FORALL }
   | '&' { LOGIC_AND }
   | '|' { LOGIC_OR }
   | '~' { LOGIC_NOT }

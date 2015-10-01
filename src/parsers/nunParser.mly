@@ -34,6 +34,7 @@
 %token LOGIC_EQUIV
 %token LOGIC_FORALL
 %token LOGIC_EXISTS
+
 %token PROP
 %token TYPE
 
@@ -43,6 +44,7 @@
 
 %token ARROW
 %token FUN
+%token FORALL
 
 %token <string> LOWER_WORD
 %token <string> UPPER_WORD
@@ -59,17 +61,25 @@ parse_term: t=term EOI {t}
 parse_ty: t=ty EOI {t}
 parse_statement_list: l=list(statement) EOI { l }
 
+/* variable without a location */
+raw_var: w=LOWER_WORD { w }
+
 ty_var:
   | WILDCARD
     {
       let loc = L.mk_pos $startpos $endpos in
       A.ty_wildcard ~loc ()
     }
-  | name=LOWER_WORD
+  | v=raw_var
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.ty_var ~loc name
+      A.ty_var ~loc v
     }
+
+ty_quantified_var:
+  | v=raw_var { v }
+  | v=raw_var COLUMN TYPE { v }
+  | LEFT_PAREN v=raw_var COLUMN TYPE RIGHT_PAREN { v }
 
 atomic_ty:
   | v=ty_var { v }
@@ -77,6 +87,11 @@ atomic_ty:
     {
       let loc = L.mk_pos $startpos $endpos in
       A.ty_sym ~loc Sym.type_
+    }
+  | PROP
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.ty_sym ~loc Sym.prop
     }
   | LEFT_PAREN t=ty RIGHT_PAREN { t }
 
@@ -96,18 +111,20 @@ ty:
       let loc = L.mk_pos $startpos $endpos in
       A.ty_arrow ~loc t u
     }
+  | FORALL vars=ty_quantified_var+ DOT t=ty
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.ty_forall_list ~loc vars t
+    }
   | error
     {
       let loc = L.mk_pos $startpos $endpos in
       raise (A.ParseError loc)
     }
 
-/* variable without a location */
-raw_var: w=LOWER_WORD { w }
-
 typed_var:
   | v=raw_var { v, None }
-  | v=raw_var COLUMN t=atomic_ty { v, Some t }
+  | LEFT_PAREN v=raw_var COLUMN t=ty RIGHT_PAREN { v, Some t }
 
 var:
   | name=raw_var
@@ -118,11 +135,6 @@ var:
 
 atomic_term:
   | v=var { v }
-  | PROP
-    {
-      let loc = L.mk_pos $startpos $endpos in
-      A.sym ~loc Sym.prop
-    }
   | LOGIC_TRUE
     {
       let loc = L.mk_pos $startpos $endpos in

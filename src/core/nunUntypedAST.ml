@@ -55,6 +55,8 @@ let ty_app ?loc a l = Loc.with_loc ?loc (TyApp (a,l))
 let ty_arrow ?loc a b = Loc.with_loc ?loc (TyArrow (a,b))
 let ty_forall ?loc v t = Loc.with_loc ?loc (TyForall (v,t))
 
+let ty_forall_list ?loc = List.fold_right (ty_forall ?loc)
+
 let sym ?loc s = Loc.with_loc ?loc (Sym s)
 let var ?loc v = Loc.with_loc ?loc (Var v)
 let app ?loc t l = Loc.with_loc ?loc (App (t,l))
@@ -95,7 +97,7 @@ let rec print_ty out ty = match Loc.get ty with
       pf out "@[<2>%a ->@ %a@]"
         print_ty_in_arrow a print_ty b
   | TyForall (v, t) ->
-      pf out "@[<2>pi %s.@ %a@]" v print_ty t
+      pf out "@[<2>forall (%s:type).@ %a@]" v print_ty t
 and print_ty_in_app out ty = match Loc.get ty with
   | TyApp _ | TyArrow _ | TyForall _ ->
       pf out "(%a)" print_ty ty
@@ -107,17 +109,26 @@ and print_ty_in_arrow out ty = match Loc.get ty with
 
 let print_typed_var out (v,ty) = match ty with
   | None -> pf out "%s" v
-  | Some ty -> pf out "%s:%a" v print_ty_in_app ty
+  | Some ty -> pf out "(%s:%a)" v print_ty ty
 
 let rec print_term out term = match Loc.get term with
   | Sym s -> Sym.print out s
   | Var v -> CCFormat.string out v
+  | App (f, [a;b]) ->
+      begin match Loc.get f with
+      | Sym s when Sym.fixity s = `Infix ->
+          pf out "@[<2>%a@ %a@ %a@]"
+            print_term_inner a Sym.print s print_term_inner b
+      | _ ->
+          pf out "@[<2>%a@ %a@ %a@]" print_term_inner f
+            print_term_inner a print_term_inner b
+      end
   | App (a, l) ->
       pf out "@[<2>%a@ %a@]"
         print_term_inner a
         (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_term_inner) l
   | Fun (v, t) ->
-      pf out "@[<2>fun %a =>@ %a@]" print_typed_var v print_term t
+      pf out "@[<2>fun %a.@ %a@]" print_typed_var v print_term t
   | Let (v,t,u) ->
       pf out "@[<2>let %s :=@ %a in@ %a@]" v print_term t print_term u
   | Forall (v, t) ->
