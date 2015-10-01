@@ -8,6 +8,7 @@ module Utils = NunUtils
 (** {2 Options} *)
 
 let print_ = ref false
+let version_ = ref false
 let file = ref ""
 let set_file f =
   if !file <> ""
@@ -26,6 +27,7 @@ let options_debug_ = Utils.Section.iter
 let options = Arg.align (
   options_debug_ @
   [ "--print", Arg.Set print_, " print input and exit"
+  ; "--version", Arg.Set version_, " print version and exit"
   ]
 )
 
@@ -33,6 +35,10 @@ let options = Arg.align (
 let main () =
   let open CCError.Infix in
   Arg.parse options set_file "usage: nunchaku [options] file";
+  if !version_ then (
+    Format.printf "nunchaku %s@." Const.version;
+    exit 0    
+  );
   ( if !file = "" then (
       Utils.debugf 1 "will read on stdin";
       NunLexer.parse_stdin ()
