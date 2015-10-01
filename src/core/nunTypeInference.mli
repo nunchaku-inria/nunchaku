@@ -13,16 +13,9 @@ exception ScopingError of string * string * loc option
 
 (** {2 Interface For Types} *)
 module type TYPE = sig
-  include NunType_intf.S
+  include NunType_intf.UNIFIABLE
 
   val loc : t -> loc option
-
-  val deref : t -> t option
-
-  val bind : var:t -> t -> unit
-  (** [bind ~var t] binds the variable [var] to [t].
-      @raise Invalid_argument if [var] is not a variable or if [var]
-        is already bound *)
 
   val sym : ?loc:loc -> sym -> t
   val var : ?loc:loc -> var -> t
@@ -73,10 +66,53 @@ end
 (** {2 Type Inference/Checking} *)
 
 module ConvertTerm(Term : TERM) : sig
-  type env
+  module ConvertType : module type of ConvertType(Term.Ty)
+
+  type term_env
+
+  type env = {
+    ty: ConvertType.env;
+    term: term_env;
+  }
 
   val convert : env:env -> NunUntypedAST.term -> Term.t or_error
   (** [convert ~env ty] converts the raw, unscoped type [ty] into a
       type from the representation [Ty.t].
       It returns an error if the type is ill-scoped. *)
+
+  val convert_exn : env:env -> NunUntypedAST.term -> Term.t
+  (** Unsafe version of {!convert}
+      @raise TypeError if it fails to  type properly *)
 end
+
+(** {2 Statements} *)
+
+module type STATEMENT = sig
+  include NunStatement_intf.S
+
+  module T : TERM
+
+  val loc : (_,_) t -> loc option
+
+  val decl : ?loc:loc -> var -> T.Ty.t -> (_, T.Ty.t) t
+  val def : ?loc:loc -> var -> T.t -> (T.t, _) t
+  val axiom : ?loc:loc -> T.t -> (T.t,_) t
+end
+
+module ConvertStatement(St : STATEMENT) : sig
+  module ConvertTerm : module type of ConvertTerm(St.T)
+
+  type t = (St.T.t, St.T.Ty.t) St.t
+
+  type env = ConvertTerm.env
+
+  val convert : env:env -> NunUntypedAST.statement -> (t * env) or_error
+
+  val convert_exn : env:env -> NunUntypedAST.statement -> t * env
+  (** Unsafe version of {!convert} *)
+
+  val convert_list : env:env -> NunUntypedAST.statement list -> (t list * env) or_error
+
+  val convert_list_exn : env:env -> NunUntypedAST.statement list -> t list * env
+end
+

@@ -28,16 +28,9 @@ let () = Printexc.register_printer
 
 (** {2 Interface For Types} *)
 module type TYPE = sig
-  include NunType_intf.S
+  include NunType_intf.UNIFIABLE
 
   val loc : t -> loc option
-
-  val deref : t -> t option
-
-  val bind : var:t -> t -> unit
-  (** [bind ~var t] binds the variable [var] to [t].
-      @raise Invalid_argument if [var] is not a variable or if [var]
-        is already bound *)
 
   val sym : ?loc:loc -> sym -> t
   val var : ?loc:loc -> var -> t
@@ -54,6 +47,8 @@ module ConvertType(Ty : TYPE) = struct
   type t = Ty.t
 
   type env = t MStr.t
+
+  let add_env ~env v ty = MStr.add v ty env
 
   let prop = Ty.sym Sym.prop
 
@@ -109,7 +104,115 @@ let () = Printexc.register_printer
   )
 
 module ConvertTerm(Term : TERM) = struct
-  type env = unit (* TODO *)
+  module Ty = Term.Ty
+  module ConvertType = ConvertType(Ty)
 
-  let convert ~env t = assert false (* TODO *)
+  module Unif = NunTypeUnify.Make(Ty)
+
+  type term_def =
+    | Def of Term.t
+    | Decl of Ty.t
+
+  type term_env = {
+    names: Var.t MStr.t; (* name -> variable, post-scoping *)
+    defs : term_def Var.Map.t;  (* var -> type/definition *)
+  }
+
+  (* name -> definition *)
+
+  type env = {
+    ty: ConvertType.env;
+    term: term_env;
+  }
+
+  let add_name ~env v var = {env with term={env.term with names=MStr.add v var env.term.names}}
+
+  let add_def ~env v t = {env with term={env.term with defs=Var.Map.add v (Def t) env.term.defs}}
+
+  let add_ty ~env v t = {env with term={env.term with defs=Var.Map.add v (Decl t) env.term.defs}}
+
+  let add_ty_env ~env v ty = {env with ty=ConvertType.add_env ~env:env.ty v ty}
+
+  (* obtain the type of a term *)
+  let get_ty_ t = match Term.ty t with
+    | None -> assert false
+    | Some ty ->
+        match Ty.deref ty with
+        | None -> ty
+        | Some ty' -> ty'
+
+  let convert_exn ~env t = assert false
+
+  let convert ~env t =
+    try E.return (convert_exn ~env t)
+    with e -> E.of_exn e
+end
+
+module type STATEMENT = sig
+  include NunStatement_intf.S
+
+  module T : TERM
+
+  val loc : (_,_) t -> loc option
+
+  val decl : ?loc:loc -> var -> T.Ty.t -> (_, T.Ty.t) t
+  val def : ?loc:loc -> var -> T.t -> (T.t, _) t
+  val axiom : ?loc:loc -> T.t -> (T.t,_) t
+end
+
+module ConvertStatement(St : STATEMENT) = struct
+  module ConvertTerm = ConvertTerm(St.T)
+  module ConvertType = ConvertTerm.ConvertType
+  module T = St.T
+  module Ty = T.Ty
+
+  type t = (T.t, Ty.t) St.t
+
+  type env = ConvertTerm.env
+
+  let convert_exn ~env st =
+    let loc = Loc.get_loc st in
+    match Loc.get st with
+    | A.Decl (v, ty) ->
+        let var = Var.make ~name:v in
+        let env = ConvertTerm.add_name ~env v var in
+        let ty = ConvertType.convert_exn ~env:env.ConvertTerm.ty ty in
+        let env = ConvertTerm.add_ty ~env var ty in
+        St.decl ?loc var ty, env
+    | A.Def ((v, ty_opt), t) ->
+        let var = Var.make ~name:v in
+        let env = ConvertTerm.add_name ~env v var in
+        (* infer type for t *)
+        let t = ConvertTerm.convert_exn ~env t in
+        let env = ConvertTerm.add_def ~env var t in
+        (* unify with [ty_opt] if present *)
+        CCOpt.iter
+          (fun ty ->
+            let ty = ConvertType.convert_exn ~env:env.ConvertTerm.ty ty in
+            ConvertTerm.Unif.unify_exn ty (ConvertTerm.get_ty_ t)
+          ) ty_opt;
+        St.def ?loc var t, env
+    | A.Axiom t ->
+        (* infer type for t *)
+        let t = ConvertTerm.convert_exn ~env t in
+        (* be sure it's a proposition *)
+        ConvertTerm.Unif.unify_exn (ConvertTerm.get_ty_ t) ConvertType.prop;
+        St.axiom ?loc t, env
+
+  let convert ~env st =
+    try E.return (convert_exn ~env st)
+    with e -> E.of_exn e
+
+  let convert_list_exn ~env l =
+    let rec aux acc ~env l = match l with
+      | [] -> List.rev acc, env
+      | st :: l' ->
+          let st, env = convert_exn ~env st in
+          aux (st :: acc) ~env l'
+    in
+    aux [] ~env l
+
+  let convert_list ~env st =
+    try E.return (convert_list_exn ~env st)
+    with e -> E.of_exn e
 end

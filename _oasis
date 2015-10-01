@@ -18,7 +18,9 @@ Library "nunchaku_core"
   Path:             src/core/
   Modules:          NunVar, NunLocation, NunIntf, NunUtils, NunTransform,
                     NunSymbol, NunTerm_intf, NunType_intf, NunUntypedAST,
-                    NunType_mut, NunTerm_typed, NunTypeInference
+                    NunType_mut, NunTerm_typed,
+                    NunTypeUnify, NunTypeInference,
+                    NunStatement_intf, NunStatement_loc
   Install:          true
   BuildDepends:     containers, containers.iter, sequence, unix
 
