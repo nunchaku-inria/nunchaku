@@ -1,5 +1,5 @@
 
-(* This file is free software, part of containers. See file "license" for more details. *)
+(* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Pipeline of Transformations} *)
 
@@ -30,19 +30,30 @@ type ('a, 'b) transformation = ('a, 'b) t
     Allows chaining the transformations in a type-safe way *)
 
 module Pipe : sig
-  (** Composite transformation from ['a] to ['b] *)
-  type ('a, 'b) t =
-    | Id : ('a, 'a) t  (** no transformation *)
-    | Comp : ('a, 'b) transformation * ('b, 'c) t -> ('a, 'c) t
+  (** Composite transformation from ['a] to ['b], yielding results ['res] *)
+  type ('a, 'b, 'res) t =
+    | Id : ('a, 'a, unit) t  (** no transformation *)
+    | Call : ('a -> ('a option * 'res) lazy_list) -> ('a, 'a, 'res) t
+    | Comp : ('a, 'b) transformation * ('b, 'c, 'res) t -> ('a, 'c, 'res) t
 
-  val id : ('a, 'a) t
+  (* TODO: replace/complement Id by the function from {!run}, b -> (b option * res) list *)
 
-  val compose : ('a, 'b) transformation -> ('b, 'c) t -> ('a, 'c) t
+  val id : ('a, 'a, unit) t
+
+  val compose : ('a, 'b) transformation -> ('b, 'c, 'res) t -> ('a, 'c, 'res) t
+
+  val call :
+    ('a, 'b, _) t ->
+    f:('b -> ('b option * 'res) lazy_list) ->
+    ('a, 'b, 'res) t
+  (** [call p ~f] is the same pipe as [p], but calls [f] on each
+      value [y] obtained through the pipe to obtain a result and a possible
+      new value of type ['b]. *)
 end
 
-val run : pipe:('a, 'b) Pipe.t -> 'a -> f:('b -> 'b lazy_list) -> 'a lazy_list
+val run : pipe:('a, 'b, 'res) Pipe.t -> 'a -> ('a option * 'res) lazy_list
 (** [run ~pipe x ~f] runs [x] through the pipe [pipe], in a lazy way,
-    and yields each resulting [y: 'b] to [f]. For each [f y], then,
-    the reverse transformation is done to obtain a value of type ['a] *)
+    and converts back each resulting [y: 'b] (if any) into a ['a] along
+    with the result. *)
 
 

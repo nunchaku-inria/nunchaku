@@ -1,5 +1,5 @@
 
-(* This file is free software, part of containers. See file "license" for more details. *)
+(* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Pipeline of Transformations} *)
 
@@ -29,24 +29,35 @@ type ('a, 'b) transformation = ('a, 'b) t
     Allows chaining the transformations in a type-safe way *)
 
 module Pipe = struct
-  type ('a, 'b) t =
-    | Id : ('a, 'a) t  (** no transformation *)
-    | Comp : ('a, 'b) transformation * ('b, 'c) t -> ('a, 'c) t
+  type ('a, 'b, 'res) t =
+    | Id : ('a, 'a, unit) t  (** no transformation *)
+    | Call : ('a -> ('a option * 'res) lazy_list) -> ('a, 'a, 'res) t
+    | Comp : ('a, 'b) transformation * ('b, 'c, 'res) t -> ('a, 'c, 'res) t
 
   let id = Id
   let compose a p = Comp (a, p)
+
+  let rec call
+    : type a b c res. (a, b, c) t -> f:(b -> (b option * res) lazy_list) -> (a, b, res) t
+    = fun p ~f -> match p with
+    | Id -> Call f
+    | Call _ -> Call f
+    | Comp (trans, p') -> Comp (trans, call p' ~f)
 end
 
 let rec run
-  : type a b. pipe:(a,b) Pipe.t -> a -> f:(b -> b lazy_list) -> a lazy_list
-  = fun ~pipe x ~f -> match pipe with
-  | Pipe.Id -> f x
+  : type a b res. pipe:(a,b,res) Pipe.t -> a -> (a option * res) lazy_list
+  = fun ~pipe x -> match pipe with
+  | Pipe.Id -> CCKList.return (None, ())
+  | Pipe.Call f -> f x
   | Pipe.Comp (Ex trans, pipe') ->
       let (>>=) = CCKList.(>>=) in
       trans.encode x
       >>= fun (y, st) ->
-      run ~pipe:pipe' y ~f
-      >>= fun y' ->
-      CCKList.return (trans.decode st y')
+      run ~pipe:pipe' y
+      >>= fun (y', res) ->
+      (* decode [y'], if needed *)
+      let x' = CCOpt.map (trans.decode st) y' in
+      CCKList.return (x', res)
 
 
