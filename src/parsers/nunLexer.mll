@@ -65,6 +65,7 @@ rule token = parse
   | '?' { LOGIC_EXISTS }
   | "=>" { LOGIC_IMPLY }
   | "<=>" { LOGIC_EQUIV }
+  | '@' { AT }
   | lower_word { LOWER_WORD(Lexing.lexeme lexbuf) }
   | upper_word { UPPER_WORD(Lexing.lexeme lexbuf) }
   | _ as c { raise (LexError (Printf.sprintf "lexer fails on char '%c'" c)) }

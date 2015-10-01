@@ -19,27 +19,27 @@ let () = Printexc.register_printer
 
 type var = string
 
-type ty = ty_node Loc.with_loc
-and ty_node =
-  | TySym of Sym.t (** Builtin constant *)
-  | TyWildcard
-  | TyVar of var
-  | TyApp of ty * ty list
-  | TyArrow of ty * ty
-  | TyForall of var * ty
-
-(** A variable with, possibly, its type *)
-type typed_var = var * ty option
-
 type term = term_node Loc.with_loc
 and term_node =
+  | Wildcard
   | Sym of Sym.t
   | Var of var
+  | AtVar of var  (* variable without implicit arguments *)
   | App of term * term list
   | Fun of typed_var * term
   | Let of var * term * term
   | Forall of typed_var * term
   | Exists of typed_var * term
+  | TyArrow of ty * ty
+  | TyForall of var * ty
+
+(* we mix terms and types because it is hard to know, in
+  [@cons a b c], which ones of [a, b, c] are types, and which ones 
+  are terms *)
+and ty = term
+
+(** A variable with, possibly, its type *)
+and typed_var = var * ty option
 
 type statement_node =
   | Decl of var * ty (* declaration of uninterpreted symbol *)
@@ -48,15 +48,7 @@ type statement_node =
 
 type statement = statement_node Loc.with_loc
 
-let ty_sym ?loc s = Loc.with_loc ?loc (TySym s)
-let ty_wildcard ?loc () = Loc.with_loc ?loc TyWildcard
-let ty_var ?loc v = Loc.with_loc ?loc (TyVar v)
-let ty_app ?loc a l = Loc.with_loc ?loc (TyApp (a,l))
-let ty_arrow ?loc a b = Loc.with_loc ?loc (TyArrow (a,b))
-let ty_forall ?loc v t = Loc.with_loc ?loc (TyForall (v,t))
-
-let ty_forall_list ?loc = List.fold_right (ty_forall ?loc)
-
+let wildcard ?loc () = Loc.with_loc ?loc Wildcard
 let sym ?loc s = Loc.with_loc ?loc (Sym s)
 let var ?loc v = Loc.with_loc ?loc (Var v)
 let app ?loc t l = Loc.with_loc ?loc (App (t,l))
@@ -65,6 +57,10 @@ let fun_l ?loc = List.fold_right (fun_ ?loc)
 let let_ ?loc v t u = Loc.with_loc ?loc (Let (v,t,u))
 let forall ?loc v t = Loc.with_loc ?loc (Forall (v, t))
 let exists ?loc v t = Loc.with_loc ?loc (Exists (v, t))
+let ty_arrow ?loc a b = Loc.with_loc ?loc (TyArrow (a,b))
+let ty_forall ?loc v t = Loc.with_loc ?loc (TyForall (v,t))
+
+let ty_forall_list ?loc = List.fold_right (ty_forall ?loc)
 
 let forall_list ?loc = List.fold_right (forall ?loc)
 let exists_list ?loc = List.fold_right (exists ?loc)
@@ -85,35 +81,11 @@ let def_l ?loc v vars t =
 
 let pf = Format.fprintf
 
-let rec print_ty out ty = match Loc.get ty with
-  | TySym s -> Sym.print out s
-  | TyWildcard -> CCFormat.string out "_"
-  | TyVar v -> CCFormat.string out v
-  | TyApp (a, l) ->
-      pf out "@[<2>%a@ %a@]"
-        print_ty_in_app a
-        (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_ty_in_app) l
-  | TyArrow (a, b) ->
-      pf out "@[<2>%a ->@ %a@]"
-        print_ty_in_arrow a print_ty b
-  | TyForall (v, t) ->
-      pf out "@[<2>forall (%s:type).@ %a@]" v print_ty t
-and print_ty_in_app out ty = match Loc.get ty with
-  | TyApp _ | TyArrow _ | TyForall _ ->
-      pf out "(%a)" print_ty ty
-  | TySym _ | TyVar _ | TyWildcard -> print_ty out ty
-and print_ty_in_arrow out ty = match Loc.get ty with
-  | TyArrow _ | TyForall _ ->
-      pf out "(%a)" print_ty ty
-  | TyApp _ | TySym _ | TyVar _ | TyWildcard -> print_ty out ty
-
-let print_typed_var out (v,ty) = match ty with
-  | None -> pf out "%s" v
-  | Some ty -> pf out "(%s:%a)" v print_ty ty
-
 let rec print_term out term = match Loc.get term with
+  | Wildcard -> CCFormat.string out "_"
   | Sym s -> Sym.print out s
   | Var v -> CCFormat.string out v
+  | AtVar v -> pf out "@%s" v
   | App (f, [a;b]) ->
       begin match Loc.get f with
       | Sym s when Sym.fixity s = `Infix ->
@@ -135,13 +107,34 @@ let rec print_term out term = match Loc.get term with
       pf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
   | Exists (v, t) ->
       pf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
+  | TyArrow (a, b) ->
+      pf out "@[<2>%a ->@ %a@]"
+        print_term_in_arrow a print_term b
+  | TyForall (v, t) ->
+      pf out "@[<2>forall (%s:type).@ %a@]" v print_term t
 and print_term_inner out term = match Loc.get term with
-  | App _ | Fun _ | Let _ | Forall _ | Exists _ ->
+  | App _ | Fun _ | Let _ | Forall _ | Exists _ | TyForall _ | TyArrow _ ->
       pf out "(%a)" print_term term
-  | Sym _ | Var _ -> print_term out term
+  | Sym _ | AtVar _ | Var _ | Wildcard -> print_term out term
+and print_term_in_arrow out t = match Loc.get t with
+  | Wildcard 
+  | Sym _
+  | Var _
+  | AtVar _
+  | App (_,_) -> print_term out t
+  | Let (_,_,_)
+  | Forall (_,_)
+  | Exists (_,_)
+  | Fun (_,_)
+  | TyArrow (_,_)
+  | TyForall (_,_) -> pf out "@[(%a)@]" print_term t
+
+and print_typed_var out (v,ty) = match ty with
+  | None -> pf out "%s" v
+  | Some ty -> pf out "(%s:%a)" v print_term ty
 
 let print_statement out st = match Loc.get st with
-  | Decl (v, t) -> pf out "@[val %s : %a.@]" v print_ty t
+  | Decl (v, t) -> pf out "@[val %s : %a.@]" v print_term t
   | Def (v, t) -> pf out "@[def %a := %a.@]" print_typed_var v print_term t
   | Axiom t -> pf out "@[axiom %a.@]" print_term t
 

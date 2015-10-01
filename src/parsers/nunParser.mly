@@ -24,6 +24,7 @@
 %token LET
 %token IN
 %token AND
+%token AT
 
 %token LOGIC_TRUE
 %token LOGIC_FALSE
@@ -68,12 +69,12 @@ ty_var:
   | WILDCARD
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.ty_wildcard ~loc ()
+      A.wildcard ~loc ()
     }
   | v=raw_var
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.ty_var ~loc v
+      A.var ~loc v
     }
 
 ty_quantified_var:
@@ -91,7 +92,7 @@ atomic_ty:
   | PROP
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.ty_sym ~loc Sym.prop
+      A.sym ~loc Sym.prop
     }
   | LEFT_PAREN t=ty RIGHT_PAREN { t }
 
@@ -101,7 +102,7 @@ app_ty:
   | t=atomic_ty u=atomic_ty+
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.ty_app ~loc t u
+      A.app ~loc t u
     }
 
 ty:
@@ -135,6 +136,11 @@ var:
 
 atomic_term:
   | v=var { v }
+  | AT v=raw_var
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.at_var ~loc v
+    }
   | LOGIC_TRUE
     {
       let loc = L.mk_pos $startpos $endpos in
