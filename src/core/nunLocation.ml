@@ -1,5 +1,5 @@
 
-(* This file is free software, part of containers. See file "license" for more details. *)
+(* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Location in a file} *)
 
@@ -92,6 +92,7 @@ type 'a with_loc = {
 let with_loc ?loc value = {loc; value; }
 
 let get {value; _} = value
+let get_loc {loc; _} = loc
 
 (** {2 Lexbuf} *)
 

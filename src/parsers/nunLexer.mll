@@ -1,5 +1,5 @@
 
-(* This file is free software, part of containers. See file "license" for more details. *)
+(* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Lexer for Nunchaku} *)
 
@@ -46,24 +46,38 @@ rule token = parse
   | ':' { COLUMN }
   | ":=" { EQDEF }
   | "->" { ARROW }
-  | "=>" { DOUBLEARROW }
   | "fun" { FUN }
   | "def" { DEF }
   | "val" { DECL }
+  | "type" { TYPE }
+  | "prop" { PROP }
   | "axiom" { AXIOM }
+  | "let" { LET }
+  | "in" { IN }
+  | "and" { AND }
+  | "true" { LOGIC_TRUE }
+  | "false" { LOGIC_FALSE }
+  | '&' { LOGIC_AND }
+  | '|' { LOGIC_OR }
+  | '~' { LOGIC_NOT }
+  | '!' { LOGIC_FORALL }
+  | '?' { LOGIC_EXISTS }
+  | "=>" { LOGIC_IMPLY }
+  | "<=>" { LOGIC_EQUIV }
   | lower_word { LOWER_WORD(Lexing.lexeme lexbuf) }
   | upper_word { UPPER_WORD(Lexing.lexeme lexbuf) }
   | _ as c { raise (LexError (Printf.sprintf "lexer fails on char '%c'" c)) }
 
 {
   module E = CCError
+  module A = NunUntypedAST
   module Loc = NunLocation
 
   type 'a or_error = [`Ok of 'a | `Error of string ]
 
-  type statement = NunAST.statement
-  type term = NunAST.term
-  type ty = NunAST.ty
+  type statement = A.statement
+  type term = A.term
+  type ty = A.ty
 
   let () = Printexc.register_printer
     (function

@@ -1,38 +1,54 @@
 
-(* This file is free software, part of containers. See file "license" for more details. *)
+(* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-type t = {
-  name: string;
-  mutable id: int;
-}
-(** A symbol. Two symbols for the same name are physically equal *)
+type t =
+  | Prop
+  | Type
+  | Not
+  | And
+  | Or
+  | True
+  | False
+  | Imply
+  | Equiv
 
-type sym = t
+let equal a b = a==b
+let compare = Pervasives.compare
+let hash = Hashtbl.hash
 
-(* Weak table for interning strings *)
-module W = Weak.Make(struct
-  type t = sym
-  let equal a b = a.name = b.name
-  let hash a = Hashtbl.hash a.name
-end)
+let prop = Prop
+let type_ = Type
+let not_ = Not
+let and_ = And
+let or_ = Or
+let true_ = True
+let false_ = False
+let imply = Imply
+let equiv = Equiv
 
-let make =
-  let tbl = W.create 256 in
-  let n = ref 0 in (* unique ID generator *)
-  fun name ->
-    let s = {name; id= ~-1; } in
-    let s' = W.merge tbl s in
-    if s == s' then (
-      (* new symbol *)
-      s'.id <- !n;
-      incr n;
-    );
-    s'
+let fixity = function
+  | Type -> `Prefix
+  | Prop -> `Prefix
+  | Not -> `Prefix
+  | And -> `Infix
+  | Or -> `Infix
+  | True -> `Prefix
+  | False -> `Prefix
+  | Imply -> `Infix
+  | Equiv -> `Infix
 
-let equal a b = a.id = b.id
-let compare a b = Pervasives.compare a.id b.id
-let hash a = a.id land max_int
+let print out s =
+  Format.pp_print_string out
+    (match s with
+    | Type -> "type"
+    | Prop -> "prop"
+    | Not -> "~"
+    | And -> "&"
+    | Or -> "|"
+    | True -> "true"
+    | False -> "false"
+    | Imply -> "==>"
+    | Equiv -> "<=>"
+    )
 
-let print out s = Format.pp_print_string out s.name
-
-let to_string s = s.name
+let to_string = CCFormat.to_string print

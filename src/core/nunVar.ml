@@ -1,5 +1,5 @@
 
-(* This file is free software, part of containers. See file "license" for more details. *)
+(* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 type t = {
   name: string;
@@ -24,3 +24,4 @@ let equal v1 v2 = v1.id = v2.id
 let compare v1 v2 = Pervasives.compare v1.id v2.id
 let hash v = v.id land max_int (* >= 0 *)
 
+let print out v = Format.fprintf out "%s/%d" v.name v.id

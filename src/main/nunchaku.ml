@@ -2,7 +2,7 @@
 (** {1 Main program} *)
 
 module E = CCError
-module A = NunAST
+module A = NunUntypedAST
 module Utils = NunUtils
 
 (** {2 Options} *)

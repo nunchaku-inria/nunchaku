@@ -16,13 +16,15 @@ XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain'"
 
 Library "nunchaku_core"
   Path:             src/core/
-  Modules:          NunVar, NunLocation, NunIntf, NunUtils, NunTransform
+  Modules:          NunVar, NunLocation, NunIntf, NunUtils, NunTransform,
+                    NunSymbol, NunTerm_intf, NunType_intf, NunUntypedAST,
+                    NunType_mut, NunTerm_typed, NunTypeInference
   Install:          true
   BuildDepends:     containers, containers.iter, sequence, unix
 
 Library "nunchaku_parsers"
   Path:             src/parsers/
-  Modules:          NunLexer, NunParser, NunAST
+  Modules:          NunLexer, NunParser
   Install:          true
   BuildTools:       menhir
   BuildDepends:     nunchaku_core

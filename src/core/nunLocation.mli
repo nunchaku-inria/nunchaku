@@ -1,5 +1,5 @@
 
-(* This file is free software, part of containers. See file "license" for more details. *)
+(* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Location in a file} *)
 
@@ -54,7 +54,7 @@ val with_loc: ?loc:t -> 'a -> 'a with_loc
 (** [with_loc ?loc x] makes a value with the given location *)
 
 val get : 'a with_loc -> 'a
-(** Extract the value *)
+val get_loc : _ with_loc -> t option
 
 (** {2 Lexbuf}
 

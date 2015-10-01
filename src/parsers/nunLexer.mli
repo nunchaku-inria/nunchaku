@@ -1,5 +1,5 @@
 
-(* This file is free software, part of containers. See file "license" for more details. *)
+(* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Lexer} *)
 
@@ -10,9 +10,9 @@ val token : Lexing.lexbuf -> NunParser.token
 
 type 'a or_error = [`Ok of 'a | `Error of string ]
 
-type statement = NunAST.statement
-type term = NunAST.term
-type ty = NunAST.ty
+type statement = NunUntypedAST.statement
+type term = NunUntypedAST.term
+type ty = NunUntypedAST.ty
 
 val parse_file : string -> statement list or_error
 
