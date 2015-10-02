@@ -37,3 +37,16 @@ Executable nunchaku
   CompiledObject:   native
   MainIs:           nunchaku.ml
   BuildDepends:     nunchaku_core, nunchaku_parsers
+
+Document nunchaku
+  Title:                Documentation of Nunchaku
+  Type:                 ocamlbuild (0.3)
+  BuildTools+:          ocamldoc
+  Build$:               flag(docs)
+  Install:              true
+  XOCamlbuildPath:      .
+  XOCamlbuildExtraArgs:
+    "-docflags '-colorize-code -short-functors -charset utf-8'"
+  XOCamlbuildLibraries:
+    nunchaku_core, nunchaku_parsers
+
