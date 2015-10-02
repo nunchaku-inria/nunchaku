@@ -48,6 +48,8 @@ end
 module ConvertTerm(Term : TERM) : sig
   type env
 
+  val empty_env : env
+
   module ConvertTy : sig
     val convert : env:env -> NunUntypedAST.ty -> Term.Ty.t or_error
     (** [convert ~env ty] converts the raw, unscoped type [ty] into a
@@ -88,6 +90,8 @@ module ConvertStatement(St : STATEMENT) : sig
   type t = (St.T.t, St.T.Ty.t) St.t
 
   type env = CT.env
+
+  val empty_env : env
 
   val convert : env:env -> NunUntypedAST.statement -> (t * env) or_error
 

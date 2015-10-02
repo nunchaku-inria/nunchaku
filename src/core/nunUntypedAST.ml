@@ -34,7 +34,7 @@ and term_node =
   | TyForall of var * ty
 
 (* we mix terms and types because it is hard to know, in
-  [@cons a b c], which ones of [a, b, c] are types, and which ones 
+  [@cons a b c], which ones of [a, b, c] are types, and which ones
   are terms *)
 and ty = term
 
@@ -118,7 +118,7 @@ and print_term_inner out term = match Loc.get term with
       pf out "(%a)" print_term term
   | Sym _ | AtVar _ | Var _ | Wildcard -> print_term out term
 and print_term_in_arrow out t = match Loc.get t with
-  | Wildcard 
+  | Wildcard
   | Sym _
   | Var _
   | AtVar _

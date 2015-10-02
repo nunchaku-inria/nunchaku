@@ -156,3 +156,4 @@ module Ty = struct
     | TyI.Arrow (_,_)
     | TyI.Forall (_,_) -> fpf out "@[(%a)@]" print t
 end
+

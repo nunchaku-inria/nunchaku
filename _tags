@@ -2,6 +2,7 @@
 # OASIS_STOP
 
 true: use_menhir
+true: safe_string
 
 # more warnings
 <src/**/*.ml>: warn(+a), warn(-4), warn(-44), warn(-50)

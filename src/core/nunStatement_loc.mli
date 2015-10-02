@@ -17,3 +17,5 @@ val axiom : ?loc:loc -> 'a -> ('a,_) t
 type 'a printer = Format.formatter -> 'a -> unit
 
 val print : 'a printer -> 'b printer -> ('a,'b) t printer
+
+val print_list : 'a printer -> 'b printer -> ('a,'b) t list printer

@@ -104,11 +104,9 @@ module ConvertTerm(Term : TERM) = struct
   type env = (Var.t * term_def) MStr.t
   (* map names to proper identifiers, with their definition *)
 
+  let empty_env = MStr.empty
+
   module ConvertTy = struct
-    type t = Term.Ty.t
-
-    let add_env ~env v ty = MStr.add v ty env
-
     let rec convert_exn ~(env:env) (ty:A.ty) =
       let loc = Loc.get_loc ty in
       match Loc.get ty with
@@ -148,8 +146,6 @@ module ConvertTerm(Term : TERM) = struct
   let add_def ~env v ~var t = MStr.add v (var, Def t) env
 
   let add_decl ~env v ~var ty = MStr.add v (var, Decl ty) env
-
-  let add_ty_env ~env v ty = ConvertTy.add_env ~env v ty
 
   let prop = Term.ty_prop
   let arrow_list ?loc = List.fold_right (Term.ty_arrow ?loc)
@@ -252,8 +248,6 @@ module ConvertTerm(Term : TERM) = struct
     | A.TyForall _ -> fail ?loc "terms cannot contain π"
     | A.TyArrow _ -> fail ?loc "terms cannot contain arrows"
 
-  and convert_list_exn ~env l = List.map (convert_exn ~env) l
-
   (* convert elements of [l] into types or terms, depending on
      what [ty] expects. Return the converted list, along with
      what remains of [ty].
@@ -313,6 +307,8 @@ module ConvertStatement(St : STATEMENT) = struct
   type t = (T.t, Ty.t) St.t
 
   type env = CT.env
+
+  let empty_env = CT.empty_env
 
   let convert_exn ~env st =
     let loc = Loc.get_loc st in

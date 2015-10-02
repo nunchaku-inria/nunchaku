@@ -4,4 +4,3 @@
 (** {1 Terms with Types} *)
 
 include NunTypeInference.TERM
-

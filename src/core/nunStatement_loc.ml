@@ -30,10 +30,14 @@ let axiom ?loc t = make_ ?loc (St.Axiom t)
 
 type 'a printer = Format.formatter -> 'a -> unit
 
+let fpf = Format.fprintf
+
 let print pt pty out t =
-  let fpf = Format.fprintf in
   match t.view with
   | St.Decl (v, ty) -> fpf out "@[<2>val %a@ : %a.@]" Var.print v pty ty
   | St.Def (v, t) -> fpf out "@[<2>def %a@ := %a.@]" Var.print v pt t
   | St.Axiom t -> fpf out "@[<2>axiom %a.@]" pt t
 
+let print_list pt pty out l =
+  fpf out "@[<v>%a@]"
+    (CCFormat.list ~start:"" ~stop:"" ~sep:"" (print pt pty)) l

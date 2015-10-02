@@ -3,7 +3,9 @@
 
 (** {1 Types} *)
 
-type var = NunVar.t
+module Var = NunVar
+
+type var = Var.t
 
 module Builtin : sig
   type t =
@@ -64,4 +66,41 @@ module type UNIFIABLE = sig
 
   include NunIntf.PRINT with type t := t
   (** Need to be able to print types *)
+end
+
+(** {2 Print Types} *)
+
+module Print(Ty : S) : sig
+  type 'a printer = Format.formatter -> 'a -> unit
+
+  val print : Ty.t printer
+  val print_in_app : Ty.t printer
+  val print_in_arrow : Ty.t printer
+end = struct
+  type 'a printer = Format.formatter -> 'a -> unit
+
+  let fpf = Format.fprintf
+
+  let rec print out ty = match Ty.view ty with
+    | Kind -> CCFormat.string out "kind"
+    | Type -> CCFormat.string out "type"
+    | Builtin b -> CCFormat.string out (Builtin.to_string b)
+    | Var v -> Var.print out v
+    | App (f,l) ->
+        fpf out "@[<2>%a@ %a@]" print_in_app f
+          (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_in_app) l
+    | Arrow (a,b) ->
+        fpf out "@[<2>%a ->@ %a@]" print_in_app a print_in_arrow b
+    | Forall (v,t) ->
+        fpf out "@[<2>forall %a:type.@ %a@]" Var.print v print t
+  and print_in_app out t = match Ty.view t with
+    | Builtin _ | Kind | Type | Var _ -> print out t
+    | App (_,_)
+    | Arrow (_,_)
+    | Forall (_,_) -> fpf out "@[(%a)@]" print t
+  and print_in_arrow out t = match Ty.view t with
+    | Builtin _ | Kind | Type | Var _
+    | App (_,_) -> print out t
+    | Arrow (_,_)
+    | Forall (_,_) -> fpf out "@[(%a)@]" print t
 end
