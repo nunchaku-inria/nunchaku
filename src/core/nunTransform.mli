@@ -31,29 +31,17 @@ type ('a, 'b) transformation = ('a, 'b) t
 
 module Pipe : sig
   (** Composite transformation from ['a] to ['b], yielding results ['res] *)
-  type ('a, 'b, 'res) t =
-    | Id : ('a, 'a, unit) t  (** no transformation *)
-    | Call : ('a -> ('a option * 'res) lazy_list) -> ('a, 'a, 'res) t
-    | Comp : ('a, 'b) transformation * ('b, 'c, 'res) t -> ('a, 'c, 'res) t
+  type ('a, 'b) t =
+    | Id : ('a, 'a) t  (** no transformation *)
+    | Comp : ('a, 'b) transformation * ('b, 'c) t -> ('a, 'c) t
 
-  (* TODO: replace/complement Id by the function from {!run}, b -> (b option * res) list *)
+  val id : ('a, 'a) t
 
-  val id : ('a, 'a, unit) t
-
-  val compose : ('a, 'b) transformation -> ('b, 'c, 'res) t -> ('a, 'c, 'res) t
-
-  val call :
-    ('a, 'b, _) t ->
-    f:('b -> ('b option * 'res) lazy_list) ->
-    ('a, 'b, 'res) t
-  (** [call p ~f] is the same pipe as [p], but calls [f] on each
-      value [y] obtained through the pipe to obtain a result and a possible
-      new value of type ['b]. *)
+  val compose : ('a, 'b) transformation -> ('b, 'c) t -> ('a, 'c) t
 end
 
-val run : pipe:('a, 'b, 'res) Pipe.t -> 'a -> ('a option * 'res) lazy_list
-(** [run ~pipe x ~f] runs [x] through the pipe [pipe], in a lazy way,
-    and converts back each resulting [y: 'b] (if any) into a ['a] along
-    with the result. *)
+val run : pipe:('a, 'b) Pipe.t -> 'a -> ('b * ('b -> 'a)) lazy_list
+(** [run ~pipe x] runs [x] through the pipe [pipe], in a lazy way,
+    and yields values of type ['b] along with a conversion function back *)
 
 

@@ -29,35 +29,25 @@ type ('a, 'b) transformation = ('a, 'b) t
     Allows chaining the transformations in a type-safe way *)
 
 module Pipe = struct
-  type ('a, 'b, 'res) t =
-    | Id : ('a, 'a, unit) t  (** no transformation *)
-    | Call : ('a -> ('a option * 'res) lazy_list) -> ('a, 'a, 'res) t
-    | Comp : ('a, 'b) transformation * ('b, 'c, 'res) t -> ('a, 'c, 'res) t
+  type ('a, 'b) t =
+    | Id : ('a, 'a) t  (** no transformation *)
+    | Comp : ('a, 'b) transformation * ('b, 'c) t -> ('a, 'c) t
 
   let id = Id
   let compose a p = Comp (a, p)
-
-  let rec call
-    : type a b c res. (a, b, c) t -> f:(b -> (b option * res) lazy_list) -> (a, b, res) t
-    = fun p ~f -> match p with
-    | Id -> Call f
-    | Call _ -> Call f
-    | Comp (trans, p') -> Comp (trans, call p' ~f)
 end
 
 let rec run
-  : type a b res. pipe:(a,b,res) Pipe.t -> a -> (a option * res) lazy_list
+  : type a b. pipe:(a,b) Pipe.t -> a -> (b * (b -> a)) lazy_list
   = fun ~pipe x -> match pipe with
-  | Pipe.Id -> CCKList.return (None, ())
-  | Pipe.Call f -> f x
+  | Pipe.Id -> CCKList.return (x, fun x->x)
   | Pipe.Comp (Ex trans, pipe') ->
-      let (>>=) = CCKList.(>>=) in
+      let open CCKList in
       trans.encode x
       >>= fun (y, st) ->
       run ~pipe:pipe' y
-      >>= fun (y', res) ->
-      (* decode [y'], if needed *)
-      let x' = CCOpt.map (trans.decode st) y' in
-      CCKList.return (x', res)
+      >|= fun (y', conv_back) ->
+      let conv_back' x = trans.decode st (conv_back x) in
+      y', conv_back'
 
 
