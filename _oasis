@@ -20,7 +20,7 @@ Library "nunchaku_core"
   Modules:          NunVar, NunLocation, NunIntf, NunUtils, NunTransform,
                     NunSymbol, NunTerm_intf, NunType_intf, NunUntypedAST,
                     NunTerm_typed, NunTypeUnify, NunTypeInference,
-                    NunStatement_intf, NunStatement_loc
+                    NunStatement_intf, NunStatement_loc, NunDeref
   Install:          true
   BuildDepends:     containers, containers.iter, sequence, unix
 
