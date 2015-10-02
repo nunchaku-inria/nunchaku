@@ -17,26 +17,30 @@ module Var = NunVar
 type t = {
   view : (t,t) TI.view;
   loc : Loc.t option;
-  mutable deref : deref;  (** used only for type variables *)
   mutable ty : t option;
 }
-and deref =
-  | Deref_none (** not a variable *)
-  | Deref_meta (** variable ready for unif *)
-  | Deref_to of t (** variable bound to some term *)
 
-let view t = t.view
+(* dereference the term, if it is a variable, until it is not bound *)
+let rec deref_rec_ t = match t.view with
+  | TI.TyMeta (_, ({NunDeref.deref=Some t'; _} as ref)) ->
+      let root = deref_rec_ t' in
+      (* path compression *)
+      if t' != root then NunDeref.rebind ~ref root;
+      root
+  | _ -> t
+
+let view t = (deref_rec_ t).view
 
 let loc t = t.loc
 
 let ty t = t.ty
 
 (* special constants: kind and type *)
-let kind_ = {view=TI.TyKind; loc=None; ty=None; deref=Deref_none}
-let type_ = {view=TI.TyType; loc=None; ty=Some kind_; deref=Deref_none}
-let prop = {view=TI.TyBuiltin TyI.Builtin.Prop; loc=None; ty=Some type_; deref=Deref_none}
+let kind_ = {view=TI.TyKind; loc=None; ty=None}
+let type_ = {view=TI.TyType; loc=None; ty=Some kind_}
+let prop = {view=TI.TyBuiltin TyI.Builtin.Prop; loc=None; ty=Some type_}
 
-let make_raw_ ~loc ~ty view = { view; loc; ty; deref=Deref_none}
+let make_raw_ ~loc ~ty view = { view; loc; ty}
 
 let make_ ?loc ?ty view = match view with
   | TI.App ({view=TI.App (f, l1); loc; _}, l2) ->
@@ -59,7 +63,7 @@ let ty_prop = prop
 
 let ty_builtin ?loc b = make_ ?loc ~ty:type_ (TI.TyBuiltin b)
 let ty_var ?loc v = var ?loc ~ty:type_ v
-let ty_meta_var ?loc v = {view=TI.Var v; loc;ty=Some type_; deref=Deref_meta}
+let ty_meta_var ?loc v = make_ ?loc (TI.TyMeta (v, NunDeref.create()))
 let ty_app ?loc f l =
   if l=[] then f else app ?loc ~ty:type_ f l
 let ty_arrow ?loc a b = make_ ?loc ~ty:type_ (TI.TyArrow (a,b))
@@ -70,24 +74,24 @@ module Ty = struct
 
   type t = term
 
-  let is_Type t = match t.view with
+  let is_Type t = match (deref_rec_ t).view with
     | TI.TyType -> true
     | _ -> false
 
-  let is_Kind t = match t.view with
+  let is_Kind t = match (deref_rec_ t).view with
     | TI.TyKind -> true
     | _ -> false
 
-  let rec returns_Type t = match t.view with
+  let rec returns_Type t = match (deref_rec_ t).view with
     | TI.TyType -> true
-    | TI.TyArrow (_, t)
-    | TI.TyForall (_, t) -> returns_Type t
+    | TI.TyArrow (_, t')
+    | TI.TyForall (_, t') -> returns_Type t'
     | _ -> false
 
   let to_term t = t
 
   let is_ty t = match t.ty with
-    | Some {view=TI.TyType; _} -> true
+    | Some ty -> is_Type ty
     | _ -> false
 
   let of_term t =
@@ -96,33 +100,12 @@ module Ty = struct
   let of_term_exn t =
     if is_ty t then t else failwith "Term_mut.TyI.of_term_exn"
 
-  (* dereference the type, if it is a variable, until it is not bound *)
-  let rec deref_rec_ t = match t.deref with
-    | Deref_meta
-    | Deref_none -> t
-    | Deref_to t' ->
-        let root = deref_rec_ t' in
-        (* path compression *)
-        if t' != root then t.deref <- Deref_to root;
-        t'
-
-  (* dereference at least once *)
-  let deref1 t = match t.deref with
-    | Deref_to _ ->
-        let t' = deref_rec_ t in
-        Some t'
-    | Deref_none
-    | Deref_meta -> None
-
-  let rec view t = match t.view with
+  let view t = match (deref_rec_ t).view with
     | TI.TyKind -> TyI.Kind
     | TI.TyType -> TyI.Type
     | TI.TyBuiltin b -> TyI.Builtin b
-    | TI.Var v ->
-        begin match deref1 t with
-          | Some t' -> view t'
-          | None -> TyI.Var v
-        end
+    | TI.TyMeta (v, d) -> TyI.Meta (v,d)
+    | TI.Var v -> TyI.Var v
     | TI.App (f,l) -> TyI.App (f,l)
     | TI.TyArrow (a,b) -> TyI.Arrow (a,b)
     | TI.TyForall (v,t) -> TyI.Forall (v,t)
@@ -137,45 +120,10 @@ module Ty = struct
     | TyI.Type -> type_
     | TyI.Builtin b -> ty_builtin b
     | TyI.Var v -> var ~ty:type_ v
+    | TyI.Meta (v, d) -> make_ (TI.TyMeta(v,d))
     | TyI.App (f,l) -> app ~ty:type_ f l
     | TyI.Arrow (a,b) -> ty_arrow a b
     | TyI.Forall (v,t) -> ty_forall v t
-
-  let rec fold fun_ t = match view t with
-    | TyI.Kind -> fun_ TyI.Kind
-    | TyI.Type -> fun_ TyI.Type
-    | TyI.Var v -> fun_ (TyI.Var v)
-    | TyI.Builtin b -> fun_ (TyI.Builtin b)
-    | TyI.App (f,l) ->
-        let f = fold fun_ f in
-        let l = List.map (fold fun_) l in
-        fun_ (TyI.App (f,l))
-    | TyI.Arrow (a,b) -> fun_ (TyI.Arrow (fold fun_ a, fold fun_ b))
-    | TyI.Forall (v,t) -> fun_ (TyI.Forall (v, fold fun_ t))
-
-  let is_var t = match t.view with TI.Var _ -> true | _ -> false
-
-  let can_bind t = is_var t && match t.deref with
-    | Deref_meta -> true
-    | Deref_none
-    | Deref_to _ -> false
-
-  (*$T
-    Ty.can_bind (ty_meta_var (Var.make ~name:"foo"))
-    not (Ty.can_bind (ty_var (Var.make ~name:"bar")))
-  *)
-
-  (*$R
-    let v = ty_meta_var (Var.make ~name:"a") in
-    let v2 = ty_var (Var.make ~name:"b") in
-    Ty.bind v v2;
-    assert_bool "cannot bind"
-      (not (Ty.can_bind v))
-  *)
-
-  let bind ~var t =
-    if not (can_bind var) then invalid_arg "Type_mut.bind";
-    var.deref <- Deref_to t
 
   let fpf = Format.fprintf
 
@@ -183,6 +131,7 @@ module Ty = struct
     | TyI.Kind -> CCFormat.string out "kind"
     | TyI.Type -> CCFormat.string out "type"
     | TyI.Builtin b -> CCFormat.string out (TyI.Builtin.to_string b)
+    | TyI.Meta (v,_)
     | TyI.Var v -> Var.print out v
     | TyI.App (f,l) ->
         fpf out "@[<2>%a@ %a@]" print_in_app f
@@ -192,12 +141,12 @@ module Ty = struct
     | TyI.Forall (v,t) ->
         fpf out "@[<2>forall %a:type.@ %a@]" Var.print v print t
   and print_in_app out t = match view t with
-    | TyI.Builtin _ | TyI.Kind | TyI.Type | TyI.Var _ -> print out t
+    | TyI.Builtin _ | TyI.Kind | TyI.Type | TyI.Var _ | TyI.Meta _ -> print out t
     | TyI.App (_,_)
     | TyI.Arrow (_,_)
     | TyI.Forall (_,_) -> fpf out "@[(%a)@]" print t
   and print_in_arrow out t = match view t with
-    | TyI.Builtin _ | TyI.Kind | TyI.Type | TyI.Var _
+    | TyI.Builtin _ | TyI.Kind | TyI.Type | TyI.Var _ | TyI.Meta _
     | TyI.App (_,_) -> print out t
     | TyI.Arrow (_,_)
     | TyI.Forall (_,_) -> fpf out "@[(%a)@]" print t

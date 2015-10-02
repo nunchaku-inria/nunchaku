@@ -12,7 +12,7 @@ exception ScopingError of string * string * loc option
 
 (** {2 Typed Term} *)
 module type TERM = sig
-  include NunTerm_intf.S_WITH_UNIFIABLE_TY
+  include NunTerm_intf.S_WITH_PRINTABLE_TY
 
   val loc : t -> loc option
 

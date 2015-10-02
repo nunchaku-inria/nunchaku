@@ -8,19 +8,7 @@ module TyI = NunType_intf
 
 type var = Var.t
 
-module Builtin : sig
-  type t =
-    | True
-    | False
-    | Not
-    | Or
-    | And
-    | Imply
-    | Equiv
-  val fixity : t -> [`Infix | `Prefix]
-  val to_string : t -> string
-  val equal : t -> t -> bool
-end = struct
+module Builtin = struct
   type t =
     | True
     | False
@@ -58,6 +46,7 @@ type ('a, 'ty) view =
   | Let of var * 'a * 'a
   | TyKind
   | TyType
+  | TyMeta of var * 'ty NunDeref.t
   | TyBuiltin of NunType_intf.Builtin.t (** Builtin type *)
   | TyArrow of 'ty * 'ty   (** Arrow type *)
   | TyForall of var * 'ty  (** Polymorphic/dependent type *)
@@ -74,12 +63,12 @@ module type S = sig
   val build : (t, Ty.t) view -> t
 end
 
-module type S_WITH_UNIFIABLE_TY = sig
+module type S_WITH_PRINTABLE_TY = sig
   type t
 
   module Ty : sig
     include NunType_intf.AS_TERM with type term = t
-    include NunType_intf.UNIFIABLE with type t := t
+    include NunIntf.PRINT with type t := t
   end
 
   val view : t -> (t, Ty.t) view
@@ -89,13 +78,7 @@ end
 
 (** {2 Print Terms} *)
 
-module Print(T : S) : sig
-  type 'a printer = Format.formatter -> 'a -> unit
-
-  val print : T.t printer
-  val print_in_app : T.t printer
-  val print_in_binder : T.t printer
-end = struct
+module Print(T : S) = struct
   type 'a printer = Format.formatter -> 'a -> unit
 
   let fpf = Format.fprintf
@@ -105,14 +88,15 @@ end = struct
     | TyType -> CCFormat.string out "type"
     | Builtin b -> CCFormat.string out (Builtin.to_string b)
     | TyBuiltin b -> CCFormat.string out (TyI.Builtin.to_string b)
+    | TyMeta (v, _)
     | Var v -> Var.print out v
     | App (f, [a;b]) ->
         begin match T.view f with
         | Builtin s when Builtin.fixity s = `Infix ->
-            fpf out "@[<2>%a@ %s@ %a@]"
+            fpf out "@[<hov>%a@ %s@ %a@]"
               print_in_app a (Builtin.to_string s) print_in_app b
         | _ ->
-            fpf out "@[<2>%a@ %a@ %a@]" print_in_app f
+            fpf out "@[<hov2>%a@ %a@ %a@]" print_in_app f
               print_in_app a print_in_app b
         end
     | App (f,l) ->
@@ -136,7 +120,8 @@ end = struct
   and print_ty_in_arrow out ty = print_in_binder out (T.Ty.to_term ty)
 
   and print_in_app out t = match T.view t with
-    | Builtin _ | TyBuiltin _ | TyKind | TyType | Var _ -> print out t
+    | Builtin _ | TyBuiltin _ | TyKind | TyType | Var _ | TyMeta _ ->
+        print out t
     | App (_,_)
     | Forall _
     | Exists _
@@ -146,7 +131,7 @@ end = struct
     | TyForall (_,_) -> fpf out "@[(%a)@]" print t
 
   and print_in_binder out t = match T.view t with
-    | Builtin _ | TyBuiltin _ | TyKind | TyType | Var _ | App (_,_) ->
+    | Builtin _ | TyBuiltin _ | TyKind | TyType | Var _ | TyMeta _ | App (_,_) ->
         print out t
     | Forall _
     | Exists _

@@ -39,7 +39,7 @@ module MStr = Map.Make(String)
 
 (** {2 Typed Term} *)
 module type TERM = sig
-  include NunTerm_intf.S_WITH_UNIFIABLE_TY
+  include NunTerm_intf.S_WITH_PRINTABLE_TY
 
   val loc : t -> loc option
 
@@ -111,8 +111,6 @@ module ConvertTerm(Term : TERM) = struct
   let get_ty_ t = match Term.ty t with
     | None -> assert false
     | Some ty -> ty
-
-  let get_ty_ty_ (t:Term.Ty.t) = get_ty_ (t:>Term.t)
 
   (* Environment *)
 
@@ -202,6 +200,7 @@ module ConvertTerm(Term : TERM) = struct
     | TyI.Kind, _
     | TyI.Type, _
     | TyI.Builtin _, _
+    | TyI.Meta _, _
     | TyI.Var _, _
     | TyI.App (_,_),_ -> l
     | TyI.Arrow _, [] -> [] (* need an explicit argument *)
@@ -216,6 +215,9 @@ module ConvertTerm(Term : TERM) = struct
     | TyI.Kind
     | TyI.Type
     | TyI.Builtin _ -> ty
+    | TyI.Meta (v,_) ->
+        assert (not (Var.Map.mem v subst));
+        ty
     | TyI.Var v ->
         begin try
           let ty' = Var.Map.find v subst in
@@ -330,6 +332,7 @@ module ConvertTerm(Term : TERM) = struct
         eval_subst ~subst ty, []
     | TyI.Kind ,_
     | TyI.Type ,_
+    | TyI.Meta _, _
     | TyI.Var _,_
     | TyI.App (_,_),_
     | TyI.Builtin _,_ ->
@@ -347,7 +350,6 @@ module ConvertTerm(Term : TERM) = struct
     | TyI.Forall (v,ty'), b :: l' ->
         (* [b] must be a type, and we replace [v] with [b] *)
         let b = ConvertTy.convert_exn ~env b in
-        assert (Term.Ty.is_Type (get_ty_ty_ b));
         let subst = Var.Map.add v b subst in
         (* continue *)
         let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty' l' in
@@ -379,17 +381,21 @@ module ConvertTerm(Term : TERM) = struct
 
   let generalize t =
     let ty = get_ty_ t in
-    let vars = Unif.free_vars ty |> Var.Set.elements in
+    let vars = Unif.free_meta_vars ty |> Var.Map.to_list in
     (* fun v1, ... , vn => t
       of type
       forall v1, ..., vn => typeof t *)
-    let t = List.fold_right
-      (fun v t ->
+    let t, new_vars = List.fold_right
+      (fun (v,ref) (t,new_vars) ->
         let ty_t = get_ty_ t in
-        Term.fun_ ~ty:(Term.ty_forall v ty_t) v ~ty_arg:Term.ty_type t
-      ) vars t
+        (* invariant: a meta var should never occur under a binder *)
+        let var = Var.fresh_copy v in
+        NunDeref.bind ~ref (Term.ty_var var);
+        Term.fun_ ~ty:(Term.ty_forall var ty_t) var ~ty_arg:Term.ty_type t,
+        var :: new_vars
+      ) vars (t, [])
     in
-    t, vars
+    t, new_vars
 end
 
 module type STATEMENT = sig
