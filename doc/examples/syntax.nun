@@ -5,6 +5,7 @@ val list : type -> type.
 val nil : forall a:type. list a.
 val cons : forall a:type. a -> list a -> list a.
 
+val n : nat.
 val f : nat -> nat.
 val p : nat -> prop.
 val polyprop : forall a. a -> prop.
@@ -19,6 +20,9 @@ val g : product nat nat -> product nat nat.
 
 def f := fun x y. polyprop (g (g x)) | polyprop (f (f y)).
 def h x y := ~ (p x) & p y.
+
+axiom polyprop (fun (f:nat -> list nat -> nat). f n (cons n nil)).
+# TODO infer axiom polyprop (fun g. g n (cons n nil)).
 
 # let's play with monadic-ish operators
 def yolo (join : forall a. list (list a) -> list a) :=
