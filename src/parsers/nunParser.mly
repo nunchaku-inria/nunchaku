@@ -59,31 +59,41 @@
 
 parse_statement: s=statement EOI {s}
 parse_term: t=term EOI {t}
-parse_ty: t=ty EOI {t}
+parse_ty: t=term EOI {t}
 parse_statement_list: l=list(statement) EOI { l }
 
 /* variable without a location */
 raw_var: w=LOWER_WORD { w }
 
-ty_var:
+typed_var:
+  | v=raw_var { v, None }
+  | LEFT_PAREN v=raw_var COLUMN t=term RIGHT_PAREN { v, Some t }
+
+typed_ty_var:
+  | v=raw_var { v }
+  | v=raw_var COLUMN TYPE { v }
+  | LEFT_PAREN v=raw_var COLUMN TYPE RIGHT_PAREN { v }
+
+var:
   | WILDCARD
     {
       let loc = L.mk_pos $startpos $endpos in
       A.wildcard ~loc ()
     }
-  | v=raw_var
+  | name=raw_var
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.var ~loc v
+      A.var ~loc name
     }
 
-ty_quantified_var:
-  | v=raw_var { v }
-  | v=raw_var COLUMN TYPE { v }
-  | LEFT_PAREN v=raw_var COLUMN TYPE RIGHT_PAREN { v }
+at_var:
+  | AT v=raw_var
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.at_var ~loc v
+    }
 
-atomic_ty:
-  | v=ty_var { v }
+const:
   | TYPE
     {
       let loc = L.mk_pos $startpos $endpos in
@@ -93,53 +103,6 @@ atomic_ty:
     {
       let loc = L.mk_pos $startpos $endpos in
       A.sym ~loc Sym.prop
-    }
-  | LEFT_PAREN t=ty RIGHT_PAREN { t }
-
-/* application */
-app_ty:
-  | t=atomic_ty { t }
-  | t=atomic_ty u=atomic_ty+
-    {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc t u
-    }
-
-ty:
-  | t=app_ty {t}
-  | t=app_ty ARROW u=ty
-    {
-      let loc = L.mk_pos $startpos $endpos in
-      A.ty_arrow ~loc t u
-    }
-  | FORALL vars=ty_quantified_var+ DOT t=ty
-    {
-      let loc = L.mk_pos $startpos $endpos in
-      A.ty_forall_list ~loc vars t
-    }
-  | error
-    {
-      let loc = L.mk_pos $startpos $endpos in
-      raise (A.ParseError loc)
-    }
-
-typed_var:
-  | v=raw_var { v, None }
-  | LEFT_PAREN v=raw_var COLUMN t=ty RIGHT_PAREN { v, Some t }
-
-var:
-  | name=raw_var
-    {
-      let loc = L.mk_pos $startpos $endpos in
-      A.var ~loc name
-    }
-
-atomic_term:
-  | v=var { v }
-  | AT v=raw_var
-    {
-      let loc = L.mk_pos $startpos $endpos in
-      A.at_var ~loc v
     }
   | LOGIC_TRUE
     {
@@ -151,6 +114,11 @@ atomic_term:
       let loc = L.mk_pos $startpos $endpos in
       A.sym ~loc Sym.false_
     }
+
+atomic_term:
+  | v=var { v }
+  | v=at_var { v }
+  | t=const { t }
   | LEFT_PAREN t=term RIGHT_PAREN { t }
 
 apply_term:
@@ -214,6 +182,16 @@ term:
       let loc = L.mk_pos $startpos $endpos in
       A.exists_list ~loc vars t
     }
+  | t=apply_term ARROW u=term
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.ty_arrow ~loc t u
+    }
+  | FORALL vars=typed_ty_var+ DOT t=term
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.ty_forall_list ~loc vars t
+    }
   | error
     {
       let loc = L.mk_pos $startpos $endpos in
@@ -221,7 +199,7 @@ term:
     }
 
 statement:
-  | DECL v=raw_var COLUMN t=ty DOT
+  | DECL v=raw_var COLUMN t=term DOT
     {
       let loc = L.mk_pos $startpos $endpos in
       A.decl ~loc v t

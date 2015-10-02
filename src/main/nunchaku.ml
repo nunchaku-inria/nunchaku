@@ -57,10 +57,13 @@ let print_version_if_needed () =
   ()
 
 let parse_file () =
-  if !file="" then  (
+  let res = if !file="" then  (
     Utils.debugf 1 "will read on stdin";
     NunLexer.parse_stdin ()
   ) else NunLexer.parse_file !file
+  in
+  E.map_err
+    (fun msg -> Printf.sprintf "could not parse %s: %s" !file msg) res
 
 let print_input_if_needed statements =
   if !print_ then (

@@ -75,7 +75,7 @@ module ConvertTerm(Term : TERM) = struct
   (* print a stack *)
   let print_stack out st =
     let print_frame out t =
-      fpf out "@[<hv 2>trying to infer type of %a at %a@]"
+      fpf out "@[<hv 2>trying to infer type of@ @[%a@] at@ %a@]"
         A.print_term t Loc.print_opt (Loc.get_loc t) in
     fpf out "@[<hv>%a@]"
       (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_frame) st
@@ -146,11 +146,11 @@ module ConvertTerm(Term : TERM) = struct
               in
               if not ok
                 then type_errorf ~stack:(push_ ty stack)
-                  "expected type, var %a is not a type" Var.print var;
+                  "@[<2>expected type,@ var %a is not a type@]" Var.print var;
               Term.ty_var ?loc var
             with Not_found -> scoping_error ?loc v "not bound in environment"
             end
-        | A.AtVar _ -> ill_formed ?loc "@ syntax is not available for types"
+        | A.AtVar _ -> ill_formed ?loc "@@ syntax is not available for types"
         | A.TyArrow (a,b) ->
             Term.ty_arrow ?loc
               (convert_ ~stack ~env a)
@@ -334,7 +334,7 @@ module ConvertTerm(Term : TERM) = struct
     | TyI.Var _,_
     | TyI.App (_,_),_
     | TyI.Builtin _,_ ->
-        type_errorf ~stack "@[term of type %a cannot accept argument,@ but was given %a@]"
+        type_errorf ~stack "@[term of type @[%a@] cannot accept argument,@ but was given @[<hv>%a@]@]"
           Term.Ty.print ty (CCFormat.list A.print_term) l
     | TyI.Arrow (a,ty'), b :: l' ->
         (* [b] must be a term whose type coincides with [subst a] *)
