@@ -285,6 +285,20 @@ module ConvertTerm(Term : TERM) = struct
   let convert ~env t =
     try E.return (convert_exn ~env t)
     with e -> E.of_exn e
+
+  let generalize t =
+    let ty = get_ty_ t in
+    let vars = Unif.free_vars ty |> Var.Set.elements in
+    (* fun v1, ... , vn => t
+      of type
+      forall v1, ..., vn => typeof t *)
+    let t = List.fold_right
+      (fun v t ->
+        let ty_t = get_ty_ t in
+        Term.fun_ ~ty:(Term.ty_forall v ty_t) v ~ty_arg:Term.ty_type t
+      ) vars t
+    in
+    t, vars
 end
 
 module type STATEMENT = sig
@@ -322,6 +336,8 @@ module ConvertStatement(St : STATEMENT) = struct
         let var = Var.make ~name:v in
         (* infer type for t *)
         let t = CT.convert_exn ~env t in
+        (* generalize type and term *)
+        let t, _ = CT.generalize t in
         let env = CT.add_def ~env v ~var t in
         (* unify with [ty_opt] if present *)
         CCOpt.iter

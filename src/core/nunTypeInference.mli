@@ -68,6 +68,11 @@ module ConvertTerm(Term : TERM) : sig
   val convert_exn : env:env -> NunUntypedAST.term -> Term.t
   (** Unsafe version of {!convert}
       @raise TypeError if it fails to  type properly *)
+
+  val generalize : Term.t -> Term.t * var list
+  (** Generalize a term [t] by parametrizing it over its free {b type}
+      variables.
+      @return a pair [(t', vars)] such that, roughly, [app t' vars = t] *)
 end
 
 (** {2 Statements} *)
