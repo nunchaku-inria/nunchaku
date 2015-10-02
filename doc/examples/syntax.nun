@@ -22,7 +22,7 @@ def h x y := ~ (p x) & p y.
 
 # let's play with monadic-ish operators
 def yolo (join : forall a. list (list a) -> list a) :=
-  join (cons (cons true nil) (cons (cons false nil) nil)).
+  join (cons (cons true nil) (cons (@cons prop false nil) nil)).
 
 
 

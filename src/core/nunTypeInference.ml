@@ -59,6 +59,7 @@ module type TERM = sig
 
   val ty_builtin : ?loc:loc -> NunType_intf.Builtin.t -> Ty.t
   val ty_var : ?loc:loc -> var -> Ty.t
+  val ty_meta_var : ?loc:loc -> var -> Ty.t  (** Meta-variable, ready for unif *)
   val ty_app : ?loc:loc -> Ty.t -> Ty.t list -> Ty.t
   val ty_forall : ?loc:loc -> var -> Ty.t -> Ty.t
   val ty_arrow : ?loc:loc -> Ty.t -> Ty.t -> Ty.t
@@ -136,7 +137,7 @@ module ConvertTerm(Term : TERM) = struct
             Term.ty_app ?loc
               (convert_ ~stack ~env f)
               (List.map (convert_ ~stack ~env) l)
-        | A.Wildcard -> Term.ty_var ?loc (Var.make ~name:"_")
+        | A.Wildcard -> Term.ty_meta_var ?loc (Var.make ~name:"?")
         | A.Var v ->
             begin try
               let var, def = MStr.find v env in
@@ -184,7 +185,7 @@ module ConvertTerm(Term : TERM) = struct
 
   let fresh_ty_var_ ~name =
     let name = "ty_" ^ name in
-    Term.ty_var (Var.make ~name)
+    Term.ty_meta_var (Var.make ~name)
 
   (* find the variable and definition of [v] *)
   let find_ ?loc ~env v =
@@ -334,7 +335,8 @@ module ConvertTerm(Term : TERM) = struct
     | TyI.Var _,_
     | TyI.App (_,_),_
     | TyI.Builtin _,_ ->
-        type_errorf ~stack "@[term of type @[%a@] cannot accept argument,@ but was given @[<hv>%a@]@]"
+        type_errorf ~stack
+          "@[term of type @[%a@] cannot accept argument,@ but was given @[<hv>%a@]@]"
           Term.Ty.print ty (CCFormat.list A.print_term) l
     | TyI.Arrow (a,ty'), b :: l' ->
         (* [b] must be a term whose type coincides with [subst a] *)

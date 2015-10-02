@@ -32,6 +32,7 @@ module type TERM = sig
 
   val ty_builtin : ?loc:loc -> NunType_intf.Builtin.t -> Ty.t
   val ty_var : ?loc:loc -> var -> Ty.t
+  val ty_meta_var : ?loc:loc -> var -> Ty.t  (** Meta-variable, ready for unif *)
   val ty_app : ?loc:loc -> Ty.t -> Ty.t list -> Ty.t
   val ty_forall : ?loc:loc -> var -> Ty.t -> Ty.t
   val ty_arrow : ?loc:loc -> Ty.t -> Ty.t -> Ty.t

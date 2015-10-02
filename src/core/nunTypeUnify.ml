@@ -89,14 +89,14 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
           if Var.equal v1 (Var.Map.find v2 !bound) then ()
           else failf ~stack ty1 ty2 "variable %a is bound" Var.print v2
       | TyI.Var v1, TyI.Var v2 when Var.equal v1 v2 -> ()
-      | TyI.Var var, _ ->
+      | TyI.Var var, _ when Ty.can_bind ty1 ->
           assert (Ty.deref ty1=None);
           if occur_check_ ~var:var ty2
             then
               failf ~stack ty1 ty2
                 "cycle detected (variable %a occurs in type)" Var.print var
             else Ty.bind ~var:ty1 ty2
-      | _, TyI.Var var ->
+      | _, TyI.Var var when Ty.can_bind ty2 ->
           assert (Ty.deref ty2=None);
           if occur_check_ ~var:var ty1
             then
@@ -124,6 +124,7 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
           bound := Var.Map.add v1 v2 !bound;
           let stack = push_ ty1 ty2 stack in
           unify_ ~stack t1 t2
+      | TyI.Var _, _
       | TyI.Kind, _
       | TyI.Type, _
       | TyI.Builtin _,_

@@ -60,6 +60,10 @@ module type UNIFIABLE = sig
 
   val deref : t -> t option
 
+  val can_bind : t -> bool
+  (** [can_bind t] returns [true]  iff [t] is a type {b meta}-variable that is
+      not bound *)
+
   val bind : var:t -> t -> unit
   (** [bind ~var t] binds the variable [var] to [t].
       @raise Invalid_argument if [var] is not a variable or if [var]

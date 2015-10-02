@@ -7,14 +7,23 @@ module TyI = NunType_intf
 module Loc = NunLocation
 module Var = NunVar
 
+(*$inject
+  module Var = NunVar
+
+*)
+
 (** {1 Terms with Types} *)
 
 type t = {
   view : (t,t) TI.view;
   loc : Loc.t option;
-  mutable deref : t option;  (** used only for type variables *)
+  mutable deref : deref;  (** used only for type variables *)
   mutable ty : t option;
 }
+and deref =
+  | Deref_none (** not a variable *)
+  | Deref_meta (** variable ready for unif *)
+  | Deref_to of t (** variable bound to some term *)
 
 let view t = t.view
 
@@ -23,11 +32,11 @@ let loc t = t.loc
 let ty t = t.ty
 
 (* special constants: kind and type *)
-let kind_ = {view=TI.TyKind; loc=None; ty=None; deref=None}
-let type_ = {view=TI.TyType; loc=None; ty=Some kind_; deref=None}
-let prop = {view=TI.TyBuiltin TyI.Builtin.Prop; loc=None; ty=Some type_; deref=None}
+let kind_ = {view=TI.TyKind; loc=None; ty=None; deref=Deref_none}
+let type_ = {view=TI.TyType; loc=None; ty=Some kind_; deref=Deref_none}
+let prop = {view=TI.TyBuiltin TyI.Builtin.Prop; loc=None; ty=Some type_; deref=Deref_none}
 
-let make_raw_ ~loc ~ty view = { view; loc; ty; deref=None }
+let make_raw_ ~loc ~ty view = { view; loc; ty; deref=Deref_none}
 
 let make_ ?loc ?ty view = match view with
   | TI.App ({view=TI.App (f, l1); loc; _}, l2) ->
@@ -49,6 +58,7 @@ let ty_prop = prop
 
 let ty_builtin ?loc b = make_ ?loc ~ty:type_ (TI.TyBuiltin b)
 let ty_var ?loc v = var ?loc ~ty:type_ v
+let ty_meta_var ?loc v = {view=TI.Var v; loc;ty=Some type_; deref=Deref_meta}
 let ty_app ?loc f l = app ?loc ~ty:type_ f l
 let ty_arrow ?loc a b = make_ ?loc ~ty:type_ (TI.TyArrow (a,b))
 let ty_forall ?loc a b = make_ ?loc ~ty:type_ (TI.TyForall(a,b))
@@ -119,23 +129,41 @@ module Ty = struct
     | TyI.Arrow (a,b) -> fun_ (TyI.Arrow (fold fun_ a, fold fun_ b))
     | TyI.Forall (v,t) -> fun_ (TyI.Forall (v, fold fun_ t))
 
-  (* dereference the type, if it is a variable, until it is not bound *)
-  let rec deref t = match t.deref with
-    | None -> None
-    | Some t' as res ->
-        match deref t' with
-        | None -> res  (* t' is root *)
-        | Some _ as res ->
-            (* path compression *)
-            t.deref <- res;
-            res
-
   let is_var t = match t.view with TI.Var _ -> true | _ -> false
 
+  let can_bind t = is_var t && match t.deref with
+    | Deref_meta -> true
+    | Deref_none
+    | Deref_to _ -> false
+
+  (*$T
+    Ty.can_bind (ty_meta_var (Var.make ~name:"foo"))
+    not (Ty.can_bind (ty_var (Var.make ~name:"bar")))
+  *)
+
+  (*$R
+    let v = ty_meta_var (Var.make ~name:"a") in
+    let v2 = ty_var (Var.make ~name:"b") in
+    Ty.bind v v2;
+    assert_bool "cannot bind"
+      (not (Ty.can_bind v))
+  *)
+
+  (* dereference the type, if it is a variable, until it is not bound *)
+  let rec deref t = match t.deref with
+    | Deref_meta
+    | Deref_none -> None
+    | Deref_to t' ->
+        match deref t' with
+        | None -> Some t' (* t' is root *)
+        | Some root as res ->
+            (* path compression *)
+            t.deref <- Deref_to root;
+            res
+
   let bind ~var t =
-    if not (is_var var) then invalid_arg "Type_mut.bind";
-    if var.deref <> None then invalid_arg "Type_mut.bind";
-    var.deref <- Some t
+    if not (can_bind var) then invalid_arg "Type_mut.bind";
+    var.deref <- Deref_to t
 
   let fpf = Format.fprintf
 
