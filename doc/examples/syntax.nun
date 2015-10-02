@@ -1,0 +1,29 @@
+
+val nat : type.
+val list : type -> type.
+
+val nil : forall a:type. list a.
+val cons : forall a:type. a -> list a -> list a.
+
+val f : nat -> nat.
+val p : nat -> prop.
+val polyprop : forall a. a -> prop.
+
+val product : type -> type -> type.
+
+val pair : forall a b. a -> b -> product a b.
+
+axiom !x. p (f (f (f x))).
+
+val g : product nat nat -> product nat nat.
+
+def f := fun x y. polyprop (g (g x)) | polyprop (f (f y)).
+def h x y := ~ (p x) & p y.
+
+# let's play with monadic-ish operators
+def yolo (join : forall a. list (list a) -> list a) :=
+  join (cons (cons true nil) (cons (cons false nil) nil)).
+
+
+
+
