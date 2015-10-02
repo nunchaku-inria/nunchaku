@@ -7,8 +7,10 @@ module Var = NunVar
 module Sym = NunSymbol
 module TyI = NunType_intf
 
-module Make(Ty : NunType_intf.UNIFIABLE) = struct
+type var = Var.t
+type 'a sequence = ('a -> unit) -> unit
 
+module Make(Ty : NunType_intf.UNIFIABLE) = struct
   exception Fail of Ty.t * Ty.t * string
 
   let spf = CCFormat.sprintf
@@ -25,7 +27,9 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
     match Ty.view ty with
     | TyI.App (f, l) ->
         occur_check_ ~var f || List.exists (occur_check_ ~var) l
-    | TyI.Sym _ -> false
+    | TyI.Kind
+    | TyI.Type
+    | TyI.Builtin _ -> false
     | TyI.Var v ->
         Var.equal var v
         ||
@@ -38,7 +42,10 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
         (* [var] could be shadowed *)
         not (Var.equal var v) && occur_check_ ~var t
 
-  let deref_or_ ty = match Ty.deref ty with
+  (* NOTE: after dependent types are added, will need to recurse into
+      types too for unification and occur-check *)
+
+  let deref_rec ty = match Ty.deref ty with
     | None -> ty
     | Some ty' -> ty'
 
@@ -60,11 +67,13 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
   let unify_exn ty1 ty2 =
     let bound = ref Var.Map.empty in
     let rec unify_ ty1 ty2 =
-      let ty1 = deref_or_ ty1 in
-      let ty2 = deref_or_ ty2 in
+      let ty1 = deref_rec ty1 in
+      let ty2 = deref_rec ty2 in
       match Ty.view ty1, Ty.view ty2 with
-      | TyI.Sym s1, TyI.Sym s2 ->
-          if Sym.equal s1 s2 then ()
+      | TyI.Kind, TyI.Kind
+      | TyI.Type, TyI.Type -> ()  (* success *)
+      | TyI.Builtin s1, TyI.Builtin s2 ->
+          if TyI.Builtin.equal s1 s2 then ()
           else fail ty1 ty2 "incompatible symbols"
       | TyI.Var v1, TyI.Var v2 when Var.Map.mem v1 !bound ->
           if Var.equal v2 (Var.Map.find v1 !bound) then ()
@@ -103,23 +112,47 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
           assert (not (Var.Map.mem v2 !bound));
           bound := Var.Map.add v1 v2 !bound;
           unify_ t1 t2
-      | TyI.Sym _,_
+      | TyI.Kind, _
+      | TyI.Type, _
+      | TyI.Builtin _,_
       | TyI.App (_,_),_
       | TyI.Arrow (_,_),_
       | TyI.Forall (_,_),_ -> fail ty1 ty2 "incompatible types"
     in
     unify_ ty1 ty2
 
-    let rec eval ty = match Ty.view ty with
-      | TyI.Sym _ -> ty
-      | TyI.Var _ ->
-          begin match Ty.deref ty with
-          | None -> ty
-          | Some ty' -> eval ty'
-          end
-      | TyI.App (f,l) -> Ty.build (TyI.App (eval f, List.map eval l))
-      | TyI.Arrow (a,b) -> Ty.build (TyI.Arrow (eval a, eval b))
-      | TyI.Forall (v,t) -> Ty.build (TyI.Forall (v, eval t))
+  let rec eval ty = match Ty.view ty with
+    | TyI.Kind
+    | TyI.Type
+    | TyI.Builtin _ -> ty
+    | TyI.Var _ ->
+        begin match Ty.deref ty with
+        | None -> ty
+        | Some ty' -> eval ty'
+        end
+    | TyI.App (f,l) -> Ty.build (TyI.App (eval f, List.map eval l))
+    | TyI.Arrow (a,b) -> Ty.build (TyI.Arrow (eval a, eval b))
+    | TyI.Forall (v,t) -> Ty.build (TyI.Forall (v, eval t))
+
+  let free_vars ?(init=Var.Set.empty) ty =
+    let rec aux ~bound acc ty =
+      (* follow pointers *)
+      let ty = deref_rec ty in
+      match Ty.view ty with
+      | TyI.Kind | TyI.Type | TyI.Builtin _ -> acc
+      | TyI.Var v ->
+          if Var.Set.mem v bound then acc else Var.Set.add v acc
+      | TyI.App (f,l) ->
+          let acc = aux ~bound acc f in
+          List.fold_left (aux ~bound) acc l
+      | TyI.Arrow (a,b) ->
+          let acc = aux ~bound acc a in
+          aux ~bound acc b
+      | TyI.Forall (v,t) ->
+          (* must not return [v] *)
+          aux ~bound:(Var.Set.add v bound) acc t
+    in
+    aux ~bound:Var.Set.empty init ty
 end
 
 

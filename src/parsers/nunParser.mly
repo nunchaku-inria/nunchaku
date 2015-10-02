@@ -87,7 +87,7 @@ atomic_ty:
   | TYPE
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.ty_sym ~loc Sym.type_
+      A.sym ~loc Sym.type_
     }
   | PROP
     {

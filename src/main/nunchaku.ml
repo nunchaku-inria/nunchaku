@@ -37,7 +37,7 @@ let main () =
   Arg.parse options set_file "usage: nunchaku [options] file";
   if !version_ then (
     Format.printf "nunchaku %s@." Const.version;
-    exit 0    
+    exit 0
   );
   ( if !file = "" then (
       Utils.debugf 1 "will read on stdin";

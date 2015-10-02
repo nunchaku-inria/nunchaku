@@ -3,6 +3,5 @@
 
 (** {1 Terms with Types} *)
 
-module Make(Ty : NunTypeInference.TYPE) :
-  NunTypeInference.TERM with module Ty = Ty
+include NunTypeInference.TERM
 

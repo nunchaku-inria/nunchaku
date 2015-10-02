@@ -27,14 +27,14 @@ let imply = Imply
 let equiv = Equiv
 
 let fixity = function
-  | Type -> `Prefix
-  | Prop -> `Prefix
+  | Type
+  | True
+  | False
+  | Prop
   | Not -> `Prefix
-  | And -> `Infix
-  | Or -> `Infix
-  | True -> `Prefix
-  | False -> `Prefix
-  | Imply -> `Infix
+  | And
+  | Or
+  | Imply
   | Equiv -> `Infix
 
 let print out s =

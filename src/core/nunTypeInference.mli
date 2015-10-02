@@ -6,74 +6,57 @@
 type 'a or_error = [`Ok of 'a | `Error of string]
 type var = NunVar.t
 type loc = NunLocation.t
-type sym = NunSymbol.t
 
 exception ScopingError of string * string * loc option
 (** Scoping error for the given variable *)
-
-(** {2 Interface For Types} *)
-module type TYPE = sig
-  include NunType_intf.UNIFIABLE
-
-  val loc : t -> loc option
-
-  val sym : ?loc:loc -> sym -> t
-  val var : ?loc:loc -> var -> t
-  val app : ?loc:loc -> t -> t list -> t
-  val arrow : ?loc:loc -> t -> t -> t
-  val forall : ?loc:loc -> var -> t -> t
-end
-
-(** {2 Conversion of Types from the parse tree} *)
-
-module ConvertType(Ty : TYPE) : sig
-  type env
-
-  val prop : Ty.t  (** Type of propositions *)
-
-  val convert : env:env -> NunUntypedAST.ty -> Ty.t or_error
-  (** [convert ~env ty] converts the raw, unscoped type [ty] into a
-      type from the representation [Ty.t].
-      It returns an error if the type is ill-scoped. *)
-
-  val convert_exn : env:env -> NunUntypedAST.ty -> Ty.t
-  (** @raise ScopingError if the type isn't well-scoped *)
-end
 
 exception TypeError of string * loc option
 (** Raised when the input is ill-typed or could not be inferred *)
 
 (** {2 Typed Term} *)
 module type TERM = sig
-  include NunTerm_intf.S
-
-  module Ty : TYPE
+  include NunTerm_intf.S_WITH_UNIFIABLE_TY
 
   val loc : t -> loc option
 
   val ty : t -> Ty.t option
   (** Type of this term *)
 
-  val sym : ?loc:loc -> ty:ty -> sym -> t
-  val var : ?loc:loc -> ty:ty -> var -> t
-  val app : ?loc:loc -> ty:ty -> t -> ty_arg:ty list -> t list -> t
-  val fun_ : ?loc:loc -> ty:ty -> var -> ty_arg:ty -> t -> t
+  val builtin : ?loc:loc -> ty:Ty.t -> NunTerm_intf.Builtin.t -> t
+  val var : ?loc:loc -> ty:Ty.t -> var -> t
+  val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
+  val fun_ : ?loc:loc -> ty:Ty.t -> var -> ty_arg:Ty.t -> t -> t
   val let_ : ?loc:loc -> var -> t -> t -> t
-  val forall : ?loc:loc -> var -> ty_arg:ty -> t -> t
-  val exists : ?loc:loc -> var -> ty_arg:ty -> t -> t
+  val forall : ?loc:loc -> var -> ty_arg:Ty.t -> t -> t
+  val exists : ?loc:loc -> var -> ty_arg:Ty.t -> t -> t
+
+  val ty_type : Ty.t (** Type of types *)
+  val ty_prop : Ty.t (** Propositions *)
+
+  val ty_builtin : ?loc:loc -> NunType_intf.Builtin.t -> Ty.t
+  val ty_var : ?loc:loc -> var -> Ty.t
+  val ty_app : ?loc:loc -> Ty.t -> Ty.t list -> Ty.t
+  val ty_forall : ?loc:loc -> var -> Ty.t -> Ty.t
+  val ty_arrow : ?loc:loc -> Ty.t -> Ty.t -> Ty.t
 end
 
-(** {2 Type Inference/Checking} *)
+(** {2 Type Inference/Checking}
+
+  Functions exposed by this functor will mutate in place their input,
+  by calling [Term.Ty.bind]. *)
 
 module ConvertTerm(Term : TERM) : sig
-  module ConvertType : module type of ConvertType(Term.Ty)
+  type env
 
-  type term_env
+  module ConvertTy : sig
+    val convert : env:env -> NunUntypedAST.ty -> Term.Ty.t or_error
+    (** [convert ~env ty] converts the raw, unscoped type [ty] into a
+        type from the representation [Ty.t].
+        It returns an error if the type is ill-scoped. *)
 
-  type env = {
-    ty: ConvertType.env;
-    term: term_env;
-  }
+    val convert_exn : env:env -> NunUntypedAST.ty -> Term.Ty.t
+    (** @raise ScopingError if the type isn't well-scoped *)
+  end
 
   val convert : env:env -> NunUntypedAST.term -> Term.t or_error
   (** [convert ~env ty] converts the raw, unscoped type [ty] into a
@@ -100,11 +83,11 @@ module type STATEMENT = sig
 end
 
 module ConvertStatement(St : STATEMENT) : sig
-  module ConvertTerm : module type of ConvertTerm(St.T)
+  module CT : module type of ConvertTerm(St.T)
 
   type t = (St.T.t, St.T.Ty.t) St.t
 
-  type env = ConvertTerm.env
+  type env = CT.env
 
   val convert : env:env -> NunUntypedAST.statement -> (t * env) or_error
 

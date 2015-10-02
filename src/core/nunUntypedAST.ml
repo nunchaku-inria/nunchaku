@@ -51,6 +51,7 @@ type statement = statement_node Loc.with_loc
 let wildcard ?loc () = Loc.with_loc ?loc Wildcard
 let sym ?loc s = Loc.with_loc ?loc (Sym s)
 let var ?loc v = Loc.with_loc ?loc (Var v)
+let at_var ?loc v = Loc.with_loc ?loc (AtVar v)
 let app ?loc t l = Loc.with_loc ?loc (App (t,l))
 let fun_ ?loc v t = Loc.with_loc ?loc (Fun(v,t))
 let fun_l ?loc = List.fold_right (fun_ ?loc)

@@ -88,4 +88,4 @@ and print_in_arrow out t = match t.view with
   | Ty.Var _
   | Ty.App (_,_) -> print out t
   | Ty.Arrow (_,_)
-  | Ty.Forall (_,_) -> fpf out "@[(%a)@]" print t
+  | Ty.Forall (_,_)
