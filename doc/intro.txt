@@ -5,10 +5,29 @@ TODO explain there are libraries and the core
 {2 The Library}
 
 {!modules:
+NunIntf
+NunLocation
+NunStatement_intf
+NunStatement_loc
+NunSymbol
+NunTerm_intf
+NunTerm_typed
+NunTransform
+NunTypeInference
+NunTypeUnify
+NunType_intf
 NunUntypedAST
-
+NunUntypedAST
+NunUtils
+NunVar
 }
 
+{2 Parsers}
+
+{!modules:
+NunLexer
+NunParser
+}
 
 {2 Index}
 
