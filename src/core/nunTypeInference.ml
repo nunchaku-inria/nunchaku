@@ -110,7 +110,7 @@ module ConvertTerm(Term : TERM) = struct
   (* obtain the type of a term *)
   let get_ty_ t = match Term.ty t with
     | None -> assert false
-    | Some ty -> Unif.deref_rec ty
+    | Some ty -> ty
 
   let get_ty_ty_ (t:Term.Ty.t) = get_ty_ (t:>Term.t)
 
@@ -195,7 +195,6 @@ module ConvertTerm(Term : TERM) = struct
   (* explore the type [ty], and add fresh type variables in the corresponding
      positions of [l] *)
   let rec fill_implicit_ ?loc ty l =
-    let ty = Unif.deref_rec ty in
     match Term.Ty.view ty, l with
     | TyI.Forall (_,ty'), l ->
         (* implicit argument, insert a variable *)
@@ -212,7 +211,6 @@ module ConvertTerm(Term : TERM) = struct
 
   (* evaluate the type [ty] under the explicit substitution [subst] *)
   let rec eval_subst ~subst ty =
-    let ty = Unif.deref_rec ty in
     let loc = Term.loc (Term.Ty.to_term ty) in
     match Term.Ty.view ty with
     | TyI.Kind
@@ -279,7 +277,8 @@ module ConvertTerm(Term : TERM) = struct
         in
         (* now, convert elements of [l] depending on what is
            expected by the type of [f] *)
-        let ty, l' = convert_following ~stack ~env ~subst:Var.Map.empty ty_f l in
+        let ty, l' = convert_arguments_following_ty
+          ~stack ~env ~subst:Var.Map.empty ty_f l in
         Term.app ?loc ~ty f' l'
     | A.Var v ->
         (* a variable might be applied, too *)
@@ -288,7 +287,7 @@ module ConvertTerm(Term : TERM) = struct
         (* add potential implicit args *)
         let l = fill_implicit_ ?loc ty_var [] in
         (* convert [l] into proper types, of course *)
-        let ty, l' = convert_following ~stack ~env ~subst:Var.Map.empty ty_var l in
+        let ty, l' = convert_arguments_following_ty ~stack ~env ~subst:Var.Map.empty ty_var l in
         Term.app ?loc ~ty (Term.var ?loc ~ty:ty_var var) l'
     | A.Forall ((v,ty_opt),t) ->
         convert_quantifier ?loc ~stack ~env ~which:`Forall v ty_opt t
@@ -324,8 +323,7 @@ module ConvertTerm(Term : TERM) = struct
      what [ty] expects. Return the converted list, along with
      what remains of [ty].
      @param subst the substitution of bound variables *)
-  and convert_following ~stack ~env ~subst ty l =
-    let ty = Unif.deref_rec ty in
+  and convert_arguments_following_ty ~stack ~env ~subst ty l =
     match Term.Ty.view ty, l with
     | _, [] ->
         (* substitution is complete, evaluate [ty] now *)
@@ -344,7 +342,7 @@ module ConvertTerm(Term : TERM) = struct
         let ty_b = get_ty_ b in
         unify_in_ctx_ ~stack (eval_subst ~subst a) ty_b;
         (* continue *)
-        let ty', l' = convert_following ~stack ~env ~subst ty' l' in
+        let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty' l' in
         ty', b :: l'
     | TyI.Forall (v,ty'), b :: l' ->
         (* [b] must be a type, and we replace [v] with [b] *)
@@ -352,8 +350,8 @@ module ConvertTerm(Term : TERM) = struct
         assert (Term.Ty.is_Type (get_ty_ty_ b));
         let subst = Var.Map.add v b subst in
         (* continue *)
-        let ty', l' = convert_following ~stack ~env ~subst ty' l' in
-        ty', (Term.Ty.to_term b) :: l'
+        let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty' l' in
+        ty', Term.Ty.to_term b :: l'
 
   and convert_quantifier ?loc ~stack ~env ~which v ty_opt t =
     (* fresh variable *)

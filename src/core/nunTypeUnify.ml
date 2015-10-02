@@ -34,13 +34,7 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
     | TyI.Kind
     | TyI.Type
     | TyI.Builtin _ -> false
-    | TyI.Var v ->
-        Var.equal var v
-        ||
-        (match Ty.deref ty with
-          | None -> false
-          | Some ty' -> occur_check_ ~var ty'
-        )
+    | TyI.Var v -> Var.equal var v
     | TyI.Arrow (a,b) -> occur_check_ ~var a || occur_check_ ~var b
     | TyI.Forall (v,t) ->
         (* [var] could be shadowed *)
@@ -48,10 +42,6 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
 
   (* NOTE: after dependent types are added, will need to recurse into
       types too for unification and occur-check *)
-
-  let deref_rec ty = match Ty.deref ty with
-    | None -> ty
-    | Some ty' -> ty'
 
   let push_ a b c = (a,b) :: c
 
@@ -74,8 +64,6 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
     let bound = ref Var.Map.empty in
     (* keep a stack of unification attempts *)
     let rec unify_ ~stack ty1 ty2 =
-      let ty1 = deref_rec ty1 in
-      let ty2 = deref_rec ty2 in
       match Ty.view ty1, Ty.view ty2 with
       | TyI.Kind, TyI.Kind
       | TyI.Type, TyI.Type -> ()  (* success *)
@@ -90,14 +78,12 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
           else failf ~stack ty1 ty2 "variable %a is bound" Var.print v2
       | TyI.Var v1, TyI.Var v2 when Var.equal v1 v2 -> ()
       | TyI.Var var, _ when Ty.can_bind ty1 ->
-          assert (Ty.deref ty1=None);
           if occur_check_ ~var:var ty2
             then
               failf ~stack ty1 ty2
                 "cycle detected (variable %a occurs in type)" Var.print var
             else Ty.bind ~var:ty1 ty2
       | _, TyI.Var var when Ty.can_bind ty2 ->
-          assert (Ty.deref ty2=None);
           if occur_check_ ~var:var ty1
             then
               failf ~stack ty1 ty2
@@ -138,24 +124,20 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
   let rec eval ty = match Ty.view ty with
     | TyI.Kind
     | TyI.Type
+    | TyI.Var _
     | TyI.Builtin _ -> ty
-    | TyI.Var _ ->
-        begin match Ty.deref ty with
-        | None -> ty
-        | Some ty' -> eval ty'
-        end
     | TyI.App (f,l) -> Ty.build (TyI.App (eval f, List.map eval l))
     | TyI.Arrow (a,b) -> Ty.build (TyI.Arrow (eval a, eval b))
     | TyI.Forall (v,t) -> Ty.build (TyI.Forall (v, eval t))
 
   let free_vars ?(init=Var.Set.empty) ty =
     let rec aux ~bound acc ty =
-      (* follow pointers *)
-      let ty = deref_rec ty in
       match Ty.view ty with
       | TyI.Kind | TyI.Type | TyI.Builtin _ -> acc
       | TyI.Var v ->
-          if Var.Set.mem v bound then acc else Var.Set.add v acc
+          if Ty.can_bind ty && not (Var.Set.mem v bound)
+            then Var.Set.add v acc
+            else acc
       | TyI.App (f,l) ->
           let acc = aux ~bound acc f in
           List.fold_left (aux ~bound) acc l

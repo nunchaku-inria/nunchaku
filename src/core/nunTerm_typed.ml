@@ -47,7 +47,8 @@ let build t = make_ t
 
 let builtin ?loc ~ty s = make_ ?loc ~ty (TI.Builtin s)
 let var ?loc ~ty v = make_ ?loc ~ty (TI.Var v)
-let app ?loc ~ty t l = make_ ?loc ~ty (TI.App (t, l))
+let app ?loc ~ty t l =
+  if l=[] then t else make_ ?loc ~ty (TI.App (t, l))
 let fun_ ?loc ~ty v ~ty_arg t = make_ ?loc ~ty (TI.Fun (v, ty_arg, t))
 let let_ ?loc v t u = make_ ?loc ?ty:u.ty (TI.Let (v, t, u))
 let forall ?loc v ~ty_arg t = make_ ?loc ~ty:prop (TI.Forall (v, ty_arg, t))
@@ -59,7 +60,8 @@ let ty_prop = prop
 let ty_builtin ?loc b = make_ ?loc ~ty:type_ (TI.TyBuiltin b)
 let ty_var ?loc v = var ?loc ~ty:type_ v
 let ty_meta_var ?loc v = {view=TI.Var v; loc;ty=Some type_; deref=Deref_meta}
-let ty_app ?loc f l = app ?loc ~ty:type_ f l
+let ty_app ?loc f l =
+  if l=[] then f else app ?loc ~ty:type_ f l
 let ty_arrow ?loc a b = make_ ?loc ~ty:type_ (TI.TyArrow (a,b))
 let ty_forall ?loc a b = make_ ?loc ~ty:type_ (TI.TyForall(a,b))
 
@@ -94,11 +96,33 @@ module Ty = struct
   let of_term_exn t =
     if is_ty t then t else failwith "Term_mut.TyI.of_term_exn"
 
-  let view t = match t.view with
+  (* dereference the type, if it is a variable, until it is not bound *)
+  let rec deref_rec_ t = match t.deref with
+    | Deref_meta
+    | Deref_none -> t
+    | Deref_to t' ->
+        let root = deref_rec_ t' in
+        (* path compression *)
+        if t' != root then t.deref <- Deref_to root;
+        t'
+
+  (* dereference at least once *)
+  let deref1 t = match t.deref with
+    | Deref_to _ ->
+        let t' = deref_rec_ t in
+        Some t'
+    | Deref_none
+    | Deref_meta -> None
+
+  let rec view t = match t.view with
     | TI.TyKind -> TyI.Kind
     | TI.TyType -> TyI.Type
     | TI.TyBuiltin b -> TyI.Builtin b
-    | TI.Var v -> TyI.Var v
+    | TI.Var v ->
+        begin match deref1 t with
+          | Some t' -> view t'
+          | None -> TyI.Var v
+        end
     | TI.App (f,l) -> TyI.App (f,l)
     | TI.TyArrow (a,b) -> TyI.Arrow (a,b)
     | TI.TyForall (v,t) -> TyI.Forall (v,t)
@@ -148,18 +172,6 @@ module Ty = struct
     assert_bool "cannot bind"
       (not (Ty.can_bind v))
   *)
-
-  (* dereference the type, if it is a variable, until it is not bound *)
-  let rec deref t = match t.deref with
-    | Deref_meta
-    | Deref_none -> None
-    | Deref_to t' ->
-        match deref t' with
-        | None -> Some t' (* t' is root *)
-        | Some root as res ->
-            (* path compression *)
-            t.deref <- Deref_to root;
-            res
 
   let bind ~var t =
     if not (can_bind var) then invalid_arg "Type_mut.bind";

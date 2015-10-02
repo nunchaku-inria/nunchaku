@@ -58,14 +58,14 @@ end
 module type UNIFIABLE = sig
   include S
 
-  val deref : t -> t option
-
   val can_bind : t -> bool
   (** [can_bind t] returns [true]  iff [t] is a type {b meta}-variable that is
       not bound *)
 
   val bind : var:t -> t -> unit
-  (** [bind ~var t] binds the variable [var] to [t].
+  (** [bind ~var t] binds the variable [var] to [t]. From now on,
+      [var] will behave like [t]; in particular,
+      [view var = view t] should always hold.
       @raise Invalid_argument if [var] is not a variable or if [var]
         is already bound *)
 
@@ -95,7 +95,7 @@ end = struct
         fpf out "@[<2>%a@ %a@]" print_in_app f
           (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_in_app) l
     | Arrow (a,b) ->
-        fpf out "@[<2>%a ->@ %a@]" print_in_app a print_in_arrow b
+        fpf out "@[<2>%a ->@ %a@]" print_in_arrow a print b
     | Forall (v,t) ->
         fpf out "@[<2>forall %a:type.@ %a@]" Var.print v print t
   and print_in_app out t = match Ty.view t with

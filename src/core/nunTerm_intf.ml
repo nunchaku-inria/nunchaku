@@ -127,7 +127,7 @@ end = struct
     | Exists (v, ty, t) ->
         fpf out "@[<2>forall %a:%a.@ %a@]" Var.print v print_ty_in_app ty print t
     | TyArrow (a,b) ->
-        fpf out "@[<2>%a ->@ %a@]" print_ty_in_app a print_ty_in_arrow b
+        fpf out "@[<2>%a ->@ %a@]" print_ty_in_arrow a print_ty b
     | TyForall (v,t) ->
         fpf out "@[<2>forall %a:type.@ %a@]" Var.print v print_ty t
 
