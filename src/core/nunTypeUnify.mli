@@ -7,7 +7,9 @@ type var = NunVar.t
 type 'a sequence = ('a -> unit) -> unit
 
 module Make(Ty : NunType_intf.UNIFIABLE) : sig
-  exception Fail of Ty.t * Ty.t * string
+  exception Fail of (Ty.t * Ty.t) list * string
+  (** Raised when unification fails. The list of pairs of types is the
+      unification stack (with the innermost types first) *)
 
   val unify_exn : Ty.t -> Ty.t -> unit
   (** Unify the two types, modifying their binding in place.

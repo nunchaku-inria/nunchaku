@@ -93,6 +93,6 @@ let () =
   E.catch (main ())
     ~ok:(fun () -> exit 0)
     ~err:(fun msg ->
-      Utils.debugf 0 "%s" msg;
+      Format.eprintf "%s@." msg;
       exit 1
     )

@@ -59,7 +59,7 @@ type ('a, 'ty) view =
   | TyKind
   | TyType
   | TyBuiltin of NunType_intf.Builtin.t (** Builtin type *)
-  | TyArrow of 'ty * 'ty    (** Arrow type *)
+  | TyArrow of 'ty * 'ty   (** Arrow type *)
   | TyForall of var * 'ty  (** Polymorphic/dependent type *)
 
 (** {2 What is a term?} *)

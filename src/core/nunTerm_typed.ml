@@ -66,6 +66,12 @@ module Ty = struct
     | TI.TyKind -> true
     | _ -> false
 
+  let rec returns_Type t = match t.view with
+    | TI.TyType -> true
+    | TI.TyArrow (_, t)
+    | TI.TyForall (_, t) -> returns_Type t
+    | _ -> false
+
   let to_term t = t
 
   let is_ty t = match t.ty with

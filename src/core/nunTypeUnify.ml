@@ -11,14 +11,18 @@ type var = Var.t
 type 'a sequence = ('a -> unit) -> unit
 
 module Make(Ty : NunType_intf.UNIFIABLE) = struct
-  exception Fail of Ty.t * Ty.t * string
+  exception Fail of (Ty.t * Ty.t) list * string
 
+  let fpf = Format.fprintf
   let spf = CCFormat.sprintf
 
   let () = Printexc.register_printer
     (function
-      | Fail (ty1, ty2, msg) ->
-          Some (spf "failed to unify %a and %a: %s" Ty.print ty1 Ty.print ty2 msg)
+      | Fail (stack, msg) ->
+          let pp2 out (ty1,ty2) =
+            fpf out "@[<hv2>trying to unify@ %a@ and %a@]" Ty.print ty1 Ty.print ty2
+          in
+          Some (spf "@[<hv2>unification error: %s:@ %a" msg (CCFormat.list pp2) stack)
       | _ -> None
     )
 
@@ -49,14 +53,16 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
     | None -> ty
     | Some ty' -> ty'
 
-  let fail ty1 ty2 msg = raise (Fail (ty1, ty2, msg))
+  let push_ a b c = (a,b) :: c
 
-  let failf ty1 ty2 fmt =
+  let fail ~stack ty1 ty2 msg = raise (Fail (push_ ty1 ty2 stack, msg))
+
+  let failf ~stack ty1 ty2 fmt =
     let b = Buffer.create 32 in
     let out = Format.formatter_of_buffer b in
     Format.kfprintf
       (fun _ -> Format.pp_print_flush out ();
-        raise (Fail (ty1, ty2, Buffer.contents b)))
+        raise (Fail (push_ ty1 ty2 stack, Buffer.contents b)))
       out fmt
 
   let rec flatten_app_ f l = match Ty.view f with
@@ -66,7 +72,8 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
   (* bound: set of bound variables, that cannot be unified *)
   let unify_exn ty1 ty2 =
     let bound = ref Var.Map.empty in
-    let rec unify_ ty1 ty2 =
+    (* keep a stack of unification attempts *)
+    let rec unify_ ~stack ty1 ty2 =
       let ty1 = deref_rec ty1 in
       let ty2 = deref_rec ty2 in
       match Ty.view ty1, Ty.view ty2 with
@@ -74,25 +81,26 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
       | TyI.Type, TyI.Type -> ()  (* success *)
       | TyI.Builtin s1, TyI.Builtin s2 ->
           if TyI.Builtin.equal s1 s2 then ()
-          else fail ty1 ty2 "incompatible symbols"
+          else fail ~stack ty1 ty2 "incompatible symbols"
       | TyI.Var v1, TyI.Var v2 when Var.Map.mem v1 !bound ->
           if Var.equal v2 (Var.Map.find v1 !bound) then ()
-          else failf ty1 ty2 "variable %a is bound" Var.print v1
+          else failf ~stack ty1 ty2 "variable %a is bound" Var.print v1
       | TyI.Var v1, TyI.Var v2 when Var.Map.mem v2 !bound ->
           if Var.equal v1 (Var.Map.find v2 !bound) then ()
-          else failf ty1 ty2 "variable %a is bound" Var.print v2
+          else failf ~stack ty1 ty2 "variable %a is bound" Var.print v2
+      | TyI.Var v1, TyI.Var v2 when Var.equal v1 v2 -> ()
       | TyI.Var var, _ ->
           assert (Ty.deref ty1=None);
           if occur_check_ ~var:var ty2
             then
-              failf ty1 ty2
+              failf ~stack ty1 ty2
                 "cycle detected (variable %a occurs in type)" Var.print var
             else Ty.bind ~var:ty1 ty2
       | _, TyI.Var var ->
           assert (Ty.deref ty2=None);
           if occur_check_ ~var:var ty1
             then
-              failf ty1 ty2
+              failf ~stack ty1 ty2
                 "cycle detected (variable %a occurs in type)" Var.print var
             else Ty.bind ~var:ty2 ty1
       | TyI.App (f1,l1), TyI.App (f2,l2) ->
@@ -100,26 +108,31 @@ module Make(Ty : NunType_intf.UNIFIABLE) = struct
           let f2, l2 = flatten_app_ f2 l2 in
           if List.length l1<>List.length l2
             then
-              failf ty1 ty2 "different number of arguments (%d and %d resp.)"
+              failf ~stack ty1 ty2
+                "different number of arguments (%d and %d resp.)"
                 (List.length l1) (List.length l2);
-          unify_ f1 f2;
-          List.iter2 unify_ l1 l2
+          let stack = push_ ty1 ty2 stack in
+          unify_ ~stack f1 f2;
+          List.iter2 (unify_ ~stack) l1 l2
       | TyI.Arrow (l1,r1), TyI.Arrow (l2,r2) ->
-          unify_ l1 l2;
-          unify_ r1 r2
+          let stack = push_ ty1 ty2 stack in
+          unify_ ~stack l1 l2;
+          unify_ ~stack r1 r2
       | TyI.Forall (v1,t1), TyI.Forall (v2,t2) ->
           assert (not (Var.Map.mem v1 !bound));
           assert (not (Var.Map.mem v2 !bound));
           bound := Var.Map.add v1 v2 !bound;
-          unify_ t1 t2
+          let stack = push_ ty1 ty2 stack in
+          unify_ ~stack t1 t2
       | TyI.Kind, _
       | TyI.Type, _
       | TyI.Builtin _,_
       | TyI.App (_,_),_
       | TyI.Arrow (_,_),_
-      | TyI.Forall (_,_),_ -> fail ty1 ty2 "incompatible types"
+      | TyI.Forall (_,_),_ ->
+          fail ~stack ty1 ty2 "incompatible types"
     in
-    unify_ ty1 ty2
+    unify_ ~stack:[] ty1 ty2
 
   let rec eval ty = match Ty.view ty with
     | TyI.Kind

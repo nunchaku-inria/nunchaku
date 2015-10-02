@@ -45,6 +45,7 @@ module type AS_TERM = sig
   type t = private term
 
   val is_Type : t -> bool (** type == Type? *)
+  val returns_Type : t -> bool (** type == forall ... -> ... -> ... -> Type? *)
   val is_Kind : t -> bool (** type == Kind? *)
 
   val to_term : t -> term

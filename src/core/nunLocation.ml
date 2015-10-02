@@ -66,10 +66,10 @@ let smaller p ~than =
 let print out pos =
   if pos.start_line = pos.stop_line
   then
-    Format.fprintf out "@[<1>file '%s':@ line %d, col %d to %d@]"
+    Format.fprintf out "file '%s': line %d, col %d to %d"
       pos.file pos.start_line pos.start_column pos.stop_column
   else
-    Format.fprintf out "@[<1>file '%s':@ line %d, col %d to line %d, col %d@]"
+    Format.fprintf out "file '%s': line %d, col %d to line %d, col %d"
       pos.file
       pos.start_line pos.start_column
       pos.stop_line pos.stop_column

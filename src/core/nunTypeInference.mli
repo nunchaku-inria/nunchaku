@@ -10,9 +10,6 @@ type loc = NunLocation.t
 exception ScopingError of string * string * loc option
 (** Scoping error for the given variable *)
 
-exception TypeError of string * loc option
-(** Raised when the input is ill-typed or could not be inferred *)
-
 (** {2 Typed Term} *)
 module type TERM = sig
   include NunTerm_intf.S_WITH_UNIFIABLE_TY
@@ -59,6 +56,13 @@ module ConvertTerm(Term : TERM) : sig
     val convert_exn : env:env -> NunUntypedAST.ty -> Term.Ty.t
     (** @raise ScopingError if the type isn't well-scoped *)
   end
+
+  type attempt_stack = NunUntypedAST.term list
+  (** a trace of inference attempts with a message and optional location
+      for each attempt. *)
+
+  exception TypeError of string * attempt_stack
+  (** Raised when the input is ill-typed or could not be inferred. *)
 
   val convert : env:env -> NunUntypedAST.term -> Term.t or_error
   (** [convert ~env ty] converts the raw, unscoped type [ty] into a
