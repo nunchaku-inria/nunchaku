@@ -7,7 +7,7 @@ type var = NunVar.t
 
 type ('term, 'ty) view =
   | Decl of var * 'ty  (** uninterpreted symbol *)
-  | Def of var * 'term (** defined symbol *)
+  | Def of var * 'ty * 'term (** defined symbol *)
   | Axiom of 'term
 
 module type S = sig

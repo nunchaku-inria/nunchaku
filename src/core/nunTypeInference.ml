@@ -406,7 +406,7 @@ module type STATEMENT = sig
   val loc : (_,_) t -> loc option
 
   val decl : ?loc:loc -> var -> T.Ty.t -> (_, T.Ty.t) t
-  val def : ?loc:loc -> var -> T.t -> (T.t, _) t
+  val def : ?loc:loc -> var -> ty:T.Ty.t -> T.t -> (T.t, T.Ty.t) t
   val axiom : ?loc:loc -> T.t -> (T.t,_) t
 end
 
@@ -437,12 +437,13 @@ module ConvertStatement(St : STATEMENT) = struct
         let t, _ = CT.generalize t in
         let env = CT.add_def ~env v ~var t in
         (* unify with [ty_opt] if present *)
+        let ty = CT.get_ty_ t in
         CCOpt.iter
           (fun ty ->
             let ty = CT.ConvertTy.convert_exn ~env ty in
             CT.unify_in_ctx_ ~stack:[] ty (CT.get_ty_ t)
           ) ty_opt;
-        St.def ?loc var t, env
+        St.def ?loc var ~ty t, env
     | A.Axiom t ->
         (* infer type for t *)
         let t = CT.convert_exn ~env t in

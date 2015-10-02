@@ -25,7 +25,7 @@ let make_ ?loc view = {loc;view}
 let build v = make_ v
 
 let decl ?loc v t = make_ ?loc (St.Decl (v,t))
-let def ?loc v t = make_ ?loc (St.Def (v,t))
+let def ?loc v ~ty t = make_ ?loc (St.Def (v,ty,t))
 let axiom ?loc t = make_ ?loc (St.Axiom t)
 
 type 'a printer = Format.formatter -> 'a -> unit
@@ -35,7 +35,9 @@ let fpf = Format.fprintf
 let print pt pty out t =
   match t.view with
   | St.Decl (v, ty) -> fpf out "@[<2>val %a@ : %a.@]" Var.print v pty ty
-  | St.Def (v, t) -> fpf out "@[<2>def %a@ := %a.@]" Var.print v pt t
+  | St.Def (v, ty, t) ->
+      fpf out "@[<2>def %a@ : %a@ := %a.@]"
+        Var.print v pty ty pt t
   | St.Axiom t -> fpf out "@[<2>axiom %a.@]" pt t
 
 let print_list pt pty out l =

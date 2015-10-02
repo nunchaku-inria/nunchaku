@@ -90,7 +90,7 @@ module type STATEMENT = sig
   val loc : (_,_) t -> loc option
 
   val decl : ?loc:loc -> var -> T.Ty.t -> (_, T.Ty.t) t
-  val def : ?loc:loc -> var -> T.t -> (T.t, _) t
+  val def : ?loc:loc -> var -> ty:T.Ty.t -> T.t -> (T.t, T.Ty.t) t
   val axiom : ?loc:loc -> T.t -> (T.t,_) t
 end
 

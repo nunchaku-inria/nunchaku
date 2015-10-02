@@ -11,7 +11,7 @@ include NunStatement_intf.S
 val loc : (_,_) t -> loc option
 
 val decl : ?loc:loc -> var -> 'a -> (_, 'a) t
-val def : ?loc:loc -> var -> 'a -> ('a, _) t
+val def : ?loc:loc -> var -> ty:'ty -> 'a -> ('a, 'ty) t
 val axiom : ?loc:loc -> 'a -> ('a,_) t
 
 type 'a printer = Format.formatter -> 'a -> unit
