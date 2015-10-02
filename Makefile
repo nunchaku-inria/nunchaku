@@ -44,3 +44,26 @@ setup.exe: setup.ml
 .PHONY: build doc test all install uninstall reinstall clean distclean configure
 
 # OASIS_STOP
+
+DONTTEST=myocamlbuild.ml setup.ml
+QTESTABLE=$(filter-out $(DONTTEST), \
+	$(wildcard src/core/*.ml) \
+	$(wildcard src/core/*.mli) \
+	$(wildcard src/parsers/*.ml) \
+	$(wildcard src/parsers/*.mli) \
+	)
+
+qtest-clean:
+	@rm -rf qtest/
+
+QTEST_PREAMBLE=''
+
+qtest-gen:
+	@mkdir -p qtest
+	@if which qtest > /dev/null ; then \
+		qtest extract --preamble $(QTEST_PREAMBLE) \
+			-o qtest/run_qtest.ml \
+			$(QTESTABLE) 2> /dev/null ; \
+	else touch qtest/run_qtest.ml ; \
+	fi
+
