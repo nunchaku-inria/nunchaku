@@ -22,21 +22,24 @@ Library "nunchaku_core"
                     NunTerm_typed, NunTypeUnify, NunTypeInference,
                     NunStatement_intf, NunStatement_loc, NunDeref
   Install:          true
+  FindlibName:      nunchaku
   BuildDepends:     containers, containers.iter, sequence, unix
 
 Library "nunchaku_parsers"
   Path:             src/parsers/
   Modules:          NunLexer, NunParser
   Install:          true
+  FindlibName:      parsers
+  FindlibParent:    nunchaku_core
   BuildTools:       menhir
-  BuildDepends:     nunchaku_core
+  BuildDepends:     nunchaku
 
 Executable nunchaku
   Path:             src/main/
   Install:          true
   CompiledObject:   native
   MainIs:           nunchaku.ml
-  BuildDepends:     nunchaku_core, nunchaku_parsers
+  BuildDepends:     nunchaku, nunchaku.parsers
 
 PreBuildCommand:    make qtest-gen
 
@@ -46,7 +49,7 @@ Executable run_qtest
   CompiledObject:   native 
   MainIs:           run_qtest.ml
   Build$:           flag(tests)
-  BuildDepends:     nunchaku_core, nunchaku_parsers, oUnit, QTest2Lib
+  BuildDepends:     nunchaku, nunchaku.parsers, oUnit, QTest2Lib
 
 Test all
   Command:      ./run_qtest.native
@@ -63,5 +66,5 @@ Document nunchaku
   XOCamlbuildExtraArgs:
     "-docflags '-colorize-code -short-functors -charset utf-8'"
   XOCamlbuildLibraries:
-    nunchaku_core, nunchaku_parsers
+    nunchaku, nunchaku.parsers
 
