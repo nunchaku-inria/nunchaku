@@ -19,6 +19,7 @@ val name : t -> string
 val id : t -> int
 
 include NunIntf.PRINT with type t := t
+val to_string : t -> string
 
 module Map : CCMap.S with type key = t
 module Set : CCSet.S with type elt = t

@@ -26,6 +26,7 @@ let compare v1 v2 = Pervasives.compare v1.id v2.id
 let hash v = v.id land max_int (* >= 0 *)
 
 let print out v = Format.fprintf out "%s/%d" v.name v.id
+let to_string v = Printf.sprintf "%s/%d" v.name v.id
 
 module As_key = struct
   type t = _t

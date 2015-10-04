@@ -21,10 +21,10 @@ Library "nunchaku_core"
                     NunSymbol, NunTerm_intf, NunType_intf, NunUntypedAST,
                     NunTerm_typed, NunTypeUnify, NunTypeInference,
                     NunStatement_intf, NunStatement_loc, NunDeref,
-                    NunReduce
+                    NunReduce, NunSolver_intf, NunCVC4
   Install:          true
   FindlibName:      nunchaku
-  BuildDepends:     containers, containers.iter, sequence, unix
+  BuildDepends:     containers, containers.sexp, containers.iter, sequence, unix
 
 Library "nunchaku_parsers"
   Path:             src/parsers/
