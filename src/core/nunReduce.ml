@@ -59,7 +59,12 @@ module Make(T : NunTypeInference.TERM) = struct
         T.let_ v' t u
     | TI.TyArrow (a,b) ->
         T.Ty.to_term (T.ty_arrow (apply_subst_ty ~env a) (apply_subst_ty ~env b))
-    | TI.TyForall (_,_) -> assert false
+    | TI.TyForall (v,t) ->
+        enter_ ~env v T.ty_type
+          (fun ~env v' _ ->
+            let t = apply_subst_ty ~env t in
+            T.Ty.to_term (T.ty_forall v' t)
+          )
 
   and apply_subst_ty ~env (ty:T.Ty.t) =
     T.Ty.of_term_exn (apply_subst ~env (ty:>T.t))
