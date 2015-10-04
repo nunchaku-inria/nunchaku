@@ -20,7 +20,8 @@ Library "nunchaku_core"
   Modules:          NunVar, NunLocation, NunIntf, NunUtils, NunTransform,
                     NunSymbol, NunTerm_intf, NunType_intf, NunUntypedAST,
                     NunTerm_typed, NunTypeUnify, NunTypeInference,
-                    NunStatement_intf, NunStatement_loc, NunDeref
+                    NunStatement_intf, NunStatement_loc, NunDeref,
+                    NunReduce
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.iter, sequence, unix
@@ -46,7 +47,7 @@ PreBuildCommand:    make qtest-gen
 Executable run_qtest
   Path:             qtest/
   Install:          false
-  CompiledObject:   native 
+  CompiledObject:   native
   MainIs:           run_qtest.ml
   Build$:           flag(tests)
   BuildDepends:     nunchaku, nunchaku.parsers, oUnit, QTest2Lib

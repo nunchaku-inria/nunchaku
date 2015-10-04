@@ -76,8 +76,6 @@ module type S_WITH_PRINTABLE_TY = sig
   val build : (t, Ty.t) view -> t
 end
 
-(** {2 Print Terms} *)
-
 module Print(T : S) = struct
   type 'a printer = Format.formatter -> 'a -> unit
 
