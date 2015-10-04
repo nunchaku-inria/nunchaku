@@ -332,13 +332,24 @@ module ConvertTerm(Term : TERM) = struct
         eval_subst ~subst ty, []
     | TyI.Kind ,_
     | TyI.Type ,_
-    | TyI.Meta _, _
     | TyI.Var _,_
     | TyI.App (_,_),_
     | TyI.Builtin _,_ ->
         type_errorf ~stack
           "@[term of type @[%a@] cannot accept argument,@ but was given @[<hv>%a@]@]"
           Term.Ty.print ty (CCFormat.list A.print_term) l
+    | TyI.Meta (_,ref), b :: l' ->
+        (* must be an arrow type. We do not infer forall types *)
+        assert (NunDeref.can_bind ref);
+        (* convert [b] and [l'] *)
+        let b = convert_ ~stack ~env b in
+        let ty_b = get_ty_ b in
+        (* type of the function *)
+        let ty_ret = fresh_ty_var_ ~name:"?" in
+        NunDeref.bind ~ref (Term.ty_arrow ty_b ty_ret);
+        (* application *)
+        let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty_ret l' in
+        ty', b :: l'
     | TyI.Arrow (a,ty'), b :: l' ->
         (* [b] must be a term whose type coincides with [subst a] *)
         let b = convert_ ~stack ~env b in
