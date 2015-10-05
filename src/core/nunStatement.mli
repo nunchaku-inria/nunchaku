@@ -1,12 +1,19 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(** {1 Statements with Locations} *)
+(** {1 Top-Level Statements (with locations)} *)
 
 type loc = NunLocation.t
 type id = NunID.t
 
-include NunStatement_intf.S
+type ('term, 'ty) view =
+  | Decl of id * 'ty (** uninterpreted symbol *)
+  | Def of id * 'ty * 'term (** defined symbol *)
+  | Axiom of 'term
+
+type ('term,'ty) t
+
+val view : ('term,'ty) t -> ('term, 'ty) view
 
 val loc : (_,_) t -> loc option
 

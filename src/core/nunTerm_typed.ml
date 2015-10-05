@@ -28,10 +28,12 @@ module Builtin = struct
     | And
     | Imply
     | Equiv
+    | Eq
   let fixity = function
     | True
     | False
     | Not -> `Prefix
+    | Eq
     | Or
     | And
     | Imply
@@ -44,6 +46,7 @@ module Builtin = struct
     | And -> "&"
     | Imply -> "=>"
     | Equiv -> "<=>"
+    | Eq -> "="
   let equal = (==)
 end
 

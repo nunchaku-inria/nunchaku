@@ -4,7 +4,6 @@
 (** {1 Input AST} *)
 
 module Loc = NunLocation
-module Sym = NunSymbol
 
 exception ParseError of Loc.t
 exception SyntaxError of string * Loc.t option
@@ -19,10 +18,67 @@ let () = Printexc.register_printer
 
 type var = string
 
+module Builtin : sig
+  type t =
+    | Prop
+    | Type
+    | Not
+    | And
+    | Or
+    | True
+    | False
+    | Eq
+    | Imply
+    | Equiv
+
+  include NunIntf.PRINT with type t := t
+  val fixity : t -> [`Prefix | `Infix]
+  val to_string : t -> string
+end = struct
+type t =
+  | Prop
+  | Type
+  | Not
+  | And
+  | Or
+  | True
+  | False
+  | Eq
+  | Imply
+  | Equiv
+
+  let fixity = function
+    | Type
+    | True
+    | False
+    | Prop
+    | Not -> `Prefix
+    | And
+    | Or
+    | Imply
+    | Eq
+    | Equiv -> `Infix
+
+  let to_string = function
+    | Type -> "type"
+    | Prop -> "prop"
+    | Not -> "~"
+    | And -> "&"
+    | Or -> "|"
+    | True -> "true"
+    | False -> "false"
+    | Eq -> "="
+    | Imply -> "==>"
+    | Equiv -> "<=>"
+
+  let print out s = Format.pp_print_string out (to_string s)
+end
+
+
 type term = term_node Loc.with_loc
 and term_node =
   | Wildcard
-  | Sym of Sym.t
+  | Builtin of Builtin.t
   | Var of var
   | AtVar of var  (* variable without implicit arguments *)
   | App of term * term list
@@ -49,7 +105,7 @@ type statement_node =
 type statement = statement_node Loc.with_loc
 
 let wildcard ?loc () = Loc.with_loc ?loc Wildcard
-let sym ?loc s = Loc.with_loc ?loc (Sym s)
+let builtin ?loc s = Loc.with_loc ?loc (Builtin s)
 let var ?loc v = Loc.with_loc ?loc (Var v)
 let at_var ?loc v = Loc.with_loc ?loc (AtVar v)
 let app ?loc t l = Loc.with_loc ?loc (App (t,l))
@@ -84,14 +140,14 @@ let pf = Format.fprintf
 
 let rec print_term out term = match Loc.get term with
   | Wildcard -> CCFormat.string out "_"
-  | Sym s -> Sym.print out s
+  | Builtin s -> Builtin.print out s
   | Var v -> CCFormat.string out v
   | AtVar v -> pf out "@%s" v
   | App (f, [a;b]) ->
       begin match Loc.get f with
-      | Sym s when Sym.fixity s = `Infix ->
+      | Builtin s when Builtin.fixity s = `Infix ->
           pf out "@[<2>%a@ %a@ %a@]"
-            print_term_inner a Sym.print s print_term_inner b
+            print_term_inner a Builtin.print s print_term_inner b
       | _ ->
           pf out "@[<2>%a@ %a@ %a@]" print_term_inner f
             print_term_inner a print_term_inner b
@@ -116,10 +172,10 @@ let rec print_term out term = match Loc.get term with
 and print_term_inner out term = match Loc.get term with
   | App _ | Fun _ | Let _ | Forall _ | Exists _ | TyForall _ | TyArrow _ ->
       pf out "(%a)" print_term term
-  | Sym _ | AtVar _ | Var _ | Wildcard -> print_term out term
+  | Builtin _ | AtVar _ | Var _ | Wildcard -> print_term out term
 and print_term_in_arrow out t = match Loc.get t with
   | Wildcard
-  | Sym _
+  | Builtin _
   | Var _
   | AtVar _
   | App (_,_) -> print_term out t

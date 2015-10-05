@@ -58,22 +58,10 @@ end
 
 (** {2 Statements} *)
 
-module type STATEMENT = sig
-  include NunStatement_intf.S
+module ConvertStatement(T : TERM) : sig
+  module CT : module type of ConvertTerm(T)
 
-  module T : TERM
-
-  val loc : (_,_) t -> loc option
-
-  val decl : ?loc:loc -> id -> T.Ty.t -> (_, T.Ty.t) t
-  val def : ?loc:loc -> id -> ty:T.Ty.t -> T.t -> (T.t, T.Ty.t) t
-  val axiom : ?loc:loc -> T.t -> (T.t,_) t
-end
-
-module ConvertStatement(St : STATEMENT) : sig
-  module CT : module type of ConvertTerm(St.T)
-
-  type t = (St.T.t, St.T.Ty.t) St.t
+  type t = (T.t, T.Ty.t) NunStatement.t
 
   type env = CT.env
 

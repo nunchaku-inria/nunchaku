@@ -5,21 +5,6 @@ module E = CCError
 module A = NunUntypedAST
 module Utils = NunUtils
 
-(** {2 Type Inference} *)
-
-module T = NunTerm_typed.Default
-
-(* type inference *)
-module Conv = NunTypeInference.ConvertStatement(struct
-  include NunStatement_loc
-  module T = T
-end)
-
-module PrintTy = NunType_intf.Print(T.Ty)
-
-let print_statement = NunStatement_loc.print T.print PrintTy.print
-let print_statement_list = NunStatement_loc.print_list T.print PrintTy.print
-
 (** {2 Options} *)
 
 let print_ = ref false
@@ -73,7 +58,7 @@ let print_input_if_needed statements =
 
 let print_typed_if_needed statements =
   if !print_typed_ then (
-    Format.printf "@[%a@]@." print_statement_list statements;
+    Format.printf "@[%a@]@." Pipeline.TyInfer.print_statement_list statements;
     exit 0
   );
   ()
@@ -86,7 +71,7 @@ let main () =
   parse_file ()
   >>= fun statements ->
   print_input_if_needed statements;
-  Conv.convert_list ~env:Conv.empty_env statements
+  Pipeline.TyInfer.Conv.convert_list ~env:Pipeline.TyInfer.Conv.empty_env statements
   >>= fun (statements, _) ->
   print_typed_if_needed statements;
   Utils.not_implemented "main translation"

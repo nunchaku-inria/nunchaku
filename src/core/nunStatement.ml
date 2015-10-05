@@ -6,27 +6,27 @@
 module Loc = NunLocation
 module ID = NunID
 
-module St = NunStatement_intf
-
 type loc = Loc.t
 type id = ID.t
 
+type ('term, 'ty) view =
+  | Decl of id * 'ty (** uninterpreted symbol *)
+  | Def of id * 'ty * 'term (** defined symbol *)
+  | Axiom of 'term
+
 type ('a, 'b) t = {
-  view: ('a, 'b) St.view;
+  view: ('a, 'b) view;
   loc: Loc.t option;
 }
-
 
 let view t = t.view
 let loc t = t.loc
 
 let make_ ?loc view = {loc;view}
 
-let build v = make_ v
-
-let decl ?loc v t = make_ ?loc (St.Decl (v,t))
-let def ?loc v ~ty t = make_ ?loc (St.Def (v,ty,t))
-let axiom ?loc t = make_ ?loc (St.Axiom t)
+let decl ?loc v t = make_ ?loc (Decl (v,t))
+let def ?loc v ~ty t = make_ ?loc (Def (v,ty,t))
+let axiom ?loc t = make_ ?loc (Axiom t)
 
 type 'a printer = Format.formatter -> 'a -> unit
 
@@ -34,11 +34,11 @@ let fpf = Format.fprintf
 
 let print pt pty out t =
   match t.view with
-  | St.Decl (v, ty) -> fpf out "@[<2>val %a@ : %a.@]" ID.print v pty ty
-  | St.Def (v, ty, t) ->
+  | Decl (v, ty) -> fpf out "@[<2>val %a@ : %a.@]" ID.print v pty ty
+  | Def (v, ty, t) ->
       fpf out "@[<2>def %a@ : %a@ := %a.@]"
         ID.print v pty ty pt t
-  | St.Axiom t -> fpf out "@[<2>axiom %a.@]" pt t
+  | Axiom t -> fpf out "@[<2>axiom %a.@]" pt t
 
 let print_list pt pty out l =
   fpf out "@[<v>%a@]"

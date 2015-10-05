@@ -7,7 +7,7 @@
 
   module L = NunLocation
   module A = NunUntypedAST
-  module Sym = NunSymbol
+  module B = A.Builtin
 
 %}
 
@@ -35,6 +35,7 @@
 %token LOGIC_EQUIV
 %token LOGIC_FORALL
 %token LOGIC_EXISTS
+%token LOGIC_EQ
 
 %token PROP
 %token TYPE
@@ -97,22 +98,22 @@ const:
   | TYPE
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.sym ~loc Sym.type_
+      A.builtin ~loc B.Type
     }
   | PROP
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.sym ~loc Sym.prop
+      A.builtin ~loc B.Prop
     }
   | LOGIC_TRUE
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.sym ~loc Sym.true_
+      A.builtin ~loc B.True
     }
   | LOGIC_FALSE
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.sym ~loc Sym.false_
+      A.builtin ~loc B.False
     }
 
 atomic_term:
@@ -131,15 +132,20 @@ apply_term:
   | LOGIC_NOT t=atomic_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.sym ~loc Sym.not_) [t]
+      A.app ~loc (A.builtin ~loc B.Not) [t]
     }
 
 and_term:
   | t=apply_term { t }
+  | t=apply_term LOGIC_EQ u=apply_term
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.app ~loc (A.builtin ~loc B.Eq) [t; u]
+    }
   | t=apply_term LOGIC_AND u=and_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.sym ~loc Sym.and_) [t; u]
+      A.app ~loc (A.builtin ~loc B.And) [t; u]
     }
 
 or_term:
@@ -147,17 +153,17 @@ or_term:
   | t=and_term LOGIC_OR u=or_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.sym ~loc Sym.or_) [t; u]
+      A.app ~loc (A.builtin ~loc B.Or) [t; u]
     }
   | t=and_term LOGIC_IMPLY u=and_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.sym ~loc Sym.imply) [t; u]
+      A.app ~loc (A.builtin ~loc B.Imply) [t; u]
     }
   | t=and_term LOGIC_EQUIV u=and_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.sym ~loc Sym.equiv) [t; u]
+      A.app ~loc (A.builtin ~loc B.Equiv) [t; u]
     }
 
 term:

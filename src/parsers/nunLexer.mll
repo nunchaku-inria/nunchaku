@@ -44,6 +44,7 @@ rule token = parse
   | '.' { DOT }
   | '_' { WILDCARD }
   | ':' { COLUMN }
+  | "=" { LOGIC_EQ }
   | ":=" { EQDEF }
   | "->" { ARROW }
   | "fun" { FUN }

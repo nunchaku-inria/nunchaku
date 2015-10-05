@@ -295,6 +295,10 @@ module Default : S = struct
       | _ -> None
     )
 
+  let ty_of_eq =
+    let v = Var.make ~ty:ty_type ~name:"a" in
+    ty_forall v (ty_arrow (ty_var v) (ty_arrow (ty_var v) prop))
+
   let rec ty_exn ~sigma t = match t.view with
     | TyKind -> failwith "Term_ho.ty: kind has no type"
     | TyType -> kind_
@@ -307,6 +311,7 @@ module Default : S = struct
         let prop1 = ty_arrow prop prop in
         let prop2 = ty_arrow prop (ty_arrow prop prop) in
         begin match b with
+          | B.Eq -> ty_of_eq
           | B.Imply -> prop2
           | B.Equiv -> prop2
           | B.Or -> prop2

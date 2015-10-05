@@ -5,7 +5,6 @@
 
 module A = NunUntypedAST
 module E = CCError
-module Sym = NunSymbol
 module ID = NunID
 module Var = NunVar
 module MetaVar = NunMetaVar
@@ -106,9 +105,9 @@ module ConvertTerm(Term : TERM) = struct
       let loc = Loc.get_loc ty in
       let stack = push_ ty stack in
       match Loc.get ty with
-        | A.Sym Sym.Prop -> Term.ty_prop
-        | A.Sym Sym.Type -> Term.ty_type
-        | A.Sym s -> ill_formedf ?loc ~kind:"type" "%a is not a type" Sym.print s
+        | A.Builtin A.Builtin.Prop -> Term.ty_prop
+        | A.Builtin A.Builtin.Type -> Term.ty_type
+        | A.Builtin s -> ill_formedf ?loc ~kind:"type" "%a is not a type" A.Builtin.print s
         | A.App (f, l) ->
             Term.ty_app ?loc
               (convert_ ~stack ~env f)
@@ -245,26 +244,32 @@ module ConvertTerm(Term : TERM) = struct
     with Unif.Fail _ as e ->
       type_error ~stack (Printexc.to_string e)
 
+  (* forall a. a -> a -> prop *)
+  let ty_of_eq =
+    let v = Var.make ~ty:Term.ty_type ~name:"a" in
+    Term.ty_forall v (arrow_list [Term.ty_var v; Term.ty_var v] prop)
+
   (* convert a parsed term into a typed/scoped term *)
   let rec convert_ ~stack ~env t =
     let loc = Loc.get_loc t in
     let stack = push_ t stack in
     match Loc.get t with
-    | A.Sym s ->
+    | A.Builtin s ->
         (* only some symbols correspond to terms *)
         let module B = NunTerm_typed.Builtin in
         let prop1 = Term.ty_arrow prop prop in
         let prop2 = arrow_list [prop; prop] prop in
         let b, ty = match s with
-          | Sym.Imply -> B.Imply, prop2
-          | Sym.Equiv -> B.Equiv, prop2
-          | Sym.Or -> B.Or, prop2
-          | Sym.And -> B.And, prop2
-          | Sym.Prop -> ill_formed ?loc "prop is not a term, but a type"
-          | Sym.Type -> ill_formed ?loc "type is not a term"
-          | Sym.Not -> B.Not, prop1
-          | Sym.True -> B.True, prop
-          | Sym.False -> B.False, prop
+          | A.Builtin.Imply -> B.Imply, prop2
+          | A.Builtin.Equiv -> B.Equiv, prop2
+          | A.Builtin.Or -> B.Or, prop2
+          | A.Builtin.And -> B.And, prop2
+          | A.Builtin.Prop -> ill_formed ?loc "prop is not a term, but a type"
+          | A.Builtin.Type -> ill_formed ?loc "type is not a term"
+          | A.Builtin.Eq -> B.Eq, ty_of_eq
+          | A.Builtin.Not -> B.Not, prop1
+          | A.Builtin.True -> B.True, prop
+          | A.Builtin.False -> B.False, prop
         in
         Term.builtin ?loc ~ty b
     | A.AtVar v ->
@@ -425,21 +430,10 @@ module ConvertTerm(Term : TERM) = struct
     t, new_vars
 end
 
-module type STATEMENT = sig
-  include NunStatement_intf.S
-
-  module T : TERM
-
-  val loc : (_,_) t -> loc option
-
-  val decl : ?loc:loc -> id -> T.Ty.t -> (_, T.Ty.t) t
-  val def : ?loc:loc -> id -> ty:T.Ty.t -> T.t -> (T.t, T.Ty.t) t
-  val axiom : ?loc:loc -> T.t -> (T.t,_) t
-end
-
-module ConvertStatement(St : STATEMENT) = struct
-  module CT = ConvertTerm(St.T)
-  module T = St.T
+module ConvertStatement(T : TERM) = struct
+  module St = NunStatement
+  module CT = ConvertTerm(T)
+  module T = T
   module Ty = T.Ty
 
   type t = (T.t, Ty.t) St.t
@@ -448,7 +442,7 @@ module ConvertStatement(St : STATEMENT) = struct
 
   let empty_env = CT.empty_env
 
-  let convert_exn ~env st =
+  let convert_exn ~(env:env) st =
     let loc = Loc.get_loc st in
     match Loc.get st with
     | A.Decl (v, ty) ->
