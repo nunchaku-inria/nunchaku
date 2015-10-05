@@ -3,17 +3,21 @@
 
 (** {1 Interface to ground SMT solvers} *)
 
-(* TODO use another view *)
-
 module ID = NunID
 module Var = NunVar
-module T = NunTerm_typed.Default
-module Ty = T.Ty
+
+module FO = NunFO.Default
+module T = FO.T
+module Ty = FO.Ty
+module F = FO.Formula
 
 type id = ID.t
 type 'a var = 'a Var.t
+
 type term = T.t
 type ty = Ty.t
+type toplevel_ty = Ty.arrow
+type formula = F.t
 
 (** {2 The Problems sent to Solvers} *)
 module Problem = struct
@@ -22,9 +26,11 @@ module Problem = struct
 
   (** One top-level statement of the problem *)
   type statement =
-    | Decl of id * ty
-    | Def of id * ty * term
-    | Axiom of term
+    | TyDecl of id * int  (** number of arguments *)
+    | Decl of id * toplevel_ty
+    | Def of id * toplevel_ty * term
+    | FormDef of id * formula
+    | Axiom of formula
 
   type t = {
     statements: statement list;

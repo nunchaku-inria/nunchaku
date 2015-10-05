@@ -227,8 +227,6 @@ module Default = struct
         make_raw_ ~loc ~ty (App (f, l1 @ l2))
     | _ -> make_raw_ ~loc ~ty view
 
-  let build t = make_ t
-
   let builtin ?loc ~ty s = make_ ?loc ~ty (Builtin s)
   let const ?loc ~ty id = make_ ?loc ~ty (Const id)
   let var ?loc v = make_ ?loc ~ty:(Var.ty v) (Var v)

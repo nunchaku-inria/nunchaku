@@ -212,7 +212,7 @@ module ConvertTerm(Term : TERM) = struct
     let bind ~subst v ty = M.add v ty subst
 
     (* evaluate the type [ty] under the explicit substitution [subst] *)
-    let rec eval ~subst ty =
+    let rec eval ~(subst:t) ty =
       let loc = Term.loc (Term.Ty.to_term ty) in
       match Term.Ty.view ty with
       | TyI.Kind

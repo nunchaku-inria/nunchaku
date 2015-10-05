@@ -5,22 +5,19 @@
 
 module E = CCError
 module Var = NunVar
+module ID = NunID
 module Sol = NunSolver_intf
 
-module T = NunTerm_typed
-module Ty = T.Ty
-module TI = NunTerm_intf
-module TyI = NunType_intf
+module FO = NunFO
+module T = NunFO.Default.T
+module Ty = NunFO.Default.Ty
+module F = NunFO.Default.Formula
 
 module DSexp = CCSexpM.MakeDecode(struct
   type 'a t = 'a
   let return x = x
   let (>>=) x f = f x
 end)
-
-(* TODO: use a special view for terms and types? simplify matchings a lot *)
-
-let wrong_fragment msg = failwith ("CVC4: wrong fragment " ^ msg)
 
 (** {2 CVC4} *)
 module CVC4 = struct
@@ -70,84 +67,83 @@ module CVC4 = struct
     Gc.finalise close s; (* close on finalize *)
     s
 
+  let fpf = Format.fprintf
+
   (* print type (a monomorphic type) in SMT *)
   let rec print_ty out ty = match Ty.view ty with
-    | TyI.Kind -> wrong_fragment "kind"
-    | TyI.Type -> wrong_fragment "type"
-    | TyI.Builtin b ->
+    | FO.TyBuiltin b ->
         begin match b with
-        | TyI.Builtin.Prop -> CCFormat.string out "Bool"
+        | FO.TyBuiltin.Prop -> CCFormat.string out "Bool"
         end
-    | TyI.Meta (v,_)
-    | TyI.Var v -> Var.print out v
-    | TyI.App (_, []) -> assert false
-    | TyI.App (f,l) ->
-        Format.fprintf out "@[(%a@ %a)@]"
-          print_ty f
+    | FO.TyApp (f, []) -> ID.print out f
+    | FO.TyApp (f, l) ->
+        fpf out "@[(%a@ %a)@]"
+          ID.print f
           (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_ty) l
-    | TyI.Arrow (_,_)
-    | TyI.Forall (_,_) -> wrong_fragment "sub arrow or forall type"
 
   (* print type in SMT syntax *)
   let print_ty_decl out ty =
-    let rec collect ty = match Ty.view ty with
-      | TyI.Kind -> wrong_fragment "kind"
-      | TyI.Type -> wrong_fragment "type"
-      | TyI.Builtin _
-      | TyI.Var _
-      | TyI.Meta (_,_)
-      | TyI.App (_,_) -> [], ty
-      | TyI.Arrow (a,b) ->
-          let l, ret = collect b in
-          a :: l, ret
-      | TyI.Forall (_,_) -> wrong_fragment "polymorphic type"
-    in
-    let args, ret = collect ty in
-    Format.fprintf out "%a %a"
+    let args, ret = ty in
+    fpf out "%a %a"
       (CCFormat.list ~start:"(" ~stop:")" ~sep:" " print_ty) args print_ty ret
 
-  let rec print_form out t = match T.view t with
-    | TI.Builtin b ->
-        let s = match b with
-          | TI.Builtin.True -> "true"
-          | TI.Builtin.False -> "false"
-          | TI.Builtin.Not -> "not"
-          | TI.Builtin.Or -> "or"
-          | TI.Builtin.And -> "and"
-          | TI.Builtin.Imply -> "=>"
-          | TI.Builtin.Equiv -> "<=>"
-        in
-        CCFormat.string out s
-    | TI.TyMeta (v,_)
-    | TI.Var v -> Var.print out v
-    | TI.App (_, []) -> assert false
-    | TI.App (f,l) ->
-        Format.fprintf out "(@[<2>%a@ %a@])"
-          print_form f (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_form) l
-    | TI.Forall (v,ty,t) ->
-        Format.fprintf out "(@[forall ((%a %a)) %a@])"
-          Var.print v print_ty ty print_form t
-    | TI.Exists (v,ty,t) ->
-        Format.fprintf out "(@[exists ((%a %a)) %a@])"
-          Var.print v print_ty ty print_form t
-    | TI.Let (_,_,_) -> assert false (* TODO *)
-    | TI.Fun (_,_,_) -> wrong_fragment "function in formula"
-    | TI.TyKind
-    | TI.TyType
-    | TI.TyBuiltin _
-    | TI.TyArrow (_,_)
-    | TI.TyForall (_,_) -> wrong_fragment "type in formula"
+  let rec print_term out t = match T.view t with
+    | FO.Builtin b ->
+        begin match b with
+        | FO.Builtin.Int n -> CCFormat.int out n
+        end
+    | FO.Var v -> Var.print out v
+    | FO.App (f,[]) -> ID.print out f
+    | FO.App (f,l) ->
+        fpf out "(@[%a@ %a@])"
+          ID.print f (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_term) l
+    | FO.Let (v,t,u) ->
+        fpf out "@[<3>(let@ ((%a %a))@ %a@])"
+          Var.print v print_term t print_term u
+
+  let rec print_form out t = match F.view t with
+    | FO.Atom t -> print_term out t
+    | FO.True -> CCFormat.string out "true"
+    | FO.False -> CCFormat.string out "false"
+    | FO.Eq (a,b) -> fpf out "(@[=@ %a@ %a@])" print_term a print_term b
+    | FO.And [] -> print_form out F.true_
+    | FO.And [f] -> print_form out f
+    | FO.And l ->
+        fpf out "(@[and@ %a@])"
+          (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_form) l
+    | FO.Or [] -> print_form out F.false_
+    | FO.Or [f] -> print_form out f
+    | FO.Or l ->
+        fpf out "(@[or@ %a@])"
+          (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_form) l
+    | FO.Not f ->
+        fpf out "(@[not@ %a@])" print_form f
+    | FO.Imply (a,b) ->
+        fpf out "(@[=>@ %a@ %a@])" print_form a print_form b
+    | FO.Equiv (_,_) -> NunUtils.not_implemented "cvc4.print_equiv" (* TODO *)
+    | FO.Forall (v,f) ->
+        fpf out "(@[<2>forall@ ((%a %a))@ %a@])"
+          Var.print v print_ty (Var.ty v) print_form f
+    | FO.Exists (v,f) ->
+        fpf out "(@[<2>exists@ ((%a %a))@ %a@])"
+          Var.print v print_ty (Var.ty v) print_form f
+
+  let print_statement out = function
+    | Sol.Problem.TyDecl (id,arity) ->
+        fpf out "(@[declare-sort@ %a@ %d@])" ID.print id arity
+    | Sol.Problem.Decl (v,ty) ->
+        fpf out "(@[<2>declare-fun@ %a@ %a@])"
+          ID.print v print_ty_decl ty
+    | Sol.Problem.Def (_,_,_) ->
+        NunUtils.not_implemented "cvc4.output definition" (* TODO *)
+    | Sol.Problem.Axiom t ->
+        fpf out "(@[(assert %a)@])" print_form t
+    | Sol.Problem.FormDef (_,_) ->
+        NunUtils.not_implemented "cvc4.output formula def" (* TODO *)
 
   let send_ s problem =
     List.iter
-      (fun st -> match st with
-          | Sol.Problem.Decl (v,ty) ->
-              Format.fprintf s.fmt "(@[<2>declare-fun@ %a@ %a@])@."
-                Var.print v print_ty_decl ty
-          | Sol.Problem.Def (_,_,_) -> assert false (* TODO *)
-          | Sol.Problem.Axiom t ->
-              Format.fprintf s.fmt "(@[(assert %a)@])@." print_form t
-      )
+      (fpf s.fmt "%a@." print_statement)
       problem.Sol.Problem.statements;
     output_string s.oc "(check-sat)\n";
     flush s.oc;
