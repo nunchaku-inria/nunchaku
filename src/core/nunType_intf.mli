@@ -27,7 +27,7 @@ module type S = sig
   type t
 
   val view : t -> t view
-  (** View must follow {!deref} pointers} *)
+  (** View must follow {!deref} pointers *)
 
   val build : t view -> t
 end
