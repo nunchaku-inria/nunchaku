@@ -10,18 +10,10 @@ module MetaVar = NunMetaVar
 type id = NunID.t
 type 'a var = 'a Var.t
 
-module Builtin = struct
-  type t =
-    | Prop
-  let equal = (==)
-  let to_string = function
-    | Prop -> "prop"
-end
-
 type 'a view =
   | Kind (** the "type" of [Type], in some sense *)
   | Type (** the type of types *)
-  | Builtin of Builtin.t (** Builtin type *)
+  | Builtin of NunBuiltin.Ty.t (** Builtin type *)
   | Const of id
   | Var of 'a var (** Constant or bound variable *)
   | Meta of 'a NunMetaVar.t (** Meta-variable, used for unification *)
@@ -67,7 +59,7 @@ module Print(Ty : S) = struct
   let rec print out ty = match Ty.view ty with
     | Kind -> CCFormat.string out "kind"
     | Type -> CCFormat.string out "type"
-    | Builtin b -> CCFormat.string out (Builtin.to_string b)
+    | Builtin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
     | Meta v -> ID.print out (MetaVar.id v)
     | Const id -> ID.print out id
     | Var v -> Var.print out v

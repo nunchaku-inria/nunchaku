@@ -19,39 +19,8 @@ type loc = Loc.t
 type id = NunID.t
 type 'a var = 'a Var.t
 
-module Builtin = struct
-  type t =
-    | True
-    | False
-    | Not
-    | Or
-    | And
-    | Imply
-    | Equiv
-    | Eq
-  let fixity = function
-    | True
-    | False
-    | Not -> `Prefix
-    | Eq
-    | Or
-    | And
-    | Imply
-    | Equiv -> `Infix
-  let to_string = function
-    | True -> "true"
-    | False -> "false"
-    | Not -> "~"
-    | Or -> "|"
-    | And -> "&"
-    | Imply -> "=>"
-    | Equiv -> "<=>"
-    | Eq -> "="
-  let equal = (==)
-end
-
 type ('a, 'ty) view =
-  | Builtin of Builtin.t (** built-in symbol *)
+  | Builtin of NunBuiltin.T.t (** built-in symbol *)
   | Const of id (** top-level symbol *)
   | Var of 'ty var (** bound variable *)
   | App of 'a * 'a list
@@ -62,7 +31,7 @@ type ('a, 'ty) view =
   | TyKind
   | TyType
   | TyMeta of 'ty NunMetaVar.t
-  | TyBuiltin of NunType_intf.Builtin.t (** Builtin type *)
+  | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
   | TyArrow of 'ty * 'ty   (** Arrow type *)
   | TyForall of 'ty var * 'ty  (** Polymorphic/dependent type *)
 
@@ -93,7 +62,7 @@ module type S = sig
   (** Type of this term *)
 
   val const : ?loc:loc -> ty:Ty.t -> id -> t
-  val builtin : ?loc:loc -> ty:Ty.t -> Builtin.t -> t
+  val builtin : ?loc:loc -> ty:Ty.t -> NunBuiltin.T.t -> t
   val var : ?loc:loc -> Ty.t var -> t
   val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
   val fun_ : ?loc:loc -> ty:Ty.t -> ty var -> t -> t
@@ -104,7 +73,7 @@ module type S = sig
   val ty_type : Ty.t (** Type of types *)
   val ty_prop : Ty.t (** Propositions *)
 
-  val ty_builtin : ?loc:loc -> NunType_intf.Builtin.t -> Ty.t
+  val ty_builtin : ?loc:loc -> NunBuiltin.Ty.t -> Ty.t
   val ty_const : ?loc:loc -> id -> Ty.t
   val ty_var : ?loc:loc -> ty var -> Ty.t
   val ty_meta_var : ?loc:loc -> Ty.t NunMetaVar.t -> Ty.t  (** Meta-variable, ready for unif *)
@@ -131,16 +100,16 @@ module Print(T : VIEW) = struct
   let rec print out ty = match T.view ty with
     | TyKind -> CCFormat.string out "kind"
     | TyType -> CCFormat.string out "type"
-    | Builtin b -> CCFormat.string out (Builtin.to_string b)
-    | TyBuiltin b -> CCFormat.string out (TyI.Builtin.to_string b)
+    | Builtin b -> CCFormat.string out (NunBuiltin.T.to_string b)
+    | TyBuiltin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
     | Const id -> ID.print out id
     | TyMeta v -> ID.print out (MetaVar.id v)
     | Var v -> Var.print out v
     | App (f, [a;b]) ->
         begin match T.view f with
-        | Builtin s when Builtin.fixity s = `Infix ->
+        | Builtin s when NunBuiltin.T.fixity s = `Infix ->
             fpf out "@[<hov>%a@ %s@ %a@]"
-              print_in_app a (Builtin.to_string s) print_in_app b
+              print_in_app a (NunBuiltin.T.to_string s) print_in_app b
         | _ ->
             fpf out "@[<hov2>%a@ %a@ %a@]" print_in_app f
               print_in_app a print_in_app b
@@ -221,7 +190,7 @@ module Default = struct
   (* special constants: kind and type *)
   let kind_ = {view=TyKind; loc=None; ty=None}
   let type_ = {view=TyType; loc=None; ty=Some kind_}
-  let prop = {view=TyBuiltin TyI.Builtin.Prop; loc=None; ty=Some type_}
+  let prop = {view=TyBuiltin NunBuiltin.Ty.Prop; loc=None; ty=Some type_}
 
   let make_raw_ ~loc ~ty view = { view; loc; ty}
 
@@ -309,4 +278,32 @@ module Default = struct
     let view = view
     let ty = ty
   end)
+end
+
+module AsHO(T : VIEW)
+  : NunTerm_ho.VIEW
+  with type t = T.t and type ty = T.ty
+= struct
+
+  module TI = NunTerm_ho
+
+  type t = T.t
+  type ty = T.ty
+
+  let view t = match T.view t with
+    | Builtin b -> TI.Builtin b
+    | Const id -> TI.Const id
+    | Var v -> TI.Var v
+    | App (f,l) -> TI.App (f, l)
+    | Fun (v,t) -> TI.Fun (v, t)
+    | Forall (v,t) -> TI.Forall (v,t)
+    | Exists (v,t) -> TI.Exists (v,t)
+    | Let (v,t,u) -> TI.Let (v,t,u)
+    | TyKind -> TI.TyKind
+    | TyType -> TI.TyType
+    | TyMeta _ -> failwith "Term_typed.AsHO.view: remaining meta"
+    | TyBuiltin b -> TI.TyBuiltin b
+    | TyArrow (a,b) -> TI.TyArrow (a,b)
+    | TyForall (v,t) -> TI.TyForall (v,t)
+
 end

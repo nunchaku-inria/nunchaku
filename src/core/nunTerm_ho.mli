@@ -10,12 +10,8 @@ type id = NunID.t
 type 'a var = 'a NunVar.t
 type 'a or_error = [`Ok of 'a | `Error of string]
 
-module Builtin
-  : module type of NunTerm_typed.Builtin
-  with type t = NunTerm_typed.Builtin.t
-
 type ('a, 'ty) view =
-  | Builtin of Builtin.t (** built-in symbol *)
+  | Builtin of NunBuiltin.T.t (** built-in symbol *)
   | Const of id (** top-level symbol *)
   | Var of 'ty var (** bound variable *)
   | App of 'a * 'a list
@@ -25,7 +21,7 @@ type ('a, 'ty) view =
   | Let of 'ty var * 'a * 'a
   | TyKind
   | TyType
-  | TyBuiltin of NunType_intf.Builtin.t (** Builtin type *)
+  | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
   | TyArrow of 'ty * 'ty   (** Arrow type *)
   | TyForall of 'ty var * 'ty  (** Polymorphic/dependent type *)
 
@@ -60,7 +56,7 @@ module type S = sig
   end
 
   val const : id -> t
-  val builtin : Builtin.t -> t
+  val builtin : NunBuiltin.T.t -> t
   val var : Ty.t var -> t
   val app : t -> t list -> t
   val fun_ : ty var -> t -> t
@@ -71,7 +67,7 @@ module type S = sig
   val ty_type : Ty.t (** Type of types *)
   val ty_prop : Ty.t (** Propositions *)
 
-  val ty_builtin : NunType_intf.Builtin.t -> Ty.t
+  val ty_builtin : NunBuiltin.Ty.t -> Ty.t
   val ty_const : id -> Ty.t
   val ty_var : ty var -> Ty.t
   val ty_app : Ty.t -> Ty.t list -> Ty.t

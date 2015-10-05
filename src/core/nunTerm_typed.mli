@@ -7,23 +7,8 @@ type id = NunID.t
 type 'a var = 'a NunVar.t
 type loc = NunLocation.t
 
-module Builtin : sig
-  type t =
-    | True
-    | False
-    | Not
-    | Or
-    | And
-    | Imply
-    | Equiv
-    | Eq
-  val fixity : t -> [`Infix | `Prefix]
-  val to_string : t -> string
-  val equal : t -> t -> bool
-end
-
 type ('a, 'ty) view =
-  | Builtin of Builtin.t (** built-in symbol *)
+  | Builtin of NunBuiltin.T.t (** built-in symbol *)
   | Const of id (** top-level symbol *)
   | Var of 'ty var (** bound variable *)
   | App of 'a * 'a list
@@ -34,7 +19,7 @@ type ('a, 'ty) view =
   | TyKind
   | TyType
   | TyMeta of 'ty NunMetaVar.t
-  | TyBuiltin of NunType_intf.Builtin.t (** Builtin type *)
+  | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
   | TyArrow of 'ty * 'ty   (** Arrow type *)
   | TyForall of 'ty var * 'ty  (** Polymorphic/dependent type *)
 
@@ -65,7 +50,7 @@ module type S = sig
   (** Type of this term *)
 
   val const : ?loc:loc -> ty:Ty.t -> id -> t
-  val builtin : ?loc:loc -> ty:Ty.t -> Builtin.t -> t
+  val builtin : ?loc:loc -> ty:Ty.t -> NunBuiltin.T.t -> t
   val var : ?loc:loc -> Ty.t var -> t
   val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
   val fun_ : ?loc:loc -> ty:Ty.t -> ty var -> t -> t
@@ -76,7 +61,7 @@ module type S = sig
   val ty_type : Ty.t (** Type of types *)
   val ty_prop : Ty.t (** Propositions *)
 
-  val ty_builtin : ?loc:loc -> NunType_intf.Builtin.t -> Ty.t
+  val ty_builtin : ?loc:loc -> NunBuiltin.Ty.t -> Ty.t
   val ty_const : ?loc:loc -> id -> Ty.t
   val ty_var : ?loc:loc -> ty var -> Ty.t
   val ty_meta_var : ?loc:loc -> Ty.t NunMetaVar.t -> Ty.t  (** Meta-variable, ready for unif *)
@@ -107,4 +92,12 @@ module Default : sig
   include PRINT with type term = t
 end
 
+(** {2 View as {!NunTerm_ho.VIEW}}
 
+  Typed terms can be considered as regular higher-order terms, but
+  only for reading — writing requires providing the type at every
+  application *)
+
+module AsHO(T : VIEW)
+  : NunTerm_ho.VIEW
+  with type t = T.t and type ty = T.ty

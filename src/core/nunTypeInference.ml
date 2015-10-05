@@ -256,7 +256,7 @@ module ConvertTerm(Term : TERM) = struct
     match Loc.get t with
     | A.Builtin s ->
         (* only some symbols correspond to terms *)
-        let module B = NunTerm_typed.Builtin in
+        let module B = NunBuiltin.T in
         let prop1 = Term.ty_arrow prop prop in
         let prop2 = arrow_list [prop; prop] prop in
         let b, ty = match s with

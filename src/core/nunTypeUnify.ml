@@ -90,7 +90,7 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
       | TyI.Kind, TyI.Kind
       | TyI.Type, TyI.Type -> ()  (* success *)
       | TyI.Builtin s1, TyI.Builtin s2 ->
-          if TyI.Builtin.equal s1 s2 then ()
+          if NunBuiltin.Ty.equal s1 s2 then ()
           else fail ~stack "incompatible symbols"
       | TyI.Const i1, TyI.Const i2 ->
           if ID.equal i1 i2 then () else fail ~stack "incompatible symbols"

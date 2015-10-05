@@ -6,17 +6,10 @@
 type id = NunID.t
 type 'a var = 'a NunVar.t
 
-module Builtin : sig
-  type t =
-    | Prop
-  val equal : t -> t -> bool
-  val to_string : t -> string
-end
-
 type 'a view =
   | Kind (** the "type" of [Type], in some sense *)
   | Type (** the type of types *)
-  | Builtin of Builtin.t (** Builtin type *)
+  | Builtin of NunBuiltin.Ty.t (** Builtin type *)
   | Const of id
   | Var of 'a var (** Constant or bound variable *)
   | Meta of 'a NunMetaVar.t (** Meta-variable, used for unification *)
