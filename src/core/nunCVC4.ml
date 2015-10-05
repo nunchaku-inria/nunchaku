@@ -142,10 +142,10 @@ module CVC4 = struct
         NunUtils.not_implemented "cvc4.output formula def" (* TODO *)
 
   let send_ s problem =
-    List.iter
-      (fpf s.fmt "%a@." print_statement)
+    fpf s.fmt "@[<v>%a@]@."
+      (CCFormat.list ~start:"" ~stop:"" ~sep:"" print_statement)
       problem.Sol.Problem.statements;
-    output_string s.oc "(check-sat)\n";
+    fpf s.fmt "(check-sat)@.";
     flush s.oc;
     ()
 
