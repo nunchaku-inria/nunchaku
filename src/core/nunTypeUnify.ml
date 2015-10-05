@@ -14,7 +14,9 @@ let section = Utils.Section.make "unif"
 
 (*$inject
   module Var = NunVar
-  module T = NunTerm_typed
+  module MetaVar = NunMetaVar
+  module T = NunTerm_typed.Default
+  module ID = NunID
   module Ty = T.Ty
   module U = Make(Ty)
 
@@ -153,16 +155,16 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
     unify_ ~stack:[] ty1 ty2
 
   (*$R
-    let v = T.ty_meta_var (Var.make ~name:"x") in
-    let f = T.ty_var (Var.make ~name:"f") in
-    let a' = Var.make ~name:"a" in
-    let a = T.ty_var a' in
+    let v = T.ty_meta_var (MetaVar.make ~name:"x") in
+    let f = T.ty_var (Var.make ~ty:T.ty_type ~name:"f") in
+    let a' = ID.make ~name:"a" in
+    let a = T.ty_const a' in
     let t1 = T.ty_app f [v] in
     let t2 = T.ty_app f [a] in
     U.unify_exn t1 t2;
     assert_bool "v is a"
       (match Ty.view v with
-        | NunType_intf.Var v' -> Var.equal v' a'
+        | NunType_intf.Const id' -> ID.equal a' id'
         | _ -> false
       );
   *)

@@ -7,7 +7,7 @@ module Utils = NunUtils
 
 (** {2 Type Inference} *)
 
-module T = NunTerm_typed
+module T = NunTerm_typed.Default
 
 (* type inference *)
 module Conv = NunTypeInference.ConvertStatement(struct
@@ -15,11 +15,10 @@ module Conv = NunTypeInference.ConvertStatement(struct
   module T = T
 end)
 
-module PrintT = NunTerm_intf.Print(T)
 module PrintTy = NunType_intf.Print(T.Ty)
 
-let print_statement = NunStatement_loc.print PrintT.print PrintTy.print
-let print_statement_list = NunStatement_loc.print_list PrintT.print PrintTy.print
+let print_statement = NunStatement_loc.print T.print PrintTy.print
+let print_statement_list = NunStatement_loc.print_list T.print PrintTy.print
 
 (** {2 Options} *)
 
