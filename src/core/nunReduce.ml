@@ -61,7 +61,7 @@ module Make(T : NunTerm_ho.S) = struct
           )
     | TI.Let (v,t,u) ->
         let t = apply_subst ~env t in
-        let v' = Var.update_ty v ~f:(apply_subst_ty ~env) in
+        let v' = Var.fresh_update_ty v ~f:(apply_subst_ty ~env) in
         let env = Env.add ~env v (T.var v') in
         let u = apply_subst ~env u in
         T.let_ v' t u
@@ -79,7 +79,7 @@ module Make(T : NunTerm_ho.S) = struct
 
   (* enter the scope where [v : ty] *)
   and enter_ ~env v f =
-    let v' = Var.update_ty v ~f:(apply_subst_ty ~env) in
+    let v' = Var.fresh_update_ty v ~f:(apply_subst_ty ~env) in
     let env = Env.add ~env v (T.var v') in
     f ~env v'
 

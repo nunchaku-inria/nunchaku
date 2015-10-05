@@ -21,8 +21,15 @@ val decl : ?loc:loc -> id -> 'a -> (_, 'a) t
 val def : ?loc:loc -> id -> ty:'ty -> 'a -> ('a, 'ty) t
 val axiom : ?loc:loc -> 'a -> ('a,_) t
 
+val map :
+  term:('t -> 't2) ->
+  ty:('ty -> 'ty2) ->
+  ('t, 'ty) t ->
+  ('t2, 'ty2) t
+
+(** {2 Print} *)
+
 type 'a printer = Format.formatter -> 'a -> unit
 
 val print : 'a printer -> 'b printer -> ('a,'b) t printer
-
 val print_list : 'a printer -> 'b printer -> ('a,'b) t list printer

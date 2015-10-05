@@ -23,9 +23,13 @@ let fresh_copy v =
 let ty t = t.ty
 let id t = t.id
 
-let update_ty v ~f =
+let fresh_update_ty v ~f =
   let ty = f v.ty in
   make ~ty ~name:(ID.name v.id)
+
+let update_ty v ~f =
+  let ty = f v.ty in
+  { id=v.id; ty }
 
 let print oc v = ID.print oc v.id
 let to_string v = ID.to_string v.id

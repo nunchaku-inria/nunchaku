@@ -18,10 +18,11 @@ XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain'"
 Library "nunchaku_core"
   Path:             src/core/
   Modules:          NunID, NunVar, NunMetaVar, NunLocation, NunIntf, NunUtils,
-                    NunTransform, NunSymbol, NunType_intf, NunUntypedAST,
+                    NunTransform, NunType_intf, NunUntypedAST,
                     NunTerm_typed, NunTypeUnify, NunTypeInference,
-                    NunStatement_intf, NunStatement_loc, NunTerm_ho, NunFO,
-                    NunReduce, NunSolver_intf, NunCVC4
+                    NunStatement, NunTerm_ho, NunFO,
+                    NunReduce, NunSolver_intf, NunCVC4,
+                    NunTypedToHO
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.sexp, containers.iter, sequence, unix

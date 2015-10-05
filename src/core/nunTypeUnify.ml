@@ -6,7 +6,6 @@
 module MetaVar = NunMetaVar
 module ID = NunID
 module Var = NunVar
-module Sym = NunSymbol
 module TyI = NunType_intf
 module Utils = NunUtils
 

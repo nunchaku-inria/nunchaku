@@ -31,6 +31,12 @@ type ('a, 'ty) view =
   | TyArrow of 'ty * 'ty   (** Arrow type *)
   | TyForall of 'ty var * 'ty  (** Polymorphic/dependent type *)
 
+type ('t, 'ty) problem = {
+  statements : ('t, 'ty) NunStatement.t list;
+  signature : 'ty NunID.Map.t; (* id -> type *)
+  defs : 't NunID.Map.t; (* id -> definition *)
+}
+
 module type VIEW = sig
   type t
 
@@ -72,7 +78,7 @@ module type S = sig
   val ty_forall : ty var -> Ty.t -> Ty.t
   val ty_arrow : Ty.t -> Ty.t -> Ty.t
 
-  type signature = t NunID.Map.t
+  type signature = Ty.t NunID.Map.t
 
   val ty : sigma:signature -> t -> Ty.t or_error
   (** Compute the type of the given term in the given signature *)

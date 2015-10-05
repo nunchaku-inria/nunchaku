@@ -28,6 +28,13 @@ let decl ?loc v t = make_ ?loc (Decl (v,t))
 let def ?loc v ~ty t = make_ ?loc (Def (v,ty,t))
 let axiom ?loc t = make_ ?loc (Axiom t)
 
+let map ~term:ft ~ty:fty st =
+  let loc = st.loc in
+  match st.view with
+  | Decl (id,ty) -> decl ?loc id (fty ty)
+  | Def (id,ty,t) -> def ?loc id ~ty:(fty ty) (ft t)
+  | Axiom t -> axiom ?loc (ft t)
+
 type 'a printer = Format.formatter -> 'a -> unit
 
 let fpf = Format.fprintf
