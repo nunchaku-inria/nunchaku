@@ -18,12 +18,23 @@ and ('a, 'b, 'c, 'd, 'st) inner = {
   name : string; (** informal name for the transformation *)
   encode : 'a -> ('b * 'st) lazy_list;
   decode : 'st -> 'c -> 'd;
+  mutable on_encoded : ('b -> unit) list;
   print_state : (Format.formatter -> 'st -> unit) option;  (** Debugging *)
 }
 
 type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 (** Alias to {!t} *)
-(** Alias to {!t} *)
+
+let make ?print ?(name="<trans>") ~encode ~decode = Ex {
+  name;
+  encode;
+  decode;
+  on_encoded=[];
+  print_state=print;
+}
+
+let on_encoded (Ex tr) ~f =
+  tr.on_encoded <- f :: tr.on_encoded
 
 (** {2 Pipeline of Transformations}
 
@@ -38,6 +49,12 @@ module Pipe = struct
   let compose a p = Comp (a, p)
 end
 
+let callbacks_ l x =
+  List.iter
+    (fun f ->
+      try f x with _ -> ()
+    ) l
+
 let rec run
   : type a b c d. pipe:(a,b,c,d) Pipe.t -> a -> (b * (c -> d)) lazy_list
   = fun ~pipe x -> match pipe with
@@ -46,6 +63,7 @@ let rec run
       let open CCKList in
       trans.encode x
       >>= fun (y, st) ->
+      callbacks_ trans.on_encoded y;
       run ~pipe:pipe' y
       >|= fun (y', conv_back) ->
       let conv_back' x = trans.decode st (conv_back x) in

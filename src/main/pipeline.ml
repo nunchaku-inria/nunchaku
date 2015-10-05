@@ -3,6 +3,8 @@
 
 (** {1 Pipelines for Nunchaku} *)
 
+module Tr = NunTransform
+
 (** {2 Type Inference} *)
 
 module TyInfer = struct
@@ -15,4 +17,11 @@ module TyInfer = struct
 
   let print_statement = NunStatement.print T.print PrintTy.print
   let print_statement_list = NunStatement.print_list T.print PrintTy.print
+
+  (* TODO: actually use Term_ho and compute signature, etc. *)
+
+  let pipe = Tr.make
+    ~name:"type inference"
+    ~encode:(fun l -> CCKList.singleton (Conv.convert_list_exn ~env:Conv.empty_env l))
+    ~decode:(fun _ _ -> assert false)
 end

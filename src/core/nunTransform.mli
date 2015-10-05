@@ -20,12 +20,23 @@ and ('a, 'b, 'c, 'd, 'st) inner = {
   name : string; (** informal name for the transformation *)
   encode : 'a -> ('b * 'st) lazy_list;
   decode : 'st -> 'c -> 'd;
+  mutable on_encoded : ('b -> unit) list;
   print_state : (Format.formatter -> 'st -> unit) option;  (** Debugging *)
 }
 
 type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 (** Alias to {!t} *)
 
+val make : ?print:(Format.formatter -> 'st -> unit) ->
+           ?name:string ->
+           encode:('a -> ('b * 'st) lazy_list) ->
+           decode:('st -> 'c -> 'd) ->
+           ('a, 'b, 'c, 'd) t
+(** Constructor *)
+
+val on_encoded : (_, 'b, _, _) t -> f:('b -> unit) -> unit
+(** [on_encoded tr ~f] registers [f] to be called on every value
+    obtained by encoding through [tr] *)
 
 (** {2 Pipeline of Transformations}
 
