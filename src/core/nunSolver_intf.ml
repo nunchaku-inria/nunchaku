@@ -3,11 +3,15 @@
 
 (** {1 Interface to ground SMT solvers} *)
 
+(* TODO use another view *)
+
+module ID = NunID
 module Var = NunVar
-module T = NunTerm_typed
+module T = NunTerm_typed.Default
 module Ty = T.Ty
 
-type var = Var.t
+type id = ID.t
+type 'a var = 'a Var.t
 type term = T.t
 type ty = Ty.t
 
@@ -18,8 +22,8 @@ module Problem = struct
 
   (** One top-level statement of the problem *)
   type statement =
-    | Decl of var * ty
-    | Def of var * ty * term
+    | Decl of id * ty
+    | Def of id * ty * term
     | Axiom of term
 
   type t = {
@@ -30,7 +34,7 @@ end
 (** {2 A Ground Model} *)
 module Model = struct
   type t = {
-    get_values: var list -> (var * term) list
+    get_values: id list -> (id * term) list
   }
 end
 

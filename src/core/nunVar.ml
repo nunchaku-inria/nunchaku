@@ -1,38 +1,32 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-type t = {
-  name: string;
-  id: int;
+module ID = NunID
+
+type id = ID.t
+
+type 'ty t = {
+  id: id;
+  ty: 'ty;
 }
-type _t = t
 
-(* make fresh variables *)
-let make =
-  let n = ref 0 in
-  fun ~name ->
-    if name="" then invalid_arg "Var.make";
-    let id = !n in
-    incr n;
-    {name; id;}
+let equal v1 v2 = ID.equal v1.id v2.id
+let compare v1 v2 = ID.compare v1.id v2.id
 
-let fresh_copy v = make ~name:v.name
+let make ~ty ~name =
+  let id = ID.make ~name in
+  { ty; id }
 
-let name v = v.name
-let id v = v.id
+let fresh_copy v =
+  { v with id=ID.fresh_copy v.id }
 
-let equal v1 v2 = v1.id = v2.id
-let compare v1 v2 = Pervasives.compare v1.id v2.id
-let hash v = v.id land max_int (* >= 0 *)
+let ty t = t.ty
+let id t = t.id
 
-let print out v = Format.fprintf out "%s/%d" v.name v.id
-let to_string v = Printf.sprintf "%s/%d" v.name v.id
+let update_ty v ~f =
+  let ty = f v.ty in
+  make ~ty ~name:(ID.name v.id)
 
-module As_key = struct
-  type t = _t
-  let compare = compare
-end
-
-module Map = CCMap.Make(As_key)
-module Set = CCSet.Make(As_key)
+let print oc v = ID.print oc v.id
+let to_string v = ID.to_string v.id
 

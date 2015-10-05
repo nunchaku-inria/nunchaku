@@ -2,6 +2,7 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 type 'a sequence = ('a -> unit) -> unit
+type 'a or_error = [`Ok of 'a | `Error of string]
 
 module Time = struct
   (** Time elapsed since initialization of the program, and time of start *)
@@ -122,4 +123,10 @@ let () = Printexc.register_printer
   )
 
 let not_implemented feat = raise (NotImplemented feat)
+
+let err_of_exn e =
+  let msg = Printexc.to_string e in
+  let trace = Printexc.get_backtrace () in
+  CCError.fail (msg ^ "\n" ^ trace)
+
 

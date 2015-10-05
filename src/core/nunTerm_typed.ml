@@ -1,154 +1,311 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-module TI = NunTerm_intf
+(** {1 Terms with Types} *)
+
 module TyI = NunType_intf
 
 module Loc = NunLocation
 module Var = NunVar
+module MetaVar = NunMetaVar
+module ID = NunID
 
 (*$inject
   module Var = NunVar
 
 *)
 
-(** {1 Terms with Types} *)
+type loc = Loc.t
+type id = NunID.t
+type 'a var = 'a Var.t
 
-type t = {
-  view : (t,t) TI.view;
-  loc : Loc.t option;
-  mutable ty : t option;
-}
+module Builtin = struct
+  type t =
+    | True
+    | False
+    | Not
+    | Or
+    | And
+    | Imply
+    | Equiv
+  let fixity = function
+    | True
+    | False
+    | Not -> `Prefix
+    | Or
+    | And
+    | Imply
+    | Equiv -> `Infix
+  let to_string = function
+    | True -> "true"
+    | False -> "false"
+    | Not -> "~"
+    | Or -> "|"
+    | And -> "&"
+    | Imply -> "=>"
+    | Equiv -> "<=>"
+  let equal = (==)
+end
 
-(* dereference the term, if it is a variable, until it is not bound *)
-let rec deref_rec_ t = match t.view with
-  | TI.TyMeta (_, ({NunDeref.deref=Some t'; _} as ref)) ->
-      let root = deref_rec_ t' in
-      (* path compression *)
-      if t' != root then NunDeref.rebind ~ref root;
-      root
-  | _ -> t
+type ('a, 'ty) view =
+  | Builtin of Builtin.t (** built-in symbol *)
+  | Const of id (** top-level symbol *)
+  | Var of 'ty var (** bound variable *)
+  | App of 'a * 'a list
+  | Fun of 'ty var * 'a
+  | Forall of 'ty var * 'a
+  | Exists of 'ty var * 'a
+  | Let of 'ty var * 'a * 'a
+  | TyKind
+  | TyType
+  | TyMeta of 'ty NunMetaVar.t
+  | TyBuiltin of NunType_intf.Builtin.t (** Builtin type *)
+  | TyArrow of 'ty * 'ty   (** Arrow type *)
+  | TyForall of 'ty var * 'ty  (** Polymorphic/dependent type *)
 
-let view t = (deref_rec_ t).view
+(** {2 Read-Only View} *)
+module type VIEW = sig
+  type t
 
-let loc t = t.loc
+  type ty = private t
 
-let ty t = t.ty
+  val view : t -> (t, ty) view
 
-(* special constants: kind and type *)
-let kind_ = {view=TI.TyKind; loc=None; ty=None}
-let type_ = {view=TI.TyType; loc=None; ty=Some kind_}
-let prop = {view=TI.TyBuiltin TyI.Builtin.Prop; loc=None; ty=Some type_}
+  val ty : t -> ty option
+  (** The type of a term *)
+end
 
-let make_raw_ ~loc ~ty view = { view; loc; ty}
+(** {2 Full Signature} *)
+module type S = sig
+  include VIEW
 
-let make_ ?loc ?ty view = match view with
-  | TI.App ({view=TI.App (f, l1); loc; _}, l2) ->
-      make_raw_ ~loc ~ty (TI.App (f, l1 @ l2))
-  | _ -> make_raw_ ~loc ~ty view
+  module Ty : sig
+    include NunType_intf.AS_TERM with type term = t and type t = ty
+    include NunIntf.PRINT with type t := t
+  end
 
-let build t = make_ t
+  val loc : t -> loc option
 
-let builtin ?loc ~ty s = make_ ?loc ~ty (TI.Builtin s)
-let var ?loc ~ty v = make_ ?loc ~ty (TI.Var v)
-let app ?loc ~ty t l =
-  if l=[] then t else make_ ?loc ~ty (TI.App (t, l))
-let fun_ ?loc ~ty v ~ty_arg t = make_ ?loc ~ty (TI.Fun (v, ty_arg, t))
-let let_ ?loc v t u = make_ ?loc ?ty:u.ty (TI.Let (v, t, u))
-let forall ?loc v ~ty_arg t = make_ ?loc ~ty:prop (TI.Forall (v, ty_arg, t))
-let exists ?loc v ~ty_arg t = make_ ?loc ~ty:prop (TI.Exists (v, ty_arg, t))
+  val ty : t -> Ty.t option
+  (** Type of this term *)
 
-let ty_type = type_
-let ty_prop = prop
+  val const : ?loc:loc -> ty:Ty.t -> id -> t
+  val builtin : ?loc:loc -> ty:Ty.t -> Builtin.t -> t
+  val var : ?loc:loc -> Ty.t var -> t
+  val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
+  val fun_ : ?loc:loc -> ty:Ty.t -> ty var -> t -> t
+  val let_ : ?loc:loc -> ty var -> t -> t -> t
+  val forall : ?loc:loc -> ty var -> t -> t
+  val exists : ?loc:loc -> ty var -> t -> t
 
-let ty_builtin ?loc b = make_ ?loc ~ty:type_ (TI.TyBuiltin b)
-let ty_var ?loc v = var ?loc ~ty:type_ v
-let ty_meta_var ?loc v = make_ ?loc (TI.TyMeta (v, NunDeref.create()))
-let ty_app ?loc f l =
-  if l=[] then f else app ?loc ~ty:type_ f l
-let ty_arrow ?loc a b = make_ ?loc ~ty:type_ (TI.TyArrow (a,b))
-let ty_forall ?loc a b = make_ ?loc ~ty:type_ (TI.TyForall(a,b))
+  val ty_type : Ty.t (** Type of types *)
+  val ty_prop : Ty.t (** Propositions *)
 
-module Ty = struct
-  type term = t
+  val ty_builtin : ?loc:loc -> NunType_intf.Builtin.t -> Ty.t
+  val ty_const : ?loc:loc -> id -> Ty.t
+  val ty_var : ?loc:loc -> ty var -> Ty.t
+  val ty_meta_var : ?loc:loc -> Ty.t NunMetaVar.t -> Ty.t  (** Meta-variable, ready for unif *)
+  val ty_app : ?loc:loc -> Ty.t -> Ty.t list -> Ty.t
+  val ty_forall : ?loc:loc -> ty var -> Ty.t -> Ty.t
+  val ty_arrow : ?loc:loc -> Ty.t -> Ty.t -> Ty.t
+end
 
-  type t = term
+type 'a printer = Format.formatter -> 'a -> unit
 
-  let is_Type t = match (deref_rec_ t).view with
-    | TI.TyType -> true
-    | _ -> false
+module type PRINT = sig
+  type term
 
-  let is_Kind t = match (deref_rec_ t).view with
-    | TI.TyKind -> true
-    | _ -> false
+  val print : term printer
+  val print_in_app : term printer
+  val print_in_binder : term printer
+end
 
-  let rec returns_Type t = match (deref_rec_ t).view with
-    | TI.TyType -> true
-    | TI.TyArrow (_, t')
-    | TI.TyForall (_, t') -> returns_Type t'
-    | _ -> false
-
-  let to_term t = t
-
-  let is_ty t = match t.ty with
-    | Some ty -> is_Type ty
-    | _ -> false
-
-  let of_term t =
-    if is_ty t then Some t else None
-
-  let of_term_exn t =
-    if is_ty t then t else failwith "Term_mut.TyI.of_term_exn"
-
-  let view t = match (deref_rec_ t).view with
-    | TI.TyKind -> TyI.Kind
-    | TI.TyType -> TyI.Type
-    | TI.TyBuiltin b -> TyI.Builtin b
-    | TI.TyMeta (v, d) -> TyI.Meta (v,d)
-    | TI.Var v -> TyI.Var v
-    | TI.App (f,l) -> TyI.App (f,l)
-    | TI.TyArrow (a,b) -> TyI.Arrow (a,b)
-    | TI.TyForall (v,t) -> TyI.Forall (v,t)
-    | TI.Builtin _
-    | TI.Fun (_,_,_)
-    | TI.Forall (_,_,_)
-    | TI.Exists (_,_,_)
-    | TI.Let (_,_,_) -> assert false
-
-  let build = function
-    | TyI.Kind -> kind_
-    | TyI.Type -> type_
-    | TyI.Builtin b -> ty_builtin b
-    | TyI.Var v -> var ~ty:type_ v
-    | TyI.Meta (v, d) -> make_ (TI.TyMeta(v,d))
-    | TyI.App (f,l) -> app ~ty:type_ f l
-    | TyI.Arrow (a,b) -> ty_arrow a b
-    | TyI.Forall (v,t) -> ty_forall v t
+module Print(T : VIEW) = struct
+  type term = T.t
 
   let fpf = Format.fprintf
 
-  let rec print out ty = match view ty with
-    | TyI.Kind -> CCFormat.string out "kind"
-    | TyI.Type -> CCFormat.string out "type"
-    | TyI.Builtin b -> CCFormat.string out (TyI.Builtin.to_string b)
-    | TyI.Meta (v,_)
-    | TyI.Var v -> Var.print out v
-    | TyI.App (f,l) ->
+  let rec print out ty = match T.view ty with
+    | TyKind -> CCFormat.string out "kind"
+    | TyType -> CCFormat.string out "type"
+    | Builtin b -> CCFormat.string out (Builtin.to_string b)
+    | TyBuiltin b -> CCFormat.string out (TyI.Builtin.to_string b)
+    | Const id -> ID.print out id
+    | TyMeta v -> ID.print out (MetaVar.id v)
+    | Var v -> Var.print out v
+    | App (f, [a;b]) ->
+        begin match T.view f with
+        | Builtin s when Builtin.fixity s = `Infix ->
+            fpf out "@[<hov>%a@ %s@ %a@]"
+              print_in_app a (Builtin.to_string s) print_in_app b
+        | _ ->
+            fpf out "@[<hov2>%a@ %a@ %a@]" print_in_app f
+              print_in_app a print_in_app b
+        end
+    | App (f,l) ->
         fpf out "@[<2>%a@ %a@]" print_in_app f
           (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_in_app) l
-    | TyI.Arrow (a,b) ->
-        fpf out "@[<2>%a ->@ %a@]" print_in_app a print_in_arrow b
-    | TyI.Forall (v,t) ->
-        fpf out "@[<2>forall %a:type.@ %a@]" Var.print v print t
-  and print_in_app out t = match view t with
-    | TyI.Builtin _ | TyI.Kind | TyI.Type | TyI.Var _ | TyI.Meta _ -> print out t
-    | TyI.App (_,_)
-    | TyI.Arrow (_,_)
-    | TyI.Forall (_,_) -> fpf out "@[(%a)@]" print t
-  and print_in_arrow out t = match view t with
-    | TyI.Builtin _ | TyI.Kind | TyI.Type | TyI.Var _ | TyI.Meta _
-    | TyI.App (_,_) -> print out t
-    | TyI.Arrow (_,_)
-    | TyI.Forall (_,_) -> fpf out "@[(%a)@]" print t
+    | Let (v,t,u) ->
+        fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
+    | Fun (v, t) ->
+        fpf out "@[<2>fun %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
+    | Forall (v, t) ->
+        fpf out "@[<2>forall %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
+    | Exists (v, t) ->
+        fpf out "@[<2>forall %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
+    | TyArrow (a,b) ->
+        fpf out "@[<2>%a ->@ %a@]" print_ty_in_arrow a print_ty b
+    | TyForall (v,t) ->
+        fpf out "@[<2>forall %a:type.@ %a@]" Var.print v print_ty t
+
+  and print_ty out ty = print out (ty:T.ty:>T.t)
+  and print_ty_in_app out ty = print_in_app out (ty:T.ty:>T.t)
+  and print_ty_in_arrow out ty = print_in_binder out (ty:T.ty:>T.t)
+
+  and print_in_app out t = match T.view t with
+    | Builtin _ | TyBuiltin _ | TyKind | TyType
+    | Var _ | Const _ | TyMeta _ ->
+        print out t
+    | App (_,_)
+    | Forall _
+    | Exists _
+    | Fun _
+    | Let _
+    | TyArrow (_,_)
+    | TyForall (_,_) -> fpf out "@[(%a)@]" print t
+
+  and print_in_binder out t = match T.view t with
+    | Builtin _ | TyBuiltin _ | TyKind | TyType | Var _
+    | Const _ | TyMeta _ | App (_,_) ->
+        print out t
+    | Forall _
+    | Exists _
+    | Fun _
+    | Let _
+    | TyArrow (_,_)
+    | TyForall (_,_) -> fpf out "@[(%a)@]" print t
 end
 
+(** {2 Default Instance} *)
+module Default = struct
+  type t = {
+    view : (t,t) view;
+    loc : Loc.t option;
+    mutable ty : t option;
+  }
+
+  type ty = t
+
+  (* dereference the term, if it is a variable, until it is not bound *)
+  let rec deref_rec_ t = match t.view with
+    | TyMeta var ->
+        begin match MetaVar.deref var with
+        | None -> t
+        | Some t' ->
+            let root = deref_rec_ t' in
+            (* path compression *)
+            if t' != root then MetaVar.rebind ~var root;
+            root
+        end
+    | _ -> t
+
+  let view t = (deref_rec_ t).view
+
+  let loc t = t.loc
+
+  let ty t = t.ty
+
+  (* special constants: kind and type *)
+  let kind_ = {view=TyKind; loc=None; ty=None}
+  let type_ = {view=TyType; loc=None; ty=Some kind_}
+  let prop = {view=TyBuiltin TyI.Builtin.Prop; loc=None; ty=Some type_}
+
+  let make_raw_ ~loc ~ty view = { view; loc; ty}
+
+  let make_ ?loc ?ty view = match view with
+    | App ({view=App (f, l1); loc; _}, l2) ->
+        make_raw_ ~loc ~ty (App (f, l1 @ l2))
+    | _ -> make_raw_ ~loc ~ty view
+
+  let build t = make_ t
+
+  let builtin ?loc ~ty s = make_ ?loc ~ty (Builtin s)
+  let const ?loc ~ty id = make_ ?loc ~ty (Const id)
+  let var ?loc v = make_ ?loc ~ty:(Var.ty v) (Var v)
+  let app ?loc ~ty t l =
+    if l=[] then t else make_ ?loc ~ty (App (t, l))
+  let fun_ ?loc ~ty v t = make_ ?loc ~ty (Fun (v, t))
+  let let_ ?loc v t u = make_ ?loc ?ty:u.ty (Let (v, t, u))
+  let forall ?loc v t = make_ ?loc ~ty:prop (Forall (v, t))
+  let exists ?loc v t = make_ ?loc ~ty:prop (Exists (v, t))
+
+  let ty_type = type_
+  let ty_prop = prop
+
+  let ty_builtin ?loc b = make_ ?loc ~ty:type_ (TyBuiltin b)
+  let ty_const ?loc id = const ?loc ~ty:type_ id
+  let ty_var ?loc v = var ?loc v
+  let ty_meta_var ?loc v = make_ ?loc (TyMeta v)
+  let ty_app ?loc f l =
+    if l=[] then f else app ?loc ~ty:type_ f l
+  let ty_arrow ?loc a b = make_ ?loc ~ty:type_ (TyArrow (a,b))
+  let ty_forall ?loc a b = make_ ?loc ~ty:type_ (TyForall(a,b))
+
+  module Ty = struct
+    type term = t
+
+    type t = term
+
+    let is_Type t = match (deref_rec_ t).view with
+      | TyType -> true
+      | _ -> false
+
+    let is_Kind t = match (deref_rec_ t).view with
+      | TyKind -> true
+      | _ -> false
+
+    let rec returns_Type t = match (deref_rec_ t).view with
+      | TyType -> true
+      | TyArrow (_, t')
+      | TyForall (_, t') -> returns_Type t'
+      | _ -> false
+
+    let to_term t = t
+
+    let is_ty t = match t.ty with
+      | Some ty -> is_Type ty
+      | _ -> false
+
+    let of_term t =
+      if is_ty t then Some t else None
+
+    let of_term_exn t =
+      if is_ty t then t else failwith "Term_mut.TyI.of_term_exn"
+
+    let view t = match (deref_rec_ t).view with
+      | TyKind -> TyI.Kind
+      | TyType -> TyI.Type
+      | TyBuiltin b -> TyI.Builtin b
+      | TyMeta v -> TyI.Meta v
+      | Const id -> TyI.Const id
+      | Var v -> TyI.Var v
+      | App (f,l) -> TyI.App (f,l)
+      | TyArrow (a,b) -> TyI.Arrow (a,b)
+      | TyForall (v,t) -> TyI.Forall (v,t)
+      | Builtin _
+      | Fun _
+      | Forall _
+      | Exists _
+      | Let _ -> assert false
+
+    include TyI.Print(struct type t = ty let view = view end)
+  end
+
+  include Print(struct
+    type ty = t
+    type t = ty
+
+    let view = view
+    let ty = ty
+  end)
+end

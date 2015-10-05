@@ -1,25 +1,38 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(** {1 Variables} *)
+(** {1 Variable} *)
 
-type t
+type id = NunID.t
 
-include NunIntf.EQ with type t := t
-include NunIntf.ORD with type t := t
-include NunIntf.HASH with type t := t
+type 'ty t = private {
+  id: id;
+  ty: 'ty;
+}
 
-val make : name:string -> t
+val equal : 'a t -> 'a t -> bool
+(** Equality, purely by identifier. It is impossible to forge two variables
+    with the same identifier but distinct types *)
 
-val fresh_copy : t -> t
-(** [fresh_copy v] makes a new variable with the same name as [v] *)
+val compare : 'a t -> 'a t -> int
+(** Total order based on {!id} *)
 
-val name : t -> string
+val make : ty:'ty -> name:string -> 'ty t
+(** [make ~ty ~name] makes a new variable with the given name and type. It
+    will have a unique identifier *)
 
-val id : t -> int
+val fresh_copy : 'ty t -> 'ty t
+(** [fresh_copy v] makes a variable that looks like [v] but has a fresh
+    identifier *)
 
-include NunIntf.PRINT with type t := t
-val to_string : t -> string
+val ty : 'ty t -> 'ty
 
-module Map : CCMap.S with type key = t
-module Set : CCSet.S with type elt = t
+val id : _ t -> id
+
+val update_ty : 'a t -> f:('a -> 'b) -> 'b t
+(** Update the type, and make a new variable with it (which will
+    have a fresh identifier). *)
+
+val print : Format.formatter -> _ t -> unit
+val to_string : _ t -> string
+

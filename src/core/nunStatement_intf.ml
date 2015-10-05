@@ -3,11 +3,11 @@
 
 (** {1 Top-level Statements} *)
 
-type var = NunVar.t
+type id = NunID.t
 
 type ('term, 'ty) view =
-  | Decl of var * 'ty  (** uninterpreted symbol *)
-  | Def of var * 'ty * 'term (** defined symbol *)
+  | Decl of id * 'ty (** uninterpreted symbol *)
+  | Def of id * 'ty * 'term (** defined symbol *)
   | Axiom of 'term
 
 module type S = sig

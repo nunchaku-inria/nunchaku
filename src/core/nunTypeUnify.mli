@@ -3,7 +3,6 @@
 
 (** {1 Unification of Types} *)
 
-type var = NunVar.t
 type 'a sequence = ('a -> unit) -> unit
 
 module Make(Ty : NunType_intf.PRINTABLE) : sig
@@ -15,15 +14,12 @@ module Make(Ty : NunType_intf.PRINTABLE) : sig
   (** Unify the two types, modifying their binding in place.
       @raise Fail if the types are not unifiable *)
 
-  type meta_vars_set = Ty.t NunDeref.t NunVar.Map.t
+  type meta_vars_set = Ty.t NunMetaVar.t NunID.Map.t
   (* a set of meta-variable with their reference *)
 
   val free_meta_vars : ?init:meta_vars_set -> Ty.t -> meta_vars_set
   (** Compute the set of free meta variables that can be bound,
       mapped to their meta-variable *)
-
-  val eval : Ty.t -> Ty.t
-  (** Fully evaluate all variables of the given type *)
 end
 
 

@@ -3,7 +3,8 @@
 
 (** {1 Types} *)
 
-type var = NunVar.t
+type id = NunID.t
+type 'a var = 'a NunVar.t
 
 module Builtin : sig
   type t =
@@ -16,11 +17,12 @@ type 'a view =
   | Kind (** the "type" of [Type], in some sense *)
   | Type (** the type of types *)
   | Builtin of Builtin.t (** Builtin type *)
-  | Var of var (** Constant or bound variable *)
-  | Meta of var * 'a NunDeref.t (** Meta-variable, used for unification *)
+  | Const of id
+  | Var of 'a var (** Constant or bound variable *)
+  | Meta of 'a NunMetaVar.t (** Meta-variable, used for unification *)
   | App of 'a * 'a list
   | Arrow of 'a * 'a
-  | Forall of var * 'a  (** Polymorphic type *)
+  | Forall of 'a var * 'a  (** Polymorphic type *)
 
 (** {2 Basic Interface} *)
 module type S = sig
@@ -28,8 +30,6 @@ module type S = sig
 
   val view : t -> t view
   (** View must follow {!deref} pointers *)
-
-  val build : t view -> t
 end
 
 module type AS_TERM = sig

@@ -4,6 +4,7 @@
 (** {1 Utils} *)
 
 type 'a sequence = ('a -> unit) -> unit
+type 'a or_error = [`Ok of 'a | `Error of string]
 
 (** {2 Time} *)
 
@@ -64,4 +65,7 @@ exception NotImplemented of string
 
 val not_implemented: string -> 'a
 (** Raise an exception saying the given feature is not implemented *)
+
+val err_of_exn: exn -> _ or_error
+(** Make an error out of an exception, with the stack trace *)
 

@@ -4,39 +4,15 @@
 (** {1 Scoping and Type Inference} *)
 
 type 'a or_error = [`Ok of 'a | `Error of string]
-type var = NunVar.t
+type id = NunID.t
+type 'a var = 'a NunVar.t
 type loc = NunLocation.t
 
 exception ScopingError of string * string * loc option
 (** Scoping error for the given variable *)
 
 (** {2 Typed Term} *)
-module type TERM = sig
-  include NunTerm_intf.S_WITH_PRINTABLE_TY
-
-  val loc : t -> loc option
-
-  val ty : t -> Ty.t option
-  (** Type of this term *)
-
-  val builtin : ?loc:loc -> ty:Ty.t -> NunTerm_intf.Builtin.t -> t
-  val var : ?loc:loc -> ty:Ty.t -> var -> t
-  val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
-  val fun_ : ?loc:loc -> ty:Ty.t -> var -> ty_arg:Ty.t -> t -> t
-  val let_ : ?loc:loc -> var -> t -> t -> t
-  val forall : ?loc:loc -> var -> ty_arg:Ty.t -> t -> t
-  val exists : ?loc:loc -> var -> ty_arg:Ty.t -> t -> t
-
-  val ty_type : Ty.t (** Type of types *)
-  val ty_prop : Ty.t (** Propositions *)
-
-  val ty_builtin : ?loc:loc -> NunType_intf.Builtin.t -> Ty.t
-  val ty_var : ?loc:loc -> var -> Ty.t
-  val ty_meta_var : ?loc:loc -> var -> Ty.t  (** Meta-variable, ready for unif *)
-  val ty_app : ?loc:loc -> Ty.t -> Ty.t list -> Ty.t
-  val ty_forall : ?loc:loc -> var -> Ty.t -> Ty.t
-  val ty_arrow : ?loc:loc -> Ty.t -> Ty.t -> Ty.t
-end
+module type TERM = NunTerm_typed.S
 
 (** {2 Type Inference/Checking}
 
@@ -74,7 +50,7 @@ module ConvertTerm(Term : TERM) : sig
   (** Unsafe version of {!convert}
       @raise TypeError if it fails to  type properly *)
 
-  val generalize : Term.t -> Term.t * var list
+  val generalize : Term.t -> Term.t * Term.Ty.t var list
   (** Generalize a term [t] by parametrizing it over its free {b type}
       variables.
       @return a pair [(t', vars)] such that, roughly, [app t' vars = t] *)
@@ -89,8 +65,8 @@ module type STATEMENT = sig
 
   val loc : (_,_) t -> loc option
 
-  val decl : ?loc:loc -> var -> T.Ty.t -> (_, T.Ty.t) t
-  val def : ?loc:loc -> var -> ty:T.Ty.t -> T.t -> (T.t, T.Ty.t) t
+  val decl : ?loc:loc -> id -> T.Ty.t -> (_, T.Ty.t) t
+  val def : ?loc:loc -> id -> ty:T.Ty.t -> T.t -> (T.t, T.Ty.t) t
   val axiom : ?loc:loc -> T.t -> (T.t,_) t
 end
 

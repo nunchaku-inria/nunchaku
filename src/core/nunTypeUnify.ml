@@ -3,6 +3,8 @@
 
 (** {1 Unification of Types} *)
 
+module MetaVar = NunMetaVar
+module ID = NunID
 module Var = NunVar
 module Sym = NunSymbol
 module TyI = NunType_intf
@@ -18,7 +20,6 @@ let section = Utils.Section.make "unif"
 
 *)
 
-type var = Var.t
 type 'a sequence = ('a -> unit) -> unit
 
 module Make(Ty : NunType_intf.PRINTABLE) = struct
@@ -44,15 +45,14 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
         occur_check_ ~var f || List.exists (occur_check_ ~var) l
     | TyI.Kind
     | TyI.Type
+    | TyI.Var _ (* bound var *)
+    | TyI.Const _
     | TyI.Builtin _ -> false
-    | TyI.Meta (v, ref) ->
-        assert (NunDeref.can_bind ref);
-        Var.equal v var
-    | TyI.Var v -> Var.equal var v
+    | TyI.Meta var' ->
+        assert (MetaVar.can_bind var');
+        MetaVar.equal var var'
     | TyI.Arrow (a,b) -> occur_check_ ~var a || occur_check_ ~var b
-    | TyI.Forall (v,t) ->
-        (* [var] could be shadowed *)
-        not (Var.equal var v) && occur_check_ ~var t
+    | TyI.Forall (_,t) -> occur_check_ ~var t
 
   (* NOTE: after dependent types are added, will need to recurse into
       types too for unification and occur-check *)
@@ -73,10 +73,15 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
     | TyI.App (f1, l1) -> flatten_app_ f1 (l1 @ l)
     | _ -> f, l
 
+  module VarMap = Map.Make(struct
+    type t = Ty.t Var.t
+    let compare = Var.compare
+  end)
+
   (* bound: set of bound variables, that cannot be unified *)
   let unify_exn ty1 ty2 =
     Utils.debugf ~section 5 "@[<2>unify %a@ and %a@]" Ty.print ty1 Ty.print ty2;
-    let bound = ref Var.Map.empty in
+    let bound = ref VarMap.empty in
     (* keep a stack of unification attempts *)
     let rec unify_ ~stack ty1 ty2 =
       let stack = push_ ty1 ty2 stack in
@@ -86,26 +91,32 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
       | TyI.Builtin s1, TyI.Builtin s2 ->
           if TyI.Builtin.equal s1 s2 then ()
           else fail ~stack "incompatible symbols"
-      | TyI.Var v1, TyI.Var v2 when Var.Map.mem v1 !bound ->
-          if Var.equal v2 (Var.Map.find v1 !bound) then ()
-          else failf ~stack "variable %a is bound" Var.print v1
-      | TyI.Var v1, TyI.Var v2 when Var.Map.mem v2 !bound ->
-          if Var.equal v1 (Var.Map.find v2 !bound) then ()
-          else failf ~stack "variable %a is bound" Var.print v2
-      | TyI.Meta (v1, _), TyI.Meta (v2, _)
+      | TyI.Const i1, TyI.Const i2 ->
+          if ID.equal i1 i2 then () else fail ~stack "incompatible symbols"
       | TyI.Var v1, TyI.Var v2 when Var.equal v1 v2 -> ()
-      | TyI.Meta (var, ref), _ when NunDeref.can_bind ref ->
-          if occur_check_ ~var:var ty2
+      | TyI.Var v1, TyI.Var v2 ->
+          begin try
+            let var = VarMap.find v1 !bound in
+            let var' = VarMap.find v2 !bound in
+            if Var.equal var var' then ()
+            else failf ~stack "bound variables %a and %a are incompatible"
+              Var.print v1 Var.print v2
+          with Not_found ->
+            fail ~stack "incompatible variables"
+          end
+      | TyI.Meta v1, TyI.Meta v2 when MetaVar.equal v1 v2 -> ()
+      | TyI.Meta var, _ when MetaVar.can_bind var ->
+          if occur_check_ ~var ty2
             then
               failf ~stack
-                "cycle detected (variable %a occurs in type)" Var.print var
-            else NunDeref.bind ~ref ty2
-      | _, TyI.Meta (var, ref) when NunDeref.can_bind ref ->
-          if occur_check_ ~var:var ty1
+                "cycle detected (variable %a occurs in type)" MetaVar.print var
+            else MetaVar.bind ~var ty2
+      | _, TyI.Meta var when MetaVar.can_bind var ->
+          if occur_check_ ~var ty1
             then
               failf ~stack
-                "cycle detected (variable %a occurs in type)" Var.print var
-            else NunDeref.bind ~ref ty1
+                "cycle detected (variable %a occurs in type)" MetaVar.print var
+            else MetaVar.bind ~var ty1
       | TyI.App (f1,l1), TyI.App (f2,l2) ->
           (* NOTE: if partial application in types is allowed,
              we must allow [length l1 <> length l2]. In that case, unification
@@ -123,11 +134,13 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
           unify_ ~stack l1 l2;
           unify_ ~stack r1 r2
       | TyI.Forall (v1,t1), TyI.Forall (v2,t2) ->
-          assert (not (Var.Map.mem v1 !bound));
-          assert (not (Var.Map.mem v2 !bound));
-          bound := Var.Map.add v1 v2 !bound;
+          assert (not (VarMap.mem v1 !bound));
+          assert (not (VarMap.mem v2 !bound));
+          let v = Var.make ~ty:(Var.ty v1) ~name:"?" in
+          bound := VarMap.add v1 v (VarMap.add v2 v !bound);
           unify_ ~stack t1 t2
       | TyI.Meta _, _
+      | TyI.Const _, _
       | TyI.Var _, _
       | TyI.Kind, _
       | TyI.Type, _
@@ -154,27 +167,16 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
       );
   *)
 
-  let rec eval ty = match Ty.view ty with
-    | TyI.Kind
-    | TyI.Type
-    | TyI.Meta _
-    | TyI.Var _
-    | TyI.Builtin _ -> ty
-    | TyI.App (f,l) -> Ty.build (TyI.App (eval f, List.map eval l))
-    | TyI.Arrow (a,b) -> Ty.build (TyI.Arrow (eval a, eval b))
-    | TyI.Forall (v,t) -> Ty.build (TyI.Forall (v, eval t))
-
-  type meta_vars_set = Ty.t NunDeref.t NunVar.Map.t
+  type meta_vars_set = Ty.t MetaVar.t ID.Map.t
   (* a set of meta-variable with their reference *)
 
-  let free_meta_vars ?(init=Var.Map.empty) ty =
+  let free_meta_vars ?(init=ID.Map.empty) ty =
     let rec aux acc ty =
       match Ty.view ty with
-      | TyI.Kind | TyI.Type | TyI.Builtin _ -> acc
-      | TyI.Meta (v, ref) ->
-          assert (NunDeref.can_bind ref);
-          Var.Map.add v ref acc
-      | TyI.Var _ -> acc
+      | TyI.Kind | TyI.Type | TyI.Builtin _ | TyI.Const _ | TyI.Var _ -> acc
+      | TyI.Meta var ->
+          assert (MetaVar.can_bind var);
+          ID.Map.add (MetaVar.id var) var acc
       | TyI.App (f,l) ->
           let acc = aux acc f in
           List.fold_left aux acc l

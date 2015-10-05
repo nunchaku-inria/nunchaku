@@ -3,7 +3,9 @@
 
 (** {1 Reductions, including Beta Reduction} *)
 
-module Make(T : NunTypeInference.TERM) : sig
+module Make(T : NunTerm_ho.S) : sig
+
+  (* TODO: delta-reduction (expand definitions of Const) *)
 
   val whnf : T.t -> T.t
   (** Weak Head Normal Form *)

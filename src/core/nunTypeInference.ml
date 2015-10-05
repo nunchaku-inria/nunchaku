@@ -6,14 +6,16 @@
 module A = NunUntypedAST
 module E = CCError
 module Sym = NunSymbol
+module ID = NunID
 module Var = NunVar
+module MetaVar = NunMetaVar
 module Loc = NunLocation
 
 module TyI = NunType_intf
-module TI = NunTerm_intf
 
 type 'a or_error = [`Ok of 'a | `Error of string]
-type var = Var.t
+type id = NunID.t
+type 'a var = 'a Var.t
 type loc = Loc.t
 
 let fpf = Format.fprintf
@@ -38,32 +40,7 @@ let scoping_error ?loc v msg = raise (ScopingError (v, msg, loc))
 module MStr = Map.Make(String)
 
 (** {2 Typed Term} *)
-module type TERM = sig
-  include NunTerm_intf.S_WITH_PRINTABLE_TY
-
-  val loc : t -> loc option
-
-  val ty : t -> Ty.t option
-  (** Type of this term *)
-
-  val builtin : ?loc:loc -> ty:Ty.t -> NunTerm_intf.Builtin.t -> t
-  val var : ?loc:loc -> ty:Ty.t -> var -> t
-  val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
-  val fun_ : ?loc:loc -> ty:Ty.t -> var -> ty_arg:Ty.t -> t -> t
-  val let_ : ?loc:loc -> var -> t -> t -> t
-  val forall : ?loc:loc -> var -> ty_arg:Ty.t -> t -> t
-  val exists : ?loc:loc -> var -> ty_arg:Ty.t -> t -> t
-
-  val ty_type : Ty.t (** Type of types *)
-  val ty_prop : Ty.t (** Propositions *)
-
-  val ty_builtin : ?loc:loc -> NunType_intf.Builtin.t -> Ty.t
-  val ty_var : ?loc:loc -> var -> Ty.t
-  val ty_meta_var : ?loc:loc -> var -> Ty.t  (** Meta-variable, ready for unif *)
-  val ty_app : ?loc:loc -> Ty.t -> Ty.t list -> Ty.t
-  val ty_forall : ?loc:loc -> var -> Ty.t -> Ty.t
-  val ty_arrow : ?loc:loc -> Ty.t -> Ty.t -> Ty.t
-end
+module type TERM = NunTerm_typed.S
 
 module ConvertTerm(Term : TERM) = struct
   module Unif = NunTypeUnify.Make(Term.Ty)
@@ -115,10 +92,11 @@ module ConvertTerm(Term : TERM) = struct
   (* Environment *)
 
   type term_def =
-    | Def of Term.t
-    | Decl of Term.Ty.t
+    | Def of ID.t * Term.t
+    | Decl of ID.t * Term.Ty.t
+    | Var of Term.Ty.t var
 
-  type env = (Var.t * term_def) MStr.t
+  type env = term_def MStr.t
   (* map names to proper identifiers, with their definition *)
 
   let empty_env = MStr.empty
@@ -135,18 +113,27 @@ module ConvertTerm(Term : TERM) = struct
             Term.ty_app ?loc
               (convert_ ~stack ~env f)
               (List.map (convert_ ~stack ~env) l)
-        | A.Wildcard -> Term.ty_meta_var ?loc (Var.make ~name:"?")
+        | A.Wildcard -> Term.ty_meta_var ?loc (MetaVar.make ~name:"?")
         | A.Var v ->
             begin try
-              let var, def = MStr.find v env in
-              let ok = match def with
-                | Decl t -> Term.Ty.returns_Type t (* var: _ ... _ -> Type mandatory *)
-                | Def t -> Term.Ty.returns_Type (get_ty_ t)
-              in
-              if not ok
-                then type_errorf ~stack:(push_ ty stack)
-                  "@[<2>expected type,@ var %a is not a type@]" Var.print var;
-              Term.ty_var ?loc var
+              let def = MStr.find v env in
+              match def with
+                | Decl (id, t) ->
+                    (* var: _ ... _ -> Type mandatory *)
+                    if not (Term.Ty.returns_Type t)
+                      then type_errorf ~stack:(push_ ty stack)
+                        "@[<2>expected type,@ const %a is not a type@]" ID.print id;
+                    Term.ty_const ?loc id
+                | Def (id, t) ->
+                    if not (Term.Ty.returns_Type (get_ty_ t))
+                      then type_errorf ~stack:(push_ ty stack)
+                        "@[<2>expected type,@ const %a is not a type@]" ID.print id;
+                    Term.ty_const ?loc id
+                | Var v ->
+                    if not (Term.Ty.returns_Type (Var.ty v))
+                      then type_errorf ~stack:(push_ ty stack)
+                        "@[<2>expected type,@ var %a is not a type@]" Var.print v;
+                    Term.ty_var ?loc v
             with Not_found -> scoping_error ?loc v "not bound in environment"
             end
         | A.AtVar _ -> ill_formed ?loc "@@ syntax is not available for types"
@@ -155,8 +142,8 @@ module ConvertTerm(Term : TERM) = struct
               (convert_ ~stack ~env a)
               (convert_ ~stack ~env b)
         | A.TyForall (v,t) ->
-            let var = Var.make ~name:v in
-            let env = MStr.add v (var, Decl Term.ty_type) env in
+            let var = Var.make ~ty:Term.ty_type ~name:v in
+            let env = MStr.add v (Var var) env in
             Term.ty_forall ?loc var (convert_ ~stack ~env t)
         | A.Fun (_,_) -> ill_formed ?loc "no functions in types"
         | A.Let (_,_,_) -> ill_formed ?loc "no let in types"
@@ -170,20 +157,23 @@ module ConvertTerm(Term : TERM) = struct
       with e -> E.of_exn e
   end
 
-  let add_def ~env v ~var t = MStr.add v (var, Def t) env
+  let add_def ~env v ~id t = MStr.add v (Def (id, t)) env
 
-  let add_decl ~env v ~var ty = MStr.add v (var, Decl ty) env
+  let add_decl ~env v ~id ty = MStr.add v (Decl (id, ty)) env
+
+  let add_var ~env v ~var = MStr.add v (Var var) env
 
   let prop = Term.ty_prop
   let arrow_list ?loc = List.fold_right (Term.ty_arrow ?loc)
 
   let ty_of_def_ = function
-    | Decl ty -> ty
-    | Def t -> get_ty_ t
+    | Decl (_,ty) -> ty
+    | Def (_,t) -> get_ty_ t
+    | Var v -> Var.ty v
 
   let fresh_ty_var_ ~name =
     let name = "ty_" ^ name in
-    Term.ty_meta_var (Var.make ~name)
+    Term.ty_meta_var (MetaVar.make ~name)
 
   (* find the variable and definition of [v] *)
   let find_ ?loc ~env v =
@@ -201,6 +191,7 @@ module ConvertTerm(Term : TERM) = struct
     | TyI.Type, _
     | TyI.Builtin _, _
     | TyI.Meta _, _
+    | TyI.Const _, _
     | TyI.Var _, _
     | TyI.App (_,_),_ -> l
     | TyI.Arrow _, [] -> [] (* need an explicit argument *)
@@ -208,31 +199,43 @@ module ConvertTerm(Term : TERM) = struct
         (* explicit argument *)
         a :: fill_implicit_ ?loc ty' l'
 
-  (* evaluate the type [ty] under the explicit substitution [subst] *)
-  let rec eval_subst ~subst ty =
-    let loc = Term.loc (Term.Ty.to_term ty) in
-    match Term.Ty.view ty with
-    | TyI.Kind
-    | TyI.Type
-    | TyI.Builtin _ -> ty
-    | TyI.Meta (v,_) ->
-        assert (not (Var.Map.mem v subst));
-        ty
-    | TyI.Var v ->
-        begin try
-          let ty' = Var.Map.find v subst in
-          eval_subst ~subst ty'
-        with Not_found -> ty
-        end
-    | TyI.App (f,l) ->
-        Term.ty_app ?loc (eval_subst ~subst f) (List.map (eval_subst ~subst) l)
-    | TyI.Arrow (a,b) ->
-        Term.ty_arrow ?loc (eval_subst ~subst a) (eval_subst ~subst b)
-    | TyI.Forall (v,t) ->
-        (* preserve freshness of variables *)
-        let v' = Var.fresh_copy v in
-        let subst = Var.Map.add v (Term.ty_var v') subst in
-        Term.ty_forall ?loc v' (eval_subst ~subst t)
+  module Subst = struct
+    module M = Map.Make(struct
+      type t = Term.Ty.t Var.t
+      let compare = Var.compare
+    end)
+
+    type t = Term.Ty.t M.t
+
+    let empty = M.empty
+
+    let bind ~subst v ty = M.add v ty subst
+
+    (* evaluate the type [ty] under the explicit substitution [subst] *)
+    let rec eval ~subst ty =
+      let loc = Term.loc (Term.Ty.to_term ty) in
+      match Term.Ty.view ty with
+      | TyI.Kind
+      | TyI.Type
+      | TyI.Const _
+      | TyI.Builtin _ -> ty
+      | TyI.Meta _ -> ty
+      | TyI.Var v ->
+          begin try
+            let ty' = M.find v subst in
+            eval ~subst ty'
+          with Not_found -> ty
+          end
+      | TyI.App (f,l) ->
+          Term.ty_app ?loc (eval ~subst f) (List.map (eval ~subst) l)
+      | TyI.Arrow (a,b) ->
+          Term.ty_arrow ?loc (eval ~subst a) (eval ~subst b)
+      | TyI.Forall (v,t) ->
+          (* preserve freshness of variables *)
+          let v' = Var.fresh_copy v in
+          let subst = bind ~subst v (Term.ty_var v') in
+          Term.ty_forall ?loc v' (eval ~subst t)
+  end
 
   (* try to unify ty1 and ty2.
       @param stack the trace of inference attempts *)
@@ -249,7 +252,7 @@ module ConvertTerm(Term : TERM) = struct
     match Loc.get t with
     | A.Sym s ->
         (* only some symbols correspond to terms *)
-        let module B = TI.Builtin in
+        let module B = NunTerm_typed.Builtin in
         let prop1 = Term.ty_arrow prop prop in
         let prop2 = arrow_list [prop; prop] prop in
         let b, ty = match s with
@@ -265,9 +268,14 @@ module ConvertTerm(Term : TERM) = struct
         in
         Term.builtin ?loc ~ty b
     | A.AtVar v ->
-        let var, def = find_ ?loc ~env v in
-        let ty = ty_of_def_ def in
-        Term.var ?loc ~ty var
+        let def = find_ ?loc ~env v in
+        begin match def with
+          | Def (id, _)
+          | Decl (id, _) ->
+              let ty = ty_of_def_ def in
+              Term.const ?loc ~ty id
+          | Var var -> Term.var ?loc var
+        end
     | A.App (f, l) ->
         (* infer type of [f] *)
         let f' = convert_ ~stack ~env f in
@@ -280,41 +288,47 @@ module ConvertTerm(Term : TERM) = struct
         (* now, convert elements of [l] depending on what is
            expected by the type of [f] *)
         let ty, l' = convert_arguments_following_ty
-          ~stack ~env ~subst:Var.Map.empty ty_f l in
+          ~stack ~env ~subst:Subst.empty ty_f l in
         Term.app ?loc ~ty f' l'
     | A.Var v ->
         (* a variable might be applied, too *)
-        let var, def = find_ ?loc ~env v in
-        let ty_var = ty_of_def_ def in
+        let def = find_ ?loc ~env v in
+        let head, ty_head = match def with
+          | Def (id, _)
+          | Decl (id, _) ->
+              let ty = ty_of_def_ def in
+              Term.const ?loc ~ty id, ty
+          | Var var -> Term.var ?loc var, Var.ty var
+        in
         (* add potential implicit args *)
-        let l = fill_implicit_ ?loc ty_var [] in
+        let l = fill_implicit_ ?loc ty_head [] in
         (* convert [l] into proper types, of course *)
-        let ty, l' = convert_arguments_following_ty ~stack ~env ~subst:Var.Map.empty ty_var l in
-        Term.app ?loc ~ty (Term.var ?loc ~ty:ty_var var) l'
+        let ty, l' = convert_arguments_following_ty
+          ~stack ~env ~subst:Subst.empty ty_head l in
+        Term.app ?loc ~ty head l'
     | A.Forall ((v,ty_opt),t) ->
         convert_quantifier ?loc ~stack ~env ~which:`Forall v ty_opt t
     | A.Exists ((v,ty_opt),t) ->
         convert_quantifier ?loc ~stack ~env ~which:`Exists v ty_opt t
     | A.Fun ((v,ty_opt),t) ->
         (* fresh variable *)
-        let var = Var.make ~name:v in
-        (* the type of [var] *)
         let ty_var = fresh_ty_var_ ~name:v in
+        let var = Var.make ~ty:ty_var ~name:v in
         (* unify with expected type *)
         CCOpt.iter
           (fun ty ->
             unify_in_ctx_ ~stack ty_var (ConvertTy.convert_exn ~env ty)
           ) ty_opt;
-        let env = add_decl ~env v ~var ty_var in
+        let env = add_var ~env v ~var in
         let t = convert_ ~stack ~env t in
         (* NOTE: for dependent types, need to check whether [var] occurs in [type t]
            so that a forall is issued here instead of a mere arrow *)
         let ty = Term.ty_arrow ?loc ty_var (get_ty_ t) in
-        Term.fun_ ?loc var ~ty ~ty_arg:(Unif.eval ty_var) t
+        Term.fun_ ?loc var ~ty t
     | A.Let (v,t,u) ->
-        let var = Var.make ~name:v in
         let t = convert_ ~stack ~env t in
-        let env = add_def ~env v ~var t in
+        let var = Var.make ~name:v ~ty:(get_ty_ t) in
+        let env = add_var ~env v ~var in
         let u = convert_ ~stack ~env u in
         Term.let_ ?loc var t u
     | A.Wildcard -> type_error ~stack "term wildcards cannot be inferred"
@@ -329,24 +343,25 @@ module ConvertTerm(Term : TERM) = struct
     match Term.Ty.view ty, l with
     | _, [] ->
         (* substitution is complete, evaluate [ty] now *)
-        eval_subst ~subst ty, []
+        Subst.eval ~subst ty, []
     | TyI.Kind ,_
     | TyI.Type ,_
     | TyI.Var _,_
     | TyI.App (_,_),_
+    | TyI.Const _, _
     | TyI.Builtin _,_ ->
         type_errorf ~stack
           "@[term of type @[%a@] cannot accept argument,@ but was given @[<hv>%a@]@]"
           Term.Ty.print ty (CCFormat.list A.print_term) l
-    | TyI.Meta (_,ref), b :: l' ->
+    | TyI.Meta var, b :: l' ->
         (* must be an arrow type. We do not infer forall types *)
-        assert (NunDeref.can_bind ref);
+        assert (MetaVar.can_bind var);
         (* convert [b] and [l'] *)
         let b = convert_ ~stack ~env b in
         let ty_b = get_ty_ b in
         (* type of the function *)
         let ty_ret = fresh_ty_var_ ~name:"?" in
-        NunDeref.bind ~ref (Term.ty_arrow ty_b ty_ret);
+        MetaVar.bind ~var (Term.ty_arrow ty_b ty_ret);
         (* application *)
         let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty_ret l' in
         ty', b :: l'
@@ -354,14 +369,14 @@ module ConvertTerm(Term : TERM) = struct
         (* [b] must be a term whose type coincides with [subst a] *)
         let b = convert_ ~stack ~env b in
         let ty_b = get_ty_ b in
-        unify_in_ctx_ ~stack (eval_subst ~subst a) ty_b;
+        unify_in_ctx_ ~stack (Subst.eval ~subst a) ty_b;
         (* continue *)
         let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty' l' in
         ty', b :: l'
     | TyI.Forall (v,ty'), b :: l' ->
         (* [b] must be a type, and we replace [v] with [b] *)
         let b = ConvertTy.convert_exn ~env b in
-        let subst = Var.Map.add v b subst in
+        let subst = Subst.bind ~subst v b in
         (* continue *)
         let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty' l' in
         ty', Term.Ty.to_term b :: l'
@@ -374,15 +389,15 @@ module ConvertTerm(Term : TERM) = struct
       (fun ty ->
         unify_in_ctx_ ~stack ty_var (ConvertTy.convert_exn ~env ty)
       ) ty_opt;
-    let var = Var.make ~name:v in
-    let env = add_decl ~env v ~var ty_var in
+    let var = Var.make ~name:v ~ty:ty_var in
+    let env = add_var ~env v ~var  in
     let t = convert_ ~stack ~env t in
     (* which quantifier to build? *)
     let builder = match which with
       | `Forall -> Term.forall
       | `Exists -> Term.exists
     in
-    builder ?loc var ~ty_arg:(Unif.eval ty_var) t
+    builder ?loc var t
 
   let convert_exn ~env t = convert_ ~stack:[] ~env t
 
@@ -392,18 +407,19 @@ module ConvertTerm(Term : TERM) = struct
 
   let generalize t =
     let ty = get_ty_ t in
-    let vars = Unif.free_meta_vars ty |> Var.Map.to_list in
+    let vars = Unif.free_meta_vars ty |> ID.Map.to_list in
     (* fun v1, ... , vn => t
       of type
       forall v1, ..., vn => typeof t *)
     let t, new_vars = List.fold_right
-      (fun (v,ref) (t,new_vars) ->
+      (fun (_,var) (t,new_vars) ->
         let ty_t = get_ty_ t in
-        (* invariant: a meta var should never occur under a binder *)
-        let var = Var.fresh_copy v in
-        NunDeref.bind ~ref (Term.ty_var var);
-        Term.fun_ ~ty:(Term.ty_forall var ty_t) var ~ty_arg:Term.ty_type t,
-        var :: new_vars
+        (* transform the meta-variable into a regular (type) variable *)
+        let var' = Var.make ~name:(MetaVar.id var |> ID.name) ~ty:Term.ty_type in
+        MetaVar.bind ~var (Term.ty_var var');
+        (* build a function over [var'] *)
+        Term.fun_ ~ty:(Term.ty_forall var' ty_t) var' t,
+        var' :: new_vars
       ) vars (t, [])
     in
     t, new_vars
@@ -416,8 +432,8 @@ module type STATEMENT = sig
 
   val loc : (_,_) t -> loc option
 
-  val decl : ?loc:loc -> var -> T.Ty.t -> (_, T.Ty.t) t
-  val def : ?loc:loc -> var -> ty:T.Ty.t -> T.t -> (T.t, T.Ty.t) t
+  val decl : ?loc:loc -> id -> T.Ty.t -> (_, T.Ty.t) t
+  val def : ?loc:loc -> id -> ty:T.Ty.t -> T.t -> (T.t, T.Ty.t) t
   val axiom : ?loc:loc -> T.t -> (T.t,_) t
 end
 
@@ -436,17 +452,17 @@ module ConvertStatement(St : STATEMENT) = struct
     let loc = Loc.get_loc st in
     match Loc.get st with
     | A.Decl (v, ty) ->
-        let var = Var.make ~name:v in
+        let id = ID.make ~name:v in
         let ty = CT.ConvertTy.convert_exn ~env ty in
-        let env = CT.add_decl ~env v ~var ty in
-        St.decl ?loc var ty, env
+        let env = CT.add_decl ~env v ~id ty in
+        St.decl ?loc id ty, env
     | A.Def ((v, ty_opt), t) ->
-        let var = Var.make ~name:v in
+        let id = ID.make ~name:v in
         (* infer type for t *)
         let t = CT.convert_exn ~env t in
         (* generalize type and term *)
         let t, _ = CT.generalize t in
-        let env = CT.add_def ~env v ~var t in
+        let env = CT.add_def ~env v ~id t in
         (* unify with [ty_opt] if present *)
         let ty = CT.get_ty_ t in
         CCOpt.iter
@@ -454,7 +470,7 @@ module ConvertStatement(St : STATEMENT) = struct
             let ty = CT.ConvertTy.convert_exn ~env ty in
             CT.unify_in_ctx_ ~stack:[] ty (CT.get_ty_ t)
           ) ty_opt;
-        St.def ?loc var ~ty t, env
+        St.def ?loc id ~ty t, env
     | A.Axiom t ->
         (* infer type for t *)
         let t = CT.convert_exn ~env t in

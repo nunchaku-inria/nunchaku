@@ -4,14 +4,14 @@
 (** {1 Statements with Locations} *)
 
 type loc = NunLocation.t
-type var = NunVar.t
+type id = NunID.t
 
 include NunStatement_intf.S
 
 val loc : (_,_) t -> loc option
 
-val decl : ?loc:loc -> var -> 'a -> (_, 'a) t
-val def : ?loc:loc -> var -> ty:'ty -> 'a -> ('a, 'ty) t
+val decl : ?loc:loc -> id -> 'a -> (_, 'a) t
+val def : ?loc:loc -> id -> ty:'ty -> 'a -> ('a, 'ty) t
 val axiom : ?loc:loc -> 'a -> ('a,_) t
 
 type 'a printer = Format.formatter -> 'a -> unit

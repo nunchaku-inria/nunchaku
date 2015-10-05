@@ -4,12 +4,12 @@
 (** {1 Statements with Locations} *)
 
 module Loc = NunLocation
-module Var = NunVar
+module ID = NunID
 
 module St = NunStatement_intf
 
 type loc = Loc.t
-type var = Var.t
+type id = ID.t
 
 type ('a, 'b) t = {
   view: ('a, 'b) St.view;
@@ -34,10 +34,10 @@ let fpf = Format.fprintf
 
 let print pt pty out t =
   match t.view with
-  | St.Decl (v, ty) -> fpf out "@[<2>val %a@ : %a.@]" Var.print v pty ty
+  | St.Decl (v, ty) -> fpf out "@[<2>val %a@ : %a.@]" ID.print v pty ty
   | St.Def (v, ty, t) ->
       fpf out "@[<2>def %a@ : %a@ := %a.@]"
-        Var.print v pty ty pt t
+        ID.print v pty ty pt t
   | St.Axiom t -> fpf out "@[<2>axiom %a.@]" pt t
 
 let print_list pt pty out l =
