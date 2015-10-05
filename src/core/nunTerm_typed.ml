@@ -19,29 +19,30 @@ type loc = Loc.t
 type id = NunID.t
 type 'a var = 'a Var.t
 
-type ('a, 'ty) view =
-  | Builtin of NunBuiltin.T.t (** built-in symbol *)
-  | Const of id (** top-level symbol *)
-  | Var of 'ty var (** bound variable *)
-  | App of 'a * 'a list
-  | Fun of 'ty var * 'a
-  | Forall of 'ty var * 'a
-  | Exists of 'ty var * 'a
-  | Let of 'ty var * 'a * 'a
-  | TyKind
-  | TyType
-  | TyMeta of 'ty NunMetaVar.t
-  | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
-  | TyArrow of 'ty * 'ty   (** Arrow type *)
-  | TyForall of 'ty var * 'ty  (** Polymorphic/dependent type *)
+type ('a, 'ty, 'kind) view =
+  | Builtin : NunBuiltin.T.t -> ('a, 'ty, [>]) view (** built-in symbol *)
+  | Const : id -> ('a, 'ty, [>]) view (** top-level symbol *)
+  | Var : 'ty var -> ('a, 'ty, [>]) view (** bound variable *)
+  | App : 'a * 'a list -> ('a, 'ty, [>]) view
+  | Fun : 'ty var * 'a -> ('a, 'ty, [>]) view
+  | Forall : 'ty var * 'a -> ('a, 'ty, [>]) view
+  | Exists : 'ty var * 'a -> ('a, 'ty, [>]) view
+  | Let : 'ty var * 'a * 'a -> ('a, 'ty, [>]) view
+  | TyKind : ('a, 'ty, [>]) view
+  | TyType : ('a, 'ty, [>]) view
+  | TyMeta : 'ty NunMetaVar.t -> ('a, 'ty, [>`Meta]) view
+  | TyBuiltin : NunBuiltin.Ty.t -> ('a, 'ty, [>]) view (** Builtin type *)
+  | TyArrow : 'ty * 'ty -> ('a, 'ty, [>]) view   (** Arrow type *)
+  | TyForall : 'ty var * 'ty -> ('a, 'ty, [>`Poly]) view  (** Polymorphic/dependent type *)
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
   type t
 
+  type kind
   type ty = private t
 
-  val view : t -> (t, ty) view
+  val view : t -> (t, ty, kind) view
 
   val ty : t -> ty option
   (** The type of a term *)
