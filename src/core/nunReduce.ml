@@ -75,7 +75,9 @@ module Make(T : NunTerm_ho.S) = struct
           )
 
   and apply_subst_ty ~env ty =
-    T.Ty.of_term_exn (apply_subst ~env (ty:T.Ty.t:>T.t))
+    (* we can do this, because substitution preserves the structure enough
+       that types remain types. *)
+    T.Ty.of_term_unsafe (apply_subst ~env (ty:T.Ty.t:>T.t))
 
   (* enter the scope where [v : ty] *)
   and enter_ ~env v f =

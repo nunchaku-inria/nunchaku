@@ -37,11 +37,11 @@ module type AS_TERM = sig
   val is_Type : t -> bool (** type == Type? *)
   val returns_Type : t -> bool (** type == forall ... -> ... -> ... -> Type? *)
   val is_Kind : t -> bool (** type == Kind? *)
-
   val to_term : t -> term
-  val is_ty : term -> bool (** [is_ty t] same as [is_Type (type of t)] *)
-  val of_term : term -> t option
-  val of_term_exn : term -> t  (** @raise Failure if it is not a term *)
+
+  val of_term_unsafe : term -> t
+  (** [of_term_unsafe t] converts [t] to a [ty] without checking.
+      {b caution}, this can break invariants. *)
 end
 
 module type PRINTABLE = sig

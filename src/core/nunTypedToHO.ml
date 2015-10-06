@@ -50,7 +50,8 @@ module Make(T1 : NunTerm_typed.S)(T2 : NunTerm_ho.S)
     | TI1.TyForall (v,t) -> (T2.ty_forall (convert_var v) (convert_ty t) : T2.ty :> T2.t)
 
   and convert_ty t =
-    T2.Ty.of_term_exn (convert (T1.Ty.to_term t))
+    (* conversion preserves the structure, so a type remains a type *)
+    T2.Ty.of_term_unsafe (convert (T1.Ty.to_term t))
 
   (* keep the same ID *)
   and convert_var v = Var.update_ty v ~f:convert_ty

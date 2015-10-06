@@ -163,11 +163,9 @@ module Default : S = struct
       | TyForall (_, t') -> returns_Type t'
       | _ -> false
 
-    let is_ty _ = true (* FIXME? remove from signature? *)
-
     let to_term t = t
-    let of_term t = Some t
-    let of_term_exn t = t
+
+    let of_term_unsafe t = t
 
     module Subst = struct
       module M = Map.Make(struct

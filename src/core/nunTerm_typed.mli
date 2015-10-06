@@ -42,6 +42,10 @@ module type S = sig
   module Ty : sig
     include NunType_intf.AS_TERM with type term = t and type t = ty
     include NunIntf.PRINT with type t := t
+
+    val is_ty : term -> bool (** [is_ty t] same as [is_Type (type of t)] *)
+    val of_term : term -> t option
+    val of_term_exn : term -> t  (** @raise Failure if it is not a term *)
   end
 
   val loc : t -> loc option
