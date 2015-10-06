@@ -9,6 +9,7 @@
 type id = NunID.t
 type 'a var = 'a NunVar.t
 type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a printer = Format.formatter -> 'a -> unit
 
 type ('a, 'ty) view =
   | Builtin of NunBuiltin.T.t (** built-in symbol *)
@@ -24,14 +25,6 @@ type ('a, 'ty) view =
   | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
   | TyArrow of 'ty * 'ty   (** Arrow type *)
   | TyForall of 'ty var * 'ty  (** Polymorphic/dependent type *)
-
-(** A full problem to solve, with the list of statements and computed
-    signatures and definitions for fast access *)
-type ('t, 'ty) problem = {
-  statements : ('t, 'ty) NunStatement.t list;
-  signature : 'ty NunID.Map.t; (* id -> type *)
-  defs : 't NunID.Map.t; (* id -> definition *)
-}
 
 module type VIEW = sig
   type t
@@ -78,7 +71,7 @@ module type S = sig
 
   val compute_signature :
     ?init:signature ->
-    (t, Ty.t) NunStatement.t Sequence.t ->
+    (t, Ty.t) NunProblem.Statement.t Sequence.t ->
     signature
   (** Signature from statements *)
 
@@ -93,6 +86,21 @@ module type S = sig
 end
 
 module Default : S
+
+(** {2 Printing} *)
+
+module type PRINT = sig
+  type term
+  type ty
+
+  val print : term printer
+  val print_in_app : term printer
+  val print_in_binder : term printer
+
+  val print_ty : ty printer
+end
+
+module Print(T : VIEW) : PRINT with type term = T.t and type ty = T.ty
 
 (** {2 Type Erasure} *)
 

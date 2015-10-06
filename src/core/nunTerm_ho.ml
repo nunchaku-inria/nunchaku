@@ -13,6 +13,7 @@ module TyI = NunType_intf
 type id = NunID.t
 type 'a var = 'a NunVar.t
 type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a printer = Format.formatter -> 'a -> unit
 
 type ('a, 'ty) view =
   | Builtin of NunBuiltin.T.t (** built-in symbol *)
@@ -28,12 +29,6 @@ type ('a, 'ty) view =
   | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
   | TyArrow of 'ty * 'ty   (** Arrow type *)
   | TyForall of 'ty var * 'ty  (** Polymorphic/dependent type *)
-
-type ('t, 'ty) problem = {
-  statements : ('t, 'ty) NunStatement.t list;
-  signature : 'ty NunID.Map.t; (* id -> type *)
-  defs : 't NunID.Map.t; (* id -> definition *)
-}
 
 module type VIEW = sig
   type t
@@ -80,7 +75,7 @@ module type S = sig
 
   val compute_signature :
     ?init:signature ->
-    (t, Ty.t) NunStatement.t Sequence.t ->
+    (t, Ty.t) NunProblem.Statement.t Sequence.t ->
     signature
   (** Signature from statements *)
 
@@ -297,11 +292,12 @@ module Default : S = struct
 
   let compute_signature ?(init=ID.Map.empty) =
     let module M = ID.Map in
+    let module St = NunProblem.Statement in
     Sequence.fold
-      (fun sigma st -> match NunStatement.view st with
-        | NunStatement.Decl (id,ty) -> M.add id ty sigma
-        | NunStatement.Axiom _ -> sigma
-        | NunStatement.Def (id,ty,_) -> M.add id ty sigma
+      (fun sigma st -> match St.view st with
+        | St.Decl (id,ty) -> M.add id ty sigma
+        | St.Axiom _ -> sigma
+        | St.Def (id,ty,_) -> M.add id ty sigma
       ) init
 
   exception Undefined of id
@@ -356,6 +352,82 @@ module Default : S = struct
     with e -> NunUtils.err_of_exn e
 end
 
+(** {2 Printing} *)
+
+module type PRINT = sig
+  type term
+  type ty
+
+  val print : term printer
+  val print_in_app : term printer
+  val print_in_binder : term printer
+
+  val print_ty : ty printer
+end
+
+module Print(T : VIEW) = struct
+  type term = T.t
+  type ty = T.ty
+
+  let fpf = Format.fprintf
+
+  let rec print out ty = match T.view ty with
+    | TyKind -> CCFormat.string out "kind"
+    | TyType -> CCFormat.string out "type"
+    | Builtin b -> CCFormat.string out (NunBuiltin.T.to_string b)
+    | TyBuiltin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
+    | Const id -> ID.print out id
+    | Var v -> Var.print out v
+    | App (f, [a;b]) ->
+        begin match T.view f with
+        | Builtin s when NunBuiltin.T.fixity s = `Infix ->
+            fpf out "@[<hov>%a@ %s@ %a@]"
+              print_in_app a (NunBuiltin.T.to_string s) print_in_app b
+        | _ ->
+            fpf out "@[<hov2>%a@ %a@ %a@]" print_in_app f
+              print_in_app a print_in_app b
+        end
+    | App (f,l) ->
+        fpf out "@[<2>%a@ %a@]" print_in_app f
+          (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_in_app) l
+    | Let (v,t,u) ->
+        fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
+    | Fun (v, t) ->
+        fpf out "@[<2>fun %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
+    | Forall (v, t) ->
+        fpf out "@[<2>forall %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
+    | Exists (v, t) ->
+        fpf out "@[<2>forall %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
+    | TyArrow (a,b) ->
+        fpf out "@[<2>%a ->@ %a@]" print_ty_in_arrow a print_ty b
+    | TyForall (v,t) ->
+        fpf out "@[<2>forall %a:type.@ %a@]" Var.print v print_ty t
+
+  and print_ty out ty = print out (ty:T.ty:>T.t)
+  and print_ty_in_app out ty = print_in_app out (ty:T.ty:>T.t)
+  and print_ty_in_arrow out ty = print_in_binder out (ty:T.ty:>T.t)
+
+  and print_in_app out t = match T.view t with
+    | Builtin _ | TyBuiltin _ | TyKind | TyType | Var _ | Const _ ->
+        print out t
+    | App (_,_)
+    | Forall _
+    | Exists _
+    | Fun _
+    | Let _
+    | TyArrow (_,_)
+    | TyForall (_,_) -> fpf out "@[(%a)@]" print t
+
+  and print_in_binder out t = match T.view t with
+    | Builtin _ | TyBuiltin _ | TyKind | TyType | Var _ | Const _ | App (_,_) ->
+        print out t
+    | Forall _
+    | Exists _
+    | Fun _
+    | Let _
+    | TyArrow (_,_)
+    | TyForall (_,_) -> fpf out "@[(%a)@]" print t
+end
 
 module Erase(T : VIEW) = struct
   module Untyped = NunUntypedAST

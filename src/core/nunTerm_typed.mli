@@ -102,6 +102,19 @@ end
   only for reading — writing requires providing the type at every
   application *)
 
-module AsHO(T : VIEW)
-  : NunTerm_ho.VIEW
-  with type t = T.t and type ty = T.ty
+module AsHO(T : VIEW) : sig
+  include NunTerm_ho.VIEW
+    with type t = T.t and type ty = T.ty
+
+  val convert : T.t -> t
+
+  val convert_ty : T.ty -> ty
+
+  val convert_statement :
+    (T.t, T.ty) NunProblem.Statement.t ->
+    (t, ty) NunProblem.Statement.t
+
+  val convert_problem :
+    (T.t, T.ty) NunProblem.Statement.t list ->
+    (t, ty) NunProblem.t
+end

@@ -31,6 +31,7 @@ val make : ?print:(Format.formatter -> 'st -> unit) ->
            ?name:string ->
            encode:('a -> ('b * 'st) lazy_list) ->
            decode:('st -> 'c -> 'd) ->
+           unit ->
            ('a, 'b, 'c, 'd) t
 (** Constructor *)
 
@@ -52,6 +53,10 @@ module Pipe : sig
   val id : ('a, 'a, 'c, 'c) t
 
   val compose :
+    ('a, 'b, 'd1, 'e) transformation ->
+    ('b, 'b2, 'c, 'd1) t -> ('a, 'b2, 'c, 'e) t
+
+  val (@@@) :
     ('a, 'b, 'd1, 'e) transformation ->
     ('b, 'b2, 'c, 'd1) t -> ('a, 'b2, 'c, 'e) t
 end

@@ -61,7 +61,7 @@ end
 module ConvertStatement(T : TERM) : sig
   module CT : module type of ConvertTerm(T)
 
-  type t = (T.t, T.Ty.t) NunStatement.t
+  type t = (T.t, T.Ty.t) NunProblem.Statement.t
 
   type env = CT.env
 

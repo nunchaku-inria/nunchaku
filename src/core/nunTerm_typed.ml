@@ -286,12 +286,9 @@ module Default = struct
   end)
 end
 
-module AsHO(T : VIEW)
-  : NunTerm_ho.VIEW
-  with type t = T.t and type ty = T.ty
-= struct
-
+module AsHO(T : VIEW) = struct
   module TI = NunTerm_ho
+  module Stmt = NunProblem.Statement
 
   type t = T.t
   type ty = T.ty
@@ -312,4 +309,29 @@ module AsHO(T : VIEW)
     | TyArrow (a,b) -> TI.TyArrow (a,b)
     | TyForall (v,t) -> TI.TyForall (v,t)
 
+  let convert t = t
+  let convert_ty ty = ty
+
+  let convert_statement st =
+    Stmt.map ~term:convert ~ty:convert_ty st
+
+  let convert_statement_list = CCList.map convert_statement
+
+  let convert_problem l =
+    let module M = NunID.Map in
+    let statements = convert_statement_list l in
+    let sigma, defs =
+      let thunk = lazy (
+        List.fold_left
+          (fun (sigma,defs) st -> match Stmt.view st with
+            | Stmt.Decl (id,ty) -> M.add id ty sigma, defs
+            | Stmt.Def (id,ty,t) ->
+                M.add id ty sigma, M.add id t defs
+            | Stmt.Axiom _ -> sigma, defs
+          ) (M.empty, M.empty) statements
+      )
+      in
+      lazy (fst (Lazy.force thunk)), lazy (snd (Lazy.force thunk))
+    in
+    NunProblem.make ~signature:sigma ~defs statements
 end

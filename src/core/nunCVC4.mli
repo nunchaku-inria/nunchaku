@@ -3,7 +3,6 @@
 
 (** {1 Interface to CVC4} *)
 
-module CVC4 : NunSolver_intf.S
+include NunSolver_intf.S
 
-val solver : (module NunSolver_intf.S)
-(** The solver interface to CVC4 *)
+val print_problem : Format.formatter -> NunSolver_intf.Problem.t -> unit

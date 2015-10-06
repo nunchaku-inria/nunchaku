@@ -431,7 +431,7 @@ module ConvertTerm(Term : TERM) = struct
 end
 
 module ConvertStatement(T : TERM) = struct
-  module St = NunStatement
+  module St = NunProblem.Statement
   module CT = ConvertTerm(T)
   module T = T
   module Ty = T.Ty

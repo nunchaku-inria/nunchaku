@@ -25,7 +25,7 @@ and ('a, 'b, 'c, 'd, 'st) inner = {
 type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 (** Alias to {!t} *)
 
-let make ?print ?(name="<trans>") ~encode ~decode = Ex {
+let make ?print ?(name="<trans>") ~encode ~decode () = Ex {
   name;
   encode;
   decode;
@@ -47,6 +47,7 @@ module Pipe = struct
 
   let id = Id
   let compose a p = Comp (a, p)
+  let (@@@) = compose
 end
 
 let callbacks_ l x =
