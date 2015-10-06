@@ -64,7 +64,8 @@ let print_input_if_needed statements =
 let make_pipeline () =
   let open NunTransform.Pipe in
   (* type inference *)
-  let step_ty_infer = Pipeline.TyInfer.pipe in
+  let step_ty_infer = Pipeline.ty_infer
+    (module NunTerm_typed.Default) (module NunTerm_ho.Default) in
   if !print_typed_
     then NunTransform.on_encoded step_ty_infer
       ~f:(Format.printf "@[after type inference:@ %a@]@."

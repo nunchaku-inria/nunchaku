@@ -30,34 +30,37 @@ end
 
 (** {2 Type Inference} *)
 
-module TyInfer = struct
-  module T = NunTerm_typed.Default
-  module PrintT = NunTerm_typed.Print(T)
+let ty_infer (type a) (type b)
+(module T1 : NunTerm_typed.S with type t = a)
+(module T2 : NunTerm_ho.S with type t = b) =
+  let module DoIt = struct
+    module PrintT = NunTerm_typed.Print(T1)
 
-  (* we get back "regular" HO terms *)
-  module TBack = NunTerm_ho.Default
-  module Erase = NunTerm_ho.Erase(TBack)
+    (* we get back "regular" HO terms *)
+    module TBack = T2
+    module Erase = NunTerm_ho.Erase(TBack)
 
-  (* type inference *)
-  module Conv = NunTypeInference.ConvertStatement(T)
+    (* type inference *)
+    module Conv = NunTypeInference.ConvertStatement(T1)
 
-  let print_problem = NunProblem.print PrintT.print T.Ty.print
+    let print_problem = NunProblem.print PrintT.print T1.Ty.print
 
-  let pipe = Tr.make
-    ~name:"type inference"
-    ~encode:(fun l ->
-      let problem = l
-        |> Conv.convert_list_exn ~env:Conv.empty_env
-        |> fst
-        |> (fun l->NunProblem.make l)
-      in
-      CCKList.singleton (problem, ())
-    )
-    ~decode:(fun () (model : TBack.t Res.model) ->
-      let ctx = Erase.create () in
-      NunProblem.Model.map model ~f:(Erase.erase ~ctx)
-    ) ()
-end
+    let pipe = Tr.make
+      ~name:"type inference"
+      ~encode:(fun l ->
+        let problem = l
+          |> Conv.convert_list_exn ~env:Conv.empty_env
+          |> fst
+          |> (fun l->NunProblem.make l)
+        in
+        CCKList.singleton (problem, ())
+      )
+      ~decode:(fun () (model : TBack.t Res.model) ->
+        let ctx = Erase.create () in
+        NunProblem.Model.map model ~f:(Erase.erase ~ctx)
+      ) ()
+  end in
+  DoIt.pipe
 
 (** {2 Optimizations/Encodings} *)
 
