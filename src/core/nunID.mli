@@ -23,3 +23,4 @@ val to_string : t -> string
 
 module Map : CCMap.S with type key = t
 module Set : CCSet.S with type elt = t
+module Tbl : CCHashtbl.S with type key = t

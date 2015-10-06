@@ -76,6 +76,12 @@ module type S = sig
 
   type signature = Ty.t NunID.Map.t
 
+  val compute_signature :
+    ?init:signature ->
+    (t, Ty.t) NunStatement.t Sequence.t ->
+    signature
+  (** Signature from statements *)
+
   val ty : sigma:signature -> t -> Ty.t or_error
   (** Compute the type of the given term in the given signature *)
 
@@ -87,3 +93,19 @@ module type S = sig
 end
 
 module Default : S
+
+(** {2 Type Erasure} *)
+
+module Erase(T : VIEW) : sig
+  module Untyped = NunUntypedAST
+
+  type ctx
+  (** Disambiguation context *)
+
+  val create : unit -> ctx
+  (** New context *)
+
+  val erase : ctx:ctx -> T.t -> Untyped.term
+
+  val erase_ty : ctx:ctx -> T.ty -> Untyped.ty
+end

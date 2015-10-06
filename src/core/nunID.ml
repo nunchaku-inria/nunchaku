@@ -31,8 +31,11 @@ let to_string v = Printf.sprintf "%s/%d" v.name v.id
 module As_key = struct
   type t = _t
   let compare = compare
+  let hash = hash
+  let equal = equal
 end
 
 module Map = CCMap.Make(As_key)
 module Set = CCSet.Make(As_key)
+module Tbl = CCHashtbl.Make(As_key)
 

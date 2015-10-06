@@ -78,6 +78,12 @@ module type S = sig
 
   type signature = Ty.t NunID.Map.t
 
+  val compute_signature :
+    ?init:signature ->
+    (t, Ty.t) NunStatement.t Sequence.t ->
+    signature
+  (** Signature from statements *)
+
   val ty : sigma:signature -> t -> Ty.t or_error
   (** Compute the type of the given term in the given signature *)
 
@@ -289,6 +295,15 @@ module Default : S = struct
 
   type signature = t NunID.Map.t
 
+  let compute_signature ?(init=ID.Map.empty) =
+    let module M = ID.Map in
+    Sequence.fold
+      (fun sigma st -> match NunStatement.view st with
+        | NunStatement.Decl (id,ty) -> M.add id ty sigma
+        | NunStatement.Axiom _ -> sigma
+        | NunStatement.Def (id,ty,_) -> M.add id ty sigma
+      ) init
+
   exception Undefined of id
 
   let () = Printexc.register_printer
@@ -340,4 +355,108 @@ module Default : S = struct
     try CCError.return (ty_exn ~sigma t)
     with e -> NunUtils.err_of_exn e
 end
+
+
+module Erase(T : VIEW) = struct
+  module Untyped = NunUntypedAST
+
+  type ctx = {
+    map: (string * int) ID.Tbl.t; (* remember results *)
+    disamb: (string, int list) Hashtbl.t;  (* name -> set of nums *)
+  }
+  (* map ID to names, without collisions *)
+
+  let create () = {
+    map=ID.Tbl.create 32;
+    disamb=Hashtbl.create 32;
+  }
+
+  (* find smallest int not in list *)
+  let rec find_smallest_ n l =
+    if List.mem n l then find_smallest_ (n+1) l else n
+
+  (* find an identifier *)
+  let find_ ~ctx id =
+    try fst (ID.Tbl.find ctx.map id)
+    with Not_found ->
+      let name = ID.name id in
+      let l = try Hashtbl.find ctx.disamb name with Not_found -> [] in
+      let n = find_smallest_ 0 l in
+      let name' = if n=0 then name else Printf.sprintf "%s/%d" name n in
+      Hashtbl.replace ctx.disamb name (n::l);
+      ID.Tbl.replace ctx.map id (name', n);
+      name'
+
+  (* remove an identifier *)
+  let remove_ ~ctx id =
+    let _, n = ID.Tbl.find ctx.map id in
+    ID.Tbl.remove ctx.map id;
+    let name = ID.name id in
+    let l = Hashtbl.find ctx.disamb name in
+    let l = CCList.Set.remove n l in
+    if l=[]
+    then Hashtbl.remove ctx.disamb name
+    else Hashtbl.replace ctx.disamb name l
+
+  (* enter the scope of [v] *)
+  let enter_ ~ctx v f =
+    let name = find_ ~ctx (Var.id v) in
+    try
+      let x = f name in
+      remove_ ~ctx (Var.id v);
+      x
+    with e ->
+      remove_ ~ctx (Var.id v);
+      raise e
+
+  let rec erase ~ctx t = match T.view t with
+    | Builtin b ->
+        let b = match b with
+          | NunBuiltin.T.True  -> Untyped.Builtin.True
+          | NunBuiltin.T.False -> Untyped.Builtin.False
+          | NunBuiltin.T.Not -> Untyped.Builtin.Not
+          | NunBuiltin.T.Or -> Untyped.Builtin.Or
+          | NunBuiltin.T.And -> Untyped.Builtin.And
+          | NunBuiltin.T.Imply -> Untyped.Builtin.Imply
+          | NunBuiltin.T.Equiv -> Untyped.Builtin.Equiv
+          | NunBuiltin.T.Eq -> Untyped.Builtin.Eq
+        in Untyped.builtin b
+    | Const id -> Untyped.var (find_ ~ctx id)
+    | Var v -> Untyped.var (find_ ~ctx (Var.id v))
+    | App (f,l) -> Untyped.app (erase ~ctx f) (List.map (erase ~ctx) l)
+    | Fun (v,t) ->
+        enter_typed_var_ ~ctx v (fun v' -> Untyped.fun_ v' (erase ~ctx t))
+    | Forall (v,t) ->
+        enter_typed_var_ ~ctx v (fun v' -> Untyped.forall v' (erase ~ctx t))
+    | Exists (v,t) ->
+        enter_typed_var_ ~ctx v (fun v' -> Untyped.forall v' (erase ~ctx t))
+    | Let (v,t,u) ->
+        let t = erase ~ctx t in
+        enter_ ~ctx v
+          (fun v' ->
+            Untyped.let_ v' t (erase ~ctx u)
+          )
+    | TyKind -> failwith "HO.erase: cannot erase Kind"
+    | TyType -> Untyped.builtin Untyped.Builtin.Type
+    | TyBuiltin b ->
+        let b = match b with
+          | NunBuiltin.Ty.Prop -> Untyped.Builtin.Prop
+        in
+        Untyped.builtin b
+    | TyArrow (a,b) -> Untyped.ty_arrow (erase_ty ~ctx a) (erase_ty ~ctx b)
+    | TyForall (v,t) ->
+        enter_ ~ctx v (fun v' -> Untyped.ty_forall v' (erase_ty ~ctx t))
+
+  (* erase a type *)
+  and erase_ty ~ctx t = erase ~ctx (t:T.ty:>T.t)
+
+  (* enter a typed variable *)
+  and enter_typed_var_ ~ctx v f =
+    enter_ ~ctx v
+      (fun v' ->
+        let ty = erase_ty ~ctx (Var.ty v) in
+        f (v', Some ty)
+      )
+end
+
 
