@@ -46,7 +46,8 @@ let close s =
   )
 
 let create_ ~timeout () =
-  let cmd = Printf.sprintf "cvc4 --tlimit-per=%d" (timeout * 1000) in
+  if timeout < 0. then invalid_arg "CVC4.create: wrong timeout";
+  let cmd = Printf.sprintf "cvc4 --tlimit-per=%.3f" (timeout *. 1000.) in
   let ic, oc = Unix.open_process cmd in
   (* send prelude *)
   output_string oc "(set-option :produce-models true)\n";
@@ -176,7 +177,7 @@ let res t = match t.res with
       t.res <- Some r;
       r
 
-let solve ?(timeout=30) problem =
+let solve ?(timeout=30.) problem =
   let s = create_ ~timeout () in
   send_ s problem;
   s

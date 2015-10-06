@@ -62,6 +62,7 @@ module type S = sig
   val exists : ty var -> t -> t
 
   val ty_type : Ty.t (** Type of types *)
+  val ty_kind : Ty.t (** Type of ty_type *)
   val ty_prop : Ty.t (** Propositions *)
 
   val ty_builtin : NunBuiltin.Ty.t -> Ty.t
@@ -71,7 +72,7 @@ module type S = sig
   val ty_forall : ty var -> Ty.t -> Ty.t
   val ty_arrow : Ty.t -> Ty.t -> Ty.t
 
-  type signature = Ty.t NunID.Map.t
+  type signature = Ty.t NunProblem.Signature.t
 
   val compute_signature :
     ?init:signature ->
@@ -121,6 +122,7 @@ module Default : S = struct
   let exists v t = make_ (Exists (v, t))
 
   let ty_type = type_
+  let ty_kind = kind_
   let ty_prop = prop
 
   let ty_builtin b = make_ (TyBuiltin b)
@@ -288,7 +290,7 @@ module Default : S = struct
     end)
   end
 
-  type signature = t NunID.Map.t
+  type signature = Ty.t NunProblem.Signature.t
 
   let compute_signature ?(init=ID.Map.empty) =
     let module M = ID.Map in

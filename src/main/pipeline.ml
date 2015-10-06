@@ -4,6 +4,7 @@
 (** {1 Pipelines for Nunchaku} *)
 
 module Tr = NunTransform
+module Utils = NunUtils
 
 module Res = struct
   type 't model = 't NunProblem.Model.t
@@ -105,21 +106,19 @@ module CallCVC4 = struct
   module FO = NunFO.Default
   module Sol = NunSolver_intf
 
-  (* TODO:
-    - call CVC4
-    - some timeout system (deadline - current time = timeout)
-    - if error, raise (it will get back to main)
-  *)
-
+  (* solve problem using CVC4 before [deadline] *)
   let solve
-    : Sol.Problem.t -> FO.T.t Res.t
-    = fun problem ->
-      let timeout = 5 in (* TODO *)
-      let solver = NunCVC4.solve ~timeout problem in
-      match NunCVC4.res solver with
-      | Sol.Res.Sat _m -> assert false (* TODO: extract values for terms in [problem]  *)
-      | Sol.Res.Unsat -> Res.Unsat
-      | Sol.Res.Timeout -> Res.Timeout
-      | Sol.Res.Error e ->
-          failwith e
+    : deadline:float -> Sol.Problem.t -> FO.T.t Res.t
+    = fun ~deadline problem ->
+      (* how much time remains *)
+      let timeout = deadline -. Unix.gettimeofday() in
+      if timeout < 0.1 then Res.Timeout
+      else
+        let solver = NunCVC4.solve ~timeout problem in
+        match NunCVC4.res solver with
+        | Sol.Res.Sat _m -> assert false (* TODO: extract values for terms in [problem]  *)
+        | Sol.Res.Unsat -> Res.Unsat
+        | Sol.Res.Timeout -> Res.Timeout
+        | Sol.Res.Error e ->
+            failwith e
 end

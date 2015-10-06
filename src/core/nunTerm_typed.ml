@@ -318,20 +318,5 @@ module AsHO(T : VIEW) = struct
   let convert_statement_list = CCList.map convert_statement
 
   let convert_problem l =
-    let module M = NunID.Map in
-    let statements = convert_statement_list l in
-    let sigma, defs =
-      let thunk = lazy (
-        List.fold_left
-          (fun (sigma,defs) st -> match Stmt.view st with
-            | Stmt.Decl (id,ty) -> M.add id ty sigma, defs
-            | Stmt.Def (id,ty,t) ->
-                M.add id ty sigma, M.add id t defs
-            | Stmt.Axiom _ -> sigma, defs
-          ) (M.empty, M.empty) statements
-      )
-      in
-      lazy (fst (Lazy.force thunk)), lazy (snd (Lazy.force thunk))
-    in
-    NunProblem.make ~signature:sigma ~defs statements
+    NunProblem.make (convert_statement_list l)
 end

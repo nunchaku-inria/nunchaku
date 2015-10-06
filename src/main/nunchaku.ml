@@ -10,6 +10,7 @@ module Utils = NunUtils
 let print_ = ref false
 let print_typed_ = ref false
 let print_fo_ = ref false
+let timeout_ = ref 30
 let version_ = ref false
 let file = ref ""
 let set_file f =
@@ -31,6 +32,7 @@ let options = Arg.align (
   [ "--print", Arg.Set print_, " print input and exit"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
+  ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "--version", Arg.Set version_, " print version and exit"
   ]
 )
@@ -99,15 +101,18 @@ let main () =
   let open CCError.Infix in
   Arg.parse options set_file "usage: nunchaku [options] file";
   print_version_if_needed ();
+  Printexc.record_backtrace true;
   (* parse *)
   parse_file ()
   >>= fun statements ->
   print_input_if_needed statements;
+  (* timeout *)
+  let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   (* run pipeline *)
   let pipe = make_pipeline() in
   NunTransform.run ~pipe statements
   |> CCKList.map
-    (fun (p, back) -> Pipeline.CallCVC4.solve p, back)
+    (fun (p, back) -> Pipeline.CallCVC4.solve ~deadline p, back)
   |> traverse_list_
 
 let () =

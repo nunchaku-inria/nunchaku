@@ -58,6 +58,7 @@ module type S = sig
   val exists : ty var -> t -> t
 
   val ty_type : Ty.t (** Type of types *)
+  val ty_kind : Ty.t (** Type of ty_type *)
   val ty_prop : Ty.t (** Propositions *)
 
   val ty_builtin : NunBuiltin.Ty.t -> Ty.t
@@ -67,7 +68,7 @@ module type S = sig
   val ty_forall : ty var -> Ty.t -> Ty.t
   val ty_arrow : Ty.t -> Ty.t -> Ty.t
 
-  type signature = Ty.t NunID.Map.t
+  type signature = Ty.t NunProblem.Signature.t
 
   val compute_signature :
     ?init:signature ->

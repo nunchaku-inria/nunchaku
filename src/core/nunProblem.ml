@@ -60,20 +60,17 @@ end
 
 type ('t, 'ty) t = {
   statements : ('t, 'ty) Statement.t list;
-  signature : 'ty Signature.t lazy_t; (* id -> type *)
-  defs : 't NunID.Map.t lazy_t; (* id -> definition *)
 }
-
-let make ?(signature=lazy Signature.empty) ?(defs=lazy ID.Map.empty) statements =
-  { statements; signature; defs }
 
 let statements t = t.statements
 
-let signature t = Lazy.force t.signature
+let make statements =
+  { statements; }
 
-let defs t = Lazy.force t.defs
+let map ~term ~ty p = {
+  statements=CCList.map (Statement.map ~term ~ty) p.statements;
+}
 
-(* XXX print signature too? *)
 let print pt pty out problem =
   fpf out "@[<v2>{%a}@]"
     (Statement.print_list pt pty) problem.statements

@@ -47,22 +47,16 @@ end
 
 type ('t, 'ty) t = private {
   statements : ('t, 'ty) Statement.t list;
-  signature : 'ty Signature.t lazy_t; (* id -> type *)
-  defs : 't NunID.Map.t lazy_t; (* id -> definition *)
 }
 
 val make :
-  ?signature:'ty Signature.t lazy_t ->
-  ?defs:'t NunID.Map.t lazy_t ->
   ('t, 'ty) Statement.t list ->
   ('t, 'ty) t
 (** Build a problem from a list of statements *)
 
 val statements : ('t, 'ty) t -> ('t, 'ty) Statement.t list
 
-val signature : (_, 'ty) t -> 'ty Signature.t
-
-val defs : ('t, _) t -> 't NunID.Map.t
+val map : term:('a -> 'b) -> ty:('tya -> 'tyb) -> ('a, 'tya) t -> ('b, 'tyb) t
 
 val print : 'a printer -> 'b printer -> ('a,'b) t printer
 (** Printer for a problem *)
