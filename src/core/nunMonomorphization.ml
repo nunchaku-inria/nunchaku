@@ -61,12 +61,11 @@ module Make(T1 : NunTerm_typed.VIEW)(T2 : NunTerm_ho.S)
       | T1I.TyType -> (T2.ty_type :> T2.t)
       | T1I.TyMeta _ -> failwith "Mono.encode: type meta-variable"
       | T1I.TyBuiltin b -> (T2.ty_builtin b :> T2.t)
-      | T1I.TyArrow (a,b) -> (T2.ty_arrow (aux_ty a) (aux_ty b) :> T2.t)
-      | T1I.TyForall (v,t) -> (T2.ty_forall (aux_var v) (aux_ty t) :> T2.t)
-    and aux_ty ty = T2.Ty.of_term_unsafe (aux (ty:T1.ty:>T1.t))
-    and aux_var = Var.update_ty ~f:aux_ty
+      | T1I.TyArrow (a,b) -> (T2.ty_arrow (aux a) (aux b) :> T2.t)
+      | T1I.TyForall (v,t) -> (T2.ty_forall (aux_var v) (aux t) :> T2.t)
+    and aux_var = Var.update_ty ~f:aux
     in
-    aux, aux_ty
+    aux, aux
 
   let encode_problem p =
     let st = create_st_ () in

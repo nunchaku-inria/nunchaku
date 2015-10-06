@@ -30,18 +30,13 @@ end
 
 module type AS_TERM = sig
   type term
-  type t = private term
+  type t = term
 
   include S with type t := t
 
   val is_Type : t -> bool (** type == Type? *)
   val returns_Type : t -> bool (** type == forall ... -> ... -> ... -> Type? *)
   val is_Kind : t -> bool (** type == Kind? *)
-  val to_term : t -> term
-
-  val of_term_unsafe : term -> t
-  (** [of_term_unsafe t] converts [t] to a [ty] without checking.
-      {b caution}, this can break invariants. *)
 end
 
 module type PRINTABLE = sig

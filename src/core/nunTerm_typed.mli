@@ -26,8 +26,7 @@ type ('a, 'ty) view =
 (** {2 Read-Only View} *)
 module type VIEW = sig
   type t
-
-  type ty = private t
+  type ty = t
 
   val view : t -> (t, ty) view
 
@@ -44,8 +43,6 @@ module type S = sig
     include NunIntf.PRINT with type t := t
 
     val is_ty : term -> bool (** [is_ty t] same as [is_Type (type of t)] *)
-    val of_term : term -> t option
-    val of_term_exn : term -> t  (** @raise Failure if it is not a term *)
   end
 
   val loc : t -> loc option

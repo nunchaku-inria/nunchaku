@@ -39,7 +39,7 @@ type ('a, 'ty) view =
 module type VIEW = sig
   type t
 
-  type ty = private t
+  type ty = t
 
   val view : t -> (t, ty) view
 
@@ -56,8 +56,6 @@ module type S = sig
     include NunIntf.PRINT with type t := t
 
     val is_ty : term -> bool (** [is_ty t] same as [is_Type (type of t)] *)
-    val of_term : term -> t option
-    val of_term_exn : term -> t  (** @raise Failure if it is not a term *)
   end
 
   val loc : t -> loc option
@@ -134,9 +132,9 @@ module Print(T : VIEW) = struct
     | TyForall (v,t) ->
         fpf out "@[<2>forall %a:type.@ %a@]" Var.print v print_ty t
 
-  and print_ty out ty = print out (ty:T.ty:>T.t)
-  and print_ty_in_app out ty = print_in_app out (ty:T.ty:>T.t)
-  and print_ty_in_arrow out ty = print_in_binder out (ty:T.ty:>T.t)
+  and print_ty out ty = print out ty
+  and print_ty_in_app out ty = print_in_app out ty
+  and print_ty_in_arrow out ty = print_in_binder out ty
 
   and print_in_app out t = match T.view t with
     | Builtin _ | TyBuiltin _ | TyKind | TyType
@@ -244,19 +242,9 @@ module Default = struct
       | TyForall (_, t') -> returns_Type t'
       | _ -> false
 
-    let to_term t = t
-
     let is_ty t = match t.ty with
       | Some ty -> is_Type ty
       | _ -> false
-
-    let of_term t =
-      if is_ty t then Some t else None
-
-    let of_term_exn t =
-      if is_ty t then t else failwith "Term_mut.TyI.of_term_exn"
-
-    let of_term_unsafe = of_term_exn
 
     let view t = match (deref_rec_ t).view with
       | TyKind -> TyI.Kind

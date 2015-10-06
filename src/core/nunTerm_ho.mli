@@ -28,8 +28,7 @@ type ('a, 'ty) view =
 
 module type VIEW = sig
   type t
-
-  type ty = private t
+  type ty = t
 
   val view : t -> (t, ty) view
 end

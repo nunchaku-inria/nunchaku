@@ -41,6 +41,8 @@ end
 
 module Signature : sig
   type 'ty t = 'ty NunID.Map.t
+
+  val empty : _ t
 end
 
 (** {2 Problem: a Set of Statements + Signature} *)

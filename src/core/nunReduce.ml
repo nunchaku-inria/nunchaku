@@ -61,27 +61,22 @@ module Make(T : NunTerm_ho.S) = struct
           )
     | TI.Let (v,t,u) ->
         let t = apply_subst ~env t in
-        let v' = Var.fresh_update_ty v ~f:(apply_subst_ty ~env) in
+        let v' = Var.fresh_update_ty v ~f:(apply_subst ~env) in
         let env = Env.add ~env v (T.var v') in
         let u = apply_subst ~env u in
         T.let_ v' t u
     | TI.TyArrow (a,b) ->
-        T.Ty.to_term (T.ty_arrow (apply_subst_ty ~env a) (apply_subst_ty ~env b))
+        T.ty_arrow (apply_subst ~env a) (apply_subst ~env b)
     | TI.TyForall (v,t) ->
         enter_ ~env v
           (fun ~env v' ->
-            let t = apply_subst_ty ~env t in
-            T.Ty.to_term (T.ty_forall v' t)
+            let t = apply_subst ~env t in
+            T.ty_forall v' t
           )
-
-  and apply_subst_ty ~env ty =
-    (* we can do this, because substitution preserves the structure enough
-       that types remain types. *)
-    T.Ty.of_term_unsafe (apply_subst ~env (ty:T.Ty.t:>T.t))
 
   (* enter the scope where [v : ty] *)
   and enter_ ~env v f =
-    let v' = Var.fresh_update_ty v ~f:(apply_subst_ty ~env) in
+    let v' = Var.fresh_update_ty v ~f:(apply_subst ~env) in
     let env = Env.add ~env v (T.var v') in
     f ~env v'
 

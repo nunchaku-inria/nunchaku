@@ -212,7 +212,7 @@ module ConvertTerm(Term : TERM) = struct
 
     (* evaluate the type [ty] under the explicit substitution [subst] *)
     let rec eval ~(subst:t) ty =
-      let loc = Term.loc (Term.Ty.to_term ty) in
+      let loc = Term.loc ty in
       match Term.Ty.view ty with
       | TyI.Kind
       | TyI.Type
@@ -384,7 +384,7 @@ module ConvertTerm(Term : TERM) = struct
         let subst = Subst.bind ~subst v b in
         (* continue *)
         let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty' l' in
-        ty', Term.Ty.to_term b :: l'
+        ty', b :: l'
 
   and convert_quantifier ?loc ~stack ~env ~which v ty_opt t =
     (* fresh variable *)

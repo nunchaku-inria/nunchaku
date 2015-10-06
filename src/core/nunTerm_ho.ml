@@ -32,8 +32,7 @@ type ('a, 'ty) view =
 
 module type VIEW = sig
   type t
-
-  type ty = private t
+  type ty = t
 
   val view : t -> (t, ty) view
 end
@@ -165,10 +164,6 @@ module Default : S = struct
       | TyArrow (_, t')
       | TyForall (_, t') -> returns_Type t'
       | _ -> false
-
-    let to_term t = t
-
-    let of_term_unsafe t = t
 
     module Subst = struct
       module M = Map.Make(struct
