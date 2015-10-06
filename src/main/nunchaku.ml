@@ -64,20 +64,12 @@ let print_input_if_needed statements =
 let make_pipeline () =
   let open NunTransform.Pipe in
   (* type inference *)
-  let step_ty_infer = Pipeline.ty_infer
+  let step_ty_infer = Pipeline.ty_infer ~print:!print_typed_
     (module NunTerm_typed.Default) (module NunTerm_ho.Default) in
-  if !print_typed_
-    then NunTransform.on_encoded step_ty_infer
-      ~f:(Format.printf "@[after type inference:@ %a@]@."
-            Pipeline.TyInfer.print_problem
-    );
   (* encodings *)
   let step_monomorphization = Pipeline.Mono.pipe in
   (* conversion to FO *)
-  let step_fo = Pipeline.ToFO.pipe in
-  if !print_fo_
-    then NunTransform.on_encoded step_fo
-      ~f:(Format.printf "@[FO problem:@ %a@]@." Pipeline.ToFO.print_problem);
+  let step_fo = Pipeline.ToFO.pipe ~print:!print_fo_ in
   (* setup pipeline *)
   step_ty_infer @@@
   step_monomorphization @@@

@@ -30,37 +30,35 @@ end
 
 (** {2 Type Inference} *)
 
-let ty_infer (type a) (type b)
+let ty_infer (type a) (type b) ~print
 (module T1 : NunTerm_typed.S with type t = a)
 (module T2 : NunTerm_ho.S with type t = b) =
-  let module DoIt = struct
-    module PrintT = NunTerm_typed.Print(T1)
-
-    (* we get back "regular" HO terms *)
-    module TBack = T2
-    module Erase = NunTerm_ho.Erase(TBack)
-
-    (* type inference *)
-    module Conv = NunTypeInference.ConvertStatement(T1)
-
-    let print_problem = NunProblem.print PrintT.print T1.Ty.print
-
-    let pipe = Tr.make
-      ~name:"type inference"
-      ~encode:(fun l ->
-        let problem = l
-          |> Conv.convert_list_exn ~env:Conv.empty_env
-          |> fst
-          |> (fun l->NunProblem.make l)
-        in
-        CCKList.singleton (problem, ())
-      )
-      ~decode:(fun () (model : TBack.t Res.model) ->
-        let ctx = Erase.create () in
-        NunProblem.Model.map model ~f:(Erase.erase ~ctx)
-      ) ()
-  end in
-  DoIt.pipe
+  let module PrintT = NunTerm_typed.Print(T1) in
+  (* we get back "regular" HO terms *)
+  let module Erase = NunTerm_ho.Erase(T2) in
+  (* type inference *)
+  let module Conv = NunTypeInference.ConvertStatement(T1) in
+  let print_problem = NunProblem.print PrintT.print T1.Ty.print in
+  let on_encoded =
+    if print
+    then [Format.printf "@[after type inference:@ %a@]@." print_problem]
+    else []
+  in
+  Tr.make
+    ~on_encoded
+    ~name:"type inference"
+    ~encode:(fun l ->
+      let problem = l
+        |> Conv.convert_list_exn ~env:Conv.empty_env
+        |> fst
+        |> (fun l->NunProblem.make l)
+      in
+      CCKList.singleton (problem, ())
+    )
+    ~decode:(fun () (model : T2.t Res.model) ->
+      let ctx = Erase.create () in
+      NunProblem.Model.map model ~f:(Erase.erase ~ctx)
+    ) ()
 
 (** {2 Optimizations/Encodings} *)
 
@@ -94,7 +92,13 @@ module ToFO = struct
 
   (* TODO *)
 
-  let pipe = Tr.make
+  let pipe ~print =
+    let on_encoded =
+      if print
+      then [Format.printf "@[FO problem:@ %a@]@." print_problem]
+      else []
+    in
+    Tr.make ~on_encoded
     ~name:"to_fo"
     ~encode:(fun (_problem:(T.t, T.ty) NunProblem.t) ->
       (assert false : ((Sol.Problem.t * state) CCKList.t))

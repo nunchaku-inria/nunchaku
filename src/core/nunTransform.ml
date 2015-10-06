@@ -25,11 +25,11 @@ and ('a, 'b, 'c, 'd, 'st) inner = {
 type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 (** Alias to {!t} *)
 
-let make ?print ?(name="<trans>") ~encode ~decode () = Ex {
+let make ?print ?(name="<trans>") ?(on_encoded=[]) ~encode ~decode () = Ex {
   name;
   encode;
   decode;
-  on_encoded=[];
+  on_encoded;
   print_state=print;
 }
 

@@ -29,6 +29,7 @@ type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 
 val make : ?print:(Format.formatter -> 'st -> unit) ->
            ?name:string ->
+           ?on_encoded:('b -> unit) list ->
            encode:('a -> ('b * 'st) lazy_list) ->
            decode:('st -> 'c -> 'd) ->
            unit ->
