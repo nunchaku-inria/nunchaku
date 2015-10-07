@@ -116,7 +116,7 @@ module Print(T : VIEW) = struct
     | App (f, [a;b]) ->
         begin match T.view f with
         | Builtin s when NunBuiltin.T.fixity s = `Infix ->
-            fpf out "@[<hov>%a@ %s@ %a@]"
+            fpf out "@[<hv>%a@ %s@ %a@]"
               print_in_app a (NunBuiltin.T.to_string s) print_in_app b
         | _ ->
             fpf out "@[<hov2>%a@ %a@ %a@]" print_in_app f
