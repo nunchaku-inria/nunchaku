@@ -44,6 +44,12 @@ module Make(T1 : NunTerm_typed.VIEW)(T2 : NunTerm_ho.S)
       - declare f_alpha : (typeof f) applied to alpha
       - add (f alpha) -> f_alpha in [rev]
       - rewrite (f alpha) into f_alpha everywhere
+
+      - dependency analysis from the goal, to know which specialization
+        are needed
+      - variations on Axiom to help removing useless things
+        ("spec" for consistent axioms that can be ignored,
+        "def" for terminating ones that can be ignored (> spec), etc.)
   *)
 
   (* make encoding functions for terms and types *)

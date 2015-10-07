@@ -57,6 +57,8 @@ type 'ty ty_view =
 (** Toplevel type: an arrow of atomic types *)
 type 'ty toplevel_ty = 'ty list * 'ty
 
+(* TODO: try to merge back with NunProblem? *)
+
 (** Problem *)
 type ('f, 't, 'ty) statement =
   | TyDecl of id * int  (** number of arguments *)
