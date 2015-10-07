@@ -20,6 +20,7 @@ and ('a, 'b, 'c, 'd, 'st) inner = {
   name : string; (** informal name for the transformation *)
   encode : 'a -> ('b * 'st) lazy_list;
   decode : 'st -> 'c -> 'd;
+  mutable on_input : ('a -> unit) list;
   mutable on_encoded : ('b -> unit) list;
   print_state : (Format.formatter -> 'st -> unit) option;  (** Debugging *)
 }
@@ -29,6 +30,7 @@ type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 
 val make : ?print:(Format.formatter -> 'st -> unit) ->
            ?name:string ->
+           ?on_input:('a -> unit) list ->
            ?on_encoded:('b -> unit) list ->
            encode:('a -> ('b * 'st) lazy_list) ->
            decode:('st -> 'c -> 'd) ->
@@ -68,4 +70,37 @@ val run : pipe:('a, 'b, 'c, 'd) Pipe.t ->
 (** [run ~pipe x] runs [x] through the pipe [pipe], in a lazy way,
     and yields values of type ['b] along with a conversion function back *)
 
+(** {2 Pipe with a function at the end}
+
+  Same as composing a {!Pipe.t} with a function that consumes it and
+  returns values to be converted back *)
+module ClosedPipe : sig
+  type ('a, 'c, 'd, 'res) t =
+    | ClosedEx : ('a, 'b, 'c, 'd, 'res) inner -> ('a, 'c, 'd, 'res) t
+  (** A machine that consumes ['a] using a pipeline, and calls some function
+      to obtain a result ['res] and something that can be converted back
+      to ['d] using the pipeline again *)
+
+  and ('a, 'b, 'c, 'd, 'res) inner = {
+    pipe: ('a, 'b, 'c, 'd) Pipe.t;
+    call: ('b -> 'res lazy_list);
+  }
+
+  val make :
+    pipe: ('a, 'b, 'c, 'd) Pipe.t ->
+    f:('b -> 'res lazy_list) ->
+    ('a, 'c, 'd, 'res) t
+
+  val make1 :
+    pipe: ('a, 'b, 'c, 'd) Pipe.t ->
+    f:('b -> 'res) ->
+    ('a, 'c, 'd, 'res) t
+  (** Same as {!make}, but the function always returns exactly one element *)
+end
+
+val run_closed :
+  cpipe:('a, 'c, 'd, 'res) ClosedPipe.t ->
+  'a ->
+  ('res * ('c -> 'd)) lazy_list
+(** Run the value through [pipe] *)
 
