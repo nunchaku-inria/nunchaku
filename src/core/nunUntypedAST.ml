@@ -101,6 +101,7 @@ type statement_node =
   | Decl of var * ty (* declaration of uninterpreted symbol *)
   | Def of typed_var * term (* definition *)
   | Axiom of term (* axiom *)
+  | Goal of term (* goal *)
 
 type statement = statement_node Loc.with_loc
 
@@ -125,6 +126,7 @@ let exists_list ?loc = List.fold_right (exists ?loc)
 let decl ?loc v t = Loc.with_loc ?loc (Decl(v,t))
 let def ?loc v t = Loc.with_loc ?loc (Def (v,t))
 let axiom ?loc t = Loc.with_loc ?loc (Axiom t)
+let goal ?loc t = Loc.with_loc ?loc (Goal t)
 
 (* all elements are distinct? *)
 let rec all_diff_ = function
@@ -194,6 +196,7 @@ let print_statement out st = match Loc.get st with
   | Decl (v, t) -> pf out "@[val %s : %a.@]" v print_term t
   | Def (v, t) -> pf out "@[def %a := %a.@]" print_typed_var v print_term t
   | Axiom t -> pf out "@[axiom %a.@]" print_term t
+  | Goal t -> pf out "@[goal %a.@]" print_term t
 
 let print_statement_list out l =
   Format.fprintf out "@[<v>%a@]"

@@ -14,6 +14,7 @@ module Statement : sig
     | Decl of id * 'ty (** uninterpreted symbol *)
     | Def of id * 'ty * 'term (** defined symbol *)
     | Axiom of 'term
+    | Goal of 'term
 
   type ('term,'ty) t
 
@@ -24,6 +25,7 @@ module Statement : sig
   val decl : ?loc:loc -> id -> 'a -> (_, 'a) t
   val def : ?loc:loc -> id -> ty:'ty -> 'a -> ('a, 'ty) t
   val axiom : ?loc:loc -> 'a -> ('a,_) t
+  val goal : ?loc:loc -> 'a -> ('a,_) t
 
   val map :
     term:('t -> 't2) ->

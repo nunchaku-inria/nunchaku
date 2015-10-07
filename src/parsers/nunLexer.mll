@@ -53,6 +53,7 @@ rule token = parse
   | "type" { TYPE }
   | "prop" { PROP }
   | "axiom" { AXIOM }
+  | "goal" { GOAL }
   | "let" { LET }
   | "in" { IN }
   | "and" { AND }

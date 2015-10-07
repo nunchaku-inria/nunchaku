@@ -1,12 +1,22 @@
 # OASIS_START
-# DO NOT EDIT (digest: 4178f453839ddc128f40b099efe24cb8)
+# DO NOT EDIT (digest: e17c294755de267395b931363c0376e8)
 version = "0.1"
 description = "A counter-example finder for higher-order logic"
-requires = "containers sequence"
-archive(byte) = "nunchaku.cma"
-archive(byte, plugin) = "nunchaku.cma"
-archive(native) = "nunchaku.cmxa"
-archive(native, plugin) = "nunchaku.cmxs"
-exists_if = "nunchaku.cma"
+requires = "containers containers.sexp containers.iter sequence unix"
+archive(byte) = "nunchaku_core.cma"
+archive(byte, plugin) = "nunchaku_core.cma"
+archive(native) = "nunchaku_core.cmxa"
+archive(native, plugin) = "nunchaku_core.cmxs"
+exists_if = "nunchaku_core.cma"
+package "parsers" (
+ version = "0.1"
+ description = "A counter-example finder for higher-order logic"
+ requires = "nunchaku"
+ archive(byte) = "nunchaku_parsers.cma"
+ archive(byte, plugin) = "nunchaku_parsers.cma"
+ archive(native) = "nunchaku_parsers.cmxa"
+ archive(native, plugin) = "nunchaku_parsers.cmxs"
+ exists_if = "nunchaku_parsers.cma"
+)
 # OASIS_STOP
 

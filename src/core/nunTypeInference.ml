@@ -471,6 +471,13 @@ module ConvertStatement(T : TERM) = struct
         (* be sure it's a proposition *)
         CT.Unif.unify_exn (CT.get_ty_ t) CT.prop;
         St.axiom ?loc t, env
+    | A.Goal t ->
+        (* infer type for t *)
+        let t = CT.convert_exn ~env t in
+        (* be sure it's a proposition
+           XXX: for narrowing, could be of any type? *)
+        CT.Unif.unify_exn (CT.get_ty_ t) CT.prop;
+        St.goal ?loc t, env
 
   let convert ~env st =
     try E.return (convert_exn ~env st)

@@ -285,6 +285,7 @@ module ComputeType(T : S) = struct
     Sequence.fold
       (fun sigma st -> match St.view st with
         | St.Decl (id,ty) -> M.add id ty sigma
+        | St.Goal _
         | St.Axiom _ -> sigma
         | St.Def (id,ty,_) -> M.add id ty sigma
       ) init
@@ -644,6 +645,7 @@ module AsFO(T : VIEW) = struct
         let ty = Ty.flatten_arrow ty in
         FOI.Def (id, ty, t)
     | St.Axiom f -> FOI.Axiom f
+    | St.Goal f -> FOI.Goal f
 
   let convert_problem p =
     NunProblem.statements p

@@ -145,6 +145,8 @@ module Make(FO : NunFO.VIEW) = struct
         NunUtils.not_implemented "cvc4.output definition" (* TODO *)
     | FOI.Axiom t ->
         fpf out "(@[(assert %a)@])" print_form t
+    | FOI.Goal t ->
+        fpf out "(@[(assert %a)@])" print_form t
     | FOI.FormDef (_,_) ->
         NunUtils.not_implemented "cvc4.output formula def" (* TODO *)
 

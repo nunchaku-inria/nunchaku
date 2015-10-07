@@ -17,6 +17,7 @@ module Statement = struct
     | Decl of id * 'ty (** uninterpreted symbol *)
     | Def of id * 'ty * 'term (** defined symbol *)
     | Axiom of 'term
+    | Goal of 'term
 
   type ('a, 'b) t = {
     view: ('a, 'b) view;
@@ -31,6 +32,7 @@ module Statement = struct
   let decl ?loc v t = make_ ?loc (Decl (v,t))
   let def ?loc v ~ty t = make_ ?loc (Def (v,ty,t))
   let axiom ?loc t = make_ ?loc (Axiom t)
+  let goal ?loc t = make_ ?loc (Goal t)
 
   let map ~term:ft ~ty:fty st =
     let loc = st.loc in
@@ -38,6 +40,7 @@ module Statement = struct
     | Decl (id,ty) -> decl ?loc id (fty ty)
     | Def (id,ty,t) -> def ?loc id ~ty:(fty ty) (ft t)
     | Axiom t -> axiom ?loc (ft t)
+    | Goal t -> goal ?loc (ft t)
 
   let print pt pty out t =
     match t.view with
@@ -46,6 +49,7 @@ module Statement = struct
         fpf out "@[<2>def %a@ : %a@ := %a.@]"
           ID.print v pty ty pt t
     | Axiom t -> fpf out "@[<2>axiom %a.@]" pt t
+    | Goal t -> fpf out "@[<2>goal %a.@]" pt t
 
   let print_list pt pty out l =
     fpf out "@[<v>%a@]"

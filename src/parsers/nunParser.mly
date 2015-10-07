@@ -43,6 +43,7 @@
 %token AXIOM
 %token DEF
 %token DECL
+%token GOAL
 
 %token ARROW
 %token FUN
@@ -219,6 +220,11 @@ statement:
     {
       let loc = L.mk_pos $startpos $endpos in
       A.axiom ~loc t
+    }
+  | GOAL t=term DOT
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.goal ~loc t
     }
   | error
     {

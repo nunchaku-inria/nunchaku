@@ -61,6 +61,7 @@ type ('f, 't, 'ty) statement =
   | Def of id * 'ty toplevel_ty * 't
   | FormDef of id * 'f
   | Axiom of 'f
+  | Goal of 'f
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
