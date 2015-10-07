@@ -134,5 +134,7 @@ module Problem : sig
   }
 
   val make : ('f, 't, 'ty) statement list -> ('f, 't, 'ty) t
+  val statements : ('f, 't, 'ty) t -> ('f, 't, 'ty) statement list
+
 end
 

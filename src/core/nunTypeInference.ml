@@ -449,7 +449,9 @@ module ConvertStatement(T : TERM) = struct
         let id = ID.make ~name:v in
         let ty = CT.ConvertTy.convert_exn ~env ty in
         let env = CT.add_decl ~env v ~id ty in
-        St.decl ?loc id ty, env
+        if Ty.returns_Type ty
+        then St.ty_decl ?loc id ty, env (* id is a type *)
+        else St.decl ?loc id ty, env
     | A.Def ((v, ty_opt), t) ->
         let id = ID.make ~name:v in
         (* infer type for t *)
@@ -464,7 +466,12 @@ module ConvertStatement(T : TERM) = struct
             let ty = CT.ConvertTy.convert_exn ~env ty in
             CT.unify_in_ctx_ ~stack:[] ty (CT.get_ty_ t)
           ) ty_opt;
-        St.def ?loc id ~ty t, env
+        begin match Ty.view ty with
+        | TyI.Builtin NunBuiltin.Ty.Prop ->
+            St.prop_def ?loc id t, env  (* prop def *)
+        | _ ->
+            St.def ?loc id ~ty t, env (* regular def *)
+        end
     | A.Axiom t ->
         (* infer type for t *)
         let t = CT.convert_exn ~env t in

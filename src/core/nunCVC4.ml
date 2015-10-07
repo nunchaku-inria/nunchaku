@@ -21,20 +21,21 @@ module Make(FO : NunFO.VIEW) = struct
   module Ty = FO.Ty
   module F = FO.Formula
 
-  type term = FO.T.t
-  type ty = FO.Ty.t
-  type toplevel_ty = FO.Ty.toplevel_ty
-  type formula = FO.Formula.t
-  type problem = (formula, term, ty) NunFO.Problem.t
+  (* for the model *)
+  module FOBack = NunFO.Default
+
+  type problem = (FO.Formula.t, FO.T.t, FO.Ty.t) NunFO.Problem.t
 
   (* the solver is dealt with through stdin/stdout *)
   type t = {
     oc : out_channel;
     fmt : Format.formatter; (* prints on [oc] *)
     ic : in_channel;
+    symbols : ID.Set.t; (* set of symbols to ask values for in the model *)
+    tbl : (string, ID.t) Hashtbl.t; (* map (stringof ID) -> ID *)
     mutable sexp : DSexp.t;
     mutable closed : bool;
-    mutable res : term Sol.Res.t option;
+    mutable res : FOBack.T.t Sol.Res.t option;
   }
 
   let name = "cvc4"
@@ -53,9 +54,10 @@ module Make(FO : NunFO.VIEW) = struct
       s.sexp <- DSexp.make ~bufsize:5 (fun _ _ _ -> assert false);
     )
 
-  let create_ ~timeout () =
+  let create_ ~timeout ~symbols () =
     if timeout < 0. then invalid_arg "CVC4.create: wrong timeout";
-    let cmd = Printf.sprintf "cvc4 --tlimit-per=%.3f" (timeout *. 1000.) in
+    let cmd = Printf.sprintf "cvc4 --tlimit-per=%d --lang smt"
+      (int_of_float (timeout *. 1000.)) in
     let ic, oc = Unix.open_process cmd in
     (* send prelude *)
     output_string oc "(set-option :produce-models true)\n";
@@ -67,6 +69,8 @@ module Make(FO : NunFO.VIEW) = struct
       oc;
       fmt=Format.formatter_of_out_channel oc;
       ic;
+      symbols;
+      tbl=Hashtbl.create 32;
       closed=false;
       sexp=DSexp.make ~bufsize:4_000 (input ic);
       res=None;
@@ -76,101 +80,172 @@ module Make(FO : NunFO.VIEW) = struct
 
   let fpf = Format.fprintf
 
-  (* print type (a monomorphic type) in SMT *)
-  let rec print_ty out ty = match Ty.view ty with
-    | FOI.TyBuiltin b ->
-        begin match b with
-        | FOI.TyBuiltin.Prop -> CCFormat.string out "Bool"
-        end
-    | FOI.TyApp (f, []) -> ID.print out f
-    | FOI.TyApp (f, l) ->
-        fpf out "@[(%a@ %a)@]"
-          ID.print f
-          (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_ty) l
+  (* print problems. [on_id (to_string id) id] is called every time
+      and id is printed.  *)
+  let print_problem_ ~on_id =
+    (* print ID and remember its name for parsing model afterward *)
+    let rec print_id out id =
+      let name = ID.to_string id in
+      on_id name id;
+      CCFormat.string out name
 
-  (* print type in SMT syntax *)
-  let print_ty_decl out ty =
-    let args, ret = ty in
-    fpf out "%a %a"
-      (CCFormat.list ~start:"(" ~stop:")" ~sep:" " print_ty) args print_ty ret
+    (* print type (a monomorphic type) in SMT *)
+    and print_ty out ty = match Ty.view ty with
+      | FOI.TyBuiltin b ->
+          begin match b with
+          | FOI.TyBuiltin.Prop -> CCFormat.string out "Bool"
+          end
+      | FOI.TyApp (f, []) -> print_id out f
+      | FOI.TyApp (f, l) ->
+          fpf out "@[(%a@ %a)@]"
+            print_id f
+            (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_ty) l
 
-  let rec print_term out t = match T.view t with
-    | FOI.Builtin b ->
-        begin match b with
-        | FOI.Builtin.Int n -> CCFormat.int out n
-        end
-    | FOI.Var v -> Var.print out v
-    | FOI.App (f,[]) -> ID.print out f
-    | FOI.App (f,l) ->
-        fpf out "(@[%a@ %a@])"
-          ID.print f (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_term) l
-    | FOI.Let (v,t,u) ->
-        fpf out "@[<3>(let@ ((%a %a))@ %a@])"
-          Var.print v print_term t print_term u
+    (* print type in SMT syntax *)
+    and print_ty_decl out ty =
+      let args, ret = ty in
+      fpf out "%a %a"
+        (CCFormat.list ~start:"(" ~stop:")" ~sep:" " print_ty) args print_ty ret
 
-  let rec print_form out t = match F.view t with
-    | FOI.Atom t -> print_term out t
-    | FOI.True -> CCFormat.string out "true"
-    | FOI.False -> CCFormat.string out "false"
-    | FOI.Eq (a,b) -> fpf out "(@[=@ %a@ %a@])" print_term a print_term b
-    | FOI.And [] -> CCFormat.string out "true"
-    | FOI.And [f] -> print_form out f
-    | FOI.And l ->
-        fpf out "(@[and@ %a@])"
-          (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_form) l
-    | FOI.Or [] -> CCFormat.string out "false"
-    | FOI.Or [f] -> print_form out f
-    | FOI.Or l ->
-        fpf out "(@[or@ %a@])"
-          (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_form) l
-    | FOI.Not f ->
-        fpf out "(@[not@ %a@])" print_form f
-    | FOI.Imply (a,b) ->
-        fpf out "(@[=>@ %a@ %a@])" print_form a print_form b
-    | FOI.Equiv (_,_) -> NunUtils.not_implemented "cvc4.print_equiv" (* TODO *)
-    | FOI.Forall (v,f) ->
-        fpf out "(@[<2>forall@ ((%a %a))@ %a@])"
-          Var.print v print_ty (Var.ty v) print_form f
-    | FOI.Exists (v,f) ->
-        fpf out "(@[<2>exists@ ((%a %a))@ %a@])"
-          Var.print v print_ty (Var.ty v) print_form f
+    and print_term out t = match T.view t with
+      | FOI.Builtin b ->
+          begin match b with
+          | FOI.Builtin.Int n -> CCFormat.int out n
+          end
+      | FOI.Var v -> Var.print out v
+      | FOI.App (f,[]) -> print_id out f
+      | FOI.App (f,l) ->
+          fpf out "(@[%a@ %a@])"
+            print_id f (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_term) l
+      | FOI.Let (v,t,u) ->
+          fpf out "@[<3>(let@ ((%a %a))@ %a@])"
+            Var.print v print_term t print_term u
 
-  let print_statement out = function
-    | FOI.TyDecl (id,arity) ->
-        fpf out "(@[declare-sort@ %a@ %d@])" ID.print id arity
-    | FOI.Decl (v,ty) ->
-        fpf out "(@[<2>declare-fun@ %a@ %a@])"
-          ID.print v print_ty_decl ty
-    | FOI.Def (_,_,_) ->
-        NunUtils.not_implemented "cvc4.output definition" (* TODO *)
-    | FOI.Axiom t ->
-        fpf out "(@[(assert %a)@])" print_form t
-    | FOI.Goal t ->
-        fpf out "(@[(assert %a)@])" print_form t
-    | FOI.FormDef (_,_) ->
-        NunUtils.not_implemented "cvc4.output formula def" (* TODO *)
+    and print_form out t = match F.view t with
+      | FOI.Atom t -> print_term out t
+      | FOI.True -> CCFormat.string out "true"
+      | FOI.False -> CCFormat.string out "false"
+      | FOI.Eq (a,b) -> fpf out "(@[=@ %a@ %a@])" print_term a print_term b
+      | FOI.And [] -> CCFormat.string out "true"
+      | FOI.And [f] -> print_form out f
+      | FOI.And l ->
+          fpf out "(@[and@ %a@])"
+            (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_form) l
+      | FOI.Or [] -> CCFormat.string out "false"
+      | FOI.Or [f] -> print_form out f
+      | FOI.Or l ->
+          fpf out "(@[or@ %a@])"
+            (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_form) l
+      | FOI.Not f ->
+          fpf out "(@[not@ %a@])" print_form f
+      | FOI.Imply (a,b) ->
+          fpf out "(@[=>@ %a@ %a@])" print_form a print_form b
+      | FOI.Equiv (_,_) -> NunUtils.not_implemented "cvc4.print_equiv" (* TODO *)
+      | FOI.Forall (v,f) ->
+          fpf out "(@[<2>forall@ ((%a %a))@ %a@])"
+            Var.print v print_ty (Var.ty v) print_form f
+      | FOI.Exists (v,f) ->
+          fpf out "(@[<2>exists@ ((%a %a))@ %a@])"
+            Var.print v print_ty (Var.ty v) print_form f
 
-  let print_problem out p =
-    fpf out "@[<v>%a@]"
-      (CCFormat.list ~start:"" ~stop:"" ~sep:"" print_statement)
-      p.FOI.Problem.statements
+    and print_statement out = function
+      | FOI.TyDecl (id,arity) ->
+          fpf out "(@[declare-sort@ %a@ %d@])" print_id id arity
+      | FOI.Decl (v,ty) ->
+          fpf out "(@[<2>declare-fun@ %a@ %a@])"
+            print_id v print_ty_decl ty
+      | FOI.Def (_,_,_) ->
+          NunUtils.not_implemented "cvc4.output definition" (* TODO *)
+      | FOI.Axiom t ->
+          fpf out "(@[assert@ %a@])" print_form t
+      | FOI.Goal t ->
+          fpf out "(@[assert@ %a@])" print_form t
+      | FOI.FormDef (_,_) ->
+          NunUtils.not_implemented "cvc4.output formula def" (* TODO *)
+
+    in
+    fun out pb ->
+      fpf out "@[<v>%a@]"
+        (CCFormat.list ~start:"" ~stop:"" ~sep:"" print_statement )
+        pb.FOI.Problem.statements
 
   let send_ s problem =
-    fpf s.fmt "%a@." print_problem problem;
+    let on_id name id =
+      Hashtbl.replace s.tbl name id
+    in
+    fpf s.fmt "%a@." (print_problem_ ~on_id) problem;
     fpf s.fmt "(check-sat)@.";
     flush s.oc;
     ()
 
-  (* read model from CVC4 *)
-  let get_model_ _ = assert false
+  let print_problem = print_problem_ ~on_id:(fun _ _ -> ())
+
+  (* local error *)
+  exception Error of string
+
+  let error_ e = raise (Error e)
+
+  (* parse an identifier *)
+  let parse_id_ ~tbl = function
+    | `Atom s ->
+        begin try Hashtbl.find tbl s
+        with Not_found ->
+          error_ ("could not find ID for " ^ s)
+        end
+    | _ -> error_ "expected ID, got a list"
+
+  (* parse a ground term *)
+  let rec parse_term_ ~tbl = function
+    | `Atom _ as t -> FOBack.T.const (parse_id_ ~tbl t)
+    | `List [] -> error_ "expected term, got empty list"
+    | `List (f :: l) ->
+        let f = parse_id_ ~tbl f in
+        let l = List.map (parse_term_ ~tbl) l in
+        FOBack.T.app f l
+
+  (* tbl: string -> ID *)
+  let parse_model_ ~tbl = function
+    | `Atom _ -> error_ "expected model, got atom"
+    | `List assoc ->
+      (* parse model *)
+      let m = List.fold_left
+        (fun m -> function
+          | `List [`Atom _ as s; term] ->
+              let id = parse_id_ ~tbl s in
+              let term = parse_term_ ~tbl term in
+              ID.Map.add id term m
+          | _ -> error_ "expected pair key/value in the model"
+        )
+        ID.Map.empty assoc
+      in
+      m
+
+  (* read model from CVC4 instance [s]
+     symbols: set of symbols to get values for
+     tbl: string -> ID *)
+  let get_model_ ~symbols ~tbl s =
+    fpf s.fmt "(@[<hv2>get-value@ %a@])@."
+      (CCFormat.list ~start:"(" ~sep:" " ~stop:")" ID.print)
+      (ID.Set.elements symbols);
+    match DSexp.next s.sexp with
+    | `Error e -> error_ e
+    | `End -> error_ "unexpected end of input from CVC4: expected model"
+    | `Ok sexp ->
+        let m = parse_model_ ~tbl sexp in
+        (* check all symbols are defined *)
+        let ok = ID.Set.to_seq symbols
+          |> Sequence.for_all (fun s -> ID.Map.mem s m)
+        in
+        if not ok then raise (Error "some symbols are not defined in the model");
+        m
 
   (* read the result *)
-  let read_res_ s =
+  let read_res_ ~symbols ~tbl s =
     match DSexp.next s.sexp with
     | `Ok (`Atom "unsat") ->
         Sol.Res.Unsat
     | `Ok (`Atom "sat") ->
-        let m = get_model_ s in
+        let m = get_model_ ~symbols ~tbl s in
         Sol.Res.Sat m
     | `Ok sexp ->
         let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ %a@]"
@@ -183,12 +258,29 @@ module Make(FO : NunFO.VIEW) = struct
   let res t = match t.res with
     | Some r -> r
     | None ->
-        let r = read_res_ t in
+        let r =
+          try read_res_ ~symbols:t.symbols ~tbl:t.tbl t
+          with Error e -> Sol.Res.Error e
+        in
         t.res <- Some r;
         r
 
+  (* set of symbols to find a value for in the model *)
+  let compute_symbols_ pb =
+    FOI.Problem.statements pb
+    |> List.fold_left
+      (fun acc s -> match s with
+        | FOI.Decl (id,_)
+        | FOI.Def (id,_,_)
+        | FOI.FormDef (id,_) -> ID.Set.add id acc
+        | FOI.TyDecl (_,_)
+        | FOI.Axiom _
+        | FOI.Goal _ -> acc
+      ) ID.Set.empty
+
   let solve ?(timeout=30.) problem =
-    let s = create_ ~timeout () in
+    let symbols = compute_symbols_ problem in
+    let s = create_ ~timeout ~symbols () in
     send_ s problem;
     s
 end

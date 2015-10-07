@@ -11,8 +11,10 @@ type 'a printer = Format.formatter -> 'a -> unit
 
 module Statement : sig
   type ('term, 'ty) view =
+    | TyDecl of id * 'ty (** uninterpreted type *)
     | Decl of id * 'ty (** uninterpreted symbol *)
-    | Def of id * 'ty * 'term (** defined symbol *)
+    | Def of id * 'ty * 'term (** defined function symbol *)
+    | PropDef of id * 'term (** defined symbol of type Prop *)
     | Axiom of 'term
     | Goal of 'term
 
@@ -22,8 +24,10 @@ module Statement : sig
 
   val loc : (_,_) t -> loc option
 
+  val ty_decl : ?loc:loc -> id -> 'a -> (_, 'a) t
   val decl : ?loc:loc -> id -> 'a -> (_, 'a) t
   val def : ?loc:loc -> id -> ty:'ty -> 'a -> ('a, 'ty) t
+  val prop_def : ?loc:loc -> id -> 'a -> ('a, 'ty) t
   val axiom : ?loc:loc -> 'a -> ('a,_) t
   val goal : ?loc:loc -> 'a -> ('a,_) t
 

@@ -192,5 +192,6 @@ module Problem = struct
   }
 
   let make l = {statements=l}
+    let statements t = t.statements
 end
 

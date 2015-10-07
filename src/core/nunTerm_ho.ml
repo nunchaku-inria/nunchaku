@@ -284,9 +284,11 @@ module ComputeType(T : S) = struct
     let module St = NunProblem.Statement in
     Sequence.fold
       (fun sigma st -> match St.view st with
+        | St.TyDecl (id, ty)
         | St.Decl (id,ty) -> M.add id ty sigma
         | St.Goal _
         | St.Axiom _ -> sigma
+        | St.PropDef (id,_) -> M.add id T.ty_prop sigma
         | St.Def (id,ty,_) -> M.add id ty sigma
       ) init
 
@@ -522,14 +524,15 @@ module Erase(T : VIEW) = struct
 end
 
 module AsFO(T : VIEW) = struct
+  module Term = T (* alias for shadowing *)
   exception NotInFO of string * T.t
 
   let () = Printexc.register_printer
     (function
       | NotInFO (msg, t) ->
-          let module P = Print(T) in
+          let module P = Print(Term) in
           let msg = CCFormat.sprintf
-            "@[term @[%a@] is not in the first-order fragment:@ %s@]"
+            "@[term `@[%a@]` is not in the first-order fragment:@ %s@]"
             P.print_in_app t msg
           in
           Some msg
@@ -570,31 +573,35 @@ module AsFO(T : VIEW) = struct
       | TyArrow (a, b) ->
           let l, ret = flatten_arrow b in
           a :: l, ret
-      | _ ->
-          ignore (view t); (* check atomicity quickly *)
-          [], t
+      | _ -> [], t
   end
 
   module T = struct
+    module T = Term
     type t = T.t
 
     let view t = match T.view t with
       | Builtin _ -> fail t "no builtin in terms"
-      | Const _
-      | Var _
-      | App (_,_)
-      | Fun (_,_)
+      | Const id -> FOI.App (id, [])
+      | Var v -> FOI.Var v
+      | App (f,l) ->
+          begin match T.view f with
+          | Const id -> FOI.App (id, l)
+          | _ -> fail t "application of non-constant term"
+          end
+      | Fun (_,_) -> fail t "no functions in FO terms"
       | Forall (_,_)
-      | Exists (_,_)
-      | Let (_,_,_)
+      | Exists (_,_) -> fail t "no quantifiers in FO terms"
+      | Let (v,t,u) -> FOI.Let (v, t, u)
       | TyKind
       | TyType
       | TyBuiltin _
       | TyArrow (_,_)
-      | TyForall (_,_) -> assert false
+      | TyForall (_,_) -> fail t "no types in FO terms"
   end
 
   module Formula = struct
+    module T = Term (* avoid shadowing from [T] above *)
     type t = T.t
 
     let view t = match T.view t with
@@ -619,7 +626,7 @@ module AsFO(T : VIEW) = struct
           | Builtin NunBuiltin.T.Or, _ -> FOI.Or l
           | Builtin NunBuiltin.T.Imply, [a;b] -> FOI.Imply (a,b)
           | Builtin NunBuiltin.T.Equiv, [a;b] -> FOI.Equiv (a,b)
-          | Builtin NunBuiltin.T.Eq, [a;b] -> FOI.Eq (a,b)
+          | Builtin NunBuiltin.T.Eq, [_ty;a;b] -> FOI.Eq (a,b)
           | Builtin _, _ -> fail t "wrong builtin/arity"
           | Const _, _ -> FOI.Atom t
           | _ -> fail t "wrong application in FO formula"
@@ -638,9 +645,15 @@ module AsFO(T : VIEW) = struct
   let convert_statement st =
     let module St = NunProblem.Statement in
     match St.view st with
+    | St.TyDecl (id, ty) ->
+        let args, _ = Ty.flatten_arrow ty in
+        let n = List.length args in
+        FOI.TyDecl (id, n)
     | St.Decl (id,ty) ->
         let ty = Ty.flatten_arrow ty in
         FOI.Decl (id, ty)
+    | St.PropDef (id, t) ->
+        FOI.FormDef (id, t)
     | St.Def (id,ty,t) ->
         let ty = Ty.flatten_arrow ty in
         FOI.Def (id, ty, t)

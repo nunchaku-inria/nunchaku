@@ -16,9 +16,7 @@ type 'a var = 'a Var.t
 
 (** {2 A Ground Model} *)
 module Model = struct
-  type 't t = {
-    get_values: id list -> (id * 't) list
-  }
+  type 't t = 't NunID.Map.t
 end
 
 module Res = struct
@@ -35,13 +33,10 @@ exception SolverClosed
 
 (** {2 The Interface of a Solver} *)
 module type S = sig
-  module FO : NunFO.VIEW
+  module FO : NunFO.VIEW (* input terms *)
+  module FOBack : NunFO.S (* output terms (in the model) *)
 
-  type term = FO.T.t
-  type ty = FO.Ty.t
-  type toplevel_ty = FO.Ty.toplevel_ty
-  type formula = FO.Formula.t
-  type problem = (formula, term, ty) NunFO.Problem.t
+  type problem = (FO.Formula.t, FO.T.t, FO.Ty.t) NunFO.Problem.t
 
   type t
   (** An instance of the solver *)
@@ -49,10 +44,10 @@ module type S = sig
   val name : string
   (** Name of the solver *)
 
-  val res : t -> term Res.t
+  val res : t -> FOBack.T.t Res.t
   (** [res s] blocks until the result of [s] is available, then return it *)
 
-  val peek_res : t -> term Res.t option
+  val peek_res : t -> FOBack.T.t Res.t option
   (** [peek_res s] checks whether the result of [s] is already available *)
 
   val solve : ?timeout:float -> problem -> t
