@@ -120,6 +120,9 @@ module Make(FO : NunFO.VIEW) = struct
       | FOI.Let (v,t,u) ->
           fpf out "@[<3>(let@ ((%a %a))@ %a@])"
             Var.print v print_term t print_term u
+      | FOI.Ite (a,b,c) ->
+          fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
+            print_form a print_term b print_term c
 
     and print_form out t = match F.view t with
       | FOI.Atom t -> print_term out t
@@ -147,6 +150,9 @@ module Make(FO : NunFO.VIEW) = struct
       | FOI.Exists (v,f) ->
           fpf out "(@[<2>exists@ ((%a %a))@ %a@])"
             Var.print v print_ty (Var.ty v) print_form f
+      | FOI.F_ite (a,b,c) ->
+          fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
+            print_form a print_form b print_form c
 
     and print_statement out = function
       | FOI.TyDecl (id,arity) ->
@@ -228,12 +234,14 @@ module Make(FO : NunFO.VIEW) = struct
      tbl: string -> ID *)
   let get_model_ ~symbols ~tbl s =
     fpf s.fmt "(@[<hv2>get-value@ %a@])@."
-      (CCFormat.list ~start:"(" ~sep:" " ~stop:")" ID.print)
-      (ID.Set.elements symbols);
+      (ID.Set.print ~start:"(" ~sep:" " ~stop:")" ID.print)
+      symbols;
     match DSexp.next s.sexp with
     | `Error e -> error_ e
     | `End -> error_ "unexpected end of input from CVC4: expected model"
     | `Ok sexp ->
+        if !Sol.print_model_
+          then Format.eprintf "@[raw model:@ @[<hov>%a@]@]@." CCSexpM.print sexp;
         let m = parse_model_ ~tbl sexp in
         (* check all symbols are defined *)
         let ok = ID.Set.to_seq symbols

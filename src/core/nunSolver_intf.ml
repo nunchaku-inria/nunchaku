@@ -70,4 +70,11 @@ module type S = sig
 end
 
 
+(**/**)
+
+let print_model_ = ref false
+(** If true, solver interfaces might print the raw model before parsing it *)
+
+(**/**)
+
 

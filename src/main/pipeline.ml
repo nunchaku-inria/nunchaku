@@ -130,7 +130,7 @@ let call_cvc4 (type f)(type t)(type ty)
 (* close a pipeline with CVC4 *)
 let close_pipe_cvc4 (type f)(type t)(type ty)
 (module FO : NunFO.VIEW with type T.t=t and type formula=f and type Ty.t=ty)
-~pipe ~print ~print_raw_model ~deadline
+~pipe ~print ~deadline
 =
   let module FOBack = NunFO.Default in
   let module P = NunFO.Print(FOBack) in

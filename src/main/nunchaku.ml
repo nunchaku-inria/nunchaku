@@ -10,7 +10,6 @@ module Utils = NunUtils
 let print_ = ref false
 let print_typed_ = ref false
 let print_fo_ = ref false
-let print_raw_model_ = ref false
 let timeout_ = ref 30
 let version_ = ref false
 let file = ref ""
@@ -33,7 +32,7 @@ let options = Arg.align (
   [ "--print", Arg.Set print_, " print input and exit"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
-  ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
+  ; "--print-raw-model", Arg.Set NunSolver_intf.print_model_, " print raw model"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "--version", Arg.Set version_, " print version and exit"
   ]
@@ -85,7 +84,7 @@ let make_pipeline () =
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   let module T = NunTerm_ho.AsFO(NunTerm_ho.Default) in
   Pipeline.close_pipe_cvc4 (module T)
-    ~pipe ~deadline ~print:!print_fo_ ~print_raw_model:!print_raw_model_
+    ~pipe ~deadline ~print:!print_fo_
 
 (* search for results *)
 let rec traverse_list_ l =
