@@ -190,7 +190,10 @@ module Make(FO : NunFO.VIEW) = struct
     | `Atom s ->
         begin try Hashtbl.find tbl s
         with Not_found ->
-          error_ ("could not find ID for " ^ s)
+          (* introduced by CVC4 in the model; make a new ID *)
+          let id = ID.make ~name:s in
+          Hashtbl.replace tbl s id;
+          id
         end
     | _ -> error_ "expected ID, got a list"
 

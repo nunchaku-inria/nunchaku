@@ -8,6 +8,7 @@ module Var = NunVar
 
 type id = NunID.t
 type 'a var = 'a NunVar.t
+type 'a printer = Format.formatter -> 'a -> unit
 
 module TyBuiltin = struct
   type t =
@@ -26,11 +27,12 @@ module Builtin = struct
 end
 
 (** Term *)
-type ('t, 'ty) view =
+type ('f, 't, 'ty) view =
   | Builtin of Builtin.t
   | Var of 'ty var
   | App of id * 't list
   | Let of 'ty var * 't * 't
+  | Ite of 'f * 't * 't
 
 (** Formula *)
 type ('f, 't, 'ty) form_view =
@@ -45,6 +47,7 @@ type ('f, 't, 'ty) form_view =
   | Equiv of 'f * 'f
   | Forall of 'ty var * 'f
   | Exists of 'ty var * 'f
+  | F_ite of 'f * 'f * 'f  (* if then else *)
 
 (** Type *)
 type 'ty ty_view =
@@ -65,6 +68,8 @@ type ('f, 't, 'ty) statement =
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
+  type formula
+
   module Ty : sig
     type t
     type toplevel_ty = t list * t
@@ -73,18 +78,20 @@ module type VIEW = sig
 
   module T : sig
     type t
-    val view : t -> (t, Ty.t) view
+    val view : t -> (formula, t, Ty.t) view
     (** Observe the structure of the term *)
   end
 
   module Formula : sig
-    type t
+    type t = formula
     val view : t -> (t, T.t, Ty.t) form_view
   end
 end
 
-(** {2 First-Order Formulas, Terms, Types} *)
+(** {2 View and Build Formulas, Terms, Types} *)
 module type S = sig
+  type formula
+
   module Ty : sig
     type t
     type toplevel_ty = t list * t
@@ -98,7 +105,7 @@ module type S = sig
 
   module T : sig
     type t
-    val view : t -> (t, Ty.t) view
+    val view : t -> (formula, t, Ty.t) view
     (** Observe the structure of the term *)
 
     val builtin : Builtin.t -> t
@@ -108,7 +115,7 @@ module type S = sig
   end
 
   module Formula : sig
-    type t
+    type t = formula
 
     val view : t -> (t, T.t, Ty.t) form_view
 
@@ -141,10 +148,13 @@ module Default : S = struct
     let arrow a l = a,l
   end
 
+  type term = { view : (formula, term, Ty.t) view }
+  and formula = {
+    fview: (formula, term, Ty.t) form_view;
+  }
+
   module T = struct
-    type t = {
-      view : (t, Ty.t) view;
-    }
+    type t = term
 
     let view t = t.view
 
@@ -156,9 +166,7 @@ module Default : S = struct
   end
 
   module Formula = struct
-    type t = {
-      fview: (t, T.t, Ty.t) form_view;
-    }
+    type t = formula
 
     let view t = t.fview
 
@@ -195,3 +203,86 @@ module Problem = struct
     let statements t = t.statements
 end
 
+module type PRINT = sig
+  module FO : VIEW
+
+  val print_ty : FO.Ty.t printer
+  val print_toplevel_ty : FO.Ty.toplevel_ty printer
+  val print_term : FO.T.t printer
+  val print_formula : FO.Formula.t printer
+  val print_statement : (FO.Formula.t, FO.T.t, FO.Ty.t) statement printer
+  val print_model : (FO.T.t * FO.T.t) list printer
+  val print_problem : (FO.Formula.t, FO.T.t, FO.Ty.t) Problem.t printer
+end
+
+(* TODO: use it in CVC4? or too specific, this is not SMT specific *)
+module Print(FO : VIEW) : PRINT with module FO = FO = struct
+  module FO = FO
+
+  let fpf = Format.fprintf
+
+  let pp_list_ out p = CCFormat.list ~start:"" ~stop:"" ~sep:" " out p
+
+  let rec print_ty out ty = match FO.Ty.view ty with
+    | TyApp (id, []) -> ID.print out id
+    | TyApp (id, l) ->
+        fpf out "@[<2>(%a@ %a)@]" ID.print id (pp_list_ print_ty) l
+    | TyBuiltin b -> TyBuiltin.print out b
+
+  let print_toplevel_ty out (args, ret) =
+    if args=[] then print_ty out ret
+    else fpf out "@[<2>(%a -> %a)@]" (pp_list_ print_ty) args print_ty ret
+
+  let rec print_term out t = match FO.T.view t with
+    | Builtin b -> Builtin.print out b
+    | Var v -> Var.print out v
+    | App (f,[]) -> ID.print out f
+    | App (f,l) ->
+        fpf out "@[<2>(%a@ %a)@]" ID.print f (pp_list_ print_term) l
+    | Let (v,t,u) ->
+        fpf out "@[<2>(let@ %a =@ %a in@ %a)@]"
+          Var.print v print_term t print_term u
+    | Ite (a,b,c) ->
+        fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
+          print_formula a print_term b print_term c
+
+  and print_formula out f = match FO.Formula.view f with
+    | Atom t -> print_term out t
+    | True -> CCFormat.string out "true"
+    | False -> CCFormat.string out "false"
+    | Eq (a,b) -> fpf out "@[%a =@ %a@]" print_term a print_term b
+    | And l -> fpf out "@[(and@ %a)@]" (pp_list_ print_formula) l
+    | Or l ->  fpf out "@[(and@ %a)@]" (pp_list_ print_formula) l
+    | Not f -> fpf out "@[(not@ %a)@]" print_formula f
+    | Imply (a,b) -> fpf out "@[(%a =>@ %a)@]" print_formula a print_formula b
+    | Equiv (a,b) -> fpf out "@[(%a =>@ %a)@]" print_formula a print_formula b
+    | Forall (v,f) ->
+        fpf out "@[(forall %a@ %a)@]" Var.print v print_formula f
+    | Exists (v,f) ->
+        fpf out "@[(forall %a@ %a)@]" Var.print v print_formula f
+    | F_ite (a,b,c) ->
+        fpf out "@[(f_ite %a@ %a@ %a)@]"
+          print_formula a print_formula b print_formula c
+
+  let print_model out m =
+    let pp_pair out (t,u) = fpf out "@[%a -> %a@]" print_term t print_term u in
+    fpf out "@[model {@,@[<hv>%a@]}@]"
+      (CCFormat.list ~start:"" ~stop:"" ~sep:","  pp_pair) m
+
+  let print_statement out s = match s with
+    | TyDecl (id, n) ->
+        fpf out "@[<2>type %a arity %d.@]" ID.print id n
+    | Decl (v, ty) ->
+        fpf out "@[<2>val %a@ : %a.@]" ID.print v print_toplevel_ty ty
+    | FormDef (v, t) ->
+        fpf out "@[<2>def %a@ : prop@ := %a.@]"
+          ID.print v print_formula t
+    | Def (v, ty, t) ->
+        fpf out "@[<2>def %a@ : %a@ := %a.@]"
+          ID.print v print_toplevel_ty ty print_term t
+    | Axiom t -> fpf out "@[<2>axiom %a.@]" print_formula t
+    | Goal t -> fpf out "@[<2>goal %a.@]" print_formula t
+
+  let print_problem out pb =
+    fpf out "@[<v>%a@]" (pp_list_ print_statement) (Problem.statements pb)
+end

@@ -9,6 +9,7 @@
 
 type id = NunID.t
 type 'a var = 'a NunVar.t
+type 'a printer = Format.formatter -> 'a -> unit
 
 module TyBuiltin : sig
   type t =
@@ -25,11 +26,12 @@ module Builtin : sig
 end
 
 (** Term *)
-type ('t, 'ty) view =
+type ('f, 't, 'ty) view =
   | Builtin of Builtin.t
   | Var of 'ty var
   | App of id * 't list
   | Let of 'ty var * 't * 't
+  | Ite of 'f * 't * 't
 
 (** Formula *)
 type ('f, 't, 'ty) form_view =
@@ -44,6 +46,7 @@ type ('f, 't, 'ty) form_view =
   | Equiv of 'f * 'f
   | Forall of 'ty var * 'f
   | Exists of 'ty var * 'f
+  | F_ite of 'f * 'f * 'f  (* if then else *)
 
 (** Type *)
 type 'ty ty_view =
@@ -64,6 +67,8 @@ type ('f, 't, 'ty) statement =
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
+  type formula
+
   module Ty : sig
     type t
     type toplevel_ty = t list * t
@@ -72,18 +77,20 @@ module type VIEW = sig
 
   module T : sig
     type t
-    val view : t -> (t, Ty.t) view
+    val view : t -> (formula, t, Ty.t) view
     (** Observe the structure of the term *)
   end
 
   module Formula : sig
-    type t
+    type t = formula
     val view : t -> (t, T.t, Ty.t) form_view
   end
 end
 
 (** {2 View and Build Formulas, Terms, Types} *)
 module type S = sig
+  type formula
+
   module Ty : sig
     type t
     type toplevel_ty = t list * t
@@ -97,7 +104,7 @@ module type S = sig
 
   module T : sig
     type t
-    val view : t -> (t, Ty.t) view
+    val view : t -> (formula, t, Ty.t) view
     (** Observe the structure of the term *)
 
     val builtin : Builtin.t -> t
@@ -107,7 +114,7 @@ module type S = sig
   end
 
   module Formula : sig
-    type t
+    type t = formula
 
     val view : t -> (t, T.t, Ty.t) form_view
 
@@ -135,6 +142,20 @@ module Problem : sig
 
   val make : ('f, 't, 'ty) statement list -> ('f, 't, 'ty) t
   val statements : ('f, 't, 'ty) t -> ('f, 't, 'ty) statement list
-
 end
 
+(** {2 IO} *)
+
+module type PRINT = sig
+  module FO : VIEW
+
+  val print_ty : FO.Ty.t printer
+  val print_toplevel_ty : FO.Ty.toplevel_ty printer
+  val print_term : FO.T.t printer
+  val print_formula : FO.Formula.t printer
+  val print_statement : (FO.Formula.t, FO.T.t, FO.Ty.t) statement printer
+  val print_model : (FO.T.t * FO.T.t) list printer
+  val print_problem : (FO.Formula.t, FO.T.t, FO.Ty.t) Problem.t printer
+end
+
+module Print(FO : VIEW) : PRINT with module FO = FO

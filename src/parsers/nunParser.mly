@@ -23,6 +23,9 @@
 %token EQDEF
 %token LET
 %token IN
+%token IF
+%token THEN
+%token ELSE
 %token AND
 %token AT
 
@@ -178,6 +181,11 @@ term:
     {
       let loc = L.mk_pos $startpos $endpos in
       A.let_ ~loc v t u
+    }
+  | IF a=term THEN b=term ELSE c=term
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.ite ~loc a b c
     }
   | LOGIC_FORALL vars=typed_var+ DOT t=term
     {

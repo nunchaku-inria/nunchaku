@@ -65,6 +65,8 @@ module Make(T : NunTerm_ho.S) = struct
         let env = Env.add ~env v (T.var v') in
         let u = apply_subst ~env u in
         T.let_ v' t u
+    | TI.Ite (a,b,c) ->
+        T.ite (apply_subst ~env a)(apply_subst ~env b)(apply_subst ~env c)
     | TI.TyArrow (a,b) ->
         T.ty_arrow (apply_subst ~env a) (apply_subst ~env b)
     | TI.TyForall (v,t) ->
@@ -129,6 +131,7 @@ module Make(T : NunTerm_ho.S) = struct
     | TI.Forall _
     | TI.Exists _
     | TI.Let _
+    | TI.Ite _
     | TI.TyKind
     | TI.TyType
     | TI.TyBuiltin _
@@ -149,7 +152,9 @@ module Make(T : NunTerm_ho.S) = struct
     | TI.TyType
     | TI.TyBuiltin _
     | TI.Const _
-    | TI.Builtin _ -> st
+    | TI.Builtin _ ->
+        (* TODO: reduce boolean expressions? *)
+        st
     | TI.TyForall (_,_)
     | TI.TyArrow (_,_) ->
         st (* NOTE: depend types might require beta-reduction in types *)
@@ -167,6 +172,14 @@ module Make(T : NunTerm_ho.S) = struct
     | TI.Let (v,t,u) ->
         let t = snf_term ~env:st.env t in
         enter_snf_ st v u (fun v u -> T.let_ v t u)
+    | TI.Ite (a,b,c) ->
+        (* XXX: should we check [a] against [true] or [false]? *)
+        {st with head=
+          T.ite
+            (snf_term ~env:st.env a)
+            (snf_term ~env:st.env b)
+            (snf_term ~env:st.env c)
+        }
 
   (* compute the SNF of this term in [env] *)
   and snf_term ~env t = term_of_state (snf_ {head=t; env; args=[]})

@@ -20,6 +20,7 @@ type ('a, 'ty) view =
   | Forall of 'ty var * 'a
   | Exists of 'ty var * 'a
   | Let of 'ty var * 'a * 'a
+  | Ite of 'a * 'a * 'a
   | TyKind
   | TyType
   | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
@@ -53,6 +54,7 @@ module type S = sig
   val app : t -> t list -> t
   val fun_ : ty var -> t -> t
   val let_ : ty var -> t -> t -> t
+  val ite : t -> t -> t -> t
   val forall : ty var -> t -> t
   val exists : ty var -> t -> t
 
@@ -138,9 +140,9 @@ module AsFO(T : VIEW) : sig
 
   include NunFO.VIEW with type T.t = T.t
     and type Ty.t = T.ty
-    and type Formula.t = T.t
+    and type formula = T.t
 end
 
 val as_fo :
   (module VIEW with type t = 'a) ->
-  (module NunFO.VIEW with type T.t = 'a and type Ty.t = 'a and type Formula.t = 'a)
+  (module NunFO.VIEW with type T.t = 'a and type Ty.t = 'a and type formula = 'a)

@@ -24,6 +24,7 @@ type ('a, 'ty) view =
   | Forall of 'ty var * 'a
   | Exists of 'ty var * 'a
   | Let of 'ty var * 'a * 'a
+  | Ite of 'a * 'a * 'a
   | TyKind
   | TyType
   | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
@@ -57,6 +58,7 @@ module type S = sig
   val app : t -> t list -> t
   val fun_ : ty var -> t -> t
   val let_ : ty var -> t -> t -> t
+  val ite : t -> t -> t -> t
   val forall : ty var -> t -> t
   val exists : ty var -> t -> t
 
@@ -100,6 +102,7 @@ module Default : S = struct
     if l=[] then t else make_ (App (t, l))
   let fun_ v t = make_ (Fun (v, t))
   let let_ v t u = make_ (Let (v, t, u))
+  let ite a b c = make_ (Ite (a,b,c))
   let forall v t = make_ (Forall (v, t))
   let exists v t = make_ (Exists (v, t))
 
@@ -132,6 +135,7 @@ module Default : S = struct
       | Fun _
       | Forall _
       | Exists _
+      | Ite _
       | Let _ -> assert false
 
     let is_Type t = match t.view with
@@ -335,6 +339,7 @@ module ComputeType(T : S) = struct
     | Forall (v,_)
     | Exists (v,_) -> T.ty_arrow (Var.ty v) T.ty_prop
     | Let (_,_,u) -> ty_exn ~sigma u
+    | Ite (_,b,_) -> ty_exn ~sigma b
     | TyBuiltin _
     | TyArrow (_,_)
     | TyForall (_,_) -> T.ty_type
@@ -384,6 +389,8 @@ module Print(T : VIEW) = struct
           (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_in_app) l
     | Let (v,t,u) ->
         fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
+    | Ite (a,b,c) ->
+        fpf out "@[<2>if %a@ then %a@ else %a@]" print a print b print c
     | Fun (v, t) ->
         fpf out "@[<2>fun %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
     | Forall (v, t) ->
@@ -406,7 +413,7 @@ module Print(T : VIEW) = struct
     | Forall _
     | Exists _
     | Fun _
-    | Let _
+    | Let _ | Ite _
     | TyArrow (_,_)
     | TyForall (_,_) -> fpf out "@[(%a)@]" print t
 
@@ -416,7 +423,7 @@ module Print(T : VIEW) = struct
     | Forall _
     | Exists _
     | Fun _
-    | Let _
+    | Let _ | Ite _
     | TyArrow (_,_)
     | TyForall (_,_) -> fpf out "@[(%a)@]" print t
 end
@@ -500,6 +507,7 @@ module Erase(T : VIEW) = struct
           (fun v' ->
             Untyped.let_ v' t (erase ~ctx u)
           )
+    | Ite (a,b,c) -> Untyped.ite (erase ~ctx a) (erase ~ctx b) (erase ~ctx c)
     | TyKind -> failwith "HO.erase: cannot erase Kind"
     | TyType -> Untyped.builtin Untyped.Builtin.Type
     | TyBuiltin b ->
@@ -560,6 +568,7 @@ module AsFO(T : VIEW) = struct
       | Forall (_,_)
       | Exists (_,_) -> fail t "no quantifier in type"
       | Let (_,_,_) -> fail t "no let in type"
+      | Ite (_,_,_) -> fail t "no if/then/else in type"
       | TyKind -> fail t "kind belongs to HO fragment"
       | TyType -> fail t "type belongs to HO fragment"
       | TyBuiltin b ->
@@ -593,6 +602,7 @@ module AsFO(T : VIEW) = struct
       | Forall (_,_)
       | Exists (_,_) -> fail t "no quantifiers in FO terms"
       | Let (v,t,u) -> FOI.Let (v, t, u)
+      | Ite (a,b,c) -> FOI.Ite (a,b,c)
       | TyKind
       | TyType
       | TyBuiltin _
@@ -635,12 +645,15 @@ module AsFO(T : VIEW) = struct
       | Forall (v,f) -> FOI.Forall (v,f)
       | Exists (v,f) -> FOI.Exists (v,f)
       | Let (_,_,_) -> FOI.Atom t
+      | Ite (a,b,c) -> FOI.F_ite (a,b,c)
       | TyArrow (_,_)
       | TyForall (_,_)
       | TyKind
       | TyBuiltin _
       | TyType -> fail t "no types in FO formulas"
   end
+
+  type formula = Formula.t
 
   let convert_statement st =
     let module St = NunProblem.Statement in
@@ -668,5 +681,5 @@ end
 
 let as_fo (type a) (module T : VIEW with type t = a) =
   let module U = AsFO(T) in
-  (module U : NunFO.VIEW with type T.t = a and type Ty.t = a and type Formula.t = a)
+  (module U : NunFO.VIEW with type T.t = a and type Ty.t = a and type formula = a)
 

@@ -16,6 +16,7 @@ type ('a, 'ty) view =
   | Forall of 'ty var * 'a
   | Exists of 'ty var * 'a
   | Let of 'ty var * 'a * 'a
+  | Ite of 'a * 'a * 'a (* if then else *)
   | TyKind
   | TyType
   | TyMeta of 'ty NunMetaVar.t
@@ -56,6 +57,7 @@ module type S = sig
   val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
   val fun_ : ?loc:loc -> ty:Ty.t -> ty var -> t -> t
   val let_ : ?loc:loc -> ty var -> t -> t -> t
+  val ite : ?loc:loc -> t -> t -> t -> t
   val forall : ?loc:loc -> ty var -> t -> t
   val exists : ?loc:loc -> ty var -> t -> t
 

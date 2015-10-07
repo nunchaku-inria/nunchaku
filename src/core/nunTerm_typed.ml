@@ -28,6 +28,7 @@ type ('a, 'ty) view =
   | Forall of 'ty var * 'a
   | Exists of 'ty var * 'a
   | Let of 'ty var * 'a * 'a
+  | Ite of 'a * 'a * 'a (* if then else *)
   | TyKind
   | TyType
   | TyMeta of 'ty NunMetaVar.t
@@ -69,6 +70,7 @@ module type S = sig
   val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
   val fun_ : ?loc:loc -> ty:Ty.t -> ty var -> t -> t
   val let_ : ?loc:loc -> ty var -> t -> t -> t
+  val ite : ?loc:loc -> t -> t -> t -> t
   val forall : ?loc:loc -> ty var -> t -> t
   val exists : ?loc:loc -> ty var -> t -> t
 
@@ -121,6 +123,9 @@ module Print(T : VIEW) = struct
           (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_in_app) l
     | Let (v,t,u) ->
         fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
+    | Ite (a,b,c) ->
+        fpf out "@[<2>if %a@ then %a@ else %a@]"
+          print a print b print c
     | Fun (v, t) ->
         fpf out "@[<2>fun %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
     | Forall (v, t) ->
@@ -144,7 +149,7 @@ module Print(T : VIEW) = struct
     | Forall _
     | Exists _
     | Fun _
-    | Let _
+    | Let _ | Ite _
     | TyArrow (_,_)
     | TyForall (_,_) -> fpf out "@[(%a)@]" print t
 
@@ -155,7 +160,7 @@ module Print(T : VIEW) = struct
     | Forall _
     | Exists _
     | Fun _
-    | Let _
+    | Let _ | Ite _
     | TyArrow (_,_)
     | TyForall (_,_) -> fpf out "@[(%a)@]" print t
 end
@@ -208,6 +213,7 @@ module Default = struct
     if l=[] then t else make_ ?loc ~ty (App (t, l))
   let fun_ ?loc ~ty v t = make_ ?loc ~ty (Fun (v, t))
   let let_ ?loc v t u = make_ ?loc ?ty:u.ty (Let (v, t, u))
+  let ite ?loc a b c = make_ ?loc ?ty:b.ty (Ite (a,b,c))
   let forall ?loc v t = make_ ?loc ~ty:prop (Forall (v, t))
   let exists ?loc v t = make_ ?loc ~ty:prop (Exists (v, t))
 
@@ -263,6 +269,7 @@ module Default = struct
       | Fun _
       | Forall _
       | Exists _
+      | Ite _
       | Let _ -> assert false
 
     include TyI.Print(struct type t = ty let view = view end)
@@ -293,6 +300,7 @@ module AsHO(T : VIEW) = struct
     | Forall (v,t) -> TI.Forall (v,t)
     | Exists (v,t) -> TI.Exists (v,t)
     | Let (v,t,u) -> TI.Let (v,t,u)
+    | Ite (a,b,c) -> TI.Ite (a,b,c)
     | TyKind -> TI.TyKind
     | TyType -> TI.TyType
     | TyMeta _ -> failwith "Term_typed.AsHO.view: remaining meta"

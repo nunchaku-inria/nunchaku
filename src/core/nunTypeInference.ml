@@ -146,6 +146,7 @@ module ConvertTerm(Term : TERM) = struct
             Term.ty_forall ?loc var (convert_ ~stack ~env t)
         | A.Fun (_,_) -> ill_formed ?loc "no functions in types"
         | A.Let (_,_,_) -> ill_formed ?loc "no let in types"
+        | A.Ite _ -> ill_formed ?loc "no if/then/else in types"
         | A.Forall (_,_)
         | A.Exists (_,_) -> ill_formed ?loc "no quantifiers in types"
 
@@ -336,6 +337,14 @@ module ConvertTerm(Term : TERM) = struct
         let env = add_var ~env v ~var in
         let u = convert_ ~stack ~env u in
         Term.let_ ?loc var t u
+    | A.Ite (a,b,c) ->
+        let a = convert_ ~stack ~env a in
+        let b = convert_ ~stack ~env b in
+        let c = convert_ ~stack ~env c in
+        (* a:prop, and b and c must have the same type *)
+        unify_in_ctx_ ~stack (get_ty_ a) Term.ty_prop;
+        unify_in_ctx_ ~stack (get_ty_ b) (get_ty_ c);
+        Term.ite ?loc a b c
     | A.Wildcard -> type_error ~stack "term wildcards cannot be inferred"
     | A.TyForall _ -> type_error ~stack "terms cannot contain π"
     | A.TyArrow _ -> type_error ~stack "terms cannot contain arrows"

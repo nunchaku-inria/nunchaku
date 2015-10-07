@@ -10,6 +10,7 @@ module Utils = NunUtils
 let print_ = ref false
 let print_typed_ = ref false
 let print_fo_ = ref false
+let print_raw_model_ = ref false
 let timeout_ = ref 30
 let version_ = ref false
 let file = ref ""
@@ -32,6 +33,7 @@ let options = Arg.align (
   [ "--print", Arg.Set print_, " print input and exit"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
+  ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "--version", Arg.Set version_, " print version and exit"
   ]
@@ -74,19 +76,16 @@ let make_pipeline () =
     (module NunTerm_ho.Default) (module NunFO.Default)
   in
   (* setup pipeline *)
-  NunTransform.ClosedPipe.make1
-    ~pipe:(
-      step_ty_infer @@@
-      step_monomorphization @@@
-      step_fo @@@
-      id
-    )
-    ~f:(
-      (* timeout *)
-      let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-      let module T = NunTerm_ho.AsFO(NunTerm_ho.Default) in
-      Pipeline.call_cvc4 (module T) ~deadline ~print:!print_fo_
-    )
+  let pipe =
+    step_ty_infer @@@
+    step_monomorphization @@@
+    step_fo @@@
+    id
+  in
+  let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
+  let module T = NunTerm_ho.AsFO(NunTerm_ho.Default) in
+  Pipeline.close_pipe_cvc4 (module T)
+    ~pipe ~deadline ~print:!print_fo_ ~print_raw_model:!print_raw_model_
 
 (* search for results *)
 let rec traverse_list_ l =

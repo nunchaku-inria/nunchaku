@@ -42,6 +42,8 @@ val on_encoded : (_, 'b, _, _) t -> f:('b -> unit) -> unit
 (** [on_encoded tr ~f] registers [f] to be called on every value
     obtained by encoding through [tr] *)
 
+val on_input : ('a, _, _, _) t -> f:('a -> unit) -> unit
+
 (** {2 Pipeline of Transformations}
 
     Allows chaining the transformations in a type-safe way *)

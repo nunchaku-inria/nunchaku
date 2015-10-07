@@ -105,9 +105,10 @@ let to_fo (type a)(type b)
 
 (* solve problem using CVC4 before [deadline] *)
 let call_cvc4 (type f)(type t)(type ty)
-(module FO : NunFO.VIEW with type T.t=t and type Formula.t=f and type Ty.t=ty)
+(module FO : NunFO.VIEW with type T.t=t and type formula=f and type Ty.t=ty)
 ~print ~deadline problem =
   let module FOBack = NunFO.Default in
+  let module P = NunFO.Print(FO) in
   let module Sol = NunSolver_intf in
   let module CVC4 = NunCVC4.Make(FO) in
   (* how much time remains *)
@@ -115,7 +116,7 @@ let call_cvc4 (type f)(type t)(type ty)
   if timeout < 0.1 then Res.Timeout
   else (
     if print
-      then Format.printf "@[<2>FO problem:@ %a@]@." CVC4.print_problem problem;
+      then Format.printf "@[<2>FO problem:@ %a@]@." P.print_problem problem;
     let solver = CVC4.solve ~timeout problem in
     match CVC4.res solver with
     | Sol.Res.Sat _m ->
@@ -125,3 +126,14 @@ let call_cvc4 (type f)(type t)(type ty)
     | Sol.Res.Error e ->
         failwith e
   )
+
+(* close a pipeline with CVC4 *)
+let close_pipe_cvc4 (type f)(type t)(type ty)
+(module FO : NunFO.VIEW with type T.t=t and type formula=f and type Ty.t=ty)
+~pipe ~print ~print_raw_model ~deadline
+=
+  let module FOBack = NunFO.Default in
+  let module P = NunFO.Print(FOBack) in
+  NunTransform.ClosedPipe.make1
+    ~pipe
+    ~f:(call_cvc4 (module FO) ~deadline ~print)

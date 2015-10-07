@@ -84,6 +84,7 @@ and term_node =
   | App of term * term list
   | Fun of typed_var * term
   | Let of var * term * term
+  | Ite of term * term * term
   | Forall of typed_var * term
   | Exists of typed_var * term
   | TyArrow of ty * ty
@@ -113,6 +114,7 @@ let app ?loc t l = Loc.with_loc ?loc (App (t,l))
 let fun_ ?loc v t = Loc.with_loc ?loc (Fun(v,t))
 let fun_l ?loc = List.fold_right (fun_ ?loc)
 let let_ ?loc v t u = Loc.with_loc ?loc (Let (v,t,u))
+let ite ?loc a b c = Loc.with_loc ?loc (Ite (a,b,c))
 let forall ?loc v t = Loc.with_loc ?loc (Forall (v, t))
 let exists ?loc v t = Loc.with_loc ?loc (Exists (v, t))
 let ty_arrow ?loc a b = Loc.with_loc ?loc (TyArrow (a,b))
@@ -162,6 +164,9 @@ let rec print_term out term = match Loc.get term with
       pf out "@[<2>fun %a.@ %a@]" print_typed_var v print_term t
   | Let (v,t,u) ->
       pf out "@[<2>let %s :=@ %a in@ %a@]" v print_term t print_term u
+  | Ite (a,b,c) ->
+      pf out "@[<2>if %a@ then %a@ else %a@]"
+        print_term a print_term b print_term c
   | Forall (v, t) ->
       pf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
   | Exists (v, t) ->
@@ -172,7 +177,8 @@ let rec print_term out term = match Loc.get term with
   | TyForall (v, t) ->
       pf out "@[<2>forall (%s:type).@ %a@]" v print_term t
 and print_term_inner out term = match Loc.get term with
-  | App _ | Fun _ | Let _ | Forall _ | Exists _ | TyForall _ | TyArrow _ ->
+  | App _ | Fun _ | Let _ | Ite _
+  | Forall _ | Exists _ | TyForall _ | TyArrow _ ->
       pf out "(%a)" print_term term
   | Builtin _ | AtVar _ | Var _ | Wildcard -> print_term out term
 and print_term_in_arrow out t = match Loc.get t with
@@ -182,6 +188,7 @@ and print_term_in_arrow out t = match Loc.get t with
   | AtVar _
   | App (_,_) -> print_term out t
   | Let (_,_,_)
+  | Ite _
   | Forall (_,_)
   | Exists (_,_)
   | Fun (_,_)

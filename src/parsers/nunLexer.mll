@@ -56,6 +56,9 @@ rule token = parse
   | "goal" { GOAL }
   | "let" { LET }
   | "in" { IN }
+  | "if" { IF }
+  | "then" { THEN }
+  | "else" { ELSE }
   | "and" { AND }
   | "true" { LOGIC_TRUE }
   | "false" { LOGIC_FALSE }

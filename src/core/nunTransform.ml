@@ -27,17 +27,18 @@ type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 (** Alias to {!t} *)
 
 let make ?print ?(name="<trans>") ?(on_input=[])
-?(on_encoded=[]) ~encode ~decode () = Ex {
-  name;
-  encode;
-  decode;
-  on_input;
-  on_encoded;
-  print_state=print;
-}
+?(on_encoded=[]) ~encode ~decode () =
+  Ex {
+    name;
+    encode;
+    decode;
+    on_input;
+    on_encoded;
+    print_state=print;
+  }
 
-let on_encoded (Ex tr) ~f =
-  tr.on_encoded <- f :: tr.on_encoded
+let on_input (Ex tr) ~f = tr.on_input <- f :: tr.on_input
+let on_encoded (Ex tr) ~f = tr.on_encoded <- f :: tr.on_encoded
 
 (** {2 Pipeline of Transformations}
 
@@ -88,7 +89,7 @@ module ClosedPipe = struct
     call: ('b -> 'res lazy_list);
   }
 
-  let make ~pipe ~f = ClosedEx {pipe; call=f}
+  let make ~pipe ~f = ClosedEx {pipe; call=f }
 
   let make1 ~pipe ~f =
     make ~pipe ~f:(fun x -> CCKList.return (f x))
@@ -99,7 +100,10 @@ let run_closed ~cpipe:(ClosedPipe.ClosedEx cpipe) a =
   |> CCKList.flat_map
     (fun (b, conv_back) ->
       cpipe.ClosedPipe.call b
-      |> CCKList.map (fun res -> res, conv_back)
+      |> CCKList.map
+        (fun res ->
+          res, conv_back
+        )
     )
 
 
