@@ -70,23 +70,6 @@ module type S = sig
   val ty_app : Ty.t -> Ty.t list -> Ty.t
   val ty_forall : ty var -> Ty.t -> Ty.t
   val ty_arrow : Ty.t -> Ty.t -> Ty.t
-
-  type signature = Ty.t NunProblem.Signature.t
-
-  val compute_signature :
-    ?init:signature ->
-    (t, Ty.t) NunProblem.Statement.t Sequence.t ->
-    signature
-  (** Signature from statements *)
-
-  val ty : sigma:signature -> t -> Ty.t or_error
-  (** Compute the type of the given term in the given signature *)
-
-  exception Undefined of id
-
-  val ty_exn : sigma:signature -> t -> Ty.t
-  (** @raise Ty.Error in case of error at an application
-      @raise Undefined in case some symbol is not defined *)
 end
 
 module Default : S = struct
@@ -159,10 +142,13 @@ module Default : S = struct
       | TyKind -> true
       | _ -> false
 
-    let rec returns_Type t = match t.view with
-      | TyType -> true
+    let rec returns t = match t.view with
       | TyArrow (_, t')
-      | TyForall (_, t') -> returns_Type t'
+      | TyForall (_, t') -> returns t'
+      | _ -> t
+
+    let returns_Type t = match (returns t).view with
+      | TyType -> true
       | _ -> false
 
     module Subst = struct
@@ -284,8 +270,14 @@ module Default : S = struct
       let view = view
     end)
   end
+end
 
-  type signature = Ty.t NunProblem.Signature.t
+(** {2 Compute Types} *)
+
+exception Undefined of id
+
+module ComputeType(T : S) = struct
+  type signature = T.ty NunProblem.Signature.t
 
   let compute_signature ?(init=ID.Map.empty) =
     let module M = ID.Map in
@@ -306,20 +298,20 @@ module Default : S = struct
     )
 
   let ty_of_eq =
-    let v = Var.make ~ty:ty_type ~name:"a" in
-    ty_forall v (ty_arrow (ty_var v) (ty_arrow (ty_var v) prop))
+    let v = Var.make ~ty:T.ty_type ~name:"a" in
+    T.ty_forall v (T.ty_arrow (T.ty_var v) (T.ty_arrow (T.ty_var v) T.ty_prop))
 
-  let rec ty_exn ~sigma t = match t.view with
+  let rec ty_exn ~sigma t = match T.view t with
     | TyKind -> failwith "Term_ho.ty: kind has no type"
-    | TyType -> kind_
+    | TyType -> T.ty_kind
     | Const id ->
         begin try NunID.Map.find id sigma
         with Not_found -> raise (Undefined id)
         end
     | Builtin b ->
         let module B = NunBuiltin.T in
-        let prop1 = ty_arrow prop prop in
-        let prop2 = ty_arrow prop (ty_arrow prop prop) in
+        let prop1 = T.ty_arrow T.ty_prop T.ty_prop in
+        let prop2 = T.ty_arrow T.ty_prop (T.ty_arrow T.ty_prop T.ty_prop) in
         begin match b with
           | B.Eq -> ty_of_eq
           | B.Imply -> prop2
@@ -327,22 +319,22 @@ module Default : S = struct
           | B.Or -> prop2
           | B.And -> prop2
           | B.Not -> prop1
-          | B.True -> prop
-          | B.False -> prop
+          | B.True -> T.ty_prop
+          | B.False -> T.ty_prop
         end
     | Var v -> Var.ty v
     | App (f,l) ->
-        Ty.apply (ty_exn ~sigma f) (List.map (ty_exn ~sigma) l)
+        T.Ty.apply (ty_exn ~sigma f) (List.map (ty_exn ~sigma) l)
     | Fun (v,t) ->
-        if Ty.returns_Type (Var.ty v)
-        then ty_forall v (ty_exn ~sigma t)
-        else ty_arrow (Var.ty v) (ty_exn ~sigma t)
+        if T.Ty.returns_Type (Var.ty v)
+        then T.ty_forall v (ty_exn ~sigma t)
+        else T.ty_arrow (Var.ty v) (ty_exn ~sigma t)
     | Forall (v,_)
-    | Exists (v,_) -> ty_arrow (Var.ty v) prop
+    | Exists (v,_) -> T.ty_arrow (Var.ty v) T.ty_prop
     | Let (_,_,u) -> ty_exn ~sigma u
     | TyBuiltin _
     | TyArrow (_,_)
-    | TyForall (_,_) -> ty_type
+    | TyForall (_,_) -> T.ty_type
 
   let ty ~sigma t =
     try CCError.return (ty_exn ~sigma t)
@@ -528,4 +520,138 @@ module Erase(T : VIEW) = struct
       )
 end
 
+module AsFO(T : VIEW) = struct
+  exception NotInFO of string * T.t
+
+  let () = Printexc.register_printer
+    (function
+      | NotInFO (msg, t) ->
+          let module P = Print(T) in
+          let msg = CCFormat.sprintf
+            "@[term @[%a@] is not in the first-order fragment:@ %s@]"
+            P.print_in_app t msg
+          in
+          Some msg
+      | _ -> None
+    )
+
+  module FOI = NunFO
+
+  let fail t msg = raise (NotInFO (msg, t))
+
+  module Ty = struct
+    type t = T.t
+    type toplevel_ty = t list * t
+
+    let view t = match T.view t with
+      | Builtin _ -> fail t "builtin term"
+      | Const id -> FOI.TyApp (id, [])
+      | Var _ -> fail t "variable in type"
+      | App (f,l) ->
+          begin match T.view f with
+          | Const id -> FOI.TyApp (id, l)
+          | _ -> fail t "non-constant application"
+          end
+      | Fun (_,_) -> fail t "no function in type"
+      | Forall (_,_)
+      | Exists (_,_) -> fail t "no quantifier in type"
+      | Let (_,_,_) -> fail t "no let in type"
+      | TyKind -> fail t "kind belongs to HO fragment"
+      | TyType -> fail t "type belongs to HO fragment"
+      | TyBuiltin b ->
+          begin match b with
+          | NunBuiltin.Ty.Prop -> FOI.TyBuiltin FOI.TyBuiltin.Prop
+          end
+      | TyArrow (_,_) -> fail t "arrow is not an atomic type"
+      | TyForall (_,_) -> fail t "no quantification in FO types"
+
+    let rec flatten_arrow t = match T.view t with
+      | TyArrow (a, b) ->
+          let l, ret = flatten_arrow b in
+          a :: l, ret
+      | _ ->
+          ignore (view t); (* check atomicity quickly *)
+          [], t
+  end
+
+  module T = struct
+    type t = T.t
+
+    let view t = match T.view t with
+      | Builtin _ -> fail t "no builtin in terms"
+      | Const _
+      | Var _
+      | App (_,_)
+      | Fun (_,_)
+      | Forall (_,_)
+      | Exists (_,_)
+      | Let (_,_,_)
+      | TyKind
+      | TyType
+      | TyBuiltin _
+      | TyArrow (_,_)
+      | TyForall (_,_) -> assert false
+  end
+
+  module Formula = struct
+    type t = T.t
+
+    let view t = match T.view t with
+      | Builtin b ->
+          begin match b with
+          | NunBuiltin.T.True -> FOI.True
+          | NunBuiltin.T.False -> FOI.False
+          | NunBuiltin.T.Not
+          | NunBuiltin.T.Or
+          | NunBuiltin.T.And
+          | NunBuiltin.T.Imply
+          | NunBuiltin.T.Equiv
+          | NunBuiltin.T.Eq  -> fail t "connective not fully applied"
+          end
+      | Const _ -> FOI.Atom t
+      | Var _ -> fail t "no variable in FO formulas"
+      | App (_, []) -> assert false
+      | App (f,l) ->
+          begin match T.view f, l with
+          | Builtin NunBuiltin.T.Not, [f] -> FOI.Not f
+          | Builtin NunBuiltin.T.And, _ -> FOI.And l
+          | Builtin NunBuiltin.T.Or, _ -> FOI.Or l
+          | Builtin NunBuiltin.T.Imply, [a;b] -> FOI.Imply (a,b)
+          | Builtin NunBuiltin.T.Equiv, [a;b] -> FOI.Equiv (a,b)
+          | Builtin NunBuiltin.T.Eq, [a;b] -> FOI.Eq (a,b)
+          | Builtin _, _ -> fail t "wrong builtin/arity"
+          | Const _, _ -> FOI.Atom t
+          | _ -> fail t "wrong application in FO formula"
+          end
+      | Fun (_,_) -> fail t "function in FO"
+      | Forall (v,f) -> FOI.Forall (v,f)
+      | Exists (v,f) -> FOI.Exists (v,f)
+      | Let (_,_,_) -> FOI.Atom t
+      | TyArrow (_,_)
+      | TyForall (_,_)
+      | TyKind
+      | TyBuiltin _
+      | TyType -> fail t "no types in FO formulas"
+  end
+
+  let convert_statement st =
+    let module St = NunProblem.Statement in
+    match St.view st with
+    | St.Decl (id,ty) ->
+        let ty = Ty.flatten_arrow ty in
+        FOI.Decl (id, ty)
+    | St.Def (id,ty,t) ->
+        let ty = Ty.flatten_arrow ty in
+        FOI.Def (id, ty, t)
+    | St.Axiom f -> FOI.Axiom f
+
+  let convert_problem p =
+    NunProblem.statements p
+    |> CCList.map convert_statement
+    |> FOI.Problem.make
+end
+
+let as_fo (type a) (module T : VIEW with type t = a) =
+  let module U = AsFO(T) in
+  (module U : NunFO.VIEW with type T.t = a and type Ty.t = a and type Formula.t = a)
 

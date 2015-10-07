@@ -66,26 +66,31 @@ module type S = sig
   val ty_app : Ty.t -> Ty.t list -> Ty.t
   val ty_forall : ty var -> Ty.t -> Ty.t
   val ty_arrow : Ty.t -> Ty.t -> Ty.t
-
-  type signature = Ty.t NunProblem.Signature.t
-
-  val compute_signature :
-    ?init:signature ->
-    (t, Ty.t) NunProblem.Statement.t Sequence.t ->
-    signature
-  (** Signature from statements *)
-
-  val ty : sigma:signature -> t -> Ty.t or_error
-  (** Compute the type of the given term in the given signature *)
-
-  exception Undefined of id
-
-  val ty_exn : sigma:signature -> t -> Ty.t
-  (** @raise Ty.Error in case of error at an application
-      @raise Undefined in case some symbol is not defined *)
 end
 
 module Default : S
+
+(** {2 Computing Types} *)
+
+exception Undefined of id
+(** When a symbol is not defined *)
+
+module ComputeType(T : S) : sig
+  type signature = T.ty NunProblem.Signature.t
+
+  val compute_signature :
+    ?init:signature ->
+    (T.t, T.ty) NunProblem.Statement.t Sequence.t ->
+    signature
+  (** Signature from statements *)
+
+  val ty : sigma:signature -> T.t -> T.ty or_error
+  (** Compute the type of the given term in the given signature *)
+
+  val ty_exn : sigma:signature -> T.t -> T.ty
+  (** @raise Ty.Error in case of error at an application
+      @raise Undefined in case some symbol is not defined *)
+end
 
 (** {2 Printing} *)
 
@@ -117,3 +122,25 @@ module Erase(T : VIEW) : sig
 
   val erase_ty : ctx:ctx -> T.ty -> Untyped.ty
 end
+
+(** {2 View as FO terms}
+
+  The views can fail if the terms are actually not first order *)
+
+module AsFO(T : VIEW) : sig
+  exception NotInFO of string * T.t
+  (** Raised if a term is not in the first-order fragment *)
+
+  (** Convert a problem in a "cheap" way (without allocating new terms) *)
+  val convert_problem :
+    (T.t, T.ty) NunProblem.t ->
+    (T.t, T.t, T.ty) NunFO.Problem.t
+
+  include NunFO.VIEW with type T.t = T.t
+    and type Ty.t = T.ty
+    and type Formula.t = T.t
+end
+
+val as_fo :
+  (module VIEW with type t = 'a) ->
+  (module NunFO.VIEW with type T.t = 'a and type Ty.t = 'a and type Formula.t = 'a)

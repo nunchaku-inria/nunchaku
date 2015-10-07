@@ -36,6 +36,7 @@ module type AS_TERM = sig
 
   val is_Type : t -> bool (** type == Type? *)
   val returns_Type : t -> bool (** type == forall ... -> ... -> ... -> Type? *)
+  val returns : t -> t (** follow forall/arrows to get return type *)
   val is_Kind : t -> bool (** type == Kind? *)
 end
 

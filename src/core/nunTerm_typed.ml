@@ -236,10 +236,13 @@ module Default = struct
       | TyKind -> true
       | _ -> false
 
-    let rec returns_Type t = match (deref_rec_ t).view with
-      | TyType -> true
+    let rec returns t = match (deref_rec_ t).view with
       | TyArrow (_, t')
-      | TyForall (_, t') -> returns_Type t'
+      | TyForall (_, t') -> returns t'
+      | _ -> t
+
+    let returns_Type t = match (deref_rec_ (returns t)).view with
+      | TyType -> true
       | _ -> false
 
     let is_ty t = match t.ty with

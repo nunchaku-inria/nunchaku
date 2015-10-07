@@ -51,19 +51,48 @@ type 'ty ty_view =
   | TyBuiltin of TyBuiltin.t
   | TyApp of id * 'ty list
 
-(** {1 First-Order Formulas, Terms, Types} *)
+(** Toplevel type: an arrow of atomic types *)
+type 'ty toplevel_ty = 'ty list * 'ty
+
+(** Problem *)
+type ('f, 't, 'ty) statement =
+  | TyDecl of id * int  (** number of arguments *)
+  | Decl of id * 'ty toplevel_ty
+  | Def of id * 'ty toplevel_ty * 't
+  | FormDef of id * 'f
+  | Axiom of 'f
+
+(** {2 Read-Only View} *)
+module type VIEW = sig
+  module Ty : sig
+    type t
+    type toplevel_ty = t list * t
+    val view : t -> t ty_view
+  end
+
+  module T : sig
+    type t
+    val view : t -> (t, Ty.t) view
+    (** Observe the structure of the term *)
+  end
+
+  module Formula : sig
+    type t
+    val view : t -> (t, T.t, Ty.t) form_view
+  end
+end
+
+(** {2 First-Order Formulas, Terms, Types} *)
 module type S = sig
   module Ty : sig
     type t
+    type toplevel_ty = t list * t
 
     val view : t -> t ty_view
 
-    type arrow = t list * t
-    (** list of args, return *)
-
     val const : id -> t
     val app : id -> t list -> t
-    val arrow : t list -> t -> arrow
+    val arrow : t list -> t -> toplevel_ty
   end
 
   module T : sig
@@ -101,10 +130,9 @@ module Default : S = struct
     type t = {
       view: t ty_view;
     }
+    type toplevel_ty = t list * t
 
     let view t = t.view
-
-    type arrow = t list * t
 
     let make_ view = {view}
     let const id = make_ (TyApp (id, []))
@@ -156,4 +184,12 @@ module Default : S = struct
   end
 end
 
+(** {2 The Problems sent to Solvers} *)
+module Problem = struct
+  type ('f, 't, 'ty) t = {
+    statements: ('f, 't, 'ty) statement list;
+  }
+
+  let make l = {statements=l}
+end
 

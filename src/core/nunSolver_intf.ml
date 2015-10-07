@@ -14,61 +14,48 @@ module F = FO.Formula
 type id = ID.t
 type 'a var = 'a Var.t
 
-type term = T.t
-type ty = Ty.t
-type toplevel_ty = Ty.arrow
-type formula = F.t
-
-(** {2 The Problems sent to Solvers} *)
-module Problem = struct
-
-  (* TODO: add a type declaration (create new type, such as "nat") *)
-
-  (** One top-level statement of the problem *)
-  type statement =
-    | TyDecl of id * int  (** number of arguments *)
-    | Decl of id * toplevel_ty
-    | Def of id * toplevel_ty * term
-    | FormDef of id * formula
-    | Axiom of formula
-
-  type t = {
-    statements: statement list;
-  }
-end
-
 (** {2 A Ground Model} *)
 module Model = struct
-  type t = {
-    get_values: id list -> (id * term) list
+  type 't t = {
+    get_values: id list -> (id * 't) list
   }
 end
 
 module Res = struct
-  type t =
-    | Sat of Model.t
+  type 't t =
+    | Sat of 't Model.t
     | Unsat
     | Timeout
     | Error of string
 end
 
 exception SolverClosed
+(** Raised when the solver has been stopped (see {!S.close}) and some
+    function is invoked on it *)
 
 (** {2 The Interface of a Solver} *)
 module type S = sig
+  module FO : NunFO.VIEW
+
+  type term = FO.T.t
+  type ty = FO.Ty.t
+  type toplevel_ty = FO.Ty.toplevel_ty
+  type formula = FO.Formula.t
+  type problem = (formula, term, ty) NunFO.Problem.t
+
   type t
   (** An instance of the solver *)
 
   val name : string
   (** Name of the solver *)
 
-  val res : t -> Res.t
+  val res : t -> term Res.t
   (** [res s] blocks until the result of [s] is available, then return it *)
 
-  val peek_res : t -> Res.t option
+  val peek_res : t -> term Res.t option
   (** [peek_res s] checks whether the result of [s] is already available *)
 
-  val solve : ?timeout:float -> Problem.t -> t
+  val solve : ?timeout:float -> problem -> t
   (** [solve problem] creates a new solver and sends it the given problem.
       This function should return immediately, without waiting for the solver
       to return with an answer.
