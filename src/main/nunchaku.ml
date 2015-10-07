@@ -34,6 +34,7 @@ let options = Arg.align (
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-raw-model", Arg.Set NunSolver_intf.print_model_, " print raw model"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
+  ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
   ; "--version", Arg.Set version_, " print version and exit"
   ]
 )
@@ -104,7 +105,6 @@ let main () =
   let open CCError.Infix in
   Arg.parse options set_file "usage: nunchaku [options] file";
   print_version_if_needed ();
-  Printexc.record_backtrace true;
   (* parse *)
   parse_file ()
   >>= fun statements ->
