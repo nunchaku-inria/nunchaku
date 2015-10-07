@@ -20,6 +20,8 @@ let make ~ty ~name =
 let fresh_copy v =
   { v with id=ID.fresh_copy v.id }
 
+let of_id ~ty id = {id;ty}
+
 let ty t = t.ty
 let id t = t.id
 

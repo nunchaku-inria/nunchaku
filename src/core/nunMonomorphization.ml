@@ -57,6 +57,8 @@ module Make(T1 : NunTerm_typed.VIEW)(T2 : NunTerm_ho.S)
       | T1I.Forall (v,t) -> T2.forall (aux_var v) (aux t)
       | T1I.Exists (v,t) -> T2.exists (aux_var v) (aux t)
       | T1I.Let (v,t,u) -> T2.let_ (aux_var v) (aux t) (aux u)
+      | T1I.Ite (a,b,c) -> T2.ite (aux a) (aux b) (aux c)
+      | T1I.Eq (a,b) -> T2.eq (aux a) (aux b)
       | T1I.TyKind -> (T2.ty_kind :> T2.t)
       | T1I.TyType -> (T2.ty_type :> T2.t)
       | T1I.TyMeta _ -> failwith "Mono.encode: type meta-variable"

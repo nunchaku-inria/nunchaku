@@ -41,6 +41,7 @@ module Make(T : NunTerm_ho.S) = struct
     | TI.Builtin _ -> t
     | TI.App (f,l) ->
         T.app (apply_subst ~env f) (List.map (apply_subst ~env) l)
+    | TI.Eq (a,b) -> T.eq (apply_subst ~env a)(apply_subst ~env b)
     | TI.Fun (v,body) ->
         enter_ ~env v
           (fun ~env v' ->
@@ -128,6 +129,7 @@ module Make(T : NunTerm_ho.S) = struct
               env=Env.add ~env:st.env v (term_of_state a)
             }
         end
+    | TI.Eq _
     | TI.Forall _
     | TI.Exists _
     | TI.Let _
@@ -180,6 +182,8 @@ module Make(T : NunTerm_ho.S) = struct
             (snf_term ~env:st.env b)
             (snf_term ~env:st.env c)
         }
+    | TI.Eq (a,b) ->
+        { st with head=T.eq (snf_term ~env:st.env a) (snf_term ~env:st.env b) }
 
   (* compute the SNF of this term in [env] *)
   and snf_term ~env t = term_of_state (snf_ {head=t; env; args=[]})

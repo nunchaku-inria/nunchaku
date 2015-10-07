@@ -7,6 +7,9 @@ type id = NunID.t
 type 'a var = 'a NunVar.t
 type loc = NunLocation.t
 
+(* TODO: merge {!view} (and therefore, {!Print}) with NunTerm_ho to avoid
+   duplication. NunHO can fail on meta variables anyway, during conversion. *)
+
 type ('a, 'ty) view =
   | Builtin of NunBuiltin.T.t (** built-in symbol *)
   | Const of id (** top-level symbol *)
@@ -17,6 +20,7 @@ type ('a, 'ty) view =
   | Exists of 'ty var * 'a
   | Let of 'ty var * 'a * 'a
   | Ite of 'a * 'a * 'a (* if then else *)
+  | Eq of 'a * 'a (* equality. See {!NunTermHO} for more details *)
   | TyKind
   | TyType
   | TyMeta of 'ty NunMetaVar.t
@@ -60,6 +64,7 @@ module type S = sig
   val ite : ?loc:loc -> t -> t -> t -> t
   val forall : ?loc:loc -> ty var -> t -> t
   val exists : ?loc:loc -> ty var -> t -> t
+  val eq : ?loc:loc -> t -> t -> t
 
   val ty_type : Ty.t (** Type of types *)
   val ty_prop : Ty.t (** Propositions *)

@@ -4,7 +4,9 @@
 (** {1 Interface to CVC4} *)
 
 module Make(FO : NunFO.VIEW) : sig
-  include NunSolver_intf.S with module FO = FO
+  include NunSolver_intf.S
+  with module FO = FO
+  and module FOBack = NunFO.Default
 
   val print_problem : Format.formatter -> problem -> unit
 end

@@ -117,6 +117,9 @@ module Make(FO : NunFO.VIEW) = struct
       | FOI.App (f,l) ->
           fpf out "(@[%a@ %a@])"
             print_id f (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_term) l
+      | FOI.Fun (v,t) ->
+          fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
+            Var.print v print_ty (Var.ty v) print_term t
       | FOI.Let (v,t,u) ->
           fpf out "@[<3>(let@ ((%a %a))@ %a@])"
             Var.print v print_term t print_term u
@@ -203,14 +206,76 @@ module Make(FO : NunFO.VIEW) = struct
         end
     | _ -> error_ "expected ID, got a list"
 
+  (* parse an atomic type *)
+  let rec parse_ty_ ~tbl = function
+    | `Atom _ as f ->
+        let id = parse_id_ ~tbl f in
+        FOBack.Ty.const id
+    | `List (`Atom _ as f :: l) ->
+        let id = parse_id_ ~tbl f in
+        let l = List.map (parse_ty_ ~tbl) l in
+        FOBack.Ty.app id l
+    | _ -> error_ "invalid type"
+
+  let parse_var_ ~tbl = function
+    | `List [`Atom _ as v; ty] ->
+        let id = parse_id_ ~tbl v in
+        let ty = parse_ty_ ~tbl ty in
+        Var.of_id ~ty id
+    | _ -> error_ "expected typed variable"
+
   (* parse a ground term *)
   let rec parse_term_ ~tbl = function
     | `Atom _ as t -> FOBack.T.const (parse_id_ ~tbl t)
-    | `List [] -> error_ "expected term, got empty list"
-    | `List (f :: l) ->
+    | `List [`Atom "LAMBDA"; `List bindings; body] ->
+        (* lambda term *)
+        let bindings = List.map (parse_var_ ~tbl) bindings in
+        let body = parse_term_ ~tbl body in
+        List.fold_right FOBack.T.fun_ bindings body
+    | `List [`Atom "ite"; a; b; c] ->
+        let a = parse_formula_ ~tbl a in
+        let b = parse_term_ ~tbl b in
+        let c = parse_term_ ~tbl c in
+        FOBack.T.ite a b c
+    | `List (`Atom _ as f :: l) ->
         let f = parse_id_ ~tbl f in
         let l = List.map (parse_term_ ~tbl) l in
         FOBack.T.app f l
+    | `List (`List _ :: _) -> error_ "non first-order list"
+    | `List [] -> error_ "expected term, got empty list"
+
+  (* TODO: equiv, imply *)
+  and parse_formula_ ~tbl s =
+    match s with
+    | `Atom "true" -> FOBack.Formula.true_
+    | `Atom "false" -> FOBack.Formula.false_
+    | `List [`Atom "="; a; b] ->
+        let a = parse_term_ ~tbl a in
+        let b = parse_term_ ~tbl b in
+        FOBack.Formula.eq a b
+    | `List [`Atom "not"; f] ->
+        let f = parse_formula_ ~tbl f in
+        FOBack.Formula.not_ f
+    | `List (`Atom "and" :: l) ->
+        FOBack.Formula.and_ (List.map (parse_formula_ ~tbl) l)
+    | `List (`Atom "or" :: l) ->
+        FOBack.Formula.or_ (List.map (parse_formula_ ~tbl) l)
+    | `List [`Atom "forall"; `List bindings; f] ->
+        let bindings = List.map (parse_var_ ~tbl) bindings in
+        let f = parse_formula_ ~tbl f in
+        List.fold_right FOBack.Formula.forall bindings f
+    | `List [`Atom "exists"; `List bindings; f] ->
+        let bindings = List.map (parse_var_ ~tbl) bindings in
+        let f = parse_formula_ ~tbl f in
+        List.fold_right FOBack.Formula.exists bindings f
+    | `List [`Atom "ite"; a; b; c] ->
+        let a = parse_formula_ ~tbl a in
+        let b = parse_formula_ ~tbl b in
+        let c = parse_formula_ ~tbl c in
+        FOBack.Formula.f_ite a b c
+    | _ ->
+        let t = parse_term_ ~tbl s in
+        FOBack.Formula.atom t
 
   (* tbl: string -> ID *)
   let parse_model_ ~tbl = function
@@ -247,7 +312,7 @@ module Make(FO : NunFO.VIEW) = struct
         let ok = ID.Set.to_seq symbols
           |> Sequence.for_all (fun s -> ID.Map.mem s m)
         in
-        if not ok then raise (Error "some symbols are not defined in the model");
+        if not ok then error_ "some symbols are not defined in the model";
         m
 
   (* read the result *)

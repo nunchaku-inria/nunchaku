@@ -3,6 +3,7 @@
 
 (** {1 Pipelines for Nunchaku} *)
 
+module ID = NunID
 module Tr = NunTransform
 module Utils = NunUtils
 
@@ -87,10 +88,11 @@ let mono (type a)(type b) ~print
 (** {2 Conversion to FO} *)
 
 let to_fo (type a)(type b)
-(module T : NunTerm_ho.VIEW with type t = a)
+(module T : NunTerm_ho.S with type t = a)
 (module FO : NunFO.S with type T.t = b) =
   let module Sol = NunSolver_intf in
   let module Conv = NunTerm_ho.AsFO(T) in
+  let module ConvBack = NunTerm_ho.OfFO(T)(FO) in
   Tr.make
   ~name:"to_fo"
   ~encode:(fun (pb:(T.t, T.ty) NunProblem.t) ->
@@ -98,7 +100,9 @@ let to_fo (type a)(type b)
     let res = CCKList.return (pb', ()) in
     (res : (((_,_,_) NunFO.Problem.t * unit) CCKList.t))
   )
-  ~decode:(fun _st (_model:FO.T.t Res.model) -> (assert false : T.t Res.model))
+  ~decode:(fun _st (m:FO.T.t Res.model) ->
+    ConvBack.convert_model m
+  )
   ()
 
 (** {2 Solving} *)
@@ -119,8 +123,12 @@ let call_cvc4 (type f)(type t)(type ty)
       then Format.printf "@[<2>FO problem:@ %a@]@." P.print_problem problem;
     let solver = CVC4.solve ~timeout problem in
     match CVC4.res solver with
-    | Sol.Res.Sat _m ->
-        assert false (* TODO: extract values for terms in [problem] using FOBack *)
+    | Sol.Res.Sat m ->
+        let m = ID.Map.fold
+          (fun id v acc -> (FOBack.T.const id, v) :: acc)
+          m []
+        in
+        Res.Sat m
     | Sol.Res.Unsat -> Res.Unsat
     | Sol.Res.Timeout -> Res.Timeout
     | Sol.Res.Error e ->

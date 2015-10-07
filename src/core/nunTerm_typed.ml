@@ -29,6 +29,7 @@ type ('a, 'ty) view =
   | Exists of 'ty var * 'a
   | Let of 'ty var * 'a * 'a
   | Ite of 'a * 'a * 'a (* if then else *)
+  | Eq of 'a * 'a (* equality. See {!NunTermHO} for more details *)
   | TyKind
   | TyType
   | TyMeta of 'ty NunMetaVar.t
@@ -73,6 +74,7 @@ module type S = sig
   val ite : ?loc:loc -> t -> t -> t -> t
   val forall : ?loc:loc -> ty var -> t -> t
   val exists : ?loc:loc -> ty var -> t -> t
+  val eq : ?loc:loc -> t -> t -> t
 
   val ty_type : Ty.t (** Type of types *)
   val ty_prop : Ty.t (** Propositions *)
@@ -109,6 +111,8 @@ module Print(T : VIEW) = struct
     | Const id -> ID.print out id
     | TyMeta v -> ID.print out (MetaVar.id v)
     | Var v -> Var.print out v
+    | Eq (a,b) ->
+        fpf out "@[%a =@ %a@]" print a print b
     | App (f, [a;b]) ->
         begin match T.view f with
         | Builtin s when NunBuiltin.T.fixity s = `Infix ->
@@ -149,7 +153,7 @@ module Print(T : VIEW) = struct
     | Forall _
     | Exists _
     | Fun _
-    | Let _ | Ite _
+    | Let _ | Ite _ | Eq _
     | TyArrow (_,_)
     | TyForall (_,_) -> fpf out "@[(%a)@]" print t
 
@@ -160,7 +164,7 @@ module Print(T : VIEW) = struct
     | Forall _
     | Exists _
     | Fun _
-    | Let _ | Ite _
+    | Let _ | Ite _ | Eq _
     | TyArrow (_,_)
     | TyForall (_,_) -> fpf out "@[(%a)@]" print t
 end
@@ -216,6 +220,7 @@ module Default = struct
   let ite ?loc a b c = make_ ?loc ?ty:b.ty (Ite (a,b,c))
   let forall ?loc v t = make_ ?loc ~ty:prop (Forall (v, t))
   let exists ?loc v t = make_ ?loc ~ty:prop (Exists (v, t))
+  let eq ?loc a b = make_ ?loc ~ty:prop (Eq (a,b))
 
   let ty_type = type_
   let ty_prop = prop
@@ -266,10 +271,7 @@ module Default = struct
       | TyArrow (a,b) -> TyI.Arrow (a,b)
       | TyForall (v,t) -> TyI.Forall (v,t)
       | Builtin _
-      | Fun _
-      | Forall _
-      | Exists _
-      | Ite _
+      | Fun _ | Forall _ | Exists _ | Ite _ | Eq _
       | Let _ -> assert false
 
     include TyI.Print(struct type t = ty let view = view end)
@@ -301,6 +303,7 @@ module AsHO(T : VIEW) = struct
     | Exists (v,t) -> TI.Exists (v,t)
     | Let (v,t,u) -> TI.Let (v,t,u)
     | Ite (a,b,c) -> TI.Ite (a,b,c)
+    | Eq (a,b) -> TI.Eq (a,b)
     | TyKind -> TI.TyKind
     | TyType -> TI.TyType
     | TyMeta _ -> failwith "Term_typed.AsHO.view: remaining meta"

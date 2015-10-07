@@ -117,7 +117,7 @@ let main () =
 let () =
   E.catch (main ())
     ~ok:(fun m ->
-      Format.printf "sat: model %a@."
+      Format.printf "@[<1>sat:@ model {@,%a}@]@."
         (NunProblem.Model.print NunUntypedAST.print_term) m;
       exit 0
     )

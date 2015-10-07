@@ -20,12 +20,10 @@ module T = struct
     | And
     | Imply
     | Equiv
-    | Eq
   let fixity = function
     | True
     | False
     | Not -> `Prefix
-    | Eq
     | Or
     | And
     | Imply
@@ -38,6 +36,5 @@ module T = struct
     | And -> "&"
     | Imply -> "=>"
     | Equiv -> "<=>"
-    | Eq -> "="
   let equal = (==)
 end

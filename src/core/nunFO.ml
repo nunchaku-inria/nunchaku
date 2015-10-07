@@ -31,6 +31,7 @@ type ('f, 't, 'ty) view =
   | Builtin of Builtin.t
   | Var of 'ty var
   | App of id * 't list
+  | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
   | Ite of 'f * 't * 't
 
@@ -112,6 +113,9 @@ module type S = sig
     val const : id -> t
     val app : id -> t list -> t
     val var : Ty.t var -> t
+    val let_ : Ty.t var -> t -> t -> t
+    val fun_ : Ty.t var -> t -> t
+    val ite : formula -> t -> t -> t
   end
 
   module Formula : sig
@@ -130,6 +134,7 @@ module type S = sig
     val equiv : t -> t -> t
     val forall : Ty.t var -> t -> t
     val exists : Ty.t var -> t -> t
+    val f_ite : t -> t -> t -> t
   end
 end
 
@@ -163,6 +168,9 @@ module Default : S = struct
     let app id l = make_ (App(id,l))
     let const id = make_ (App(id,[]))
     let var v = make_ (Var v)
+    let let_ v t u = make_ (Let(v,t,u))
+    let fun_ v t = make_ (Fun (v,t))
+    let ite f t u = make_ (Ite (f,t,u))
   end
 
   module Formula = struct
@@ -190,6 +198,7 @@ module Default : S = struct
     let equiv a b = make_ (Equiv (a,b))
     let forall v t = make_ (Forall (v,t))
     let exists v t = make_ (Exists (v,t))
+    let f_ite a b c = make_ (F_ite (a,b,c))
   end
 end
 
@@ -239,6 +248,9 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     | App (f,[]) -> ID.print out f
     | App (f,l) ->
         fpf out "@[<2>(%a@ %a)@]" ID.print f (pp_list_ print_term) l
+    | Fun (v,t) ->
+        fpf out "@[<2>(fun %a:%a.@ %a)@]"
+          Var.print v print_ty (Var.ty v) print_term t
     | Let (v,t,u) ->
         fpf out "@[<2>(let@ %a =@ %a in@ %a)@]"
           Var.print v print_term t print_term u

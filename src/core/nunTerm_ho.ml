@@ -25,6 +25,7 @@ type ('a, 'ty) view =
   | Exists of 'ty var * 'a
   | Let of 'ty var * 'a * 'a
   | Ite of 'a * 'a * 'a
+  | Eq of 'a * 'a
   | TyKind
   | TyType
   | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
@@ -61,6 +62,7 @@ module type S = sig
   val ite : t -> t -> t -> t
   val forall : ty var -> t -> t
   val exists : ty var -> t -> t
+  val eq : t -> t -> t
 
   val ty_type : Ty.t (** Type of types *)
   val ty_kind : Ty.t (** Type of ty_type *)
@@ -105,6 +107,7 @@ module Default : S = struct
   let ite a b c = make_ (Ite (a,b,c))
   let forall v t = make_ (Forall (v, t))
   let exists v t = make_ (Exists (v, t))
+  let eq a b = make_ (Eq (a,b))
 
   let ty_type = type_
   let ty_kind = kind_
@@ -131,6 +134,7 @@ module Default : S = struct
       | App (f,l) -> TyI.App (f,l)
       | TyArrow (a,b) -> TyI.Arrow (a,b)
       | TyForall (v,t) -> TyI.Forall (v,t)
+      | Eq _
       | Builtin _
       | Fun _
       | Forall _
@@ -320,7 +324,6 @@ module ComputeType(T : S) = struct
         let prop1 = T.ty_arrow T.ty_prop T.ty_prop in
         let prop2 = T.ty_arrow T.ty_prop (T.ty_arrow T.ty_prop T.ty_prop) in
         begin match b with
-          | B.Eq -> ty_of_eq
           | B.Imply -> prop2
           | B.Equiv -> prop2
           | B.Or -> prop2
@@ -340,6 +343,7 @@ module ComputeType(T : S) = struct
     | Exists (v,_) -> T.ty_arrow (Var.ty v) T.ty_prop
     | Let (_,_,u) -> ty_exn ~sigma u
     | Ite (_,b,_) -> ty_exn ~sigma b
+    | Eq _ -> T.ty_prop
     | TyBuiltin _
     | TyArrow (_,_)
     | TyForall (_,_) -> T.ty_type
@@ -375,6 +379,7 @@ module Print(T : VIEW) = struct
     | TyBuiltin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
     | Const id -> ID.print out id
     | Var v -> Var.print out v
+    | Eq (a,b) -> fpf out "@[%a =@ %a@]" print a print b
     | App (f, [a;b]) ->
         begin match T.view f with
         | Builtin s when NunBuiltin.T.fixity s = `Infix ->
@@ -413,7 +418,7 @@ module Print(T : VIEW) = struct
     | Forall _
     | Exists _
     | Fun _
-    | Let _ | Ite _
+    | Let _ | Ite _ | Eq _
     | TyArrow (_,_)
     | TyForall (_,_) -> fpf out "@[(%a)@]" print t
 
@@ -423,7 +428,7 @@ module Print(T : VIEW) = struct
     | Forall _
     | Exists _
     | Fun _
-    | Let _ | Ite _
+    | Let _ | Ite _ | Eq _
     | TyArrow (_,_)
     | TyForall (_,_) -> fpf out "@[(%a)@]" print t
 end
@@ -490,10 +495,12 @@ module Erase(T : VIEW) = struct
           | NunBuiltin.T.And -> Untyped.Builtin.And
           | NunBuiltin.T.Imply -> Untyped.Builtin.Imply
           | NunBuiltin.T.Equiv -> Untyped.Builtin.Equiv
-          | NunBuiltin.T.Eq -> Untyped.Builtin.Eq
         in Untyped.builtin b
     | Const id -> Untyped.var (find_ ~ctx id)
     | Var v -> Untyped.var (find_ ~ctx (Var.id v))
+    | Eq (a,b) ->
+        Untyped.app
+          (Untyped.builtin Untyped.Builtin.Eq) [erase ~ctx a; erase ~ctx b]
     | App (f,l) -> Untyped.app (erase ~ctx f) (List.map (erase ~ctx) l)
     | Fun (v,t) ->
         enter_typed_var_ ~ctx v (fun v' -> Untyped.fun_ v' (erase ~ctx t))
@@ -569,6 +576,7 @@ module AsFO(T : VIEW) = struct
       | Exists (_,_) -> fail t "no quantifier in type"
       | Let (_,_,_) -> fail t "no let in type"
       | Ite (_,_,_) -> fail t "no if/then/else in type"
+      | Eq _ -> fail t "no = in types"
       | TyKind -> fail t "kind belongs to HO fragment"
       | TyType -> fail t "type belongs to HO fragment"
       | TyBuiltin b ->
@@ -603,6 +611,7 @@ module AsFO(T : VIEW) = struct
       | Exists (_,_) -> fail t "no quantifiers in FO terms"
       | Let (v,t,u) -> FOI.Let (v, t, u)
       | Ite (a,b,c) -> FOI.Ite (a,b,c)
+      | Eq _ -> fail t "no = in terms"
       | TyKind
       | TyType
       | TyBuiltin _
@@ -623,8 +632,7 @@ module AsFO(T : VIEW) = struct
           | NunBuiltin.T.Or
           | NunBuiltin.T.And
           | NunBuiltin.T.Imply
-          | NunBuiltin.T.Equiv
-          | NunBuiltin.T.Eq  -> fail t "connective not fully applied"
+          | NunBuiltin.T.Equiv -> fail t "connective not fully applied"
           end
       | Const _ -> FOI.Atom t
       | Var _ -> fail t "no variable in FO formulas"
@@ -636,11 +644,11 @@ module AsFO(T : VIEW) = struct
           | Builtin NunBuiltin.T.Or, _ -> FOI.Or l
           | Builtin NunBuiltin.T.Imply, [a;b] -> FOI.Imply (a,b)
           | Builtin NunBuiltin.T.Equiv, [a;b] -> FOI.Equiv (a,b)
-          | Builtin NunBuiltin.T.Eq, [_ty;a;b] -> FOI.Eq (a,b)
           | Builtin _, _ -> fail t "wrong builtin/arity"
           | Const _, _ -> FOI.Atom t
           | _ -> fail t "wrong application in FO formula"
           end
+      | Eq (a,b) -> FOI.Eq (a,b)
       | Fun (_,_) -> fail t "function in FO"
       | Forall (v,f) -> FOI.Forall (v,f)
       | Exists (v,f) -> FOI.Exists (v,f)
@@ -683,3 +691,62 @@ let as_fo (type a) (module T : VIEW with type t = a) =
   let module U = AsFO(T) in
   (module U : NunFO.VIEW with type T.t = a and type Ty.t = a and type formula = a)
 
+module OfFO(T : S)(FO : NunFO.VIEW) = struct
+
+  let rec convert_ty t = match FO.Ty.view t with
+    | NunFO.TyBuiltin b ->
+        let b = match b with
+          | NunFO.TyBuiltin.Prop -> NunBuiltin.Ty.Prop
+        in T.ty_builtin b
+    | NunFO.TyApp (f,l) ->
+        let l = List.map convert_ty l in
+        T.ty_app (T.ty_const f) l
+
+  and convert_term t = match FO.T.view t with
+    | NunFO.Builtin b ->
+        let b = match b with
+          | NunFO.Builtin.Int _ -> NunUtils.not_implemented "conversion from int"
+        in
+        T.builtin b
+    | NunFO.Var v ->
+        T.var (Var.update_ty v ~f:convert_ty)
+    | NunFO.App (f,l) ->
+        let l = List.map convert_term l in
+        T.app (T.const f) l
+    | NunFO.Fun (v,t) ->
+        let v = Var.update_ty v ~f:convert_ty in
+        T.fun_ v (convert_term t)
+    | NunFO.Let (v,t,u) ->
+        let v = Var.update_ty v ~f:convert_ty in
+        T.let_ v (convert_term t) (convert_term u)
+    | NunFO.Ite (a,b,c) ->
+        T.ite (convert_formula a) (convert_term b) (convert_term c)
+
+  and convert_formula f =
+    let module B = NunBuiltin.T in
+    match FO.Formula.view f with
+    | NunFO.Atom t -> convert_term t
+    | NunFO.True -> T.builtin B.True
+    | NunFO.False -> T.builtin B.False
+    | NunFO.Eq (a,b) -> T.eq (convert_term a) (convert_term b)
+    | NunFO.And l ->
+        T.app (T.builtin B.And) (List.map convert_formula l)
+    | NunFO.Or l ->
+        T.app (T.builtin B.Or) (List.map convert_formula l)
+    | NunFO.Not f ->
+        T.app (T.builtin B.Not) [convert_formula f]
+    | NunFO.Imply (a,b) ->
+        T.app (T.builtin B.Imply) [convert_formula a; convert_formula b]
+    | NunFO.Equiv (a,b) ->
+        T.app (T.builtin B.Equiv) [convert_formula a; convert_formula b]
+    | NunFO.Forall (v,t) ->
+        let v = Var.update_ty v ~f:convert_ty in
+        T.forall v (convert_formula t)
+    | NunFO.Exists (v,t) ->
+        let v = Var.update_ty v ~f:convert_ty in
+        T.exists v (convert_formula t)
+    | NunFO.F_ite (a,b,c) ->
+        T.ite (convert_formula a) (convert_formula b) (convert_formula c)
+
+  let convert_model m = NunProblem.Model.map ~f:convert_term m
+end

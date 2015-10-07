@@ -165,8 +165,8 @@ let rec print_term out term = match Loc.get term with
   | Let (v,t,u) ->
       pf out "@[<2>let %s :=@ %a in@ %a@]" v print_term t print_term u
   | Ite (a,b,c) ->
-      pf out "@[<2>if %a@ then %a@ else %a@]"
-        print_term a print_term b print_term c
+      pf out "@[<hv2>if %a@ then %a@ else %a@]"
+        print_term_inner a print_term b print_term c
   | Forall (v, t) ->
       pf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
   | Exists (v, t) ->

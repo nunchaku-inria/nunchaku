@@ -25,6 +25,9 @@ val fresh_copy : 'ty t -> 'ty t
 (** [fresh_copy v] makes a variable that looks like [v] but has a fresh
     identifier *)
 
+val of_id : ty:'ty -> id -> 'ty t
+(** [of_id ~ty id] makes a variable with the given ID *)
+
 val ty : 'ty t -> 'ty
 
 val id : _ t -> id

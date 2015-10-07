@@ -245,16 +245,17 @@ module ConvertTerm(Term : TERM) = struct
     with Unif.Fail _ as e ->
       type_error ~stack (Printexc.to_string e)
 
-  (* forall a. a -> a -> prop *)
-  let ty_of_eq =
-    let v = Var.make ~ty:Term.ty_type ~name:"a" in
-    Term.ty_forall v (arrow_list [Term.ty_var v; Term.ty_var v] prop)
+  let is_eq_ t = match Loc.get t with
+    | A.Builtin A.Builtin.Eq -> true
+    | _ -> false
 
   (* convert a parsed term into a typed/scoped term *)
   let rec convert_ ~stack ~env t =
     let loc = Loc.get_loc t in
     let stack = push_ t stack in
     match Loc.get t with
+    | A.Builtin A.Builtin.Eq ->
+        ill_formed ?loc "equality must be fully applied"
     | A.Builtin s ->
         (* only some symbols correspond to terms *)
         let module B = NunBuiltin.T in
@@ -267,10 +268,10 @@ module ConvertTerm(Term : TERM) = struct
           | A.Builtin.And -> B.And, prop2
           | A.Builtin.Prop -> ill_formed ?loc "prop is not a term, but a type"
           | A.Builtin.Type -> ill_formed ?loc "type is not a term"
-          | A.Builtin.Eq -> B.Eq, ty_of_eq
           | A.Builtin.Not -> B.Not, prop1
           | A.Builtin.True -> B.True, prop
           | A.Builtin.False -> B.False, prop
+          | A.Builtin.Eq -> assert false (* deal with earlier *)
         in
         Term.builtin ?loc ~ty b
     | A.AtVar v ->
@@ -282,6 +283,11 @@ module ConvertTerm(Term : TERM) = struct
               Term.const ?loc ~ty id
           | Var var -> Term.var ?loc var
         end
+    | A.App (f, [a;b]) when is_eq_ f ->
+        let a = convert_ ~stack ~env a in
+        let b = convert_ ~stack ~env b in
+        unify_in_ctx_ ~stack (get_ty_ a) (get_ty_ b);
+        Term.eq ?loc a b
     | A.App (f, l) ->
         (* infer type of [f] *)
         let f' = convert_ ~stack ~env f in

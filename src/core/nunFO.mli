@@ -30,6 +30,7 @@ type ('f, 't, 'ty) view =
   | Builtin of Builtin.t
   | Var of 'ty var
   | App of id * 't list
+  | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
   | Ite of 'f * 't * 't
 
@@ -111,6 +112,9 @@ module type S = sig
     val const : id -> t
     val app : id -> t list -> t
     val var : Ty.t var -> t
+    val let_ : Ty.t var -> t -> t -> t
+    val fun_ : Ty.t var -> t -> t
+    val ite : formula -> t -> t -> t
   end
 
   module Formula : sig
@@ -129,6 +133,7 @@ module type S = sig
     val equiv : t -> t -> t
     val forall : Ty.t var -> t -> t
     val exists : Ty.t var -> t -> t
+    val f_ite : t -> t -> t -> t
   end
 end
 
