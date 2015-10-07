@@ -41,7 +41,7 @@ let ty_infer (type a) (type b) ~print
   let print_problem = NunProblem.print PrintT.print T1.Ty.print in
   let on_encoded =
     if print
-    then [Format.printf "@[after type inference:@ %a@]@." print_problem]
+    then [Format.printf "@[<2>after type inference:@ %a@]@." print_problem]
     else []
   in
   Tr.make
@@ -62,13 +62,20 @@ let ty_infer (type a) (type b) ~print
 
 (** {2 Optimizations/Encodings} *)
 
-module Mono = struct
-  module T1 = NunTerm_typed.Default
-  module T2 = NunTerm_ho.Default
-
-  module DoIt = NunMonomorphization.Make(T1)(T2)
-
-  let pipe = Tr.make
+let mono (type a)(type b) ~print
+(module T1 : NunTerm_typed.VIEW with type t = a)
+(module T2 : NunTerm_ho.S with type t = b)
+=
+  let module DoIt = NunMonomorphization.Make(T1)(T2) in
+  let on_encoded = if print
+    then
+      let module P = NunTerm_ho.Print(T2) in
+      [Format.printf "@[<2>after mono:@ %a@]@."
+        (NunProblem.print P.print P.print_ty)]
+    else []
+  in
+  Tr.make
+    ~on_encoded
     ~name:"monomorphization"
     ~encode:(fun p -> p
         |> DoIt.encode_problem
@@ -76,56 +83,45 @@ module Mono = struct
     )
     ~decode:DoIt.decode_model
     ()
-end
-
 
 (** {2 Conversion to FO} *)
 
-module ToFO = struct
-  module T = NunTerm_ho.Default
-  module FO = NunFO.Default
-  module Sol = NunSolver_intf
-
-  type state = unit (* TODO *)
-
-  let print_problem = NunCVC4.print_problem
-
-  (* TODO *)
-
-  let pipe ~print =
-    let on_encoded =
-      if print
-      then [Format.printf "@[FO problem:@ %a@]@." print_problem]
-      else []
-    in
-    Tr.make ~on_encoded
-    ~name:"to_fo"
-    ~encode:(fun (_problem:(T.t, T.ty) NunProblem.t) ->
-      (assert false : ((Sol.Problem.t * state) CCKList.t))
-    )
-    ~decode:(fun _st (_model:FO.T.t Res.model) -> (assert false : T.t Res.model))
-    ()
-end
+let to_fo (type a)(type b)
+(module T : NunTerm_ho.VIEW with type t = a)
+(module FO : NunFO.S with type T.t = b) =
+  let module Sol = NunSolver_intf in
+  let module Conv = NunTerm_ho.AsFO(T) in
+  Tr.make
+  ~name:"to_fo"
+  ~encode:(fun (pb:(T.t, T.ty) NunProblem.t) ->
+    let pb' = Conv.convert_problem pb in
+    let res = CCKList.return (pb', ()) in
+    (res : (((_,_,_) NunFO.Problem.t * unit) CCKList.t))
+  )
+  ~decode:(fun _st (_model:FO.T.t Res.model) -> (assert false : T.t Res.model))
+  ()
 
 (** {2 Solving} *)
 
-module CallCVC4 = struct
-  module FO = NunFO.Default
-  module Sol = NunSolver_intf
-
-  (* solve problem using CVC4 before [deadline] *)
-  let solve
-    : deadline:float -> Sol.Problem.t -> FO.T.t Res.t
-    = fun ~deadline problem ->
-      (* how much time remains *)
-      let timeout = deadline -. Unix.gettimeofday() in
-      if timeout < 0.1 then Res.Timeout
-      else
-        let solver = NunCVC4.solve ~timeout problem in
-        match NunCVC4.res solver with
-        | Sol.Res.Sat _m -> assert false (* TODO: extract values for terms in [problem]  *)
-        | Sol.Res.Unsat -> Res.Unsat
-        | Sol.Res.Timeout -> Res.Timeout
-        | Sol.Res.Error e ->
-            failwith e
-end
+(* solve problem using CVC4 before [deadline] *)
+let call_cvc4 (type f)(type t)(type ty)
+(module FO : NunFO.VIEW with type T.t=t and type Formula.t=f and type Ty.t=ty)
+~print ~deadline problem =
+  let module FOBack = NunFO.Default in
+  let module Sol = NunSolver_intf in
+  let module CVC4 = NunCVC4.Make(FO) in
+  (* how much time remains *)
+  let timeout = deadline -. Unix.gettimeofday() in
+  if timeout < 0.1 then Res.Timeout
+  else (
+    if print
+      then Format.printf "@[<2>FO problem:@ %a@]@." CVC4.print_problem problem;
+    let solver = CVC4.solve ~timeout problem in
+    match CVC4.res solver with
+    | Sol.Res.Sat _m ->
+        assert false (* TODO: extract values for terms in [problem] using FOBack *)
+    | Sol.Res.Unsat -> Res.Unsat
+    | Sol.Res.Timeout -> Res.Timeout
+    | Sol.Res.Error e ->
+        failwith e
+  )

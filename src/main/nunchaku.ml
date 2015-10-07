@@ -67,14 +67,26 @@ let make_pipeline () =
   let step_ty_infer = Pipeline.ty_infer ~print:!print_typed_
     (module NunTerm_typed.Default) (module NunTerm_ho.Default) in
   (* encodings *)
-  let step_monomorphization = Pipeline.Mono.pipe in
+  let step_monomorphization = Pipeline.mono ~print:false
+    (module NunTerm_typed.Default) (module NunTerm_ho.Default) in
   (* conversion to FO *)
-  let step_fo = Pipeline.ToFO.pipe ~print:!print_fo_ in
+  let step_fo = Pipeline.to_fo
+    (module NunTerm_ho.Default) (module NunFO.Default)
+  in
   (* setup pipeline *)
-  step_ty_infer @@@
-  step_monomorphization @@@
-  step_fo @@@
-  id
+  NunTransform.ClosedPipe.make1
+    ~pipe:(
+      step_ty_infer @@@
+      step_monomorphization @@@
+      step_fo @@@
+      id
+    )
+    ~f:(
+      (* timeout *)
+      let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
+      let module T = NunTerm_ho.AsFO(NunTerm_ho.Default) in
+      Pipeline.call_cvc4 (module T) ~deadline ~print:!print_fo_
+    )
 
 (* search for results *)
 let rec traverse_list_ l =
@@ -99,13 +111,9 @@ let main () =
   parse_file ()
   >>= fun statements ->
   print_input_if_needed statements;
-  (* timeout *)
-  let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   (* run pipeline *)
-  let pipe = make_pipeline() in
-  NunTransform.run ~pipe statements
-  |> CCKList.map
-    (fun (p, back) -> Pipeline.CallCVC4.solve ~deadline p, back)
+  let cpipe = make_pipeline() in
+  NunTransform.run_closed ~cpipe statements
   |> traverse_list_
 
 let () =
