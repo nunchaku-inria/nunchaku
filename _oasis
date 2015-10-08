@@ -20,7 +20,7 @@ Library "nunchaku_core"
   Modules:          NunID, NunVar, NunMetaVar, NunLocation, NunIntf, NunUtils,
                     NunTransform, NunType_intf, NunUntypedAST,
                     NunTerm_typed, NunTypeUnify, NunTypeInference,
-                    NunProblem, NunTerm_ho, NunFO, NunBuiltin,
+                    NunProblem, NunTerm_ho, NunFO, NunBuiltin, NunTerm_intf,
                     NunReduce, NunSolver_intf, NunCVC4, NunMonomorphization
   Install:          true
   FindlibName:      nunchaku
