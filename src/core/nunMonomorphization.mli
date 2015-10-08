@@ -26,34 +26,6 @@ module type S = sig
 
   exception InvalidProblem of string
 
-  (** {6 Set of Instances} *)
-
-  (** Tuple of arguments to instantiate a symbol definition with *)
-  module ArgTuple : sig
-    type t
-    val of_list : T2.ty list -> t
-    val to_list : t -> T2.ty list
-  end
-
-  (** Set of {!ArgTuple.t} *)
-  module ArgTupleSet : sig
-    type t
-    val empty : t
-    val is_empty : t -> bool
-    val add : ArgTuple.t -> t -> t
-    val to_list : t -> ArgTuple.t list
-  end
-
-  module SetOfInstances : sig
-    type t
-
-    val args : t -> id -> ArgTupleSet.t
-    (** function -> set of args to instantiate it with *)
-
-    val required : t -> id -> bool
-    (** Is the symbol even needed? *)
-  end
-
   type mono_state
   (** State used for monomorphizing (to convert [f int (list nat)] to
       [f_int_list_nat], and back) *)
@@ -61,22 +33,19 @@ module type S = sig
   val create : unit -> mono_state
   (** New state *)
 
-  val compute_instances :
-    sigma:T1.ty NunProblem.Signature.t ->
-    (T1.t, T1.ty) NunProblem.t ->
-    SetOfInstances.t
-  (** [compute_instances pb] finds a set of instances for each symbol
-      such that it is sufficient to instantiate the corresponding (partial)
-      definitions of the symbol with those tuples
-      @param the signature of the symbols *)
-
   val monomorphize :
-    instances:SetOfInstances.t ->
+    sigma:T1.ty NunProblem.Signature.t ->
     state:mono_state ->
     (T1.t, T1.ty) NunProblem.t ->
     (T2.t, T2.ty) NunProblem.t
-  (** Filter and specialize definitions of the problem using the given
-      set of instances *)
+  (** Filter and specialize definitions of the problem.
+
+      First it finds a set of instances for each symbol
+      such that it is sufficient to instantiate the corresponding (partial)
+      definitions of the symbol with those tuples.
+
+      Then it specializes relevant definitions with the set of tuples
+      computed earlier. *)
 
   (** {6 Convert atomic types to symbols} *)
   module Mangling : sig

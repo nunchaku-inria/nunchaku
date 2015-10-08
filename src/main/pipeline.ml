@@ -79,9 +79,8 @@ let mono (type a)(type b) ~print
     ~name:"monomorphization"
     ~encode:(fun p ->
       let sigma = NunProblem.signature p in
-      let instances = Mono.compute_instances ~sigma p in
       let state = Mono.create () in
-      let p = Mono.monomorphize ~instances ~state p in
+      let p = Mono.monomorphize ~sigma ~state p in
       p, state
       (* TODO mangling of types, as an option *)
     )
