@@ -99,7 +99,7 @@ module Print(Ty : S) = struct
     | Type -> CCFormat.string out "type"
     | Builtin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
     | Meta v -> ID.print out (MetaVar.id v)
-    | Const id -> ID.print out id
+    | Const id -> ID.print_no_id out id
     | Var v -> Var.print out v
     | App (f,l) ->
         fpf out "@[<2>%a@ %a@]" print_in_app f

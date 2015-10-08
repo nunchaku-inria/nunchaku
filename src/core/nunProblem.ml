@@ -51,14 +51,14 @@ module Statement = struct
 
   let print pt pty out t =
     match t.view with
-    | TyDecl (v, ty) -> fpf out "@[<2>val %a@ : %a.@]" ID.print v pty ty
-    | Decl (v, ty) -> fpf out "@[<2>val %a@ : %a.@]" ID.print v pty ty
+    | TyDecl (v, ty) -> fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id v pty ty
+    | Decl (v, ty) -> fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id v pty ty
     | PropDef (v, prop, t) ->
         fpf out "@[<2>def %a@ : %a@ := %a.@]"
-          ID.print v pty prop pt t
+          ID.print_no_id v pty prop pt t
     | Def (v, ty, t) ->
         fpf out "@[<2>def %a@ : %a@ := %a.@]"
-          ID.print v pty ty pt t
+          ID.print_no_id v pty ty pt t
     | Axiom t -> fpf out "@[<2>axiom %a.@]" pt t
     | Goal t -> fpf out "@[<2>goal %a.@]" pt t
 

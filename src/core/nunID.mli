@@ -21,6 +21,9 @@ val id : t -> int
 include NunIntf.PRINT with type t := t
 val to_string : t -> string
 
+val print_no_id : Format.formatter -> t -> unit
+(** Print the name without the number itself *)
+
 module Map : CCMap.S with type key = t
 module Set : CCSet.S with type elt = t
 module Tbl : CCHashtbl.S with type key = t

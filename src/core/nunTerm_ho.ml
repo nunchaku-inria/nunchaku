@@ -370,7 +370,7 @@ module Print(T : VIEW) = struct
     | TyType -> CCFormat.string out "type"
     | Builtin b -> CCFormat.string out (NunBuiltin.T.to_string b)
     | TyBuiltin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
-    | Const id -> ID.print out id
+    | Const id -> ID.print_no_id out id
     | TyMeta v -> ID.print out (NunMetaVar.id v)
     | Var v -> Var.print out v
     | Eq (a,b) ->
