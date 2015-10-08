@@ -36,3 +36,28 @@ let update_ty v ~f =
 let print oc v = ID.print oc v.id
 let to_string v = ID.to_string v.id
 
+(** {2 Substitutions} *)
+
+module Subst(Ty : sig type t end) = struct
+  type var = Ty.t t
+
+  module M = Map.Make(struct
+    type t = var
+    let compare = compare
+  end)
+
+  type 'a t = 'a M.t
+
+  let empty = M.empty
+
+  let add ~subst v x = M.add v x subst
+
+  let mem ~subst v = M.mem v subst
+
+  let find_exn ~subst v = M.find v subst
+
+  let find ~subst v = try Some (find_exn ~subst v) with Not_found -> None
+
+  let to_list s = M.fold (fun v x acc -> (v,x)::acc) s []
+end
+

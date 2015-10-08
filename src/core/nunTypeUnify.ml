@@ -70,15 +70,12 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
     | TyI.App (f1, l1) -> flatten_app_ f1 (l1 @ l)
     | _ -> f, l
 
-  module VarMap = Map.Make(struct
-    type t = Ty.t Var.t
-    let compare = Var.compare
-  end)
+  module Subst = Var.Subst(struct type t = Ty.t end)
 
   (* bound: set of bound variables, that cannot be unified *)
   let unify_exn ty1 ty2 =
     Utils.debugf ~section 5 "@[<2>unify %a@ and %a@]" Ty.print ty1 Ty.print ty2;
-    let bound = ref VarMap.empty in
+    let bound = ref Subst.empty in
     (* keep a stack of unification attempts *)
     let rec unify_ ~stack ty1 ty2 =
       let stack = push_ ty1 ty2 stack in
@@ -93,8 +90,8 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
       | TyI.Var v1, TyI.Var v2 when Var.equal v1 v2 -> ()
       | TyI.Var v1, TyI.Var v2 ->
           begin try
-            let var = VarMap.find v1 !bound in
-            let var' = VarMap.find v2 !bound in
+            let var = Subst.find_exn ~subst:!bound v1 in
+            let var' = Subst.find_exn ~subst:!bound v2 in
             if Var.equal var var' then ()
             else failf ~stack "bound variables %a and %a are incompatible"
               Var.print v1 Var.print v2
@@ -131,10 +128,10 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
           unify_ ~stack l1 l2;
           unify_ ~stack r1 r2
       | TyI.Forall (v1,t1), TyI.Forall (v2,t2) ->
-          assert (not (VarMap.mem v1 !bound));
-          assert (not (VarMap.mem v2 !bound));
+          assert (not (Subst.mem ~subst:!bound v1));
+          assert (not (Subst.mem ~subst:!bound v2));
           let v = Var.make ~ty:(Var.ty v1) ~name:"?" in
-          bound := VarMap.add v1 v (VarMap.add v2 v !bound);
+          bound := Subst.add ~subst:(Subst.add ~subst:!bound v2 v) v1 v;
           unify_ ~stack t1 t2
       | TyI.Meta _, _
       | TyI.Const _, _

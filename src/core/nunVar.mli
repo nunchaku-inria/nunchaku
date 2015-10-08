@@ -42,3 +42,21 @@ val fresh_update_ty : 'a t -> f:('a -> 'b) -> 'b t
 val print : Format.formatter -> _ t -> unit
 val to_string : _ t -> string
 
+(** {2 Substitutions} *)
+
+module Subst(Ty : sig type t end) : sig
+  type var = Ty.t t
+
+  type 'a t
+  (** A substitution for those variables *)
+
+  val empty : 'a t
+
+  val add : subst:'a t -> var -> 'a -> 'a t
+
+  val mem : subst:'a t -> var -> bool
+  val find : subst:'a t -> var -> 'a option
+  val find_exn : subst:'a t -> var -> 'a  (** @raise Not_found *)
+
+  val to_list : 'a t -> (var * 'a) list
+end
