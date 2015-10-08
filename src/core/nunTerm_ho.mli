@@ -91,12 +91,6 @@ exception Undefined of id
 module ComputeType(T : S) : sig
   type signature = T.ty NunProblem.Signature.t
 
-  val compute_signature :
-    ?init:signature ->
-    (T.t, T.ty) NunProblem.Statement.t Sequence.t ->
-    signature
-  (** Signature from statements *)
-
   val ty : sigma:signature -> T.t -> T.ty or_error
   (** Compute the type of the given term in the given signature *)
 

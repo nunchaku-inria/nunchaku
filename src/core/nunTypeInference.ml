@@ -467,7 +467,7 @@ module Convert(Term : TERM) = struct
           ) ty_opt;
         begin match Term.Ty.view ty with
         | TyI.Builtin NunBuiltin.Ty.Prop ->
-            St.prop_def ?loc id t, env  (* prop def *)
+            St.prop_def ?loc id ~prop t, env  (* prop def *)
         | _ ->
             St.def ?loc id ~ty t, env (* regular def *)
         end

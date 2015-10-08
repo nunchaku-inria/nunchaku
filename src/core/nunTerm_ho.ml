@@ -287,19 +287,6 @@ exception Undefined of id
 module ComputeType(T : S) = struct
   type signature = T.ty NunProblem.Signature.t
 
-  let compute_signature ?(init=ID.Map.empty) =
-    let module M = ID.Map in
-    let module St = NunProblem.Statement in
-    Sequence.fold
-      (fun sigma st -> match St.view st with
-        | St.TyDecl (id, ty)
-        | St.Decl (id,ty) -> M.add id ty sigma
-        | St.Goal _
-        | St.Axiom _ -> sigma
-        | St.PropDef (id,_) -> M.add id T.ty_prop sigma
-        | St.Def (id,ty,_) -> M.add id ty sigma
-      ) init
-
   exception Undefined of id
 
   let () = Printexc.register_printer
@@ -307,10 +294,6 @@ module ComputeType(T : S) = struct
       | Undefined id -> Some ("undefined ID: " ^ ID.to_string id)
       | _ -> None
     )
-
-  let ty_of_eq =
-    let v = Var.make ~ty:T.ty_type ~name:"a" in
-    T.ty_forall v (T.ty_arrow (T.ty_var v) (T.ty_arrow (T.ty_var v) T.ty_prop))
 
   let rec ty_exn ~sigma t = match T.view t with
     | TyKind -> failwith "Term_ho.ty: kind has no type"
@@ -673,7 +656,7 @@ module AsFO(T : VIEW) = struct
     | St.Decl (id,ty) ->
         let ty = Ty.flatten_arrow ty in
         FOI.Decl (id, ty)
-    | St.PropDef (id, t) ->
+    | St.PropDef (id, _prop, t) ->
         FOI.FormDef (id, t)
     | St.Def (id,ty,t) ->
         let ty = Ty.flatten_arrow ty in
@@ -692,7 +675,6 @@ let as_fo (type a) (module T : VIEW with type t = a) =
   (module U : NunFO.VIEW with type T.t = a and type Ty.t = a and type formula = a)
 
 module OfFO(T : S)(FO : NunFO.VIEW) = struct
-
   let rec convert_ty t = match FO.Ty.view t with
     | NunFO.TyBuiltin b ->
         let b = match b with

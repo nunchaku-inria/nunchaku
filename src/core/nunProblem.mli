@@ -6,6 +6,7 @@
 type loc = NunLocation.t
 type id = NunID.t
 type 'a printer = Format.formatter -> 'a -> unit
+type 'a or_error = [`Ok of 'a | `Error of string]
 
 (** {2 Top-level statement} *)
 
@@ -14,7 +15,7 @@ module Statement : sig
     | TyDecl of id * 'ty (** uninterpreted type *)
     | Decl of id * 'ty (** uninterpreted symbol *)
     | Def of id * 'ty * 'term (** defined function symbol *)
-    | PropDef of id * 'term (** defined symbol of type Prop *)
+    | PropDef of id * 'ty * 'term (** defined symbol of type Prop. The type is prop. *)
     | Axiom of 'term
     | Goal of 'term
 
@@ -27,7 +28,7 @@ module Statement : sig
   val ty_decl : ?loc:loc -> id -> 'a -> (_, 'a) t
   val decl : ?loc:loc -> id -> 'a -> (_, 'a) t
   val def : ?loc:loc -> id -> ty:'ty -> 'a -> ('a, 'ty) t
-  val prop_def : ?loc:loc -> id -> 'a -> ('a, 'ty) t
+  val prop_def : ?loc:loc -> id -> prop:'ty -> 'a -> ('a, 'ty) t
   val axiom : ?loc:loc -> 'a -> ('a,_) t
   val goal : ?loc:loc -> 'a -> ('a,_) t
 
@@ -68,6 +69,19 @@ val map : term:('a -> 'b) -> ty:('tya -> 'tyb) -> ('a, 'tya) t -> ('b, 'tyb) t
 
 val print : 'a printer -> 'b printer -> ('a,'b) t printer
 (** Printer for a problem *)
+
+exception IllFormed of string
+(** Ill-formed problem *)
+
+val goal : ('t, _) t -> 't
+(** [goal pb] returns the unique goal of [pb], or fails. A problem that doesn't
+    have a single goal is ill-formed
+    @raise IllFormed if the problem doesn't have exactly one goal *)
+
+val signature : ?init:'ty Signature.t -> (_, 'ty) t -> 'ty Signature.t
+(** Gather the signature of every declared symbol
+    @param init initial signature, if any
+    @raise IllFormed if some symbol is declared twice *)
 
 (** {2 Model} *)
 
