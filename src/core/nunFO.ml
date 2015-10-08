@@ -263,17 +263,17 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     | True -> CCFormat.string out "true"
     | False -> CCFormat.string out "false"
     | Eq (a,b) -> fpf out "@[%a =@ %a@]" print_term a print_term b
-    | And l -> fpf out "@[(and@ %a)@]" (pp_list_ print_formula) l
-    | Or l ->  fpf out "@[(and@ %a)@]" (pp_list_ print_formula) l
-    | Not f -> fpf out "@[(not@ %a)@]" print_formula f
-    | Imply (a,b) -> fpf out "@[(%a =>@ %a)@]" print_formula a print_formula b
-    | Equiv (a,b) -> fpf out "@[(%a =>@ %a)@]" print_formula a print_formula b
+    | And l -> fpf out "(@[and@ %a@])" (pp_list_ print_formula) l
+    | Or l ->  fpf out "(@[and@ %a@])" (pp_list_ print_formula) l
+    | Not f -> fpf out "(@[not@ %a@])" print_formula f
+    | Imply (a,b) -> fpf out "(@[%a =>@ %a@])" print_formula a print_formula b
+    | Equiv (a,b) -> fpf out "(@[%a =>@ %a@])" print_formula a print_formula b
     | Forall (v,f) ->
-        fpf out "@[(forall %a@ %a)@]" Var.print v print_formula f
+        fpf out "(@[forall %a@ %a@])" Var.print v print_formula f
     | Exists (v,f) ->
-        fpf out "@[(forall %a@ %a)@]" Var.print v print_formula f
+        fpf out "(@[forall %a@ %a@])" Var.print v print_formula f
     | F_ite (a,b,c) ->
-        fpf out "@[(f_ite %a@ %a@ %a)@]"
+        fpf out "(@[f_ite %a@ %a@ %a@])"
           print_formula a print_formula b print_formula c
 
   let print_model out m =
