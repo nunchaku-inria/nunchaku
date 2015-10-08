@@ -50,6 +50,12 @@ module Signature : sig
   type 'ty t = 'ty NunID.Map.t
 
   val empty : _ t
+
+  val mem : sigma:'a t -> id -> bool
+  val find : sigma:'a t -> id -> 'a option
+  val find_exn : sigma:'a t -> id -> 'a (** @raise Not_found *)
+
+  val declare : sigma:'a t -> id -> 'a -> 'a t
 end
 
 (** {2 Problem: a Set of Statements + Signature} *)

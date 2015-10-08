@@ -69,3 +69,9 @@ val not_implemented: string -> 'a
 val err_of_exn: exn -> _ or_error
 (** Make an error out of an exception, with the stack trace *)
 
+val exn_ksprintf :
+  f:(string -> exn) ->
+  ('a, Format.formatter, unit, 'b) format4 ->
+  'a
+(** A sprintf implementation for formatters, that calls an exception
+    raising function [f] *)

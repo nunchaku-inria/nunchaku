@@ -151,6 +151,23 @@ module Default : S = struct
       | TyType -> true
       | _ -> false
 
+    let to_seq t yield =
+      let rec aux ty =
+        yield ty;
+        match view ty with
+        | TyI.Kind
+        | TyI.Type
+        | TyI.Builtin _
+        | TyI.Const _
+        | TyI.Var _
+        | TyI.Meta _ -> ()
+        | TyI.App (f,l) -> aux f; List.iter aux l
+        | TyI.Arrow (a,b) -> aux a; aux b
+        | TyI.Forall (_,t) -> aux t
+      in
+      aux t
+
+
     module Subst = struct
       module M = Map.Make(struct
         type t = ty Var.t
@@ -539,6 +556,8 @@ module AsFO(T : VIEW) = struct
   module FOI = NunFO
 
   let fail t msg = raise (NotInFO (msg, t))
+  let failf t msg =
+    NunUtils.exn_ksprintf msg ~f:(fun msg -> fail t msg)
 
   module Ty = struct
     type t = T.t
@@ -589,7 +608,7 @@ module AsFO(T : VIEW) = struct
           | Const id -> FOI.App (id, l)
           | _ -> fail t "application of non-constant term"
           end
-      | Fun (_,_) -> fail t "no functions in FO terms"
+      | Fun (v,t) -> FOI.Fun (v, t)
       | Forall (_,_)
       | Exists (_,_) -> fail t "no quantifiers in FO terms"
       | Let (v,t,u) -> FOI.Let (v, t, u)
@@ -616,7 +635,8 @@ module AsFO(T : VIEW) = struct
           | NunBuiltin.T.Or
           | NunBuiltin.T.And
           | NunBuiltin.T.Imply
-          | NunBuiltin.T.Equiv -> fail t "connective not fully applied"
+          | NunBuiltin.T.Equiv ->
+              failf t "connective %s not fully applied" (NunBuiltin.T.to_string b)
           end
       | Const _ -> FOI.Atom t
       | Var _ -> fail t "no variable in FO formulas"
@@ -633,7 +653,7 @@ module AsFO(T : VIEW) = struct
           | _ -> fail t "wrong application in FO formula"
           end
       | Eq (a,b) -> FOI.Eq (a,b)
-      | Fun (_,_) -> fail t "function in FO"
+      | Fun (_,_) -> fail t "function in FO formula"
       | Forall (v,f) -> FOI.Forall (v,f)
       | Exists (v,f) -> FOI.Exists (v,f)
       | Let (_,_,_) -> FOI.Atom t

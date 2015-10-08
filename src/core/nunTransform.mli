@@ -38,6 +38,16 @@ val make : ?print:(Format.formatter -> 'st -> unit) ->
            ('a, 'b, 'c, 'd) t
 (** Constructor *)
 
+val make1 : ?print:(Format.formatter -> 'st -> unit) ->
+            ?name:string ->
+            ?on_input:('a -> unit) list ->
+            ?on_encoded:('b -> unit) list ->
+            encode:('a -> 'b * 'st) ->
+            decode:('st -> 'c -> 'd) ->
+            unit ->
+            ('a, 'b, 'c, 'd) t
+(** Constructor when [encode] returns exactly one solution *)
+
 val on_encoded : (_, 'b, _, _) t -> f:('b -> unit) -> unit
 (** [on_encoded tr ~f] registers [f] to be called on every value
     obtained by encoding through [tr] *)

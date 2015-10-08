@@ -34,6 +34,7 @@ module type UTILS = sig
   val returns_Type : t -> bool (** type == forall ... -> ... -> ... -> Type? *)
   val returns : t -> t (** follow forall/arrows to get return type.  *)
   val is_Kind : t -> bool (** type == Kind? *)
+  val to_seq : t -> t Sequence.t
 end
 
 module type AS_TERM = sig
@@ -69,6 +70,21 @@ module Utils(Ty : S) : UTILS with type t = Ty.t = struct
   let returns_Type t = match Ty.view (returns t) with
     | Type -> true
     | _ -> false
+
+  let to_seq ty yield =
+    let rec aux ty =
+      yield ty;
+      match Ty.view ty with
+      | Kind
+      | Type
+      | Builtin _
+      | Const _
+      | Var _
+      | Meta _ -> ()
+      | App (f,l) -> aux f; List.iter aux l
+      | Arrow (a,b) -> aux a; aux b
+      | Forall (_,t) -> aux t
+    in aux ty
 end
 
 (** {2 Print Types} *)

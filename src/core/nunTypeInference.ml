@@ -61,21 +61,14 @@ module Convert(Term : TERM) = struct
 
   let push_ t stack = t::stack
 
-  let myksprintf ~f fmt =
-    let buf = Buffer.create 32 in
-    let out = Format.formatter_of_buffer buf in
-    Format.kfprintf
-      (fun _ -> Format.pp_print_flush out (); raise (f (Buffer.contents buf)))
-      out fmt
-
   let type_error ~stack msg = raise (TypeError (msg, stack))
   let type_errorf ~stack fmt =
-    myksprintf fmt
+    NunUtils.exn_ksprintf fmt
       ~f:(fun msg -> TypeError(msg, stack))
 
   let ill_formed ?loc msg = raise (IllFormed ("term", msg, loc))
   let ill_formedf ?loc ?(kind="term") fmt =
-    myksprintf fmt
+    NunUtils.exn_ksprintf fmt
       ~f:(fun msg -> IllFormed (kind, msg, loc))
 
   (* obtain the type of a term *)

@@ -129,4 +129,10 @@ let err_of_exn e =
   let trace = Printexc.get_backtrace () in
   CCError.fail (msg ^ "\n" ^ trace)
 
+let exn_ksprintf ~f fmt =
+  let buf = Buffer.create 32 in
+  let out = Format.formatter_of_buffer buf in
+  Format.kfprintf
+    (fun _ -> Format.pp_print_flush out (); raise (f (Buffer.contents buf)))
+    out fmt
 

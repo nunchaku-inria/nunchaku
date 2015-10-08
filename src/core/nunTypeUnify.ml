@@ -63,12 +63,8 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
   let fail ~stack msg = raise (Fail (stack, msg))
 
   let failf ~stack fmt =
-    let b = Buffer.create 32 in
-    let out = Format.formatter_of_buffer b in
-    Format.kfprintf
-      (fun _ -> Format.pp_print_flush out ();
-        raise (Fail (stack, Buffer.contents b)))
-      out fmt
+    NunUtils.exn_ksprintf fmt
+      ~f:(fun msg -> raise (Fail (stack, msg)))
 
   let rec flatten_app_ f l = match Ty.view f with
     | TyI.App (f1, l1) -> flatten_app_ f1 (l1 @ l)
