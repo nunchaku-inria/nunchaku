@@ -14,12 +14,34 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 let fpf = Format.fprintf
 
 module Statement = struct
+  type decl =
+    | Decl_type
+    | Decl_fun
+    | Decl_prop
+
+  (* definition of one term, by a list of axioms *)
+  type 't rec_case = {
+    case_defines: 't;  (* the term being defined *)
+    case_definitions: 't list;  (* the defining axioms *)
+  }
+
+  (* mutual definition of several terms *)
+  type 't rec_struct = {
+    rec_cases: 't rec_case list;
+  }
+
+  (** Flavour of axiom *)
+  type 't axiom =
+    | Axiom_std of 't list
+      (** Axiom list that can influence consistency (no assumptions) *)
+    | Axiom_spec of 't rec_struct
+      (** Axioms can be safely ignored, they are consistent *)
+    | Axiom_rec of 't rec_struct
+      (** Axioms are part of an admissible (partial) definition *)
+
   type ('term, 'ty) view =
-    | TyDecl of id * 'ty (** uninterpreted type *)
-    | Decl of id * 'ty (** uninterpreted symbol *)
-    | Def of id * 'ty * 'term (** defined function symbol *)
-    | PropDef of id * 'ty * 'term (** defined symbol of type Prop. The type is prop. *)
-    | Axiom of 'term
+    | Decl of id * decl * 'ty
+    | Axiom of 'term axiom
     | Goal of 'term
 
   type ('a, 'b) t = {
@@ -32,34 +54,73 @@ module Statement = struct
 
   let make_ ?loc view = {loc;view}
 
-  let ty_decl ?loc v t = make_ ?loc (TyDecl (v,t))
-  let decl ?loc v t = make_ ?loc (Decl (v,t))
-  let prop_def ?loc v ~prop t = make_ ?loc (PropDef (v,prop,t))
-  let def ?loc v ~ty t = make_ ?loc (Def (v,ty,t))
-  let axiom ?loc t = make_ ?loc (Axiom t)
+  let mk_axiom ?loc t = make_ ?loc (Axiom t)
+  let mk_decl ?loc id k decl = make_ ?loc (Decl (id,k,decl))
+
+  let ty_decl ?loc id t = mk_decl ?loc id Decl_type t
+  let decl ?loc id t = mk_decl ?loc id Decl_fun t
+  let prop_decl ?loc id t = mk_decl ?loc id Decl_prop t
+  let axiom ?loc l = mk_axiom ?loc (Axiom_std l)
+  let axiom1 ?loc t = axiom ?loc [t]
+  let axiom_spec ?loc t = mk_axiom ?loc (Axiom_spec t)
+  let axiom_rec ?loc t = mk_axiom ?loc (Axiom_rec t)
   let goal ?loc t = make_ ?loc (Goal t)
+
+  let map_rec_case f t =
+    {case_defines=f t.case_defines; case_definitions=List.map f t.case_definitions}
+  let map_rec_struct f t = {rec_cases=List.map (map_rec_case f) t.rec_cases}
 
   let map ~term:ft ~ty:fty st =
     let loc = st.loc in
     match st.view with
-    | TyDecl (id,ty) -> ty_decl ?loc id (fty ty)
-    | Decl (id,ty) -> decl ?loc id (fty ty)
-    | PropDef (id,prop,t) -> prop_def ?loc id ~prop:(fty prop) (ft t)
-    | Def (id,ty,t) -> def ?loc id ~ty:(fty ty) (ft t)
-    | Axiom t -> axiom ?loc (ft t)
+    | Decl (id,k,t) ->
+        mk_decl ?loc id k (fty t)
+    | Axiom a ->
+        begin match a with
+        | Axiom_std l -> axiom ?loc (List.map ft l)
+        | Axiom_spec t ->
+            axiom_spec ?loc (map_rec_struct ft t)
+        | Axiom_rec t ->
+            axiom_rec ?loc (map_rec_struct ft t)
+        end
     | Goal t -> goal ?loc (ft t)
 
-  let print pt pty out t =
-    match t.view with
-    | TyDecl (v, ty) -> fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id v pty ty
-    | Decl (v, ty) -> fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id v pty ty
-    | PropDef (v, prop, t) ->
-        fpf out "@[<2>def %a@ : %a@ := %a.@]"
-          ID.print_no_id v pty prop pt t
-    | Def (v, ty, t) ->
-        fpf out "@[<2>def %a@ : %a@ := %a.@]"
-          ID.print_no_id v pty ty pt t
-    | Axiom t -> fpf out "@[<2>axiom %a.@]" pt t
+  let fold ~term ~ty acc st = match st.view with
+    | Decl (_, _, t) -> ty acc t
+    | Axiom a ->
+        begin match a with
+        | Axiom_std l -> List.fold_left term acc l
+        | Axiom_spec t
+        | Axiom_rec t ->
+            List.fold_left
+              (fun acc case ->
+                let acc = term acc case.case_defines in
+                List.fold_left term acc case.case_definitions
+              ) acc t.rec_cases
+        end
+    | Goal t -> term acc t
+
+  let print pt pty out t = match t.view with
+    | Decl (id,_,t) ->
+        fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id id pty t
+    | Axiom a ->
+        let print_rec out t =
+          let print_cases out t =
+            fpf out "@[<hv2>%a :=@ %a@]"
+              pt t.case_defines
+              (CCFormat.list ~start:"" ~stop:"" ~sep:";" pt) t.case_definitions
+          in
+          fpf out "@[<v>%a@]"
+            (CCFormat.list ~start:"" ~stop:"" ~sep:" and " print_cases)
+            t.rec_cases
+        in
+        begin match a with
+        | Axiom_std l ->
+            fpf out "@[<2>axiom %a.@]"
+              (CCFormat.list ~start:"" ~stop:"" ~sep:";" pt) l
+        | Axiom_spec t -> fpf out "@[<2>spec %a.@]" print_rec t
+        | Axiom_rec t -> fpf out "@[<2>rec %a.@]" print_rec t
+        end
     | Goal t -> fpf out "@[<2>goal %a.@]" pt t
 
   let print_list pt pty out l =
@@ -128,14 +189,9 @@ let signature ?(init=ID.Map.empty) pb =
   in
   List.fold_left
     (fun sigma st -> match Statement.view st with
-      | Statement.TyDecl (id,ty)
-      | Statement.Decl (id,ty)
-      | Statement.Def (id,ty,_) ->
+      | Statement.Decl (id,_,ty) ->
           check_new_ ~sigma id;
           ID.Map.add id ty sigma
-      | Statement.PropDef (id,prop,_) ->
-          check_new_ ~sigma id;
-          ID.Map.add id prop sigma
       | Statement.Goal _
       | Statement.Axiom _ -> sigma
     ) init pb.statements

@@ -11,12 +11,34 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 (** {2 Top-level statement} *)
 
 module Statement : sig
+  type decl =
+    | Decl_type
+    | Decl_fun
+    | Decl_prop
+
+  (* definition of one term, by a list of axioms *)
+  type 't rec_case = {
+    case_defines: 't;  (* the term being defined *)
+    case_definitions: 't list;  (* the defining axioms *)
+  }
+
+  (* mutual definition of several terms *)
+  type 't rec_struct = {
+    rec_cases: 't rec_case list;
+  }
+
+  (** Flavour of axiom *)
+  type 't axiom =
+    | Axiom_std of 't list
+      (** Axiom list that can influence consistency (no assumptions) *)
+    | Axiom_spec of 't rec_struct
+      (** Axioms can be safely ignored, they are consistent *)
+    | Axiom_rec of 't rec_struct
+      (** Axioms are part of an admissible (partial) definition *)
+
   type ('term, 'ty) view =
-    | TyDecl of id * 'ty (** uninterpreted type *)
-    | Decl of id * 'ty (** uninterpreted symbol *)
-    | Def of id * 'ty * 'term (** defined function symbol *)
-    | PropDef of id * 'ty * 'term (** defined symbol of type Prop. The type is prop. *)
-    | Axiom of 'term
+    | Decl of id * decl * 'ty
+    | Axiom of 'term axiom
     | Goal of 'term
 
   type ('term,'ty) t
@@ -25,18 +47,42 @@ module Statement : sig
 
   val loc : (_,_) t -> loc option
 
+  val mk_decl : ?loc:loc -> id -> decl -> ('t,'ty) t
+  val mk_axiom : ?loc:loc -> 'a axiom -> ('a, _) t
+
   val ty_decl : ?loc:loc -> id -> 'a -> (_, 'a) t
+  (** declare a type constructor *)
+
   val decl : ?loc:loc -> id -> 'a -> (_, 'a) t
-  val def : ?loc:loc -> id -> ty:'ty -> 'a -> ('a, 'ty) t
-  val prop_def : ?loc:loc -> id -> prop:'ty -> 'a -> ('a, 'ty) t
-  val axiom : ?loc:loc -> 'a -> ('a,_) t
+  (** declare a function symbol *)
+
+  val prop_decl : ?loc:loc -> id -> 'a -> (_, 'a) t
+  (** Declare a proposition ([prop] must be provided) *)
+
+  val axiom : ?loc:loc -> 'a list -> ('a,_) t
+  (** Axioms without additional assumptions *)
+
+  val axiom1 : ?loc:loc -> 'a -> ('a,_) t
+
+  val axiom_spec : ?loc:loc -> 'a -> ('a,_) t
+  (** Axiom that can be ignored if not explicitely depended upon by the goal *)
+
+  val axiom_rec : ?loc:loc -> 'a list -> ('a,_) t
+  (** Axiom that is part of an admissible (mutual, partial) definition. *)
+
   val goal : ?loc:loc -> 'a -> ('a,_) t
+  (** The goal of the problem *)
 
   val map :
     term:('t -> 't2) ->
     ty:('ty -> 'ty2) ->
     ('t, 'ty) t ->
     ('t2, 'ty2) t
+
+  val fold :
+    term:('a -> 't -> 'a) ->
+    ty:('a -> 'ty -> 'a) ->
+    'a -> ('t, 'ty) t -> 'a
 
   (** {2 Print} *)
 
