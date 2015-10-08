@@ -12,6 +12,8 @@ module St = NunProblem.Statement
 
 type id = ID.t
 
+let section = NunUtils.Section.make "mono"
+
 module type S = sig
   module T1 : NunTerm_ho.VIEW
   module T2 : NunTerm_ho.S
@@ -46,6 +48,13 @@ module type S = sig
     (** Is the symbol even needed? *)
   end
 
+  type mono_state
+  (** State used for monomorphizing (to convert [f int (list nat)] to
+      [f_int_list_nat], and back) *)
+
+  val create : unit -> mono_state
+  (** New state *)
+
   val compute_instances :
     sigma:T1.ty NunProblem.Signature.t ->
     (T1.t, T1.ty) NunProblem.t ->
@@ -57,6 +66,7 @@ module type S = sig
 
   val monomorphize :
     instances:SetOfInstances.t ->
+    state:mono_state ->
     (T1.t, T1.ty) NunProblem.t ->
     (T2.t, T2.ty) NunProblem.t
   (** Filter and specialize definitions of the problem using the given
@@ -98,7 +108,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
 
   let () = Printexc.register_printer
     (function
-      | Invalid_argument msg -> Some ("invalid problem: " ^ msg)
+      | InvalidProblem msg -> Some ("invalid problem: " ^ msg)
       | _ -> None
     )
 
@@ -117,8 +127,8 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
     | TyI.Var _
     | TyI.Const _
     | TyI.Kind
-    | TyI.Type -> 0
     | TyI.App _
+    | TyI.Type -> 0
     | TyI.Meta _ -> fail_ "remaining meta-variable"
     | TyI.Builtin _ -> 0
     | TyI.Arrow (_,t') ->
@@ -161,28 +171,12 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
         failf_ "non-ground type: %a" P1.print_ty ty
       )
 
-  (* convert a ground atomic type to [T2.ty] *)
-  let rec convert_ground_atomic_ty_ ty = match T1.Ty.view ty with
-    | TyI.Kind -> T2.ty_kind
-    | TyI.Type -> T2.ty_type
-    | TyI.Builtin b -> T2.ty_builtin b
-    | TyI.Const id -> T2.ty_const id
-    | TyI.Var v -> failf_ "non-ground type: %a" Var.print v
-    | TyI.Meta _ -> assert false
-    | TyI.App (f,l) ->
-        T2.ty_app
-          (convert_ground_atomic_ty_ f)
-          (List.map convert_ground_atomic_ty_ l)
-    | TyI.Arrow (a,b) ->
-        T2.ty_arrow (convert_ground_atomic_ty_ a) (convert_ground_atomic_ty_ b)
-    | TyI.Forall _ ->
-        failf_ "non-ground type: %a" P1.print_ty ty
-
   (* A tuple of arguments that a given function symbol should be
      instantiated with *)
   module ArgTuple = struct
     type t = T2.ty list
 
+    let empty = []
     let of_list l = l
     let to_list l = l
     let to_seq = Sequence.of_list
@@ -226,6 +220,9 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
       | [] -> [tup]
       | tup' :: l' ->
           if ArgTuple.equal tup tup' then l else tup' :: add tup l'
+
+    let print out =
+      fpf out "{@[<hv1>%a@]}" (CCFormat.list ~start:"" ~stop:"" ArgTuple.print)
   end
 
   (** set of tuples of parameters to instantiate a given function symbol with *)
@@ -269,10 +266,16 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
       let required = ArgTuple.to_seq tup
         |> Sequence.fold add_ty_ids_ required
       in
-      { args; required }
+      { args; required; }
 
-    let require t id =
-      {t with required=ID.Set.add id t.required}
+    let print out t =
+      let pp_required out r =
+        fpf out "@[%a@]" (ID.Set.print ID.print_no_id) r in
+      let pp_args out a =
+        fpf out "@[<hv>%a@]" (ID.Map.print ID.print_no_id ArgTupleSet.print) a
+      in
+      fpf out "@[<hv2>instances{@,required=@[%a@],@ args=@[%a@]@]@,}"
+        pp_required t.required pp_args t.args
   end
 
   let find_ty_ ~sigma id =
@@ -291,26 +294,30 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
   (* computes ID -> set_of_instances for every ID defined/declared in
       the list of statements [st_l] *)
   let compute_instances ~sigma pb =
-    (* discover the argument tuples used for functions in [t].
+    (* discover the argument tuples used for functions or type constructors in [t].
        the arguments should be ground (contain no variables) *)
     let rec analyse_term t instances =
       match T1.view t with
+      | TI.Const id ->
+          SetOfInstances.add instances id ArgTuple.empty
       | TI.Builtin _
-      | TI.Const _
       | TI.Var _ -> instances
       | TI.App (f,l) ->
           (* XXX: WHNF would help? *)
           begin match T1.view f with
-          | TI.Builtin _ -> instances (* builtins are defined *)
+          | TI.Builtin _ ->
+              (* builtins are defined, but examine their args *)
+              List.fold_right analyse_term l instances
           | TI.Const id ->
+              (* find type arguments *)
               let ty = find_ty_ ~sigma id in
               let n = num_param_ty_ ty in
               (* tuple of arguments for [id] *)
               let tup = take_n_ground_atomic_types_ n l in
               let tup = ArgTuple.of_list tup in
               let instances = SetOfInstances.add instances id tup in
-              (* analyse remaining args *)
-              List.fold_right analyse_term (CCList.drop n l) instances
+              (* analyse all args (types and terms) *)
+              List.fold_right analyse_term l instances
           | _ ->
               failf_ "cannot monomorphize term with head %a" P1.print f
           end
@@ -326,16 +333,19 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
           instances |> analyse_term a |> analyse_term b
       | TI.TyKind
       | TI.TyType
-      | TI.TyBuiltin _
-      | TI.TyArrow (_,_)
-      | TI.TyForall (_,_)
-      | TI.TyMeta _ ->
-          failf_ "could not analyse %a: is a type" P1.print t
+      | TI.TyBuiltin _ -> instances
+      | TI.TyArrow (a,b) -> instances |> analyse_term a |> analyse_term b
+      | TI.TyForall (_,t) -> analyse_term t instances
+      | TI.TyMeta _ -> assert false
     in
     (* perform analysis on one statement *)
     let analyse_statement ~instances st = match St.view st with
-      | St.TyDecl (_,_)
-      | St.Decl (_,_) -> instances
+      | St.TyDecl (id,ty)
+      | St.Decl (id,ty) ->
+          (* if [id] is required, then its type must be declared *)
+          if SetOfInstances.required instances id
+          then analyse_term ty instances
+          else instances
       | St.Def (id,_,t)
       | St.PropDef (id,_,t) ->
           if SetOfInstances.required instances id
@@ -352,11 +362,22 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
        on statements that come before them in the list, so the
        last statement is not depended upon *)
     let st_l = NunProblem.statements pb in
-    List.fold_right
-      (fun st instances -> analyse_statement ~instances st)
+    let instances = List.fold_right
+      (fun st instances ->
+        NunUtils.debugf ~section 2 "@[<2>analysing@ `@[%a@]`@]"
+          (NunProblem.Statement.print P1.print P1.print_ty) st;
+        analyse_statement ~instances st
+        )
       st_l SetOfInstances.empty
+    in
+    NunUtils.debugf ~section 3 "@[<2>results:@ @[%a@]@]" SetOfInstances.print instances;
+    instances
 
-  let monomorphize ~instances pb =
+  type mono_state = unit (* TODO *)
+
+  let create () = ()
+
+  let monomorphize ~instances ~state pb =
     (* map T1.t to T2.t *)
     let rec aux t = match T1.view t with
       | TI.Builtin b -> T2.builtin b

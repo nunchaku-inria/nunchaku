@@ -80,9 +80,10 @@ let mono (type a)(type b) ~print
     ~encode:(fun p ->
       let sigma = NunProblem.signature p in
       let instances = Mono.compute_instances ~sigma p in
-      let p = Mono.monomorphize ~instances p in
-      p, instances
-      (* TODO mangling? as an option *)
+      let state = Mono.create () in
+      let p = Mono.monomorphize ~instances ~state p in
+      p, state
+      (* TODO mangling of types, as an option *)
     )
     ~decode:(fun _ m -> m)
     ()

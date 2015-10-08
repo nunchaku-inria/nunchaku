@@ -54,6 +54,13 @@ module type S = sig
     (** Is the symbol even needed? *)
   end
 
+  type mono_state
+  (** State used for monomorphizing (to convert [f int (list nat)] to
+      [f_int_list_nat], and back) *)
+
+  val create : unit -> mono_state
+  (** New state *)
+
   val compute_instances :
     sigma:T1.ty NunProblem.Signature.t ->
     (T1.t, T1.ty) NunProblem.t ->
@@ -65,6 +72,7 @@ module type S = sig
 
   val monomorphize :
     instances:SetOfInstances.t ->
+    state:mono_state ->
     (T1.t, T1.ty) NunProblem.t ->
     (T2.t, T2.ty) NunProblem.t
   (** Filter and specialize definitions of the problem using the given
