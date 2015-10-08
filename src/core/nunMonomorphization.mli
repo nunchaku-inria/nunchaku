@@ -3,10 +3,28 @@
 
 (** {1 Monomorphization} *)
 
+type id = NunID.t
+
+(* summary:
+    - detect polymorphic functions
+    - specialize them on some ground type (skolem?)
+    - declare f_alpha : (typeof f) applied to alpha
+    - add (f alpha) -> f_alpha in [rev]
+    - rewrite (f alpha) into f_alpha everywhere
+
+    - dependency analysis from the goal, to know which specialization
+      are needed
+    - variations on Axiom to help removing useless things
+      ("spec" for consistent axioms that can be ignored,
+      "def" for terminating ones that can be ignored (> spec), etc.)
+*)
+
 (** {2 Signature} *)
 module type S = sig
   module T1 : NunTerm_ho.VIEW
   module T2 : NunTerm_ho.S
+
+  exception InvalidProblem of string
 
   (** {6 Set of Instances} *)
 
@@ -21,23 +39,32 @@ module type S = sig
   module ArgTupleSet : sig
     type t
     val empty : t
+    val is_empty : t -> bool
     val add : ArgTuple.t -> t -> t
     val to_list : t -> ArgTuple.t list
   end
 
-  type set_of_instances =
-    | NoInstances
-    | Instances of ArgTupleSet.t
+  module SetOfInstances : sig
+    type t
+
+    val args : t -> id -> ArgTupleSet.t
+    (** function -> set of args to instantiate it with *)
+
+    val required : t -> id -> bool
+    (** Is the symbol even needed? *)
+  end
 
   val compute_instances :
+    sigma:T1.ty NunProblem.Signature.t ->
     (T1.t, T1.ty) NunProblem.t ->
-    set_of_instances NunID.Map.t
+    SetOfInstances.t
   (** [compute_instances pb] finds a set of instances for each symbol
       such that it is sufficient to instantiate the corresponding (partial)
-      definitions of the symbol with those tuples *)
+      definitions of the symbol with those tuples
+      @param the signature of the symbols *)
 
   val monomorphize :
-    instances:set_of_instances NunID.Map.t ->
+    instances:SetOfInstances.t ->
     (T1.t, T1.ty) NunProblem.t ->
     (T2.t, T2.ty) NunProblem.t
   (** Filter and specialize definitions of the problem using the given

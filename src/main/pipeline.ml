@@ -45,7 +45,7 @@ let ty_infer (type a) (type b) ~print
     then [Format.printf "@[<2>after type inference:@ %a@]@." print_problem]
     else []
   in
-  Tr.make
+  Tr.make1
     ~on_encoded
     ~name:"type inference"
     ~encode:(fun l ->
@@ -53,7 +53,7 @@ let ty_infer (type a) (type b) ~print
         |> Conv.convert_problem_exn ~env:Conv.empty_env
         |> fst
       in
-      CCKList.singleton (problem, ())
+      problem, ()
     )
     ~decode:(fun () (model : T2.t Res.model) ->
       let ctx = Erase.create () in
@@ -66,7 +66,7 @@ let mono (type a)(type b) ~print
 (module T1 : NunTerm_ho.VIEW with type t = a)
 (module T2 : NunTerm_ho.S with type t = b)
 =
-  let module DoIt = NunMonomorphization.Make(T1)(T2) in
+  let module Mono = NunMonomorphization.Make(T1)(T2) in
   let on_encoded = if print
     then
       let module P = NunTerm_ho.Print(T2) in
@@ -74,14 +74,17 @@ let mono (type a)(type b) ~print
         (NunProblem.print P.print P.print_ty)]
     else []
   in
-  Tr.make
+  Tr.make1
     ~on_encoded
     ~name:"monomorphization"
-    ~encode:(fun p -> p
-        |> DoIt.encode_problem
-        |> CCKList.singleton
+    ~encode:(fun p ->
+      let sigma = NunProblem.signature p in
+      let instances = Mono.compute_instances ~sigma p in
+      let p = Mono.monomorphize ~instances p in
+      p, instances
+      (* TODO mangling? as an option *)
     )
-    ~decode:DoIt.decode_model
+    ~decode:(fun _ m -> m)
     ()
 
 (** {2 Conversion to FO} *)
@@ -92,12 +95,11 @@ let to_fo (type a)(type b)
   let module Sol = NunSolver_intf in
   let module Conv = NunTerm_ho.AsFO(T) in
   let module ConvBack = NunTerm_ho.OfFO(T)(FO) in
-  Tr.make
+  Tr.make1
   ~name:"to_fo"
   ~encode:(fun (pb:(T.t, T.ty) NunProblem.t) ->
     let pb' = Conv.convert_problem pb in
-    let res = CCKList.return (pb', ()) in
-    (res : (((_,_,_) NunFO.Problem.t * unit) CCKList.t))
+    pb', ()
   )
   ~decode:(fun _st (m:FO.T.t Res.model) ->
     ConvBack.convert_model m

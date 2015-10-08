@@ -10,9 +10,13 @@ module T1I = NunTerm_typed
 module TyI = NunType_intf
 module St = NunProblem.Statement
 
+type id = ID.t
+
 module type S = sig
   module T1 : NunTerm_ho.VIEW
   module T2 : NunTerm_ho.S
+
+  exception InvalidProblem of string
 
   (** {6 Set of Instances} *)
 
@@ -27,23 +31,32 @@ module type S = sig
   module ArgTupleSet : sig
     type t
     val empty : t
+    val is_empty : t -> bool
     val add : ArgTuple.t -> t -> t
     val to_list : t -> ArgTuple.t list
   end
 
-  type set_of_instances =
-    | NoInstances
-    | Instances of ArgTupleSet.t
+  module SetOfInstances : sig
+    type t
+
+    val args : t -> id -> ArgTupleSet.t
+    (** function -> set of args to instantiate it with *)
+
+    val required : t -> id -> bool
+    (** Is the symbol even needed? *)
+  end
 
   val compute_instances :
+    sigma:T1.ty NunProblem.Signature.t ->
     (T1.t, T1.ty) NunProblem.t ->
-    set_of_instances NunID.Map.t
+    SetOfInstances.t
   (** [compute_instances pb] finds a set of instances for each symbol
       such that it is sufficient to instantiate the corresponding (partial)
-      definitions of the symbol with those tuples *)
+      definitions of the symbol with those tuples
+      @param the signature of the symbols *)
 
   val monomorphize :
-    instances:set_of_instances NunID.Map.t ->
+    instances:SetOfInstances.t ->
     (T1.t, T1.ty) NunProblem.t ->
     (T2.t, T2.ty) NunProblem.t
   (** Filter and specialize definitions of the problem using the given
@@ -81,10 +94,22 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
   module T1 = T1
   module T2 = T2
 
-  let fail_ msg = failwith ("monomorphization failed: "^msg)
+  exception InvalidProblem of string
+
+  let () = Printexc.register_printer
+    (function
+      | Invalid_argument msg -> Some ("invalid problem: " ^ msg)
+      | _ -> None
+    )
+
   let fpf = Format.fprintf
 
+  let fail_ msg = raise (InvalidProblem msg)
+  let failf_ msg =
+    NunUtils.exn_ksprintf msg ~f:(fun msg -> raise (InvalidProblem msg))
+
   module TyUtils = TyI.Utils(T1.Ty)
+  module P1 = NunTerm_ho.Print(T1)
   module P2 = NunTerm_ho.Print(T2)
 
   (* number of parameters of this (polymorphic?) T1.ty type *)
@@ -102,6 +127,57 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
           else 0  (* asks for term parameters *)
     | TyI.Forall (_,t) -> 1 + num_param_ty_ t
 
+  let nop_ _ = ()
+
+  (* convert [T1.ty] to [T2.ty].
+     callbacks are used for non-(ground atomic types) *)
+  let convert_ty_ ?(on_non_ground=nop_) ty =
+    let rec convert_ty_ ty = match T1.Ty.view ty with
+      | TyI.Kind -> T2.ty_kind
+      | TyI.Type -> T2.ty_type
+      | TyI.Builtin b -> T2.ty_builtin b
+      | TyI.Const id -> T2.ty_const id
+      | TyI.Var v ->
+          on_non_ground ty;
+          T2.ty_var (Var.update_ty v ~f:convert_ty_)
+      | TyI.Meta _ -> assert false
+      | TyI.App (f,l) ->
+          T2.ty_app
+            (convert_ty_ f)
+            (List.map convert_ty_ l)
+      | TyI.Arrow (a,b) ->
+          T2.ty_arrow (convert_ty_ a) (convert_ty_ b)
+      | TyI.Forall (v,t) ->
+          on_non_ground ty;
+          T2.ty_forall
+            (Var.update_ty v ~f:convert_ty_)
+            (convert_ty_ t)
+    in
+    convert_ty_ ty
+
+  let convert_ground_atomic_ty_ ty =
+    convert_ty_ ty
+      ~on_non_ground:(fun ty ->
+        failf_ "non-ground type: %a" P1.print_ty ty
+      )
+
+  (* convert a ground atomic type to [T2.ty] *)
+  let rec convert_ground_atomic_ty_ ty = match T1.Ty.view ty with
+    | TyI.Kind -> T2.ty_kind
+    | TyI.Type -> T2.ty_type
+    | TyI.Builtin b -> T2.ty_builtin b
+    | TyI.Const id -> T2.ty_const id
+    | TyI.Var v -> failf_ "non-ground type: %a" Var.print v
+    | TyI.Meta _ -> assert false
+    | TyI.App (f,l) ->
+        T2.ty_app
+          (convert_ground_atomic_ty_ f)
+          (List.map convert_ground_atomic_ty_ l)
+    | TyI.Arrow (a,b) ->
+        T2.ty_arrow (convert_ground_atomic_ty_ a) (convert_ground_atomic_ty_ b)
+    | TyI.Forall _ ->
+        failf_ "non-ground type: %a" P1.print_ty ty
+
   (* A tuple of arguments that a given function symbol should be
      instantiated with *)
   module ArgTuple = struct
@@ -109,6 +185,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
 
     let of_list l = l
     let to_list l = l
+    let to_seq = Sequence.of_list
 
     (* equality for ground atomic types T2.ty *)
     let rec ty_ground_eq_ t1 t2 = match T2.Ty.view t1, T2.Ty.view t2 with
@@ -141,6 +218,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
     type t = ArgTuple.t list
 
     let empty = []
+    let is_empty = CCList.is_empty
     let to_list l = l
 
     (* add [tup] to the set [l] *)
@@ -150,30 +228,134 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
           if ArgTuple.equal tup tup' then l else tup' :: add tup l'
   end
 
-  (* set of tuples of parameters to instantiate a given function symbol with *)
-  type set_of_instances =
-    | NoInstances
-    | Instances of ArgTupleSet.t
+  (** set of tuples of parameters to instantiate a given function symbol with *)
+  module SetOfInstances = struct
+    type t = {
+      args: ArgTupleSet.t ID.Map.t; (* function -> set of args *)
+      required: ID.Set.t;  (* symbols that are needed *)
+    }
+
+    let empty = {
+      args=ID.Map.empty;
+      required=ID.Set.empty;
+    }
+
+    let required t id = ID.Set.mem id t.required
+
+    let args t id =
+      try ID.Map.find id t.args
+      with Not_found -> ArgTupleSet.empty
+
+    (* add the set of ID occuring in [ty] to [required] *)
+    let add_ty_ids_ required ty =
+      let module TyUtils2 = NunType_intf.Utils(T2.Ty) in
+      TyUtils2.to_seq ty
+      |> Sequence.filter_map
+        (fun ty -> match T2.Ty.view ty with
+          | TyI.Const id -> Some id
+          | _ -> None
+        )
+      |> Sequence.fold (fun set id -> ID.Set.add id set) required
+
+    let add t id tup =
+      let set =
+        try ID.Map.find id t.args
+        with Not_found -> ArgTupleSet.empty in
+      let set = ArgTupleSet.add tup set in
+      (* add a tuple of args for [id], and require [id] *)
+      let args = ID.Map.add id set t.args in
+      let required = ID.Set.add id t.required in
+      (* also require symbols of types in [tup] *)
+      let required = ArgTuple.to_seq tup
+        |> Sequence.fold add_ty_ids_ required
+      in
+      { args; required }
+
+    let require t id =
+      {t with required=ID.Set.add id t.required}
+  end
+
+  let find_ty_ ~sigma id =
+    try NunProblem.Signature.find_exn ~sigma id
+    with Not_found ->
+      fail_ ("symbol " ^ ID.to_string id ^ " is not declared")
+
+  (* take [n] ground atomic type arguments in [l], or fail *)
+  let rec take_n_ground_atomic_types_ n = function
+    | _ when n=0 -> []
+    | [] -> failf_ "not enough arguments (%d missing)" n
+    | t :: l' ->
+        let t = convert_ground_atomic_ty_ t in
+        t :: take_n_ground_atomic_types_ (n-1) l'
 
   (* computes ID -> set_of_instances for every ID defined/declared in
       the list of statements [st_l] *)
-  let compute_instances st_l = assert false
+  let compute_instances ~sigma pb =
+    (* discover the argument tuples used for functions in [t].
+       the arguments should be ground (contain no variables) *)
+    let rec analyse_term t instances =
+      match T1.view t with
+      | TI.Builtin _
+      | TI.Const _
+      | TI.Var _ -> instances
+      | TI.App (f,l) ->
+          (* XXX: WHNF would help? *)
+          begin match T1.view f with
+          | TI.Builtin _ -> instances (* builtins are defined *)
+          | TI.Const id ->
+              let ty = find_ty_ ~sigma id in
+              let n = num_param_ty_ ty in
+              (* tuple of arguments for [id] *)
+              let tup = take_n_ground_atomic_types_ n l in
+              let tup = ArgTuple.of_list tup in
+              let instances = SetOfInstances.add instances id tup in
+              (* analyse remaining args *)
+              List.fold_right analyse_term (CCList.drop n l) instances
+          | _ ->
+              failf_ "cannot monomorphize term with head %a" P1.print f
+          end
+      | TI.Fun (_,t)
+      | TI.Forall (_,t)
+      | TI.Exists (_,t) ->
+          analyse_term t instances
+      | TI.Let (_,t,u) ->
+          instances |> analyse_term t |> analyse_term u
+      | TI.Ite (a,b,c) ->
+          instances |> analyse_term a |> analyse_term b |> analyse_term c
+      | TI.Eq (a,b) ->
+          instances |> analyse_term a |> analyse_term b
+      | TI.TyKind
+      | TI.TyType
+      | TI.TyBuiltin _
+      | TI.TyArrow (_,_)
+      | TI.TyForall (_,_)
+      | TI.TyMeta _ ->
+          failf_ "could not analyse %a: is a type" P1.print t
+    in
+    (* perform analysis on one statement *)
+    let analyse_statement ~instances st = match St.view st with
+      | St.TyDecl (_,_)
+      | St.Decl (_,_) -> instances
+      | St.Def (id,_,t)
+      | St.PropDef (id,_,t) ->
+          if SetOfInstances.required instances id
+          then analyse_term t instances
+          else instances
+      | St.Axiom t ->
+          (* need it anyway *)
+          analyse_term t instances
+      | St.Goal t ->
+          (* where we start *)
+          analyse_term t instances
+    in
+    (* NOTE: we fold from the right, because statements can only depend
+       on statements that come before them in the list, so the
+       last statement is not depended upon *)
+    let st_l = NunProblem.statements pb in
+    List.fold_right
+      (fun st instances -> analyse_statement ~instances st)
+      st_l SetOfInstances.empty
 
-  (* TODO: the encoding itself
-      - detect polymorphic functions
-      - specialize them on some ground type (skolem?)
-      - declare f_alpha : (typeof f) applied to alpha
-      - add (f alpha) -> f_alpha in [rev]
-      - rewrite (f alpha) into f_alpha everywhere
-
-      - dependency analysis from the goal, to know which specialization
-        are needed
-      - variations on Axiom to help removing useless things
-        ("spec" for consistent axioms that can be ignored,
-        "def" for terminating ones that can be ignored (> spec), etc.)
-  *)
-
-  (* TODO: specialize definitions for their tuples of types *)
   let monomorphize ~instances pb =
     (* map T1.t to T2.t *)
     let rec aux t = match T1.view t with
@@ -201,11 +383,45 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
       | St.Axiom t ->
           (* must keep axiom, in general *)
           [St.axiom ?loc (aux t)]
-      | St.TyDecl (_,_)
-      | St.Decl (_,_)
-      | St.Def (_,_,_)
-      | St.PropDef (_,_,_)
-      | St.Goal _ -> assert false (* TODO *)
+      | St.TyDecl (id,ty) ->
+          (* declare type only if required *)
+          (* TODO: need specialization of types too? *)
+          if SetOfInstances.required instances id
+          then [ St.ty_decl ?loc id (convert_ty_ ty) ]
+          else []
+      | St.Decl (id,ty) ->
+          (* declare type only if required *)
+          (* TODO: need specialization of types too? *)
+          if SetOfInstances.required instances id
+          then [ St.decl ?loc id (convert_ty_ ty) ]
+          else []
+      | St.Def (id,ty,t) ->
+          if SetOfInstances.required instances id
+          then
+            let tuples = SetOfInstances.args instances id
+              |> ArgTupleSet.to_list
+              |> List.map ArgTuple.to_list
+            in
+            CCList.flat_map
+              (fun tup ->
+                assert false (* TODO specialize def here *)
+              ) tuples
+          else []
+      | St.PropDef (id,prop,t) ->
+          if SetOfInstances.required instances id
+          then
+            let tuples = SetOfInstances.args instances id
+              |> ArgTupleSet.to_list
+              |> List.map ArgTuple.to_list
+            in
+            CCList.flat_map
+              (fun tup ->
+                assert false (* TODO specialize def here *)
+              ) tuples
+          else []
+      | St.Goal t ->
+          (* convert goal *)
+          [ St.goal ?loc (aux t) ]
     in
     NunProblem.statements pb
     |> CCList.flat_map aux_statement
