@@ -19,34 +19,32 @@ module type TERM = NunTerm_typed.S
   Functions exposed by this functor will mutate in place their input,
   by calling [Term.Ty.bind]. *)
 
-module ConvertTerm(Term : TERM) : sig
+type attempt_stack = NunUntypedAST.term list
+(** a trace of inference attempts with a message and optional location
+    for each attempt. *)
+
+exception TypeError of string * attempt_stack
+(** Raised when the input is ill-typed or could not be inferred. *)
+
+module Convert(Term : TERM) : sig
   type env
 
   val empty_env : env
 
-  module ConvertTy : sig
-    val convert : env:env -> NunUntypedAST.ty -> Term.Ty.t or_error
-    (** [convert ~env ty] converts the raw, unscoped type [ty] into a
-        type from the representation [Ty.t].
-        It returns an error if the type is ill-scoped. *)
-
-    val convert_exn : env:env -> NunUntypedAST.ty -> Term.Ty.t
-    (** @raise ScopingError if the type isn't well-scoped *)
-  end
-
-  type attempt_stack = NunUntypedAST.term list
-  (** a trace of inference attempts with a message and optional location
-      for each attempt. *)
-
-  exception TypeError of string * attempt_stack
-  (** Raised when the input is ill-typed or could not be inferred. *)
-
-  val convert : env:env -> NunUntypedAST.term -> Term.t or_error
+  val convert_ty : env:env -> NunUntypedAST.ty -> Term.Ty.t or_error
   (** [convert ~env ty] converts the raw, unscoped type [ty] into a
       type from the representation [Ty.t].
       It returns an error if the type is ill-scoped. *)
 
-  val convert_exn : env:env -> NunUntypedAST.term -> Term.t
+  val convert_ty_exn : env:env -> NunUntypedAST.ty -> Term.Ty.t
+  (** @raise ScopingError if the type isn't well-scoped *)
+
+  val convert_term : env:env -> NunUntypedAST.term -> Term.t or_error
+  (** [convert ~env ty] converts the raw, unscoped type [ty] into a
+      type from the representation [Ty.t].
+      It returns an error if the type is ill-scoped. *)
+
+  val convert_term_exn : env:env -> NunUntypedAST.term -> Term.t
   (** Unsafe version of {!convert}
       @raise TypeError if it fails to  type properly *)
 
@@ -54,26 +52,18 @@ module ConvertTerm(Term : TERM) : sig
   (** Generalize a term [t] by parametrizing it over its free {b type}
       variables.
       @return a pair [(t', vars)] such that, roughly, [app t' vars = t] *)
-end
 
-(** {2 Statements} *)
+  type statement = (Term.t, Term.Ty.t) NunProblem.Statement.t
 
-module ConvertStatement(T : TERM) : sig
-  module CT : module type of ConvertTerm(T)
+  val convert_statement : env:env -> NunUntypedAST.statement -> (statement * env) or_error
 
-  type t = (T.t, T.Ty.t) NunProblem.Statement.t
-
-  type env = CT.env
-
-  val empty_env : env
-
-  val convert : env:env -> NunUntypedAST.statement -> (t * env) or_error
-
-  val convert_exn : env:env -> NunUntypedAST.statement -> t * env
+  val convert_statement_exn : env:env -> NunUntypedAST.statement -> statement * env
   (** Unsafe version of {!convert} *)
 
-  val convert_list : env:env -> NunUntypedAST.statement list -> (t list * env) or_error
+  type problem = (Term.t, Term.Ty.t) NunProblem.t
 
-  val convert_list_exn : env:env -> NunUntypedAST.statement list -> t list * env
+  val convert_problem : env:env -> NunUntypedAST.statement list -> (problem * env) or_error
+
+  val convert_problem_exn : env:env -> NunUntypedAST.statement list -> problem * env
 end
 

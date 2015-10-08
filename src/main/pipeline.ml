@@ -38,7 +38,7 @@ let ty_infer (type a) (type b) ~print
   (* we get back "regular" HO terms *)
   let module Erase = NunTerm_ho.Erase(T2) in
   (* type inference *)
-  let module Conv = NunTypeInference.ConvertStatement(T1) in
+  let module Conv = NunTypeInference.Convert(T1) in
   let print_problem = NunProblem.print PrintT.print T1.Ty.print in
   let on_encoded =
     if print
@@ -50,9 +50,8 @@ let ty_infer (type a) (type b) ~print
     ~name:"type inference"
     ~encode:(fun l ->
       let problem = l
-        |> Conv.convert_list_exn ~env:Conv.empty_env
+        |> Conv.convert_problem_exn ~env:Conv.empty_env
         |> fst
-        |> (fun l->NunProblem.make l)
       in
       CCKList.singleton (problem, ())
     )
