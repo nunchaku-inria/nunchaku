@@ -48,6 +48,9 @@ val make1 : ?print:(Format.formatter -> 'st -> unit) ->
             ('a, 'b, 'c, 'd) t
 (** Constructor when [encode] returns exactly one solution *)
 
+val nop : unit -> ('a, 'a, 'b, 'b) t
+(** Transformation that does nothing *)
+
 val on_encoded : (_, 'b, _, _) t -> f:('b -> unit) -> unit
 (** [on_encoded tr ~f] registers [f] to be called on every value
     obtained by encoding through [tr] *)

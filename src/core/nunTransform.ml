@@ -41,6 +41,8 @@ let make1 ?print ?name ?on_input ?on_encoded ~encode ~decode =
   let encode x = CCKList.return (encode x) in
   make ?print ?name ?on_input ?on_encoded ~encode ~decode
 
+let nop () = make1 ~encode:(fun x->x,()) ~decode:(fun () y->y) ()
+
 let on_input (Ex tr) ~f = tr.on_input <- f :: tr.on_input
 let on_encoded (Ex tr) ~f = tr.on_encoded <- f :: tr.on_encoded
 
