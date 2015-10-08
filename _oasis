@@ -24,7 +24,8 @@ Library "nunchaku_core"
                     NunReduce, NunSolver_intf, NunCVC4, NunMonomorphization
   Install:          true
   FindlibName:      nunchaku
-  BuildDepends:     containers, containers.sexp, containers.iter, sequence, unix
+  BuildDepends:     containers, containers.sexp, containers.iter,
+                    containers.data, sequence, unix
 
 Library "nunchaku_parsers"
   Path:             src/parsers/

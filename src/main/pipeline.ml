@@ -63,7 +63,7 @@ let ty_infer (type a) (type b) ~print
 (** {2 Optimizations/Encodings} *)
 
 let mono (type a)(type b) ~print
-(module T1 : NunTerm_typed.VIEW with type t = a)
+(module T1 : NunTerm_ho.VIEW with type t = a)
 (module T2 : NunTerm_ho.S with type t = b)
 =
   let module DoIt = NunMonomorphization.Make(T1)(T2) in

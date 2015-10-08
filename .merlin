@@ -5,6 +5,8 @@ B _build/src/core
 B _build/src/main/
 B _build/src/parsers
 PKG containers
+PKG containers.iter
+PKG containers.data
 PKG sequence
 PKG unix
 FLG -w +a -w -4 -w -44
