@@ -15,28 +15,12 @@ type 'a var = 'a NunVar.t
 type 'a or_error = [`Ok of 'a | `Error of string]
 type 'a printer = Format.formatter -> 'a -> unit
 
-type ('a, 'ty) view =
-  | Builtin of NunBuiltin.T.t (** built-in symbol *)
-  | Const of id (** top-level symbol *)
-  | Var of 'ty var (** bound variable *)
-  | App of 'a * 'a list
-  | Fun of 'ty var * 'a
-  | Forall of 'ty var * 'a
-  | Exists of 'ty var * 'a
-  | Let of 'ty var * 'a * 'a
-  | Ite of 'a * 'a * 'a
-  | Eq of 'a * 'a
-  | TyKind
-  | TyType
-  | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
-  | TyArrow of 'ty * 'ty   (** Arrow type *)
-  | TyForall of 'ty var * 'ty  (** Polymorphic/dependent type *)
+open NunTerm_intf
 
 module type VIEW = sig
   type t
   type ty = t
-
-  val view : t -> (t, ty) view
+  include NunTerm_intf.VIEW with type t := t and type ty := ty
 end
 
 module type S = sig
@@ -134,6 +118,7 @@ module Default : S = struct
       | App (f,l) -> TyI.App (f,l)
       | TyArrow (a,b) -> TyI.Arrow (a,b)
       | TyForall (v,t) -> TyI.Forall (v,t)
+      | TyMeta _ -> assert false
       | Eq _
       | Builtin _
       | Fun _
@@ -327,6 +312,7 @@ module ComputeType(T : S) = struct
     | Let (_,_,u) -> ty_exn ~sigma u
     | Ite (_,b,_) -> ty_exn ~sigma b
     | Eq _ -> T.ty_prop
+    | TyMeta _ -> assert false
     | TyBuiltin _
     | TyArrow (_,_)
     | TyForall (_,_) -> T.ty_type
@@ -340,7 +326,7 @@ end
 
 module type PRINT = sig
   type term
-  type ty
+  type ty = term
 
   val print : term printer
   val print_in_app : term printer
@@ -361,12 +347,14 @@ module Print(T : VIEW) = struct
     | Builtin b -> CCFormat.string out (NunBuiltin.T.to_string b)
     | TyBuiltin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
     | Const id -> ID.print out id
+    | TyMeta v -> ID.print out (NunMetaVar.id v)
     | Var v -> Var.print out v
-    | Eq (a,b) -> fpf out "@[%a =@ %a@]" print a print b
+    | Eq (a,b) ->
+        fpf out "@[%a =@ %a@]" print a print b
     | App (f, [a;b]) ->
         begin match T.view f with
         | Builtin s when NunBuiltin.T.fixity s = `Infix ->
-            fpf out "@[<hov>%a@ %s@ %a@]"
+            fpf out "@[<hv>%a@ %s@ %a@]"
               print_in_app a (NunBuiltin.T.to_string s) print_in_app b
         | _ ->
             fpf out "@[<hov2>%a@ %a@ %a@]" print_in_app f
@@ -378,7 +366,8 @@ module Print(T : VIEW) = struct
     | Let (v,t,u) ->
         fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
     | Ite (a,b,c) ->
-        fpf out "@[<2>if %a@ then %a@ else %a@]" print a print b print c
+        fpf out "@[<2>if %a@ then %a@ else %a@]"
+          print a print b print c
     | Fun (v, t) ->
         fpf out "@[<2>fun %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
     | Forall (v, t) ->
@@ -390,12 +379,13 @@ module Print(T : VIEW) = struct
     | TyForall (v,t) ->
         fpf out "@[<2>forall %a:type.@ %a@]" Var.print v print_ty t
 
-  and print_ty out ty = print out (ty:T.ty:>T.t)
-  and print_ty_in_app out ty = print_in_app out (ty:T.ty:>T.t)
-  and print_ty_in_arrow out ty = print_in_binder out (ty:T.ty:>T.t)
+  and print_ty out ty = print out ty
+  and print_ty_in_app out ty = print_in_app out ty
+  and print_ty_in_arrow out ty = print_in_binder out ty
 
   and print_in_app out t = match T.view t with
-    | Builtin _ | TyBuiltin _ | TyKind | TyType | Var _ | Const _ ->
+    | Builtin _ | TyBuiltin _ | TyKind | TyType
+    | Var _ | Const _ | TyMeta _ ->
         print out t
     | App (_,_)
     | Forall _
@@ -406,7 +396,8 @@ module Print(T : VIEW) = struct
     | TyForall (_,_) -> fpf out "@[(%a)@]" print t
 
   and print_in_binder out t = match T.view t with
-    | Builtin _ | TyBuiltin _ | TyKind | TyType | Var _ | Const _ | App (_,_) ->
+    | Builtin _ | TyBuiltin _ | TyKind | TyType | Var _
+    | Const _ | TyMeta _ | App (_,_) ->
         print out t
     | Forall _
     | Exists _
@@ -508,6 +499,7 @@ module Erase(T : VIEW) = struct
     | TyArrow (a,b) -> Untyped.ty_arrow (erase_ty ~ctx a) (erase_ty ~ctx b)
     | TyForall (v,t) ->
         enter_ ~ctx v (fun v' -> Untyped.ty_forall v' (erase_ty ~ctx t))
+    | TyMeta _ -> assert false
 
   (* erase a type *)
   and erase_ty ~ctx t = erase ~ctx (t:T.ty:>T.t)
@@ -568,6 +560,7 @@ module AsFO(T : VIEW) = struct
           end
       | TyArrow (_,_) -> fail t "arrow is not an atomic type"
       | TyForall (_,_) -> fail t "no quantification in FO types"
+      | TyMeta _ -> assert false
 
     let rec flatten_arrow t = match T.view t with
       | TyArrow (a, b) ->
@@ -600,6 +593,7 @@ module AsFO(T : VIEW) = struct
       | TyBuiltin _
       | TyArrow (_,_)
       | TyForall (_,_) -> fail t "no types in FO terms"
+      | TyMeta _ -> assert false
   end
 
   module Formula = struct
@@ -642,6 +636,7 @@ module AsFO(T : VIEW) = struct
       | TyKind
       | TyBuiltin _
       | TyType -> fail t "no types in FO formulas"
+      | TyMeta _ -> assert false
   end
 
   type formula = Formula.t

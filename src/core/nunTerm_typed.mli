@@ -7,29 +7,22 @@ type id = NunID.t
 type 'a var = 'a NunVar.t
 type loc = NunLocation.t
 
-(* TODO: merge {!view} (and therefore, {!Print}) with NunTerm_ho to avoid
-   duplication. NunHO can fail on meta variables anyway, during conversion. *)
-
-type ('a, 'ty) view =
-  | Builtin of NunBuiltin.T.t (** built-in symbol *)
-  | Const of id (** top-level symbol *)
-  | Var of 'ty var (** bound variable *)
-  | App of 'a * 'a list
-  | Fun of 'ty var * 'a
-  | Forall of 'ty var * 'a
-  | Exists of 'ty var * 'a
-  | Let of 'ty var * 'a * 'a
-  | Ite of 'a * 'a * 'a (* if then else *)
-  | Eq of 'a * 'a (* equality. See {!NunTermHO} for more details *)
-  | TyKind
-  | TyType
-  | TyMeta of 'ty NunMetaVar.t
-  | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
-  | TyArrow of 'ty * 'ty   (** Arrow type *)
-  | TyForall of 'ty var * 'ty  (** Polymorphic/dependent type *)
+type ('a, 'ty) view = ('a, 'ty) NunTerm_intf.view
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
+  type t
+  type ty = t
+  include NunTerm_intf.VIEW with type t := t and type ty := ty
+
+  val ty : t -> ty option
+  (** The type of a term *)
+
+  module Ty : NunType_intf.S with type t = ty
+end
+
+(** {2 Full Signature} *)
+module type S = sig
   type t
   type ty = t
 
@@ -37,11 +30,6 @@ module type VIEW = sig
 
   val ty : t -> ty option
   (** The type of a term *)
-end
-
-(** {2 Full Signature} *)
-module type S = sig
-  include VIEW
 
   module Ty : sig
     include NunType_intf.AS_TERM with type term = t and type t = ty
@@ -51,9 +39,6 @@ module type S = sig
   end
 
   val loc : t -> loc option
-
-  val ty : t -> Ty.t option
-  (** Type of this term *)
 
   val const : ?loc:loc -> ty:Ty.t -> id -> t
   val builtin : ?loc:loc -> ty:Ty.t -> NunBuiltin.T.t -> t
@@ -78,26 +63,12 @@ module type S = sig
   val ty_arrow : ?loc:loc -> Ty.t -> Ty.t -> Ty.t
 end
 
-(** {2 Print} *)
-
-type 'a printer = Format.formatter -> 'a -> unit
-
-module type PRINT = sig
-  type term
-
-  val print : term printer
-  val print_in_app : term printer
-  val print_in_binder : term printer
-end
-
-module Print(T : VIEW) : PRINT with type term = T.t
-
 (** {2 Default Instance} *)
 
 module Default : sig
   include S
 
-  include PRINT with type term = t
+  include NunTerm_ho.PRINT with type term = t and type ty := ty
 end
 
 (** {2 View as {!NunTerm_ho.VIEW}}

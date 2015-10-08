@@ -28,21 +28,47 @@ module type S = sig
   val view : t -> t view
 end
 
+module type UTILS = sig
+  type t
+  val is_Type : t -> bool (** type == Type? *)
+  val returns_Type : t -> bool (** type == forall ... -> ... -> ... -> Type? *)
+  val returns : t -> t (** follow forall/arrows to get return type.  *)
+  val is_Kind : t -> bool (** type == Kind? *)
+end
+
 module type AS_TERM = sig
   type term
   type t = term
 
   include S with type t := t
-
-  val is_Type : t -> bool (** type == Type? *)
-  val returns_Type : t -> bool (** type == forall ... -> ... -> ... -> Type? *)
-  val returns : t -> t (** follow forall/arrows to get return type *)
-  val is_Kind : t -> bool (** type == Kind? *)
+  include UTILS with type t := t
 end
 
 module type PRINTABLE = sig
   include S
   include NunIntf.PRINT with type t := t
+end
+
+(** {2 Utils} *)
+module Utils(Ty : S) : UTILS with type t = Ty.t = struct
+  type t = Ty.t
+
+  let is_Type t = match Ty.view t with
+    | Type -> true
+    | _ -> false
+
+  let is_Kind t = match Ty.view t with
+    | Kind -> true
+    | _ -> false
+
+  let rec returns t = match Ty.view t with
+    | Arrow (_, t')
+    | Forall (_, t') -> returns t'
+    | _ -> t
+
+  let returns_Type t = match Ty.view (returns t) with
+    | Type -> true
+    | _ -> false
 end
 
 (** {2 Print Types} *)

@@ -4,7 +4,7 @@
 (** {1 Reductions, including Beta Reduction} *)
 
 module Var = NunVar
-module TI = NunTerm_ho
+module TI = NunTerm_intf
 
 module Make(T : NunTerm_ho.S) = struct
   (* environment for reduction *)
@@ -76,6 +76,7 @@ module Make(T : NunTerm_ho.S) = struct
             let t = apply_subst ~env t in
             T.ty_forall v' t
           )
+    | TI.TyMeta _ -> assert false
 
   (* enter the scope where [v : ty] *)
   and enter_ ~env v f =
@@ -139,6 +140,7 @@ module Make(T : NunTerm_ho.S) = struct
     | TI.TyBuiltin _
     | TI.TyArrow _
     | TI.TyForall _ -> st
+    | TI.TyMeta _ -> assert false
 
   let whnf t =
     let st = whnf_ {env=Env.empty; head=t; args=[]} in
@@ -184,6 +186,7 @@ module Make(T : NunTerm_ho.S) = struct
         }
     | TI.Eq (a,b) ->
         { st with head=T.eq (snf_term ~env:st.env a) (snf_term ~env:st.env b) }
+    | TI.TyMeta _ -> assert false
 
   (* compute the SNF of this term in [env] *)
   and snf_term ~env t = term_of_state (snf_ {head=t; env; args=[]})

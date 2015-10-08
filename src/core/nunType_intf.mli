@@ -25,22 +25,29 @@ module type S = sig
   (** View must follow {!deref} pointers *)
 end
 
-module type AS_TERM = sig
-  type term
-  type t = term
-
-  include S with type t := t
-
+module type UTILS = sig
+  type t
   val is_Type : t -> bool (** type == Type? *)
   val returns_Type : t -> bool (** type == forall ... -> ... -> ... -> Type? *)
   val returns : t -> t (** follow forall/arrows to get return type.  *)
   val is_Kind : t -> bool (** type == Kind? *)
 end
 
+module type AS_TERM = sig
+  type term
+  type t = term
+
+  include S with type t := t
+  include UTILS with type t := t
+end
+
 module type PRINTABLE = sig
   include S
   include NunIntf.PRINT with type t := t
 end
+
+(** {2 Utils} *)
+module Utils(Ty : S) : UTILS with type t = Ty.t
 
 (** {2 Print Types} *)
 

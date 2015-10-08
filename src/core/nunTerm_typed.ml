@@ -19,39 +19,31 @@ type loc = Loc.t
 type id = NunID.t
 type 'a var = 'a Var.t
 
-type ('a, 'ty) view =
-  | Builtin of NunBuiltin.T.t (** built-in symbol *)
-  | Const of id (** top-level symbol *)
-  | Var of 'ty var (** bound variable *)
-  | App of 'a * 'a list
-  | Fun of 'ty var * 'a
-  | Forall of 'ty var * 'a
-  | Exists of 'ty var * 'a
-  | Let of 'ty var * 'a * 'a
-  | Ite of 'a * 'a * 'a (* if then else *)
-  | Eq of 'a * 'a (* equality. See {!NunTermHO} for more details *)
-  | TyKind
-  | TyType
-  | TyMeta of 'ty NunMetaVar.t
-  | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
-  | TyArrow of 'ty * 'ty   (** Arrow type *)
-  | TyForall of 'ty var * 'ty  (** Polymorphic/dependent type *)
+type ('a, 'ty) view = ('a, 'ty) NunTerm_intf.view
+
+open NunTerm_intf
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
   type t
+  type ty = t
+  include NunTerm_intf.VIEW with type t := t and type ty := ty
 
+  val ty : t -> ty option
+  (** The type of a term *)
+
+  module Ty : NunType_intf.S with type t = ty
+end
+
+(** {2 Full Signature} *)
+module type S = sig
+  type t
   type ty = t
 
   val view : t -> (t, ty) view
 
   val ty : t -> ty option
   (** The type of a term *)
-end
-
-(** {2 Full Signature} *)
-module type S = sig
-  include VIEW
 
   module Ty : sig
     include NunType_intf.AS_TERM with type term = t and type t = ty
@@ -61,9 +53,6 @@ module type S = sig
   end
 
   val loc : t -> loc option
-
-  val ty : t -> Ty.t option
-  (** Type of this term *)
 
   val const : ?loc:loc -> ty:Ty.t -> id -> t
   val builtin : ?loc:loc -> ty:Ty.t -> NunBuiltin.T.t -> t
@@ -88,87 +77,6 @@ module type S = sig
   val ty_arrow : ?loc:loc -> Ty.t -> Ty.t -> Ty.t
 end
 
-type 'a printer = Format.formatter -> 'a -> unit
-
-module type PRINT = sig
-  type term
-
-  val print : term printer
-  val print_in_app : term printer
-  val print_in_binder : term printer
-end
-
-module Print(T : VIEW) = struct
-  type term = T.t
-
-  let fpf = Format.fprintf
-
-  let rec print out ty = match T.view ty with
-    | TyKind -> CCFormat.string out "kind"
-    | TyType -> CCFormat.string out "type"
-    | Builtin b -> CCFormat.string out (NunBuiltin.T.to_string b)
-    | TyBuiltin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
-    | Const id -> ID.print out id
-    | TyMeta v -> ID.print out (MetaVar.id v)
-    | Var v -> Var.print out v
-    | Eq (a,b) ->
-        fpf out "@[%a =@ %a@]" print a print b
-    | App (f, [a;b]) ->
-        begin match T.view f with
-        | Builtin s when NunBuiltin.T.fixity s = `Infix ->
-            fpf out "@[<hv>%a@ %s@ %a@]"
-              print_in_app a (NunBuiltin.T.to_string s) print_in_app b
-        | _ ->
-            fpf out "@[<hov2>%a@ %a@ %a@]" print_in_app f
-              print_in_app a print_in_app b
-        end
-    | App (f,l) ->
-        fpf out "@[<2>%a@ %a@]" print_in_app f
-          (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_in_app) l
-    | Let (v,t,u) ->
-        fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
-    | Ite (a,b,c) ->
-        fpf out "@[<2>if %a@ then %a@ else %a@]"
-          print a print b print c
-    | Fun (v, t) ->
-        fpf out "@[<2>fun %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
-    | Forall (v, t) ->
-        fpf out "@[<2>forall %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
-    | Exists (v, t) ->
-        fpf out "@[<2>forall %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
-    | TyArrow (a,b) ->
-        fpf out "@[<2>%a ->@ %a@]" print_ty_in_arrow a print_ty b
-    | TyForall (v,t) ->
-        fpf out "@[<2>forall %a:type.@ %a@]" Var.print v print_ty t
-
-  and print_ty out ty = print out ty
-  and print_ty_in_app out ty = print_in_app out ty
-  and print_ty_in_arrow out ty = print_in_binder out ty
-
-  and print_in_app out t = match T.view t with
-    | Builtin _ | TyBuiltin _ | TyKind | TyType
-    | Var _ | Const _ | TyMeta _ ->
-        print out t
-    | App (_,_)
-    | Forall _
-    | Exists _
-    | Fun _
-    | Let _ | Ite _ | Eq _
-    | TyArrow (_,_)
-    | TyForall (_,_) -> fpf out "@[(%a)@]" print t
-
-  and print_in_binder out t = match T.view t with
-    | Builtin _ | TyBuiltin _ | TyKind | TyType | Var _
-    | Const _ | TyMeta _ | App (_,_) ->
-        print out t
-    | Forall _
-    | Exists _
-    | Fun _
-    | Let _ | Ite _ | Eq _
-    | TyArrow (_,_)
-    | TyForall (_,_) -> fpf out "@[(%a)@]" print t
-end
-
 (** {2 Default Instance} *)
 module Default = struct
   type t = {
@@ -176,8 +84,6 @@ module Default = struct
     loc : Loc.t option;
     mutable ty : t option;
   }
-
-  type ty = t
 
   (* dereference the term, if it is a variable, until it is not bound *)
   let rec deref_rec_ t = match t.view with
@@ -237,29 +143,6 @@ module Default = struct
   module Ty = struct
     type term = t
 
-    type t = term
-
-    let is_Type t = match (deref_rec_ t).view with
-      | TyType -> true
-      | _ -> false
-
-    let is_Kind t = match (deref_rec_ t).view with
-      | TyKind -> true
-      | _ -> false
-
-    let rec returns t = match (deref_rec_ t).view with
-      | TyArrow (_, t')
-      | TyForall (_, t') -> returns t'
-      | _ -> t
-
-    let returns_Type t = match (deref_rec_ (returns t)).view with
-      | TyType -> true
-      | _ -> false
-
-    let is_ty t = match t.ty with
-      | Some ty -> is_Type ty
-      | _ -> false
-
     let view t = match (deref_rec_ t).view with
       | TyKind -> TyI.Kind
       | TyType -> TyI.Type
@@ -274,42 +157,33 @@ module Default = struct
       | Fun _ | Forall _ | Exists _ | Ite _ | Eq _
       | Let _ -> assert false
 
-    include TyI.Print(struct type t = ty let view = view end)
+    include TyI.Utils(struct type t = term let view = view end)
+
+    let is_ty t = match t.ty with
+      | Some ty -> is_Type ty
+      | _ -> false
+
+    include TyI.Print(struct type _t = t type t = _t let view = view end)
   end
 
-  include Print(struct
+  include NunTerm_ho.Print(struct
     type ty = t
     type t = ty
 
     let view = view
-    let ty = ty
+    module Ty = Ty
   end)
 end
 
 module AsHO(T : VIEW) = struct
-  module TI = NunTerm_ho
   module Stmt = NunProblem.Statement
 
   type t = T.t
   type ty = T.ty
 
   let view t = match T.view t with
-    | Builtin b -> TI.Builtin b
-    | Const id -> TI.Const id
-    | Var v -> TI.Var v
-    | App (f,l) -> TI.App (f, l)
-    | Fun (v,t) -> TI.Fun (v, t)
-    | Forall (v,t) -> TI.Forall (v,t)
-    | Exists (v,t) -> TI.Exists (v,t)
-    | Let (v,t,u) -> TI.Let (v,t,u)
-    | Ite (a,b,c) -> TI.Ite (a,b,c)
-    | Eq (a,b) -> TI.Eq (a,b)
-    | TyKind -> TI.TyKind
-    | TyType -> TI.TyType
     | TyMeta _ -> failwith "Term_typed.AsHO.view: remaining meta"
-    | TyBuiltin b -> TI.TyBuiltin b
-    | TyArrow (a,b) -> TI.TyArrow (a,b)
-    | TyForall (v,t) -> TI.TyForall (v,t)
+    | v -> v
 
   let convert t = t
   let convert_ty ty = ty

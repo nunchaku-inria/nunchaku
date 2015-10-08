@@ -34,7 +34,7 @@ end
 let ty_infer (type a) (type b) ~print
 (module T1 : NunTerm_typed.S with type t = a)
 (module T2 : NunTerm_ho.S with type t = b) =
-  let module PrintT = NunTerm_typed.Print(T1) in
+  let module PrintT = NunTerm_ho.Print(T1) in
   (* we get back "regular" HO terms *)
   let module Erase = NunTerm_ho.Erase(T2) in
   (* type inference *)
