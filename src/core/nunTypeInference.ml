@@ -411,6 +411,7 @@ module Convert(Term : TERM) = struct
     try E.return (convert_term_exn ~env t)
     with e -> E.of_exn e
 
+  (* TODO ensure that no meta var remains *)
   let generalize t =
     let ty = get_ty_ t in
     let vars = Unif.free_meta_vars ty |> ID.Map.to_list in
@@ -434,10 +435,17 @@ module Convert(Term : TERM) = struct
 
   type statement = (Term.t, Term.Ty.t) St.t
 
+  (* checks that the name is not declared/defined already *)
+  let check_new_ ?loc ~env name =
+    if MStr.mem name env
+      then ill_formedf ~kind:"statement" ?loc
+        "identifier %s already defined" name
+
   let convert_statement_exn ~(env:env) st =
     let loc = Loc.get_loc st in
     match Loc.get st with
     | A.Decl (v, ty) ->
+        check_new_ ?loc ~env v;
         let id = ID.make ~name:v in
         let ty = convert_ty_exn ~env ty in
         let env = add_decl ~env v ~id ty in
@@ -445,6 +453,7 @@ module Convert(Term : TERM) = struct
         then St.ty_decl ?loc id ty, env (* id is a type *)
         else St.decl ?loc id ty, env
     | A.Def ((v, ty_opt), t) ->
+        check_new_ ?loc ~env v;
         let id = ID.make ~name:v in
         (* infer type for t *)
         let t = convert_ty_exn ~env t in
