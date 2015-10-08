@@ -15,10 +15,17 @@ module type VIEW = sig
   type t
   type ty = t
   include NunTerm_intf.VIEW with type t := t and type ty := ty
+
+  module Ty : sig
+    type t = ty
+    val view : t -> t NunType_intf.view
+  end
 end
 
 module type S = sig
-  include VIEW
+  type t
+  type ty = t
+  include NunTerm_intf.VIEW with type t := t and type ty := ty
 
   module Ty : sig
     include NunType_intf.AS_TERM with type term = t and type t = ty

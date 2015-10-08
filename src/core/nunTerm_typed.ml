@@ -195,4 +195,6 @@ module AsHO(T : VIEW) = struct
 
   let convert_problem l =
     NunProblem.make (convert_statement_list l)
+
+  module Ty = T.Ty
 end
