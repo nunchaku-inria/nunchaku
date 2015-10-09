@@ -33,16 +33,7 @@ module type S = sig
   type ty = t
   include NunTerm_intf.VIEW with type t := t and type ty := ty
 
-  module Ty : sig
-    include NunType_intf.AS_TERM with type term = t and type t = ty
-
-    exception Error of string * t * t list
-    (** Raised when a type application fails *)
-
-    val apply : t -> t list -> t
-    (** [apply t l] computes the type of [f args] where [f : t] and [args : l]
-        @raise Error if the arguments do not match *)
-  end
+  module Ty : NunType_intf.AS_TERM with type term = t and type t = ty
 
   val const : id -> t
   val builtin : NunBuiltin.T.t -> t
@@ -167,182 +158,8 @@ module Default : S = struct
       in
       aux t
 
-
-    module Subst = struct
-      module M = Map.Make(struct
-        type t = ty Var.t
-        let compare = Var.compare
-      end)
-
-      type _t = ty M.t
-
-      let empty = M.empty
-
-      let is_empty = M.is_empty
-
-      let find = M.find
-
-      let bind = M.add
-
-      let rec equal ~subst ty1 ty2 = match view ty1, view ty2 with
-        | TyI.Kind, TyI.Kind
-        | TyI.Type, TyI.Type -> true
-        | TyI.Const id1, TyI.Const id2 -> ID.equal id1 id2
-        | TyI.Var v1, _ when M.mem v1 subst ->
-            equal ~subst (M.find v1 subst) ty2
-        | _, TyI.Var v2 when M.mem v2 subst ->
-            equal ~subst ty1 (M.find v2 subst)
-        | TyI.Var v1, TyI.Var v2 -> Var.equal v1 v2
-        | TyI.Builtin b1, TyI.Builtin b2 -> NunBuiltin.Ty.equal b1 b2
-        | TyI.Meta v1, TyI.Meta v2 -> NunMetaVar.equal v1 v2
-        | TyI.App (f1,l1), TyI.App (f2, l2) ->
-            equal ~subst f1 f2
-              && List.length l1 = List.length l2
-              && List.for_all2 (equal ~subst) l1 l2
-        | TyI.Arrow (a1,b1), TyI.Arrow (a2,b2) ->
-            equal ~subst a1 a2 && equal ~subst b1 b2
-        | TyI.Forall (v1, t1), TyI.Forall (v2, t2) ->
-            let v = Var.fresh_copy v1 in
-            let subst = bind v1 (ty_var v) (bind v2 (ty_var v) subst) in
-            equal ~subst t1 t2
-        | TyI.Kind ,_
-        | TyI.Var _, _
-        | TyI.Type ,_
-        | TyI.Builtin _,_
-        | TyI.Const _,_
-        | TyI.Meta _,_
-        | TyI.App (_,_),_
-        | TyI.Arrow (_,_),_
-        | TyI.Forall (_,_),_ -> false
-
-      let rec eval ~subst ty = match view ty with
-        | TyI.Kind
-        | TyI.Type
-        | TyI.Meta _
-        | TyI.Const _
-        | TyI.Builtin _ -> ty
-        | TyI.Var v ->
-            begin try M.find v subst
-            with Not_found -> ty
-            end
-        | TyI.App (f,l) ->
-            ty_app (eval ~subst f) (List.map (eval ~subst) l)
-        | TyI.Arrow (a,b) ->
-            ty_arrow (eval ~subst a) (eval ~subst b)
-        | TyI.Forall (v,t) ->
-            let v' = Var.fresh_copy v in
-            let subst = M.add v (ty_var v') subst in
-            ty_forall v' (eval ~subst t)
-    end
-
     include TyI.Print(struct type t = ty let view = view end)
-
-    exception Error of string * t * t list
-    (** Raised when a type application fails *)
-
-    let () = Printexc.register_printer
-      (function
-        | Error (msg, t, l) ->
-            let msg = CCFormat.sprintf
-              "@[<hv2>type error@ when applying %a@ on @[%a@]: %s@]"
-                print_in_app t (CCFormat.list print_in_app) l msg
-            in Some msg
-        | _ -> None
-      )
-
-    let error_ msg ~hd ~l = raise (Error (msg, hd, l))
-
-    let apply t l =
-      let rec app_ ~subst t l = match view t, l with
-        | _, [] ->
-            if Subst.is_empty subst then t else Subst.eval ~subst t
-        | TyI.Kind, _
-        | TyI.Type, _
-        | TyI.Builtin _, _
-        | TyI.App (_,_),_
-        | TyI.Const _, _ ->
-            error_ "cannot apply this type" ~hd:t ~l
-        | TyI.Var v, _ ->
-            begin try
-              let t = Subst.find v subst in
-              app_ ~subst t l
-            with Not_found ->
-              error_ "cannot apply this type" ~hd:t ~l
-            end
-        | TyI.Meta _,_ -> assert false
-        | TyI.Arrow (a, t'), b :: l' ->
-            if Subst.equal ~subst a b
-            then app_ ~subst t' l'
-            else error_ "type mismatch on first argument" ~hd:t ~l
-        | TyI.Forall (v,t'), b :: l' ->
-            let subst = Subst.bind v b subst in
-            app_ ~subst t' l'
-
-      in
-      app_ ~subst:Subst.empty t l
-
-    include TyI.Print(struct
-      type _t = t
-      type t = _t
-      let view = view
-    end)
   end
-end
-
-(** {2 Compute Types} *)
-
-exception Undefined of id
-
-module ComputeType(T : S) = struct
-  type signature = T.ty NunProblem.Signature.t
-
-  exception Undefined of id
-
-  let () = Printexc.register_printer
-    (function
-      | Undefined id -> Some ("undefined ID: " ^ ID.to_string id)
-      | _ -> None
-    )
-
-  let rec ty_exn ~sigma t = match T.view t with
-    | TyKind -> failwith "Term_ho.ty: kind has no type"
-    | TyType -> T.ty_kind
-    | Const id ->
-        begin try NunID.Map.find id sigma
-        with Not_found -> raise (Undefined id)
-        end
-    | Builtin b ->
-        let module B = NunBuiltin.T in
-        let prop1 = T.ty_arrow T.ty_prop T.ty_prop in
-        let prop2 = T.ty_arrow T.ty_prop (T.ty_arrow T.ty_prop T.ty_prop) in
-        begin match b with
-          | B.Imply -> prop2
-          | B.Or -> prop2
-          | B.And -> prop2
-          | B.Not -> prop1
-          | B.True -> T.ty_prop
-          | B.False -> T.ty_prop
-        end
-    | Var v -> Var.ty v
-    | App (f,l) ->
-        T.Ty.apply (ty_exn ~sigma f) (List.map (ty_exn ~sigma) l)
-    | Fun (v,t) ->
-        if T.Ty.returns_Type (Var.ty v)
-        then T.ty_forall v (ty_exn ~sigma t)
-        else T.ty_arrow (Var.ty v) (ty_exn ~sigma t)
-    | Forall (v,_)
-    | Exists (v,_) -> T.ty_arrow (Var.ty v) T.ty_prop
-    | Let (_,_,u) -> ty_exn ~sigma u
-    | Ite (_,b,_) -> ty_exn ~sigma b
-    | Eq _ -> T.ty_prop
-    | TyMeta _ -> assert false
-    | TyBuiltin _
-    | TyArrow (_,_)
-    | TyForall (_,_) -> T.ty_type
-
-  let ty ~sigma t =
-    try CCError.return (ty_exn ~sigma t)
-    with e -> NunUtils.err_of_exn e
 end
 
 (** {2 Printing} *)
@@ -429,6 +246,205 @@ module Print(T : VIEW) = struct
     | TyArrow (_,_)
     | TyForall (_,_) -> fpf out "@[(%a)@]" print t
 end
+
+(** {2 Utils with Substitutions} *)
+
+exception Undefined of id
+
+let () = Printexc.register_printer
+  (function
+    | Undefined id -> Some ("undefined ID: " ^ ID.to_string id)
+    | _ -> None
+  )
+
+module UtilSubst(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
+  let rec equal ~subst ty1 ty2 = match T.view ty1, T.view ty2 with
+    | TyKind, TyKind
+    | TyType, TyType -> true
+    | Const id1, Const id2 -> ID.equal id1 id2
+    | Var v1, _ when Subst.mem ~subst v1 ->
+        equal ~subst (Subst.find_exn ~subst v1) ty2
+    | _, Var v2 when Subst.mem ~subst v2 ->
+        equal ~subst ty1 (Subst.find_exn ~subst v2)
+    | Var v1, Var v2 -> Var.equal v1 v2
+    | Builtin b1, Builtin b2 -> NunBuiltin.T.equal b1 b2
+    | TyBuiltin b1, TyBuiltin b2 -> NunBuiltin.Ty.equal b1 b2
+    | TyMeta v1, TyMeta v2 -> NunMetaVar.equal v1 v2
+    | App (f1,l1), App (f2, l2) ->
+        equal ~subst f1 f2
+          && List.length l1 = List.length l2
+          && List.for_all2 (equal ~subst) l1 l2
+    | TyArrow (a1,b1), TyArrow (a2,b2) ->
+        equal ~subst a1 a2 && equal ~subst b1 b2
+    | TyForall (v1, t1), TyForall (v2, t2) ->
+        let v = Var.fresh_copy v1 in
+        let subst = Subst.add ~subst v1 (T.ty_var v) in
+        let subst = Subst.add ~subst v2 (T.ty_var v) in
+        equal ~subst t1 t2
+    | Fun (v1,t1), Fun (v2,t2)
+    | Forall (v1,t1), Forall (v2,t2)
+    | Exists (v1,t1), Exists (v2,t2) ->
+        let v = Var.fresh_copy v1 in
+        let subst = Subst.add ~subst v1 (T.var v) in
+        let subst = Subst.add ~subst v2 (T.var v) in
+        equal ~subst t1 t2
+    | Let (v1,t1,u1), Let (v2,t2,u2) ->
+        let subst = Subst.add ~subst v1 t1 in
+        let subst = Subst.add ~subst v2 t2 in
+        equal ~subst u1 u2
+    | Ite (a1,b1,c1), Ite (a2,b2,c2) ->
+        equal ~subst a1 a2 &&
+        equal ~subst b1 b2 &&
+        equal ~subst c1 c2
+    | Eq (a1,b1), Eq (a2,b2) ->
+        equal ~subst a1 a2 &&
+        equal ~subst b1 b2
+    | TyKind ,_
+    | Var _, _
+    | TyType ,_
+    | TyBuiltin _,_
+    | Builtin _,_
+    | Const _,_
+    | TyMeta _,_
+    | App (_,_),_
+    | Fun (_,_),_
+    | Forall (_,_),_
+    | Exists (_,_),_
+    | Let (_,_,_),_
+    | Ite (_,_,_),_
+    | Eq (_,_),_
+    | TyArrow (_,_),_
+    | TyForall (_,_),_ -> false
+
+  let rec eval ~subst t = match T.view t with
+    | TyKind
+    | TyType
+    | TyMeta _
+    | Const _
+    | TyBuiltin _ -> t
+    | Builtin _ -> t
+    | Fun (v,t) ->
+        let v' = Var.fresh_copy v in
+        let subst = Subst.add ~subst v (T.var v') in
+        T.fun_ v' (eval ~subst t)
+    | Forall (v,t) ->
+        let v' = Var.fresh_copy v in
+        let subst = Subst.add ~subst v (T.var v') in
+        T.forall v' (eval ~subst t)
+    | Exists (v,t) ->
+        let v' = Var.fresh_copy v in
+        let subst = Subst.add ~subst v (T.var v') in
+        T.exists v' (eval ~subst t)
+    | Let (v,t,u) ->
+        let v' = Var.fresh_copy v in
+        let t = eval ~subst t in
+        let subst = Subst.add ~subst v (T.var v') in
+        T.let_ v' t (eval ~subst u)
+    | Ite (a,b,c) ->
+        T.ite (eval ~subst a) (eval ~subst b) (eval ~subst c)
+    | Eq (a,b) ->
+        T.eq (eval ~subst a) (eval ~subst b)
+    | Var v ->
+        begin try Subst.find_exn ~subst v
+        with Not_found -> t
+        end
+    | App (f,l) ->
+        T.app (eval ~subst f) (List.map (eval ~subst) l)
+    | TyArrow (a,b) ->
+        T.ty_arrow (eval ~subst a) (eval ~subst b)
+    | TyForall (v,t) ->
+        let v' = Var.fresh_copy v in
+        let subst = Subst.add ~subst v (T.ty_var v') in
+        T.ty_forall v' (eval ~subst t)
+
+  exception Error of string * T.t * T.t list
+  (** Raised when a type application fails *)
+
+  let () = Printexc.register_printer
+    (function
+      | Error (msg, t, l) ->
+          let module P = Print(T) in
+          let msg = CCFormat.sprintf
+            "@[<hv2>type error@ when applying %a@ on @[%a@]: %s@]"
+              P.print_in_app t (CCFormat.list P.print_in_app) l msg
+          in Some msg
+      | _ -> None
+    )
+
+  let error_ msg ~hd ~l = raise (Error (msg, hd, l))
+
+  let ty_apply t l =
+    let rec app_ ~subst t l = match T.Ty.view t, l with
+      | _, [] ->
+          if Subst.is_empty subst then t else eval ~subst t
+      | TyI.Kind, _
+      | TyI.Type, _
+      | TyI.Builtin _, _
+      | TyI.App (_,_),_
+      | TyI.Const _, _ ->
+          error_ "cannot apply this type" ~hd:t ~l
+      | TyI.Var v, _ ->
+          begin try
+            let t = Subst.find_exn ~subst v in
+            app_ ~subst t l
+          with Not_found ->
+            error_ "cannot apply this type" ~hd:t ~l
+          end
+      | TyI.Meta _,_ -> assert false
+      | TyI.Arrow (a, t'), b :: l' ->
+          if equal ~subst a b
+          then app_ ~subst t' l'
+          else error_ "type mismatch on first argument" ~hd:t ~l
+      | TyI.Forall (v,t'), b :: l' ->
+          let subst = Subst.add ~subst v b in
+          app_ ~subst t' l'
+    in
+    app_ ~subst:Subst.empty t l
+
+  type signature = T.ty NunProblem.Signature.t
+
+  let rec ty_exn ~sigma t = match T.view t with
+    | TyKind -> failwith "Term_ho.ty: kind has no type"
+    | TyType -> T.ty_kind
+    | Const id ->
+        begin try NunID.Map.find id sigma
+        with Not_found -> raise (Undefined id)
+        end
+    | Builtin b ->
+        let module B = NunBuiltin.T in
+        let prop1 = T.ty_arrow T.ty_prop T.ty_prop in
+        let prop2 = T.ty_arrow T.ty_prop (T.ty_arrow T.ty_prop T.ty_prop) in
+        begin match b with
+          | B.Imply -> prop2
+          | B.Or -> prop2
+          | B.And -> prop2
+          | B.Not -> prop1
+          | B.True -> T.ty_prop
+          | B.False -> T.ty_prop
+        end
+    | Var v -> Var.ty v
+    | App (f,l) ->
+        ty_apply (ty_exn ~sigma f) (List.map (ty_exn ~sigma) l)
+    | Fun (v,t) ->
+        if T.Ty.returns_Type (Var.ty v)
+        then T.ty_forall v (ty_exn ~sigma t)
+        else T.ty_arrow (Var.ty v) (ty_exn ~sigma t)
+    | Forall (v,_)
+    | Exists (v,_) -> T.ty_arrow (Var.ty v) T.ty_prop
+    | Let (_,_,u) -> ty_exn ~sigma u
+    | Ite (_,b,_) -> ty_exn ~sigma b
+    | Eq _ -> T.ty_prop
+    | TyMeta _ -> assert false
+    | TyBuiltin _
+    | TyArrow (_,_)
+    | TyForall (_,_) -> T.ty_type
+
+  let ty ~sigma t =
+    try CCError.return (ty_exn ~sigma t)
+    with e -> NunUtils.err_of_exn e
+end
+
+(** {2 Type Erasure} *)
 
 module Erase(T : VIEW) = struct
   module Untyped = NunUntypedAST

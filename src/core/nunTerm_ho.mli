@@ -27,16 +27,7 @@ module type S = sig
   type ty = t
   include NunTerm_intf.VIEW with type t := t and type ty := ty
 
-  module Ty : sig
-    include NunType_intf.AS_TERM with type term = t and type t = ty
-
-    exception Error of string * t * t list
-    (** Raised when a type application fails *)
-
-    val apply : t -> t list -> t
-    (** [apply t l] computes the type of [f args] where [f : t] and [args : l]
-        @raise Error if the arguments do not match *)
-  end
+  module Ty : NunType_intf.AS_TERM with type term = t and type t = ty
 
   val const : id -> t
   val builtin : NunBuiltin.T.t -> t
@@ -62,22 +53,6 @@ module type S = sig
 end
 
 module Default : S
-
-(** {2 Computing Types} *)
-
-exception Undefined of id
-(** When a symbol is not defined *)
-
-module ComputeType(T : S) : sig
-  type signature = T.ty NunProblem.Signature.t
-
-  val ty : sigma:signature -> T.t -> T.ty or_error
-  (** Compute the type of the given term in the given signature *)
-
-  val ty_exn : sigma:signature -> T.t -> T.ty
-  (** @raise Ty.Error in case of error at an application
-      @raise Undefined in case some symbol is not defined *)
-end
 
 (** {2 Printing} *)
 
@@ -108,6 +83,37 @@ module Erase(T : VIEW) : sig
   val erase : ctx:ctx -> T.t -> Untyped.term
 
   val erase_ty : ctx:ctx -> T.ty -> Untyped.ty
+end
+
+(** {2 Substitutions} *)
+
+exception Undefined of id
+(** When a symbol is not defined *)
+
+module UtilSubst(T : S)(Su : NunVar.SUBST with type ty = T.ty) : sig
+  val equal : subst:T.t Su.t -> T.t -> T.t -> bool
+  (** Equality modulo substitution *)
+
+  val eval : subst:T.t Su.t -> T.t -> T.t
+  (** Applying a substitution *)
+
+  exception Error of string * T.t * T.t list
+  (** Raised when a type application fails *)
+
+  val ty_apply : T.ty -> T.t list -> T.ty
+  (** [apply t l] computes the type of [f args] where [f : t] and [args : l]
+      @raise Error if the arguments do not match *)
+
+  type signature = T.ty NunProblem.Signature.t
+
+  val ty : sigma:signature -> T.t -> T.ty or_error
+  (** Compute the type of the given term in the given signature *)
+
+  val ty_exn : sigma:signature -> T.t -> T.ty
+  (** @raise Ty.Error in case of error at an application
+      @raise Undefined in case some symbol is not defined *)
+
+  (* TODO: unification and matching *)
 end
 
 (** {2 View as FO terms}
