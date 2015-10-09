@@ -3,7 +3,7 @@
 
 (** {1 Reductions, including Beta Reduction} *)
 
-module Make(T : NunTerm_ho.S) : sig
+module Make(T : NunTerm_ho.S)(Subst : NunVar.SUBST with type ty = T.ty) : sig
 
   (* TODO: delta-reduction (expand definitions of Const) *)
 
@@ -13,4 +13,13 @@ module Make(T : NunTerm_ho.S) : sig
   val snf : T.t -> T.t
   (** Strong Normal Form (reduce under functions) *)
 
+  module Full : sig
+    type subst = T.t Subst.t
+
+    val whnf :
+      ?subst:subst->
+      T.t ->
+      T.t list ->
+      (T.t * T.t list * subst)
+  end
 end
