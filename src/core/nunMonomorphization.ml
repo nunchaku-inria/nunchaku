@@ -110,54 +110,18 @@ module Make(T : NunTerm_ho.S) : S with module T = T
   module Subst = Var.Subst(struct type t = T.ty end)
   module SubstUtil = NunTerm_ho.SubstUtil(T)(Subst)
 
-  let nop_ _ = ()
-
-  (* convert [subst T.ty] to [T.ty].
-     callbacks are used for non-(ground atomic types).
-     @param subst the substitution for variables *)
-  let convert_ty_ ?(on_non_ground=nop_) ~subst ty =
-    let rec convert_ ty = match T.Ty.view ty with
-      | TyI.Kind -> T.ty_kind
-      | TyI.Type -> T.ty_type
-      | TyI.Builtin b -> T.ty_builtin b
-      | TyI.Const id -> T.ty_const id
-      | TyI.Var v ->
-          (* maybe [v] is bound *)
-          begin match Subst.find ~subst v with
-          | None ->
-              on_non_ground ty;
-              T.ty_var (Var.update_ty v ~f:convert_)
-          | Some ty -> convert_ ty
-          end
-      | TyI.Meta _ -> assert false
-      | TyI.App (f,l) ->
-          T.ty_app
-            (convert_ f)
-            (List.map convert_ l)
-      | TyI.Arrow (a,b) ->
-          T.ty_arrow (convert_ a) (convert_ b)
-      | TyI.Forall (v,t) ->
-          on_non_ground ty;
-          T.ty_forall
-            (Var.update_ty v ~f:convert_)
-            (convert_ t)
-    in
-    convert_ ty
-
-  let convert_ground_atomic_ty_ ~subst ty =
-    convert_ty_ ty ~subst
-      ~on_non_ground:(fun ty ->
-        failf_ "non-ground type: %a" P.print_ty ty
-      )
-
   (* A tuple of arguments that a given function symbol should be
      instantiated with *)
   module ArgTuple = struct
-    type t = T.ty list
+    type t = {
+      args: T.ty list;
+      mangled: ID.t option; (* mangled name of [f args] *)
+    }
 
-    let empty = []
-    let of_list l = l
-    let to_list l = l
+    let empty = {args=[]; mangled=None;}
+    let of_list ~mangled l = {args=l; mangled;}
+    let args t = t.args
+    let mangled t = t.mangled
 
     (* equality for ground atomic types T.ty *)
     let rec ty_ground_eq_ t1 t2 = match T.Ty.view t1, T.Ty.view t2 with
@@ -179,11 +143,17 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       | TyI.Meta _,_
       | TyI.Forall (_,_),_ -> fail_ "type is not ground"
 
-    let equal = CCList.equal ty_ground_eq_
+    let equal tup1 tup2 =
+      CCList.equal ty_ground_eq_ tup1.args tup2.args
 
-    let print out =
-      fpf out "@[%a@]"
-        (CCFormat.list ~start:"(" ~stop:")" ~sep:", " P.print_ty)
+    let print out tup =
+      let pp_mangled out = function
+        | None -> ()
+        | Some id -> fpf out " as %a" ID.print id
+      in
+      fpf out "@[%a%a@]"
+        (CCFormat.list ~start:"(" ~stop:")" ~sep:", " P.print_ty) tup.args
+        pp_mangled tup.mangled
   end
 
   module ArgTupleSet = struct
@@ -241,10 +211,12 @@ module Make(T : NunTerm_ho.S) : S with module T = T
     type depth = int
 
     type t = {
-      axioms: (T.t, T.ty) NunProblem.Statement.t list ID.Tbl.t;
-        (* ID -> set of axioms in which the ID is defined *)
       to_process : (ID.t * ArgTuple.t * depth) Queue.t;
         (* tuples to process (with recursion depth) *)
+      mangle : (string, ID.t) Hashtbl.t;
+        (* mangled name -> mangled ID *)
+      unmangle : (ID.t * T.t list) ID.Tbl.t;
+        (* mangled name -> (id, args) *)
       mutable required: SetOfInstances.t;
         (* tuples that must be instantiated *)
       mutable processed: SetOfInstances.t;
@@ -263,13 +235,24 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       Queue.push (id,tup,depth) state.to_process
 
     let create () = {
-      axioms=ID.Tbl.create 128;
       processed=SetOfInstances.empty;
       required=SetOfInstances.empty;
+      mangle=Hashtbl.create 64;
+      unmangle=ID.Tbl.create 64;
       to_process=Queue.create();
     }
 
     let find_tuples ~state id = SetOfInstances.args state.required id
+
+    (* remember that (id,tup) -> mangled *)
+    let save_mangled ~state id tup ~mangled =
+      try Hashtbl.find state.mangle mangled
+      with Not_found ->
+        (* create new ID *)
+        let mangled' = ID.make ~name:mangled in
+        Hashtbl.add state.mangle mangled mangled';
+        ID.Tbl.replace state.unmangle mangled' (id, tup);
+        mangled'
 
     (* add dependency on [id] applied to [tup] *)
     let has_processed ~state id tup =
@@ -279,28 +262,44 @@ module Make(T : NunTerm_ho.S) : S with module T = T
   type mono_state = St.t
   let create = St.create
 
-  (* take [n] ground atomic type arguments in [l], or fail *)
-  let rec take_n_ground_atomic_types_ ~subst n = function
-    | _ when n=0 -> []
-    | [] -> failf_ "not enough arguments (%d missing)" n
-    | t :: l' ->
-        let t = convert_ground_atomic_ty_ ~subst t in
-        t :: take_n_ground_atomic_types_ ~subst (n-1) l'
+  (* find a specialized name for [id tup] if [tup] not empty *)
+  let mangle_ ~state id args =
+    let pp_list p = CCFormat.list ~start:"" ~stop:"" ~sep:"_" p in
+    let rec flat_ty_ out t = match T.Ty.view t with
+      | TyI.Kind -> CCFormat.string out "kind"
+      | TyI.Type -> CCFormat.string out "type"
+      | TyI.Builtin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
+      | TyI.Const id -> ID.print_no_id out id
+      | TyI.Var _ -> fail_ "mangling: cannot mangle variable"
+      | TyI.Meta _ -> assert false
+      | TyI.App (f,l) ->
+          fpf out "%a_%a" flat_ty_ f (pp_list flat_ty_) l
+      | TyI.Arrow (a,b) -> fpf out "%a_to_%a" flat_ty_ a flat_ty_ b
+      | TyI.Forall (_,_) -> failf_ "mangling: cannot mangle %a" P.print_ty t
+    in
+    match args with
+    | [] -> id, None
+    | _::_ ->
+      let name = CCFormat.sprintf "@[<h>%a@]" flat_ty_ (T.app (T.const id) args) in
+      let mangled = St.save_mangled ~state id args ~mangled:name in
+      mangled, Some mangled
 
   let monomorphize ?(depth_limit=256) ~sigma ~state pb =
     (* map T.t to T.t and, simultaneously, compute relevant instances
        of symbols [t] depends on.
-       @param subst bindings for type variables *)
-    let rec conv_term ~depth ~subst t =
+       @param subst bindings for type variables
+       @param mangle enable/disable mangling (in types...)
+      *)
+    let rec conv_term ~mangle ~depth ~subst t =
       match T.view t with
       | TI.Builtin b -> T.builtin b
       | TI.Const c ->
-          St.schedule ~state ~depth:(depth+1)
-            c ArgTuple.empty; (* no args, but still required *)
+          (* no args, but we require [c] in the output *)
+          St.schedule ~state ~depth:(depth+1) c ArgTuple.empty;
           T.const c
       | TI.Var v ->
           begin match Subst.find ~subst v with
-          | Some t' -> conv_term ~depth ~subst t'
+          | Some t' -> conv_term ~mangle ~depth ~subst t'
           | None ->
               let v = aux_var ~subst v in
               T.var v
@@ -310,50 +309,75 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           begin match T.view f with
           | TI.Builtin b ->
               (* builtins are defined, but examine their args *)
-              let l = List.map (conv_term ~subst ~depth) l in
+              let l = List.map (conv_term ~mangle ~subst ~depth) l in
               T.app (T.builtin b) l
           | TI.Const id ->
               (* find type arguments *)
               let ty = find_ty_ ~sigma id in
               let n = num_param_ty_ ty in
               (* tuple of arguments for [id] *)
-              let tup = take_n_ground_atomic_types_ ~subst n l in
-              let tup = ArgTuple.of_list tup in
-              St.schedule ~state ~depth id tup;
-              (* analyse all args (types and terms) *)
-              let l = List.map (conv_term ~depth ~subst) l in
-              T.app (T.const id) l
+              let tup = take_n_ground_atomic_types_ ~depth ~subst n l in
+              (* mangle? *)
+              let new_id, mangled =
+                if mangle then mangle_ ~state id tup
+                else id, None
+              in
+              (* schedule specialization of [id] *)
+              let tup = ArgTuple.of_list ~mangled tup in
+              St.schedule ~state ~depth:(depth+1) id tup;
+              (* convert arguments.
+                 Drop type arguments iff they are mangled with ID *)
+              let l = if mangled=None then l else CCList.drop n l in
+              let l = List.map (conv_term ~mangle ~depth ~subst) l in
+              T.app (T.const new_id) l
           | _ ->
               failf_ "cannot monomorphize term with head %a" P.print f
           end
       | TI.Fun (v,t) ->
-          T.fun_ (aux_var ~subst v) (conv_term ~depth ~subst t)
+          T.fun_ (aux_var ~subst v) (conv_term ~mangle ~depth ~subst t)
       | TI.Forall (v,t) ->
-          T.forall (aux_var ~subst v) (conv_term ~depth ~subst t)
+          T.forall (aux_var ~subst v) (conv_term ~mangle ~depth ~subst t)
       | TI.Exists (v,t) ->
-          T.exists (aux_var ~subst v) (conv_term ~depth ~subst t)
+          T.exists (aux_var ~subst v) (conv_term ~mangle ~depth ~subst t)
       | TI.Let (v,t,u) ->
           T.let_ (aux_var ~subst v)
-            (conv_term ~depth ~subst t) (conv_term ~depth ~subst u)
+            (conv_term ~mangle ~depth ~subst t)
+            (conv_term ~mangle ~depth ~subst u)
       | TI.Ite (a,b,c) ->
           T.ite
-            (conv_term ~depth ~subst a)
-            (conv_term ~depth ~subst b)
-            (conv_term ~depth ~subst c)
+            (conv_term ~mangle ~depth ~subst a)
+            (conv_term ~mangle ~depth ~subst b)
+            (conv_term ~mangle ~depth ~subst c)
       | TI.Eq (a,b) ->
-          T.eq (conv_term ~depth ~subst a) (conv_term ~depth ~subst b)
+          T.eq
+            (conv_term ~mangle ~depth ~subst a)
+            (conv_term ~mangle ~depth ~subst b)
       | TI.TyKind -> T.ty_kind
       | TI.TyType -> T.ty_type
       | TI.TyMeta _ -> failwith "Mono.encode: remaining type meta-variable"
       | TI.TyBuiltin b -> T.ty_builtin b
       | TI.TyArrow (a,b) ->
-          T.ty_arrow (conv_term ~depth ~subst a) (conv_term ~depth ~subst b)
+          T.ty_arrow
+            (conv_term ~mangle ~depth ~subst a)
+            (conv_term ~mangle ~depth ~subst b)
       | TI.TyForall (v,t) ->
           (* TODO: emit warning? *)
           assert (not (Subst.mem ~subst v));
-          T.ty_forall (aux_var ~subst v) (conv_term ~depth ~subst t)
+          T.ty_forall
+            (aux_var ~subst v)
+            (conv_term ~mangle ~depth ~subst t)
+
     and aux_var ~subst v =
-      Var.update_ty ~f:(conv_term ~depth:0 ~subst) v
+      Var.update_ty ~f:(conv_term ~mangle:false ~depth:0 ~subst) v
+
+    (* take [n] ground atomic type arguments in [l], or fail *)
+    and take_n_ground_atomic_types_ ~depth ~subst n = function
+      | _ when n=0 -> []
+      | [] -> failf_ "not enough arguments (%d missing)" n
+      | t :: l' ->
+          (* do not mangle types *)
+          let t = conv_term ~depth ~mangle:false ~subst t in
+          t :: take_n_ground_atomic_types_ ~depth ~subst (n-1) l'
     in
     (* maps a statement to 0 to n specialized statements *)
     let aux_statement st =
@@ -367,7 +391,8 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           | Stmt.Decl_type ->
               if St.required_id ~state id
               then (* type is needed, keep it *)
-                [ Stmt.ty_decl ?loc id (conv_term ~depth:0 ~subst:Subst.empty ty) ]
+                [ Stmt.ty_decl ?loc id
+                    (conv_term ~mangle:false ~depth:0 ~subst:Subst.empty ty) ]
               else []
           | Stmt.Decl_fun
           | Stmt.Decl_prop ->
@@ -376,14 +401,25 @@ module Make(T : NunTerm_ho.S) : S with module T = T
               List.map
                 (fun tup ->
                   (* apply type to tuple *)
-                  let ty = SubstUtil.ty_apply ty (ArgTuple.to_list tup) in
-                  Stmt.mk_decl ?loc id k ty)
+                  let ty = SubstUtil.ty_apply ty (ArgTuple.args tup) in
+                  (* require symbols in the type *)
+                  let ty = conv_term ~mangle:false ~depth:0 ~subst:Subst.empty ty in
+                  (* return new statement *)
+                  let new_id = match ArgTuple.mangled tup with
+                    | None -> id
+                    | Some x -> x
+                  in
+                  Stmt.mk_decl ?loc new_id k ty)
                 (ArgTupleSet.to_list tuples)
           end
       | Stmt.Goal t ->
           (* convert goal *)
-          [ Stmt.goal ?loc (conv_term ~depth:0 ~subst:Subst.empty t) ]
-      | Stmt.Axiom s ->
+          [ Stmt.goal ?loc (conv_term ~mangle:true ~depth:0 ~subst:Subst.empty t) ]
+      | Stmt.Axiom (Stmt.Axiom_std l) ->
+          let l = List.map (conv_term ~mangle:true ~depth:0 ~subst:Subst.empty) l in
+          [ Stmt.axiom ?loc l ]
+      | Stmt.Axiom (Stmt.Axiom_spec _)
+      | Stmt.Axiom (Stmt.Axiom_rec _) ->
           (* TODO: fixpoint on the queue of [st] *)
           (* TODO: for each task, check depth  *)
           assert false (* TODO *)
