@@ -176,25 +176,12 @@ module Default = struct
 end
 
 module AsHO(T : VIEW) = struct
-  module Stmt = NunProblem.Statement
-
   type t = T.t
   type ty = T.ty
 
   let view t = match T.view t with
     | TyMeta _ -> failwith "Term_typed.AsHO.view: remaining meta"
     | v -> v
-
-  let convert t = t
-  let convert_ty ty = ty
-
-  let convert_statement st =
-    Stmt.map ~term:convert ~ty:convert_ty st
-
-  let convert_statement_list = CCList.map convert_statement
-
-  let convert_problem l =
-    NunProblem.make (convert_statement_list l)
 
   module Ty = T.Ty
 end

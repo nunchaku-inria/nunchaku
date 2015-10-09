@@ -38,7 +38,27 @@ let to_string v = ID.to_string v.id
 
 (** {2 Substitutions} *)
 
+module type SUBST = sig
+  type ty
+  type var = ty t
+
+  type 'a t
+  (** A substitution for those variables *)
+
+  val empty : 'a t
+  val is_empty : _ t -> bool
+
+  val add : subst:'a t -> var -> 'a -> 'a t
+
+  val mem : subst:'a t -> var -> bool
+  val find : subst:'a t -> var -> 'a option
+  val find_exn : subst:'a t -> var -> 'a  (** @raise Not_found *)
+
+  val to_list : 'a t -> (var * 'a) list
+end
+
 module Subst(Ty : sig type t end) = struct
+  type ty = Ty.t
   type var = Ty.t t
 
   module M = Map.Make(struct
@@ -49,6 +69,7 @@ module Subst(Ty : sig type t end) = struct
   type 'a t = 'a M.t
 
   let empty = M.empty
+  let is_empty = M.is_empty
 
   let add ~subst v x = M.add v x subst
 

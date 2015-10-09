@@ -90,11 +90,11 @@ end
 exception Undefined of id
 (** When a symbol is not defined *)
 
-module UtilSubst(T : S)(Su : NunVar.SUBST with type ty = T.ty) : sig
-  val equal : subst:T.t Su.t -> T.t -> T.t -> bool
+module SubstUtil(T : S)(Subst : NunVar.SUBST with type ty = T.ty) : sig
+  val equal : subst:T.t Subst.t -> T.t -> T.t -> bool
   (** Equality modulo substitution *)
 
-  val eval : subst:T.t Su.t -> T.t -> T.t
+  val eval : subst:T.t Subst.t -> T.t -> T.t
   (** Applying a substitution *)
 
   exception Error of string * T.t * T.t list

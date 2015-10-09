@@ -257,7 +257,7 @@ let () = Printexc.register_printer
     | _ -> None
   )
 
-module UtilSubst(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
+module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
   let rec equal ~subst ty1 ty2 = match T.view ty1, T.view ty2 with
     | TyKind, TyKind
     | TyType, TyType -> true

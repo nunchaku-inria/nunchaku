@@ -44,13 +44,15 @@ val to_string : _ t -> string
 
 (** {2 Substitutions} *)
 
-module Subst(Ty : sig type t end) : sig
-  type var = Ty.t t
+module type SUBST = sig
+  type ty
+  type var = ty t
 
   type 'a t
   (** A substitution for those variables *)
 
   val empty : 'a t
+  val is_empty : _ t -> bool
 
   val add : subst:'a t -> var -> 'a -> 'a t
 
@@ -60,3 +62,5 @@ module Subst(Ty : sig type t end) : sig
 
   val to_list : 'a t -> (var * 'a) list
 end
+
+module Subst(Ty : sig type t end) : SUBST with type ty = Ty.t
