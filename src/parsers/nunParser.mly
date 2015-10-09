@@ -43,14 +43,16 @@
 %token PROP
 %token TYPE
 
+%token SEMI_COLUMN
 %token AXIOM
-%token DEF
-%token DECL
+%token REC
+%token SPEC
+%token VAL
 %token GOAL
 
 %token ARROW
 %token FUN
-%token FORALL
+%token PI
 
 %token <string> LOWER_WORD
 %token <string> UPPER_WORD
@@ -164,10 +166,10 @@ or_term:
       let loc = L.mk_pos $startpos $endpos in
       A.app ~loc (A.builtin ~loc B.Imply) [t; u]
     }
-  | t=and_term LOGIC_EQUIV u=and_term
+  | t=and_term LOGIC_EQ u=and_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc B.Equiv) [t; u]
+      A.app ~loc (A.builtin ~loc B.Eq) [t; u]
     }
 
 term:
@@ -202,7 +204,7 @@ term:
       let loc = L.mk_pos $startpos $endpos in
       A.ty_arrow ~loc t u
     }
-  | FORALL vars=typed_ty_var+ DOT t=term
+  | PI vars=typed_ty_var+ DOT t=term
     {
       let loc = L.mk_pos $startpos $endpos in
       A.ty_forall_list ~loc vars t
@@ -213,21 +215,33 @@ term:
       raise (A.ParseError loc)
     }
 
+case:
+  | t=term EQDEF l=separated_nonempty_list(SEMI_COLUMN, term) option(SEMI_COLUMN)
+    { t, l }
+
+structure:
+  | l=separated_nonempty_list(AND, case) { l }
+
 statement:
-  | DECL v=raw_var COLUMN t=term DOT
+  | VAL v=raw_var COLUMN t=term DOT
     {
       let loc = L.mk_pos $startpos $endpos in
       A.decl ~loc v t
     }
-  | DEF v=typed_var l=typed_var* EQDEF t=term DOT
+  | AXIOM l=separated_nonempty_list(SEMI_COLUMN, term) DOT
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.def_l ~loc v l t
+      A.axiom ~loc l
     }
-  | AXIOM t=term DOT
+  | SPEC l=structure DOT
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.axiom ~loc t
+      A.spec ~loc l
+    }
+  | REC l=structure DOT
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.rec_ ~loc l
     }
   | GOAL t=term DOT
     {

@@ -5,8 +5,8 @@ val term : type.
 val term2 : type.
 val list : type -> type.
 
-val nil : forall a. list a.
-val cons : forall a. a -> list a -> list a.
+val nil : pi a. list a.
+val cons : pi a. a -> list a -> list a.
 
 val a : term.
 val b : term.

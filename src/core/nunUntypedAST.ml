@@ -29,7 +29,6 @@ module Builtin : sig
     | False
     | Eq
     | Imply
-    | Equiv
 
   include NunIntf.PRINT with type t := t
   val fixity : t -> [`Prefix | `Infix]
@@ -45,7 +44,6 @@ type t =
   | False
   | Eq
   | Imply
-  | Equiv
 
   let fixity = function
     | Type
@@ -56,8 +54,7 @@ type t =
     | And
     | Or
     | Imply
-    | Eq
-    | Equiv -> `Infix
+    | Eq -> `Infix
 
   let to_string = function
     | Type -> "type"
@@ -69,7 +66,6 @@ type t =
     | False -> "false"
     | Eq -> "="
     | Imply -> "==>"
-    | Equiv -> "<=>"
 
   let print out s = Format.pp_print_string out (to_string s)
 end
@@ -100,8 +96,9 @@ and typed_var = var * ty option
 
 type statement_node =
   | Decl of var * ty (* declaration of uninterpreted symbol *)
-  | Def of typed_var * term (* definition *)
-  | Axiom of term (* axiom *)
+  | Axiom of term list (* axiom *)
+  | Spec of (term * term list) list (* mutual spec *)
+  | Rec of (term * term list) list (* mutual rec *)
   | Goal of term (* goal *)
 
 type statement = statement_node Loc.with_loc
@@ -126,19 +123,10 @@ let forall_list ?loc = List.fold_right (forall ?loc)
 let exists_list ?loc = List.fold_right (exists ?loc)
 
 let decl ?loc v t = Loc.with_loc ?loc (Decl(v,t))
-let def ?loc v t = Loc.with_loc ?loc (Def (v,t))
-let axiom ?loc t = Loc.with_loc ?loc (Axiom t)
+let axiom ?loc l = Loc.with_loc ?loc (Axiom l)
+let spec ?loc l = Loc.with_loc ?loc (Spec l)
+let rec_ ?loc l = Loc.with_loc ?loc (Rec l)
 let goal ?loc t = Loc.with_loc ?loc (Goal t)
-
-(* all elements are distinct? *)
-let rec all_diff_ = function
-  | [_] | [] -> true
-  | x :: tail -> not (List.mem x tail) && all_diff_ tail
-
-(* [def_l v vars t] is [def v (fun vars => t)] *)
-let def_l ?loc v vars t =
-  if not (all_diff_ (v::vars)) then raise (SyntaxError ("non-linear pattern", loc));
-  def ?loc v (fun_l ?loc vars t)
 
 let pf = Format.fprintf
 
@@ -199,10 +187,19 @@ and print_typed_var out (v,ty) = match ty with
   | None -> pf out "%s" v
   | Some ty -> pf out "(%s:%a)" v print_term ty
 
+let pp_list_ ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
+
+let pp_struct out l =
+  let pp_case out (t,l) =
+    pf out "@[<hv>%a@ %a@]" print_term t (pp_list_ ~sep:";" print_term) l
+  in
+  pf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_case) l
+
 let print_statement out st = match Loc.get st with
   | Decl (v, t) -> pf out "@[val %s : %a.@]" v print_term t
-  | Def (v, t) -> pf out "@[def %a := %a.@]" print_typed_var v print_term t
-  | Axiom t -> pf out "@[axiom %a.@]" print_term t
+  | Axiom l -> pf out "@[axiom @[%a@].@]" (pp_list_ ~sep:";" print_term) l
+  | Spec l -> pf out "@[spec %a.@]" pp_struct l
+  | Rec l -> pf out "@[rec %a.@]" pp_struct l
   | Goal t -> pf out "@[goal %a.@]" print_term t
 
 let print_statement_list out l =

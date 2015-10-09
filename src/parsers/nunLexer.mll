@@ -44,12 +44,14 @@ rule token = parse
   | '.' { DOT }
   | '_' { WILDCARD }
   | ':' { COLUMN }
+  | ';' { SEMI_COLUMN }
   | "=" { LOGIC_EQ }
   | ":=" { EQDEF }
   | "->" { ARROW }
   | "fun" { FUN }
-  | "def" { DEF }
-  | "val" { DECL }
+  | "rec" { REC }
+  | "spec" { SPEC }
+  | "val" { VAL }
   | "type" { TYPE }
   | "prop" { PROP }
   | "axiom" { AXIOM }
@@ -62,14 +64,13 @@ rule token = parse
   | "and" { AND }
   | "true" { LOGIC_TRUE }
   | "false" { LOGIC_FALSE }
-  | "forall" { FORALL }
+  | "pi" { PI }
   | '&' { LOGIC_AND }
   | '|' { LOGIC_OR }
   | '~' { LOGIC_NOT }
   | '!' { LOGIC_FORALL }
   | '?' { LOGIC_EXISTS }
   | "=>" { LOGIC_IMPLY }
-  | "<=>" { LOGIC_EQUIV }
   | '@' { AT }
   | lower_word { LOWER_WORD(Lexing.lexeme lexbuf) }
   | upper_word { UPPER_WORD(Lexing.lexeme lexbuf) }
