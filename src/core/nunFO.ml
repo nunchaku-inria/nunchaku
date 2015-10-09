@@ -231,9 +231,9 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
   let pp_list_ out p = CCFormat.list ~start:"" ~stop:"" ~sep:" " out p
 
   let rec print_ty out ty = match FO.Ty.view ty with
-    | TyApp (id, []) -> ID.print out id
+    | TyApp (id, []) -> ID.print_no_id out id
     | TyApp (id, l) ->
-        fpf out "@[<2>(%a@ %a)@]" ID.print id (pp_list_ print_ty) l
+        fpf out "@[<2>(%a@ %a)@]" ID.print_no_id id (pp_list_ print_ty) l
     | TyBuiltin b -> TyBuiltin.print out b
 
   let print_toplevel_ty out (args, ret) =
@@ -243,9 +243,9 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
   let rec print_term out t = match FO.T.view t with
     | Builtin b -> Builtin.print out b
     | Var v -> Var.print out v
-    | App (f,[]) -> ID.print out f
+    | App (f,[]) -> ID.print_no_id out f
     | App (f,l) ->
-        fpf out "@[<2>(%a@ %a)@]" ID.print f (pp_list_ print_term) l
+        fpf out "@[<2>(%a@ %a)@]" ID.print_no_id f (pp_list_ print_term) l
     | Fun (v,t) ->
         fpf out "@[<2>(fun %a:%a.@ %a)@]"
           Var.print v print_ty (Var.ty v) print_term t
@@ -260,12 +260,12 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     | Atom t -> print_term out t
     | True -> CCFormat.string out "true"
     | False -> CCFormat.string out "false"
-    | Eq (a,b) -> fpf out "@[%a =@ %a@]" print_term a print_term b
+    | Eq (a,b) -> fpf out "(@[%a =@ %a@])" print_term a print_term b
     | And l -> fpf out "(@[and@ %a@])" (pp_list_ print_formula) l
     | Or l ->  fpf out "(@[and@ %a@])" (pp_list_ print_formula) l
     | Not f -> fpf out "(@[not@ %a@])" print_formula f
     | Imply (a,b) -> fpf out "(@[%a =>@ %a@])" print_formula a print_formula b
-    | Equiv (a,b) -> fpf out "(@[%a =>@ %a@])" print_formula a print_formula b
+    | Equiv (a,b) -> fpf out "(@[%a <=>@ %a@])" print_formula a print_formula b
     | Forall (v,f) ->
         fpf out "(@[forall %a@ %a@])" Var.print v print_formula f
     | Exists (v,f) ->
@@ -281,9 +281,9 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
 
   let print_statement out s = match s with
     | TyDecl (id, n) ->
-        fpf out "@[<2>type %a arity %d.@]" ID.print id n
+        fpf out "@[<2>type %a (arity %d).@]" ID.print_no_id id n
     | Decl (v, ty) ->
-        fpf out "@[<2>val %a@ : %a.@]" ID.print v print_toplevel_ty ty
+        fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id v print_toplevel_ty ty
     | Axiom t -> fpf out "@[<2>axiom %a.@]" print_formula t
     | Goal t -> fpf out "@[<2>goal %a.@]" print_formula t
 
