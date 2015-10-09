@@ -19,24 +19,24 @@ module Statement = struct
     | Decl_fun
     | Decl_prop
 
-  (* definition of one term, by a list of axioms *)
-  type 't rec_case = {
-    case_defines: 't;  (* the term being defined *)
-    case_definitions: 't list;  (* the defining axioms *)
-  }
+  (** definition of one term, by a list of axioms.
+    - first element is the term being defined/refined
+    - second element is a list of axioms *)
+  type 't case = 't * 't list
 
   (* mutual definition of several terms *)
-  type 't rec_struct = {
-    rec_cases: 't rec_case list;
-  }
+  type 't mutual_cases = 't case list
+
+  let case_defines = fst
+  let case_definitions = snd
 
   (** Flavour of axiom *)
   type 't axiom =
     | Axiom_std of 't list
       (** Axiom list that can influence consistency (no assumptions) *)
-    | Axiom_spec of 't rec_struct
+    | Axiom_spec of 't mutual_cases
       (** Axioms can be safely ignored, they are consistent *)
-    | Axiom_rec of 't rec_struct
+    | Axiom_rec of 't mutual_cases
       (** Axioms are part of an admissible (partial) definition *)
 
   type ('term, 'ty) view =
@@ -66,11 +66,10 @@ module Statement = struct
   let axiom_rec ?loc t = mk_axiom ?loc (Axiom_rec t)
   let goal ?loc t = make_ ?loc (Goal t)
 
-  let map_rec_case ~defines ~definition t =
-    {case_defines=defines t.case_defines;
-     case_definitions=List.map definition t.case_definitions}
-  let map_rec_struct ~defines ~definition t =
-    {rec_cases=List.map (map_rec_case ~defines ~definition) t.rec_cases}
+  let map_case ~defines ~definition (t,l) =
+    defines t, List.map definition l
+  let map_cases ~defines ~definition t =
+    List.map (map_case ~defines ~definition) t
 
   let map ~term:ft ~ty:fty st =
     let loc = st.loc in
@@ -81,9 +80,9 @@ module Statement = struct
         begin match a with
         | Axiom_std l -> axiom ?loc (List.map ft l)
         | Axiom_spec t ->
-            axiom_spec ?loc (map_rec_struct ~defines:ft ~definition:ft t)
+            axiom_spec ?loc (map_cases ~defines:ft ~definition:ft t)
         | Axiom_rec t ->
-            axiom_rec ?loc (map_rec_struct ~defines:ft ~definition:ft t)
+            axiom_rec ?loc (map_cases ~defines:ft ~definition:ft t)
         end
     | Goal t -> goal ?loc (ft t)
 
@@ -95,10 +94,10 @@ module Statement = struct
         | Axiom_spec t
         | Axiom_rec t ->
             List.fold_left
-              (fun acc case ->
-                let acc = term acc case.case_defines in
-                List.fold_left term acc case.case_definitions
-              ) acc t.rec_cases
+              (fun acc (t,l) ->
+                let acc = term acc t in
+                List.fold_left term acc l
+              ) acc t
         end
     | Goal t -> term acc t
 
@@ -106,22 +105,20 @@ module Statement = struct
     | Decl (id,_,t) ->
         fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id id pty t
     | Axiom a ->
-        let print_rec out t =
-          let print_cases out t =
+        let print_cases out t =
+          let print_case out (t,l) =
             fpf out "@[<hv2>%a :=@ %a@]"
-              pt t.case_defines
-              (CCFormat.list ~start:"" ~stop:"" ~sep:";" pt) t.case_definitions
+              pt t (CCFormat.list ~start:"" ~stop:"" ~sep:";" pt) l
           in
           fpf out "@[<v>%a@]"
-            (CCFormat.list ~start:"" ~stop:"" ~sep:" and " print_cases)
-            t.rec_cases
+            (CCFormat.list ~start:"" ~stop:"" ~sep:" and " print_case) t
         in
         begin match a with
         | Axiom_std l ->
             fpf out "@[<2>axiom %a.@]"
               (CCFormat.list ~start:"" ~stop:"" ~sep:";" pt) l
-        | Axiom_spec t -> fpf out "@[<2>spec %a.@]" print_rec t
-        | Axiom_rec t -> fpf out "@[<2>rec %a.@]" print_rec t
+        | Axiom_spec t -> fpf out "@[<2>spec %a.@]" print_cases t
+        | Axiom_rec t -> fpf out "@[<2>rec %a.@]" print_cases t
         end
     | Goal t -> fpf out "@[<2>goal %a.@]" pt t
 

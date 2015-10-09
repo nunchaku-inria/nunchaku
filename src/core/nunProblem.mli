@@ -16,24 +16,24 @@ module Statement : sig
     | Decl_fun
     | Decl_prop
 
-  (* definition of one term, by a list of axioms *)
-  type 't rec_case = {
-    case_defines: 't;  (* the term being defined *)
-    case_definitions: 't list;  (* the defining axioms *)
-  }
+  (** definition of one term, by a list of axioms.
+    - first element is the term being defined/refined
+    - second element is a list of axioms *)
+  type 't case = 't * 't list
 
   (* mutual definition of several terms *)
-  type 't rec_struct = {
-    rec_cases: 't rec_case list;
-  }
+  type 't mutual_cases = 't case list
+
+  val case_defines : 't case -> 't
+  val case_definitions : 't case -> 't list
 
   (** Flavour of axiom *)
   type 't axiom =
     | Axiom_std of 't list
       (** Axiom list that can influence consistency (no assumptions) *)
-    | Axiom_spec of 't rec_struct
+    | Axiom_spec of 't mutual_cases
       (** Axioms can be safely ignored, they are consistent *)
-    | Axiom_rec of 't rec_struct
+    | Axiom_rec of 't mutual_cases
       (** Axioms are part of an admissible (partial) definition *)
 
   type ('term, 'ty) view =
@@ -64,17 +64,18 @@ module Statement : sig
 
   val axiom1 : ?loc:loc -> 'a -> ('a,_) t
 
-  val axiom_spec : ?loc:loc -> 'a rec_struct -> ('a,_) t
+  val axiom_spec : ?loc:loc -> 'a mutual_cases -> ('a,_) t
   (** Axiom that can be ignored if not explicitely depended upon by the goal *)
 
-  val axiom_rec : ?loc:loc -> 'a rec_struct -> ('a,_) t
+  val axiom_rec : ?loc:loc -> 'a mutual_cases -> ('a,_) t
   (** Axiom that is part of an admissible (mutual, partial) definition. *)
 
   val goal : ?loc:loc -> 'a -> ('a,_) t
   (** The goal of the problem *)
 
-  val map_rec_case : defines:('a -> 'b) -> definition:('a -> 'b) -> 'a rec_case -> 'b rec_case
-  val map_rec_struct : defines:('a -> 'b) -> definition:('a -> 'b) -> 'a rec_struct -> 'b rec_struct
+  val map_case : defines:('a -> 'b) -> definition:('a -> 'b) -> 'a case -> 'b case
+  val map_cases : defines:('a -> 'b) -> definition:('a -> 'b) ->
+                  'a mutual_cases -> 'b mutual_cases
 
   val map :
     term:('t -> 't2) ->
