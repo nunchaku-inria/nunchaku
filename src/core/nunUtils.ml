@@ -104,8 +104,8 @@ let debugf ?(section=Section.root) l msg =
     then (
       let now = Time.total () in
       if section == Section.root
-        then Format.fprintf debug_fmt_ "@[<hov 8>%% [%.3f]@ " now
-        else Format.fprintf debug_fmt_ "@[<hov 8>%% [%.3f %s]@ "
+        then Format.fprintf debug_fmt_ "@[<hov 3>%.3f[]@ " now
+        else Format.fprintf debug_fmt_ "@[<hov 3>%.3f[%s]:@ "
           now section.Section.full_name;
         Format.kfprintf
           (fun fmt -> Format.fprintf fmt "@]@.")
