@@ -175,6 +175,8 @@ module Default = struct
   end)
 end
 
+let default = (module Default : S with type t = Default.t)
+
 module AsHO(T : VIEW) = struct
   type t = T.t
   type ty = T.ty
@@ -185,3 +187,7 @@ module AsHO(T : VIEW) = struct
 
   module Ty = T.Ty
 end
+
+let as_ho =
+  let module T = AsHO(Default) in
+  (module T : NunTerm_ho.VIEW with type t = Default.t)

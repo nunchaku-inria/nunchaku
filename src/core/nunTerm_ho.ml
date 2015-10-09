@@ -162,6 +162,8 @@ module Default : S = struct
   end
 end
 
+let default = (module Default : S with type t = Default.t)
+
 (** {2 Printing} *)
 
 module type PRINT = sig

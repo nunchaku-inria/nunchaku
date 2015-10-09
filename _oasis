@@ -21,7 +21,8 @@ Library "nunchaku_core"
                     NunTransform, NunType_intf, NunUntypedAST,
                     NunTerm_typed, NunTypeUnify, NunTypeInference,
                     NunProblem, NunTerm_ho, NunFO, NunBuiltin, NunTerm_intf,
-                    NunReduce, NunSolver_intf, NunCVC4, NunMonomorphization
+                    NunReduce, NunSolver_intf,
+                    NunCVC4, NunSkolem, NunMonomorphization
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.sexp, containers.iter,

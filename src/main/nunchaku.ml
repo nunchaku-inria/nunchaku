@@ -9,6 +9,8 @@ module Utils = NunUtils
 
 let print_ = ref false
 let print_typed_ = ref false
+let print_skolem_ = ref false
+let print_mono_ = ref false
 let print_fo_ = ref false
 let timeout_ = ref 30
 let version_ = ref false
@@ -27,10 +29,14 @@ let options_debug_ = Utils.Section.iter
       " verbosity level for " ^ (if name="" then "all messages" else name))
   |> Sequence.to_rev_list
 
-let options = Arg.align (
+let options =
+  let open CCFun in
+  Arg.align ?limit:None @@ List.sort Pervasives.compare @@ (
   options_debug_ @
   [ "--print", Arg.Set print_, " print input and exit"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
+  ; "--print-skolem", Arg.Set print_typed_, " print input after Skolemization"
+  ; "--print-mono", Arg.Set print_typed_, " print input after monomorphization"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-raw-model", Arg.Set NunSolver_intf.print_model_, " print raw model"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
@@ -67,10 +73,13 @@ let make_pipeline () =
   let open NunTransform.Pipe in
   (* type inference *)
   let step_ty_infer = NunTypeInference.pipe ~print:!print_typed_
-    (module NunTerm_typed.Default) (module NunTerm_ho.Default) in
+    NunTerm_typed.default NunTerm_ho.default in
   (* encodings *)
-  let step_monomorphization = NunMonomorphization.pipe ~print:false
-    (module NunTerm_typed.Default) (module NunTerm_ho.Default) in
+  let step_skolem =
+    NunSkolem.pipe ~print:!print_skolem_
+    NunTerm_typed.as_ho NunTerm_ho.default in
+  let step_monomorphization =
+    NunMonomorphization.pipe ~print:!print_mono_ NunTerm_ho.default in
   (* conversion to FO *)
   let step_fo = NunTerm_ho.to_fo
     (module NunTerm_ho.Default) (module NunFO.Default)
@@ -78,6 +87,7 @@ let make_pipeline () =
   (* setup pipeline *)
   let pipe =
     step_ty_infer @@@
+    step_skolem @@@
     step_monomorphization @@@
     step_fo @@@
     id

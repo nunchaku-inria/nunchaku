@@ -54,6 +54,8 @@ end
 
 module Default : S
 
+val default : (module S with type t = Default.t)
+
 (** {2 Printing} *)
 
 module type PRINT = sig

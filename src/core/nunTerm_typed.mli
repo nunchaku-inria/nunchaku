@@ -71,6 +71,8 @@ module Default : sig
   include NunTerm_ho.PRINT with type term = t and type ty := ty
 end
 
+val default : (module S with type t = Default.t)
+
 (** {2 View as {!NunTerm_ho.VIEW}}
 
   Typed terms can be considered as regular higher-order terms, but
@@ -79,3 +81,5 @@ end
 
 module AsHO(T : VIEW) : NunTerm_ho.VIEW
   with type t = T.t and type ty = T.ty
+
+val as_ho : (module NunTerm_ho.VIEW with type t = Default.t)

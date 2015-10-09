@@ -21,8 +21,7 @@ type id = NunID.t
 
 (** {2 Signature} *)
 module type S = sig
-  module T1 : NunTerm_ho.VIEW
-  module T2 : NunTerm_ho.S
+  module T : NunTerm_ho.S
 
   exception InvalidProblem of string
 
@@ -35,10 +34,10 @@ module type S = sig
 
   val monomorphize :
     ?depth_limit:int ->
-    sigma:T1.ty NunProblem.Signature.t ->
+    sigma:T.ty NunProblem.Signature.t ->
     state:mono_state ->
-    (T1.t, T1.ty) NunProblem.t ->
-    (T2.t, T2.ty) NunProblem.t
+    (T.t, T.ty) NunProblem.t ->
+    (T.t, T.ty) NunProblem.t
   (** Filter and specialize definitions of the problem.
 
       First it finds a set of instances for each symbol
@@ -61,31 +60,29 @@ module type S = sig
 
     val mangle_term :
       state:state ->
-      (T2.t,T2.ty) NunProblem.t ->
-      (T2.t,T2.ty) NunProblem.t
+      (T.t,T.ty) NunProblem.t ->
+      (T.t,T.ty) NunProblem.t
 
     val mangle_problem :
       state:state ->
-      (T2.t,T2.ty) NunProblem.t ->
-      (T2.t,T2.ty) NunProblem.t
+      (T.t,T.ty) NunProblem.t ->
+      (T.t,T.ty) NunProblem.t
 
-    val unmangle_term : state:state -> T2.t -> T2.t
+    val unmangle_term : state:state -> T.t -> T.t
 
     val unmangle_model :
         state:state ->
-        T2.t NunProblem.Model.t -> T2.t NunProblem.Model.t
+        T.t NunProblem.Model.t -> T.t NunProblem.Model.t
     (** Stay in the same term representation, but de-monomorphize *)
   end
 end
 
-module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
-  : S with module T1 = T1 and module T2 = T2
+module Make(T : NunTerm_ho.S) : S with module T = T
 
 (** Pipeline component *)
 val pipe :
   print:bool ->
-  (module NunTerm_ho.VIEW with type t = 'a) ->
-  (module NunTerm_ho.S with type t = 'b) ->
-  (('a, 'a) NunProblem.t, ('b,'b) NunProblem.t,
-    'b NunProblem.Model.t, 'b NunProblem.Model.t) NunTransform.t
+  (module NunTerm_ho.S with type t = 'a) ->
+  (('a, 'a) NunProblem.t, ('a,'a) NunProblem.t,
+    'a NunProblem.Model.t, 'a NunProblem.Model.t) NunTransform.t
 

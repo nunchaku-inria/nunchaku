@@ -6,7 +6,6 @@
 module ID = NunID
 module Var = NunVar
 module TI = NunTerm_intf
-module T1I = NunTerm_typed
 module TyI = NunType_intf
 module Stmt = NunProblem.Statement
 
@@ -15,8 +14,7 @@ type id = ID.t
 let section = NunUtils.Section.make "mono"
 
 module type S = sig
-  module T1 : NunTerm_ho.VIEW
-  module T2 : NunTerm_ho.S
+  module T : NunTerm_ho.S
 
   exception InvalidProblem of string
 
@@ -29,10 +27,10 @@ module type S = sig
 
   val monomorphize :
     ?depth_limit:int ->
-    sigma:T1.ty NunProblem.Signature.t ->
+    sigma:T.ty NunProblem.Signature.t ->
     state:mono_state ->
-    (T1.t, T1.ty) NunProblem.t ->
-    (T2.t, T2.ty) NunProblem.t
+    (T.t, T.ty) NunProblem.t ->
+    (T.t, T.ty) NunProblem.t
   (** Filter and specialize definitions of the problem.
 
       First it finds a set of instances for each symbol
@@ -55,28 +53,26 @@ module type S = sig
 
     val mangle_term :
       state:state ->
-      (T2.t,T2.ty) NunProblem.t ->
-      (T2.t,T2.ty) NunProblem.t
+      (T.t,T.ty) NunProblem.t ->
+      (T.t,T.ty) NunProblem.t
 
     val mangle_problem :
       state:state ->
-      (T2.t,T2.ty) NunProblem.t ->
-      (T2.t,T2.ty) NunProblem.t
+      (T.t,T.ty) NunProblem.t ->
+      (T.t,T.ty) NunProblem.t
 
-    val unmangle_term : state:state -> T2.t -> T2.t
+    val unmangle_term : state:state -> T.t -> T.t
 
     val unmangle_model :
         state:state ->
-        T2.t NunProblem.Model.t -> T2.t NunProblem.Model.t
+        T.t NunProblem.Model.t -> T.t NunProblem.Model.t
     (** Stay in the same term representation, but de-monomorphize *)
   end
 end
 
-module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
-  : S with module T1 = T1 and module T2 = T2
+module Make(T : NunTerm_ho.S) : S with module T = T
 = struct
-  module T1 = T1
-  module T2 = T2
+  module T = T
 
   exception InvalidProblem of string
 
@@ -92,12 +88,11 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
   let failf_ msg =
     NunUtils.exn_ksprintf msg ~f:(fun msg -> raise (InvalidProblem msg))
 
-  module TyUtils = TyI.Utils(T1.Ty)
-  module P1 = NunTerm_ho.Print(T1)
-  module P2 = NunTerm_ho.Print(T2)
+  module TyUtils = TyI.Utils(T.Ty)
+  module P = NunTerm_ho.Print(T)
 
-  (* number of parameters of this (polymorphic?) T1.ty type *)
-  let rec num_param_ty_ ty = match T1.Ty.view ty with
+  (* number of parameters of this (polymorphic?) T.ty type *)
+  let rec num_param_ty_ ty = match T.Ty.view ty with
     | TyI.Var _
     | TyI.Const _
     | TyI.Kind
@@ -112,37 +107,38 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
     | TyI.Forall (_,t) -> 1 + num_param_ty_ t
 
   (* substitution *)
-  module Subst = Var.Subst(struct type t = T1.ty end)
+  module Subst = Var.Subst(struct type t = T.ty end)
+  module SubstUtil = NunTerm_ho.SubstUtil(T)(Subst)
 
   let nop_ _ = ()
 
-  (* convert [subst T1.ty] to [T2.ty].
+  (* convert [subst T.ty] to [T.ty].
      callbacks are used for non-(ground atomic types).
      @param subst the substitution for variables *)
   let convert_ty_ ?(on_non_ground=nop_) ~subst ty =
-    let rec convert_ ty = match T1.Ty.view ty with
-      | TyI.Kind -> T2.ty_kind
-      | TyI.Type -> T2.ty_type
-      | TyI.Builtin b -> T2.ty_builtin b
-      | TyI.Const id -> T2.ty_const id
+    let rec convert_ ty = match T.Ty.view ty with
+      | TyI.Kind -> T.ty_kind
+      | TyI.Type -> T.ty_type
+      | TyI.Builtin b -> T.ty_builtin b
+      | TyI.Const id -> T.ty_const id
       | TyI.Var v ->
           (* maybe [v] is bound *)
           begin match Subst.find ~subst v with
           | None ->
               on_non_ground ty;
-              T2.ty_var (Var.update_ty v ~f:convert_)
+              T.ty_var (Var.update_ty v ~f:convert_)
           | Some ty -> convert_ ty
           end
       | TyI.Meta _ -> assert false
       | TyI.App (f,l) ->
-          T2.ty_app
+          T.ty_app
             (convert_ f)
             (List.map convert_ l)
       | TyI.Arrow (a,b) ->
-          T2.ty_arrow (convert_ a) (convert_ b)
+          T.ty_arrow (convert_ a) (convert_ b)
       | TyI.Forall (v,t) ->
           on_non_ground ty;
-          T2.ty_forall
+          T.ty_forall
             (Var.update_ty v ~f:convert_)
             (convert_ t)
     in
@@ -151,21 +147,20 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
   let convert_ground_atomic_ty_ ~subst ty =
     convert_ty_ ty ~subst
       ~on_non_ground:(fun ty ->
-        failf_ "non-ground type: %a" P1.print_ty ty
+        failf_ "non-ground type: %a" P.print_ty ty
       )
 
   (* A tuple of arguments that a given function symbol should be
      instantiated with *)
   module ArgTuple = struct
-    type t = T2.ty list
+    type t = T.ty list
 
     let empty = []
     let of_list l = l
     let to_list l = l
-    let to_seq = Sequence.of_list
 
-    (* equality for ground atomic types T2.ty *)
-    let rec ty_ground_eq_ t1 t2 = match T2.Ty.view t1, T2.Ty.view t2 with
+    (* equality for ground atomic types T.ty *)
+    let rec ty_ground_eq_ t1 t2 = match T.Ty.view t1, T.Ty.view t2 with
       | TyI.Kind, TyI.Kind
       | TyI.Type, TyI.Type -> true
       | TyI.Builtin b1, TyI.Builtin b2 -> NunBuiltin.Ty.equal b1 b2
@@ -188,7 +183,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
 
     let print out =
       fpf out "@[%a@]"
-        (CCFormat.list ~start:"(" ~stop:")" ~sep:", " P2.print_ty)
+        (CCFormat.list ~start:"(" ~stop:")" ~sep:", " P.print_ty)
   end
 
   module ArgTupleSet = struct
@@ -234,7 +229,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
 
     let print out t =
       fpf out "@[<hv>instances{%a@]@,}"
-        (ID.Map.print ID.print_no_id ArgTupleSet.print) t
+        (ID.Map.print ~start:"" ~stop:"" ID.print_no_id ArgTupleSet.print) t
   end
 
   let find_ty_ ~sigma id =
@@ -246,7 +241,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
     type depth = int
 
     type t = {
-      axioms: (T1.t, T1.ty) NunProblem.Statement.t list ID.Tbl.t;
+      axioms: (T.t, T.ty) NunProblem.Statement.t list ID.Tbl.t;
         (* ID -> set of axioms in which the ID is defined *)
       to_process : (ID.t * ArgTuple.t * depth) Queue.t;
         (* tuples to process (with recursion depth) *)
@@ -263,6 +258,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
     let required_id ~state id = SetOfInstances.mem_id state.required id
 
     let schedule ~state ~depth id tup =
+      NunUtils.debugf ~section 3 "require %a on %a" ID.print id ArgTuple.print tup;
       state.required <- SetOfInstances.add state.required id tup;
       Queue.push (id,tup,depth) state.to_process
 
@@ -273,8 +269,10 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
       to_process=Queue.create();
     }
 
+    let find_tuples ~state id = SetOfInstances.args state.required id
+
     (* add dependency on [id] applied to [tup] *)
-    let have_processed ~state id tup =
+    let has_processed ~state id tup =
       state.processed <- SetOfInstances.add state.processed id tup
   end
 
@@ -290,30 +288,30 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
         t :: take_n_ground_atomic_types_ ~subst (n-1) l'
 
   let monomorphize ?(depth_limit=256) ~sigma ~state pb =
-    (* map T1.t to T2.t and, simultaneously, compute relevant instances
+    (* map T.t to T.t and, simultaneously, compute relevant instances
        of symbols [t] depends on.
        @param subst bindings for type variables *)
     let rec conv_term ~depth ~subst t =
-      match T1.view t with
-      | TI.Builtin b -> T2.builtin b
+      match T.view t with
+      | TI.Builtin b -> T.builtin b
       | TI.Const c ->
           St.schedule ~state ~depth:(depth+1)
             c ArgTuple.empty; (* no args, but still required *)
-          T2.const c
+          T.const c
       | TI.Var v ->
           begin match Subst.find ~subst v with
           | Some t' -> conv_term ~depth ~subst t'
           | None ->
               let v = aux_var ~subst v in
-              T2.var v
+              T.var v
           end
       | TI.App (f,l) ->
           (* XXX: WHNF would help? *)
-          begin match T1.view f with
+          begin match T.view f with
           | TI.Builtin b ->
               (* builtins are defined, but examine their args *)
               let l = List.map (conv_term ~subst ~depth) l in
-              T2.app (T2.builtin b) l
+              T.app (T.builtin b) l
           | TI.Const id ->
               (* find type arguments *)
               let ty = find_ty_ ~sigma id in
@@ -324,62 +322,76 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
               St.schedule ~state ~depth id tup;
               (* analyse all args (types and terms) *)
               let l = List.map (conv_term ~depth ~subst) l in
-              T2.app (T2.const id) l
+              T.app (T.const id) l
           | _ ->
-              failf_ "cannot monomorphize term with head %a" P1.print f
+              failf_ "cannot monomorphize term with head %a" P.print f
           end
       | TI.Fun (v,t) ->
-          T2.fun_ (aux_var ~subst v) (conv_term ~depth ~subst t)
+          T.fun_ (aux_var ~subst v) (conv_term ~depth ~subst t)
       | TI.Forall (v,t) ->
-          T2.forall (aux_var ~subst v) (conv_term ~depth ~subst t)
+          T.forall (aux_var ~subst v) (conv_term ~depth ~subst t)
       | TI.Exists (v,t) ->
-          T2.exists (aux_var ~subst v) (conv_term ~depth ~subst t)
+          T.exists (aux_var ~subst v) (conv_term ~depth ~subst t)
       | TI.Let (v,t,u) ->
-          T2.let_ (aux_var ~subst v)
+          T.let_ (aux_var ~subst v)
             (conv_term ~depth ~subst t) (conv_term ~depth ~subst u)
       | TI.Ite (a,b,c) ->
-          T2.ite
+          T.ite
             (conv_term ~depth ~subst a)
             (conv_term ~depth ~subst b)
             (conv_term ~depth ~subst c)
       | TI.Eq (a,b) ->
-          T2.eq (conv_term ~depth ~subst a) (conv_term ~depth ~subst b)
-      | TI.TyKind -> T2.ty_kind
-      | TI.TyType -> T2.ty_type
+          T.eq (conv_term ~depth ~subst a) (conv_term ~depth ~subst b)
+      | TI.TyKind -> T.ty_kind
+      | TI.TyType -> T.ty_type
       | TI.TyMeta _ -> failwith "Mono.encode: remaining type meta-variable"
-      | TI.TyBuiltin b -> T2.ty_builtin b
+      | TI.TyBuiltin b -> T.ty_builtin b
       | TI.TyArrow (a,b) ->
-          T2.ty_arrow (conv_term ~depth ~subst a) (conv_term ~depth ~subst b)
+          T.ty_arrow (conv_term ~depth ~subst a) (conv_term ~depth ~subst b)
       | TI.TyForall (v,t) ->
           (* TODO: emit warning? *)
           assert (not (Subst.mem ~subst v));
-          T2.ty_forall (aux_var ~subst v) (conv_term ~depth ~subst t)
+          T.ty_forall (aux_var ~subst v) (conv_term ~depth ~subst t)
     and aux_var ~subst v =
       Var.update_ty ~f:(conv_term ~depth:0 ~subst) v
     in
     (* maps a statement to 0 to n specialized statements *)
-    let aux_statement ~depth st =
-      if depth>depth_limit then []
-      else
-        (* process statement *)
-        let loc = Stmt.loc st in
-        match Stmt.view st with
-        | Stmt.Decl (id,k,ty) ->
-            begin match k with
-            | Stmt.Decl_type ->
-                if St.required_id ~state id
-                then
-                  [ Stmt.ty_decl ?loc id (convert_ty_ ~subst:Subst.empty ty) ]
-                else []
-            | _ ->  assert false (* TODO *)
-            end
-        | Stmt.Goal t ->
-            (* convert goal *)
-            [ Stmt.goal ?loc (conv_term ~depth ~subst:Subst.empty t) ]
-        | Stmt.Axiom s -> assert false (* TODO *)
+    let aux_statement st =
+      NunUtils.debugf ~section 2 "@[<2>convert statement@ %a@]"
+        (NunProblem.Statement.print P.print P.print_ty) st;
+      (* process statement *)
+      let loc = Stmt.loc st in
+      match Stmt.view st with
+      | Stmt.Decl (id,k,ty) ->
+          begin match k with
+          | Stmt.Decl_type ->
+              if St.required_id ~state id
+              then (* type is needed, keep it *)
+                [ Stmt.ty_decl ?loc id (conv_term ~depth:0 ~subst:Subst.empty ty) ]
+              else []
+          | Stmt.Decl_fun
+          | Stmt.Decl_prop ->
+              let tuples = St.find_tuples ~state id in
+              (* for each tuple that requires [id], specialize *)
+              List.map
+                (fun tup ->
+                  (* apply type to tuple *)
+                  let ty = SubstUtil.ty_apply ty (ArgTuple.to_list tup) in
+                  Stmt.mk_decl ?loc id k ty)
+                (ArgTupleSet.to_list tuples)
+          end
+      | Stmt.Goal t ->
+          (* convert goal *)
+          [ Stmt.goal ?loc (conv_term ~depth:0 ~subst:Subst.empty t) ]
+      | Stmt.Axiom s ->
+          (* TODO: fixpoint on the queue of [st] *)
+          (* TODO: for each task, check depth  *)
+          assert false (* TODO *)
     in
     let pb' = NunProblem.statements pb
-      |> CCList.flat_map (aux_statement ~depth:0)
+      |> List.rev (* start at the end *)
+      |> CCList.flat_map aux_statement
+      |> List.rev
       |> NunProblem.make
     in
     (* some debug *)
@@ -405,7 +417,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
 
     type state = {
       mutable tree: ID.t Trie.t; (* [f a b --> f_a_b] *)
-      rev: T2.t ID.Tbl.t; (* new identifier -> monomorphized term *)
+      rev: T.t ID.Tbl.t; (* new identifier -> monomorphized term *)
     }
 
     let create () = {
@@ -425,14 +437,13 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
   end
 end
 
-let pipe (type a)(type b) ~print
-(module T1 : NunTerm_ho.VIEW with type t = a)
-(module T2 : NunTerm_ho.S with type t = b)
+let pipe (type a) ~print
+(module T : NunTerm_ho.S with type t = a)
 =
-  let module Mono = Make(T1)(T2) in
+  let module Mono = Make(T) in
   let on_encoded = if print
     then
-      let module P = NunTerm_ho.Print(T2) in
+      let module P = NunTerm_ho.Print(T) in
       [Format.printf "@[<2>after mono:@ %a@]@."
         (NunProblem.print P.print P.print_ty)]
     else []
