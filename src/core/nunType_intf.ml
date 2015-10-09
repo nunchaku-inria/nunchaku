@@ -107,7 +107,7 @@ module Print(Ty : S) = struct
     | Arrow (a,b) ->
         fpf out "@[<2>%a ->@ %a@]" print_in_arrow a print b
     | Forall (v,t) ->
-        fpf out "@[<2>forall %a:type.@ %a@]" Var.print v print t
+        fpf out "@[<2>pi %a:type.@ %a@]" Var.print v print t
   and print_in_app out t = match Ty.view t with
     | Builtin _ | Kind | Type | Var _ | Const _ | Meta _ -> print out t
     | App (_,_)

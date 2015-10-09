@@ -167,7 +167,9 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
   let free_meta_vars ?(init=ID.Map.empty) ty =
     let rec aux acc ty =
       match Ty.view ty with
-      | TyI.Kind | TyI.Type | TyI.Builtin _ | TyI.Const _ | TyI.Var _ -> acc
+      | TyI.Kind | TyI.Type | TyI.Builtin _ | TyI.Const _ -> acc
+      | TyI.Var v ->
+          aux acc (Var.ty v) (* type can also contain metas *)
       | TyI.Meta var ->
           assert (MetaVar.can_bind var);
           ID.Map.add (MetaVar.id var) var acc
@@ -177,8 +179,9 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
       | TyI.Arrow (a,b) ->
           let acc = aux acc a in
           aux acc b
-      | TyI.Forall (_,t) ->
+      | TyI.Forall (v,t) ->
           (* the variable should not be a meta *)
+          let acc = aux acc (Var.ty v) in
           aux acc t
     in
     aux init ty

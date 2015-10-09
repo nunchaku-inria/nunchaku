@@ -58,7 +58,7 @@ module type SUBST = sig
 
   val mem : subst:'a t -> var -> bool
   val find : subst:'a t -> var -> 'a option
-  val find_exn : subst:'a t -> var -> 'a  (** @raise Not_found *)
+  val find_exn : subst:'a t -> var -> 'a  (** @raise Not_found if var not bound *)
 
   val to_list : 'a t -> (var * 'a) list
 end

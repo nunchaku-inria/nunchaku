@@ -48,10 +48,18 @@ module Convert(Term : TERM) : sig
   (** Unsafe version of {!convert}
       @raise TypeError if it fails to  type properly *)
 
-  val generalize : Term.t -> Term.t * Term.Ty.t var list
+  val generalize : close:[`Forall | `Fun | `NoClose] ->
+                   Term.t -> Term.t * Term.Ty.t var list
   (** Generalize a term [t] by parametrizing it over its free {b type}
       variables.
-      @return a pair [(t', vars)] such that, roughly, [app t' vars = t] *)
+      @param close decides how [t] is generalized
+        {ul
+          {- [`Forall] makes [t' = forall vars t]}
+          {- [`Fun] makes [t' = fun vars t]}
+          {- [`NoClose] makes [t' = t] with meta variables replaced by [vars]}
+        }
+      @return a pair [(t', vars)] such that, roughly, [app t' vars = t],
+        or [t'] is [forall vars t], or [t'] contains [vars] *)
 
   type statement = (Term.t, Term.Ty.t) NunProblem.Statement.t
 

@@ -103,7 +103,7 @@ module Signature : sig
 
   val mem : sigma:'a t -> id -> bool
   val find : sigma:'a t -> id -> 'a option
-  val find_exn : sigma:'a t -> id -> 'a (** @raise Not_found *)
+  val find_exn : sigma:'a t -> id -> 'a (** @raise Not_found if not present *)
 
   val declare : sigma:'a t -> id -> 'a -> 'a t
 end

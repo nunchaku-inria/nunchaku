@@ -189,7 +189,7 @@ module Print(T : VIEW) = struct
     | Builtin b -> CCFormat.string out (NunBuiltin.T.to_string b)
     | TyBuiltin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
     | Const id -> ID.print_no_id out id
-    | TyMeta v -> ID.print out (NunMetaVar.id v)
+    | TyMeta v -> fpf out "?%a" ID.print (NunMetaVar.id v)
     | Var v -> Var.print out v
     | Eq (a,b) ->
         fpf out "@[%a =@ %a@]" print a print b
@@ -213,13 +213,13 @@ module Print(T : VIEW) = struct
     | Fun (v, t) ->
         fpf out "@[<2>fun %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
     | Forall (v, t) ->
-        fpf out "@[<2>forall %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
+        fpf out "@[<2>! %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
     | Exists (v, t) ->
-        fpf out "@[<2>forall %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
+        fpf out "@[<2>exists %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
     | TyArrow (a,b) ->
         fpf out "@[<2>%a ->@ %a@]" print_ty_in_arrow a print_ty b
     | TyForall (v,t) ->
-        fpf out "@[<2>forall %a:type.@ %a@]" Var.print v print_ty t
+        fpf out "@[<2>pi %a:type.@ %a@]" Var.print v print_ty t
 
   and print_ty out ty = print out ty
   and print_ty_in_app out ty = print_in_app out ty

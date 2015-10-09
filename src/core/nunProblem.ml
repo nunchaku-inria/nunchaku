@@ -107,11 +107,11 @@ module Statement = struct
     | Axiom a ->
         let print_cases out t =
           let print_case out (t,l) =
-            fpf out "@[<hv2>%a :=@ %a@]"
-              pt t (CCFormat.list ~start:"" ~stop:"" ~sep:";" pt) l
+            fpf out "@[<v2>%a :=@ %a@]@,"
+              pt t (CCFormat.list ~start:"" ~stop:"" ~sep:"; " pt) l
           in
           fpf out "@[<v>%a@]"
-            (CCFormat.list ~start:"" ~stop:"" ~sep:" and " print_case) t
+            (CCFormat.list ~start:"" ~stop:"" ~sep:"and " print_case) t
         in
         begin match a with
         | Axiom_std l ->
@@ -155,7 +155,7 @@ let map ~term ~ty p = {
 }
 
 let print pt pty out problem =
-  fpf out "@[<v2>{%a}@]"
+  fpf out "@[<v2>{%a@]@,}"
     (Statement.print_list pt pty) problem.statements
 
 exception IllFormed of string

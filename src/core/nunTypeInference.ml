@@ -29,7 +29,7 @@ exception TypeError of string * attempt_stack
 (* print a stack *)
 let print_stack out st =
   let print_frame out t =
-    fpf out "@[<hv 2>trying to infer type of@ @[%a@] at@ %a@]"
+    fpf out "@[<hv 2>trying to infer type of@ `@[%a@]` at@ %a@]"
       A.print_term t Loc.print_opt (Loc.get_loc t) in
   fpf out "@[<hv>%a@]"
     (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_frame) st
@@ -98,7 +98,7 @@ module Convert(Term : TERM) = struct
           Term.ty_app ?loc
             (convert_ty_ ~stack ~env f)
             (List.map (convert_ty_ ~stack ~env) l)
-      | A.Wildcard -> Term.ty_meta_var ?loc (MetaVar.make ~name:"?")
+      | A.Wildcard -> Term.ty_meta_var ?loc (MetaVar.make ~name:"_")
       | A.Var v ->
           begin try
             let def = MStr.find v env in
@@ -354,7 +354,7 @@ module Convert(Term : TERM) = struct
         let b = convert_term_ ~stack ~env b in
         let ty_b = get_ty_ b in
         (* type of the function *)
-        let ty_ret = fresh_ty_var_ ~name:"?" in
+        let ty_ret = fresh_ty_var_ ~name:"_" in
         MetaVar.bind ~var (Term.ty_arrow ty_b ty_ret);
         (* application *)
         let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty_ret l' in
@@ -400,7 +400,7 @@ module Convert(Term : TERM) = struct
     with e -> E.of_exn e
 
   (* TODO ensure that no meta var remains *)
-  let generalize t =
+  let generalize ~close t =
     let ty = get_ty_ t in
     let vars = Unif.free_meta_vars ty |> ID.Map.to_list in
     (* fun v1, ... , vn => t
@@ -408,13 +408,18 @@ module Convert(Term : TERM) = struct
       forall v1, ..., vn => typeof t *)
     let t, new_vars = List.fold_right
       (fun (_,var) (t,new_vars) ->
-        let ty_t = get_ty_ t in
         (* transform the meta-variable into a regular (type) variable *)
         let var' = Var.make ~name:(MetaVar.id var |> ID.name) ~ty:Term.ty_type in
         MetaVar.bind ~var (Term.ty_var var');
         (* build a function over [var'] *)
-        Term.fun_ ~ty:(Term.ty_forall var' ty_t) var' t,
-        var' :: new_vars
+        let t = match close with
+          | `Fun ->
+              let ty_t = get_ty_ t in
+              Term.fun_ ~ty:(Term.ty_forall var' ty_t) var' t
+          | `Forall -> Term.forall var' t
+          | `NoClose -> t
+        in
+        t, var' :: new_vars
       ) vars (t, [])
     in
     t, new_vars
@@ -430,13 +435,17 @@ module Convert(Term : TERM) = struct
         "identifier %s already defined" name
 
   let convert_prop_ ~env t =
-    let t = convert_term_exn ~env t in
+    let t, _ = generalize ~close:`Forall (convert_term_exn ~env t) in
     unify_in_ctx_ ~stack:[] (get_ty_ t) prop;
     t
 
   let convert_cases ~env l =
     List.map
-      (fun (t,l) -> convert_term_exn ~env t, List.map (convert_prop_ ~env) l)
+      (fun (t,l) ->
+        let t, _ = generalize ~close:`NoClose (convert_term_exn ~env t) in
+        let l = List.map (convert_prop_ ~env) l in
+        t, l
+      )
       l
 
   let convert_statement_exn ~(env:env) st =
