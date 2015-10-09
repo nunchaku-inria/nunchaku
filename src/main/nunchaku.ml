@@ -102,15 +102,17 @@ let make_pipeline () =
 (* search for results *)
 let rec traverse_list_ l =
   let module Res = NunProblem.Res in
+  try
   match l() with
-  | `Nil -> E.fail "exhausted possibilities"
-  | `Cons ((res, conv_back), tail) ->
-      match res with
-      | Res.Timeout -> E.fail "timeout"
-      | Res.Unsat -> traverse_list_ tail
-      | Res.Sat m ->
-          let m = conv_back m in
-          E.return m
+    | `Nil -> E.fail "exhausted possibilities"
+    | `Cons ((res, conv_back), tail) ->
+        match res with
+        | Res.Timeout -> E.fail "timeout"
+        | Res.Unsat -> traverse_list_ tail
+        | Res.Sat m ->
+            let m = conv_back m in
+            E.return m
+  with e -> NunUtils.err_of_exn e
 
 (* main *)
 let main () =

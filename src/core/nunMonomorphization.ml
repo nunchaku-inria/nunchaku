@@ -422,7 +422,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       | Stmt.Axiom (Stmt.Axiom_rec _) ->
           (* TODO: fixpoint on the queue of [st] *)
           (* TODO: for each task, check depth  *)
-          assert false (* TODO *)
+          NunUtils.not_implemented "monomorphization of cases"
     in
     let pb' = NunProblem.statements pb
       |> List.rev (* start at the end *)
