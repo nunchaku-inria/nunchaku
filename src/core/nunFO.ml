@@ -62,8 +62,6 @@ type 'ty toplevel_ty = 'ty list * 'ty
 type ('f, 't, 'ty) statement =
   | TyDecl of id * int  (** number of arguments *)
   | Decl of id * 'ty toplevel_ty
-  | Def of id * 'ty toplevel_ty * 't
-  | FormDef of id * 'f
   | Axiom of 'f
   | Goal of 'f
 
@@ -286,12 +284,6 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
         fpf out "@[<2>type %a arity %d.@]" ID.print id n
     | Decl (v, ty) ->
         fpf out "@[<2>val %a@ : %a.@]" ID.print v print_toplevel_ty ty
-    | FormDef (v, t) ->
-        fpf out "@[<2>def %a@ : prop@ := %a.@]"
-          ID.print v print_formula t
-    | Def (v, ty, t) ->
-        fpf out "@[<2>def %a@ : %a@ := %a.@]"
-          ID.print v print_toplevel_ty ty print_term t
     | Axiom t -> fpf out "@[<2>axiom %a.@]" print_formula t
     | Goal t -> fpf out "@[<2>goal %a.@]" print_formula t
 

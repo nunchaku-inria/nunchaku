@@ -67,3 +67,11 @@ module Convert(Term : TERM) : sig
   val convert_problem_exn : env:env -> NunUntypedAST.statement list -> problem * env
 end
 
+(** Pipeline component. Takes input and output Term representations. *)
+val pipe :
+  print:bool ->
+  (module NunTerm_typed.S with type t = 'a) ->
+  (module NunTerm_ho.S with type t = 'b) ->
+  (NunUntypedAST.statement list, ('a, 'a) NunProblem.t,
+    'b NunProblem.Model.t, NunUntypedAST.term NunProblem.Model.t)
+    NunTransform.t

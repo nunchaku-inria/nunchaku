@@ -79,7 +79,6 @@ module Convert(Term : TERM) = struct
   (* Environment *)
 
   type term_def =
-    | Def of ID.t * Term.t
     | Decl of ID.t * Term.Ty.t
     | Var of Term.Ty.t var
 
@@ -107,11 +106,6 @@ module Convert(Term : TERM) = struct
               | Decl (id, t) ->
                   (* var: _ ... _ -> Type mandatory *)
                   if not (Term.Ty.returns_Type t)
-                    then type_errorf ~stack:(push_ ty stack)
-                      "@[<2>expected type,@ const %a is not a type@]" ID.print id;
-                  Term.ty_const ?loc id
-              | Def (id, t) ->
-                  if not (Term.Ty.returns_Type (get_ty_ t))
                     then type_errorf ~stack:(push_ ty stack)
                       "@[<2>expected type,@ const %a is not a type@]" ID.print id;
                   Term.ty_const ?loc id
@@ -143,8 +137,6 @@ module Convert(Term : TERM) = struct
     try E.return (convert_ty_exn ~env ty)
     with e -> E.of_exn e
 
-  let add_def ~env v ~id t = MStr.add v (Def (id, t)) env
-
   let add_decl ~env v ~id ty = MStr.add v (Decl (id, ty)) env
 
   let add_var ~env v ~var = MStr.add v (Var var) env
@@ -154,7 +146,6 @@ module Convert(Term : TERM) = struct
 
   let ty_of_def_ = function
     | Decl (_,ty) -> ty
-    | Def (_,t) -> get_ty_ t
     | Var v -> Var.ty v
 
   let fresh_ty_var_ ~name =
@@ -249,7 +240,6 @@ module Convert(Term : TERM) = struct
         let prop2 = arrow_list [prop; prop] prop in
         let b, ty = match s with
           | A.Builtin.Imply -> B.Imply, prop2
-          | A.Builtin.Equiv -> B.Equiv, prop2
           | A.Builtin.Or -> B.Or, prop2
           | A.Builtin.And -> B.And, prop2
           | A.Builtin.Prop -> ill_formed ?loc "prop is not a term, but a type"
@@ -263,7 +253,6 @@ module Convert(Term : TERM) = struct
     | A.AtVar v ->
         let def = find_ ?loc ~env v in
         begin match def with
-          | Def (id, _)
           | Decl (id, _) ->
               let ty = ty_of_def_ def in
               Term.const ?loc ~ty id
@@ -292,7 +281,6 @@ module Convert(Term : TERM) = struct
         (* a variable might be applied, too *)
         let def = find_ ?loc ~env v in
         let head, ty_head = match def with
-          | Def (id, _)
           | Decl (id, _) ->
               let ty = ty_of_def_ def in
               Term.const ?loc ~ty id, ty
@@ -441,6 +429,21 @@ module Convert(Term : TERM) = struct
       then ill_formedf ~kind:"statement" ?loc
         "identifier %s already defined" name
 
+  let convert_prop_ ~env t =
+    let t = convert_term_exn ~env t in
+    unify_in_ctx_ ~stack:[] (get_ty_ t) prop;
+    t
+
+  let convert_struct ~env s =
+    {St.rec_cases=
+      List.map
+        (fun (t,l) ->
+          {St.case_defines=convert_term_exn ~env t;
+           case_definitions=List.map (convert_prop_ ~env) l;
+          }
+        ) s
+    }
+
   let convert_statement_exn ~(env:env) st =
     let loc = Loc.get_loc st in
     match Loc.get st with
@@ -452,33 +455,16 @@ module Convert(Term : TERM) = struct
         if Term.Ty.returns_Type ty
         then St.ty_decl ?loc id ty, env (* id is a type *)
         else St.decl ?loc id ty, env
-    | A.Def ((v, ty_opt), t) ->
-        check_new_ ?loc ~env v;
-        let id = ID.make ~name:v in
-        (* infer type for t *)
-        let t = convert_ty_exn ~env t in
-        (* generalize type and term *)
-        let t, _ = generalize t in
-        let env = add_def ~env v ~id t in
-        (* unify with [ty_opt] if present *)
-        let ty = get_ty_ t in
-        CCOpt.iter
-          (fun ty ->
-            let ty = convert_ty_exn ~env ty in
-            unify_in_ctx_ ~stack:[] ty (get_ty_ t)
-          ) ty_opt;
-        begin match Term.Ty.view ty with
-        | TyI.Builtin NunBuiltin.Ty.Prop ->
-            St.prop_def ?loc id ~prop t, env  (* prop def *)
-        | _ ->
-            St.def ?loc id ~ty t, env (* regular def *)
-        end
-    | A.Axiom t ->
-        (* infer type for t *)
-        let t = convert_term_exn ~env t in
-        (* be sure it's a proposition *)
-        unify_in_ctx_ ~stack:[] (get_ty_ t) prop;
-        St.axiom ?loc t, env
+    | A.Axiom l ->
+        (* convert terms, and force them to be propositions *)
+        let l = List.map (convert_prop_ ~env) l in
+        St.axiom ?loc l, env
+    | A.Spec s ->
+        let s = convert_struct ~env s in
+        St.axiom_spec ?loc s, env
+    | A.Rec s ->
+        let s = convert_struct ~env s in
+        St.axiom_rec ?loc s, env
     | A.Goal t ->
         (* infer type for t *)
         let t = convert_term_exn ~env t in
@@ -507,3 +493,32 @@ module Convert(Term : TERM) = struct
     try E.return (convert_problem_exn ~env st)
     with e -> E.of_exn e
 end
+
+let pipe (type a) (type b) ~print
+(module T1 : NunTerm_typed.S with type t = a)
+(module T2 : NunTerm_ho.S with type t = b) =
+  let module PrintT = NunTerm_ho.Print(T1) in
+  (* we get back "regular" HO terms *)
+  let module Erase = NunTerm_ho.Erase(T2) in
+  (* type inference *)
+  let module Conv = Convert(T1) in
+  let print_problem = NunProblem.print PrintT.print T1.Ty.print in
+  let on_encoded =
+    if print
+    then [Format.printf "@[<2>after type inference:@ %a@]@." print_problem]
+    else []
+  in
+  NunTransform.make1
+    ~on_encoded
+    ~name:"type inference"
+    ~encode:(fun l ->
+      let problem = l
+        |> Conv.convert_problem_exn ~env:Conv.empty_env
+        |> fst
+      in
+      problem, ()
+    )
+    ~decode:(fun () (model : T2.t NunProblem.Model.t) ->
+      let ctx = Erase.create () in
+      NunProblem.Model.map model ~f:(Erase.erase ~ctx)
+    ) ()

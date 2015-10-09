@@ -66,9 +66,11 @@ module Statement = struct
   let axiom_rec ?loc t = mk_axiom ?loc (Axiom_rec t)
   let goal ?loc t = make_ ?loc (Goal t)
 
-  let map_rec_case f t =
-    {case_defines=f t.case_defines; case_definitions=List.map f t.case_definitions}
-  let map_rec_struct f t = {rec_cases=List.map (map_rec_case f) t.rec_cases}
+  let map_rec_case ~defines ~definition t =
+    {case_defines=defines t.case_defines;
+     case_definitions=List.map definition t.case_definitions}
+  let map_rec_struct ~defines ~definition t =
+    {rec_cases=List.map (map_rec_case ~defines ~definition) t.rec_cases}
 
   let map ~term:ft ~ty:fty st =
     let loc = st.loc in
@@ -79,9 +81,9 @@ module Statement = struct
         begin match a with
         | Axiom_std l -> axiom ?loc (List.map ft l)
         | Axiom_spec t ->
-            axiom_spec ?loc (map_rec_struct ft t)
+            axiom_spec ?loc (map_rec_struct ~defines:ft ~definition:ft t)
         | Axiom_rec t ->
-            axiom_rec ?loc (map_rec_struct ft t)
+            axiom_rec ?loc (map_rec_struct ~defines:ft ~definition:ft t)
         end
     | Goal t -> goal ?loc (ft t)
 
@@ -205,4 +207,26 @@ module Model = struct
     let pp_pair out (t,u) = fpf out "@[<hv2>%a ->@ %a@]" pt t pt u in
     Format.fprintf out "@[<v>%a@]"
       (CCFormat.list ~start:"" ~stop:"" ~sep:"" pp_pair) m
+end
+
+module Res = struct
+  type 't model = 't Model.t
+
+  type 't t =
+    | Unsat
+    | Sat of 't model  (** model maps terms to values *)
+    | Timeout
+
+  let map ~f t = match t with
+    | Unsat -> Unsat
+    | Timeout -> Timeout
+    | Sat model -> Sat (Model.map ~f model)
+
+  let fpf = Format.fprintf
+
+  let print pt out = function
+    | Unsat -> fpf out "unsat"
+    | Timeout -> fpf out "timeout"
+    | Sat m ->
+        fpf out "@[<2>sat {@,%a}@]" (Model.print pt) m
 end

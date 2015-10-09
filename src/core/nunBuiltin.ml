@@ -19,15 +19,13 @@ module T = struct
     | Or
     | And
     | Imply
-    | Equiv
   let fixity = function
     | True
     | False
     | Not -> `Prefix
     | Or
     | And
-    | Imply
-    | Equiv -> `Infix
+    | Imply -> `Infix
   let to_string = function
     | True -> "true"
     | False -> "false"
@@ -35,6 +33,5 @@ module T = struct
     | Or -> "|"
     | And -> "&"
     | Imply -> "=>"
-    | Equiv -> "<=>"
   let equal = (==)
 end

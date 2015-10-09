@@ -34,6 +34,7 @@ module type S = sig
   (** New state *)
 
   val monomorphize :
+    ?depth_limit:int ->
     sigma:T1.ty NunProblem.Signature.t ->
     state:mono_state ->
     (T1.t, T1.ty) NunProblem.t ->
@@ -45,7 +46,11 @@ module type S = sig
       definitions of the symbol with those tuples.
 
       Then it specializes relevant definitions with the set of tuples
-      computed earlier. *)
+      computed earlier.
+
+      @param sigma signature of the problem
+      @param depth_limit recursion limit for specialization of functions
+      @param state used to convert forward and backward *)
 
   (** {6 Convert atomic types to symbols} *)
   module Mangling : sig
@@ -75,4 +80,12 @@ end
 
 module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
   : S with module T1 = T1 and module T2 = T2
+
+(** Pipeline component *)
+val pipe :
+  print:bool ->
+  (module NunTerm_ho.VIEW with type t = 'a) ->
+  (module NunTerm_ho.S with type t = 'b) ->
+  (('a, 'a) NunProblem.t, ('b,'b) NunProblem.t,
+    'b NunProblem.Model.t, 'b NunProblem.Model.t) NunTransform.t
 

@@ -63,8 +63,6 @@ type 'ty toplevel_ty = 'ty list * 'ty
 type ('f, 't, 'ty) statement =
   | TyDecl of id * int  (** number of arguments *)
   | Decl of id * 'ty toplevel_ty
-  | Def of id * 'ty toplevel_ty * 't
-  | FormDef of id * 'f
   | Axiom of 'f
   | Goal of 'f
 

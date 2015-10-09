@@ -317,7 +317,6 @@ module ComputeType(T : S) = struct
         let prop2 = T.ty_arrow T.ty_prop (T.ty_arrow T.ty_prop T.ty_prop) in
         begin match b with
           | B.Imply -> prop2
-          | B.Equiv -> prop2
           | B.Or -> prop2
           | B.And -> prop2
           | B.Not -> prop1
@@ -492,7 +491,6 @@ module Erase(T : VIEW) = struct
           | NunBuiltin.T.Or -> Untyped.Builtin.Or
           | NunBuiltin.T.And -> Untyped.Builtin.And
           | NunBuiltin.T.Imply -> Untyped.Builtin.Imply
-          | NunBuiltin.T.Equiv -> Untyped.Builtin.Equiv
         in Untyped.builtin b
     | Const id -> Untyped.var (find_ ~ctx id)
     | Var v -> Untyped.var (find_ ~ctx (Var.id v))
@@ -634,8 +632,7 @@ module AsFO(T : VIEW) = struct
           | NunBuiltin.T.Not
           | NunBuiltin.T.Or
           | NunBuiltin.T.And
-          | NunBuiltin.T.Imply
-          | NunBuiltin.T.Equiv ->
+          | NunBuiltin.T.Imply ->
               failf t "connective %s not fully applied" (NunBuiltin.T.to_string b)
           end
       | Const _ -> FOI.Atom t
@@ -647,12 +644,11 @@ module AsFO(T : VIEW) = struct
           | Builtin NunBuiltin.T.And, _ -> FOI.And l
           | Builtin NunBuiltin.T.Or, _ -> FOI.Or l
           | Builtin NunBuiltin.T.Imply, [a;b] -> FOI.Imply (a,b)
-          | Builtin NunBuiltin.T.Equiv, [a;b] -> FOI.Equiv (a,b)
           | Builtin _, _ -> fail t "wrong builtin/arity"
           | Const _, _ -> FOI.Atom t
           | _ -> fail t "wrong application in FO formula"
           end
-      | Eq (a,b) -> FOI.Eq (a,b)
+      | Eq (a,b) -> FOI.Eq (a,b) (* FIXME: equiv in some cases? *)
       | Fun (_,_) -> fail t "function in FO formula"
       | Forall (v,f) -> FOI.Forall (v,f)
       | Exists (v,f) -> FOI.Exists (v,f)
@@ -671,30 +667,38 @@ module AsFO(T : VIEW) = struct
   let convert_statement st =
     let module St = NunProblem.Statement in
     match St.view st with
-    | St.TyDecl (id, ty) ->
-        let args, _ = Ty.flatten_arrow ty in
-        let n = List.length args in
-        FOI.TyDecl (id, n)
-    | St.Decl (id,ty) ->
-        let ty = Ty.flatten_arrow ty in
-        FOI.Decl (id, ty)
-    | St.PropDef (id, _prop, t) ->
-        FOI.FormDef (id, t)
-    | St.Def (id,ty,t) ->
-        let ty = Ty.flatten_arrow ty in
-        FOI.Def (id, ty, t)
-    | St.Axiom f -> FOI.Axiom f
-    | St.Goal f -> FOI.Goal f
+    | St.Decl (id, k, ty) ->
+        begin match k with
+        | St.Decl_type ->
+            let args, _ = Ty.flatten_arrow ty in
+            let n = List.length args in
+            [ FOI.TyDecl (id, n) ]
+        | St.Decl_fun ->
+            let ty = Ty.flatten_arrow ty in
+            [ FOI.Decl (id, ty) ]
+        | St.Decl_prop ->
+            let ty = Ty.flatten_arrow ty in
+            [ FOI.Decl (id, ty) ]
+        end
+    | St.Axiom a ->
+        let mk_ax x = FOI.Axiom x in
+        begin match a with
+        | St.Axiom_std l ->
+            List.map mk_ax l
+        | St.Axiom_spec s
+        | St.Axiom_rec s ->
+            CCList.flat_map
+              (fun case -> List.map mk_ax case.St.case_definitions)
+              s.St.rec_cases
+        end
+    | St.Goal f ->
+        [ FOI.Goal f ]
 
   let convert_problem p =
     NunProblem.statements p
-    |> CCList.map convert_statement
+    |> CCList.flat_map convert_statement
     |> FOI.Problem.make
 end
-
-let as_fo (type a) (module T : VIEW with type t = a) =
-  let module U = AsFO(T) in
-  (module U : NunFO.VIEW with type T.t = a and type Ty.t = a and type formula = a)
 
 module OfFO(T : S)(FO : NunFO.VIEW) = struct
   let rec convert_ty t = match FO.Ty.view t with
@@ -742,7 +746,7 @@ module OfFO(T : S)(FO : NunFO.VIEW) = struct
     | NunFO.Imply (a,b) ->
         T.app (T.builtin B.Imply) [convert_formula a; convert_formula b]
     | NunFO.Equiv (a,b) ->
-        T.app (T.builtin B.Equiv) [convert_formula a; convert_formula b]
+        T.eq (convert_formula a) (convert_formula b)
     | NunFO.Forall (v,t) ->
         let v = Var.update_ty v ~f:convert_ty in
         T.forall v (convert_formula t)
@@ -754,3 +758,20 @@ module OfFO(T : S)(FO : NunFO.VIEW) = struct
 
   let convert_model m = NunProblem.Model.map ~f:convert_term m
 end
+
+let to_fo (type a)(type b)
+(module T : S with type t = a)
+(module FO : NunFO.S with type T.t = b) =
+  let module Sol = NunSolver_intf in
+  let module Conv = AsFO(T) in
+  let module ConvBack = OfFO(T)(FO) in
+  NunTransform.make1
+  ~name:"to_fo"
+  ~encode:(fun (pb:(T.t, T.ty) NunProblem.t) ->
+    let pb' = Conv.convert_problem pb in
+    pb', ()
+  )
+  ~decode:(fun _st (m:FO.T.t NunProblem.Model.t) ->
+    ConvBack.convert_model m
+  )
+  ()

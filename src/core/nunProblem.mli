@@ -47,7 +47,7 @@ module Statement : sig
 
   val loc : (_,_) t -> loc option
 
-  val mk_decl : ?loc:loc -> id -> decl -> ('t,'ty) t
+  val mk_decl : ?loc:loc -> id -> decl -> 'ty -> ('t,'ty) t
   val mk_axiom : ?loc:loc -> 'a axiom -> ('a, _) t
 
   val ty_decl : ?loc:loc -> id -> 'a -> (_, 'a) t
@@ -64,14 +64,17 @@ module Statement : sig
 
   val axiom1 : ?loc:loc -> 'a -> ('a,_) t
 
-  val axiom_spec : ?loc:loc -> 'a -> ('a,_) t
+  val axiom_spec : ?loc:loc -> 'a rec_struct -> ('a,_) t
   (** Axiom that can be ignored if not explicitely depended upon by the goal *)
 
-  val axiom_rec : ?loc:loc -> 'a list -> ('a,_) t
+  val axiom_rec : ?loc:loc -> 'a rec_struct -> ('a,_) t
   (** Axiom that is part of an admissible (mutual, partial) definition. *)
 
   val goal : ?loc:loc -> 'a -> ('a,_) t
   (** The goal of the problem *)
+
+  val map_rec_case : defines:('a -> 'b) -> definition:('a -> 'b) -> 'a rec_case -> 'b rec_case
+  val map_rec_struct : defines:('a -> 'b) -> definition:('a -> 'b) -> 'a rec_struct -> 'b rec_struct
 
   val map :
     term:('t -> 't2) ->
@@ -139,6 +142,19 @@ val signature : ?init:'ty Signature.t -> (_, 'ty) t -> 'ty Signature.t
 
 module Model : sig
   type 't t = ('t * 't) list
+
+  val map : f:('a -> 'b) -> 'a t -> 'b t
+
+  val print : 't printer -> 't t printer
+end
+
+(** {2 Result} *)
+
+module Res : sig
+  type 't t =
+    | Unsat
+    | Sat of 't Model.t
+    | Timeout
 
   val map : f:('a -> 'b) -> 'a t -> 'b t
 

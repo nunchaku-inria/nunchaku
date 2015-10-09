@@ -163,14 +163,10 @@ module Make(FO : NunFO.VIEW) = struct
       | FOI.Decl (v,ty) ->
           fpf out "(@[<2>declare-fun@ %a@ %a@])"
             print_id v print_ty_decl ty
-      | FOI.Def (_,_,_) ->
-          NunUtils.not_implemented "cvc4.output definition" (* TODO *)
       | FOI.Axiom t ->
           fpf out "(@[assert@ %a@])" print_form t
       | FOI.Goal t ->
           fpf out "(@[assert@ %a@])" print_form t
-      | FOI.FormDef (_,_) ->
-          NunUtils.not_implemented "cvc4.output formula def" (* TODO *)
 
     in
     fun out pb ->
@@ -346,9 +342,7 @@ module Make(FO : NunFO.VIEW) = struct
     FOI.Problem.statements pb
     |> List.fold_left
       (fun acc s -> match s with
-        | FOI.Decl (id,_)
-        | FOI.Def (id,_,_)
-        | FOI.FormDef (id,_) -> ID.Set.add id acc
+        | FOI.Decl (id,_) -> ID.Set.add id acc
         | FOI.TyDecl (_,_)
         | FOI.Axiom _
         | FOI.Goal _ -> acc
@@ -360,3 +354,43 @@ module Make(FO : NunFO.VIEW) = struct
     send_ s problem;
     s
 end
+
+(* solve problem using CVC4 before [deadline] *)
+let call (type f)(type t)(type ty)
+(module FO : NunFO.VIEW with type T.t=t and type formula=f and type Ty.t=ty)
+~print ~deadline problem =
+  let module FOBack = NunFO.Default in
+  let module P = NunFO.Print(FO) in
+  let module Sol = NunSolver_intf in
+  let module Res = NunProblem.Res in
+  let module CVC4 = Make(FO) in
+  (* how much time remains *)
+  let timeout = deadline -. Unix.gettimeofday() in
+  if timeout < 0.1 then NunProblem.Res.Timeout
+  else (
+    if print
+      then Format.printf "@[<2>FO problem:@ %a@]@." P.print_problem problem;
+    let solver = CVC4.solve ~timeout problem in
+    match CVC4.res solver with
+    | Sol.Res.Sat m ->
+        let m = ID.Map.fold
+          (fun id v acc -> (FOBack.T.const id, v) :: acc)
+          m []
+        in
+        Res.Sat m
+    | Sol.Res.Unsat -> Res.Unsat
+    | Sol.Res.Timeout -> Res.Timeout
+    | Sol.Res.Error e ->
+        failwith e
+  )
+
+(* close a pipeline with CVC4 *)
+let close_pipe (type f)(type t)(type ty)
+(module FO : NunFO.VIEW with type T.t=t and type formula=f and type Ty.t=ty)
+~pipe ~print ~deadline
+=
+  let module FOBack = NunFO.Default in
+  let module P = NunFO.Print(FOBack) in
+  NunTransform.ClosedPipe.make1
+    ~pipe
+    ~f:(call (module FO) ~deadline ~print)

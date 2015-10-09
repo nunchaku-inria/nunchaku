@@ -18,7 +18,6 @@ module T : sig
     | Or
     | And
     | Imply
-    | Equiv
   val fixity : t -> [`Infix | `Prefix]
   val to_string : t -> string
   val equal : t -> t -> bool

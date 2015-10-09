@@ -66,13 +66,13 @@ let print_input_if_needed statements =
 let make_pipeline () =
   let open NunTransform.Pipe in
   (* type inference *)
-  let step_ty_infer = Pipeline.ty_infer ~print:!print_typed_
+  let step_ty_infer = NunTypeInference.pipe ~print:!print_typed_
     (module NunTerm_typed.Default) (module NunTerm_ho.Default) in
   (* encodings *)
-  let step_monomorphization = Pipeline.mono ~print:false
+  let step_monomorphization = NunMonomorphization.pipe ~print:false
     (module NunTerm_typed.Default) (module NunTerm_ho.Default) in
   (* conversion to FO *)
-  let step_fo = Pipeline.to_fo
+  let step_fo = NunTerm_ho.to_fo
     (module NunTerm_ho.Default) (module NunFO.Default)
   in
   (* setup pipeline *)
@@ -84,12 +84,12 @@ let make_pipeline () =
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   let module T = NunTerm_ho.AsFO(NunTerm_ho.Default) in
-  Pipeline.close_pipe_cvc4 (module T)
+  NunCVC4.close_pipe (module T)
     ~pipe ~deadline ~print:!print_fo_
 
 (* search for results *)
 let rec traverse_list_ l =
-  let module Res = Pipeline.Res in
+  let module Res = NunProblem.Res in
   match l() with
   | `Nil -> E.fail "exhausted possibilities"
   | `Cons ((res, conv_back), tail) ->

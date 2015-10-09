@@ -128,10 +128,6 @@ module AsFO(T : VIEW) : sig
     and type formula = T.t
 end
 
-val as_fo :
-  (module VIEW with type t = 'a) ->
-  (module NunFO.VIEW with type T.t = 'a and type Ty.t = 'a and type formula = 'a)
-
 module OfFO(T : S)(FO : NunFO.VIEW) : sig
   val convert_ty : FO.Ty.t -> T.ty
   val convert_term : FO.T.t -> T.t
@@ -139,3 +135,11 @@ module OfFO(T : S)(FO : NunFO.VIEW) : sig
 
   val convert_model : FO.T.t NunProblem.Model.t -> T.t NunProblem.Model.t
 end
+
+val to_fo :
+  (module S with type t = 'a) ->
+  (module NunFO.S with type T.t = 'b) ->
+  (('a, 'a) NunProblem.t,
+    ('a, 'c, 'a) NunFO.Problem.t,
+    'b NunProblem.Model.t, 'a NunProblem.Model.t
+  ) NunTransform.t
