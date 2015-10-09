@@ -109,6 +109,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
   (* substitution *)
   module Subst = Var.Subst(struct type t = T.ty end)
   module SubstUtil = NunTerm_ho.SubstUtil(T)(Subst)
+  module Red = NunReduce.Make(T)(Subst)
 
   (* A tuple of arguments that a given function symbol should be
      instantiated with *)
@@ -305,7 +306,8 @@ module Make(T : NunTerm_ho.S) : S with module T = T
               T.var v
           end
       | TI.App (f,l) ->
-          (* XXX: WHNF would help? *)
+          (* first, beta-reduce locally *)
+          let f, l, subst = Red.Full.whnf ~subst f l in
           begin match T.view f with
           | TI.Builtin b ->
               (* builtins are defined, but examine their args *)
@@ -379,6 +381,17 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           let t = conv_term ~depth ~mangle:false ~subst t in
           t :: take_n_ground_atomic_types_ ~depth ~subst (n-1) l'
     in
+
+    (* specialize mutual cases *)
+    let aux_cases ~depth ~subst l =
+      if depth > depth_limit then []
+      else (
+        (* TODO: fixpoint on the queue of [st] *)
+        (* TODO: for each task, check depth  *)
+        NunUtils.not_implemented "monomorphization of cases"
+      )
+    in
+
     (* maps a statement to 0 to n specialized statements *)
     let aux_statement st =
       NunUtils.debugf ~section 2 "@[<2>convert statement@ %a@]"
@@ -418,11 +431,12 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       | Stmt.Axiom (Stmt.Axiom_std l) ->
           let l = List.map (conv_term ~mangle:true ~depth:0 ~subst:Subst.empty) l in
           [ Stmt.axiom ?loc l ]
-      | Stmt.Axiom (Stmt.Axiom_spec _)
-      | Stmt.Axiom (Stmt.Axiom_rec _) ->
-          (* TODO: fixpoint on the queue of [st] *)
-          (* TODO: for each task, check depth  *)
-          NunUtils.not_implemented "monomorphization of cases"
+      | Stmt.Axiom (Stmt.Axiom_spec l) ->
+          let l = aux_cases ~depth:0 ~subst:Subst.empty l in
+          List.map (fun cases -> Stmt.axiom_spec ?loc cases) l
+      | Stmt.Axiom (Stmt.Axiom_rec l) ->
+          let l = aux_cases ~depth:0 ~subst:Subst.empty l in
+          List.map (fun cases -> Stmt.axiom_rec ?loc cases) l
     in
     let pb' = NunProblem.statements pb
       |> List.rev (* start at the end *)

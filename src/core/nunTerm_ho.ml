@@ -314,6 +314,8 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
     | TyArrow (_,_),_
     | TyForall (_,_),_ -> false
 
+  (* NOTE: when dependent types are added, substitution in types is needed *)
+
   let rec eval ~subst t = match T.view t with
     | TyKind
     | TyType
