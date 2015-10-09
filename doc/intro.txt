@@ -2,22 +2,28 @@
 
 TODO explain there are libraries and the core
 
-{2 The Library}
+{2 The Core Library}
 
 {!modules:
-NunDeref
+NunBuiltin
+NunCVC4
+NunFO
+NunID
 NunIntf
 NunLocation
-NunStatement_intf
-NunStatement_loc
-NunSymbol
+NunMetaVar
+NunMonomorphization
+NunProblem
+NunReduce
+NunSkolem
+NunSolver_intf
+NunTerm_ho
 NunTerm_intf
 NunTerm_typed
 NunTransform
 NunTypeInference
 NunTypeUnify
 NunType_intf
-NunUntypedAST
 NunUntypedAST
 NunUtils
 NunVar
