@@ -110,8 +110,8 @@ module Statement = struct
             fpf out "@[<v2>%a :=@ %a@]@,"
               pt t (CCFormat.list ~start:"" ~stop:"" ~sep:"; " pt) l
           in
-          fpf out "@[<v>%a@]"
-            (CCFormat.list ~start:"" ~stop:"" ~sep:"and " print_case) t
+          fpf out "@[<hov>%a@]"
+            (CCFormat.list ~start:"" ~stop:"" ~sep:" and " print_case) t
         in
         begin match a with
         | Axiom_std l ->

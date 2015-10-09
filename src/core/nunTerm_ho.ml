@@ -18,9 +18,7 @@ type 'a printer = Format.formatter -> 'a -> unit
 open NunTerm_intf
 
 module type VIEW = sig
-  type t
-  type ty = t
-  include NunTerm_intf.VIEW with type t := t and type ty := ty
+  include NunTerm_intf.VIEW_SAME_TY
 
   module Ty : sig
     type t = ty
@@ -29,9 +27,7 @@ module type VIEW = sig
 end
 
 module type S = sig
-  type t
-  type ty = t
-  include NunTerm_intf.VIEW with type t := t and type ty := ty
+  include NunTerm_intf.VIEW_SAME_TY
 
   module Ty : NunType_intf.AS_TERM with type term = t and type t = ty
 

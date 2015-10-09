@@ -11,9 +11,7 @@ type ('a, 'ty) view = ('a, 'ty) NunTerm_intf.view
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
-  type t
-  type ty = t
-  include NunTerm_intf.VIEW with type t := t and type ty := ty
+  include NunTerm_intf.VIEW_SAME_TY
 
   val ty : t -> ty option
   (** The type of a term *)
@@ -23,10 +21,7 @@ end
 
 (** {2 Full Signature} *)
 module type S = sig
-  type t
-  type ty = t
-
-  val view : t -> (t, ty) view
+  include NunTerm_intf.VIEW_SAME_TY
 
   val ty : t -> ty option
   (** The type of a term *)

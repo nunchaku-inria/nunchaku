@@ -177,19 +177,10 @@ module Convert(Term : TERM) = struct
         a :: fill_implicit_ ?loc ty' l'
 
   module Subst = struct
-    module M = Map.Make(struct
-      type t = Term.Ty.t Var.t
-      let compare = Var.compare
-    end)
-
-    type t = Term.Ty.t M.t
-
-    let empty = M.empty
-
-    let bind ~subst v ty = M.add v ty subst
+    include Var.Subst(struct type t = Term.Ty.t end)
 
     (* evaluate the type [ty] under the explicit substitution [subst] *)
-    let rec eval ~(subst:t) ty =
+    let rec eval ~(subst:ty t) ty =
       let loc = Term.loc ty in
       match Term.Ty.view ty with
       | TyI.Kind
@@ -199,7 +190,7 @@ module Convert(Term : TERM) = struct
       | TyI.Meta _ -> ty
       | TyI.Var v ->
           begin try
-            let ty' = M.find v subst in
+            let ty' = find_exn ~subst v in
             eval ~subst ty'
           with Not_found -> ty
           end
@@ -210,7 +201,7 @@ module Convert(Term : TERM) = struct
       | TyI.Forall (v,t) ->
           (* preserve freshness of variables *)
           let v' = Var.fresh_copy v in
-          let subst = bind ~subst v (Term.ty_var v') in
+          let subst = add ~subst v (Term.ty_var v') in
           Term.ty_forall ?loc v' (eval ~subst t)
   end
 
@@ -370,7 +361,7 @@ module Convert(Term : TERM) = struct
     | TyI.Forall (v,ty'), b :: l' ->
         (* [b] must be a type, and we replace [v] with [b] *)
         let b = convert_ty_exn ~env b in
-        let subst = Subst.bind ~subst v b in
+        let subst = Subst.add ~subst v b in
         (* continue *)
         let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty' l' in
         ty', b :: l'
@@ -399,13 +390,12 @@ module Convert(Term : TERM) = struct
     try E.return (convert_term_exn ~env t)
     with e -> E.of_exn e
 
+  module U = NunTerm_intf.Util(Term)
+
   (* TODO ensure that no meta var remains *)
   let generalize ~close t =
-    let ty = get_ty_ t in
-    let vars = Unif.free_meta_vars ty |> ID.Map.to_list in
-    (* fun v1, ... , vn => t
-      of type
-      forall v1, ..., vn => typeof t *)
+    (* type meta-variables *)
+    let vars = U.free_meta_vars t |> ID.Map.to_list in
     let t, new_vars = List.fold_right
       (fun (_,var) (t,new_vars) ->
         (* transform the meta-variable into a regular (type) variable *)
@@ -414,6 +404,9 @@ module Convert(Term : TERM) = struct
         (* build a function over [var'] *)
         let t = match close with
           | `Fun ->
+              (* fun v1, ... , vn => t
+                of type
+                forall v1, ..., vn => typeof t *)
               let ty_t = get_ty_ t in
               Term.fun_ ~ty:(Term.ty_forall var' ty_t) var' t
           | `Forall -> Term.forall var' t

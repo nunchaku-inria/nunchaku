@@ -3,6 +3,9 @@
 
 (** {1 View for terms} *)
 
+module ID = NunID
+module Var = NunVar
+
 type id = NunID.t
 type 'a var = 'a NunVar.t
 
@@ -38,4 +41,100 @@ module type VIEW = sig
   type ty
 
   val view : t -> (t, ty) view
+end
+
+module type VIEW_SAME_TY = sig
+  type t
+  type ty = t
+
+  val view : t -> (t, ty) view
+end
+
+(** {2 Utils} *)
+
+module Util(T : VIEW_SAME_TY) : sig
+  val to_seq : T.t -> T.t Sequence.t
+  (** Iterate on sub-terms *)
+
+  val to_seq_vars : T.t -> T.ty var Sequence.t
+  (** Iterate on variables *)
+
+  val free_meta_vars :
+    ?init:T.ty NunMetaVar.t NunID.Map.t ->
+    T.t ->
+    T.ty NunMetaVar.t NunID.Map.t
+  (** The free type meta-variables in [t] *)
+end = struct
+  let to_seq t yield =
+    let rec aux t =
+      yield t;
+      match T.view t with
+      | TyKind
+      | TyType
+      | TyBuiltin _
+      | TyMeta _
+      | Builtin _
+      | Const _ -> ()
+      | Var v -> aux (Var.ty v)
+      | App (f,l) -> aux f; List.iter aux l
+      | Fun (v,t)
+      | TyForall (v,t)
+      | Forall (v,t)
+      | Exists (v,t) -> aux (Var.ty v); aux t
+      | Let (v,t,u) -> aux (Var.ty v); aux t; aux u
+      | Ite (a,b,c) -> aux a; aux b; aux c
+      | Eq (a,b) -> aux a; aux b
+      | TyArrow (a,b) -> aux a; aux b
+    in
+    aux t
+
+  let to_seq_vars t =
+    to_seq t
+    |> Sequence.filter_map
+        (fun t -> match T.view t with
+          | Var v
+          | Forall (v,_)
+          | Exists (v,_)
+          | TyForall (v,_)
+          | Let (v,_,_)
+          | Fun (v,_) -> Some v
+          | Builtin _
+          | Const _
+          | App (_,_)
+          | Ite (_,_,_)
+          | Eq (_,_)
+          | TyKind
+          | TyType
+          | TyBuiltin _
+          | TyArrow (_,_)
+          | TyMeta _ -> None
+        )
+
+  let to_seq_meta_vars t =
+    to_seq t
+    |> Sequence.filter_map
+        (fun t -> match T.view t with
+          | TyMeta v -> Some v
+          | Var _
+          | Forall (_,_)
+          | Exists (_,_)
+          | TyForall (_,_)
+          | Let (_,_,_)
+          | Fun (_,_)
+          | Builtin _
+          | Const _
+          | App (_,_)
+          | Ite (_,_,_)
+          | Eq (_,_)
+          | TyKind
+          | TyType
+          | TyBuiltin _
+          | TyArrow (_,_) -> None
+        )
+
+  let free_meta_vars ?(init=ID.Map.empty) t =
+    to_seq_meta_vars t
+      |> Sequence.fold
+          (fun acc v -> ID.Map.add (NunMetaVar.id v) v acc)
+          init
 end
