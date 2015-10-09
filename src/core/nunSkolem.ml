@@ -3,6 +3,10 @@
 
 (** {1 Skolemization} *)
 
+module ID = NunID
+module TI = NunTerm_intf
+module Var = NunVar
+
 module type S = sig
   module T1 : NunTerm_ho.VIEW
   module T2 : NunTerm_ho.S
@@ -32,9 +36,33 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
 
   let create () = ()
 
-  let convert_term ~state t = assert false (* TODO *)
+  (* TODO skolemize existential quantifiers *)
+  let convert_term ~state t =
+    let rec aux t = match T1.view t with
+      | TI.Builtin b -> T2.builtin b
+      | TI.Const id -> T2.const id
+      | TI.Var v -> T2.var (aux_var v)
+      | TI.App (f,l) -> T2.app (aux f) (List.map aux l)
+      | TI.Fun (v,t) -> T2.fun_ (aux_var v) (aux t)
+      | TI.Forall (v,t) -> T2.forall (aux_var v) (aux t) 
+      | TI.Exists (v,t) -> T2.exists (aux_var v) (aux t)    
+      | TI.Let (v,t,u) -> T2.let_ (aux_var v) (aux t)(aux u)
+      | TI.Ite (a,b,c) -> T2.ite (aux a)(aux b)(aux c)
+      | TI.Eq (a,b) -> T2.eq (aux a)(aux b)
+      | TI.TyKind -> T2.ty_kind
+      | TI.TyType -> T2.ty_type
+      | TI.TyBuiltin b -> T2.ty_builtin b
+      | TI.TyArrow (a,b) -> T2.ty_arrow (aux a)(aux b)
+      | TI.TyForall (v,t) -> T2.ty_forall (aux_var v) (aux t)
+      | TI.TyMeta _ -> assert false
+    and aux_var = Var.update_ty ~f:aux in
+    aux t
 
-  let convert_problem ~state pb = assert false (* TODO *)
+  let convert_problem ~state pb =
+    NunProblem.map
+      ~term:(convert_term ~state)
+      ~ty:(convert_term ~state)
+      pb
 
   let decode_model ~state m = m (* TODO *)
 end

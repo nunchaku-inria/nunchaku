@@ -15,7 +15,13 @@ module DSexp = CCSexpM.MakeDecode(struct
   let (>>=) x f = f x
 end)
 
-module Make(FO : NunFO.VIEW) = struct
+module Make(FO : NunFO.VIEW) : sig
+  include NunSolver_intf.S
+  with module FO = FO
+  and module FOBack = NunFO.Default
+
+  val print_problem : Format.formatter -> problem -> unit
+end = struct
   module FO = FO
   module T = FO.T
   module Ty = FO.Ty
@@ -358,7 +364,7 @@ end
 (* solve problem using CVC4 before [deadline] *)
 let call (type f)(type t)(type ty)
 (module FO : NunFO.VIEW with type T.t=t and type formula=f and type Ty.t=ty)
-~print ~deadline problem =
+~print ~print_smt ~deadline problem =
   let module FOBack = NunFO.Default in
   let module P = NunFO.Print(FO) in
   let module Sol = NunSolver_intf in
@@ -370,6 +376,8 @@ let call (type f)(type t)(type ty)
   else (
     if print
       then Format.printf "@[<2>FO problem:@ %a@]@." P.print_problem problem;
+    if print_smt
+      then Format.printf "@[<2>SMT problem:@ %a@]@." CVC4.print_problem problem;
     let solver = CVC4.solve ~timeout problem in
     match CVC4.res solver with
     | Sol.Res.Sat m ->
@@ -387,10 +395,10 @@ let call (type f)(type t)(type ty)
 (* close a pipeline with CVC4 *)
 let close_pipe (type f)(type t)(type ty)
 (module FO : NunFO.VIEW with type T.t=t and type formula=f and type Ty.t=ty)
-~pipe ~print ~deadline
+~pipe ~print ~print_smt ~deadline
 =
   let module FOBack = NunFO.Default in
   let module P = NunFO.Print(FOBack) in
   NunTransform.ClosedPipe.make1
     ~pipe
-    ~f:(call (module FO) ~deadline ~print)
+    ~f:(call (module FO) ~deadline ~print ~print_smt)

@@ -15,6 +15,7 @@ end
 val call :
   (module NunFO.VIEW with type formula = 'a and type T.t = 'b and type Ty.t = 'c) ->
   print:bool ->
+  print_smt:bool ->
   deadline:float ->
   ('a, 'b, 'c) NunFO.Problem.t ->
   NunFO.Default.T.t NunProblem.Res.t
@@ -24,5 +25,6 @@ val close_pipe :
   (module NunFO.VIEW with type formula = 'a and type T.t = 'b and type Ty.t = 'c) ->
   pipe:('d, ('a, 'b, 'c) NunFO.Problem.t, 'e, 'f) NunTransform.Pipe.t ->
   print:bool ->
+  print_smt:bool ->
   deadline:float ->
   ('d, 'e, 'f, NunFO.Default.T.t NunProblem.Res.t) NunTransform.ClosedPipe.t

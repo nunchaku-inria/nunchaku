@@ -228,7 +228,7 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
 
   let fpf = Format.fprintf
 
-  let pp_list_ out p = CCFormat.list ~start:"" ~stop:"" ~sep:" " out p
+  let pp_list_ ?(sep=" ") out p = CCFormat.list ~start:"" ~stop:"" ~sep out p
 
   let rec print_ty out ty = match FO.Ty.view ty with
     | TyApp (id, []) -> ID.print_no_id out id
@@ -238,7 +238,7 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
 
   let print_toplevel_ty out (args, ret) =
     if args=[] then print_ty out ret
-    else fpf out "@[<2>(%a -> %a)@]" (pp_list_ print_ty) args print_ty ret
+    else fpf out "@[<2>(%a -> %a)@]" (pp_list_ ~sep:" × " print_ty) args print_ty ret
 
   let rec print_term out t = match FO.T.view t with
     | Builtin b -> Builtin.print out b
