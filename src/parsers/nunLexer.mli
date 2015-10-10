@@ -29,3 +29,11 @@ val term_of_string_exn : string -> term
 val statement_of_string : string -> statement or_error
 
 val statement_of_string_exn : string -> statement
+
+module HO : sig
+  module T = NunTerm_ho.Default
+
+  val term_of_str : string -> T.t or_error
+  val term_of_str_exn : string -> T.t
+end
+

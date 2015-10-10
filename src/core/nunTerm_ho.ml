@@ -791,3 +791,83 @@ let to_fo (type a)(type b)
     ConvBack.convert_model m
   )
   ()
+
+(** {2 Conversion of UntypedAST to HO, without Type-Checking} *)
+
+module OfUntyped(T : S) = struct
+  module A = NunUntypedAST
+  module Loc = NunLocation
+
+  exception Error of A.term * string
+
+  let () = Printexc.register_printer
+    (function
+      | Error (t,s) ->
+          Some (CCFormat.sprintf "of_untyped: error on %a: %s" A.print_term t s)
+      | _ -> None
+    )
+
+  let error_ t s = raise (Error (t,s))
+
+  type env_cell =
+    | ID of ID.t
+    | Var of T.t Var.t
+
+  let convert_term t =
+    let env = Hashtbl.create 32 in
+    let rec aux t = match Loc.get t with
+      | A.App (f, l) ->
+          T.app (aux f) (List.map aux l)
+      | A.Wildcard -> error_ t "wildcard not supported"
+      | A.Builtin b ->
+          let module B = NunBuiltin in
+          begin match b with
+          | A.Builtin.Prop -> T.ty_prop
+          | A.Builtin.Type -> T.ty_type
+          | A.Builtin.Not -> T.ty_builtin B.Ty.Prop
+          | A.Builtin.And -> T.builtin B.T.And
+          | A.Builtin.Or -> T.builtin B.T.Or
+          | A.Builtin.True -> T.builtin B.T.True
+          | A.Builtin.False -> T.builtin B.T.False
+          | A.Builtin.Eq -> error_ t "unapplied equality"
+          | A.Builtin.Imply -> T.builtin B.T.Imply
+          end
+      | A.AtVar s
+      | A.Var s ->
+          begin try
+            match Hashtbl.find env s with
+            | ID id -> T.const id
+            | Var v -> T.var v
+          with Not_found ->
+            (* constant, not variable *)
+            let id = ID.make ~name:s in
+            Hashtbl.add env s (ID id);
+            T.const id
+          end
+      | A.Exists ((_, None), _)
+      | A.Forall ((_, None), _)
+      | A.Fun ((_, None), _) -> error_ t "untyped variable"
+      | A.Fun ((v, Some ty),t) ->
+          enter_var_ ~ty v (fun v -> T.fun_ v (aux t))
+      | A.Let _ ->
+          error_ t "`let` unsupported (no way of inferring the type)"
+      | A.Ite (a,b,c) -> T.ite (aux a) (aux b) (aux c)
+      | A.Forall ((v,Some ty),t) ->
+          enter_var_ ~ty v (fun v -> T.forall v (aux t))
+      | A.Exists ((v, Some ty),t) ->
+          enter_var_ ~ty v (fun v -> T.exists v (aux t))
+      | A.TyArrow (a,b) -> T.ty_arrow (aux a) (aux b)
+      | A.TyForall (v,t) ->
+          enter_var_ ~ty:(A.builtin A.Builtin.Type) v (fun v -> T.ty_forall v (aux t))
+
+    (* enter scope of [s] *)
+    and enter_var_ s ~ty f =
+      let ty = aux ty in
+      let v = Var.make ~name:s ~ty in
+      Hashtbl.add env s (Var v);
+      let x = f v in
+      Hashtbl.remove env s;
+      x
+    in
+    aux t
+end

@@ -126,4 +126,17 @@ rule token = parse
 
   let statement_of_string = try_parse_ NunParser.parse_statement
   let statement_of_string_exn = parse_str_ NunParser.parse_statement
+
+  module HO = struct
+    module T = NunTerm_ho.Default
+    module Conv = NunTerm_ho.OfUntyped(T)
+
+    let term_of_str_exn s =
+      let t = term_of_string_exn s in
+      Conv.convert_term t
+
+    let term_of_str s =
+      try CCError.return (term_of_str_exn s)
+      with e -> NunUtils.err_of_exn e
+  end
 }

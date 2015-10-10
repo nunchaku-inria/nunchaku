@@ -132,6 +132,16 @@ module AsFO(T : VIEW) : sig
     and type formula = T.t
 end
 
+val to_fo :
+  (module S with type t = 'a) ->
+  (module NunFO.S with type T.t = 'b) ->
+  (('a, 'a) NunProblem.t,
+    ('a, 'c, 'a) NunFO.Problem.t,
+    'b NunProblem.Model.t, 'a NunProblem.Model.t
+  ) NunTransform.t
+
+(** {2 Convert FO to HO} *)
+
 module OfFO(T : S)(FO : NunFO.VIEW) : sig
   val convert_ty : FO.Ty.t -> T.ty
   val convert_term : FO.T.t -> T.t
@@ -140,10 +150,13 @@ module OfFO(T : S)(FO : NunFO.VIEW) : sig
   val convert_model : FO.T.t NunProblem.Model.t -> T.t NunProblem.Model.t
 end
 
-val to_fo :
-  (module S with type t = 'a) ->
-  (module NunFO.S with type T.t = 'b) ->
-  (('a, 'a) NunProblem.t,
-    ('a, 'c, 'a) NunFO.Problem.t,
-    'b NunProblem.Model.t, 'a NunProblem.Model.t
-  ) NunTransform.t
+(** {2 Conversion of UntypedAST to HO, without Type-Checking}
+
+  This should be useful mostly for tests: parse and convert a term to a usable
+  format in a simple way *)
+
+module OfUntyped(T : S) : sig
+  exception Error of NunUntypedAST.term * string
+
+  val convert_term : NunUntypedAST.term -> T.t
+end

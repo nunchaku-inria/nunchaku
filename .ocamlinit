@@ -2,6 +2,8 @@
 #use "topfind";;
 #require "containers";;
 #require "containers.iter";;
+#require "containers.sexp";;
+#require "containers.data";;
 #require "unix";;
 #require "sequence";;
 
