@@ -90,6 +90,12 @@ module Make(T : NunTerm_ho.S) : S with module T = T
 
   module TyUtils = TyI.Utils(T.Ty)
   module P = NunTerm_ho.Print(T)
+  module TU = NunTerm_intf.Util(T)
+
+  (* substitution *)
+  module Subst = Var.Subst(struct type t = T.ty end)
+  module SubstUtil = NunTerm_ho.SubstUtil(T)(Subst)
+  module Red = NunReduce.Make(T)(Subst)
 
   (* number of parameters of this (polymorphic?) T.ty type *)
   let rec num_param_ty_ ty = match T.Ty.view ty with
@@ -105,11 +111,6 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           then 1 + num_param_ty_ t'
           else 0  (* asks for term parameters *)
     | TyI.Forall (_,t) -> 1 + num_param_ty_ t
-
-  (* substitution *)
-  module Subst = Var.Subst(struct type t = T.ty end)
-  module SubstUtil = NunTerm_ho.SubstUtil(T)(Subst)
-  module Red = NunReduce.Make(T)(Subst)
 
   (* A tuple of arguments that a given function symbol should be
      instantiated with *)
@@ -161,8 +162,8 @@ module Make(T : NunTerm_ho.S) : S with module T = T
     type t = ArgTuple.t list
 
     let empty = []
-    let is_empty = CCList.is_empty
     let to_list l = l
+    let to_seq = Sequence.of_list
 
     let rec mem tup = function
       | [] -> false
@@ -173,7 +174,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       if mem tup l then l else tup :: l
 
     let print out =
-      fpf out "{@[<hv1>%a@]}" (CCFormat.list ~start:"" ~stop:"" ArgTuple.print)
+      fpf out "@[<hv1>%a@]" (CCFormat.list ~start:"" ~stop:"" ArgTuple.print)
   end
 
   (** set of tuples of parameters to instantiate a given function symbol with *)
@@ -199,7 +200,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       ID.Map.add id set t
 
     let print out t =
-      fpf out "@[<hv>instances{%a@]@,}"
+      fpf out "@[<hv>instances{@,%a@]@,}"
         (ID.Map.print ~start:"" ~stop:"" ID.print_no_id ArgTupleSet.print) t
   end
 
@@ -212,8 +213,6 @@ module Make(T : NunTerm_ho.S) : S with module T = T
     type depth = int
 
     type t = {
-      to_process : (ID.t * ArgTuple.t * depth) Queue.t;
-        (* tuples to process (with recursion depth) *)
       mangle : (string, ID.t) Hashtbl.t;
         (* mangled name -> mangled ID *)
       unmangle : (ID.t * T.t list) ID.Tbl.t;
@@ -222,28 +221,44 @@ module Make(T : NunTerm_ho.S) : S with module T = T
         (* tuples that must be instantiated *)
       mutable processed: SetOfInstances.t;
         (* tuples already instantiated (subset of [required]) *)
+      mutable on_schedule : depth:depth -> ID.t -> ArgTuple.t -> unit;
     }
 
     let is_processed ~state id tup = SetOfInstances.mem state.processed id tup
-
-    let required ~state id tup = SetOfInstances.mem state.required id tup
 
     let required_id ~state id = SetOfInstances.mem_id state.required id
 
     let schedule ~state ~depth id tup =
       NunUtils.debugf ~section 3 "require %a on %a" ID.print id ArgTuple.print tup;
       state.required <- SetOfInstances.add state.required id tup;
-      Queue.push (id,tup,depth) state.to_process
+      state.on_schedule ~depth id tup
+
+    (* find tuples to process that match [t] *)
+    let find_matching ~state t =
+      let id = TU.head_sym t in
+      let set = SetOfInstances.args state.required id in
+      ArgTupleSet.to_seq set
+      |> Sequence.filter_map
+        (fun tup ->
+          let t2 = T.app (T.const id) (ArgTuple.args tup) in
+          try
+            let subst = SubstUtil.match_exn t t2 in
+            Some (id, tup, subst)
+          with SubstUtil.UnifError _ -> None
+        )
 
     let create () = {
       processed=SetOfInstances.empty;
       required=SetOfInstances.empty;
       mangle=Hashtbl.create 64;
       unmangle=ID.Tbl.create 64;
-      to_process=Queue.create();
+      on_schedule=(fun ~depth:_ _ _ -> ());
     }
 
     let find_tuples ~state id = SetOfInstances.args state.required id
+
+    let reset_on_schedule ~state =
+      state.on_schedule <- (fun ~depth:_ _ _ -> ())
 
     (* remember that (id,tup) -> mangled *)
     let save_mangled ~state id tup ~mangled =
@@ -285,10 +300,22 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       let mangled = St.save_mangled ~state id args ~mangled:name in
       mangled, Some mangled
 
+  (* find a case matching [id tup] in [cases], or None *)
+  let find_case_ ~subst ~cases id tup =
+    let t = T.app (T.const id) (ArgTuple.args tup) in
+    CCList.find_map
+      (fun case ->
+        match SubstUtil.match_ ~subst2:subst case.Stmt.case_defined t with
+        | None -> None
+        | Some subst' -> Some (case, subst')
+      )
+      cases
+
   let monomorphize ?(depth_limit=256) ~sigma ~state pb =
     (* map T.t to T.t and, simultaneously, compute relevant instances
        of symbols [t] depends on.
        @param subst bindings for type variables
+       @param f called on every schedule
        @param mangle enable/disable mangling (in types...)
       *)
     let rec conv_term ~mangle ~depth ~subst t =
@@ -384,18 +411,58 @@ module Make(T : NunTerm_ho.S) : S with module T = T
     in
 
     (* specialize mutual cases *)
-    let aux_cases ~depth ~subst l =
-      if depth > depth_limit then []
-      else (
-        (* TODO: fixpoint on the queue of [st] *)
-        (* TODO: for each task, check depth  *)
-        NunUtils.not_implemented "monomorphization of cases"
-      )
+    let aux_cases ~subst cases =
+      let q = Queue.create () in (* task list, for the fixpoint *)
+      let res = ref [] in (* resulting axioms *)
+      (* if we required monomorphization of [id tup], and some case in [l]
+         matches [id tup], then push into the queue so that it will be
+         processed in the fixpoint *)
+      let on_schedule ~depth id tup =
+        match find_case_ ~subst ~cases id tup with
+        | None -> ()
+        | Some (case, subst) ->
+            Queue.push (id, tup, depth, case, subst) q
+      in
+      state.St.on_schedule <- on_schedule;
+      (* push already required tuples into the queue *)
+      List.iter
+        (fun case ->
+          St.find_matching ~state case.Stmt.case_defined
+          |> Sequence.iter
+            (fun (id, tup, subst) -> Queue.push (id, tup, 0, case, subst) q)
+        ) cases;
+      (* fixpoint *)
+      while not (Queue.is_empty q) do
+        let id, tup, depth, case, subst = Queue.take q in
+        (* check for depth limit and loops *)
+        if depth > depth_limit
+        || St.is_processed ~state id tup then ()
+        else (
+          NunUtils.debugf ~section 3
+            "@[<2>process case `%a` for@ (%a %a)@ at depth %d@]"
+            P.print case.Stmt.case_defined ID.print_no_id id ArgTuple.print tup depth;
+          (* avoid loops *)
+          St.has_processed ~state id tup;
+          (* we know [subst case.defined = (id args)], now
+              specialize the axioms of case and output them *)
+          let subst = Subst.add ~subst case.Stmt.case_alias case.Stmt.case_defined in
+          List.iter
+            (fun ax ->
+              (* monomorphize axiom, and push it in res *)
+              let ax = conv_term ~subst ~depth:(depth+1) ~mangle:true ax in
+              CCList.Ref.push res ax
+            )
+            case.Stmt.case_axioms
+        )
+      done;
+      (* remove callback *)
+      St.reset_on_schedule ~state;
+      !res
     in
 
     (* maps a statement to 0 to n specialized statements *)
     let aux_statement st =
-      NunUtils.debugf ~section 2 "@[<2>convert statement@ %a@]"
+      NunUtils.debugf ~section 2 "@[<2>convert statement@ `%a`@]"
         (NunProblem.Statement.print P.print P.print_ty) st;
       (* process statement *)
       let loc = Stmt.loc st in
@@ -433,11 +500,11 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           let l = List.map (conv_term ~mangle:true ~depth:0 ~subst:Subst.empty) l in
           [ Stmt.axiom ?loc l ]
       | Stmt.Axiom (Stmt.Axiom_spec l) ->
-          let l = aux_cases ~depth:0 ~subst:Subst.empty l in
-          List.map (fun cases -> Stmt.axiom_spec ?loc cases) l
+          let l = aux_cases ~subst:Subst.empty l in
+          [ Stmt.axiom ?loc l ]
       | Stmt.Axiom (Stmt.Axiom_rec l) ->
-          let l = aux_cases ~depth:0 ~subst:Subst.empty l in
-          List.map (fun cases -> Stmt.axiom_rec ?loc cases) l
+          let l = aux_cases ~subst:Subst.empty l in
+          [ Stmt.axiom ?loc l ]
     in
     let pb' = NunProblem.statements pb
       |> List.rev (* start at the end *)
@@ -476,12 +543,12 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       rev=ID.Tbl.create 64;
     }
 
-    let mangle_term ~state t = assert false (* TODO: traverse term, use trie *)
+    let mangle_term ~state:_ _ = assert false (* TODO: traverse term, use trie *)
 
     let mangle_problem ~state pb =
       NunProblem.map ~term:(mangle_term ~state) ~ty:(mangle_term ~state) pb
 
-    let unmangle_term ~state t = assert false (* TODO reverse mapping *)
+    let unmangle_term ~state:_ _ = assert false (* TODO reverse mapping *)
 
     let unmangle_model ~state m =
       NunProblem.Model.map ~f:(unmangle_term ~state) m

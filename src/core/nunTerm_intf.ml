@@ -59,12 +59,21 @@ module Util(T : VIEW_SAME_TY) : sig
   val to_seq_vars : T.t -> T.ty var Sequence.t
   (** Iterate on variables *)
 
+  val head_sym : T.t -> id
+  (** Search for a head symbol
+      @raise Not_found if not an application/const *)
+
   val free_meta_vars :
     ?init:T.ty NunMetaVar.t NunID.Map.t ->
     T.t ->
     T.ty NunMetaVar.t NunID.Map.t
   (** The free type meta-variables in [t] *)
 end = struct
+  let rec head_sym t = match T.view t with
+    | App (f, _) -> head_sym f
+    | Const id -> id
+    | _ -> raise Not_found
+
   let to_seq t yield =
     let rec aux t =
       yield t;

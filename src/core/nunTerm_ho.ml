@@ -6,6 +6,12 @@
   To be used after type inference, i.e. converted from {!NunTerm_typed}
 *)
 
+(*$inject
+  let pterm = NunLexer.HO.term_of_str_exn
+
+  module Su = SubstUtil(Default)
+*)
+
 module ID = NunID
 module Var = NunVar
 module TyI = NunType_intf
