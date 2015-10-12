@@ -118,7 +118,7 @@ exception NotImplemented of string
 
 let () = Printexc.register_printer
   (function
-    | NotImplemented s -> Some ("feature `" ^ s ^ "` is not implemented")
+    | NotImplemented s -> Some ("error: feature `" ^ s ^ "` is not implemented")
     | _ -> None
   )
 

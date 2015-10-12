@@ -16,29 +16,36 @@ module Statement : sig
     | Decl_fun
     | Decl_prop
 
-  (** definition of one term, by a list of axioms.
-    - first element is the term being defined/refined
-    - second element is a list of axioms *)
-  type 't case = 't * 't list
+  (** defines [t], aliased as local variable [v], with the [axioms].
+    All the type variables [alpha_1, ..., alpha_n] are free in [t]
+    and in [axioms], and no other type variable should occur. *)
+  type ('t,'ty) case = {
+    case_vars: 'ty NunVar.t list; (* alpha_1, ..., alpha_n *)
+    case_defined: 't; (* t *)
+    case_alias: 'ty NunVar.t; (* v *)
+    case_axioms: 't list; (* axioms *)
+  }
+
+  val case_vars : ('t,'ty) case -> 'ty NunVar.t list
+  val case_alias : ('t,'ty) case -> 'ty NunVar.t
+  val case_defined : ('t,'ty) case -> 't
+  val case_axioms : ('t,'ty) case -> 't list
 
   (* mutual definition of several terms *)
-  type 't mutual_cases = 't case list
-
-  val case_defines : 't case -> 't
-  val case_definitions : 't case -> 't list
+  type ('t,'ty) mutual_cases = ('t,'ty) case list
 
   (** Flavour of axiom *)
-  type 't axiom =
+  type ('t,'ty) axiom =
     | Axiom_std of 't list
       (** Axiom list that can influence consistency (no assumptions) *)
-    | Axiom_spec of 't mutual_cases
+    | Axiom_spec of ('t,'ty) mutual_cases
       (** Axioms can be safely ignored, they are consistent *)
-    | Axiom_rec of 't mutual_cases
+    | Axiom_rec of ('t,'ty) mutual_cases
       (** Axioms are part of an admissible (partial) definition *)
 
   type ('term, 'ty) view =
     | Decl of id * decl * 'ty
-    | Axiom of 'term axiom
+    | Axiom of ('term, 'ty) axiom
     | Goal of 'term
 
   type ('term,'ty) t
@@ -48,7 +55,7 @@ module Statement : sig
   val loc : (_,_) t -> loc option
 
   val mk_decl : ?loc:loc -> id -> decl -> 'ty -> ('t,'ty) t
-  val mk_axiom : ?loc:loc -> 'a axiom -> ('a, _) t
+  val mk_axiom : ?loc:loc -> ('a,'ty) axiom -> ('a, 'ty) t
 
   val ty_decl : ?loc:loc -> id -> 'a -> (_, 'a) t
   (** declare a type constructor *)
@@ -64,18 +71,26 @@ module Statement : sig
 
   val axiom1 : ?loc:loc -> 'a -> ('a,_) t
 
-  val axiom_spec : ?loc:loc -> 'a mutual_cases -> ('a,_) t
+  val axiom_spec : ?loc:loc -> ('a,'ty) mutual_cases -> ('a,'ty) t
   (** Axiom that can be ignored if not explicitely depended upon by the goal *)
 
-  val axiom_rec : ?loc:loc -> 'a mutual_cases -> ('a,_) t
+  val axiom_rec : ?loc:loc -> ('a,'ty) mutual_cases -> ('a,'ty) t
   (** Axiom that is part of an admissible (mutual, partial) definition. *)
 
   val goal : ?loc:loc -> 'a -> ('a,_) t
   (** The goal of the problem *)
 
-  val map_case : defines:('a -> 'b) -> definition:('a -> 'b) -> 'a case -> 'b case
-  val map_cases : defines:('a -> 'b) -> definition:('a -> 'b) ->
-                  'a mutual_cases -> 'b mutual_cases
+  val map_case :
+    term:('t -> 't2) ->
+    ty:('ty -> 'ty2) ->
+    ('t, 'ty) case ->
+    ('t2, 'ty2) case
+
+  val map_cases :
+    term:('t -> 't2) ->
+    ty:('ty -> 'ty2) ->
+    ('t, 'ty) mutual_cases ->
+    ('t2, 'ty2) mutual_cases
 
   val map :
     term:('t -> 't2) ->

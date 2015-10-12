@@ -5,6 +5,7 @@
 
 module Loc = NunLocation
 module ID = NunID
+module Var = NunVar
 
 type loc = Loc.t
 type id = ID.t
@@ -19,35 +20,43 @@ module Statement = struct
     | Decl_fun
     | Decl_prop
 
-  (** definition of one term, by a list of axioms.
-    - first element is the term being defined/refined
-    - second element is a list of axioms *)
-  type 't case = 't * 't list
+
+  (** defines [t], aliased as local variable [v], with the [axioms].
+    All the type variables [alpha_1, ..., alpha_n] are free in [t]
+    and in [axioms], and no other type variable should occur. *)
+  type ('t,'ty) case = {
+    case_vars: 'ty NunVar.t list; (* alpha_1, ..., alpha_n *)
+    case_defined: 't; (* t *)
+    case_alias: 'ty NunVar.t; (* v *)
+    case_axioms: 't list; (* axioms *)
+  }
 
   (* mutual definition of several terms *)
-  type 't mutual_cases = 't case list
-
-  let case_defines = fst
-  let case_definitions = snd
+  type ('t,'ty) mutual_cases = ('t,'ty) case list
 
   (** Flavour of axiom *)
-  type 't axiom =
+  type ('t,'ty) axiom =
     | Axiom_std of 't list
       (** Axiom list that can influence consistency (no assumptions) *)
-    | Axiom_spec of 't mutual_cases
+    | Axiom_spec of ('t,'ty) mutual_cases
       (** Axioms can be safely ignored, they are consistent *)
-    | Axiom_rec of 't mutual_cases
+    | Axiom_rec of ('t,'ty) mutual_cases
       (** Axioms are part of an admissible (partial) definition *)
 
   type ('term, 'ty) view =
     | Decl of id * decl * 'ty
-    | Axiom of 'term axiom
+    | Axiom of ('term, 'ty) axiom
     | Goal of 'term
 
   type ('a, 'b) t = {
     view: ('a, 'b) view;
     loc: Loc.t option;
   }
+
+  let case_defined t = t.case_defined
+  let case_axioms t = t.case_axioms
+  let case_alias t = t.case_alias
+  let case_vars t = t.case_vars
 
   let view t = t.view
   let loc t = t.loc
@@ -66,10 +75,14 @@ module Statement = struct
   let axiom_rec ?loc t = mk_axiom ?loc (Axiom_rec t)
   let goal ?loc t = make_ ?loc (Goal t)
 
-  let map_case ~defines ~definition (t,l) =
-    defines t, List.map definition l
-  let map_cases ~defines ~definition t =
-    List.map (map_case ~defines ~definition) t
+  let map_case ~term ~ty t = {
+    case_vars=List.map (Var.update_ty ~f:ty) t.case_vars;
+    case_defined=term t.case_defined;
+    case_axioms=List.map term t.case_axioms;
+    case_alias=Var.update_ty ~f:ty t.case_alias;
+  }
+
+  let map_cases ~term ~ty t = List.map (map_case ~term ~ty) t
 
   let map ~term:ft ~ty:fty st =
     let loc = st.loc in
@@ -80,9 +93,9 @@ module Statement = struct
         begin match a with
         | Axiom_std l -> axiom ?loc (List.map ft l)
         | Axiom_spec t ->
-            axiom_spec ?loc (map_cases ~defines:ft ~definition:ft t)
+            axiom_spec ?loc (map_cases ~term:ft ~ty:fty t)
         | Axiom_rec t ->
-            axiom_rec ?loc (map_cases ~defines:ft ~definition:ft t)
+            axiom_rec ?loc (map_cases ~term:ft ~ty:fty t)
         end
     | Goal t -> goal ?loc (ft t)
 
@@ -94,10 +107,15 @@ module Statement = struct
         | Axiom_spec t
         | Axiom_rec t ->
             List.fold_left
-              (fun acc (t,l) ->
-                let acc = term acc t in
-                List.fold_left term acc l
-              ) acc t
+              (fun acc case ->
+                let acc = term acc case.case_defined in
+                let acc = ty acc (Var.ty case.case_alias) in
+                let acc = List.fold_left
+                  (fun acc v -> ty acc (Var.ty v))
+                  acc case.case_vars in
+                List.fold_left term acc case.case_axioms
+              )
+              acc t
         end
     | Goal t -> term acc t
 
@@ -106,9 +124,10 @@ module Statement = struct
         fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id id pty t
     | Axiom a ->
         let print_cases out t =
-          let print_case out (t,l) =
-            fpf out "@[<v2>%a :=@ %a@]@,"
-              pt t (CCFormat.list ~start:"" ~stop:"" ~sep:"; " pt) l
+          let print_case out c =
+            fpf out "@[<v2>@[%a@] as %a :=@ %a@]@,"
+              pt c.case_defined Var.print c.case_alias
+              (CCFormat.list ~start:"" ~stop:"" ~sep:"; " pt) c.case_axioms
           in
           fpf out "@[<hov>%a@]"
             (CCFormat.list ~start:"" ~stop:"" ~sep:" and " print_case) t

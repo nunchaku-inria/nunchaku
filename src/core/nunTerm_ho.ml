@@ -704,7 +704,7 @@ module AsFO(T : VIEW) = struct
         | St.Axiom_spec s
         | St.Axiom_rec s ->
             CCList.flat_map
-              (fun c -> List.map mk_ax (St.case_definitions c))
+              (fun c -> List.map mk_ax (St.case_axioms c))
               s
         end
     | St.Goal f ->

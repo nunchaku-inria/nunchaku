@@ -48,6 +48,7 @@ rule token = parse
   | "=" { LOGIC_EQ }
   | ":=" { EQDEF }
   | "->" { ARROW }
+  | "as" { AS }
   | "fun" { FUN }
   | "rec" { REC }
   | "spec" { SPEC }

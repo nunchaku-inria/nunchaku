@@ -94,11 +94,15 @@ and ty = term
 (** A variable with, possibly, its type *)
 and typed_var = var * ty option
 
+(* mutual definitions of terms, with their alias (a variable),
+   and a list of axioms *)
+type mutual_cases = (term * string * term list) list
+
 type statement_node =
   | Decl of var * ty (* declaration of uninterpreted symbol *)
   | Axiom of term list (* axiom *)
-  | Spec of (term * term list) list (* mutual spec *)
-  | Rec of (term * term list) list (* mutual rec *)
+  | Spec of mutual_cases (* mutual spec *)
+  | Rec of mutual_cases (* mutual rec *)
   | Goal of term (* goal *)
 
 type statement = statement_node Loc.with_loc
@@ -190,8 +194,12 @@ and print_typed_var out (v,ty) = match ty with
 let pp_list_ ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
 
 let pp_struct out l =
-  let pp_case out (t,l) =
-    pf out "@[<hv>%a@ %a@]" print_term t (pp_list_ ~sep:";" print_term) l
+  let ppterms = pp_list_ ~sep:";" print_term in
+  let pp_case out (t,v,l) = match Loc.get t with
+  | Var v' when v=v' ->
+      pf out "@[<hv>%a :=@ %a@]" print_term t ppterms l
+  | _ ->
+      pf out "@[<hv>%a as %s :=@ %a@]" print_term t v ppterms l
   in
   pf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_case) l
 

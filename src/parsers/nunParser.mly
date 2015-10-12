@@ -21,6 +21,7 @@
 %token DOT
 %token COLUMN
 %token EQDEF
+%token AS
 %token LET
 %token IN
 %token IF
@@ -216,8 +217,13 @@ term:
     }
 
 case:
-  | t=term EQDEF l=separated_nonempty_list(SEMI_COLUMN, term) option(SEMI_COLUMN)
-    { t, l }
+  | v=raw_var EQDEF l=separated_nonempty_list(SEMI_COLUMN,term) SEMI_COLUMN?
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.var ~loc v, v, l
+    }
+  | t=term AS v=raw_var EQDEF l=separated_nonempty_list(SEMI_COLUMN, term) SEMI_COLUMN?
+    { t, v, l }
 
 structure:
   | l=separated_nonempty_list(AND, case) { l }

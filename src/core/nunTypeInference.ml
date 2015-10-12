@@ -427,17 +427,48 @@ module Convert(Term : TERM) = struct
       then ill_formedf ~kind:"statement" ?loc
         "identifier %s already defined" name
 
-  let convert_prop_ ~env t =
-    let t, _ = generalize ~close:`Forall (convert_term_exn ~env t) in
+  (* convert [t] into a prop, call [f], generalize [t] *)
+  let convert_prop_ ?(f=CCFun.const ()) ~env t =
+    let t = convert_term_exn ~env t in
     unify_in_ctx_ ~stack:[] (get_ty_ t) prop;
+    f t;
+    let t, _ = generalize ~close:`Forall t in
     t
 
-  let convert_cases ~env l =
+  let convert_cases ?loc ~env l =
     List.map
-      (fun (t,l) ->
-        let t, _ = generalize ~close:`NoClose (convert_term_exn ~env t) in
-        let l = List.map (convert_prop_ ~env) l in
-        t, l
+      (fun (untyped_t,v,l) ->
+        let t = convert_term_exn ~env untyped_t in
+        (* replace meta-variables in [t] by real variables, and return those *)
+        let t, vars = generalize ~close:`NoClose t in
+        (* declare [v] with the type of [t] *)
+        let var, env' =
+          let var = Var.make ~name:v ~ty:(get_ty_ t) in
+          var, add_var ~env v ~var
+        in
+        (* now convert axioms in the new env. They should contain no
+          type variables but [vars]. *)
+        let check_vars t =
+          (* bad variables: occur in axiom but not in [vars] *)
+          let bad_vars = U.to_seq_vars t
+            |> Sequence.filter
+              (fun v -> Term.Ty.returns_Type (Var.ty v))
+            |> Sequence.filter
+                (fun v -> not (CCList.Set.mem ~eq:Var.equal v vars))
+            |> Sequence.to_rev_list
+          in
+          if bad_vars <> []
+            then ill_formedf ?loc ~kind:"mutual def"
+              "axiom contains type variables @[%a@] \
+              that do not occur in defined term %a"
+              (CCFormat.list Var.print) bad_vars A.print_term untyped_t
+        in
+        let l = List.map
+          (fun ax -> convert_prop_ ~f:check_vars ~env:env' ax)
+          l
+      in
+        (* return case *)
+        {St.case_alias=var; case_defined=t; case_axioms=l; case_vars=vars;}
       )
       l
 
@@ -454,13 +485,13 @@ module Convert(Term : TERM) = struct
         else St.decl ?loc id ty, env
     | A.Axiom l ->
         (* convert terms, and force them to be propositions *)
-        let l = List.map (convert_prop_ ~env) l in
+        let l = List.map (convert_prop_ ?f:None ~env) l in
         St.axiom ?loc l, env
     | A.Spec s ->
-        let s = convert_cases ~env s in
+        let s = convert_cases ?loc ~env s in
         St.axiom_spec ?loc s, env
     | A.Rec s ->
-        let s = convert_cases ~env s in
+        let s = convert_cases ?loc ~env s in
         St.axiom_rec ?loc s, env
     | A.Goal t ->
         (* infer type for t *)
