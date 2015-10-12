@@ -256,6 +256,8 @@ let () = Printexc.register_printer
   )
 
 module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
+  type subst = T.Ty.t Subst.t
+
   let rec equal ~subst ty1 ty2 = match T.view ty1, T.view ty2 with
     | TyKind, TyKind
     | TyType, TyType -> true
@@ -314,6 +316,14 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
     | TyArrow (_,_),_
     | TyForall (_,_),_ -> false
 
+  let rec deref ~subst t = match T.view t with
+    | Var v ->
+        begin match Subst.find ~subst v with
+        | None -> t
+        | Some t' -> deref ~subst t'
+        end
+    | _ -> t
+
   (* NOTE: when dependent types are added, substitution in types is needed *)
 
   let rec eval ~subst t = match T.view t with
@@ -357,21 +367,31 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
         let subst = Subst.add ~subst v (T.ty_var v') in
         T.ty_forall v' (eval ~subst t)
 
-  exception Error of string * T.t * T.t list
+  exception ApplyError of string * T.t * T.t list
   (** Raised when a type application fails *)
+
+  exception UnifError of string * T.t * T.t
+  (** Raised for unification or matching errors *)
 
   let () = Printexc.register_printer
     (function
-      | Error (msg, t, l) ->
+      | ApplyError (msg, t, l) ->
           let module P = Print(T) in
           let msg = CCFormat.sprintf
             "@[<hv2>type error@ when applying %a@ on @[%a@]: %s@]"
               P.print_in_app t (CCFormat.list P.print_in_app) l msg
           in Some msg
+      | UnifError (msg, t1, t2) ->
+          let module P = Print(T) in
+          let msg = CCFormat.sprintf
+            "@[<hv2>unification error@ for %a@ and@ %a: %s@]"
+              P.print_in_app t1 P.print_in_app t2 msg
+          in Some msg
       | _ -> None
     )
 
-  let error_ msg ~hd ~l = raise (Error (msg, hd, l))
+  let error_apply_ msg ~hd ~l = raise (ApplyError (msg, hd, l))
+  let error_unif_ msg t1 t2 = raise (UnifError (msg, t1, t2))
 
   let ty_apply t l =
     let rec app_ ~subst t l = match T.Ty.view t, l with
@@ -382,19 +402,19 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
       | TyI.Builtin _, _
       | TyI.App (_,_),_
       | TyI.Const _, _ ->
-          error_ "cannot apply this type" ~hd:t ~l
+          error_apply_ "cannot apply this type" ~hd:t ~l
       | TyI.Var v, _ ->
           begin try
             let t = Subst.find_exn ~subst v in
             app_ ~subst t l
           with Not_found ->
-            error_ "cannot apply this type" ~hd:t ~l
+            error_apply_ "cannot apply this type" ~hd:t ~l
           end
       | TyI.Meta _,_ -> assert false
       | TyI.Arrow (a, t'), b :: l' ->
           if equal ~subst a b
           then app_ ~subst t' l'
-          else error_ "type mismatch on first argument" ~hd:t ~l
+          else error_apply_ "type mismatch on first argument" ~hd:t ~l
       | TyI.Forall (v,t'), b :: l' ->
           let subst = Subst.add ~subst v b in
           app_ ~subst t' l'
@@ -442,6 +462,71 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
   let ty ~sigma t =
     try CCError.return (ty_exn ~sigma t)
     with e -> NunUtils.err_of_exn e
+
+  (* return lists of same length, for
+    unification or matching in the case of application *)
+  let unif_l_ f1 l1 f2 l2 =
+    let n1 = List.length l1 in
+    let n2 = List.length l2 in
+    if n1=n2 then f1::l1, f2::l2
+    else if n1<n2 then
+      let l2_1, l2_2 = CCList.take_drop (n2-n1) l2 in
+      f1::l1, (T.app f2 l2_1) :: l2_2
+    else
+      let l1_1, l1_2 = CCList.take_drop (n1-n2) l1 in
+      (T.app f1 l1_1) :: l1_2, f2 :: l2
+
+  let match_exn ?(subst2=Subst.empty) t1 t2 =
+    (* bound: bound variables in t1 and t2 *)
+    let rec match_ subst t1 t2 =
+      let t2 = deref ~subst:subst2 t2 in
+      match T.view t1, T.view t2 with
+      | Builtin b1, Builtin b2 when NunBuiltin.T.equal b1 b2 -> subst
+      | Const id1, Const id2 when ID.equal id1 id2 -> subst
+      | Var v1, _ ->
+          begin match Subst.find ~subst v1 with
+          | None ->
+              (* NOTE: no occur check, we assume t1 and t2 share no variables *)
+              Subst.add ~subst v1 t2
+          | Some t1' ->
+              if equal ~subst t1' t2
+                then subst
+                else error_unif_ "incompatible variable binding" t1 t2
+          end
+      | App (f1, l1), App (f2, l2) ->
+          (* right-parenthesed application *)
+          let l1, l2 = unif_l_ f1 l1 f2 l2 in
+          List.fold_left2 match_ subst l1 l2
+      | TyArrow (a1, b1), TyArrow (a2,b2) ->
+          let subst = match_ subst a1 a2 in
+          match_ subst b1 b2
+      | TyKind , TyKind
+      | TyType , TyType -> subst
+      | Fun _, Fun _
+      | TyForall (_, _), _
+      | Forall (_, _), _
+      | Exists (_, _), _
+      | Let (_, _, _), _
+      | Ite (_, _, _), _
+      | Eq (_, _), _ -> invalid_arg "pattern is not first-order"
+      | TyBuiltin b1, TyBuiltin b2 when NunBuiltin.Ty.equal b1 b2 -> subst
+      | TyMeta _, _ -> assert false
+      | Builtin _, _
+      | Const _, _
+      | App (_, _), _
+      | Fun (_, _), _
+      | TyKind , _
+      | TyType , _
+      | TyBuiltin _, _
+      | TyArrow (_, _), _ -> error_unif_ "do not match" t1 t2
+    in
+    match_ Subst.empty t1 t2
+
+  let match_ ?subst2 t1 t2 =
+    try Some (match_exn ?subst2 t1 t2)
+    with UnifError _ -> None
+
+  (* TODO write test *)
 end
 
 (** {2 Type Erasure} *)

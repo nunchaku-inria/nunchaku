@@ -89,13 +89,19 @@ exception Undefined of id
 (** When a symbol is not defined *)
 
 module SubstUtil(T : S)(Subst : NunVar.SUBST with type ty = T.ty) : sig
-  val equal : subst:T.t Subst.t -> T.t -> T.t -> bool
+  type subst = T.t Subst.t
+
+  val equal : subst:subst -> T.t -> T.t -> bool
   (** Equality modulo substitution *)
 
-  val eval : subst:T.t Subst.t -> T.t -> T.t
+  val deref : subst:subst -> T.t -> T.t
+  (** [deref ~subst t] dereferences [t] as long as it is a variable
+      bound in [subst]. *)
+
+  val eval : subst:subst -> T.t -> T.t
   (** Applying a substitution *)
 
-  exception Error of string * T.t * T.t list
+  exception ApplyError of string * T.t * T.t list
   (** Raised when a type application fails *)
 
   val ty_apply : T.ty -> T.t list -> T.ty
@@ -111,7 +117,23 @@ module SubstUtil(T : S)(Subst : NunVar.SUBST with type ty = T.ty) : sig
   (** @raise Ty.Error in case of error at an application
       @raise Undefined in case some symbol is not defined *)
 
-  (* TODO: unification and matching *)
+  exception UnifError of string * T.t * T.t
+  (** Raised for unification or matching errors *)
+
+  val match_exn : ?subst2:subst -> T.t -> T.t -> subst
+  (** [match_exn ~subst2 t1 t2] matches the pattern [t1] against [subst2 t2].
+      Variables in [subst2 t2] are not bound.
+      We assume [t1] and [subst2 t2] do not share variables, and we assume
+      that [t1] is a mostly first-order {b pattern} (no binders, but variables
+      in head position is accepted and will only match an application).
+      @raise UnifError if they don't match
+      @raise Invalid_argument if [t1] is not a valid pattern *)
+
+  val match_ : ?subst2:subst -> T.t -> T.t -> subst option
+  (** Safe version of {!match_exn}
+      @raise Invalid_argument if [t1] is not a valid pattern *)
+
+  (* TODO: unification *)
 end
 
 (** {2 View as FO terms}

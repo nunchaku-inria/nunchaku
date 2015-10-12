@@ -50,9 +50,13 @@ module type SUBST = sig
 
   val add : subst:'a t -> var -> 'a -> 'a t
 
+  val remove : subst:'a t -> var -> 'a t
+  (** Remove binding for this variable.
+      {b careful} if other bindings depend on this variable's binding... *)
+
   val mem : subst:'a t -> var -> bool
   val find : subst:'a t -> var -> 'a option
-  val find_exn : subst:'a t -> var -> 'a  (** @raise Not_found *)
+  val find_exn : subst:'a t -> var -> 'a  (** @raise Not_found if var not bound *)
 
   val to_list : 'a t -> (var * 'a) list
 end
@@ -73,6 +77,8 @@ module Subst(Ty : sig type t end) = struct
 
   let add ~subst v x = M.add v x subst
 
+  let remove ~subst v = M.remove v subst
+
   let mem ~subst v = M.mem v subst
 
   let find_exn ~subst v = M.find v subst
@@ -82,3 +88,8 @@ module Subst(Ty : sig type t end) = struct
   let to_list s = M.fold (fun v x acc -> (v,x)::acc) s []
 end
 
+module Set(Ty : sig type t end) = Set.Make(struct
+  type 'a _t = 'a t
+  type t = Ty.t _t
+  let compare = compare
+end)

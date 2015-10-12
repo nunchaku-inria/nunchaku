@@ -56,6 +56,10 @@ module type SUBST = sig
 
   val add : subst:'a t -> var -> 'a -> 'a t
 
+  val remove : subst:'a t -> var -> 'a t
+  (** Remove binding for this variable.
+      {b careful} if other bindings depend on this variable's binding... *)
+
   val mem : subst:'a t -> var -> bool
   val find : subst:'a t -> var -> 'a option
   val find_exn : subst:'a t -> var -> 'a  (** @raise Not_found if var not bound *)
@@ -64,3 +68,9 @@ module type SUBST = sig
 end
 
 module Subst(Ty : sig type t end) : SUBST with type ty = Ty.t
+
+(** {2 Data structures} *)
+
+module Set(Ty : sig type t end) : Set.S with type elt = Ty.t t
+
+
