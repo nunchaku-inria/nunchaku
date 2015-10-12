@@ -309,6 +309,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           (* first, beta-reduce locally *)
           let f, l, subst = Red.Full.whnf ~subst f l in
           begin match T.view f with
+          | TI.Fun _ -> assert false (* beta-reduction failed? *)
           | TI.Builtin b ->
               (* builtins are defined, but examine their args *)
               let l = List.map (conv_term ~mangle ~subst ~depth) l in
