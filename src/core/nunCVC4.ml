@@ -68,7 +68,7 @@ end = struct
     (* send prelude *)
     output_string oc "(set-option :produce-models true)\n";
     output_string oc "(set-option :interactive-mode true)\n";
-    output_string oc "(set-logic QF_UF)\n";
+    output_string oc "(set-logic UF)\n";
     flush oc;
     (* the [t] instance *)
     let s = {
@@ -325,6 +325,8 @@ end = struct
     | `Ok (`Atom "sat") ->
         let m = get_model_ ~symbols ~tbl s in
         Sol.Res.Sat m
+    | `Ok (`Atom "unknown") ->
+        Sol.Res.Timeout
     | `Ok sexp ->
         let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ %a@]"
           CCSexpM.print sexp
