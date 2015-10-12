@@ -174,9 +174,16 @@ let statements t = t.statements
 let make statements =
   { statements; }
 
-let map ~term ~ty p = {
-  statements=CCList.map (Statement.map ~term ~ty) p.statements;
+let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
+  statements=CCList.flat_map
+    (fun st ->
+      let st' = Statement.map ~term ~ty st in
+      before () @ [st'] @ after ()
+    )
+    p.statements;
 }
+
+let map ~term ~ty pb = map_with ~term ~ty pb
 
 let print pt pty out problem =
   fpf out "@[<v2>{%a@]@,}"

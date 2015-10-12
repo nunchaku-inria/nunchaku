@@ -3,15 +3,23 @@
 
 (** {1 Skolemization} *)
 
+type id = NunID.t
+
 module type S = sig
   module T1 : NunTerm_ho.VIEW
   module T2 : NunTerm_ho.S
 
   type state
 
-  val create : unit -> state
+  val create : ?prefix:string -> unit -> state
+  (** @param prefix the prefix used to generate Skolem symbols *)
 
-  val convert_term : state:state -> T1.t -> T2.t
+  val convert_term : state:state -> T1.t -> T2.t * (id * T2.ty) list
+  (** [convert_term ~state t] returns [t', new_syms] where [t'] is
+      the skolemization of [t], and [new_syms] is a set of new symbols
+      with their type *)
+
+  val print_state : Format.formatter -> state -> unit
 
   val convert_problem :
     state:state ->

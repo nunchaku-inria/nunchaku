@@ -138,6 +138,17 @@ val statements : ('t, 'ty) t -> ('t, 'ty) Statement.t list
 
 val map : term:('a -> 'b) -> ty:('tya -> 'tyb) -> ('a, 'tya) t -> ('b, 'tyb) t
 
+val map_with :
+  ?before:(unit -> ('b, 'tyb) Statement.t list) ->
+  ?after:(unit -> ('b, 'tyb) Statement.t list) ->
+  term:('a -> 'b) ->
+  ty:('tya -> 'tyb) ->
+  ('a, 'tya) t -> ('b, 'tyb) t
+(** [map_with ~add ~term ~ty pb] is similar to [map ~term ~ty pb], but after
+    processing each statement [st], [after ()] and [before()] are called,
+    and the statements they return
+    are added respectively before or after the translation of [st]. *)
+
 val print : 'a printer -> 'b printer -> ('a,'b) t printer
 (** Printer for a problem *)
 

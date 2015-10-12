@@ -36,8 +36,8 @@ let options =
   options_debug_ @
   [ "--print", Arg.Set print_, " print input and exit"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
-  ; "--print-skolem", Arg.Set print_typed_, " print input after Skolemization"
-  ; "--print-mono", Arg.Set print_typed_, " print input after monomorphization"
+  ; "--print-skolem", Arg.Set print_skolem_, " print input after Skolemization"
+  ; "--print-mono", Arg.Set print_mono_, " print input after monomorphization"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set NunSolver_intf.print_model_, " print raw model"

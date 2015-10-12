@@ -7,15 +7,25 @@ module ID = NunID
 module TI = NunTerm_intf
 module Var = NunVar
 
+type id = NunID.t
+
+let section = NunUtils.Section.make "skolem"
+
 module type S = sig
   module T1 : NunTerm_ho.VIEW
   module T2 : NunTerm_ho.S
 
   type state
 
-  val create : unit -> state
+  val create : ?prefix:string -> unit -> state
+  (** @param prefix the prefix used to generate Skolem symbols *)
 
-  val convert_term : state:state -> T1.t -> T2.t
+  val convert_term : state:state -> T1.t -> T2.t * (id * T2.ty) list
+  (** [convert_term ~state t] returns [t', new_syms] where [t'] is
+      the skolemization of [t], and [new_syms] is a set of new symbols
+      with their type *)
+
+  val print_state : Format.formatter -> state -> unit
 
   val convert_problem :
     state:state ->
@@ -32,39 +42,140 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
   module T1 = T1
   module T2 = T2
 
-  type state = unit (* TODO *)
+  module P1 = NunTerm_ho.Print(T1)
+  module P2 = NunTerm_ho.Print(T2)
+  module U1 = NunTerm_intf.Util(T1)
+  module Subst = NunVar.Subst(T1)
+  module Stmt = NunProblem.Statement
 
-  let create () = ()
+  type new_sym = {
+    sym_defines : T1.t; (* what is the formula represented by the symbol *)
+    sym_ty : T2.ty; (* type of the symbol *)
+  }
 
-  (* TODO skolemize existential quantifiers *)
-  let convert_term ~state t =
-    let rec aux t = match T1.view t with
+  type state = {
+    tbl: new_sym ID.Tbl.t; (* skolem -> quantified form *)
+    prefix:string; (* prefix for Skolem symbols *)
+    mutable name : int;
+    mutable new_sym: (id * new_sym) list; (* list of newly defined symbols *)
+  }
+
+  let create ?(prefix="nun_sk_") () = {
+    tbl=ID.Tbl.create 32;
+    prefix;
+    name=0;
+    new_sym=[];
+  }
+
+  type env = {
+    vars: T2.ty Var.t list;  (* variables on the path *)
+    subst: T2.t Subst.t; (* substitution for existential variables *)
+  }
+
+  let env_bind ~env v t =
+    { env with subst=Subst.add ~subst:env.subst v t }
+
+  let env_add_var ~env v =
+    { env with vars=v :: env.vars }
+
+  let new_sym ~state =
+    let n = state.name in
+    state.name <- n+1;
+    ID.make ~name:(state.prefix ^ string_of_int n)
+
+  let convert_term_ ~state t =
+    let rec aux ~env t = match T1.view t with
       | TI.Builtin b -> T2.builtin b
       | TI.Const id -> T2.const id
-      | TI.Var v -> T2.var (aux_var v)
-      | TI.App (f,l) -> T2.app (aux f) (List.map aux l)
-      | TI.Fun (v,t) -> T2.fun_ (aux_var v) (aux t)
-      | TI.Forall (v,t) -> T2.forall (aux_var v) (aux t)
-      | TI.Exists (v,t) -> T2.exists (aux_var v) (aux t)
-      | TI.Let (v,t,u) -> T2.let_ (aux_var v) (aux t)(aux u)
-      | TI.Ite (a,b,c) -> T2.ite (aux a)(aux b)(aux c)
-      | TI.Eq (a,b) -> T2.eq (aux a)(aux b)
+      | TI.Var v ->
+          begin match Subst.find ~subst:env.subst v with
+          | None -> T2.var (aux_var ~env v)
+          | Some t -> t
+          end
+      | TI.App (f,l) ->
+          T2.app (aux ~env f) (List.map (aux ~env) l)
+      | TI.Fun (v,t) ->
+          enter_var_ ~env v
+            (fun env v -> T2.fun_ v (aux ~env t))
+      | TI.Forall (v,t) ->
+          enter_var_ ~env v
+            (fun env v -> T2.forall v (aux ~env t))
+      | TI.Exists (v,t') ->
+          (* type of Skolem function *)
+          let ty_ret = aux ~env (Var.ty v) in
+          let ty_args = List.map Var.ty env.vars in
+          let ty = List.fold_right T2.ty_arrow ty_args ty_ret in
+          (* create new skolem function *)
+          let skolem_id = new_sym ~state in
+          let skolem = T2.app (T2.const skolem_id) (List.map T2.var env.vars) in
+          let new_sym = { sym_defines=t; sym_ty=ty } in
+          ID.Tbl.add state.tbl skolem_id new_sym;
+          state.new_sym <- (skolem_id, new_sym):: state.new_sym;
+          NunUtils.debugf ~section 2
+            "@[<2>new Skolem symbol `%a :@ @[%a@]` standing for@ @[`%a`@]@]"
+            ID.print_no_id skolem_id P2.print_ty ty P1.print t;
+          (* convert [t] and replace [v] with [skolem] in it *)
+          let env = env_bind ~env v skolem in
+          aux ~env t'
+      | TI.Let (v,t,u) ->
+          let t = aux ~env t in
+          enter_var_ ~env v (fun env v -> T2.let_ v t (aux ~env u))
+      | TI.Ite (a,b,c) -> T2.ite (aux ~env a)(aux ~env b)(aux ~env c)
+      | TI.Eq (a,b) -> T2.eq (aux ~env a) (aux ~env b)
       | TI.TyKind -> T2.ty_kind
       | TI.TyType -> T2.ty_type
       | TI.TyBuiltin b -> T2.ty_builtin b
-      | TI.TyArrow (a,b) -> T2.ty_arrow (aux a)(aux b)
-      | TI.TyForall (v,t) -> T2.ty_forall (aux_var v) (aux t)
+      | TI.TyArrow (a,b) -> T2.ty_arrow (aux ~env a)(aux ~env b)
+      | TI.TyForall (v,t) ->
+          enter_var_ ~env v (fun env v -> T2.ty_forall v (aux ~env t))
       | TI.TyMeta _ -> assert false
-    and aux_var = Var.update_ty ~f:aux in
-    aux t
+
+    and aux_var ~env = Var.update_ty ~f:(aux ~env)
+
+    and enter_var_ ~env v f =
+      let v' = aux_var ~env v in
+      let env = env_add_var ~env v' in
+      f env v'
+    in
+    let env = {
+      vars=[];
+      subst=Subst.empty;
+    } in
+    aux ~env t
+
+  let convert_term ~state t =
+    let t' = convert_term_ ~state t in
+    (* clear list of new symbols *)
+    let l = state.new_sym in
+    state.new_sym <- [];
+    t', List.map (fun (id,s) -> id,s.sym_ty) l
 
   let convert_problem ~state pb =
-    NunProblem.map
-      ~term:(convert_term ~state)
-      ~ty:(convert_term ~state)
+    NunProblem.map_with
+      ~before:(fun () ->
+        let l = state.new_sym in
+        state.new_sym <- [];
+        List.map
+          (fun (id,s) -> Stmt.decl id s.sym_ty)
+          l
+      )
+      ~term:(convert_term_ ~state)
+      ~ty:(convert_term_ ~state)
       pb
 
-  let decode_model ~state m = m (* TODO *)
+  let fpf = Format.fprintf
+
+  let print_state out st =
+    let pp_sym out (id,s) =
+      fpf out "@[<2>%a: %a@ standing for `@[%a@]`@]"
+        ID.print_no_id id P2.print_ty s.sym_ty P1.print s.sym_defines
+    in
+    fpf out "@[<2>skolem table {@,%a@]@,}"
+      (CCFormat.seq pp_sym) (ID.Tbl.to_seq st.tbl)
+
+  (* TODO: identify what to translate back
+     (e.g., skolem for ?X.F -> choice F?) *)
+  let decode_model ~state:_ m = m
 end
 
 let pipe (type a)(type b) ~print
@@ -82,6 +193,7 @@ let pipe (type a)(type b) ~print
   NunTransform.make1
     ~name:"skolem"
     ~on_encoded
+    ~print:S.print_state
     ~encode:(fun pb ->
       let state = S.create() in
       let pb = S.convert_problem ~state pb in
