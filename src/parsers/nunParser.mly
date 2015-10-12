@@ -36,7 +36,6 @@
 %token LOGIC_OR
 %token LOGIC_NOT
 %token LOGIC_IMPLY
-%token LOGIC_EQUIV
 %token LOGIC_FORALL
 %token LOGIC_EXISTS
 %token LOGIC_EQ
@@ -56,7 +55,6 @@
 %token PI
 
 %token <string> LOWER_WORD
-%token <string> UPPER_WORD
 
 %start <NunUntypedAST.statement> parse_statement
 %start <NunUntypedAST.statement list> parse_statement_list
@@ -142,14 +140,17 @@ apply_term:
       A.app ~loc (A.builtin ~loc B.Not) [t]
     }
 
-and_term:
+eq_term:
   | t=apply_term { t }
   | t=apply_term LOGIC_EQ u=apply_term
     {
       let loc = L.mk_pos $startpos $endpos in
       A.app ~loc (A.builtin ~loc B.Eq) [t; u]
     }
-  | t=apply_term LOGIC_AND u=and_term
+
+and_term:
+  | t=eq_term { t }
+  | t=eq_term LOGIC_AND u=and_term
     {
       let loc = L.mk_pos $startpos $endpos in
       A.app ~loc (A.builtin ~loc B.And) [t; u]
@@ -166,11 +167,6 @@ or_term:
     {
       let loc = L.mk_pos $startpos $endpos in
       A.app ~loc (A.builtin ~loc B.Imply) [t; u]
-    }
-  | t=and_term LOGIC_EQ u=and_term
-    {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc B.Eq) [t; u]
     }
 
 term:
@@ -217,12 +213,12 @@ term:
     }
 
 case:
-  | v=raw_var EQDEF l=separated_nonempty_list(SEMI_COLUMN,term) SEMI_COLUMN?
+  | v=raw_var EQDEF l=separated_nonempty_list(SEMI_COLUMN,term)
     {
       let loc = L.mk_pos $startpos $endpos in
       A.var ~loc v, v, l
     }
-  | t=term AS v=raw_var EQDEF l=separated_nonempty_list(SEMI_COLUMN, term) SEMI_COLUMN?
+  | t=term AS v=raw_var EQDEF l=separated_nonempty_list(SEMI_COLUMN, term)
     { t, v, l }
 
 structure:

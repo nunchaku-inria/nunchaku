@@ -74,7 +74,6 @@ rule token = parse
   | "=>" { LOGIC_IMPLY }
   | '@' { AT }
   | lower_word { LOWER_WORD(Lexing.lexeme lexbuf) }
-  | upper_word { UPPER_WORD(Lexing.lexeme lexbuf) }
   | _ as c { raise (LexError (Printf.sprintf "lexer fails on char '%c'" c)) }
 
 {
