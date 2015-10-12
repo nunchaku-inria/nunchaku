@@ -125,7 +125,7 @@ module Statement = struct
     | Axiom a ->
         let print_cases ~what out l =
           let print_case out c =
-            fpf out "@[<hv2>@[%a@] as %a :=@ %a@]"
+            fpf out "@[<hv2>@[%a@] as %a :=@ @[<hv>%a@]@]"
               pt c.case_defined Var.print c.case_alias
               (CCFormat.list ~start:"" ~stop:"" ~sep:"; " pt) c.case_axioms
           in
@@ -139,7 +139,7 @@ module Statement = struct
         in
         begin match a with
         | Axiom_std l ->
-            fpf out "@[<2>axiom %a.@]"
+            fpf out "@[<hv2>axiom %a.@]"
               (CCFormat.list ~start:"" ~stop:"" ~sep:";" pt) l
         | Axiom_spec t -> print_cases ~what:"spec" out t
         | Axiom_rec t -> print_cases ~what:"rec" out t
