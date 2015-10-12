@@ -123,21 +123,26 @@ module Statement = struct
     | Decl (id,_,t) ->
         fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id id pty t
     | Axiom a ->
-        let print_cases out t =
+        let print_cases ~what out l =
           let print_case out c =
-            fpf out "@[<v2>@[%a@] as %a :=@ %a@]@,"
+            fpf out "@[<hv2>@[%a@] as %a :=@ %a@]"
               pt c.case_defined Var.print c.case_alias
               (CCFormat.list ~start:"" ~stop:"" ~sep:"; " pt) c.case_axioms
           in
-          fpf out "@[<hov>%a@]"
-            (CCFormat.list ~start:"" ~stop:"" ~sep:" and " print_case) t
+          fpf out "@[<hov>%s " what;
+          List.iteri
+            (fun i case ->
+              if i>0 then fpf out "@,and ";
+              fpf out "@[%a@]" print_case case
+            ) l;
+          fpf out ".@]"
         in
         begin match a with
         | Axiom_std l ->
             fpf out "@[<2>axiom %a.@]"
               (CCFormat.list ~start:"" ~stop:"" ~sep:";" pt) l
-        | Axiom_spec t -> fpf out "@[<2>spec %a.@]" print_cases t
-        | Axiom_rec t -> fpf out "@[<2>rec %a.@]" print_cases t
+        | Axiom_spec t -> print_cases ~what:"spec" out t
+        | Axiom_rec t -> print_cases ~what:"rec" out t
         end
     | Goal t -> fpf out "@[<2>goal %a.@]" pt t
 
