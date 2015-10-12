@@ -211,7 +211,7 @@ module Print(T : VIEW) = struct
     | Forall (v, t) ->
         fpf out "@[<2>! %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
     | Exists (v, t) ->
-        fpf out "@[<2>exists %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
+        fpf out "@[<2>? %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
     | TyArrow (a,b) ->
         fpf out "@[<2>%a ->@ %a@]" print_ty_in_arrow a print_ty b
     | TyForall (v,t) ->
