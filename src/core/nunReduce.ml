@@ -21,9 +21,6 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       subst: subst;
     }
 
-    let st_of_term head = {head;subst=Subst.empty;args=[]}
-    let st_of_term_with ~subst head = {head;subst;args=[]}
-
     let push_args ~st l = l @ st.args
 
     (* convert a state back to a term *)
