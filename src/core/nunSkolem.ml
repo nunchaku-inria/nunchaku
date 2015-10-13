@@ -176,8 +176,6 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
 
   let epsilon = ID.make ~name:"_witness_of"
 
-  (* TODO: identify what to translate back
-     (e.g., skolem for ?X.F -> choice F?) *)
   let decode_model ~state m =
     m |> List.map
         (fun (t,u) -> match T2.view t with

@@ -68,8 +68,9 @@ rule token = parse
   | "pi" { PI }
   | "data" { DATA }
   | "codata" { CODATA }
-  | '&' { LOGIC_AND }
-  | '|' { LOGIC_OR }
+  | "&&" { LOGIC_AND }
+  | "||" { LOGIC_OR }
+  | "|" { VERTICAL_BAR }
   | '~' { LOGIC_NOT }
   | '!' { LOGIC_FORALL }
   | '?' { LOGIC_EXISTS }

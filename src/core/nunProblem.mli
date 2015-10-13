@@ -31,8 +31,20 @@ module Statement : sig
   val case_defined : ('t,'ty) case -> 't
   val case_axioms : ('t,'ty) case -> 't list
 
-  (* mutual definition of several terms *)
+  (** mutual definition of several terms *)
   type ('t,'ty) mutual_cases = ('t,'ty) case list
+
+  (** A type constructor *)
+  type 'ty ty_constructor = id * 'ty
+
+  type 'ty tydef = {
+    ty_id : id;
+    ty_type : 'ty;
+    ty_cstors : 'ty ty_constructor list;
+  }
+
+  (** Mutual definitions of several types *)
+  type 'ty mutual_types = 'ty tydef list
 
   (** Flavour of axiom *)
   type ('t,'ty) axiom =
@@ -46,6 +58,7 @@ module Statement : sig
   type ('term, 'ty) view =
     | Decl of id * decl * 'ty
     | Axiom of ('term, 'ty) axiom
+    | TyDef of [`Data | `Codata] * 'ty mutual_types
     | Goal of 'term
 
   type ('term,'ty) t
@@ -56,6 +69,7 @@ module Statement : sig
 
   val mk_decl : ?loc:loc -> id -> decl -> 'ty -> ('t,'ty) t
   val mk_axiom : ?loc:loc -> ('a,'ty) axiom -> ('a, 'ty) t
+  val mk_ty_def : ?loc:loc -> [`Data | `Codata] -> 'ty mutual_types -> (_, 'ty) t
 
   val ty_decl : ?loc:loc -> id -> 'a -> (_, 'a) t
   (** declare a type constructor *)
@@ -76,6 +90,10 @@ module Statement : sig
 
   val axiom_rec : ?loc:loc -> ('a,'ty) mutual_cases -> ('a,'ty) t
   (** Axiom that is part of an admissible (mutual, partial) definition. *)
+
+  val data : ?loc:loc -> 'ty mutual_types -> (_, 'ty) t
+
+  val codata : ?loc:loc -> 'ty mutual_types -> (_, 'ty) t
 
   val goal : ?loc:loc -> 'a -> ('a,_) t
   (** The goal of the problem *)

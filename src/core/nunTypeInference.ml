@@ -472,6 +472,43 @@ module Convert(Term : TERM) = struct
       )
       l
 
+  let rec fold_map_ f acc l = match l with
+    | [] -> acc, []
+    | x :: tail ->
+        let acc, y = f acc x in
+        let acc, tail' = fold_map_ f acc tail in
+        acc, y :: tail'
+
+  (* convert type decl *)
+  let convert_tydef ~env l =
+    (* first, declare all the types *)
+    let env, l = fold_map_
+      (fun env (name,ty,cstors) ->
+        let ty = convert_ty_exn ~env ty in
+        (* ensure this defines a type *)
+        let ty_ret = Term.Ty.returns ty in
+        unify_in_ctx_ ~stack:[] ty_ret Term.ty_type;
+        let id = ID.make ~name in
+        let env' = add_decl ~env name ~id ty in
+        env', (id,ty,cstors)
+      ) env l
+    in
+    (* then convert constructors' types *)
+    fold_map_
+      (fun env (id,ty,cstors) ->
+        let env, cstors = fold_map_
+          (fun env (name,ty') ->
+            let ty' = convert_ty_exn ~env ty' in
+            (* TODO check that [head (returns ty') = id] *)
+            let id' = ID.make ~name in
+            let env = add_decl ~env name ~id:id' ty' in
+            env, (id', ty')
+          ) env cstors
+        in
+        env, {St.ty_id=id; ty_type=ty; ty_cstors=cstors}
+      )
+      env l
+
   let convert_statement_exn ~(env:env) st =
     let loc = Loc.get_loc st in
     match Loc.get st with
@@ -493,6 +530,12 @@ module Convert(Term : TERM) = struct
     | A.Rec s ->
         let s = convert_cases ?loc ~env s in
         St.axiom_rec ?loc s, env
+    | A.Data l ->
+        let env, l = convert_tydef ~env l in
+        St.data ?loc l, env
+    | A.Codata l ->
+        let env, l = convert_tydef ~env l in
+        St.codata ?loc l, env
     | A.Goal t ->
         (* infer type for t *)
         let t = convert_term_exn ~env t in

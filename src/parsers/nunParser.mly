@@ -55,6 +55,7 @@
 %token ARROW
 %token FUN
 %token PI
+%token VERTICAL_BAR
 
 %token <string> LOWER_WORD
 
@@ -226,8 +227,15 @@ case:
 mutual_cases:
   | l=separated_nonempty_list(AND, case) { l }
 
+constructor:
+  | v=raw_var COLUMN ty=term { v, ty }
+
+constructors:
+  | VERTICAL_BAR? l=separated_nonempty_list(VERTICAL_BAR, constructor) { l }
+
 type_def:
-  | t=apply_term EQDEF l=separated_nonempty_list(LOGIC_OR, apply_term) { t, l }
+  | t=raw_var EQDEF l=constructors  { t, A.builtin A.Builtin.Type, l }
+  | t=raw_var COLUMN ty=term EQDEF l=constructors { t, ty, l }
 
 mutual_types:
   | l=separated_nonempty_list(AND, type_def) { l }

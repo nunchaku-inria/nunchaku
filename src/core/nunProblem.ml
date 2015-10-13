@@ -34,6 +34,18 @@ module Statement = struct
   (* mutual definition of several terms *)
   type ('t,'ty) mutual_cases = ('t,'ty) case list
 
+  (** A type constructor *)
+  type 'ty ty_constructor = id * 'ty
+
+  type 'ty tydef = {
+    ty_id : id;
+    ty_type : 'ty;
+    ty_cstors : 'ty ty_constructor list;
+  }
+
+  (** Mutual definitions of several types *)
+  type 'ty mutual_types = 'ty tydef list
+
   (** Flavour of axiom *)
   type ('t,'ty) axiom =
     | Axiom_std of 't list
@@ -46,6 +58,7 @@ module Statement = struct
   type ('term, 'ty) view =
     | Decl of id * decl * 'ty
     | Axiom of ('term, 'ty) axiom
+    | TyDef of [`Data | `Codata] * 'ty mutual_types
     | Goal of 'term
 
   type ('a, 'b) t = {
@@ -65,6 +78,7 @@ module Statement = struct
 
   let mk_axiom ?loc t = make_ ?loc (Axiom t)
   let mk_decl ?loc id k decl = make_ ?loc (Decl (id,k,decl))
+  let mk_ty_def ?loc k l = make_ ?loc (TyDef (k, l))
 
   let ty_decl ?loc id t = mk_decl ?loc id Decl_type t
   let decl ?loc id t = mk_decl ?loc id Decl_fun t
@@ -73,6 +87,8 @@ module Statement = struct
   let axiom1 ?loc t = axiom ?loc [t]
   let axiom_spec ?loc t = mk_axiom ?loc (Axiom_spec t)
   let axiom_rec ?loc t = mk_axiom ?loc (Axiom_rec t)
+  let data ?loc l = mk_ty_def ?loc `Data l
+  let codata ?loc l = mk_ty_def ?loc `Codata l
   let goal ?loc t = make_ ?loc (Goal t)
 
   let map_case ~term ~ty t = {
@@ -97,6 +113,16 @@ module Statement = struct
         | Axiom_rec t ->
             axiom_rec ?loc (map_cases ~term:ft ~ty:fty t)
         end
+    | TyDef (k, l) ->
+        let l = List.map
+          (fun tydef ->
+            {tydef with
+              ty_type=fty tydef.ty_type;
+              ty_cstors=
+                List.map (fun (id,t) -> id, fty t) tydef.ty_cstors;
+            }) l
+        in
+        mk_ty_def ?loc k l
     | Goal t -> goal ?loc (ft t)
 
   let fold ~term ~ty acc st = match st.view with
@@ -117,6 +143,12 @@ module Statement = struct
               )
               acc t
         end
+    | TyDef (_, l) ->
+        List.fold_left
+          (fun acc tydef ->
+            let acc = ty acc tydef.ty_type in
+            List.fold_left (fun acc (_,t) -> ty acc t) acc tydef.ty_cstors
+          ) acc l
     | Goal t -> term acc t
 
   let print pt pty out t = match t.view with
@@ -144,6 +176,17 @@ module Statement = struct
         | Axiom_spec t -> print_cases ~what:"spec" out t
         | Axiom_rec t -> print_cases ~what:"rec" out t
         end
+    | TyDef (k, l) ->
+        let ppcstors out (id,ty) =
+          fpf out "@[%a : %a@]" ID.print_no_id id pty ty in
+        let print_def out tydef =
+          fpf out "@[<hv2>%a :@ %a :=@ %a@]"
+            ID.print_no_id tydef.ty_id pty tydef.ty_type
+            (CCFormat.list ~start:"" ~stop:"" ~sep:"|" ppcstors) tydef.ty_cstors
+        in
+        fpf out "@[%s@ %a.@]"
+          (match k with `Data -> "data" | `Codata -> "codata")
+          (CCFormat.list ~start:"" ~stop:"" ~sep:" and " print_def) l
     | Goal t -> fpf out "@[<2>goal %a.@]" pt t
 
   let print_list pt pty out l =
@@ -213,17 +256,25 @@ let goal pb =
   aux None pb.statements
 
 let signature ?(init=ID.Map.empty) pb =
-  let check_new_ ~sigma id =
+  let module St = Statement in
+  let declare_ ~sigma id ty =
     if ID.Map.mem id sigma
-      then ill_formed_ (CCFormat.sprintf "symbol %a declared twice" ID.print id)
+      then ill_formed_ (CCFormat.sprintf "symbol %a declared twice" ID.print id);
+    ID.Map.add id ty sigma
   in
   List.fold_left
-    (fun sigma st -> match Statement.view st with
-      | Statement.Decl (id,_,ty) ->
-          check_new_ ~sigma id;
-          ID.Map.add id ty sigma
-      | Statement.Goal _
-      | Statement.Axiom _ -> sigma
+    (fun sigma st -> match St.view st with
+      | St.Decl (id,_,ty) -> declare_ ~sigma id ty
+      | St.TyDef (_,l) ->
+          List.fold_left
+            (fun sigma tydef ->
+              let sigma = declare_ ~sigma
+                tydef.St.ty_id tydef.St.ty_type in
+              List.fold_left (fun sigma (id,ty) -> declare_ ~sigma id ty)
+                sigma tydef.St.ty_cstors
+            ) sigma l
+      | St.Goal _
+      | St.Axiom _ -> sigma
     ) init pb.statements
 
 module Model = struct

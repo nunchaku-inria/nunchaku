@@ -14,7 +14,7 @@ val a2 : term2.
 val b2 : term2.
 
 goal ~ (cons a (cons b nil) = cons b (cons a nil))
-  &  ~ (cons a2 (cons b2 nil) = cons b2 (cons a2 nil)).
+  &&  ~ (cons a2 (cons b2 nil) = cons b2 (cons a2 nil)).
 
 
 

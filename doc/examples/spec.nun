@@ -38,5 +38,5 @@ and tail :=
 #    h nil = z.
 
 # odd number that is >= 4
-goal ?l. (odd (head l) & (?m. head l = s (s (s (s m))))).
+goal ?l. (odd (head l) && (?m. head l = s (s (s (s m))))).
 

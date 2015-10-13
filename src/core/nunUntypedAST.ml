@@ -98,8 +98,9 @@ and typed_var = var * ty option
    and a list of axioms *)
 type mutual_cases = (term * string * term list) list
 
-(* list of mutual type definitions (the type, and its cases) *)
-type mutual_types = (ty * ty list) list
+(* list of mutual type definitions (the type name, its type,
+   and its constructors that are id:type) *)
+type mutual_types = (var * ty * (var * ty) list) list
 
 type statement_node =
   | Decl of var * ty (* declaration of uninterpreted symbol *)
@@ -211,9 +212,10 @@ let pp_mutual_cases out l =
   pf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_case) l
 
 let pp_ty_defs out l =
-  let pptypes = pp_list_ ~sep:"|" print_term in
-  let pp_case out (t,l) =
-    pf out "@[<hv>%a :=@ %a@]" print_term t pptypes l
+  let ppcons out (id,ty) = pf out "@[%s : %a@]" id print_term ty in
+  let ppcons_l = pp_list_ ~sep:"|" ppcons in
+  let pp_case out (id,ty,l) =
+    pf out "@[<hv>%s :@ %a :=@ %a@]" id print_term ty ppcons_l l
   in
   pf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_case) l
 

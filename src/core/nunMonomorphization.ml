@@ -505,6 +505,8 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       | Stmt.Axiom (Stmt.Axiom_rec l) ->
           let l = aux_cases ~subst:Subst.empty l in
           [ Stmt.axiom ?loc l ]
+      | Stmt.TyDef (k, l) ->
+          assert false (* TODO: fixpoint again *)
     in
     let pb' = NunProblem.statements pb
       |> List.rev (* start at the end *)
