@@ -1,0 +1,42 @@
+
+# recursive spec and rec
+
+val nat : type.
+
+val z : nat.
+val s : nat -> nat.
+
+val even : nat -> prop.
+val odd : nat -> prop.
+
+rec even :=
+  even z ;
+  ~ (even (s z));
+  !n. (even n = odd (s n))
+and odd :=
+  odd (s z);
+  ~ (odd z);
+  !n. (odd n = even (s n)).
+
+val list : type -> type.
+val nil : pi a. list a.
+val cons : pi a. a -> list a -> list a.
+
+# partial funs
+val head : pi a. list a -> a.
+val tail : pi a. list a -> list a.
+
+# generic specification
+spec head :=
+    !x l. head (cons x l) = x
+and tail :=
+    !x l. tail (cons x l) = l.
+
+# NOTE: not orthogonal with generic specification, should we allow this?
+# overload with a default value
+#spec @head nat as h :=
+#    h nil = z.
+
+# odd number that is >= 4
+goal ?l. (odd (head l) & (?m. head l = s (s (s (s m))))).
+
