@@ -15,6 +15,8 @@ module DSexp = CCSexpM.MakeDecode(struct
   let (>>=) x f = f x
 end)
 
+type model_elt = NunFO.Default.term_or_form
+
 module Make(FO : NunFO.VIEW) : sig
   include NunSolver_intf.S
   with module FO = FO
@@ -41,7 +43,7 @@ end = struct
     tbl : (string, ID.t) Hashtbl.t; (* map (stringof ID) -> ID *)
     mutable sexp : DSexp.t;
     mutable closed : bool;
-    mutable res : FOBack.T.t Sol.Res.t option;
+    mutable res : model_elt Sol.Res.t option;
   }
 
   let name = "cvc4"
@@ -162,6 +164,9 @@ end = struct
       | FOI.F_ite (a,b,c) ->
           fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
             print_form a print_form b print_form c
+      | FOI.F_fun (v,t) ->
+          fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
+            Var.print v print_ty (Var.ty v) print_form t
 
     and print_statement out = function
       | FOI.TyDecl (id,arity) ->
@@ -226,6 +231,23 @@ end = struct
         Var.of_id ~ty id
     | _ -> error_ "expected typed variable"
 
+  (* is this formula actually just a term? if yes, convert *)
+  let rec as_term_ f = match FOBack.Formula.view f with
+    | NunFO.Atom t -> Some t
+    | NunFO.F_fun (v,f) ->
+        CCOpt.map (FOBack.T.fun_ v) (as_term_ f)
+    | NunFO.True
+    | NunFO.False
+    | NunFO.Eq (_,_)
+    | NunFO.And _
+    | NunFO.Or _
+    | NunFO.Not _
+    | NunFO.Imply (_,_)
+    | NunFO.Equiv (_,_)
+    | NunFO.Forall (_,_)
+    | NunFO.Exists (_,_)
+    | NunFO.F_ite (_,_,_) -> None
+
   (* parse a ground term *)
   let rec parse_term_ ~tbl = function
     | `Atom _ as t -> FOBack.T.const (parse_id_ ~tbl t)
@@ -246,38 +268,65 @@ end = struct
     | `List (`List _ :: _) -> error_ "non first-order list"
     | `List [] -> error_ "expected term, got empty list"
 
-  (* TODO: equiv, imply *)
   and parse_formula_ ~tbl s =
+    let module F = FOBack.Formula in
     match s with
-    | `Atom "true" -> FOBack.Formula.true_
-    | `Atom "false" -> FOBack.Formula.false_
+    | `Atom "true" -> F.true_
+    | `Atom "false" -> F.false_
     | `List [`Atom "="; a; b] ->
-        let a = parse_term_ ~tbl a in
-        let b = parse_term_ ~tbl b in
-        FOBack.Formula.eq a b
+        let a = parse_term_or_formula_ ~tbl a in
+        let b = parse_term_or_formula_ ~tbl b in
+        begin match a, b with
+        | NunFO.Term a,NunFO.Term b -> F.eq a b
+        | NunFO.Form a,NunFO.Form b -> F.equiv a b
+        | NunFO.Form a,NunFO.Term b -> F.equiv a (F.atom b)
+        | NunFO.Term a,NunFO.Form b -> F.equiv (F.atom a) b
+        end
     | `List [`Atom "not"; f] ->
         let f = parse_formula_ ~tbl f in
-        FOBack.Formula.not_ f
+        F.not_ f
     | `List (`Atom "and" :: l) ->
-        FOBack.Formula.and_ (List.map (parse_formula_ ~tbl) l)
+        F.and_ (List.map (parse_formula_ ~tbl) l)
     | `List (`Atom "or" :: l) ->
-        FOBack.Formula.or_ (List.map (parse_formula_ ~tbl) l)
+        F.or_ (List.map (parse_formula_ ~tbl) l)
     | `List [`Atom "forall"; `List bindings; f] ->
         let bindings = List.map (parse_var_ ~tbl) bindings in
         let f = parse_formula_ ~tbl f in
-        List.fold_right FOBack.Formula.forall bindings f
+        List.fold_right F.forall bindings f
     | `List [`Atom "exists"; `List bindings; f] ->
         let bindings = List.map (parse_var_ ~tbl) bindings in
         let f = parse_formula_ ~tbl f in
-        List.fold_right FOBack.Formula.exists bindings f
-    | `List [`Atom "ite"; a; b; c] ->
+        List.fold_right F.exists bindings f
+    | `List [`Atom "LAMBDA"; `List bindings; body] ->
+        (* lambda term *)
+        let bindings = List.map (parse_var_ ~tbl) bindings in
+        let body = parse_formula_ ~tbl body in
+        List.fold_right FOBack.Formula.f_fun bindings body
+    | `List [`Atom "=>"; a; b] ->
         let a = parse_formula_ ~tbl a in
         let b = parse_formula_ ~tbl b in
-        let c = parse_formula_ ~tbl c in
-        FOBack.Formula.f_ite a b c
+        F.imply a b
+    | `List [`Atom "ite"; a; b; c] ->
+        let a = parse_formula_ ~tbl a in
+        let b = parse_term_or_formula_ ~tbl b in
+        let c = parse_term_or_formula_ ~tbl c in
+        begin match b, c with
+          | NunFO.Term b, NunFO.Term c ->
+              F.atom (FOBack.T.ite a b c)
+          | NunFO.Form b, NunFO.Form c -> F.f_ite a b c
+          | NunFO.Form b, NunFO.Term c -> F.f_ite a b (F.atom c)
+          | NunFO.Term b, NunFO.Form c -> F.f_ite a (F.atom b) c
+        end
     | _ ->
         let t = parse_term_ ~tbl s in
-        FOBack.Formula.atom t
+        F.atom t
+
+  and parse_term_or_formula_ ~tbl t =
+    let f = parse_formula_ ~tbl t in
+    (* [f] might be a term *)
+    match as_term_ f with
+    | None -> NunFO.Form f
+    | Some t -> NunFO.Term t
 
   (* tbl: string -> ID *)
   let parse_model_ ~tbl = function
@@ -288,8 +337,8 @@ end = struct
         (fun m -> function
           | `List [`Atom _ as s; term] ->
               let id = parse_id_ ~tbl s in
-              let term = parse_term_ ~tbl term in
-              ID.Map.add id term m
+              let t = parse_term_or_formula_ ~tbl term in
+              ID.Map.add id t m
           | _ -> error_ "expected pair key/value in the model"
         )
         ID.Map.empty assoc
@@ -315,7 +364,51 @@ end = struct
           |> Sequence.for_all (fun s -> ID.Map.mem s m)
         in
         if not ok then error_ "some symbols are not defined in the model";
-        m
+        ID.Map.to_seq m
+          |> Sequence.map
+              (fun (id,t) -> NunFO.Term (FOBack.T.const id), t)
+          |> Sequence.to_rev_list
+
+  (* rewrite model to be nicer *)
+  let rewrite_model_ m =
+    (* rewrite [t] using the set of rewrite rules *)
+    let rec rewrite_term_ ~rules t = match FOBack.T.view t with
+      | NunFO.Builtin _
+      | NunFO.Var _ -> t
+      | NunFO.App (id,[]) ->
+          begin try ID.Map.find id rules (* apply rule *)
+          with Not_found -> t
+          end
+      | NunFO.App (id, l) -> FOBack.T.app id (List.map (rewrite_term_ ~rules) l)
+      | NunFO.Fun (v,t) ->
+          (* no capture, rules rewrite to closed terms *)
+          FOBack.T.fun_ v (rewrite_term_ ~rules t)
+      | NunFO.Let (v,t,u) ->
+          FOBack.T.let_ v (rewrite_term_ ~rules t) (rewrite_term_ ~rules u)
+      | NunFO.Ite (a,b,c) ->
+          FOBack.T.ite (rewrite_form_ ~rules a) (rewrite_term_ ~rules b) (rewrite_term_ ~rules c)
+    and rewrite_form_ ~rules f =
+      FOBack.Formula.map (rewrite_term_ ~rules) f
+    in
+    let rewrite_ ~rules = function
+      | NunFO.Term t -> NunFO.Term (rewrite_term_ ~rules t)
+      | NunFO.Form f -> NunFO.Form (rewrite_form_ ~rules f)
+    in
+    (* compute a basic set of rules *)
+    let rules = m
+      |> CCList.filter_map
+        (function
+          | NunFO.Term t, NunFO.Term u ->
+              begin match FOBack.T.view u with
+              | NunFO.App (id, []) -> Some (id, t) (* id --> t *)
+              | _ -> None
+              end
+          | _ -> None
+        )
+      |> ID.Map.of_list
+    in
+    (* rewrite every term *)
+    List.map (fun (t,u) -> rewrite_ ~rules t, rewrite_ ~rules u) m
 
   (* read the result *)
   let read_res_ ~symbols ~tbl s =
@@ -323,7 +416,7 @@ end = struct
     | `Ok (`Atom "unsat") ->
         Sol.Res.Unsat
     | `Ok (`Atom "sat") ->
-        let m = get_model_ ~symbols ~tbl s in
+        let m = get_model_ ~symbols ~tbl s |> rewrite_model_ in
         Sol.Res.Sat m
     | `Ok (`Atom "unknown") ->
         Sol.Res.Timeout
@@ -382,12 +475,7 @@ let call (type f)(type t)(type ty)
       then Format.printf "@[<2>SMT problem:@ %a@]@." CVC4.print_problem problem;
     let solver = CVC4.solve ~timeout problem in
     match CVC4.res solver with
-    | Sol.Res.Sat m ->
-        let m = ID.Map.fold
-          (fun id v acc -> (FOBack.T.const id, v) :: acc)
-          m []
-        in
-        Res.Sat m
+    | Sol.Res.Sat m -> Res.Sat m
     | Sol.Res.Unsat -> Res.Unsat
     | Sol.Res.Timeout -> Res.Timeout
     | Sol.Res.Error e ->

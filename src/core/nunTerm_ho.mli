@@ -154,14 +154,6 @@ module AsFO(T : VIEW) : sig
     and type formula = T.t
 end
 
-val to_fo :
-  (module S with type t = 'a) ->
-  (module NunFO.S with type T.t = 'b) ->
-  (('a, 'a) NunProblem.t,
-    ('a, 'c, 'a) NunFO.Problem.t,
-    'b NunProblem.Model.t, 'a NunProblem.Model.t
-  ) NunTransform.t
-
 (** {2 Convert FO to HO} *)
 
 module OfFO(T : S)(FO : NunFO.VIEW) : sig
@@ -169,8 +161,16 @@ module OfFO(T : S)(FO : NunFO.VIEW) : sig
   val convert_term : FO.T.t -> T.t
   val convert_formula : FO.Formula.t -> T.t
 
-  val convert_model : FO.T.t NunProblem.Model.t -> T.t NunProblem.Model.t
+  val convert_model : FO.term_or_form NunProblem.Model.t -> T.t NunProblem.Model.t
 end
+
+val to_fo :
+  (module S with type t = 'a) ->
+  (module NunFO.S with type T.t = 't and type formula = 'f) ->
+  (('a, 'a) NunProblem.t,
+    ('a, 'c, 'a) NunFO.Problem.t,
+    ('t,'f) NunFO.term_or_form_view NunProblem.Model.t, 'a NunProblem.Model.t
+  ) NunTransform.t
 
 (** {2 Conversion of UntypedAST to HO, without Type-Checking}
 

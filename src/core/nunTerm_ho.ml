@@ -770,6 +770,7 @@ module AsFO(T : VIEW) = struct
   end
 
   type formula = Formula.t
+  type term_or_form = (T.t, formula) NunFO.term_or_form_view
 
   let convert_statement st =
     let module St = NunProblem.Statement in
@@ -862,13 +863,20 @@ module OfFO(T : S)(FO : NunFO.VIEW) = struct
         T.exists v (convert_formula t)
     | NunFO.F_ite (a,b,c) ->
         T.ite (convert_formula a) (convert_formula b) (convert_formula c)
+    | NunFO.F_fun (v,t) ->
+        let v = Var.update_ty v ~f:convert_ty in
+        T.fun_ v (convert_formula t)
 
-  let convert_model m = NunProblem.Model.map ~f:convert_term m
+  let convert_t_or_f = function
+    | NunFO.Term t -> convert_term t
+    | NunFO.Form f -> convert_formula f
+
+  let convert_model m = NunProblem.Model.map ~f:convert_t_or_f m
 end
 
-let to_fo (type a)(type b)
+let to_fo (type a)(type b)(type c)
 (module T : S with type t = a)
-(module FO : NunFO.S with type T.t = b) =
+(module FO : NunFO.S with type T.t = b and type formula = c) =
   let module Sol = NunSolver_intf in
   let module Conv = AsFO(T) in
   let module ConvBack = OfFO(T)(FO) in
@@ -878,7 +886,7 @@ let to_fo (type a)(type b)
     let pb' = Conv.convert_problem pb in
     pb', ()
   )
-  ~decode:(fun _st (m:FO.T.t NunProblem.Model.t) ->
+  ~decode:(fun _st m ->
     ConvBack.convert_model m
   )
   ()

@@ -48,6 +48,7 @@ type ('f, 't, 'ty) form_view =
   | Forall of 'ty var * 'f
   | Exists of 'ty var * 'f
   | F_ite of 'f * 'f * 'f  (* if then else *)
+  | F_fun of 'ty var * 'f (* function *)
 
 (** Type *)
 type 'ty ty_view =
@@ -65,6 +66,11 @@ type ('f, 't, 'ty) statement =
   | Decl of id * 'ty toplevel_ty
   | Axiom of 'f
   | Goal of 'f
+
+(** models, for instance, might contain both formulas and terms *)
+type ('t, 'f) term_or_form_view =
+  | Term of 't
+  | Form of 'f
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
@@ -86,6 +92,8 @@ module type VIEW = sig
     type t = formula
     val view : t -> (t, T.t, Ty.t) form_view
   end
+
+  type term_or_form = (T.t, Formula.t) term_or_form_view
 end
 
 (** {2 View and Build Formulas, Terms, Types} *)
@@ -134,7 +142,12 @@ module type S = sig
     val forall : Ty.t var -> t -> t
     val exists : Ty.t var -> t -> t
     val f_ite : t -> t -> t -> t
+    val f_fun : Ty.t var -> t -> t
+
+    val map : (T.t -> T.t) -> t -> t
   end
+
+  type term_or_form = (T.t, Formula.t) term_or_form_view
 end
 
 module Default : S

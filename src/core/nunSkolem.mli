@@ -5,6 +5,8 @@
 
 type id = NunID.t
 
+(* TODO miniscoping *)
+
 module type S = sig
   module T1 : NunTerm_ho.VIEW
   module T2 : NunTerm_ho.S

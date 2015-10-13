@@ -49,6 +49,7 @@ type ('f, 't, 'ty) form_view =
   | Forall of 'ty var * 'f
   | Exists of 'ty var * 'f
   | F_ite of 'f * 'f * 'f  (* if then else *)
+  | F_fun of 'ty var * 'f (* function *)
 
 (** Type *)
 type 'ty ty_view =
@@ -64,6 +65,11 @@ type ('f, 't, 'ty) statement =
   | Decl of id * 'ty toplevel_ty
   | Axiom of 'f
   | Goal of 'f
+
+(** models, for instance, might contain both formulas and terms *)
+type ('t, 'f) term_or_form_view =
+  | Term of 't
+  | Form of 'f
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
@@ -85,6 +91,8 @@ module type VIEW = sig
     type t = formula
     val view : t -> (t, T.t, Ty.t) form_view
   end
+
+  type term_or_form = (T.t, Formula.t) term_or_form_view
 end
 
 (** {2 View and Build Formulas, Terms, Types} *)
@@ -133,7 +141,12 @@ module type S = sig
     val forall : Ty.t var -> t -> t
     val exists : Ty.t var -> t -> t
     val f_ite : t -> t -> t -> t
+    val f_fun : Ty.t var -> t -> t
+
+    val map : (T.t -> T.t) -> t -> t
   end
+
+  type term_or_form = (T.t, Formula.t) term_or_form_view
 end
 
 module Default : S = struct
@@ -197,7 +210,25 @@ module Default : S = struct
     let forall v t = make_ (Forall (v,t))
     let exists v t = make_ (Exists (v,t))
     let f_ite a b c = make_ (F_ite (a,b,c))
+    let f_fun v t = make_ (F_fun (v,t))
+
+    let rec map f form = match view form with
+      | Atom t -> atom (f t)
+      | True
+      | False -> form
+      | Eq (a,b) -> eq (f a) (f b)
+      | And l -> and_ (List.map (map f) l)
+      | Or l -> or_ (List.map (map f) l)
+      | Not form -> not_ (map f form)
+      | Imply (a,b) -> imply (map f a)(map f b)
+      | Equiv (a,b) -> equiv (map f a)(map f b)
+      | Forall (v,form) -> forall v (map f form)
+      | Exists (v,form) -> exists v (map f form)
+      | F_ite (a,b,c) -> f_ite (map f a) (map f b) (map f c)
+      | F_fun (v,t) -> f_fun v (map f t)
   end
+
+  type term_or_form = (T.t, Formula.t) term_or_form_view
 end
 
 (** {2 The Problems sent to Solvers} *)
@@ -273,6 +304,9 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     | F_ite (a,b,c) ->
         fpf out "(@[f_ite %a@ %a@ %a@])"
           print_formula a print_formula b print_formula c
+    | F_fun (v,t) ->
+        fpf out "@[<2>(fun %a:%a.@ %a)@]"
+          Var.print v print_ty (Var.ty v) print_formula t
 
   let print_model out m =
     let pp_pair out (t,u) = fpf out "@[%a -> %a@]" print_term t print_term u in

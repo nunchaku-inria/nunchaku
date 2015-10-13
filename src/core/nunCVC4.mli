@@ -11,6 +11,8 @@ module Make(FO : NunFO.VIEW) : sig
   val print_problem : Format.formatter -> problem -> unit
 end
 
+type model_elt = NunFO.Default.term_or_form
+
 (** Call CVC4 on a problem and obtain a result *)
 val call :
   (module NunFO.VIEW with type formula = 'a and type T.t = 'b and type Ty.t = 'c) ->
@@ -18,7 +20,7 @@ val call :
   print_smt:bool ->
   deadline:float ->
   ('a, 'b, 'c) NunFO.Problem.t ->
-  NunFO.Default.T.t NunProblem.Res.t
+  model_elt NunProblem.Res.t
 
 (** Close a pipeline by calling CVC4 *)
 val close_pipe :
@@ -27,4 +29,4 @@ val close_pipe :
   print:bool ->
   print_smt:bool ->
   deadline:float ->
-  ('d, 'e, 'f, NunFO.Default.T.t NunProblem.Res.t) NunTransform.ClosedPipe.t
+  ('d, 'e, 'f, model_elt NunProblem.Res.t) NunTransform.ClosedPipe.t

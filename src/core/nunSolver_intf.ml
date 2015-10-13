@@ -16,7 +16,7 @@ type 'a var = 'a Var.t
 
 (** {2 A Ground Model} *)
 module Model = struct
-  type 't t = 't NunID.Map.t
+  type 't t = ('t * 't) list
 end
 
 module Res = struct
@@ -44,10 +44,10 @@ module type S = sig
   val name : string
   (** Name of the solver *)
 
-  val res : t -> FOBack.T.t Res.t
+  val res : t -> FOBack.term_or_form Res.t
   (** [res s] blocks until the result of [s] is available, then return it *)
 
-  val peek_res : t -> FOBack.T.t Res.t option
+  val peek_res : t -> FOBack.term_or_form Res.t option
   (** [peek_res s] checks whether the result of [s] is already available *)
 
   val solve : ?timeout:float -> problem -> t
