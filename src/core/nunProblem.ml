@@ -180,11 +180,11 @@ module Statement = struct
         let ppcstors out (id,ty) =
           fpf out "@[%a : %a@]" ID.print_no_id id pty ty in
         let print_def out tydef =
-          fpf out "@[<hv2>%a :@ %a :=@ %a@]"
+          fpf out "@[<hov2>%a@ : %a :=@ @[<hv>%a@]@]"
             ID.print_no_id tydef.ty_id pty tydef.ty_type
-            (CCFormat.list ~start:"" ~stop:"" ~sep:"|" ppcstors) tydef.ty_cstors
+            (CCFormat.list ~start:"" ~stop:"" ~sep:" | " ppcstors) tydef.ty_cstors
         in
-        fpf out "@[%s@ %a.@]"
+        fpf out "@[<hv2>%s@ %a.@]"
           (match k with `Data -> "data" | `Codata -> "codata")
           (CCFormat.list ~start:"" ~stop:"" ~sep:" and " print_def) l
     | Goal t -> fpf out "@[<2>goal %a.@]" pt t
