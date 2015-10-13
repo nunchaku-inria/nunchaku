@@ -891,6 +891,30 @@ let to_fo (type a)(type b)(type c)
   )
   ()
 
+(** {2 Conversion} *)
+
+module Convert(T1 : VIEW)(T2 : S) = struct
+  let rec convert t = match T1.view t with
+    | Builtin b -> T2.builtin b
+    | Const id -> T2.const id
+    | Var v -> T2.var (aux_var v)
+    | App (f,l) -> T2.app (convert f) (List.map convert l)
+    | Fun (v,t) -> T2.fun_ (aux_var v) (convert t)
+    | Forall (v,t) -> T2.forall (aux_var v) (convert t)
+    | Exists (v,t) -> T2.exists (aux_var v) (convert t)
+    | Let (v,t,u) -> T2.let_ (aux_var v) (convert t) (convert u)
+    | Ite (a,b,c) -> T2.ite (convert a)(convert b)(convert c)
+    | Eq (a,b) -> T2.eq (convert a)(convert b)
+    | TyKind -> T2.ty_kind
+    | TyType -> T2.ty_type
+    | TyBuiltin b -> T2.ty_builtin b
+    | TyArrow (a,b) -> T2.ty_arrow (convert a)(convert b)
+    | TyForall (v,t) -> T2.ty_forall (aux_var v)(convert t)
+    | TyMeta _ -> assert false
+
+  and aux_var v = Var.update_ty ~f:convert v
+end
+
 (** {2 Conversion of UntypedAST to HO, without Type-Checking} *)
 
 module OfUntyped(T : S) = struct

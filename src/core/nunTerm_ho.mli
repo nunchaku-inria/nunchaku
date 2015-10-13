@@ -172,6 +172,12 @@ val to_fo :
     ('t,'f) NunFO.term_or_form_view NunProblem.Model.t, 'a NunProblem.Model.t
   ) NunTransform.t
 
+(** {2 Conversion} *)
+
+module Convert(T1 : VIEW)(T2 : S) : sig
+  val convert : T1.t -> T2.t
+end
+
 (** {2 Conversion of UntypedAST to HO, without Type-Checking}
 
   This should be useful mostly for tests: parse and convert a term to a usable

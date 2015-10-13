@@ -47,6 +47,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
   module U1 = NunTerm_intf.Util(T1)
   module Subst = NunVar.Subst(T1)
   module Stmt = NunProblem.Statement
+  module Conv = NunTerm_ho.Convert(T1)(T2)
 
   type new_sym = {
     sym_defines : T1.t; (* what is the formula represented by the symbol *)
@@ -173,9 +174,25 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
     fpf out "@[<2>skolem table {@,%a@]@,}"
       (CCFormat.seq pp_sym) (ID.Tbl.to_seq st.tbl)
 
+  let epsilon = ID.make ~name:"_witness_of"
+
   (* TODO: identify what to translate back
      (e.g., skolem for ?X.F -> choice F?) *)
-  let decode_model ~state:_ m = m
+  let decode_model ~state m =
+    m |> List.map
+        (fun (t,u) -> match T2.view t with
+          | TI.Const id ->
+              (* if [id] is a Skolem symbol, use an epsilon to display the
+                existential formula it is the witness of *)
+              begin try
+                let sym = ID.Tbl.find state.tbl id in
+                let f = Conv.convert sym.sym_defines in
+                T2.app (T2.const epsilon) [f], u
+              with Not_found ->
+                t, u
+              end
+          | _ -> t, u
+        )
 end
 
 let pipe (type a)(type b) ~print
