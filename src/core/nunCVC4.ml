@@ -62,7 +62,7 @@ end = struct
 
   let create_ ~timeout ~symbols () =
     if timeout < 0. then invalid_arg "CVC4.create: wrong timeout";
-    let cmd = Printf.sprintf "cvc4 --tlimit-per=%d --lang smt"
+    let cmd = Printf.sprintf "cvc4 --tlimit-per=%d --lang smt --finite-model-find"
       (int_of_float (timeout *. 1000.)) in
     let ic, oc = Unix.open_process cmd in
     (* send prelude *)
