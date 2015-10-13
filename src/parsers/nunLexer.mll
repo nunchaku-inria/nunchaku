@@ -66,6 +66,8 @@ rule token = parse
   | "true" { LOGIC_TRUE }
   | "false" { LOGIC_FALSE }
   | "pi" { PI }
+  | "data" { DATA }
+  | "codata" { CODATA }
   | '&' { LOGIC_AND }
   | '|' { LOGIC_OR }
   | '~' { LOGIC_NOT }

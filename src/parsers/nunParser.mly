@@ -47,6 +47,8 @@
 %token AXIOM
 %token REC
 %token SPEC
+%token DATA
+%token CODATA
 %token VAL
 %token GOAL
 
@@ -221,8 +223,14 @@ case:
   | t=term AS v=raw_var EQDEF l=separated_nonempty_list(SEMI_COLUMN, term)
     { t, v, l }
 
-structure:
+mutual_cases:
   | l=separated_nonempty_list(AND, case) { l }
+
+type_def:
+  | t=apply_term EQDEF l=separated_nonempty_list(LOGIC_OR, apply_term) { t, l }
+
+mutual_types:
+  | l=separated_nonempty_list(AND, type_def) { l }
 
 statement:
   | VAL v=raw_var COLUMN t=term DOT
@@ -235,15 +243,25 @@ statement:
       let loc = L.mk_pos $startpos $endpos in
       A.axiom ~loc l
     }
-  | SPEC l=structure DOT
+  | SPEC l=mutual_cases DOT
     {
       let loc = L.mk_pos $startpos $endpos in
       A.spec ~loc l
     }
-  | REC l=structure DOT
+  | REC l=mutual_cases DOT
     {
       let loc = L.mk_pos $startpos $endpos in
       A.rec_ ~loc l
+    }
+  | DATA l=mutual_types DOT
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.data ~loc l
+    }
+  | CODATA l=mutual_types DOT
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.codata ~loc l
     }
   | GOAL t=term DOT
     {

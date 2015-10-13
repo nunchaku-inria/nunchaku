@@ -98,11 +98,16 @@ and typed_var = var * ty option
    and a list of axioms *)
 type mutual_cases = (term * string * term list) list
 
+(* list of mutual type definitions (the type, and its cases) *)
+type mutual_types = (ty * ty list) list
+
 type statement_node =
   | Decl of var * ty (* declaration of uninterpreted symbol *)
   | Axiom of term list (* axiom *)
   | Spec of mutual_cases (* mutual spec *)
   | Rec of mutual_cases (* mutual rec *)
+  | Data of mutual_types (* inductive type *)
+  | Codata of mutual_types
   | Goal of term (* goal *)
 
 type statement = statement_node Loc.with_loc
@@ -130,6 +135,8 @@ let decl ?loc v t = Loc.with_loc ?loc (Decl(v,t))
 let axiom ?loc l = Loc.with_loc ?loc (Axiom l)
 let spec ?loc l = Loc.with_loc ?loc (Spec l)
 let rec_ ?loc l = Loc.with_loc ?loc (Rec l)
+let data ?loc l = Loc.with_loc ?loc (Data l)
+let codata ?loc l = Loc.with_loc ?loc (Codata l)
 let goal ?loc t = Loc.with_loc ?loc (Goal t)
 
 let pf = Format.fprintf
@@ -193,7 +200,7 @@ and print_typed_var out (v,ty) = match ty with
 
 let pp_list_ ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
 
-let pp_struct out l =
+let pp_mutual_cases out l =
   let ppterms = pp_list_ ~sep:";" print_term in
   let pp_case out (t,v,l) = match Loc.get t with
   | Var v' when v=v' ->
@@ -203,11 +210,20 @@ let pp_struct out l =
   in
   pf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_case) l
 
+let pp_ty_defs out l =
+  let pptypes = pp_list_ ~sep:"|" print_term in
+  let pp_case out (t,l) =
+    pf out "@[<hv>%a :=@ %a@]" print_term t pptypes l
+  in
+  pf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_case) l
+
 let print_statement out st = match Loc.get st with
   | Decl (v, t) -> pf out "@[val %s : %a.@]" v print_term t
   | Axiom l -> pf out "@[axiom @[%a@].@]" (pp_list_ ~sep:";" print_term) l
-  | Spec l -> pf out "@[spec %a.@]" pp_struct l
-  | Rec l -> pf out "@[rec %a.@]" pp_struct l
+  | Spec l -> pf out "@[spec %a.@]" pp_mutual_cases l
+  | Rec l -> pf out "@[rec %a.@]" pp_mutual_cases l
+  | Data l -> pf out "@[data %a.@]" pp_ty_defs l
+  | Codata l -> pf out "@[codata %a.@]" pp_ty_defs l
   | Goal t -> pf out "@[goal %a.@]" print_term t
 
 let print_statement_list out l =
