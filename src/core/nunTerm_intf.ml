@@ -51,6 +51,9 @@ module Util(T : VIEW) : sig
   val to_seq_vars : T.t -> T.ty var Sequence.t
   (** Iterate on variables *)
 
+  val to_seq_free_vars : T.t -> T.ty var Sequence.t
+  (** Iterate on free variables *)
+
   val head_sym : T.t -> id
   (** Search for a head symbol
       @raise Not_found if not an application/const *)
@@ -81,6 +84,24 @@ end = struct
       | TyArrow (a,b) -> aux a; aux b
     in
     aux t
+
+  module VarSet = Var.Set(struct type t = T.ty end)
+
+  let to_seq_free_vars t yield =
+    let rec aux ~bound t = match T.view t with
+      | Const _ -> ()
+      | Var v ->
+          if VarSet.mem v bound then () else yield v
+      | App (f,l) ->
+          aux ~bound f; List.iter (aux ~bound) l
+      | AppBuiltin (_,l) -> List.iter (aux ~bound) l
+      | Bind (_,v,t) -> aux ~bound:(VarSet.add v bound) t
+      | Let (v,t,u) -> aux ~bound t; aux ~bound:(VarSet.add v bound) u
+      | TyBuiltin _ -> ()
+      | TyArrow (a,b) -> aux ~bound a; aux ~bound b
+      | TyMeta _ -> ()
+    in
+    aux ~bound:VarSet.empty t
 
   let to_seq_vars t =
     to_seq t

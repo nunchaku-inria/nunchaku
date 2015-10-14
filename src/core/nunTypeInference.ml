@@ -19,6 +19,7 @@ type loc = Loc.t
 
 let fpf = Format.fprintf
 let spf = CCFormat.sprintf
+let section = NunUtils.Section.make "type_infer"
 
 type attempt_stack = NunUntypedAST.term list
 
@@ -110,7 +111,8 @@ module Convert(Term : TERM) = struct
           Term.ty_app ?loc
             (convert_ty_ ~stack ~env f)
             (List.map (convert_ty_ ~stack ~env) l)
-      | A.Wildcard -> Term.ty_meta_var ?loc (MetaVar.make ~name:"_")
+      | A.Wildcard ->
+          Term.ty_meta_var ?loc (MetaVar.make ~name:"_")
       | A.Var v ->
           begin try
             let def = MStr.find v env in
@@ -359,6 +361,8 @@ module Convert(Term : TERM) = struct
   and convert_quantifier ?loc ~stack ~env ~which v ty_opt t =
     (* fresh variable *)
     let ty_var = fresh_ty_var_ ~name:v in
+    NunUtils.debugf ~section 3 "new variable %a for %s within %a"
+      Term.Ty.print ty_var v A.print_term t;
     (* unify with expected type *)
     CCOpt.iter
       (fun ty ->
@@ -439,13 +443,14 @@ module Convert(Term : TERM) = struct
         (* now convert axioms in the new env. They should contain no
           type variables but [vars]. *)
         let check_vars t =
-          (* bad variables: occur in axiom but not in [vars] *)
-          let bad_vars = U.to_seq_vars t
+          (* bad variables: occur freely in axiom but not in [vars] *)
+          let bad_vars = U.to_seq_free_vars t
             |> Sequence.filter
               (fun v -> Term.Ty.returns_Type (Var.ty v))
             |> Sequence.filter
                 (fun v -> not (CCList.Set.mem ~eq:Var.equal v vars))
             |> Sequence.to_rev_list
+            |> CCList.sort_uniq ~cmp:Var.compare
           in
           if bad_vars <> []
             then ill_formedf ?loc ~kind:"mutual def"
@@ -499,8 +504,10 @@ module Convert(Term : TERM) = struct
       )
       env l
 
-  let convert_statement_exn ~(env:env) st =
+  let convert_statement_exn ~env st =
     let loc = Loc.get_loc st in
+    NunUtils.debugf ~section 2 "@[<hv2>infer types in@ %a@ at %a@]"
+      A.print_statement st Loc.print_opt loc;
     match Loc.get st with
     | A.Decl (v, ty) ->
         check_new_ ?loc ~env v;
