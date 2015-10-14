@@ -11,8 +11,6 @@ type id = NunID.t
 type 'a var = 'a Var.t
 
 type 'a view =
-  | Kind (** the "type" of [Type], in some sense *)
-  | Type (** the type of types *)
   | Builtin of NunBuiltin.Ty.t (** Builtin type *)
   | Const of id
   | Var of 'a var (** Constant or bound variable *)
@@ -55,11 +53,11 @@ module Utils(Ty : S) : UTILS with type t = Ty.t = struct
   type t = Ty.t
 
   let is_Type t = match Ty.view t with
-    | Type -> true
+    | Builtin NunBuiltin.Ty.Type -> true
     | _ -> false
 
   let is_Kind t = match Ty.view t with
-    | Kind -> true
+    | Builtin NunBuiltin.Ty.Kind -> true
     | _ -> false
 
   let rec returns t = match Ty.view t with
@@ -68,15 +66,13 @@ module Utils(Ty : S) : UTILS with type t = Ty.t = struct
     | _ -> t
 
   let returns_Type t = match Ty.view (returns t) with
-    | Type -> true
+    | Builtin NunBuiltin.Ty.Type -> true
     | _ -> false
 
   let to_seq ty yield =
     let rec aux ty =
       yield ty;
       match Ty.view ty with
-      | Kind
-      | Type
       | Builtin _
       | Const _
       | Var _
@@ -95,8 +91,6 @@ module Print(Ty : S) = struct
   let fpf = Format.fprintf
 
   let rec print out ty = match Ty.view ty with
-    | Kind -> CCFormat.string out "kind"
-    | Type -> CCFormat.string out "type"
     | Builtin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
     | Meta v -> ID.print out (MetaVar.id v)
     | Const id -> ID.print_no_id out id
@@ -109,12 +103,12 @@ module Print(Ty : S) = struct
     | Forall (v,t) ->
         fpf out "@[<2>pi %a:type.@ %a@]" Var.print v print t
   and print_in_app out t = match Ty.view t with
-    | Builtin _ | Kind | Type | Var _ | Const _ | Meta _ -> print out t
+    | Builtin _ | Var _ | Const _ | Meta _ -> print out t
     | App (_,_)
     | Arrow (_,_)
     | Forall (_,_) -> fpf out "@[(%a)@]" print t
   and print_in_arrow out t = match Ty.view t with
-    | Builtin _ | Kind | Type | Var _ | Const _ | Meta _
+    | Builtin _ | Var _ | Const _ | Meta _
     | App (_,_) -> print out t
     | Arrow (_,_)
     | Forall (_,_) -> fpf out "@[(%a)@]" print t

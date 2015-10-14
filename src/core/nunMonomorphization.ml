@@ -101,11 +101,9 @@ module Make(T : NunTerm_ho.S) : S with module T = T
   let rec num_param_ty_ ty = match T.Ty.view ty with
     | TyI.Var _
     | TyI.Const _
-    | TyI.Kind
     | TyI.App _
-    | TyI.Type -> 0
-    | TyI.Meta _ -> fail_ "remaining meta-variable"
     | TyI.Builtin _ -> 0
+    | TyI.Meta _ -> fail_ "remaining meta-variable"
     | TyI.Arrow (_,t') ->
         if TyUtils.is_Type t'
           then 1 + num_param_ty_ t'
@@ -127,16 +125,12 @@ module Make(T : NunTerm_ho.S) : S with module T = T
 
     (* equality for ground atomic types T.ty *)
     let rec ty_ground_eq_ t1 t2 = match T.Ty.view t1, T.Ty.view t2 with
-      | TyI.Kind, TyI.Kind
-      | TyI.Type, TyI.Type -> true
       | TyI.Builtin b1, TyI.Builtin b2 -> NunBuiltin.Ty.equal b1 b2
       | TyI.Const id1, TyI.Const id2 -> ID.equal id1 id2
       | TyI.App (f1,l1), TyI.App (f2,l2) ->
           ty_ground_eq_ f1 f2 && CCList.equal ty_ground_eq_ l1 l2
       | TyI.Arrow (a1,b1), TyI.Arrow (a2,b2) ->
           ty_ground_eq_ a1 a2 && ty_ground_eq_ b1 b2
-      | TyI.Kind, _
-      | TyI.Type, _
       | TyI.Const _, _
       | TyI.App _, _
       | TyI.Builtin _, _
@@ -282,8 +276,6 @@ module Make(T : NunTerm_ho.S) : S with module T = T
   let mangle_ ~state id args =
     let pp_list p = CCFormat.list ~start:"" ~stop:"" ~sep:"_" p in
     let rec flat_ty_ out t = match T.Ty.view t with
-      | TyI.Kind -> CCFormat.string out "kind"
-      | TyI.Type -> CCFormat.string out "type"
       | TyI.Builtin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
       | TyI.Const id -> ID.print_no_id out id
       | TyI.Var _ -> fail_ "mangling: cannot mangle variable"

@@ -149,8 +149,6 @@ module Default : S = struct
       let rec aux ty =
         yield ty;
         match view ty with
-        | TyI.Kind
-        | TyI.Type
         | TyI.Builtin _
         | TyI.Const _
         | TyI.Var _
@@ -357,8 +355,6 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
     let rec app_ ~subst t l = match T.Ty.view t, l with
       | _, [] ->
           if Subst.is_empty subst then t else eval ~subst t
-      | TyI.Kind, _
-      | TyI.Type, _
       | TyI.Builtin _, _
       | TyI.App (_,_),_
       | TyI.Const _, _ ->

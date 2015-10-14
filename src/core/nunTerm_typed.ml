@@ -146,12 +146,7 @@ module Default = struct
     type term = t
 
     let view t = match (deref_rec_ t).view with
-      | TyBuiltin b ->
-          begin match b with
-          | NunBuiltin.Ty.Kind -> TyI.Kind
-          | NunBuiltin.Ty.Type -> TyI.Type
-          | NunBuiltin.Ty.Prop -> TyI.Builtin b
-          end
+      | TyBuiltin b -> TyI.Builtin b
       | Const id -> TyI.Const id
       | Var v -> TyI.Var v
       | App (f,l) -> TyI.App (f,l)

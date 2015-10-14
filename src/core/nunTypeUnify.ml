@@ -44,8 +44,6 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
     match Ty.view ty with
     | TyI.App (f, l) ->
         occur_check_ ~var f || List.exists (occur_check_ ~var) l
-    | TyI.Kind
-    | TyI.Type
     | TyI.Var _ (* bound var *)
     | TyI.Const _
     | TyI.Builtin _ -> false
@@ -80,8 +78,6 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
     let rec unify_ ~stack ty1 ty2 =
       let stack = push_ ty1 ty2 stack in
       match Ty.view ty1, Ty.view ty2 with
-      | TyI.Kind, TyI.Kind
-      | TyI.Type, TyI.Type -> ()  (* success *)
       | TyI.Builtin s1, TyI.Builtin s2 ->
           if NunBuiltin.Ty.equal s1 s2 then ()
           else fail ~stack "incompatible symbols"
@@ -136,8 +132,6 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
       | TyI.Meta _, _
       | TyI.Const _, _
       | TyI.Var _, _
-      | TyI.Kind, _
-      | TyI.Type, _
       | TyI.Builtin _,_
       | TyI.App (_,_),_
       | TyI.Arrow (_,_),_
@@ -167,7 +161,7 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
   let free_meta_vars ?(init=ID.Map.empty) ty =
     let rec aux acc ty =
       match Ty.view ty with
-      | TyI.Kind | TyI.Type | TyI.Builtin _ | TyI.Const _ -> acc
+      | TyI.Builtin _ | TyI.Const _ -> acc
       | TyI.Var v ->
           aux acc (Var.ty v) (* type can also contain metas *)
       | TyI.Meta var ->

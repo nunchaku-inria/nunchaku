@@ -7,8 +7,6 @@ type id = NunID.t
 type 'a var = 'a NunVar.t
 
 type 'a view =
-  | Kind (** the "type" of [Type], in some sense *)
-  | Type (** the type of types *)
   | Builtin of NunBuiltin.Ty.t (** Builtin type *)
   | Const of id
   | Var of 'a var (** Constant or bound variable *)

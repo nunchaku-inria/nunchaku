@@ -168,8 +168,6 @@ module Convert(Term : TERM) = struct
     | TyI.Forall (_,ty'), l ->
         (* implicit argument, insert a variable *)
         A.wildcard ?loc () :: fill_implicit_ ?loc ty' l
-    | TyI.Kind, _
-    | TyI.Type, _
     | TyI.Builtin _, _
     | TyI.Meta _, _
     | TyI.Const _, _
@@ -187,8 +185,6 @@ module Convert(Term : TERM) = struct
     let rec eval ~(subst:ty t) ty =
       let loc = Term.loc ty in
       match Term.Ty.view ty with
-      | TyI.Kind
-      | TyI.Type
       | TyI.Const _
       | TyI.Builtin _ -> ty
       | TyI.Meta _ -> ty
@@ -325,8 +321,6 @@ module Convert(Term : TERM) = struct
     | _, [] ->
         (* substitution is complete, evaluate [ty] now *)
         Subst.eval ~subst ty, []
-    | TyI.Kind ,_
-    | TyI.Type ,_
     | TyI.Var _,_
     | TyI.App (_,_),_
     | TyI.Const _, _
