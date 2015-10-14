@@ -85,6 +85,11 @@ module Convert(Term : TERM) = struct
     with Unif.Fail _ as e ->
       type_error ~stack (Printexc.to_string e)
 
+  (* polymorphic/parametrized type? *)
+  let ty_is_poly_ t = match Term.Ty.view t with
+    | TyI.Forall _ -> true
+    | _ -> false
+
   (* Environment *)
 
   type term_def =
@@ -149,10 +154,6 @@ module Convert(Term : TERM) = struct
 
   let prop = Term.ty_prop
   let arrow_list ?loc = List.fold_right (Term.ty_arrow ?loc)
-
-  let ty_of_def_ = function
-    | Decl (_,ty) -> ty
-    | Var v -> Var.ty v
 
   let fresh_ty_var_ ~name =
     let name = "ty_" ^ name in
@@ -238,8 +239,7 @@ module Convert(Term : TERM) = struct
     | A.AtVar v ->
         let def = find_ ?loc ~env v in
         begin match def with
-          | Decl (id, _) ->
-              let ty = ty_of_def_ def in
+          | Decl (id, ty) ->
               Term.const ?loc ~ty id
           | Var var -> Term.var ?loc var
         end
@@ -266,8 +266,7 @@ module Convert(Term : TERM) = struct
         (* a variable might be applied, too *)
         let def = find_ ?loc ~env v in
         let head, ty_head = match def with
-          | Decl (id, _) ->
-              let ty = ty_of_def_ def in
+          | Decl (id, ty) ->
               Term.const ?loc ~ty id, ty
           | Var var -> Term.var ?loc var, Var.ty var
         in
@@ -483,7 +482,7 @@ module Convert(Term : TERM) = struct
         (* ensure this defines a type *)
         let ty_ret = Term.Ty.returns ty in
         unify_in_ctx_ ~stack:[] ty_ret Term.ty_type;
-        let id = ID.make ~name in
+        let id = ID.make_full ~needs_at:(ty_is_poly_ ty) ~name in
         let env' = add_decl ~env name ~id ty in
         env', (id,ty,cstors)
       ) env l
@@ -495,7 +494,7 @@ module Convert(Term : TERM) = struct
           (fun env (name,ty') ->
             let ty' = convert_ty_exn ~env ty' in
             (* TODO check that [head (returns ty') = id] *)
-            let id' = ID.make ~name in
+            let id' = ID.make_full ~needs_at:(ty_is_poly_ ty')  ~name in
             let env = add_decl ~env name ~id:id' ty' in
             env, (id', ty')
           ) env cstors
@@ -511,8 +510,8 @@ module Convert(Term : TERM) = struct
     match Loc.get st with
     | A.Decl (v, ty) ->
         check_new_ ?loc ~env v;
-        let id = ID.make ~name:v in
         let ty = convert_ty_exn ~env ty in
+        let id = ID.make_full ~needs_at:(ty_is_poly_ ty) ~name:v in
         let env = add_decl ~env v ~id ty in
         if Term.Ty.returns_Type ty
         then St.ty_decl ?loc id ty, env (* id is a type *)

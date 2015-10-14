@@ -93,7 +93,7 @@ end = struct
   let print_problem_ ~on_id =
     (* print ID and remember its name for parsing model afterward *)
     let rec print_id out id =
-      let name = ID.to_string id in
+      let name = ID.name id in
       on_id name id;
       CCFormat.string out name
 
@@ -350,7 +350,7 @@ end = struct
      tbl: string -> ID *)
   let get_model_ ~symbols ~tbl s =
     fpf s.fmt "(@[<hv2>get-value@ %a@])@."
-      (ID.Set.print ~start:"(" ~sep:" " ~stop:")" ID.print)
+      (ID.Set.print ~start:"(" ~sep:" " ~stop:")" ID.print_name)
       symbols;
     match DSexp.next s.sexp with
     | `Error e -> error_ e

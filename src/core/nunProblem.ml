@@ -153,7 +153,7 @@ module Statement = struct
 
   let print pt pty out t = match t.view with
     | Decl (id,_,t) ->
-        fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id id pty t
+        fpf out "@[<2>val %a@ : %a.@]" ID.print_name id pty t
     | Axiom a ->
         let print_cases ~what out l =
           let print_case out c =
@@ -178,10 +178,10 @@ module Statement = struct
         end
     | TyDef (k, l) ->
         let ppcstors out (id,ty) =
-          fpf out "@[%a : %a@]" ID.print_no_id id pty ty in
+          fpf out "@[%a : %a@]" ID.print_name id pty ty in
         let print_def out tydef =
           fpf out "@[<hov2>%a@ : %a :=@ @[<hv>%a@]@]"
-            ID.print_no_id tydef.ty_id pty tydef.ty_type
+            ID.print_name tydef.ty_id pty tydef.ty_type
             (CCFormat.list ~start:"" ~stop:"" ~sep:" | " ppcstors) tydef.ty_cstors
         in
         fpf out "@[<hv2>%s@ %a.@]"

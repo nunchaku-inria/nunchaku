@@ -190,7 +190,7 @@ module Print(T : VIEW) = struct
 
   let fpf = Format.fprintf
 
-  let rec print out ty = match T.view ty with
+  let rec print out t = match T.view t with
     | TyBuiltin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
     | Const id -> ID.print_no_id out id
     | TyMeta v -> NunMetaVar.print out v

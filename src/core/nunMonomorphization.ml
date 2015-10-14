@@ -277,7 +277,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
     let pp_list p = CCFormat.list ~start:"" ~stop:"" ~sep:"_" p in
     let rec flat_ty_ out t = match T.Ty.view t with
       | TyI.Builtin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
-      | TyI.Const id -> ID.print_no_id out id
+      | TyI.Const id -> ID.print_name out id
       | TyI.Var _ -> fail_ "mangling: cannot mangle variable"
       | TyI.Meta _ -> assert false
       | TyI.App (f,l) ->
