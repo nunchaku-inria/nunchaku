@@ -92,7 +92,7 @@ module Print(Ty : S) = struct
 
   let rec print out ty = match Ty.view ty with
     | Builtin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
-    | Meta v -> ID.print out (MetaVar.id v)
+    | Meta v -> MetaVar.print out v
     | Const id -> ID.print_no_id out id
     | Var v -> Var.print out v
     | App (f,l) ->

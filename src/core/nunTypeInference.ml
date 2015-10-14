@@ -29,7 +29,7 @@ exception TypeError of string * attempt_stack
 (* print a stack *)
 let print_stack out st =
   let print_frame out t =
-    fpf out "@[<hv 2>trying to infer type of@ `@[%a@]` at@ %a@]"
+    fpf out "@[<hv 2>trying to infer type of@ `@[%a@]`@ at %a@]"
       A.print_term t Loc.print_opt (Loc.get_loc t) in
   fpf out "@[<hv>%a@]"
     (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_frame) st
@@ -335,7 +335,7 @@ module Convert(Term : TERM) = struct
         let b = convert_term_ ~stack ~env b in
         let ty_b = get_ty_ b in
         (* type of the function *)
-        let ty_ret = fresh_ty_var_ ~name:"_" in
+        let ty_ret = Term.ty_meta_var (MetaVar.make ~name:"_") in
         MetaVar.bind ~var (Term.ty_arrow ty_b ty_ret);
         (* application *)
         let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty_ret l' in

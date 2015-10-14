@@ -36,6 +36,6 @@ let bind ~var x =
 let rebind ~var x =
   if can_bind var then invalid_arg "MetaVar.rebind" else var.deref <- Some x
 
-let print oc v = ID.print oc v.id
-let to_string v = ID.to_string v.id
+let print oc v = Format.fprintf oc "?%a" ID.print v.id
+let to_string v = "?" ^ ID.to_string v.id
 

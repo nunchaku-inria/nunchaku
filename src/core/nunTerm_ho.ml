@@ -193,7 +193,7 @@ module Print(T : VIEW) = struct
   let rec print out ty = match T.view ty with
     | TyBuiltin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
     | Const id -> ID.print_no_id out id
-    | TyMeta v -> fpf out "?%a" ID.print (NunMetaVar.id v)
+    | TyMeta v -> NunMetaVar.print out v
     | Var v -> Var.print out v
     | AppBuiltin (NunBuiltin.T.Ite, [a;b;c]) ->
         fpf out "@[<2>if %a@ then %a@ else %a@]"

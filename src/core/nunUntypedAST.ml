@@ -168,14 +168,14 @@ let rec print_term out term = match Loc.get term with
       pf out "@[<hv2>if %a@ then %a@ else %a@]"
         print_term_inner a print_term b print_term c
   | Forall (v, t) ->
-      pf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
+      pf out "@[<2>!%a.@ %a@]" print_typed_var v print_term t
   | Exists (v, t) ->
-      pf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
+      pf out "@[<2>?%a.@ %a@]" print_typed_var v print_term t
   | TyArrow (a, b) ->
       pf out "@[<2>%a ->@ %a@]"
         print_term_in_arrow a print_term b
   | TyForall (v, t) ->
-      pf out "@[<2>forall (%s:type).@ %a@]" v print_term t
+      pf out "@[<2>pi %s:type.@ %a@]" v print_term t
 and print_term_inner out term = match Loc.get term with
   | App _ | Fun _ | Let _ | Ite _
   | Forall _ | Exists _ | TyForall _ | TyArrow _ ->
