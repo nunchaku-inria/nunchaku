@@ -60,12 +60,12 @@ end = struct
     | Type -> "type"
     | Prop -> "prop"
     | Not -> "~"
-    | And -> "&"
-    | Or -> "|"
+    | And -> "&&"
+    | Or -> "||"
     | True -> "true"
     | False -> "false"
     | Eq -> "="
-    | Imply -> "==>"
+    | Imply -> "=>"
 
   let print out s = Format.pp_print_string out (to_string s)
 end
