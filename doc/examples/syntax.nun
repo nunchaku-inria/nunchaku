@@ -18,7 +18,7 @@ axiom !x. p (f (f (f x))).
 
 val g : product nat nat -> product nat nat.
 
-spec polyprop :=
+spec @polyprop as polyprop :=
     !x y. polyprop (g (g x)) || polyprop (f (f y)).
 
 axiom polyprop (fun (f:nat -> list nat -> nat). f n (cons n nil)).
