@@ -34,16 +34,16 @@ module Builtin : sig
   val fixity : t -> [`Prefix | `Infix]
   val to_string : t -> string
 end = struct
-type t =
-  | Prop
-  | Type
-  | Not
-  | And
-  | Or
-  | True
-  | False
-  | Eq
-  | Imply
+  type t =
+    | Prop
+    | Type
+    | Not
+    | And
+    | Or
+    | True
+    | False
+    | Eq
+    | Imply
 
   let fixity = function
     | Type

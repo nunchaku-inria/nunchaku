@@ -19,13 +19,13 @@ type loc = Loc.t
 type id = NunID.t
 type 'a var = 'a Var.t
 
-type ('a, 'ty) view = ('a, 'ty) NunTerm_intf.view
+type 'a view = 'a NunTerm_intf.view
 
 open NunTerm_intf
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
-  include NunTerm_intf.VIEW_SAME_TY
+  include NunTerm_intf.VIEW
 
   val ty : t -> ty option
   (** The type of a term *)
@@ -35,7 +35,7 @@ end
 
 (** {2 Full Signature} *)
 module type S = sig
-  include NunTerm_intf.VIEW_SAME_TY
+  include NunTerm_intf.VIEW
 
   val ty : t -> ty option
   (** The type of a term *)
@@ -51,6 +51,7 @@ module type S = sig
 
   val const : ?loc:loc -> ty:Ty.t -> id -> t
   val builtin : ?loc:loc -> ty:Ty.t -> NunBuiltin.T.t -> t
+  val app_builtin : ?loc:loc -> ty:Ty.t -> NunBuiltin.T.t -> t list -> t
   val var : ?loc:loc -> Ty.t var -> t
   val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
   val fun_ : ?loc:loc -> ty:Ty.t -> ty var -> t -> t
@@ -59,6 +60,8 @@ module type S = sig
   val forall : ?loc:loc -> ty var -> t -> t
   val exists : ?loc:loc -> ty var -> t -> t
   val eq : ?loc:loc -> t -> t -> t
+
+  val mk_bind : ?loc:loc -> ty:Ty.t -> NunTerm_intf.binder -> Ty.t var -> t -> t
 
   val ty_type : Ty.t (** Type of types *)
   val ty_prop : Ty.t (** Propositions *)
@@ -75,7 +78,7 @@ end
 (** {2 Default Instance} *)
 module Default = struct
   type t = {
-    view : (t,t) view;
+    view : t view;
     loc : Loc.t option;
     mutable ty : t option;
   }
@@ -100,8 +103,8 @@ module Default = struct
   let ty t = t.ty
 
   (* special constants: kind and type *)
-  let kind_ = {view=TyKind; loc=None; ty=None}
-  let type_ = {view=TyType; loc=None; ty=Some kind_}
+  let kind_ = {view=TyBuiltin NunBuiltin.Ty.Kind; loc=None; ty=None}
+  let type_ = {view=TyBuiltin NunBuiltin.Ty.Type; loc=None; ty=Some kind_}
   let prop = {view=TyBuiltin NunBuiltin.Ty.Prop; loc=None; ty=Some type_}
 
   let make_raw_ ~loc ~ty view = { view; loc; ty}
@@ -111,17 +114,21 @@ module Default = struct
         make_raw_ ~loc ~ty (App (f, l1 @ l2))
     | _ -> make_raw_ ~loc ~ty view
 
-  let builtin ?loc ~ty s = make_ ?loc ~ty (Builtin s)
+  let app_builtin ?loc ~ty s l = make_ ?loc ~ty (AppBuiltin (s,l))
+  let builtin ?loc ~ty s = app_builtin ?loc ~ty s []
   let const ?loc ~ty id = make_ ?loc ~ty (Const id)
   let var ?loc v = make_ ?loc ~ty:(Var.ty v) (Var v)
-  let app ?loc ~ty t l =
-    if l=[] then t else make_ ?loc ~ty (App (t, l))
-  let fun_ ?loc ~ty v t = make_ ?loc ~ty (Fun (v, t))
+  let app ?loc ~ty t l = match (deref_rec_ t).view, l with
+    | _, [] -> t
+    | AppBuiltin (b, l1), _ -> app_builtin ?loc ~ty b (l1@l)
+    | _ ->  make_ ?loc ~ty (App (t, l))
+  let mk_bind ?loc ~ty b v t = make_ ?loc ~ty (Bind (b,v,t))
+  let fun_ ?loc ~ty v t = make_ ?loc ~ty (Bind(Fun,v, t))
   let let_ ?loc v t u = make_ ?loc ?ty:u.ty (Let (v, t, u))
-  let ite ?loc a b c = make_ ?loc ?ty:b.ty (Ite (a,b,c))
-  let forall ?loc v t = make_ ?loc ~ty:prop (Forall (v, t))
-  let exists ?loc v t = make_ ?loc ~ty:prop (Exists (v, t))
-  let eq ?loc a b = make_ ?loc ~ty:prop (Eq (a,b))
+  let ite ?loc a b c = make_ ?loc ?ty:b.ty (AppBuiltin (NunBuiltin.T.Ite, [a;b;c]))
+  let forall ?loc v t = mk_bind ?loc ~ty:prop Forall v t
+  let exists ?loc v t = mk_bind ?loc ~ty:prop Exists v t
+  let eq ?loc a b = app_builtin ?loc ~ty:prop NunBuiltin.T.Eq [a;b]
 
   let ty_type = type_
   let ty_prop = prop
@@ -133,23 +140,26 @@ module Default = struct
   let ty_app ?loc f l =
     if l=[] then f else app ?loc ~ty:type_ f l
   let ty_arrow ?loc a b = make_ ?loc ~ty:type_ (TyArrow (a,b))
-  let ty_forall ?loc a b = make_ ?loc ~ty:type_ (TyForall(a,b))
+  let ty_forall ?loc a b = mk_bind ?loc ~ty:type_ TyForall a b
 
   module Ty = struct
     type term = t
 
     let view t = match (deref_rec_ t).view with
-      | TyKind -> TyI.Kind
-      | TyType -> TyI.Type
-      | TyBuiltin b -> TyI.Builtin b
-      | TyMeta v -> TyI.Meta v
+      | TyBuiltin b ->
+          begin match b with
+          | NunBuiltin.Ty.Kind -> TyI.Kind
+          | NunBuiltin.Ty.Type -> TyI.Type
+          | NunBuiltin.Ty.Prop -> TyI.Builtin b
+          end
       | Const id -> TyI.Const id
       | Var v -> TyI.Var v
       | App (f,l) -> TyI.App (f,l)
       | TyArrow (a,b) -> TyI.Arrow (a,b)
-      | TyForall (v,t) -> TyI.Forall (v,t)
-      | Builtin _
-      | Fun _ | Forall _ | Exists _ | Ite _ | Eq _
+      | Bind(TyForall,v,t) -> TyI.Forall (v,t)
+      | TyMeta v -> TyI.Meta v
+      | AppBuiltin _
+      | Bind _
       | Let _ -> assert false
 
     include TyI.Utils(struct type t = term let view = view end)
@@ -169,6 +179,12 @@ module Default = struct
     module Ty = Ty
   end)
 end
+
+(*$T
+  Default.Ty.returns_Type Default.ty_type
+  Default.Ty.returns_Type Default.(ty_arrow ty_prop ty_type)
+  not (Default.Ty.returns_Type Default.(ty_arrow ty_type ty_prop))
+*)
 
 let default = (module Default : S with type t = Default.t)
 

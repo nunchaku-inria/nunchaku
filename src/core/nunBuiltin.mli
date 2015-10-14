@@ -5,6 +5,8 @@
 
 module Ty : sig
   type t =
+    | Kind
+    | Type
     | Prop
   val equal : t -> t -> bool
   val to_string : t -> string
@@ -18,6 +20,8 @@ module T : sig
     | Or
     | And
     | Imply
+    | Ite
+    | Eq
   val fixity : t -> [`Infix | `Prefix]
   val to_string : t -> string
   val equal : t -> t -> bool

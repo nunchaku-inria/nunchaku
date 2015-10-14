@@ -12,7 +12,7 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 type 'a printer = Format.formatter -> 'a -> unit
 
 module type VIEW = sig
-  include NunTerm_intf.VIEW_SAME_TY
+  include NunTerm_intf.VIEW
 
   module Ty : sig
     type t = ty
@@ -21,12 +21,13 @@ module type VIEW = sig
 end
 
 module type S = sig
-  include NunTerm_intf.VIEW_SAME_TY
+  include NunTerm_intf.VIEW
 
   module Ty : NunType_intf.AS_TERM with type term = t and type t = ty
 
   val const : id -> t
   val builtin : NunBuiltin.T.t -> t
+  val app_builtin : NunBuiltin.T.t -> t list -> t
   val var : Ty.t var -> t
   val app : t -> t list -> t
   val fun_ : ty var -> t -> t
@@ -35,6 +36,8 @@ module type S = sig
   val forall : ty var -> t -> t
   val exists : ty var -> t -> t
   val eq : t -> t -> t
+
+  val mk_bind : NunTerm_intf.binder -> Ty.t var -> t -> t
 
   val ty_type : Ty.t (** Type of types *)
   val ty_kind : Ty.t (** Type of ty_type *)

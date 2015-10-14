@@ -7,11 +7,11 @@ type id = NunID.t
 type 'a var = 'a NunVar.t
 type loc = NunLocation.t
 
-type ('a, 'ty) view = ('a, 'ty) NunTerm_intf.view
+type 'a view = 'a NunTerm_intf.view
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
-  include NunTerm_intf.VIEW_SAME_TY
+  include NunTerm_intf.VIEW
 
   val ty : t -> ty option
   (** The type of a term *)
@@ -21,7 +21,7 @@ end
 
 (** {2 Full Signature} *)
 module type S = sig
-  include NunTerm_intf.VIEW_SAME_TY
+  include NunTerm_intf.VIEW
 
   val ty : t -> ty option
   (** The type of a term *)
@@ -37,6 +37,7 @@ module type S = sig
 
   val const : ?loc:loc -> ty:Ty.t -> id -> t
   val builtin : ?loc:loc -> ty:Ty.t -> NunBuiltin.T.t -> t
+  val app_builtin : ?loc:loc -> ty:Ty.t -> NunBuiltin.T.t -> t list -> t
   val var : ?loc:loc -> Ty.t var -> t
   val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
   val fun_ : ?loc:loc -> ty:Ty.t -> ty var -> t -> t
@@ -45,6 +46,8 @@ module type S = sig
   val forall : ?loc:loc -> ty var -> t -> t
   val exists : ?loc:loc -> ty var -> t -> t
   val eq : ?loc:loc -> t -> t -> t
+
+  val mk_bind : ?loc:loc -> ty:Ty.t -> NunTerm_intf.binder -> Ty.t var -> t -> t
 
   val ty_type : Ty.t (** Type of types *)
   val ty_prop : Ty.t (** Propositions *)

@@ -86,7 +86,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
 
   let convert_term_ ~state t =
     let rec aux ~env t = match T1.view t with
-      | TI.Builtin b -> T2.builtin b
+      | TI.AppBuiltin (b,l) -> T2.app_builtin b (List.map (aux ~env) l)
       | TI.Const id -> T2.const id
       | TI.Var v ->
           begin match Subst.find ~subst:env.subst v with
@@ -95,13 +95,10 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
           end
       | TI.App (f,l) ->
           T2.app (aux ~env f) (List.map (aux ~env) l)
-      | TI.Fun (v,t) ->
+      | TI.Bind ((TI.Fun | TI.Forall | TI.TyForall) as b, v,t) ->
           enter_var_ ~env v
-            (fun env v -> T2.fun_ v (aux ~env t))
-      | TI.Forall (v,t) ->
-          enter_var_ ~env v
-            (fun env v -> T2.forall v (aux ~env t))
-      | TI.Exists (v,t') ->
+            (fun env v -> T2.mk_bind b v (aux ~env t))
+      | TI.Bind (TI.Exists, v,t') ->
           (* type of Skolem function *)
           let ty_ret = aux ~env (Var.ty v) in
           let ty_args = List.map Var.ty env.vars in
@@ -121,14 +118,8 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
       | TI.Let (v,t,u) ->
           let t = aux ~env t in
           enter_var_ ~env v (fun env v -> T2.let_ v t (aux ~env u))
-      | TI.Ite (a,b,c) -> T2.ite (aux ~env a)(aux ~env b)(aux ~env c)
-      | TI.Eq (a,b) -> T2.eq (aux ~env a) (aux ~env b)
-      | TI.TyKind -> T2.ty_kind
-      | TI.TyType -> T2.ty_type
       | TI.TyBuiltin b -> T2.ty_builtin b
       | TI.TyArrow (a,b) -> T2.ty_arrow (aux ~env a)(aux ~env b)
-      | TI.TyForall (v,t) ->
-          enter_var_ ~env v (fun env v -> T2.ty_forall v (aux ~env t))
       | TI.TyMeta _ -> assert false
 
     and aux_var ~env = Var.update_ty ~f:(aux ~env)

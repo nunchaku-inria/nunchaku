@@ -5,10 +5,14 @@
 
 module Ty = struct
   type t =
+    | Kind
+    | Type
     | Prop
   let equal = (==)
   let to_string = function
     | Prop -> "prop"
+    | Kind -> "kind"
+    | Type -> "type"
 end
 
 module T = struct
@@ -19,10 +23,14 @@ module T = struct
     | Or
     | And
     | Imply
+    | Ite
+    | Eq
   let fixity = function
     | True
     | False
+    | Ite
     | Not -> `Prefix
+    | Eq
     | Or
     | And
     | Imply -> `Infix
@@ -33,5 +41,7 @@ module T = struct
     | Or -> "|"
     | And -> "&"
     | Imply -> "=>"
+    | Eq -> "="
+    | Ite -> assert false
   let equal = (==)
 end

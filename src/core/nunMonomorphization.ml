@@ -320,7 +320,8 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       *)
     let rec conv_term ~mangle ~depth ~subst t =
       match T.view t with
-      | TI.Builtin b -> T.builtin b
+      | TI.AppBuiltin (b,l) ->
+          T.app_builtin b (List.map (conv_term ~mangle ~depth ~subst) l)
       | TI.Const c ->
           (* no args, but we require [c] in the output *)
           St.schedule ~state ~depth:(depth+1) c ArgTuple.empty;
@@ -336,11 +337,11 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           (* first, beta-reduce locally *)
           let f, l, subst = Red.Full.whnf ~subst f l in
           begin match T.view f with
-          | TI.Fun _ -> assert false (* beta-reduction failed? *)
-          | TI.Builtin b ->
+          | TI.Bind (TI.Fun, _, _) -> assert false (* beta-reduction failed? *)
+          | TI.AppBuiltin _ ->
               (* builtins are defined, but examine their args *)
               let l = List.map (conv_term ~mangle ~subst ~depth) l in
-              T.app (T.builtin b) l
+              T.app (conv_term ~mangle ~subst ~depth f) l
           | TI.Const id ->
               (* find type arguments *)
               let ty = find_ty_ ~sigma id in
@@ -363,34 +364,19 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           | _ ->
               failf_ "cannot monomorphize term with head %a" P.print f
           end
-      | TI.Fun (v,t) ->
-          T.fun_ (aux_var ~subst v) (conv_term ~mangle ~depth ~subst t)
-      | TI.Forall (v,t) ->
-          T.forall (aux_var ~subst v) (conv_term ~mangle ~depth ~subst t)
-      | TI.Exists (v,t) ->
-          T.exists (aux_var ~subst v) (conv_term ~mangle ~depth ~subst t)
+      | TI.Bind ((TI.Fun | TI.Forall | TI.Exists) as b, v, t) ->
+          T.mk_bind b (aux_var ~subst v) (conv_term ~mangle ~depth ~subst t)
       | TI.Let (v,t,u) ->
           T.let_ (aux_var ~subst v)
             (conv_term ~mangle ~depth ~subst t)
             (conv_term ~mangle ~depth ~subst u)
-      | TI.Ite (a,b,c) ->
-          T.ite
-            (conv_term ~mangle ~depth ~subst a)
-            (conv_term ~mangle ~depth ~subst b)
-            (conv_term ~mangle ~depth ~subst c)
-      | TI.Eq (a,b) ->
-          T.eq
-            (conv_term ~mangle ~depth ~subst a)
-            (conv_term ~mangle ~depth ~subst b)
-      | TI.TyKind -> T.ty_kind
-      | TI.TyType -> T.ty_type
       | TI.TyMeta _ -> failwith "Mono.encode: remaining type meta-variable"
       | TI.TyBuiltin b -> T.ty_builtin b
       | TI.TyArrow (a,b) ->
           T.ty_arrow
             (conv_term ~mangle ~depth ~subst a)
             (conv_term ~mangle ~depth ~subst b)
-      | TI.TyForall (v,t) ->
+      | TI.Bind (TI.TyForall,v,t) ->
           (* TODO: emit warning? *)
           assert (not (Subst.mem ~subst v));
           T.ty_forall

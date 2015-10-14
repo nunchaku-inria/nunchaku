@@ -76,6 +76,14 @@ module Convert(Term : TERM) = struct
     | None -> assert false
     | Some ty -> ty
 
+  (* try to unify ty1 and ty2.
+      @param stack the trace of inference attempts *)
+  let unify_in_ctx_ ~stack ty1 ty2 =
+    try
+      Unif.unify_exn ty1 ty2
+    with Unif.Fail _ as e ->
+      type_error ~stack (Printexc.to_string e)
+
   (* Environment *)
 
   type term_def =
@@ -86,6 +94,10 @@ module Convert(Term : TERM) = struct
   (* map names to proper identifiers, with their definition *)
 
   let empty_env = MStr.empty
+
+  let add_decl ~env v ~id ty = MStr.add v (Decl (id, ty)) env
+
+  let add_var ~env v ~var = MStr.add v (Var var) env
 
   let rec convert_ty_ ~stack ~(env:env) (ty:A.ty) =
     let loc = Loc.get_loc ty in
@@ -105,14 +117,10 @@ module Convert(Term : TERM) = struct
             match def with
               | Decl (id, t) ->
                   (* var: _ ... _ -> Type mandatory *)
-                  if not (Term.Ty.returns_Type t)
-                    then type_errorf ~stack:(push_ ty stack)
-                      "@[<2>expected type,@ const %a is not a type@]" ID.print id;
+                  unify_in_ctx_ ~stack (Term.Ty.returns t) Term.ty_type;
                   Term.ty_const ?loc id
               | Var v ->
-                  if not (Term.Ty.returns_Type (Var.ty v))
-                    then type_errorf ~stack:(push_ ty stack)
-                      "@[<2>expected type,@ var %a is not a type@]" Var.print v;
+                  unify_in_ctx_ ~stack (Term.Ty.returns (Var.ty v)) Term.ty_type;
                   Term.ty_var ?loc v
           with Not_found -> scoping_error ?loc v "not bound in environment"
           end
@@ -123,7 +131,7 @@ module Convert(Term : TERM) = struct
             (convert_ty_ ~stack ~env b)
       | A.TyForall (v,t) ->
           let var = Var.make ~ty:Term.ty_type ~name:v in
-          let env = MStr.add v (Var var) env in
+          let env = add_var ~env v ~var in
           Term.ty_forall ?loc var (convert_ty_ ~stack ~env t)
       | A.Fun (_,_) -> ill_formed ?loc "no functions in types"
       | A.Let (_,_,_) -> ill_formed ?loc "no let in types"
@@ -136,10 +144,6 @@ module Convert(Term : TERM) = struct
   let convert_ty ~env ty =
     try E.return (convert_ty_exn ~env ty)
     with e -> E.of_exn e
-
-  let add_decl ~env v ~id ty = MStr.add v (Decl (id, ty)) env
-
-  let add_var ~env v ~var = MStr.add v (Var var) env
 
   let prop = Term.ty_prop
   let arrow_list ?loc = List.fold_right (Term.ty_arrow ?loc)
@@ -205,14 +209,6 @@ module Convert(Term : TERM) = struct
           Term.ty_forall ?loc v' (eval ~subst t)
   end
 
-  (* try to unify ty1 and ty2.
-      @param stack the trace of inference attempts *)
-  let unify_in_ctx_ ~stack ty1 ty2 =
-    try
-      Unif.unify_exn ty1 ty2
-    with Unif.Fail _ as e ->
-      type_error ~stack (Printexc.to_string e)
-
   let is_eq_ t = match Loc.get t with
     | A.Builtin A.Builtin.Eq -> true
     | _ -> false
@@ -233,8 +229,8 @@ module Convert(Term : TERM) = struct
           | A.Builtin.Imply -> B.Imply, prop2
           | A.Builtin.Or -> B.Or, prop2
           | A.Builtin.And -> B.And, prop2
-          | A.Builtin.Prop -> ill_formed ?loc "prop is not a term, but a type"
-          | A.Builtin.Type -> ill_formed ?loc "type is not a term"
+          | A.Builtin.Prop -> ill_formed ?loc "`prop` is not a term, but a type"
+          | A.Builtin.Type -> ill_formed ?loc "`type` is not a term"
           | A.Builtin.Not -> B.Not, prop1
           | A.Builtin.True -> B.True, prop
           | A.Builtin.False -> B.False, prop

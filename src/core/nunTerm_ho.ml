@@ -24,7 +24,7 @@ type 'a printer = Format.formatter -> 'a -> unit
 open NunTerm_intf
 
 module type VIEW = sig
-  include NunTerm_intf.VIEW_SAME_TY
+  include NunTerm_intf.VIEW
 
   module Ty : sig
     type t = ty
@@ -33,12 +33,13 @@ module type VIEW = sig
 end
 
 module type S = sig
-  include NunTerm_intf.VIEW_SAME_TY
+  include NunTerm_intf.VIEW
 
   module Ty : NunType_intf.AS_TERM with type term = t and type t = ty
 
   val const : id -> t
   val builtin : NunBuiltin.T.t -> t
+  val app_builtin : NunBuiltin.T.t -> t list -> t
   val var : Ty.t var -> t
   val app : t -> t list -> t
   val fun_ : ty var -> t -> t
@@ -47,6 +48,8 @@ module type S = sig
   val forall : ty var -> t -> t
   val exists : ty var -> t -> t
   val eq : t -> t -> t
+
+  val mk_bind : NunTerm_intf.binder -> Ty.t var -> t -> t
 
   val ty_type : Ty.t (** Type of types *)
   val ty_kind : Ty.t (** Type of ty_type *)
@@ -62,14 +65,13 @@ end
 
 module Default : S = struct
   type t = {
-    view: (t, t) view;
+    view: t view;
   }
-
   type ty = t
 
   (* special constants: kind and type *)
-  let kind_ = {view=TyKind}
-  let type_ = {view=TyType}
+  let kind_ = {view=TyBuiltin NunBuiltin.Ty.Kind}
+  let type_ = {view=TyBuiltin NunBuiltin.Ty.Type}
   let prop = {view=TyBuiltin NunBuiltin.Ty.Prop}
 
   let view t = t.view
@@ -81,17 +83,22 @@ module Default : S = struct
         make_raw_ (App (f, l1 @ l2))
     | _ -> make_raw_ view
 
-  let builtin s = make_ (Builtin s)
+  let app_builtin s l = make_ (AppBuiltin (s,l))
+  let builtin s = app_builtin s []
   let const id = make_ (Const id)
   let var v = make_ (Var v)
-  let app t l =
-    if l=[] then t else make_ (App (t, l))
-  let fun_ v t = make_ (Fun (v, t))
+  let app t l = match t.view, l with
+    | _, [] -> t
+    | AppBuiltin (b, l1), _ -> app_builtin b (l1@l)
+    | _ -> make_ (App (t, l))
+  let mk_bind b v t = make_ (Bind (b,v,t))
+  let fun_ v t = make_ (Bind (Fun,v, t))
   let let_ v t u = make_ (Let (v, t, u))
-  let ite a b c = make_ (Ite (a,b,c))
-  let forall v t = make_ (Forall (v, t))
-  let exists v t = make_ (Exists (v, t))
-  let eq a b = make_ (Eq (a,b))
+  let ite a b c =
+    app (builtin NunBuiltin.T.Ite) [a;b;c]
+  let forall v t = make_ (Bind(Forall,v, t))
+  let exists v t = make_ (Bind(Exists,v, t))
+  let eq a b = app (builtin NunBuiltin.T.Eq) [a;b]
 
   let ty_type = type_
   let ty_kind = kind_
@@ -103,45 +110,39 @@ module Default : S = struct
   let ty_app f l =
     if l=[] then f else app f l
   let ty_arrow a b = make_ (TyArrow (a,b))
-  let ty_forall a b = make_ (TyForall(a,b))
+  let ty_forall a b = make_ (Bind(TyForall,a,b))
 
   module Ty = struct
     type term = t
     type t = ty
 
     let view t = match t.view with
-      | TyKind -> TyI.Kind
-      | TyType -> TyI.Type
       | TyBuiltin b -> TyI.Builtin b
       | Const id -> TyI.Const id
       | Var v -> TyI.Var v
       | App (f,l) -> TyI.App (f,l)
       | TyArrow (a,b) -> TyI.Arrow (a,b)
-      | TyForall (v,t) -> TyI.Forall (v,t)
+      | Bind(TyForall,v,t) -> TyI.Forall (v,t)
       | TyMeta _ -> assert false
-      | Eq _
-      | Builtin _
-      | Fun _
-      | Forall _
-      | Exists _
-      | Ite _
+      | AppBuiltin _
+      | Bind _
       | Let _ -> assert false
 
     let is_Type t = match t.view with
-      | TyType -> true
+      | TyBuiltin NunBuiltin.Ty.Type -> true
       | _ -> false
 
     let is_Kind t = match t.view with
-      | TyKind -> true
+      | TyBuiltin NunBuiltin.Ty.Kind -> true
       | _ -> false
 
     let rec returns t = match t.view with
       | TyArrow (_, t')
-      | TyForall (_, t') -> returns t'
+      | Bind (TyForall, _, t') -> returns t'
       | _ -> t
 
     let returns_Type t = match (returns t).view with
-      | TyType -> true
+      | TyBuiltin NunBuiltin.Ty.Type -> true
       | _ -> false
 
     let to_seq t yield =
@@ -163,6 +164,12 @@ module Default : S = struct
     include TyI.Print(struct type t = ty let view = view end)
   end
 end
+
+(*$T
+  Default.Ty.returns_Type Default.ty_type
+  Default.Ty.returns_Type Default.(ty_arrow ty_prop ty_type)
+  not (Default.Ty.returns_Type Default.(ty_arrow ty_type ty_prop))
+*)
 
 let default = (module Default : S with type t = Default.t)
 
@@ -186,69 +193,51 @@ module Print(T : VIEW) = struct
   let fpf = Format.fprintf
 
   let rec print out ty = match T.view ty with
-    | TyKind -> CCFormat.string out "kind"
-    | TyType -> CCFormat.string out "type"
-    | Builtin b -> CCFormat.string out (NunBuiltin.T.to_string b)
     | TyBuiltin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
     | Const id -> ID.print_no_id out id
     | TyMeta v -> fpf out "?%a" ID.print (NunMetaVar.id v)
     | Var v -> Var.print out v
-    | Eq (a,b) ->
-        fpf out "@[%a =@ %a@]" print a print b
-    | App (f, [a;b]) ->
-        begin match T.view f with
-        | Builtin s when NunBuiltin.T.fixity s = `Infix ->
-            fpf out "@[<hv>%a@ %s@ %a@]"
-              print_in_app a (NunBuiltin.T.to_string s) print_in_app b
-        | _ ->
-            fpf out "@[<hov2>%a@ %a@ %a@]" print_in_app f
-              print_in_app a print_in_app b
-        end
+    | AppBuiltin (NunBuiltin.T.Ite, [a;b;c]) ->
+        fpf out "@[<2>if %a@ then %a@ else %a@]"
+          print a print b print c
+    | AppBuiltin (b, []) -> CCFormat.string out (NunBuiltin.T.to_string b)
+    | AppBuiltin (f, [a;b]) when NunBuiltin.T.fixity f = `Infix ->
+        fpf out "@[<hv>%a@ %s@ %a@]"
+          print_in_app a (NunBuiltin.T.to_string f) print_in_app b
+    | AppBuiltin (b,l) ->
+        fpf out "@[<2>%s@ %a@]" (NunBuiltin.T.to_string b)
+          (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_in_app) l
     | App (f,l) ->
         fpf out "@[<2>%a@ %a@]" print_in_app f
           (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_in_app) l
     | Let (v,t,u) ->
         fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
-    | Ite (a,b,c) ->
-        fpf out "@[<2>if %a@ then %a@ else %a@]"
-          print a print b print c
-    | Fun (v, t) ->
-        fpf out "@[<2>fun %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
-    | Forall (v, t) ->
-        fpf out "@[<2>! %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
-    | Exists (v, t) ->
-        fpf out "@[<2>? %a:%a.@ %a@]" Var.print v print_ty_in_app (Var.ty v) print t
+    | Bind (b, v, t) ->
+        let s = match b with
+          | Fun -> "fun" | Forall -> "!" | Exists -> "?" | TyForall -> "pi"
+        in
+        fpf out "@[<2>%s %a:%a.@ %a@]" s Var.print v print_ty_in_app (Var.ty v) print t
     | TyArrow (a,b) ->
         fpf out "@[<2>%a ->@ %a@]" print_ty_in_arrow a print_ty b
-    | TyForall (v,t) ->
-        fpf out "@[<2>pi %a:type.@ %a@]" Var.print v print_ty t
 
   and print_ty out ty = print out ty
   and print_ty_in_app out ty = print_in_app out ty
   and print_ty_in_arrow out ty = print_in_binder out ty
 
   and print_in_app out t = match T.view t with
-    | Builtin _ | TyBuiltin _ | TyKind | TyType
-    | Var _ | Const _ | TyMeta _ ->
+    | AppBuiltin (_,[]) | TyBuiltin _ | Var _ | Const _ | TyMeta _ ->
         print out t
-    | App (_,_)
-    | Forall _
-    | Exists _
-    | Fun _
-    | Let _ | Ite _ | Eq _
-    | TyArrow (_,_)
-    | TyForall (_,_) -> fpf out "@[(%a)@]" print t
+    | App (_,_) | AppBuiltin (_,_::_)
+    | Bind _ | Let _
+    | TyArrow (_,_) -> fpf out "@[(%a)@]" print t
 
   and print_in_binder out t = match T.view t with
-    | Builtin _ | TyBuiltin _ | TyKind | TyType | Var _
-    | Const _ | TyMeta _ | App (_,_) ->
+    | TyBuiltin _ | Var _
+    | Const _ | TyMeta _ | App (_,_) | AppBuiltin _ ->
         print out t
-    | Forall _
-    | Exists _
-    | Fun _
-    | Let _ | Ite _ | Eq _
-    | TyArrow (_,_)
-    | TyForall (_,_) -> fpf out "@[(%a)@]" print t
+    | Bind _
+    | Let _
+    | TyArrow (_,_) -> fpf out "@[(%a)@]" print t
 end
 
 (** {2 Utils with Substitutions} *)
@@ -265,15 +254,16 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
   type subst = T.Ty.t Subst.t
 
   let rec equal ~subst ty1 ty2 = match T.view ty1, T.view ty2 with
-    | TyKind, TyKind
-    | TyType, TyType -> true
     | Const id1, Const id2 -> ID.equal id1 id2
     | Var v1, _ when Subst.mem ~subst v1 ->
         equal ~subst (Subst.find_exn ~subst v1) ty2
     | _, Var v2 when Subst.mem ~subst v2 ->
         equal ~subst ty1 (Subst.find_exn ~subst v2)
     | Var v1, Var v2 -> Var.equal v1 v2
-    | Builtin b1, Builtin b2 -> NunBuiltin.T.equal b1 b2
+    | AppBuiltin (b1,l1), AppBuiltin (b2,l2) ->
+        NunBuiltin.T.equal b1 b2 &&
+        List.length l1 = List.length l2 &&
+        List.for_all2 (equal ~subst) l1 l2
     | TyBuiltin b1, TyBuiltin b2 -> NunBuiltin.Ty.equal b1 b2
     | TyMeta v1, TyMeta v2 -> NunMetaVar.equal v1 v2
     | App (f1,l1), App (f2, l2) ->
@@ -282,45 +272,25 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
           && List.for_all2 (equal ~subst) l1 l2
     | TyArrow (a1,b1), TyArrow (a2,b2) ->
         equal ~subst a1 a2 && equal ~subst b1 b2
-    | TyForall (v1, t1), TyForall (v2, t2) ->
-        let v = Var.fresh_copy v1 in
-        let subst = Subst.add ~subst v1 (T.ty_var v) in
-        let subst = Subst.add ~subst v2 (T.ty_var v) in
-        equal ~subst t1 t2
-    | Fun (v1,t1), Fun (v2,t2)
-    | Forall (v1,t1), Forall (v2,t2)
-    | Exists (v1,t1), Exists (v2,t2) ->
-        let v = Var.fresh_copy v1 in
-        let subst = Subst.add ~subst v1 (T.var v) in
-        let subst = Subst.add ~subst v2 (T.var v) in
-        equal ~subst t1 t2
+    | Bind (b1, v1, t1), Bind (b2, v2, t2) ->
+        b1 = b2 &&
+        ( let v = Var.fresh_copy v1 in
+          let subst = Subst.add ~subst v1 (T.ty_var v) in
+          let subst = Subst.add ~subst v2 (T.ty_var v) in
+          equal ~subst t1 t2 )
     | Let (v1,t1,u1), Let (v2,t2,u2) ->
         let subst = Subst.add ~subst v1 t1 in
         let subst = Subst.add ~subst v2 t2 in
         equal ~subst u1 u2
-    | Ite (a1,b1,c1), Ite (a2,b2,c2) ->
-        equal ~subst a1 a2 &&
-        equal ~subst b1 b2 &&
-        equal ~subst c1 c2
-    | Eq (a1,b1), Eq (a2,b2) ->
-        equal ~subst a1 a2 &&
-        equal ~subst b1 b2
-    | TyKind ,_
     | Var _, _
-    | TyType ,_
     | TyBuiltin _,_
-    | Builtin _,_
+    | AppBuiltin _,_
     | Const _,_
     | TyMeta _,_
     | App (_,_),_
-    | Fun (_,_),_
-    | Forall (_,_),_
-    | Exists (_,_),_
+    | Bind _, _
     | Let (_,_,_),_
-    | Ite (_,_,_),_
-    | Eq (_,_),_
-    | TyArrow (_,_),_
-    | TyForall (_,_),_ -> false
+    | TyArrow (_,_),_ -> false
 
   let rec deref ~subst t = match T.view t with
     | Var v ->
@@ -333,33 +303,21 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
   (* NOTE: when dependent types are added, substitution in types is needed *)
 
   let rec eval ~subst t = match T.view t with
-    | TyKind
-    | TyType
     | TyMeta _
     | Const _
     | TyBuiltin _ -> t
-    | Builtin _ -> t
-    | Fun (v,t) ->
+    | AppBuiltin (_,[]) -> t
+    | AppBuiltin (b,l) ->
+        T.app_builtin b (List.map (eval ~subst) l)
+    | Bind (b, v, t) ->
         let v' = Var.fresh_copy v in
         let subst = Subst.add ~subst v (T.var v') in
-        T.fun_ v' (eval ~subst t)
-    | Forall (v,t) ->
-        let v' = Var.fresh_copy v in
-        let subst = Subst.add ~subst v (T.var v') in
-        T.forall v' (eval ~subst t)
-    | Exists (v,t) ->
-        let v' = Var.fresh_copy v in
-        let subst = Subst.add ~subst v (T.var v') in
-        T.exists v' (eval ~subst t)
+        T.mk_bind b v' (eval ~subst t)
     | Let (v,t,u) ->
         let v' = Var.fresh_copy v in
         let t = eval ~subst t in
         let subst = Subst.add ~subst v (T.var v') in
         T.let_ v' t (eval ~subst u)
-    | Ite (a,b,c) ->
-        T.ite (eval ~subst a) (eval ~subst b) (eval ~subst c)
-    | Eq (a,b) ->
-        T.eq (eval ~subst a) (eval ~subst b)
     | Var v ->
         begin try Subst.find_exn ~subst v
         with Not_found -> t
@@ -368,10 +326,6 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
         T.app (eval ~subst f) (List.map (eval ~subst) l)
     | TyArrow (a,b) ->
         T.ty_arrow (eval ~subst a) (eval ~subst b)
-    | TyForall (v,t) ->
-        let v' = Var.fresh_copy v in
-        let subst = Subst.add ~subst v (T.ty_var v') in
-        T.ty_forall v' (eval ~subst t)
 
   exception ApplyError of string * T.t * T.t list
   (** Raised when a type application fails *)
@@ -430,13 +384,11 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
   type signature = T.ty NunProblem.Signature.t
 
   let rec ty_exn ~sigma t = match T.view t with
-    | TyKind -> failwith "Term_ho.ty: kind has no type"
-    | TyType -> T.ty_kind
     | Const id ->
         begin try NunID.Map.find id sigma
         with Not_found -> raise (Undefined id)
         end
-    | Builtin b ->
+    | AppBuiltin (b,_) ->
         let module B = NunBuiltin.T in
         let prop1 = T.ty_arrow T.ty_prop T.ty_prop in
         let prop2 = T.ty_arrow T.ty_prop (T.ty_arrow T.ty_prop T.ty_prop) in
@@ -445,25 +397,33 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
           | B.Or -> prop2
           | B.And -> prop2
           | B.Not -> prop1
-          | B.True -> T.ty_prop
-          | B.False -> T.ty_prop
+          | B.True
+          | B.False
+          | B.Ite
+          | B.Eq -> T.ty_prop
         end
     | Var v -> Var.ty v
     | App (f,l) ->
         ty_apply (ty_exn ~sigma f) (List.map (ty_exn ~sigma) l)
-    | Fun (v,t) ->
-        if T.Ty.returns_Type (Var.ty v)
-        then T.ty_forall v (ty_exn ~sigma t)
-        else T.ty_arrow (Var.ty v) (ty_exn ~sigma t)
-    | Forall (v,_)
-    | Exists (v,_) -> T.ty_arrow (Var.ty v) T.ty_prop
+    | Bind (b,v,t) ->
+        begin match b with
+        | Forall
+        | Exists -> T.ty_arrow (Var.ty v) T.ty_prop
+        | Fun  ->
+            if T.Ty.returns_Type (Var.ty v)
+            then T.ty_forall v (ty_exn ~sigma t)
+            else T.ty_arrow (Var.ty v) (ty_exn ~sigma t)
+        | TyForall -> T.ty_type
+        end
     | Let (_,_,u) -> ty_exn ~sigma u
-    | Ite (_,b,_) -> ty_exn ~sigma b
-    | Eq _ -> T.ty_prop
     | TyMeta _ -> assert false
-    | TyBuiltin _
-    | TyArrow (_,_)
-    | TyForall (_,_) -> T.ty_type
+    | TyBuiltin b ->
+        begin match b with
+        | NunBuiltin.Ty.Kind -> failwith "Term_ho.ty: kind has no type"
+        | NunBuiltin.Ty.Type -> T.ty_kind
+        | NunBuiltin.Ty.Prop -> T.ty_type
+        end
+    | TyArrow (_,_) -> T.ty_type
 
   let ty ~sigma t =
     try CCError.return (ty_exn ~sigma t)
@@ -487,7 +447,9 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
     let rec match_ subst t1 t2 =
       let t2 = deref ~subst:subst2 t2 in
       match T.view t1, T.view t2 with
-      | Builtin b1, Builtin b2 when NunBuiltin.T.equal b1 b2 -> subst
+      | AppBuiltin (b1,l1), AppBuiltin (b2,l2)
+          when NunBuiltin.T.equal b1 b2 && List.length l1 = List.length l2 ->
+            List.fold_left2 match_ subst l1 l2
       | Const id1, Const id2 when ID.equal id1 id2 -> subst
       | Var v1, _ ->
           begin match Subst.find ~subst v1 with
@@ -506,25 +468,15 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
       | TyArrow (a1, b1), TyArrow (a2,b2) ->
           let subst = match_ subst a1 a2 in
           match_ subst b1 b2
-      | TyKind , TyKind
-      | TyType , TyType -> subst
-      | Fun _, Fun _
-      | TyForall (_, _), _
-      | Forall (_, _), _
-      | Exists (_, _), _
-      | Let (_, _, _), _
-      | Ite (_, _, _), _
-      | Eq (_, _), _ -> invalid_arg "pattern is not first-order"
+      | Bind _, _
+      | Let (_, _, _), _ -> invalid_arg "pattern is not first-order"
       | TyBuiltin b1, TyBuiltin b2 when NunBuiltin.Ty.equal b1 b2 -> subst
       | TyMeta _, _ -> assert false
-      | Builtin _, _
+      | AppBuiltin _, _
       | Const _, _
       | App (_, _), _
-      | Fun (_, _), _
-      | TyKind , _
-      | TyType , _
-      | TyBuiltin _, _
-      | TyArrow (_, _), _ -> error_unif_ "do not match" t1 t2
+      | TyArrow _, _
+      | TyBuiltin _, _ -> error_unif_ "do not match" t1 t2
     in
     match_ Subst.empty t1 t2
 
@@ -590,44 +542,48 @@ module Erase(T : VIEW) = struct
       raise e
 
   let rec erase ~ctx t = match T.view t with
-    | Builtin b ->
+    | AppBuiltin (NunBuiltin.T.Ite, [a;b;c]) ->
+        Untyped.ite (erase ~ctx a)(erase ~ctx b)(erase ~ctx c)
+    | AppBuiltin (b,l) ->
+        let module B = NunBuiltin.T in
         let b = match b with
-          | NunBuiltin.T.True  -> Untyped.Builtin.True
-          | NunBuiltin.T.False -> Untyped.Builtin.False
-          | NunBuiltin.T.Not -> Untyped.Builtin.Not
-          | NunBuiltin.T.Or -> Untyped.Builtin.Or
-          | NunBuiltin.T.And -> Untyped.Builtin.And
-          | NunBuiltin.T.Imply -> Untyped.Builtin.Imply
-        in Untyped.builtin b
+          | B.True  -> Untyped.Builtin.True
+          | B.False -> Untyped.Builtin.False
+          | B.Not -> Untyped.Builtin.Not
+          | B.Or -> Untyped.Builtin.Or
+          | B.And -> Untyped.Builtin.And
+          | B.Imply -> Untyped.Builtin.Imply
+          | B.Eq  -> Untyped.Builtin.Eq
+          | B.Ite -> assert false
+        in
+        Untyped.app (Untyped.builtin b) (List.map (erase ~ctx) l)
     | Const id -> Untyped.var (find_ ~ctx id)
     | Var v -> Untyped.var (find_ ~ctx (Var.id v))
-    | Eq (a,b) ->
-        Untyped.app
-          (Untyped.builtin Untyped.Builtin.Eq) [erase ~ctx a; erase ~ctx b]
     | App (f,l) -> Untyped.app (erase ~ctx f) (List.map (erase ~ctx) l)
-    | Fun (v,t) ->
-        enter_typed_var_ ~ctx v (fun v' -> Untyped.fun_ v' (erase ~ctx t))
-    | Forall (v,t) ->
-        enter_typed_var_ ~ctx v (fun v' -> Untyped.forall v' (erase ~ctx t))
-    | Exists (v,t) ->
-        enter_typed_var_ ~ctx v (fun v' -> Untyped.forall v' (erase ~ctx t))
+    | Bind (b,v,t) ->
+        enter_typed_var_ ~ctx v
+          (fun v' ->
+            let t = erase ~ctx t in
+            match b with
+            | Fun -> Untyped.fun_ v' t
+            | Forall -> Untyped.forall v' t
+            | Exists -> Untyped.exists v' t
+            | TyForall -> Untyped.ty_forall (fst v') t
+          )
     | Let (v,t,u) ->
         let t = erase ~ctx t in
         enter_ ~ctx v
           (fun v' ->
             Untyped.let_ v' t (erase ~ctx u)
           )
-    | Ite (a,b,c) -> Untyped.ite (erase ~ctx a) (erase ~ctx b) (erase ~ctx c)
-    | TyKind -> failwith "HO.erase: cannot erase Kind"
-    | TyType -> Untyped.builtin Untyped.Builtin.Type
     | TyBuiltin b ->
         let b = match b with
           | NunBuiltin.Ty.Prop -> Untyped.Builtin.Prop
+          | NunBuiltin.Ty.Type -> Untyped.Builtin.Type
+          | NunBuiltin.Ty.Kind -> failwith "HO.erase: cannot erase Kind"
         in
         Untyped.builtin b
     | TyArrow (a,b) -> Untyped.ty_arrow (erase_ty ~ctx a) (erase_ty ~ctx b)
-    | TyForall (v,t) ->
-        enter_ ~ctx v (fun v' -> Untyped.ty_forall v' (erase_ty ~ctx t))
     | TyMeta _ -> assert false
 
   (* erase a type *)
@@ -651,8 +607,8 @@ module AsFO(T : VIEW) = struct
       | NotInFO (msg, t) ->
           let module P = Print(Term) in
           let msg = CCFormat.sprintf
-            "@[term `@[%a@]` is not in the first-order fragment:@ %s@]"
-            P.print_in_app t msg
+            "@[<2>term `@[%a@]` is not in the first-order fragment:@ %s@]"
+              P.print t msg
           in
           Some msg
       | _ -> None
@@ -661,15 +617,13 @@ module AsFO(T : VIEW) = struct
   module FOI = NunFO
 
   let fail t msg = raise (NotInFO (msg, t))
-  let failf t msg =
-    NunUtils.exn_ksprintf msg ~f:(fun msg -> fail t msg)
 
   module Ty = struct
     type t = T.t
     type toplevel_ty = t list * t
 
     let view t = match T.view t with
-      | Builtin _ -> fail t "builtin term"
+      | AppBuiltin _ -> fail t "builtin term"
       | Const id -> FOI.TyApp (id, [])
       | Var _ -> fail t "variable in type"
       | App (f,l) ->
@@ -677,20 +631,17 @@ module AsFO(T : VIEW) = struct
           | Const id -> FOI.TyApp (id, l)
           | _ -> fail t "non-constant application"
           end
-      | Fun (_,_) -> fail t "no function in type"
-      | Forall (_,_)
-      | Exists (_,_) -> fail t "no quantifier in type"
+      | Bind (TyForall, _, _) -> fail t "no quantification in FO types"
+      | Bind (Fun,_,_) -> fail t "no function in type"
+      | Bind ((Forall | Exists),_,_) -> fail t "no quantifier in type"
       | Let (_,_,_) -> fail t "no let in type"
-      | Ite (_,_,_) -> fail t "no if/then/else in type"
-      | Eq _ -> fail t "no = in types"
-      | TyKind -> fail t "kind belongs to HO fragment"
-      | TyType -> fail t "type belongs to HO fragment"
       | TyBuiltin b ->
           begin match b with
           | NunBuiltin.Ty.Prop -> FOI.TyBuiltin FOI.TyBuiltin.Prop
+          | NunBuiltin.Ty.Kind -> fail t "kind belongs to HO fragment"
+          | NunBuiltin.Ty.Type -> fail t "type belongs to HO fragment"
           end
       | TyArrow (_,_) -> fail t "arrow is not an atomic type"
-      | TyForall (_,_) -> fail t "no quantification in FO types"
       | TyMeta _ -> assert false
 
     let rec flatten_arrow t = match T.view t with
@@ -705,7 +656,8 @@ module AsFO(T : VIEW) = struct
     type t = T.t
 
     let view t = match T.view t with
-      | Builtin _ -> fail t "no builtin in terms"
+      | AppBuiltin (NunBuiltin.T.Ite, [a;b;c]) -> FOI.Ite (a,b,c)
+      | AppBuiltin _ -> fail t "no builtin in terms"
       | Const id -> FOI.App (id, [])
       | Var v -> FOI.Var v
       | App (f,l) ->
@@ -713,17 +665,12 @@ module AsFO(T : VIEW) = struct
           | Const id -> FOI.App (id, l)
           | _ -> fail t "application of non-constant term"
           end
-      | Fun (v,t) -> FOI.Fun (v, t)
-      | Forall (_,_)
-      | Exists (_,_) -> fail t "no quantifiers in FO terms"
+      | Bind (Fun,v,t) -> FOI.Fun (v, t)
+      | Bind ((Forall | Exists), _,_) -> fail t "no quantifiers in FO terms"
       | Let (v,t,u) -> FOI.Let (v, t, u)
-      | Ite (a,b,c) -> FOI.Ite (a,b,c)
-      | Eq _ -> fail t "no = in terms"
-      | TyKind
-      | TyType
       | TyBuiltin _
       | TyArrow (_,_)
-      | TyForall (_,_) -> fail t "no types in FO terms"
+      | Bind (TyForall, _,_) -> fail t "no types in FO terms"
       | TyMeta _ -> assert false
   end
 
@@ -732,40 +679,28 @@ module AsFO(T : VIEW) = struct
     type t = T.t
 
     let view t = match T.view t with
-      | Builtin b ->
-          begin match b with
-          | NunBuiltin.T.True -> FOI.True
-          | NunBuiltin.T.False -> FOI.False
-          | NunBuiltin.T.Not
-          | NunBuiltin.T.Or
-          | NunBuiltin.T.And
-          | NunBuiltin.T.Imply ->
-              failf t "connective %s not fully applied" (NunBuiltin.T.to_string b)
+      | AppBuiltin (b,l) ->
+          begin match b, l with
+          | NunBuiltin.T.True, [] -> FOI.True
+          | NunBuiltin.T.False, [] -> FOI.False
+          | NunBuiltin.T.Not, [f] -> FOI.Not f
+          | NunBuiltin.T.Or, l -> FOI.Or l
+          | NunBuiltin.T.And, l -> FOI.And l
+          | NunBuiltin.T.Imply, [a;b] -> FOI.Imply (a,b)
+          | NunBuiltin.T.Ite, [a;b;c] -> FOI.F_ite (a,b,c)
+          | NunBuiltin.T.Eq, [a;b] -> FOI.Eq (a,b)
+          | _ -> assert false
           end
+      | App _
       | Const _ -> FOI.Atom t
       | Var _ -> fail t "no variable in FO formulas"
-      | App (_, []) -> assert false
-      | App (f,l) ->
-          begin match T.view f, l with
-          | Builtin NunBuiltin.T.Not, [f] -> FOI.Not f
-          | Builtin NunBuiltin.T.And, _ -> FOI.And l
-          | Builtin NunBuiltin.T.Or, _ -> FOI.Or l
-          | Builtin NunBuiltin.T.Imply, [a;b] -> FOI.Imply (a,b)
-          | Builtin _, _ -> fail t "wrong builtin/arity"
-          | Const _, _ -> FOI.Atom t
-          | _ -> fail t "wrong application in FO formula"
-          end
-      | Eq (a,b) -> FOI.Eq (a,b) (* FIXME: equiv in some cases? *)
-      | Fun (_,_) -> fail t "function in FO formula"
-      | Forall (v,f) -> FOI.Forall (v,f)
-      | Exists (v,f) -> FOI.Exists (v,f)
+      | Bind (Fun,v,t) -> FOI.F_fun (v,t)
+      | Bind (Forall, v,f) -> FOI.Forall (v,f)
+      | Bind (Exists, v,f) -> FOI.Exists (v,f)
       | Let (_,_,_) -> FOI.Atom t
-      | Ite (a,b,c) -> FOI.F_ite (a,b,c)
       | TyArrow (_,_)
-      | TyForall (_,_)
-      | TyKind
-      | TyBuiltin _
-      | TyType -> fail t "no types in FO formulas"
+      | Bind (TyForall, _,_)
+      | TyBuiltin _ -> fail t "no types in FO formulas"
       | TyMeta _ -> assert false
   end
 
@@ -799,6 +734,8 @@ module AsFO(T : VIEW) = struct
               (fun c -> List.map mk_ax (St.case_axioms c))
               s
         end
+    | St.TyDef _ ->
+        NunUtils.not_implemented "to_fo: mutual type definitions"
     | St.Goal f ->
         [ FOI.Goal f ]
 
@@ -895,21 +832,14 @@ let to_fo (type a)(type b)(type c)
 
 module Convert(T1 : VIEW)(T2 : S) = struct
   let rec convert t = match T1.view t with
-    | Builtin b -> T2.builtin b
+    | AppBuiltin (b,l) -> T2.app_builtin b (List.map convert l)
     | Const id -> T2.const id
     | Var v -> T2.var (aux_var v)
     | App (f,l) -> T2.app (convert f) (List.map convert l)
-    | Fun (v,t) -> T2.fun_ (aux_var v) (convert t)
-    | Forall (v,t) -> T2.forall (aux_var v) (convert t)
-    | Exists (v,t) -> T2.exists (aux_var v) (convert t)
+    | Bind (b,v,t) -> T2.mk_bind b (aux_var v) (convert t)
     | Let (v,t,u) -> T2.let_ (aux_var v) (convert t) (convert u)
-    | Ite (a,b,c) -> T2.ite (convert a)(convert b)(convert c)
-    | Eq (a,b) -> T2.eq (convert a)(convert b)
-    | TyKind -> T2.ty_kind
-    | TyType -> T2.ty_type
     | TyBuiltin b -> T2.ty_builtin b
     | TyArrow (a,b) -> T2.ty_arrow (convert a)(convert b)
-    | TyForall (v,t) -> T2.ty_forall (aux_var v)(convert t)
     | TyMeta _ -> assert false
 
   and aux_var v = Var.update_ty ~f:convert v

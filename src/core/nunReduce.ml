@@ -35,7 +35,7 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
     (* reduce until the head is not a function *)
     let rec whnf_ st = match T.view st.head with
       | TI.Const _
-      | TI.Builtin _ -> st
+      | TI.AppBuiltin (_,_) -> st
       | TI.Var v ->
           (* dereference, if any *)
           begin match Subst.find ~subst:st.subst v with
@@ -44,7 +44,7 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
           end
       | TI.App (f, l) ->
           whnf_ {st with head=f; args=push_args ~st l}
-      | TI.Fun (v,body) ->
+      | TI.Bind (TI.Fun, v,body) ->
           begin match st.args with
           | [] -> st
           | a :: args' ->
@@ -55,16 +55,10 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
                 subst=Subst.add ~subst:st.subst v a
               }
           end
-      | TI.Eq _
-      | TI.Forall _
-      | TI.Exists _
+      | TI.Bind ((TI.Forall | TI.Exists | TI.TyForall), _, _)
       | TI.Let _
-      | TI.Ite _
-      | TI.TyKind
-      | TI.TyType
       | TI.TyBuiltin _
-      | TI.TyArrow _
-      | TI.TyForall _ -> st
+      | TI.TyArrow _ -> st
       | TI.TyMeta _ -> assert false
 
     let whnf ?(subst=Subst.empty) t args =
@@ -77,40 +71,29 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       let st = whnf_ st in
       (* then, reduce subterms *)
       match T.view st.head with
-      | TI.TyKind
-      | TI.TyType
       | TI.TyBuiltin _
       | TI.Const _
-      | TI.Builtin _ ->
+      | TI.AppBuiltin (_,[]) ->
           (* TODO: reduce boolean expressions? *)
           st
-      | TI.TyForall (_,_)
+      | TI.AppBuiltin (b,l) ->
+          let l = List.map (snf_term ~subst:st.subst) l in
+          {st with head=T.app_builtin b l}
+      | TI.Bind (TI.TyForall,_,_)
       | TI.TyArrow (_,_) ->
           st (* NOTE: depend types might require beta-reduction in types *)
       | TI.Var v ->
           assert (not (Subst.mem ~subst:st.subst v));
           st
       | TI.App (_,_) -> assert false  (* not WHNF *)
-      | TI.Fun (v, body) ->
+      | TI.Bind (TI.Fun, v, body) ->
           assert (st.args = []);
           enter_snf_ st v body (fun v body -> T.fun_ v body)
-      | TI.Forall (v,t) ->
-          enter_snf_ st v t (fun v t -> T.forall v t)
-      | TI.Exists (v,t) ->
-          enter_snf_ st v t (fun v t -> T.exists v t)
+      | TI.Bind (b, v,t) ->
+          enter_snf_ st v t (fun v t -> T.mk_bind b v t)
       | TI.Let (v,t,u) ->
           let t = snf_term ~subst:st.subst t in
           enter_snf_ st v u (fun v u -> T.let_ v t u)
-      | TI.Ite (a,b,c) ->
-          (* XXX: should we check [a] against [true] or [false]? *)
-          {st with head=
-            T.ite
-              (snf_term ~subst:st.subst a)
-              (snf_term ~subst:st.subst b)
-              (snf_term ~subst:st.subst c)
-          }
-      | TI.Eq (a,b) ->
-          { st with head=T.eq (snf_term ~subst:st.subst a) (snf_term ~subst:st.subst b) }
       | TI.TyMeta _ -> assert false
 
     (* compute the SNF of this term in [subst] *)
