@@ -59,6 +59,7 @@
 %token VERTICAL_BAR
 
 %token <string> LOWER_WORD
+%token <string> UPPER_WORD
 
 %start <NunUntypedAST.statement> parse_statement
 %start <NunUntypedAST.statement list> parse_statement_list
@@ -73,7 +74,9 @@ parse_ty: t=term EOI {t}
 parse_statement_list: l=list(statement) EOI { l }
 
 /* variable without a location */
-raw_var: w=LOWER_WORD { w }
+raw_var:
+  | w=LOWER_WORD { w }
+  | w=UPPER_WORD { w }
 
 typed_var:
   | v=raw_var { v, None }
