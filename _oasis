@@ -59,6 +59,10 @@ Test all
   TestTools:    run_qtest
   Run$:         flag(tests)
 
+Test full
+  Command:      ./tests/run.ml
+  Run$:         flag(tests)
+
 Document nunchaku
   Title:                Documentation of Nunchaku
   Type:                 ocamlbuild (0.3)

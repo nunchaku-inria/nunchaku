@@ -1,0 +1,10 @@
+
+# EXPECT: FAIL
+# (bad data declaration)
+
+val term : type.
+
+data foo : type -> type :=
+  | foo1 : foo term
+  | foo2 : term.  # bad
+

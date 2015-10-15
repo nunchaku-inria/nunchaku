@@ -1,5 +1,6 @@
 
-# should fail, f declared twice
+# EXPECT: FAIL
+# (f declared twice)
 
 val term : type.
 

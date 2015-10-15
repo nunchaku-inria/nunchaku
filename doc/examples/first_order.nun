@@ -1,5 +1,6 @@
 
 # Simple types, should have a model easily
+# EXPECT: OK
 
 val term : type.
 val list : type.
