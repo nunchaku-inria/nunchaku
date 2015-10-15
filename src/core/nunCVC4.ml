@@ -67,11 +67,6 @@ end = struct
     let cmd = Printf.sprintf "cvc4 --tlimit-per=%d --lang smt --finite-model-find"
       (int_of_float (timeout *. 1000.)) in
     let ic, oc = Unix.open_process cmd in
-    (* send prelude *)
-    output_string oc "(set-option :produce-models true)\n";
-    output_string oc "(set-option :interactive-mode true)\n";
-    output_string oc "(set-logic ALL_SUPPORTED)\n"; (* YOLO *)
-    flush oc;
     (* the [t] instance *)
     let s = {
       oc;
@@ -196,17 +191,22 @@ end = struct
 
     in
     fun out pb ->
-      fpf out "@[<v>%a@]"
-        (CCFormat.list ~start:"" ~stop:"" ~sep:"" print_statement )
-        pb.FOI.Problem.statements
+      (* send prelude *)
+      fpf out "@[<v>";
+      fpf out "(set-option :produce-models true)@,";
+      fpf out "(set-option :interactive-mode true)@,";
+      fpf out "(set-logic ALL_SUPPORTED)@,"; (* YOLO *)
+      (* write problem *)
+      CCFormat.list ~start:"" ~stop:"" ~sep:""
+        print_statement out pb.FOI.Problem.statements;
+      fpf out "@,(check-sat)@]@.";
+      ()
 
   let send_ s problem =
     let on_id name id =
       Hashtbl.replace s.tbl name id
     in
     fpf s.fmt "%a@." (print_problem_ ~on_id) problem;
-    fpf s.fmt "(check-sat)@.";
-    flush s.oc;
     ()
 
   let print_problem = print_problem_ ~on_id:(fun _ _ -> ())
