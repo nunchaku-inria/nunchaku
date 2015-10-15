@@ -38,15 +38,15 @@ let grep_expect f =
 
 (* run test for [f] , and return [true] if test was ok *)
 let test_file f =
-  Format.printf "running %s... @?" f;
+  Format.printf "running %-30s... @?" f;
   (* expected result *)
   let expected = grep_expect f in
   let p = CCUnix.call "./nunchaku.native --timeout 5 %s" f in
   let actual = if p#errcode = 0 then Ok else Error in
   if expected = actual
-  then (Format.printf "ok@."; true)
+  then (Format.printf "\x1b[32;1mok\x1b[0m@."; true)
   else (
-    Format.printf "failure: expected `%a`, got `%a`@."
+    Format.printf "\x1b[31;1mfailure\x1b[0m: expected `%a`, got `%a`@."
       pp_result expected pp_result actual;
     false
   )
