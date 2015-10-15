@@ -19,6 +19,8 @@ type id = NunID.t
       "def" for terminating ones that can be ignored (> spec), etc.)
 *)
 
+(* TODO: if depth limit reached, activate some "spuriousness" flag? *)
+
 (** {2 Signature} *)
 module type S = sig
   module T : NunTerm_ho.S

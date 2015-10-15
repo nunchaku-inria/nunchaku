@@ -272,7 +272,9 @@ module Make(T : NunTerm_ho.S) : S with module T = T
   type mono_state = St.t
   let create = St.create
 
-  (* find a specialized name for [id tup] if [tup] not empty *)
+  (* find a specialized name for [id tup] if [tup] not empty.
+   returns ID to use, and [Some mangled] if [args <> []], None otherwise
+   (so it can be used in [!ArgTuple.of_list ~mangled]) *)
   let mangle_ ~state id args =
     let pp_list p = CCFormat.list ~start:"" ~stop:"" ~sep:"_" p in
     let rec flat_ty_ out t = match T.Ty.view t with
@@ -302,6 +304,12 @@ module Make(T : NunTerm_ho.S) : S with module T = T
         | Some subst' -> Some (case, subst')
       )
       cases
+
+  (* find a (co)inductive type declaration for [id] *)
+  let find_tydef_ ~defs id =
+    CCList.find_pred
+      (fun tydef -> ID.equal id tydef.Stmt.ty_id)
+      defs
 
   let monomorphize ?(depth_limit=256) ~sigma ~state pb =
     (* map T.t to T.t and, simultaneously, compute relevant instances
@@ -438,6 +446,64 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       !res
     in
 
+    (* specialize (co)inductive types *)
+    let aux_mutual_types l =
+      let q = Queue.create() in (* task list *)
+      let res = ref [] in
+      (* whenever a type [id tup] is needed, check if it's in the block *)
+      let on_schedule ~depth id tup =
+        match find_tydef_ ~defs:l id with
+        | None -> () (* not in this block *)
+        | Some tydef -> Queue.push (tydef, depth, tup) q (* schedule *)
+      in
+      state.St.on_schedule <- on_schedule;
+      (* initialization: already required instances *)
+      List.iter
+        (fun tydef ->
+          St.find_tuples ~state tydef.Stmt.ty_id
+          |> ArgTupleSet.to_seq
+          |> Sequence.iter
+              (fun tup -> Queue.push (tydef, 0, tup) q)
+        ) l;
+      (* fixpoint *)
+      while not (Queue.is_empty q) do
+        let tydef, depth, tup = Queue.pop q in
+        (* check for loops or depth limit *)
+        if depth > depth_limit
+        || St.is_processed ~state tydef.Stmt.ty_id tup then ()
+        else (
+          NunUtils.debugf ~section 3
+            "@[<2>process type decl `%a : %a` for@ %a@ at depth %d@]"
+            ID.print_no_id tydef.Stmt.ty_id
+            P.print_ty tydef.Stmt.ty_type ArgTuple.print tup depth;
+          St.has_processed ~state tydef.Stmt.ty_id tup;
+          (* mangle type name. Monomorphized type should be : Type *)
+          let id, _ = mangle_ ~state tydef.Stmt.ty_id (ArgTuple.args tup) in
+          let ty = T.ty_type in
+          (* specialize each constructor *)
+          let cstors = List.map
+            (fun (id', ty') ->
+              (* mangle ID *)
+              let id', _ = mangle_ ~state id' (ArgTuple.args tup) in
+              (* apply, then convert type. Arity should match. *)
+              let ty' =
+                SubstUtil.ty_apply ty' (ArgTuple.args tup)
+                |> conv_term ~mangle:true ~depth:(depth+1) ~subst:Subst.empty
+              in
+              id', ty'
+            )
+            tydef.Stmt.ty_cstors
+          in
+          (* add resulting type *)
+          let tydef' = {Stmt.ty_id=id; ty_type=ty; ty_cstors=cstors} in
+          CCList.Ref.push res tydef'
+        )
+      done;
+      (* cleanup *)
+      St.reset_on_schedule ~state;
+      !res
+    in
+
     (* maps a statement to 0 to n specialized statements *)
     let aux_statement st =
       NunUtils.debugf ~section 2 "@[<2>convert statement@ `%a`@]"
@@ -484,7 +550,8 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           let l = aux_cases ~subst:Subst.empty l in
           [ Stmt.axiom ?loc l ]
       | Stmt.TyDef (k, l) ->
-          assert false (* TODO: fixpoint again *)
+          let l = aux_mutual_types l in
+          [ Stmt.mk_ty_def ?loc k l ]
     in
     let pb' = NunProblem.statements pb
       |> List.rev (* start at the end *)

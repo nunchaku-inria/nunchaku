@@ -180,7 +180,7 @@ module Statement = struct
         let ppcstors out (id,ty) =
           fpf out "@[%a : %a@]" ID.print_name id pty ty in
         let print_def out tydef =
-          fpf out "@[<hov2>%a@ : %a :=@ @[<hv>%a@]@]"
+          fpf out "@[<v2>%a : %a :=@ @[<v>%a@]@]"
             ID.print_name tydef.ty_id pty tydef.ty_type
             (CCFormat.list ~start:"" ~stop:"" ~sep:" | " ppcstors) tydef.ty_cstors
         in
