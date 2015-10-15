@@ -354,7 +354,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
               let l = List.map (conv_term ~mangle ~depth ~subst) l in
               T.app (T.const new_id) l
           | _ ->
-              failf_ "cannot monomorphize term with head %a" P.print f
+              failf_ "cannot monomorphize application term `@[%a@]`" P.print t
           end
       | TI.Bind ((TI.Fun | TI.Forall | TI.Exists) as b, v, t) ->
           T.mk_bind b (aux_var ~subst v) (conv_term ~mangle ~depth ~subst t)

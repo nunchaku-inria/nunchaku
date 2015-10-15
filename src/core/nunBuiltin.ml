@@ -38,8 +38,8 @@ module T = struct
     | True -> "true"
     | False -> "false"
     | Not -> "~"
-    | Or -> "|"
-    | And -> "&"
+    | Or -> "||"
+    | And -> "&&"
     | Imply -> "=>"
     | Eq -> "="
     | Ite -> assert false

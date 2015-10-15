@@ -29,6 +29,7 @@
 %token ELSE
 %token AND
 %token AT
+%token META_VAR
 
 %token LOGIC_TRUE
 %token LOGIC_FALSE
@@ -102,6 +103,13 @@ at_var:
       A.at_var ~loc v
     }
 
+meta_var:
+  | META_VAR v=raw_var
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.meta_var ~loc v
+    }
+
 const:
   | TYPE
     {
@@ -127,6 +135,7 @@ const:
 atomic_term:
   | v=var { v }
   | v=at_var { v }
+  | v=meta_var { v }
   | t=const { t }
   | LEFT_PAREN t=term RIGHT_PAREN { t }
 

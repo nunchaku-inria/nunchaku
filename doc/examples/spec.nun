@@ -12,11 +12,11 @@ val odd : nat -> prop.
 rec even :=
   even z ;
   ~ (even (s z));
-  !n. (even n = odd (s n))
+  forall n. (even n = odd (s n))
 and odd :=
   odd (s z);
   ~ (odd z);
-  !n. (odd n = even (s n)).
+  forall n. (odd n = even (s n)).
 
 val list : type -> type.
 val nil : pi a. list a.
@@ -26,17 +26,19 @@ val cons : pi a. a -> list a -> list a.
 val head : pi a. list a -> a.
 val tail : pi a. list a -> list a.
 
-# generic specification
-spec head :=
-    !x l. head (cons x l) = x
-and tail :=
-    !x l. tail (cons x l) = l.
+# specification for lists of polymorphic lists
+spec @head (list ?a) as head :=
+    head nil = nil;
+    forall x l. head (cons x l) = x
+and @tail (list ?a) as tail :=
+    tail nil = nil;
+    forall x l. tail (cons x l) = l.
 
-# NOTE: not orthogonal with generic specification, should we allow this?
-# overload with a default value
-#spec @head nat as h :=
-#    h nil = z.
+# specification for lists of nat
+spec @head nat as h :=
+    h nil = z;
+    forall x l. h (cons x l) = x.
 
 # odd number that is >= 4
-goal ?l. (odd (head l) && (?m. head l = s (s (s (s m))))).
+goal exists l. (odd (head l) && (exists m. head l = s (s (s (s m))))).
 

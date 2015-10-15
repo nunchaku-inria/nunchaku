@@ -57,6 +57,7 @@ module type TERM = NunTerm_typed.S
 
 module Convert(Term : TERM) = struct
   module Unif = NunTypeUnify.Make(Term.Ty)
+  module PrintTerm = NunTerm_ho.Print(Term)
 
   (* Helpers *)
 
@@ -96,16 +97,55 @@ module Convert(Term : TERM) = struct
     | Decl of ID.t * Term.Ty.t
     | Var of Term.Ty.t var
 
-  type env = term_def MStr.t
-  (* map names to proper identifiers, with their definition *)
+  module Env = struct
+    type t = {
+      vars: term_def MStr.t;
+      mutable metas: (string, Term.Ty.t MetaVar.t) Hashtbl.t option;
+    }
+    (* map names to proper identifiers, with their definition *)
 
-  let empty_env = MStr.empty
+    let empty = {
+      vars=MStr.empty;
+      metas=None;
+    }
 
-  let add_decl ~env v ~id ty = MStr.add v (Decl (id, ty)) env
+    let add_decl ~env v ~id ty = {
+      env with vars=MStr.add v (Decl (id, ty)) env.vars
+    }
 
-  let add_var ~env v ~var = MStr.add v (Var var) env
+    let add_var ~env v ~var = {
+      env with vars=MStr.add v (Var var) env.vars
+    }
 
-  let rec convert_ty_ ~stack ~(env:env) (ty:A.ty) =
+    let mem_var ~env v = MStr.mem v env.vars
+
+    let find_var ?loc ~env v =
+      try MStr.find v env.vars
+      with Not_found -> scoping_error ?loc v "not bound in environment"
+
+    (* find a meta-var by its name, create it if non existent *)
+    let find_meta_var ~env v =
+      let tbl = match env.metas with
+        | None ->
+            let tbl = Hashtbl.create 16 in
+            env.metas <- Some tbl;
+            tbl
+        | Some tbl -> tbl
+      in
+      try Hashtbl.find tbl v
+      with Not_found ->
+        let var = MetaVar.make ~name:v in
+        Hashtbl.add tbl v var;
+        var
+
+    (* reset table of meta-variables *)
+    let reset_metas ~env = CCOpt.iter Hashtbl.clear env.metas
+  end
+
+  type env = Env.t
+  let empty_env = Env.empty
+
+  let rec convert_ty_ ~stack ~env (ty:A.ty) =
     let loc = Loc.get_loc ty in
     let stack = push_ ty stack in
     match Loc.get ty with
@@ -119,26 +159,24 @@ module Convert(Term : TERM) = struct
       | A.Wildcard ->
           Term.ty_meta_var ?loc (MetaVar.make ~name:"_")
       | A.Var v ->
-          begin try
-            let def = MStr.find v env in
-            match def with
-              | Decl (id, t) ->
-                  (* var: _ ... _ -> Type mandatory *)
-                  unify_in_ctx_ ~stack (Term.Ty.returns t) Term.ty_type;
-                  Term.ty_const ?loc id
-              | Var v ->
-                  unify_in_ctx_ ~stack (Term.Ty.returns (Var.ty v)) Term.ty_type;
-                  Term.ty_var ?loc v
-          with Not_found -> scoping_error ?loc v "not bound in environment"
+          begin match Env.find_var ?loc ~env v with
+            | Decl (id, t) ->
+                (* var: _ ... _ -> Type mandatory *)
+                unify_in_ctx_ ~stack (Term.Ty.returns t) Term.ty_type;
+                Term.ty_const ?loc id
+            | Var v ->
+                unify_in_ctx_ ~stack (Term.Ty.returns (Var.ty v)) Term.ty_type;
+                Term.ty_var ?loc v
           end
       | A.AtVar _ -> ill_formed ?loc "@@ syntax is not available for types"
+      | A.MetaVar v -> Term.ty_meta_var (Env.find_meta_var ~env v)
       | A.TyArrow (a,b) ->
           Term.ty_arrow ?loc
             (convert_ty_ ~stack ~env a)
             (convert_ty_ ~stack ~env b)
       | A.TyForall (v,t) ->
           let var = Var.make ~ty:Term.ty_type ~name:v in
-          let env = add_var ~env v ~var in
+          let env = Env.add_var ~env v ~var in
           Term.ty_forall ?loc var (convert_ty_ ~stack ~env t)
       | A.Fun (_,_) -> ill_formed ?loc "no functions in types"
       | A.Let (_,_,_) -> ill_formed ?loc "no let in types"
@@ -158,11 +196,6 @@ module Convert(Term : TERM) = struct
   let fresh_ty_var_ ~name =
     let name = "ty_" ^ name in
     Term.ty_meta_var (MetaVar.make ~name)
-
-  (* find the variable and definition of [v] *)
-  let find_ ?loc ~env v =
-    try MStr.find v env
-    with Not_found -> scoping_error ?loc v "unknown identifier"
 
   (* explore the type [ty], and add fresh type variables in the corresponding
      positions of [l] *)
@@ -237,12 +270,12 @@ module Convert(Term : TERM) = struct
         in
         Term.builtin ?loc ~ty b
     | A.AtVar v ->
-        let def = find_ ?loc ~env v in
-        begin match def with
+        begin match Env.find_var ?loc ~env v with
           | Decl (id, ty) ->
               Term.const ?loc ~ty id
           | Var var -> Term.var ?loc var
         end
+    | A.MetaVar v -> Term.ty_meta_var (Env.find_meta_var ~env v)
     | A.App (f, [a;b]) when is_eq_ f ->
         let a = convert_term_ ~stack ~env a in
         let b = convert_term_ ~stack ~env b in
@@ -264,8 +297,7 @@ module Convert(Term : TERM) = struct
         Term.app ?loc ~ty f' l'
     | A.Var v ->
         (* a variable might be applied, too *)
-        let def = find_ ?loc ~env v in
-        let head, ty_head = match def with
+        let head, ty_head = match Env.find_var ?loc ~env v with
           | Decl (id, ty) ->
               Term.const ?loc ~ty id, ty
           | Var var -> Term.var ?loc var, Var.ty var
@@ -289,7 +321,7 @@ module Convert(Term : TERM) = struct
           (fun ty ->
             unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty)
           ) ty_opt;
-        let env = add_var ~env v ~var in
+        let env = Env.add_var ~env v ~var in
         let t = convert_term_ ~stack ~env t in
         (* NOTE: for dependent types, need to check whether [var] occurs in [type t]
            so that a forall is issued here instead of a mere arrow *)
@@ -298,7 +330,7 @@ module Convert(Term : TERM) = struct
     | A.Let (v,t,u) ->
         let t = convert_term_ ~stack ~env t in
         let var = Var.make ~name:v ~ty:(get_ty_ t) in
-        let env = add_var ~env v ~var in
+        let env = Env.add_var ~env v ~var in
         let u = convert_term_ ~stack ~env u in
         Term.let_ ?loc var t u
     | A.Ite (a,b,c) ->
@@ -368,7 +400,7 @@ module Convert(Term : TERM) = struct
         unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty)
       ) ty_opt;
     let var = Var.make ~name:v ~ty:ty_var in
-    let env = add_var ~env v ~var  in
+    let env = Env.add_var ~env v ~var  in
     let t = convert_term_ ~stack ~env t in
     (* which quantifier to build? *)
     let builder = match which with
@@ -408,6 +440,9 @@ module Convert(Term : TERM) = struct
         t, var' :: new_vars
       ) vars (t, [])
     in
+    if new_vars <> [] then
+      NunUtils.debugf ~section 3 "@[generalized `%a`@ w.r.t @[%a@]@]"
+        PrintTerm.print t (CCFormat.list Var.print) new_vars;
     t, new_vars
 
   module St = NunProblem.Statement
@@ -416,28 +451,30 @@ module Convert(Term : TERM) = struct
 
   (* checks that the name is not declared/defined already *)
   let check_new_ ?loc ~env name =
-    if MStr.mem name env
+    if Env.mem_var ~env name
       then ill_formedf ~kind:"statement" ?loc
         "identifier %s already defined" name
 
   (* convert [t] into a prop, call [f], generalize [t] *)
-  let convert_prop_ ?(f=CCFun.const ()) ~env t =
+  let convert_prop_ ?(before_generalize=CCFun.const ()) ~env t =
     let t = convert_term_exn ~env t in
     unify_in_ctx_ ~stack:[] (get_ty_ t) prop;
-    f t;
+    before_generalize t;
     let t, _ = generalize ~close:`Forall t in
     t
 
   let convert_cases ?loc ~env l =
+    let allowed_vars = ref [] in (* type variables that can occur in axioms *)
     List.map
       (fun (untyped_t,v,l) ->
         let t = convert_term_exn ~env untyped_t in
         (* replace meta-variables in [t] by real variables, and return those *)
         let t, vars = generalize ~close:`NoClose t in
+        allowed_vars := vars @ !allowed_vars;
         (* declare [v] with the type of [t] *)
         let var, env' =
           let var = Var.make ~name:v ~ty:(get_ty_ t) in
-          var, add_var ~env v ~var
+          var, Env.add_var ~env v ~var
         in
         (* now convert axioms in the new env. They should contain no
           type variables but [vars]. *)
@@ -447,18 +484,18 @@ module Convert(Term : TERM) = struct
             |> Sequence.filter
               (fun v -> Term.Ty.returns_Type (Var.ty v))
             |> Sequence.filter
-                (fun v -> not (CCList.Set.mem ~eq:Var.equal v vars))
+                (fun v -> not (CCList.Set.mem ~eq:Var.equal v !allowed_vars))
             |> Sequence.to_rev_list
             |> CCList.sort_uniq ~cmp:Var.compare
           in
           if bad_vars <> []
             then ill_formedf ?loc ~kind:"mutual def"
-              "axiom contains type variables @[%a@] \
-              that do not occur in defined term %a"
+              "@[<2>axiom contains type variables @[`%a`@]@ \
+              that do not occur in defined term@ @[`%a`@]@]"
               (CCFormat.list Var.print) bad_vars A.print_term untyped_t
         in
         let l = List.map
-          (fun ax -> convert_prop_ ~f:check_vars ~env:env' ax)
+          (fun ax -> convert_prop_ ~before_generalize:check_vars ~env:env' ax)
           l
       in
         (* return case *)
@@ -483,7 +520,7 @@ module Convert(Term : TERM) = struct
         let ty_ret = Term.Ty.returns ty in
         unify_in_ctx_ ~stack:[] ty_ret Term.ty_type;
         let id = ID.make_full ~needs_at:(ty_is_poly_ ty) ~name in
-        let env' = add_decl ~env name ~id ty in
+        let env' = Env.add_decl ~env name ~id ty in
         env', (id,ty,cstors)
       ) env l
     in
@@ -495,7 +532,7 @@ module Convert(Term : TERM) = struct
             let ty' = convert_ty_exn ~env ty' in
             (* TODO check that [head (returns ty') = id] *)
             let id' = ID.make_full ~needs_at:(ty_is_poly_ ty')  ~name in
-            let env = add_decl ~env name ~id:id' ty' in
+            let env = Env.add_decl ~env name ~id:id' ty' in
             env, (id', ty')
           ) env cstors
         in
@@ -512,13 +549,13 @@ module Convert(Term : TERM) = struct
         check_new_ ?loc ~env v;
         let ty = convert_ty_exn ~env ty in
         let id = ID.make_full ~needs_at:(ty_is_poly_ ty) ~name:v in
-        let env = add_decl ~env v ~id ty in
+        let env = Env.add_decl ~env v ~id ty in
         if Term.Ty.returns_Type ty
         then St.ty_decl ?loc id ty, env (* id is a type *)
         else St.decl ?loc id ty, env
     | A.Axiom l ->
         (* convert terms, and force them to be propositions *)
-        let l = List.map (convert_prop_ ?f:None ~env) l in
+        let l = List.map (convert_prop_ ?before_generalize:None ~env) l in
         St.axiom ?loc l, env
     | A.Spec s ->
         let s = convert_cases ?loc ~env s in
@@ -551,6 +588,7 @@ module Convert(Term : TERM) = struct
       | [] -> List.rev acc, env
       | st :: l' ->
           let st, env = convert_statement_exn ~env st in
+          Env.reset_metas ~env;
           aux (st :: acc) ~env l'
     in
     let l, env = aux [] ~env l in

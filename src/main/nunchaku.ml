@@ -34,7 +34,7 @@ let options =
   let open CCFun in
   Arg.align ?limit:None @@ List.sort Pervasives.compare @@ (
   options_debug_ @
-  [ "--print", Arg.Set print_, " print input and exit"
+  [ "--print-input", Arg.Set print_, " print input"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
   ; "--print-skolem", Arg.Set print_skolem_, " print input after Skolemization"
   ; "--print-mono", Arg.Set print_mono_, " print input after monomorphization"
@@ -64,10 +64,8 @@ let parse_file () =
     (fun msg -> Printf.sprintf "could not parse %s: %s" !file msg) res
 
 let print_input_if_needed statements =
-  if !print_ then (
-    Format.printf "@[%a@]@." A.print_statement_list statements;
-    exit 0
-  );
+  if !print_ then
+    Format.printf "@[<2>input:@ {%a@]@,}@." A.print_statement_list statements;
   ()
 
 (* build a pipeline, depending on options *)

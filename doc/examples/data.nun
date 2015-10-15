@@ -16,6 +16,6 @@ and llist : type -> type :=
     | lcons : pi a. a -> llist a -> llist a.
 
 # make a tree  mu x. node [y, z, x]
-goal ?x y z. x = node (lcons (leaf y) (lcons (leaf z) (lcons x lnil))).
+goal exists x y z. x = node (lcons (leaf y) (lcons (leaf z) (lcons x lnil))).
 
 

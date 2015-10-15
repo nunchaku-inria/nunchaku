@@ -45,6 +45,7 @@ rule token = parse
   | '_' { WILDCARD }
   | ':' { COLUMN }
   | ';' { SEMI_COLUMN }
+  | '?' { META_VAR }
   | "=" { LOGIC_EQ }
   | ":=" { EQDEF }
   | "->" { ARROW }
@@ -72,8 +73,8 @@ rule token = parse
   | "||" { LOGIC_OR }
   | "|" { VERTICAL_BAR }
   | '~' { LOGIC_NOT }
-  | '!' { LOGIC_FORALL }
-  | '?' { LOGIC_EXISTS }
+  | "forall" { LOGIC_FORALL }
+  | "exists" { LOGIC_EXISTS }
   | "=>" { LOGIC_IMPLY }
   | '@' { AT }
   | lower_word { LOWER_WORD(Lexing.lexeme lexbuf) }

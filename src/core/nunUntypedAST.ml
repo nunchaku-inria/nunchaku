@@ -77,6 +77,7 @@ and term_node =
   | Builtin of Builtin.t
   | Var of var
   | AtVar of var  (* variable without implicit arguments *)
+  | MetaVar of var (* unification variable *)
   | App of term * term list
   | Fun of typed_var * term
   | Let of var * term * term
@@ -117,6 +118,7 @@ let wildcard ?loc () = Loc.with_loc ?loc Wildcard
 let builtin ?loc s = Loc.with_loc ?loc (Builtin s)
 let var ?loc v = Loc.with_loc ?loc (Var v)
 let at_var ?loc v = Loc.with_loc ?loc (AtVar v)
+let meta_var ?loc v = Loc.with_loc ?loc (MetaVar v)
 let app ?loc t l = Loc.with_loc ?loc (App (t,l))
 let fun_ ?loc v t = Loc.with_loc ?loc (Fun(v,t))
 let fun_l ?loc = List.fold_right (fun_ ?loc)
@@ -146,7 +148,8 @@ let rec print_term out term = match Loc.get term with
   | Wildcard -> CCFormat.string out "_"
   | Builtin s -> Builtin.print out s
   | Var v -> CCFormat.string out v
-  | AtVar v -> pf out "@%s" v
+  | AtVar v -> pf out "@@%s" v
+  | MetaVar v -> pf out "?%s" v
   | App (f, [a;b]) ->
       begin match Loc.get f with
       | Builtin s when Builtin.fixity s = `Infix ->
@@ -168,9 +171,9 @@ let rec print_term out term = match Loc.get term with
       pf out "@[<hv2>if %a@ then %a@ else %a@]"
         print_term_inner a print_term b print_term c
   | Forall (v, t) ->
-      pf out "@[<2>!%a.@ %a@]" print_typed_var v print_term t
+      pf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
   | Exists (v, t) ->
-      pf out "@[<2>?%a.@ %a@]" print_typed_var v print_term t
+      pf out "@[<2>exists %a.@ %a@]" print_typed_var v print_term t
   | TyArrow (a, b) ->
       pf out "@[<2>%a ->@ %a@]"
         print_term_in_arrow a print_term b
@@ -180,12 +183,11 @@ and print_term_inner out term = match Loc.get term with
   | App _ | Fun _ | Let _ | Ite _
   | Forall _ | Exists _ | TyForall _ | TyArrow _ ->
       pf out "(%a)" print_term term
-  | Builtin _ | AtVar _ | Var _ | Wildcard -> print_term out term
+  | Builtin _ | AtVar _ | Var _ | MetaVar _ | Wildcard -> print_term out term
 and print_term_in_arrow out t = match Loc.get t with
   | Wildcard
   | Builtin _
-  | Var _
-  | AtVar _
+  | Var _ | AtVar _ | MetaVar _
   | App (_,_) -> print_term out t
   | Let (_,_,_)
   | Ite _
@@ -207,7 +209,7 @@ let pp_mutual_cases out l =
   | Var v' when v=v' ->
       pf out "@[<hv>%a :=@ %a@]" print_term t ppterms l
   | _ ->
-      pf out "@[<hv>%a as %s :=@ %a@]" print_term t v ppterms l
+      pf out "@[<hv2>%a as %s :=@ %a@]" print_term t v ppterms l
   in
   pf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_case) l
 
@@ -215,7 +217,7 @@ let pp_ty_defs out l =
   let ppcons out (id,ty) = pf out "@[%s : %a@]" id print_term ty in
   let ppcons_l = pp_list_ ~sep:"|" ppcons in
   let pp_case out (id,ty,l) =
-    pf out "@[<hv>%s :@ %a :=@ %a@]" id print_term ty ppcons_l l
+    pf out "@[<hv2>%s :@ %a :=@ %a@]" id print_term ty ppcons_l l
   in
   pf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_case) l
 

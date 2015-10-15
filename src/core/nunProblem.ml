@@ -165,14 +165,14 @@ module Statement = struct
           List.iteri
             (fun i case ->
               if i>0 then fpf out "@,and ";
-              fpf out "@[%a@]" print_case case
+              print_case out case
             ) l;
           fpf out ".@]"
         in
         begin match a with
         | Axiom_std l ->
             fpf out "@[<hv2>axiom@ %a.@]"
-              (CCFormat.list ~start:"" ~stop:"" ~sep:";" pt) l
+              (CCFormat.list ~start:"" ~stop:"" ~sep:"; " pt) l
         | Axiom_spec t -> print_cases ~what:"spec" out t
         | Axiom_rec t -> print_cases ~what:"rec" out t
         end

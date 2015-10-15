@@ -14,21 +14,24 @@ val product : type -> type -> type.
 
 val pair : pi a b. a -> b -> product a b.
 
-axiom !x. p (f (f (f x))).
+axiom forall x. p (f (f (f x))).
 
 val g : product nat nat -> product nat nat.
 
 spec @polyprop as polyprop :=
-    !x y. polyprop (g (g x)) || polyprop (f (f y)).
+    forall x y. polyprop (g (g x)) || polyprop (f (f y)).
 
 axiom polyprop (fun (f:nat -> list nat -> nat). f n (cons n nil)).
 axiom polyprop ((fun g. g n (cons n nil)) (fun n l. cons n (cons n l))).
 
 # let's play with monadic-ish operators
-val yolo : (pi a. list (list a) -> list a) -> list prop.
+# prenex polymorphism only please.
+val yolo : pi a. (list (list a) -> list a) -> list prop.
 
-rec yolo :=
-  !join. yolo join = join (cons (cons true nil) (cons (@cons prop false nil) nil)).
+rec @yolo prop as yolo :=
+  forall join.
+    yolo join
+    = join (cons (cons true nil) (cons (@cons prop false nil) nil)).
 
 
 

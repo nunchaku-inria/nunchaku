@@ -212,7 +212,7 @@ module Print(T : VIEW) = struct
         fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
     | Bind (b, v, t) ->
         let s = match b with
-          | Fun -> "fun" | Forall -> "!" | Exists -> "?" | TyForall -> "pi"
+          | Fun -> "fun" | Forall -> "forall" | Exists -> "exists" | TyForall -> "pi"
         in
         fpf out "@[<2>%s %a:%a.@ %a@]" s Var.print v print_ty_in_app (Var.ty v) print t
     | TyArrow (a,b) ->
@@ -893,6 +893,7 @@ module OfUntyped(T : S) = struct
             Hashtbl.add env s (ID id);
             T.const id
           end
+      | A.MetaVar _ -> error_ t "meta variable"
       | A.Exists ((_, None), _)
       | A.Forall ((_, None), _)
       | A.Fun ((_, None), _) -> error_ t "untyped variable"
