@@ -200,7 +200,7 @@ module Print(T : VIEW) = struct
           print a print b print c
     | AppBuiltin (b, []) -> CCFormat.string out (NunBuiltin.T.to_string b)
     | AppBuiltin (f, [a;b]) when NunBuiltin.T.fixity f = `Infix ->
-        fpf out "@[<hv>%a@ %s@ %a@]"
+        fpf out "@[<hv>%a@ %s %a@]"
           print_in_app a (NunBuiltin.T.to_string f) print_in_app b
     | AppBuiltin (b,l) ->
         fpf out "@[<2>%s@ %a@]" (NunBuiltin.T.to_string b)
@@ -351,10 +351,9 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
   let error_apply_ msg ~hd ~l = raise (ApplyError (msg, hd, l))
   let error_unif_ msg t1 t2 = raise (UnifError (msg, t1, t2))
 
-  let ty_apply t l =
+  let ty_apply_full t l =
     let rec app_ ~subst t l = match T.Ty.view t, l with
-      | _, [] ->
-          if Subst.is_empty subst then t else eval ~subst t
+      | _, [] -> t, subst
       | TyI.Builtin _, _
       | TyI.App (_,_),_
       | TyI.Const _, _ ->
@@ -376,6 +375,10 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
           app_ ~subst t' l'
     in
     app_ ~subst:Subst.empty t l
+
+  let ty_apply t l =
+    let t, subst = ty_apply_full t l in
+    if Subst.is_empty subst then t else eval ~subst t
 
   type signature = T.ty NunProblem.Signature.t
 
@@ -730,10 +733,39 @@ module AsFO(T : VIEW) = struct
               (fun c -> List.map mk_ax (St.case_axioms c))
               s
         end
-    | St.TyDef _ ->
-        NunUtils.not_implemented "to_fo: mutual type definitions"
     | St.Goal f ->
         [ FOI.Goal f ]
+    | St.TyDef (k, l) ->
+        let n = ref 0 in
+        let convert_cstor ty_id c =
+          (* for now, generate dummy selectors *)
+          {FOI.
+            cstor_name=c.St.cstor_name;
+            cstor_args=List.map
+              (fun a ->
+                let selector = ID.make
+                  ~name:(Printf.sprintf "_select_%s_%d" (ID.name ty_id) !n)
+                in
+                incr n;
+                selector, a
+              )
+              c.St.cstor_args;
+          }
+        in
+        (* gather all variables *)
+        let ty_vars =
+          CCList.flat_map (fun tydef -> List.map Var.id tydef.St.ty_vars) l
+        (* convert declarations *)
+        and ty_types = List.map
+          (fun tydef ->
+            let id = tydef.St.ty_id in
+            let cstors = List.map (convert_cstor id) tydef.St.ty_cstors in
+            n := 0;
+            id, cstors
+          ) l
+        in
+        let l = {FOI.  ty_vars; ty_types; } in
+        [ FOI.MutualTypes (k, l) ]
 
   let convert_problem p =
     NunProblem.statements p

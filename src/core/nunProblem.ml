@@ -34,12 +34,19 @@ module Statement = struct
   (* mutual definition of several terms *)
   type ('t,'ty) mutual_cases = ('t,'ty) case list
 
-  (** A type constructor *)
-  type 'ty ty_constructor = id * 'ty
+  (** A type constructor: name + type of arguments *)
+  type 'ty ty_constructor = {
+    cstor_name: id; (** Name *)
+    cstor_args: 'ty list; (** type arguments *)
+    cstor_type: 'ty; (** type of the constructor (shortcut) *)
+  }
 
+  (** A (co)inductive type. The type variables [ty_vars] occur freely in
+      the constructors' types. *)
   type 'ty tydef = {
     ty_id : id;
-    ty_type : 'ty;
+    ty_vars : 'ty NunVar.t list;
+    ty_type : 'ty; (** shortcut for [type -> type -> ... -> type] *)
     ty_cstors : 'ty ty_constructor list;
   }
 
@@ -70,6 +77,11 @@ module Statement = struct
   let case_axioms t = t.case_axioms
   let case_alias t = t.case_alias
   let case_vars t = t.case_vars
+
+  let tydef_vars t = t.ty_vars
+  let tydef_id t = t.ty_id
+  let tydef_type t = t.ty_type
+  let tydef_cstors t = t.ty_cstors
 
   let view t = t.view
   let loc t = t.loc
@@ -118,8 +130,14 @@ module Statement = struct
           (fun tydef ->
             {tydef with
               ty_type=fty tydef.ty_type;
+              ty_vars=List.map (Var.update_ty ~f:fty) tydef.ty_vars;
               ty_cstors=
-                List.map (fun (id,t) -> id, fty t) tydef.ty_cstors;
+                List.map
+                  (fun c -> {c with
+                    cstor_args=List.map fty c.cstor_args;
+                    cstor_type=fty c.cstor_type
+                  })
+                  tydef.ty_cstors;
             }) l
         in
         mk_ty_def ?loc k l
@@ -147,9 +165,11 @@ module Statement = struct
         List.fold_left
           (fun acc tydef ->
             let acc = ty acc tydef.ty_type in
-            List.fold_left (fun acc (_,t) -> ty acc t) acc tydef.ty_cstors
+            List.fold_left (fun acc c -> ty acc c.cstor_type) acc tydef.ty_cstors
           ) acc l
     | Goal t -> term acc t
+
+  let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
   let print pt pty out t = match t.view with
     | Decl (id,_,t) ->
@@ -159,7 +179,7 @@ module Statement = struct
           let print_case out c =
             fpf out "@[<v2>@[%a@] as %a :=@ @[<v>%a@]@]"
               pt c.case_defined Var.print c.case_alias
-              (CCFormat.list ~start:"" ~stop:"" ~sep:"; " pt) c.case_axioms
+              (pplist ~sep:"; " pt) c.case_axioms
           in
           fpf out "@[<hov>%s " what;
           List.iteri
@@ -171,22 +191,24 @@ module Statement = struct
         in
         begin match a with
         | Axiom_std l ->
-            fpf out "@[<hv2>axiom@ %a.@]"
-              (CCFormat.list ~start:"" ~stop:"" ~sep:"; " pt) l
+            fpf out "@[<hv2>axiom@ %a.@]" (pplist ~sep:"; " pt) l
         | Axiom_spec t -> print_cases ~what:"spec" out t
         | Axiom_rec t -> print_cases ~what:"rec" out t
         end
     | TyDef (k, l) ->
-        let ppcstors out (id,ty) =
-          fpf out "@[%a : %a@]" ID.print_name id pty ty in
+        let pty_in_app out t = fpf out "(%a)" pty t in
+        let ppcstors out c =
+          fpf out "@[<hv2>%a %a@]"
+            ID.print_name c.cstor_name (pplist ~sep:" " pty_in_app) c.cstor_args in
         let print_def out tydef =
-          fpf out "@[<v2>%a : %a :=@ @[<v>%a@]@]"
-            ID.print_name tydef.ty_id pty tydef.ty_type
-            (CCFormat.list ~start:"" ~stop:"" ~sep:" | " ppcstors) tydef.ty_cstors
+          fpf out "@[<v2>%a %a :=@ @[<v>%a@]@]"
+            ID.print_name tydef.ty_id
+            (pplist ~sep:" " Var.print) tydef.ty_vars
+            (pplist ~sep:" | " ppcstors) tydef.ty_cstors
         in
         fpf out "@[<hv2>%s@ %a.@]"
           (match k with `Data -> "data" | `Codata -> "codata")
-          (CCFormat.list ~start:"" ~stop:"" ~sep:" and " print_def) l
+          (pplist ~sep:" and " print_def) l
     | Goal t -> fpf out "@[<2>goal %a.@]" pt t
 
   let print_list pt pty out l =
@@ -268,9 +290,9 @@ let signature ?(init=ID.Map.empty) pb =
       | St.TyDef (_,l) ->
           List.fold_left
             (fun sigma tydef ->
-              let sigma = declare_ ~sigma
-                tydef.St.ty_id tydef.St.ty_type in
-              List.fold_left (fun sigma (id,ty) -> declare_ ~sigma id ty)
+              let sigma = declare_ ~sigma tydef.St.ty_id tydef.St.ty_type in
+              List.fold_left
+                (fun sigma c -> declare_ ~sigma c.St.cstor_name c.St.cstor_type)
                 sigma tydef.St.ty_cstors
             ) sigma l
       | St.Goal _

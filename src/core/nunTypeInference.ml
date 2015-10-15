@@ -510,33 +510,60 @@ module Convert(Term : TERM) = struct
         let acc, tail' = fold_map_ f acc tail in
         acc, y :: tail'
 
+  let ty_forall_l_ = List.fold_right (fun v t -> Term.ty_forall v t)
+
   (* convert type decl *)
   let convert_tydef ~env l =
     (* first, declare all the types *)
     let env, l = fold_map_
-      (fun env (name,ty,cstors) ->
-        let ty = convert_ty_exn ~env ty in
-        (* ensure this defines a type *)
-        let ty_ret = Term.Ty.returns ty in
-        unify_in_ctx_ ~stack:[] ty_ret Term.ty_type;
-        let id = ID.make_full ~needs_at:(ty_is_poly_ ty) ~name in
+      (fun env (name,vars,cstors) ->
+        (* ensure this defines a type -> type -> ... -> type
+          with as many arguments as [List.length vars] *)
+        let ty = List.fold_right
+          (fun _v t -> Term.ty_arrow Term.ty_type t) vars Term.ty_type in
+        let id = ID.make_full ~needs_at:false ~name in
+        NunUtils.debugf ~section 3 "@[(co)inductive type %a: %a@]"
+          ID.print_name id PrintTerm.print_ty ty;
+        (* declare *)
         let env' = Env.add_decl ~env name ~id ty in
-        env', (id,ty,cstors)
+        env', (id,vars,ty,cstors)
       ) env l
     in
-    (* then convert constructors' types *)
+    (* then declare constructors. *)
     fold_map_
-      (fun env (id,ty,cstors) ->
+      (fun env (id,vars,ty_id,cstors) ->
+        (* Type variables are declared in each constructor's scope,
+            but not in the scope of other types in the
+            same recursive definition *)
+        let env', vars' = fold_map_
+          (fun env v ->
+            let var = Var.make ~name:v ~ty:Term.ty_type in
+            Env.add_var ~env v ~var, var
+          ) env vars
+        in
+        let ty_being_declared =
+          Term.app ~ty:Term.ty_type
+            (Term.const ~ty:ty_id id)
+            (List.map (fun v->Term.var v) vars')
+        in
+        (* for each constructor, find its type and declare it *)
         let env, cstors = fold_map_
-          (fun env (name,ty') ->
-            let ty' = convert_ty_exn ~env ty' in
-            (* TODO check that [head (returns ty') = id] *)
-            let id' = ID.make_full ~needs_at:(ty_is_poly_ ty')  ~name in
+          (fun env (name,ty_args) ->
+            let ty_args = List.map (convert_ty_exn ~env:env') ty_args in
+            let ty' = ty_forall_l_ vars' (arrow_list ty_args ty_being_declared) in
+            let id' = ID.make_full ~needs_at:(vars<>[]) ~name in
             let env = Env.add_decl ~env name ~id:id' ty' in
-            env, (id', ty')
+            NunUtils.debugf ~section 3 "@[constructor %a: %a@]"
+              ID.print_name id' PrintTerm.print_ty ty';
+            (* newly built constructor *)
+            let c = {St.cstor_name=id'; cstor_type=ty'; cstor_args=ty_args; } in
+            env, c
           ) env cstors
         in
-        env, {St.ty_id=id; ty_type=ty; ty_cstors=cstors}
+        let tydef = {St.
+          ty_id=id; ty_vars=vars'; ty_type=ty_id; ty_cstors=cstors
+        } in
+        env, tydef
       )
       env l
 
@@ -544,7 +571,7 @@ module Convert(Term : TERM) = struct
     let loc = Loc.get_loc st in
     NunUtils.debugf ~section 2 "@[<hv2>infer types in@ %a@ at %a@]"
       A.print_statement st Loc.print_opt loc;
-    match Loc.get st with
+    let st', env = match Loc.get st with
     | A.Decl (v, ty) ->
         check_new_ ?loc ~env v;
         let ty = convert_ty_exn ~env ty in
@@ -576,6 +603,10 @@ module Convert(Term : TERM) = struct
            XXX: for narrowing, could be of any type? *)
         unify_in_ctx_ ~stack:[] (get_ty_ t) prop;
         St.goal ?loc t, env
+    in
+    NunUtils.debugf ~section 2 "@[<2>checked statement@ %a@]"
+      (St.print PrintTerm.print PrintTerm.print_ty) st';
+    st', env
 
   let convert_statement ~env st =
     try E.return (convert_statement_exn ~env st)

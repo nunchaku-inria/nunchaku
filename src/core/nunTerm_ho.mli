@@ -111,6 +111,11 @@ module SubstUtil(T : S)(Subst : NunVar.SUBST with type ty = T.ty) : sig
   (** [apply t l] computes the type of [f args] where [f : t] and [args : l]
       @raise Error if the arguments do not match *)
 
+  val ty_apply_full : T.ty -> T.t list -> T.ty * subst
+  (** [ty_apply_full ty l] is like [apply t l], but it returns a pair
+      [ty' , subst] such that [subst ty' = apply t l].
+      @raise Error if the arguments do not match *)
+
   type signature = T.ty NunProblem.Signature.t
 
   val ty : sigma:signature -> T.t -> T.ty or_error

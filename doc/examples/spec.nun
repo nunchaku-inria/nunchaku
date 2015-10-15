@@ -1,5 +1,6 @@
 
 # recursive spec and rec
+# EXPECT: OK
 
 val nat : type.
 

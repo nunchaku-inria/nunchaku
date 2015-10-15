@@ -34,14 +34,28 @@ module Statement : sig
   (** mutual definition of several terms *)
   type ('t,'ty) mutual_cases = ('t,'ty) case list
 
-  (** A type constructor *)
-  type 'ty ty_constructor = id * 'ty
+  (* TODO: selectors? *)
 
+  (** A type constructor: name + type of arguments *)
+  type 'ty ty_constructor = {
+    cstor_name: id; (** Name *)
+    cstor_args: 'ty list; (** type arguments *)
+    cstor_type: 'ty; (** type of the constructor (shortcut) *)
+  }
+
+  (** A (co)inductive type. The type variables [ty_vars] occur freely in
+      the constructors' types. *)
   type 'ty tydef = {
     ty_id : id;
-    ty_type : 'ty;
+    ty_vars : 'ty NunVar.t list;
+    ty_type : 'ty; (** shortcut for [type -> type -> ... -> type] *)
     ty_cstors : 'ty ty_constructor list;
   }
+
+  val tydef_vars : 'ty tydef -> 'ty NunVar.t list
+  val tydef_id : _ tydef -> id
+  val tydef_type : 'ty tydef -> 'ty
+  val tydef_cstors : 'ty tydef -> 'ty ty_constructor list
 
   (** Mutual definitions of several types *)
   type 'ty mutual_types = 'ty tydef list

@@ -58,6 +58,16 @@ type 'ty ty_view =
 (** Toplevel type: an arrow of atomic types *)
 type 'ty toplevel_ty = 'ty list * 'ty
 
+type 'ty constructor = {
+  cstor_name: id;
+  cstor_args: (id * 'ty) list; (* each arg: (selector, type) *)
+}
+
+type 'ty mutual_types = {
+  ty_vars: id list;  (* type parameters *)
+  ty_types : (id * 'ty constructor list) list;
+}
+
 (* TODO: try to merge back with NunProblem? *)
 
 (** Problem *)
@@ -65,6 +75,7 @@ type ('f, 't, 'ty) statement =
   | TyDecl of id * int  (** number of arguments *)
   | Decl of id * 'ty toplevel_ty
   | Axiom of 'f
+  | MutualTypes of [`Data | `Codata] * 'ty mutual_types
   | Goal of 'f
 
 (** models, for instance, might contain both formulas and terms *)

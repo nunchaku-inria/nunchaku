@@ -251,6 +251,9 @@ module Make(T : NunTerm_ho.S) : S with module T = T
 
     let find_tuples ~state id = SetOfInstances.args state.required id
 
+    let set_on_schedule ~state f =
+      state.on_schedule <- f
+
     let reset_on_schedule ~state =
       state.on_schedule <- (fun ~depth:_ _ _ -> ())
 
@@ -280,7 +283,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
     let rec flat_ty_ out t = match T.Ty.view t with
       | TyI.Builtin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
       | TyI.Const id -> ID.print_name out id
-      | TyI.Var _ -> fail_ "mangling: cannot mangle variable"
+      | TyI.Var v -> failf_ "mangling: cannot mangle variable %a" Var.print v
       | TyI.Meta _ -> assert false
       | TyI.App (f,l) ->
           fpf out "%a_%a" flat_ty_ f (pp_list flat_ty_) l
@@ -403,13 +406,12 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       (* if we required monomorphization of [id tup], and some case in [l]
          matches [id tup], then push into the queue so that it will be
          processed in the fixpoint *)
-      let on_schedule ~depth id tup =
-        match find_case_ ~subst ~cases id tup with
-        | None -> ()
-        | Some (case, subst) ->
-            Queue.push (id, tup, depth, case, subst) q
-      in
-      state.St.on_schedule <- on_schedule;
+      St.set_on_schedule ~state
+        (fun ~depth id tup -> match find_case_ ~subst ~cases id tup with
+          | None -> ()
+          | Some (case, subst) ->
+              Queue.push (id, tup, depth, case, subst) q
+        );
       (* push already required tuples into the queue *)
       List.iter
         (fun case ->
@@ -451,12 +453,11 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       let q = Queue.create() in (* task list *)
       let res = ref [] in
       (* whenever a type [id tup] is needed, check if it's in the block *)
-      let on_schedule ~depth id tup =
-        match find_tydef_ ~defs:l id with
-        | None -> () (* not in this block *)
-        | Some tydef -> Queue.push (tydef, depth, tup) q (* schedule *)
-      in
-      state.St.on_schedule <- on_schedule;
+      St.set_on_schedule ~state
+        (fun ~depth id tup -> match find_tydef_ ~defs:l id with
+          | None -> () (* not in this block *)
+          | Some tydef -> Queue.push (tydef, depth, tup) q (* schedule *)
+        );
       (* initialization: already required instances *)
       List.iter
         (fun tydef ->
@@ -482,20 +483,24 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           let ty = T.ty_type in
           (* specialize each constructor *)
           let cstors = List.map
-            (fun (id', ty') ->
+            (fun c ->
               (* mangle ID *)
-              let id', _ = mangle_ ~state id' (ArgTuple.args tup) in
+              let id', _ = mangle_ ~state c.Stmt.cstor_name (ArgTuple.args tup) in
               (* apply, then convert type. Arity should match. *)
-              let ty' =
-                SubstUtil.ty_apply ty' (ArgTuple.args tup)
-                |> conv_term ~mangle:true ~depth:(depth+1) ~subst:Subst.empty
+              let ty', subst =
+                SubstUtil.ty_apply_full c.Stmt.cstor_type (ArgTuple.args tup)
               in
-              id', ty'
+              let ty' = SubstUtil.eval ~subst ty'
+              and args' = List.map
+                (conv_term ~mangle:true ~depth:(depth+1) ~subst)
+                c.Stmt.cstor_args
+              in
+              {Stmt.cstor_name=id'; cstor_type=ty'; cstor_args=args'; }
             )
             tydef.Stmt.ty_cstors
           in
           (* add resulting type *)
-          let tydef' = {Stmt.ty_id=id; ty_type=ty; ty_cstors=cstors} in
+          let tydef' = {Stmt.ty_id=id; ty_type=ty; ty_cstors=cstors; ty_vars=[]; } in
           CCList.Ref.push res tydef'
         )
       done;
@@ -551,7 +556,8 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           [ Stmt.axiom ?loc l ]
       | Stmt.TyDef (k, l) ->
           let l = aux_mutual_types l in
-          [ Stmt.mk_ty_def ?loc k l ]
+          if l=[] then []
+          else [ Stmt.mk_ty_def ?loc k l ]
     in
     let pb' = NunProblem.statements pb
       |> List.rev (* start at the end *)

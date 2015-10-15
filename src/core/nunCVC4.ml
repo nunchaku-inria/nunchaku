@@ -70,7 +70,7 @@ end = struct
     (* send prelude *)
     output_string oc "(set-option :produce-models true)\n";
     output_string oc "(set-option :interactive-mode true)\n";
-    output_string oc "(set-logic UF)\n";
+    output_string oc "(set-logic ALL_SUPPORTED)\n"; (* YOLO *)
     flush oc;
     (* the [t] instance *)
     let s = {
@@ -87,6 +87,9 @@ end = struct
     s
 
   let fpf = Format.fprintf
+
+  let pp_list ?(start="") ?(stop="") pp =
+    CCFormat.list ~sep:" " ~start ~stop pp
 
   (* print problems. [on_id (to_string id) id] is called every time
       and id is printed.  *)
@@ -106,14 +109,12 @@ end = struct
       | FOI.TyApp (f, []) -> print_id out f
       | FOI.TyApp (f, l) ->
           fpf out "@[(%a@ %a)@]"
-            print_id f
-            (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_ty) l
+            print_id f (pp_list print_ty) l
 
     (* print type in SMT syntax *)
     and print_ty_decl out ty =
       let args, ret = ty in
-      fpf out "%a %a"
-        (CCFormat.list ~start:"(" ~stop:")" ~sep:" " print_ty) args print_ty ret
+      fpf out "%a %a" (pp_list ~start:"(" ~stop:")" print_ty) args print_ty ret
 
     and print_term out t = match T.view t with
       | FOI.Builtin b ->
@@ -124,7 +125,7 @@ end = struct
       | FOI.App (f,[]) -> print_id out f
       | FOI.App (f,l) ->
           fpf out "(@[%a@ %a@])"
-            print_id f (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_term) l
+            print_id f (pp_list print_term) l
       | FOI.Fun (v,t) ->
           fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
             Var.print v print_ty (Var.ty v) print_term t
@@ -143,13 +144,11 @@ end = struct
       | FOI.And [] -> CCFormat.string out "true"
       | FOI.And [f] -> print_form out f
       | FOI.And l ->
-          fpf out "(@[and@ %a@])"
-            (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_form) l
+          fpf out "(@[and@ %a@])" (pp_list print_form) l
       | FOI.Or [] -> CCFormat.string out "false"
       | FOI.Or [f] -> print_form out f
       | FOI.Or l ->
-          fpf out "(@[or@ %a@])"
-            (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_form) l
+          fpf out "(@[or@ %a@])" (pp_list print_form) l
       | FOI.Not f ->
           fpf out "(@[not@ %a@])" print_form f
       | FOI.Imply (a,b) ->
@@ -178,6 +177,22 @@ end = struct
           fpf out "(@[assert@ %a@])" print_form t
       | FOI.Goal t ->
           fpf out "(@[assert@ %a@])" print_form t
+      | FOI.MutualTypes (k, l) ->
+        let pp_arg out (id,ty) =
+          fpf out "(@[<h>%a %a@])" ID.print_name id print_ty ty in
+        let pp_cstor out c =
+          fpf out "(@[<2>%a@ %a@])" ID.print_name c.FOI.cstor_name
+            (pp_list pp_arg) c.FOI.cstor_args
+        in
+        let print_data out (name, cstors) =
+          fpf out "(@[<2>%a@ %a@])"
+            ID.print_name name (pp_list pp_cstor) cstors
+        in
+        fpf out "(@[<2>%s (%a) (%a)@])"
+          (match k with `Data -> "declare-datatypes"
+            | `Codata -> "declare-codatatypes")
+          (pp_list ID.print_name) l.FOI.ty_vars
+          (pp_list print_data) l.FOI.ty_types
 
     in
     fun out pb ->
@@ -447,6 +462,14 @@ end = struct
         | FOI.TyDecl (_,_)
         | FOI.Axiom _
         | FOI.Goal _ -> acc
+        | FOI.MutualTypes (_,l) ->
+            List.fold_left
+              (fun acc (ty, cstors) ->
+                let acc = ID.Set.add ty acc in
+                List.fold_left
+                  (fun acc cstor -> ID.Set.add cstor.FOI.cstor_name acc)
+                  acc cstors
+              ) acc l.FOI.ty_types
       ) ID.Set.empty
 
   let solve ?(timeout=30.) problem =

@@ -1,19 +1,20 @@
 
 # (co)inductive types
+# EXPECT: OK
 
-data list : type -> type :=
-    | nil : pi a. list a
-    | cons : pi a. a -> list a -> list a.
+data list a :=
+    | nil
+    | cons a (list a).
 
 val term : type.
 
 # tree with possibly infinite branching
 codata tree :=
-    | leaf : term -> tree
-    | node : llist tree -> tree
-and llist : type -> type :=
-    | lnil : pi a. llist a
-    | lcons : pi a. a -> llist a -> llist a.
+    | leaf term
+    | node (llist tree)
+and llist a :=
+    | lnil
+    | lcons a (llist a).
 
 # make a tree  mu x. node [y, z, x]
 goal exists x y z. x = node (lcons (leaf y) (lcons (leaf z) (lcons x lnil))).

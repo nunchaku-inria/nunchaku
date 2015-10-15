@@ -240,14 +240,14 @@ mutual_cases:
   | l=separated_nonempty_list(AND, case) { l }
 
 constructor:
-  | v=raw_var COLUMN ty=term { v, ty }
+  | v=raw_var l=atomic_term* { v, l }
 
 constructors:
   | VERTICAL_BAR? l=separated_nonempty_list(VERTICAL_BAR, constructor) { l }
 
 type_def:
-  | t=raw_var EQDEF l=constructors  { t, A.builtin A.Builtin.Type, l }
-  | t=raw_var COLUMN ty=term EQDEF l=constructors { t, ty, l }
+  | t=raw_var vars=raw_var* EQDEF l=constructors
+    { t, vars, l }
 
 mutual_types:
   | l=separated_nonempty_list(AND, type_def) { l }

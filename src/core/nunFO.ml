@@ -59,11 +59,21 @@ type 'ty ty_view =
 (** Toplevel type: an arrow of atomic types *)
 type 'ty toplevel_ty = 'ty list * 'ty
 
-(** Problem *)
+type 'ty constructor = {
+  cstor_name: id;
+  cstor_args: (id * 'ty) list; (* each arg: (selector, type) *)
+}
+
+type 'ty mutual_types = {
+  ty_vars: id list;  (* type parameters *)
+  ty_types : (id * 'ty constructor list) list;
+}
+
 type ('f, 't, 'ty) statement =
   | TyDecl of id * int  (** number of arguments *)
   | Decl of id * 'ty toplevel_ty
   | Axiom of 'f
+  | MutualTypes of [`Data | `Codata] * 'ty mutual_types
   | Goal of 'f
 
 (** models, for instance, might contain both formulas and terms *)
@@ -319,6 +329,20 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     | Decl (v, ty) ->
         fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id v print_toplevel_ty ty
     | Axiom t -> fpf out "@[<2>axiom %a.@]" print_formula t
+    | MutualTypes (k, l) ->
+        let pp_arg out (id,ty) = fpf out "%a: %a" ID.print_name id print_ty ty in
+        let pp_cstor out c =
+          fpf out "@[<2>(%a@ %a)@]" ID.print_name c.cstor_name
+            (CCFormat.list ~sep:" " ~start:"" ~stop:"" pp_arg) c.cstor_args
+        in
+        let print_data out (name, cstors) =
+          fpf out "@[<2>%a :=@ %a@]"
+            ID.print_name name (CCFormat.list ~sep:" | " pp_cstor) cstors
+        in
+        fpf out "@[<2>%s pi %a. %a.@]"
+          (match k with `Data -> "data" | `Codata -> "codata")
+          (CCFormat.list ID.print_name) l.ty_vars
+          (CCFormat.list ~start:"" ~stop:"" ~sep:" and " print_data) l.ty_types
     | Goal t -> fpf out "@[<2>goal %a.@]" print_formula t
 
   let print_problem out pb =

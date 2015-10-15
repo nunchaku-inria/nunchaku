@@ -4,7 +4,9 @@
 
 val term : type.
 
-data foo : type -> type :=
-  | foo1 : foo term
-  | foo2 : term.  # bad
+data foo a :=
+  | foo1
+  | foo2 a
+and bar :=
+  | bar (foo a).
 
