@@ -148,7 +148,8 @@ end = struct
           fpf out "(@[not@ %a@])" print_form f
       | FOI.Imply (a,b) ->
           fpf out "(@[=>@ %a@ %a@])" print_form a print_form b
-      | FOI.Equiv (_,_) -> NunUtils.not_implemented "cvc4.print_equiv" (* TODO *)
+      | FOI.Equiv (a,b) ->
+          fpf out "(@[=@ %a@ %a@])" print_form a print_form b
       | FOI.Forall (v,f) ->
           fpf out "(@[<2>forall@ ((%a %a))@ %a@])"
             Var.print v print_ty (Var.ty v) print_form f
@@ -195,7 +196,7 @@ end = struct
       fpf out "@[<v>";
       fpf out "(set-option :produce-models true)@,";
       fpf out "(set-option :interactive-mode true)@,";
-      fpf out "(set-logic ALL_SUPPORTED)@,"; (* YOLO *)
+      fpf out "(set-logic ALL_SUPPORTED)@,"; (* taïaut! *)
       (* write problem *)
       CCFormat.list ~start:"" ~stop:"" ~sep:""
         print_statement out pb.FOI.Problem.statements;
