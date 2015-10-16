@@ -56,11 +56,12 @@ let gather_files () =
   CCIO.File.read_dir ~recurse:true "tests"
   |> Gen.filter (CCString.suffix ~suf:".nun")
   |> Gen.to_rev_list
+  |> List.sort Pervasives.compare
 
 let () =
   Arg.parse [] (fun _ -> failwith "no arguments") "./tests/run.ml";
-  Format.printf "run tests@.";
   let files = gather_files () in
+  Format.printf "run %d tests@." (List.length files);
   let num_failed = List.fold_left
     (fun acc f ->
       let ok = test_file f in
