@@ -597,7 +597,7 @@ module Erase(T : VIEW) = struct
       )
 end
 
-module AsFO(T : VIEW) = struct
+module AsFO(T : S) = struct
   module Term = T (* alias for shadowing *)
   exception NotInFO of string * T.t
 
@@ -614,6 +614,8 @@ module AsFO(T : VIEW) = struct
     )
 
   module FOI = NunFO
+  module Subst = Var.Subst(T)
+  module SubstUtil = SubstUtil(T)(Subst)
 
   let fail t msg = raise (NotInFO (msg, t))
 
@@ -730,7 +732,14 @@ module AsFO(T : VIEW) = struct
         | St.Axiom_spec s
         | St.Axiom_rec s ->
             CCList.flat_map
-              (fun c -> List.map mk_ax (St.case_axioms c))
+              (fun c ->
+                (* evaluate axioms by replacing the alias by the defined term *)
+                let subst = Subst.add ~subst:Subst.empty
+                  c.St.case_alias c.St.case_defined in
+                List.map
+                  (fun ax -> mk_ax (SubstUtil.eval ~subst ax))
+                  (St.case_axioms c)
+              )
               s
         end
     | St.Goal f ->

@@ -148,7 +148,7 @@ end
 
   The views can fail if the terms are actually not first order *)
 
-module AsFO(T : VIEW) : sig
+module AsFO(T : S) : sig
   exception NotInFO of string * T.t
   (** Raised if a term is not in the first-order fragment *)
 

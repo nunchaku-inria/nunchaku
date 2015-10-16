@@ -8,6 +8,9 @@
 #require "containers.string";;
 #require "containers.unix";;
 
+(* TODO: at some point, save results in a S-expr file named after
+   current commit, and use it for regression tests *)
+
 type result =
   | Ok
   | Error (* should fail *)

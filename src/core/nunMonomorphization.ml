@@ -364,6 +364,16 @@ module Make(T : NunTerm_ho.S) : S with module T = T
               let l = if mangled=None then l else CCList.drop n l in
               let l = List.map (conv_term ~mangle ~depth ~subst) l in
               T.app (T.const new_id) l
+          | TI.Var v ->
+              (* allow variables in head (in spec/rec and in functions) *)
+              begin match Subst.find ~subst v with
+              | None ->
+                  let v = Var.update_ty v ~f:(conv_term ~depth ~mangle:false ~subst) in
+                  let l = List.map (conv_term ~mangle ~subst ~depth) l in
+                  T.app (T.var v) l
+              | Some t ->
+                  conv_term ~mangle ~depth ~subst (T.app t l)
+              end
           | _ ->
               failf_ "cannot monomorphize application term `@[%a@]`" P.print t
           end
@@ -432,15 +442,22 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           (* avoid loops *)
           St.has_processed ~state id tup;
           (* we know [subst case.defined = (id args)], now
-              specialize the axioms of case and output them *)
-          let subst = Subst.add ~subst case.Stmt.case_alias case.Stmt.case_defined in
-          List.iter
-            (fun ax ->
-              (* monomorphize axiom, and push it in res *)
-              let ax = conv_term ~subst ~depth:(depth+1) ~mangle:true ax in
-              CCList.Ref.push res ax
-            )
+              specialize the axioms and other fields *)
+          let update_var = Var.update_ty
+            ~f:(conv_term ~mangle:false ~depth:(depth+1) ~subst) in
+          let axioms = List.map
+            (fun ax -> conv_term ~subst ~depth:(depth+1) ~mangle:true ax)
             case.Stmt.case_axioms
+          in
+          (* new (specialized) case *)
+          let case' = {Stmt.
+            case_vars=List.map update_var case.Stmt.case_vars;
+            case_defined=conv_term ~mangle:true
+              ~depth:(depth+1) ~subst case.Stmt.case_defined;
+            case_alias=update_var case.Stmt.case_alias;
+            case_axioms=axioms;
+          } in
+          CCList.Ref.push res case';
         )
       done;
       (* remove callback *)
@@ -550,10 +567,10 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           [ Stmt.axiom ?loc l ]
       | Stmt.Axiom (Stmt.Axiom_spec l) ->
           let l = aux_cases ~subst:Subst.empty l in
-          [ Stmt.axiom ?loc l ]
+          if l=[] then [] else [ Stmt.axiom_spec ?loc l ]
       | Stmt.Axiom (Stmt.Axiom_rec l) ->
           let l = aux_cases ~subst:Subst.empty l in
-          [ Stmt.axiom ?loc l ]
+          [ Stmt.axiom_rec ?loc l ]
       | Stmt.TyDef (k, l) ->
           let l = aux_mutual_types l in
           if l=[] then []
