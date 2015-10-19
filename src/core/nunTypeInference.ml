@@ -243,7 +243,7 @@ module Convert(Term : TERM) = struct
   end
 
   let is_eq_ t = match Loc.get t with
-    | A.Builtin (A.Builtin.Eq | A.Builtin.Equiv) -> true
+    | A.Builtin A.Builtin.Eq -> true
     | _ -> false
 
   (* convert a parsed term into a typed/scoped term *)
@@ -267,7 +267,8 @@ module Convert(Term : TERM) = struct
           | A.Builtin.Not -> B.Not, prop1
           | A.Builtin.True -> B.True, prop
           | A.Builtin.False -> B.False, prop
-          | A.Builtin.Equiv | A.Builtin.Eq -> assert false (* deal with earlier *)
+          | A.Builtin.Equiv -> B.Equiv, prop2
+          | A.Builtin.Eq -> assert false (* deal with earlier *)
         in
         Term.builtin ?loc ~ty b
     | A.AtVar v ->

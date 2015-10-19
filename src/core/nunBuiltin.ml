@@ -23,6 +23,7 @@ module T = struct
     | Or
     | And
     | Imply
+    | Equiv
     | Ite
     | Eq
   let fixity = function
@@ -33,6 +34,7 @@ module T = struct
     | Eq
     | Or
     | And
+    | Equiv
     | Imply -> `Infix
   let to_string = function
     | True -> "true"
@@ -41,6 +43,7 @@ module T = struct
     | Or -> "||"
     | And -> "&&"
     | Imply -> "=>"
+    | Equiv
     | Eq -> "="
     | Ite -> assert false
   let equal = (==)

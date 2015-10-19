@@ -392,8 +392,9 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
         let prop1 = T.ty_arrow T.ty_prop T.ty_prop in
         let prop2 = T.ty_arrow T.ty_prop (T.ty_arrow T.ty_prop T.ty_prop) in
         begin match b with
-          | B.Imply -> prop2
-          | B.Or -> prop2
+          | B.Equiv
+          | B.Imply
+          | B.Or
           | B.And -> prop2
           | B.Not -> prop1
           | B.True
@@ -552,6 +553,7 @@ module Erase(T : VIEW) = struct
           | B.Or -> Untyped.Builtin.Or
           | B.And -> Untyped.Builtin.And
           | B.Imply -> Untyped.Builtin.Imply
+          | B.Equiv -> Untyped.Builtin.Equiv
           | B.Eq  -> Untyped.Builtin.Eq
           | B.Ite -> assert false
         in
@@ -689,6 +691,7 @@ module AsFO(T : S) = struct
           | NunBuiltin.T.And, l -> FOI.And l
           | NunBuiltin.T.Imply, [a;b] -> FOI.Imply (a,b)
           | NunBuiltin.T.Ite, [a;b;c] -> FOI.F_ite (a,b,c)
+          | NunBuiltin.T.Equiv, [a;b] -> FOI.Equiv (a,b)
           | NunBuiltin.T.Eq, [a;b] -> FOI.Eq (a,b)
           | _ -> assert false
           end
@@ -919,8 +922,9 @@ module OfUntyped(T : S) = struct
           | A.Builtin.Or -> T.builtin B.T.Or
           | A.Builtin.True -> T.builtin B.T.True
           | A.Builtin.False -> T.builtin B.T.False
-          | A.Builtin.Eq -> error_ t "unapplied equality"
           | A.Builtin.Imply -> T.builtin B.T.Imply
+          | A.Builtin.Eq | A.Builtin.Equiv ->
+              error_ t "unapplied equality"
           end
       | A.AtVar s
       | A.Var s ->

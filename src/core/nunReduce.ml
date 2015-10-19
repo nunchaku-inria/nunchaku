@@ -54,6 +54,16 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
           | BPartial _, _
           | _, BPartial _ -> BPartial t
           end
+      | TI.AppBuiltin (B.Equiv, [a;b]) ->
+          (* truth table *)
+          begin match eval_bool ~eval ~subst a, eval_bool ~eval ~subst b with
+          | BTrue, BTrue
+          | BFalse, BFalse -> BTrue
+          | BTrue, BFalse
+          | BFalse, BTrue -> BFalse
+          | BPartial _, _
+          | _, BPartial _ -> BPartial t
+          end
       | TI.AppBuiltin (B.Eq, [a;b]) ->
           let a = eval ~subst a in
           let b = eval ~subst b in
@@ -67,7 +77,7 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
           | BFalse -> BTrue
           | BPartial t -> BPartial (T.app_builtin B.Not [t])
           end
-      | TI.AppBuiltin ((B.Imply | B.Ite | B.Eq | B.Not), _) -> assert false
+      | TI.AppBuiltin ((B.Imply | B.Equiv | B.Ite | B.Eq | B.Not), _) -> assert false
       | TI.Const _
       | TI.Var _
       | TI.App (_,_)
@@ -106,7 +116,7 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       let eval_term ~subst t = term_of_state (eval {args=[]; head=t; subst}) in
       match b, l with
       | (B.True | B.False), _ -> st (* normal form *)
-      | (B.And | B.Eq | B.Imply | B.Not | B.Or), _ ->
+      | (B.And | B.Eq | B.Imply | B.Equiv | B.Not | B.Or), _ ->
           begin match eval_bool ~eval:eval_term ~subst:st.subst st.head with
           | BTrue -> {st with head=T.builtin B.True}
           | BFalse -> {st with head=T.builtin B.False}

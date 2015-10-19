@@ -176,8 +176,9 @@ val to_fo :
   (module S with type t = 'a) ->
   (module NunFO.S with type T.t = 't and type formula = 'f) ->
   (('a, 'a) NunProblem.t,
-    ('a, 'c, 'a) NunFO.Problem.t,
-    ('t,'f) NunFO.term_or_form_view NunProblem.Model.t, 'a NunProblem.Model.t
+    ('a, 'a, 'a) NunFO.Problem.t,
+    ('t,'f) NunFO.term_or_form_view NunProblem.Model.t,
+    'a NunProblem.Model.t
   ) NunTransform.t
 
 (** {2 Conversion} *)

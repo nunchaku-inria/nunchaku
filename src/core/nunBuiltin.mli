@@ -20,6 +20,7 @@ module T : sig
     | Or
     | And
     | Imply
+    | Equiv
     | Ite
     | Eq
   val fixity : t -> [`Infix | `Prefix]
