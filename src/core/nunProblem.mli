@@ -180,6 +180,9 @@ val make :
 
 val statements : ('t, 'ty) t -> ('t, 'ty) Statement.t list
 
+val map_statements :
+  f:(('t, 'ty) Statement.t -> ('t2,'ty2) Statement.t) -> ('t,'ty) t -> ('t2,'ty2) t
+
 val map : term:('a -> 'b) -> ty:('tya -> 'tyb) -> ('a, 'tya) t -> ('b, 'tyb) t
 
 val map_with :

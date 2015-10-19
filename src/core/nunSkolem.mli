@@ -43,4 +43,10 @@ val pipe :
     'b NunProblem.Model.t, 'b NunProblem.Model.t
   ) NunTransform.t
 
+(** Similar to {!pipe} but without getting a model back *)
+val pipe_no_model :
+  print:bool ->
+  (module NunTerm_ho.VIEW with type t = 'a) ->
+  (module NunTerm_ho.S with type t = 'b) ->
+  (('a,'a) NunProblem.t, ('b,'b) NunProblem.t, 'c, 'c) NunTransform.t
 

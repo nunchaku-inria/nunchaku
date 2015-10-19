@@ -83,3 +83,8 @@ val pipe :
   (NunUntypedAST.statement list, ('a, 'a) NunProblem.t,
     'b NunProblem.Model.t, NunUntypedAST.term NunProblem.Model.t)
     NunTransform.t
+
+val pipe_no_model :
+  print:bool ->
+  (module NunTerm_typed.S with type t = 'a) ->
+  (NunUntypedAST.statement list, ('a, 'a) NunProblem.t, 'b, 'b) NunTransform.t

@@ -868,6 +868,17 @@ let to_fo (type a)(type b)(type c)
   )
   ()
 
+let to_fo_no_model (type a) (module T : S with type t = a) =
+  let module Conv = AsFO(T) in
+  NunTransform.make1
+  ~name:"to_fo"
+  ~encode:(fun (pb:(T.t, T.ty) NunProblem.t) ->
+    let pb' = Conv.convert_problem pb in
+    pb', ()
+  )
+  ~decode:(fun _ x -> x)
+  ()
+
 (** {2 Conversion} *)
 
 module Convert(T1 : VIEW)(T2 : S) = struct

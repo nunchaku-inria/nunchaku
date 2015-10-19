@@ -88,3 +88,9 @@ val pipe :
   (('a, 'a) NunProblem.t, ('a,'a) NunProblem.t,
     'a NunProblem.Model.t, 'a NunProblem.Model.t) NunTransform.t
 
+(** Pipeline component without model *)
+val pipe_no_model :
+  print:bool ->
+  (module NunTerm_ho.S with type t = 'a) ->
+  (('a, 'a) NunProblem.t, ('a,'a) NunProblem.t, 'b, 'b) NunTransform.t
+

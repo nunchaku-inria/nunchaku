@@ -664,3 +664,28 @@ let pipe (type a) (type b) ~print
       let ctx = Erase.create () in
       NunProblem.Model.map model ~f:(Erase.erase ~ctx)
     ) ()
+
+let pipe_no_model (type a) ~print
+(module T1 : NunTerm_typed.S with type t = a)
+=
+  let module PrintT = NunTerm_ho.Print(T1) in
+  (* type inference *)
+  let module Conv = Convert(T1) in
+  let print_problem = NunProblem.print PrintT.print T1.Ty.print in
+  let on_encoded =
+    if print
+    then [Format.printf "@[<v2>after type inference: %a@]@." print_problem]
+    else []
+  in
+  NunTransform.make1
+    ~on_encoded
+    ~name:"type inference"
+    ~encode:(fun l ->
+      let problem = l
+        |> Conv.convert_problem_exn ~env:Conv.empty_env
+        |> fst
+      in
+      problem, ()
+    )
+    ~decode:(fun () x -> x)
+    ()

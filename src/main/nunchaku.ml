@@ -11,8 +11,15 @@ type input =
 
 let list_inputs_ () = "(available choices: nunchaku tptp)"
 
+type mode =
+  | M_model
+  | M_proof
+
+let list_modes_ () = "(available choices: model proof)"
+
 (** {2 Options} *)
 
+let mode_ = ref M_model
 let input_ = ref I_nunchaku
 let print_ = ref false
 let print_typed_ = ref false
@@ -34,6 +41,12 @@ let set_input_ f =
     | "nunchaku" -> I_nunchaku
     | "tptp" -> I_tptp
     | s -> failwith ("unsupported input format: " ^ s)
+
+let set_mode_ f =
+  mode_ := match String.lowercase f with
+    | "model" -> M_model
+    | "proof" -> M_proof
+    | s -> failwith ("unsupported mode: " ^ s)
 
 (* set debug levels *)
 let options_debug_ = Utils.Section.iter
@@ -57,6 +70,7 @@ let options =
   ; "--print-raw-model", Arg.Set NunSolver_intf.print_model_, " print raw model"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
+  ; "--mode", Arg.String set_mode_, " search mode" ^ list_modes_ ()
   ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
   ; "--version", Arg.Set version_, " print version and exit"
   ]
@@ -98,7 +112,7 @@ let print_input_if_needed statements =
   ()
 
 (* build a pipeline, depending on options *)
-let make_pipeline () =
+let make_model_pipeline () =
   let open NunTransform.Pipe in
   (* type inference *)
   let step_ty_infer = NunTypeInference.pipe ~print:!print_typed_
@@ -126,8 +140,33 @@ let make_pipeline () =
   NunCVC4.close_pipe (module T)
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
+let make_proof_pipeline () =
+  let open NunTransform.Pipe in
+  (* type inference *)
+  let step_ty_infer = NunTypeInference.pipe_no_model ~print:!print_typed_ NunTerm_typed.default in
+  (* encodings *)
+  let step_skolem =
+    NunSkolem.pipe_no_model ~print:!print_skolem_
+    NunTerm_typed.as_ho NunTerm_ho.default in
+  let step_monomorphization =
+    NunMonomorphization.pipe_no_model ~print:!print_mono_ NunTerm_ho.default in
+  (* conversion to FO *)
+  let step_fo = NunTerm_ho.to_fo_no_model (module NunTerm_ho.Default) in
+  (* setup pipeline *)
+  let pipe =
+    step_ty_infer @@@
+    step_skolem @@@
+    step_monomorphization @@@
+    step_fo @@@
+    id
+  in
+  let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
+  let module T = NunTerm_ho.AsFO(NunTerm_ho.Default) in
+  NunCVC4.close_pipe (module T)
+    ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
+
 (* search for results *)
-let rec traverse_list_ l =
+let rec find_model_ l =
   let module Res = NunProblem.Res in
   try
   match l() with
@@ -135,34 +174,79 @@ let rec traverse_list_ l =
     | `Cons ((res, conv_back), tail) ->
         match res with
         | Res.Timeout -> E.fail "timeout"
-        | Res.Unsat -> traverse_list_ tail
+        | Res.Unsat -> find_model_ tail
         | Res.Sat m ->
             let m = conv_back m in
             E.return m
   with e -> NunUtils.err_of_exn e
 
+(* negate the goal *)
+let negate_goal stmts =
+  let module A = NunUntypedAST in
+  CCList.map
+    (fun st -> match st.A.stmt_value with
+      | A.Goal f -> {st with A.stmt_value=A.Goal (A.not_ f); }
+      | _ -> st
+    ) stmts
+
+type proof_output =
+  | Unsat
+  | Sat
+
+(* look at the first result *)
+let find_proof_ l =
+  let module Res = NunProblem.Res in
+  try
+  match l() with
+    | `Nil -> E.fail "exhausted possibilities"
+    | `Cons ((res, _), _) ->
+        match res with
+        | Res.Timeout -> E.fail "timeout"
+        | Res.Unsat -> E.return Unsat
+        | Res.Sat _ -> E.return Sat
+  with e -> NunUtils.err_of_exn e
+
+open CCError.Infix
+
+(* model mode *)
+let main_model statements =
+  (* run pipeline *)
+  let cpipe = make_model_pipeline() in
+  NunTransform.run_closed ~cpipe statements |> find_model_
+  >|= fun m ->
+  Format.printf "@[<v2>SAT: model {@,%a@]@,}@."
+    (NunProblem.Model.print NunUntypedAST.print_term) m;
+  ()
+
+(* proof mode *)
+let main_proof statements =
+  (* run pipeline *)
+  let cpipe = make_proof_pipeline () in
+  let statements = negate_goal statements in
+  NunTransform.run_closed ~cpipe statements |> find_proof_
+  >|= fun res ->
+  begin match res with
+    | Unsat -> Format.printf "unsat@."
+    | Sat -> Format.printf "sat@."
+  end;
+  ()
+
 (* main *)
 let main () =
-  let open CCError.Infix in
   Arg.parse options set_file "usage: nunchaku [options] file";
   print_version_if_needed ();
   (* parse *)
   parse_file ~input:!input_ ()
   >>= fun statements ->
   print_input_if_needed statements;
-  (* run pipeline *)
-  let cpipe = make_pipeline() in
-  NunTransform.run_closed ~cpipe statements
-  |> traverse_list_
+  match !mode_ with
+  | M_model -> main_model statements
+  | M_proof -> main_proof statements
 
 let () =
   E.catch (main ())
-    ~ok:(fun m ->
-      Format.printf "@[<v2>SAT: model {@,%a@]@,}@."
-        (NunProblem.Model.print NunUntypedAST.print_term) m;
-      exit 0
-    )
-    ~err:(fun msg ->
-      Format.eprintf "%s@." msg;
-      exit 1
-    )
+  ~ok:(fun () -> exit 0)
+  ~err:(fun msg ->
+    Format.eprintf "%s@." msg;
+    exit 1
+  )

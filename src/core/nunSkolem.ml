@@ -208,3 +208,26 @@ let pipe (type a)(type b) ~print
     ~decode:(fun state m -> S.decode_model ~state m)
     ()
 
+let pipe_no_model (type a)(type b) ~print
+(module T1 : NunTerm_ho.VIEW with type t = a)
+(module T2 : NunTerm_ho.S with type t = b)
+=
+  let module S = Make(T1)(T2) in
+  let on_encoded = if print
+    then
+      let module P = NunTerm_ho.Print(T2) in
+      [Format.printf "@[<2>after Skolemization:@ %a@]@."
+        (NunProblem.print P.print P.print_ty)]
+    else []
+  in
+  NunTransform.make1
+    ~name:"skolem"
+    ~on_encoded
+    ~print:S.print_state
+    ~encode:(fun pb ->
+      let state = S.create() in
+      let pb = S.convert_problem ~state pb in
+      pb, state
+    )
+    ~decode:(fun _ x -> x)
+    ()

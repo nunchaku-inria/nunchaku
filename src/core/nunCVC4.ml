@@ -494,9 +494,9 @@ let call (type f)(type t)(type ty)
   if timeout < 0.1 then NunProblem.Res.Timeout
   else (
     if print
-      then Format.printf "@[<2>FO problem:@ %a@]@." P.print_problem problem;
+      then Format.printf "@[<v2>FO problem:@ %a@]@." P.print_problem problem;
     if print_smt
-      then Format.printf "@[<2>SMT problem:@ %a@]@." CVC4.print_problem problem;
+      then Format.printf "@[<v2>SMT problem:@ %a@]@." CVC4.print_problem problem;
     let solver = CVC4.solve ~timeout problem in
     match CVC4.res solver with
     | Sol.Res.Sat m -> Res.Sat m

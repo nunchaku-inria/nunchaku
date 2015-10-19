@@ -648,3 +648,27 @@ let pipe (type a) ~print
     )
     ~decode:(fun _ m -> m)
     ()
+
+let pipe_no_model (type a) ~print
+(module T : NunTerm_ho.S with type t = a)
+=
+  let module Mono = Make(T) in
+  let on_encoded = if print
+    then
+      let module P = NunTerm_ho.Print(T) in
+      [Format.printf "@[<2>after mono:@ %a@]@."
+        (NunProblem.print P.print P.print_ty)]
+    else []
+  in
+  NunTransform.make1
+    ~on_encoded
+    ~name:"monomorphization"
+    ~encode:(fun p ->
+      let sigma = NunProblem.signature p in
+      let state = Mono.create () in
+      let p = Mono.monomorphize ~sigma ~state p in
+      p, state
+      (* TODO mangling of types, as an option *)
+    )
+    ~decode:(fun _ x -> x)
+    ()

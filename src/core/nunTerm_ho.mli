@@ -181,6 +181,10 @@ val to_fo :
     'a NunProblem.Model.t
   ) NunTransform.t
 
+val to_fo_no_model :
+  (module S with type t = 'a) ->
+  (('a, 'a) NunProblem.t, ('a, 'a, 'a) NunFO.Problem.t, 'b, 'b) NunTransform.t
+
 (** {2 Conversion} *)
 
 module Convert(T1 : VIEW)(T2 : S) : sig

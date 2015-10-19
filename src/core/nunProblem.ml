@@ -249,6 +249,10 @@ let statements t = t.statements
 let make statements =
   { statements; }
 
+let map_statements ~f st = {
+  statements=CCList.map f st.statements;
+}
+
 let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
   statements=CCList.flat_map
     (fun st ->
@@ -261,7 +265,7 @@ let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
 let map ~term ~ty pb = map_with ~term ~ty pb
 
 let print pt pty out problem =
-  fpf out "@[<v2>{%a@]@,}"
+  fpf out "{@,%a@,}"
     (Statement.print_list pt pty) problem.statements
 
 exception IllFormed of string
