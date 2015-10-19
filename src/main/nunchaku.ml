@@ -5,8 +5,15 @@ module E = CCError
 module A = NunUntypedAST
 module Utils = NunUtils
 
+type input =
+  | I_nunchaku
+  | I_tptp
+
+let list_inputs_ () = "(available choices: nunchaku tptp)"
+
 (** {2 Options} *)
 
+let input_ = ref I_nunchaku
 let print_ = ref false
 let print_typed_ = ref false
 let print_skolem_ = ref false
@@ -16,10 +23,17 @@ let print_smt_ = ref false
 let timeout_ = ref 30
 let version_ = ref false
 let file = ref ""
+
 let set_file f =
   if !file <> ""
   then raise (Arg.Bad "please provide only one file")
   else file := f
+
+let set_input_ f =
+  input_ := match String.lowercase f with
+    | "nunchaku" -> I_nunchaku
+    | "tptp" -> I_tptp
+    | s -> failwith ("unsupported input format: " ^ s)
 
 (* set debug levels *)
 let options_debug_ = Utils.Section.iter
@@ -42,6 +56,7 @@ let options =
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set NunSolver_intf.print_model_, " print raw model"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
+  ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
   ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
   ; "--version", Arg.Set version_, " print version and exit"
   ]
@@ -54,11 +69,24 @@ let print_version_if_needed () =
   );
   ()
 
-let parse_file () =
-  let res = if !file="" then  (
-    Utils.debugf 1 "will read on stdin";
-    NunLexer.parse_stdin ()
-  ) else NunLexer.parse_file !file
+let parse_file ~input () =
+  let lexer, parse = match input with
+    | I_nunchaku -> NunLexer.token, NunParser.parse_statement_list
+    | I_tptp -> NunUtils.not_implemented "tptp parser"
+  in
+  let with_in f =
+    if !file="" then f stdin
+    else CCIO.with_in !file f
+  in
+  let res = with_in
+    (fun ic ->
+      let lexbuf = Lexing.from_channel ic in
+      NunLocation.set_file lexbuf (if !file="" then "<stdin>" else !file);
+      try
+        E.return (parse lexer lexbuf)
+      with e ->
+        E.fail (Printexc.to_string e)
+    )
   in
   E.map_err
     (fun msg -> Printf.sprintf "could not parse %s: %s" !file msg) res
@@ -118,7 +146,7 @@ let main () =
   Arg.parse options set_file "usage: nunchaku [options] file";
   print_version_if_needed ();
   (* parse *)
-  parse_file ()
+  parse_file ~input:!input_ ()
   >>= fun statements ->
   print_input_if_needed statements;
   (* run pipeline *)
