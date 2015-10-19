@@ -68,10 +68,10 @@ module Convert(Term : TERM) = struct
     NunUtils.exn_ksprintf fmt
       ~f:(fun msg -> TypeError(msg, stack))
 
-  let ill_formed ?loc msg = raise (IllFormed ("term", msg, loc))
-  let ill_formedf ?loc ?(kind="term") fmt =
+  let ill_formed ?loc ?(kind="term") msg = raise (IllFormed (kind, msg, loc))
+  let ill_formedf ?loc ?kind fmt =
     NunUtils.exn_ksprintf fmt
-      ~f:(fun msg -> IllFormed (kind, msg, loc))
+      ~f:(fun msg -> ill_formed ?loc ?kind msg)
 
   (* obtain the type of a term *)
   let get_ty_ t = match Term.ty t with
@@ -168,7 +168,8 @@ module Convert(Term : TERM) = struct
                 unify_in_ctx_ ~stack (Term.Ty.returns (Var.ty v)) Term.ty_type;
                 Term.ty_var ?loc v
           end
-      | A.AtVar _ -> ill_formed ?loc "@@ syntax is not available for types"
+      | A.AtVar _ ->
+          ill_formed ~kind:"type" ?loc "@@ syntax is not available for types"
       | A.MetaVar v -> Term.ty_meta_var (Env.find_meta_var ~env v)
       | A.TyArrow (a,b) ->
           Term.ty_arrow ?loc
@@ -251,7 +252,7 @@ module Convert(Term : TERM) = struct
     let stack = push_ t stack in
     match Loc.get t with
     | A.Builtin A.Builtin.Eq ->
-        ill_formed ?loc "equality must be fully applied"
+        ill_formed ~kind:"term" ?loc "equality must be fully applied"
     | A.Builtin s ->
         (* only some symbols correspond to terms *)
         let module B = NunBuiltin.T in
@@ -574,6 +575,8 @@ module Convert(Term : TERM) = struct
     NunUtils.debugf ~section 2 "@[<hv2>infer types in@ %a@ at %a@]"
       A.print_statement st Loc.print_opt loc;
     let st', env = match st.A.stmt_value with
+    | A.Include _ ->
+        ill_formed ~kind:"statement" ?loc "include statement not processed"
     | A.Decl (v, ty) ->
         check_new_ ?loc ~env v;
         let ty = convert_ty_exn ~env ty in
