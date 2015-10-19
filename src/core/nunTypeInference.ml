@@ -568,41 +568,43 @@ module Convert(Term : TERM) = struct
       env l
 
   let convert_statement_exn ~env st =
-    let loc = Loc.get_loc st in
+    let name = st.A.stmt_name in
+    let loc = st.A.stmt_loc in
+    let info = {St.name; loc; } in
     NunUtils.debugf ~section 2 "@[<hv2>infer types in@ %a@ at %a@]"
       A.print_statement st Loc.print_opt loc;
-    let st', env = match Loc.get st with
+    let st', env = match st.A.stmt_value with
     | A.Decl (v, ty) ->
         check_new_ ?loc ~env v;
         let ty = convert_ty_exn ~env ty in
         let id = ID.make_full ~needs_at:(ty_is_poly_ ty) ~name:v in
         let env = Env.add_decl ~env v ~id ty in
         if Term.Ty.returns_Type ty
-        then St.ty_decl ?loc id ty, env (* id is a type *)
-        else St.decl ?loc id ty, env
+        then St.ty_decl ~info id ty, env (* id is a type *)
+        else St.decl ~info id ty, env
     | A.Axiom l ->
         (* convert terms, and force them to be propositions *)
         let l = List.map (convert_prop_ ?before_generalize:None ~env) l in
-        St.axiom ?loc l, env
+        St.axiom ~info l, env
     | A.Spec s ->
         let s = convert_cases ?loc ~env s in
-        St.axiom_spec ?loc s, env
+        St.axiom_spec ~info s, env
     | A.Rec s ->
         let s = convert_cases ?loc ~env s in
-        St.axiom_rec ?loc s, env
+        St.axiom_rec ~info s, env
     | A.Data l ->
         let env, l = convert_tydef ~env l in
-        St.data ?loc l, env
+        St.data ~info l, env
     | A.Codata l ->
         let env, l = convert_tydef ~env l in
-        St.codata ?loc l, env
+        St.codata ~info l, env
     | A.Goal t ->
         (* infer type for t *)
         let t = convert_term_exn ~env t in
         (* be sure it's a proposition
            XXX: for narrowing, could be of any type? *)
         unify_in_ctx_ ~stack:[] (get_ty_ t) prop;
-        St.goal ?loc t, env
+        St.goal ~info t, env
     in
     NunUtils.debugf ~section 2 "@[<2>checked statement@ %a@]"
       (St.print PrintTerm.print PrintTerm.print_ty) st';

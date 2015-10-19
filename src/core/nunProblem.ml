@@ -63,14 +63,23 @@ module Statement = struct
       (** Axioms are part of an admissible (partial) definition *)
 
   type ('term, 'ty) view =
+    | Include of string * (string list) option (* include *)
     | Decl of id * decl * 'ty
     | Axiom of ('term, 'ty) axiom
     | TyDef of [`Data | `Codata] * 'ty mutual_types
     | Goal of 'term
 
-  type ('a, 'b) t = {
-    view: ('a, 'b) view;
-    loc: Loc.t option;
+  (** Additional informations on the statement *)
+  type info = {
+    loc: loc option;
+    name: string option;
+  }
+
+  let info_default = { loc=None; name=None; }
+
+  type ('term, 'ty) t = {
+    view: ('term, 'ty) view;
+    info: info;
   }
 
   let case_defined t = t.case_defined
@@ -84,24 +93,27 @@ module Statement = struct
   let tydef_cstors t = t.ty_cstors
 
   let view t = t.view
-  let loc t = t.loc
+  let info t = t.info
+  let loc t = t.info.loc
+  let name t = t.info.name
 
-  let make_ ?loc view = {loc;view}
+  let make_ ~info view = {info;view}
 
-  let mk_axiom ?loc t = make_ ?loc (Axiom t)
-  let mk_decl ?loc id k decl = make_ ?loc (Decl (id,k,decl))
-  let mk_ty_def ?loc k l = make_ ?loc (TyDef (k, l))
+  let mk_include ~info ?which f = make_ ~info (Include (f, which))
+  let mk_axiom ~info t = make_ ~info (Axiom t)
+  let mk_decl ~info id k decl = make_ ~info (Decl (id,k,decl))
+  let mk_ty_def ~info k l = make_ ~info (TyDef (k, l))
 
-  let ty_decl ?loc id t = mk_decl ?loc id Decl_type t
-  let decl ?loc id t = mk_decl ?loc id Decl_fun t
-  let prop_decl ?loc id t = mk_decl ?loc id Decl_prop t
-  let axiom ?loc l = mk_axiom ?loc (Axiom_std l)
-  let axiom1 ?loc t = axiom ?loc [t]
-  let axiom_spec ?loc t = mk_axiom ?loc (Axiom_spec t)
-  let axiom_rec ?loc t = mk_axiom ?loc (Axiom_rec t)
-  let data ?loc l = mk_ty_def ?loc `Data l
-  let codata ?loc l = mk_ty_def ?loc `Codata l
-  let goal ?loc t = make_ ?loc (Goal t)
+  let ty_decl ~info id t = mk_decl ~info id Decl_type t
+  let decl ~info id t = mk_decl ~info id Decl_fun t
+  let prop_decl ~info id t = mk_decl ~info id Decl_prop t
+  let axiom ~info l = mk_axiom ~info (Axiom_std l)
+  let axiom1 ~info t = axiom ~info [t]
+  let axiom_spec ~info t = mk_axiom ~info (Axiom_spec t)
+  let axiom_rec ~info t = mk_axiom ~info (Axiom_rec t)
+  let data ~info l = mk_ty_def ~info `Data l
+  let codata ~info l = mk_ty_def ~info `Codata l
+  let goal ~info t = make_ ~info (Goal t)
 
   let map_case ~term ~ty t = {
     case_vars=List.map (Var.update_ty ~f:ty) t.case_vars;
@@ -113,17 +125,18 @@ module Statement = struct
   let map_cases ~term ~ty t = List.map (map_case ~term ~ty) t
 
   let map ~term:ft ~ty:fty st =
-    let loc = st.loc in
+    let info = st.info in
     match st.view with
+    | Include (f,which) -> mk_include ~info ?which f
     | Decl (id,k,t) ->
-        mk_decl ?loc id k (fty t)
+        mk_decl ~info id k (fty t)
     | Axiom a ->
         begin match a with
-        | Axiom_std l -> axiom ?loc (List.map ft l)
+        | Axiom_std l -> axiom ~info (List.map ft l)
         | Axiom_spec t ->
-            axiom_spec ?loc (map_cases ~term:ft ~ty:fty t)
+            axiom_spec ~info (map_cases ~term:ft ~ty:fty t)
         | Axiom_rec t ->
-            axiom_rec ?loc (map_cases ~term:ft ~ty:fty t)
+            axiom_rec ~info (map_cases ~term:ft ~ty:fty t)
         end
     | TyDef (k, l) ->
         let l = List.map
@@ -140,10 +153,11 @@ module Statement = struct
                   tydef.ty_cstors;
             }) l
         in
-        mk_ty_def ?loc k l
-    | Goal t -> goal ?loc (ft t)
+        mk_ty_def ~info k l
+    | Goal t -> goal ~info (ft t)
 
   let fold ~term ~ty acc st = match st.view with
+    | Include _ -> acc
     | Decl (_, _, t) -> ty acc t
     | Axiom a ->
         begin match a with
@@ -172,6 +186,11 @@ module Statement = struct
   let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
   let print pt pty out t = match t.view with
+    | Include (f, None) ->
+        fpf out "@[<2>include '%s'.@]" f
+    | Include (f, Some l) ->
+        fpf out "@[<2>include %a from '%s'.@]"
+          (CCFormat.list ~start:"(" ~stop:")" ~sep:"," CCFormat.string) l f
     | Decl (id,_,t) ->
         fpf out "@[<2>val %a@ : %a.@]" ID.print_name id pty t
     | Axiom a ->
@@ -286,6 +305,7 @@ let signature ?(init=ID.Map.empty) pb =
   in
   List.fold_left
     (fun sigma st -> match St.view st with
+      | St.Include _ -> sigma
       | St.Decl (id,_,ty) -> declare_ ~sigma id ty
       | St.TyDef (_,l) ->
           List.fold_left

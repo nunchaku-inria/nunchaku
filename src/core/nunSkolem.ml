@@ -148,7 +148,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
         let l = state.new_sym in
         state.new_sym <- [];
         List.map
-          (fun (id,s) -> Stmt.decl id s.sym_ty)
+          (fun (id,s) -> Stmt.decl ~info:Stmt.info_default id s.sym_ty)
           l
       )
       ~term:(convert_term_ ~state)

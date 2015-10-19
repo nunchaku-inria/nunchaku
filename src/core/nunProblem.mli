@@ -70,46 +70,60 @@ module Statement : sig
       (** Axioms are part of an admissible (partial) definition *)
 
   type ('term, 'ty) view =
+    | Include of string * (string list) option (* include *)
     | Decl of id * decl * 'ty
     | Axiom of ('term, 'ty) axiom
     | TyDef of [`Data | `Codata] * 'ty mutual_types
     | Goal of 'term
 
-  type ('term,'ty) t
+  (** Additional informations on the statement *)
+  type info = {
+    loc: loc option;
+    name: string option;
+  }
+
+  val info_default : info
+
+  type ('term, 'ty) t = private {
+    view: ('term, 'ty) view;
+    info: info;
+  }
 
   val view : ('term,'ty) t -> ('term, 'ty) view
-
   val loc : (_,_) t -> loc option
+  val name : (_,_) t -> string option
+  val info : (_,_) t -> info
 
-  val mk_decl : ?loc:loc -> id -> decl -> 'ty -> ('t,'ty) t
-  val mk_axiom : ?loc:loc -> ('a,'ty) axiom -> ('a, 'ty) t
-  val mk_ty_def : ?loc:loc -> [`Data | `Codata] -> 'ty mutual_types -> (_, 'ty) t
+  val mk_include : info:info -> ?which:string list -> string -> (_,_) t
+  val mk_decl : info:info  -> id -> decl -> 'ty -> ('t,'ty) t
+  val mk_axiom : info:info -> ('a,'ty) axiom -> ('a, 'ty) t
+  val mk_ty_def : info:info -> [`Data | `Codata] -> 'ty mutual_types -> (_, 'ty) t
 
-  val ty_decl : ?loc:loc -> id -> 'a -> (_, 'a) t
+  val ty_decl : info:info -> id -> 'a -> (_, 'a) t
   (** declare a type constructor *)
 
-  val decl : ?loc:loc -> id -> 'a -> (_, 'a) t
+  val decl : info:info -> id -> 'a -> (_, 'a) t
   (** declare a function symbol *)
 
-  val prop_decl : ?loc:loc -> id -> 'a -> (_, 'a) t
+  val prop_decl : info:info -> id -> 'a -> (_, 'a) t
   (** Declare a proposition ([prop] must be provided) *)
 
-  val axiom : ?loc:loc -> 'a list -> ('a,_) t
+  val axiom : info:info -> 'a list -> ('a,_) t
   (** Axioms without additional assumptions *)
 
-  val axiom1 : ?loc:loc -> 'a -> ('a,_) t
+  val axiom1 : info:info -> 'a -> ('a,_) t
 
-  val axiom_spec : ?loc:loc -> ('a,'ty) mutual_cases -> ('a,'ty) t
+  val axiom_spec : info:info -> ('a,'ty) mutual_cases -> ('a,'ty) t
   (** Axiom that can be ignored if not explicitely depended upon by the goal *)
 
-  val axiom_rec : ?loc:loc -> ('a,'ty) mutual_cases -> ('a,'ty) t
+  val axiom_rec : info:info -> ('a,'ty) mutual_cases -> ('a,'ty) t
   (** Axiom that is part of an admissible (mutual, partial) definition. *)
 
-  val data : ?loc:loc -> 'ty mutual_types -> (_, 'ty) t
+  val data : info:info -> 'ty mutual_types -> (_, 'ty) t
 
-  val codata : ?loc:loc -> 'ty mutual_types -> (_, 'ty) t
+  val codata : info:info -> 'ty mutual_types -> (_, 'ty) t
 
-  val goal : ?loc:loc -> 'a -> ('a,_) t
+  val goal : info:info -> 'a -> ('a,_) t
   (** The goal of the problem *)
 
   val map_case :

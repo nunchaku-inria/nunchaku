@@ -531,14 +531,16 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       NunUtils.debugf ~section 2 "@[<2>convert statement@ `%a`@]"
         (NunProblem.Statement.print P.print P.print_ty) st;
       (* process statement *)
-      let loc = Stmt.loc st in
+      let info = Stmt.info st in
       match Stmt.view st with
+      | Stmt.Include _ ->
+          fail_ "cannot monomorphize an include statement"
       | Stmt.Decl (id,k,ty) ->
           begin match k with
           | Stmt.Decl_type ->
               if St.required_id ~state id
               then (* type is needed, keep it *)
-                [ Stmt.ty_decl ?loc id
+                [ Stmt.ty_decl ~info id
                     (conv_term ~mangle:false ~depth:0 ~subst:Subst.empty ty) ]
               else []
           | Stmt.Decl_fun
@@ -556,25 +558,25 @@ module Make(T : NunTerm_ho.S) : S with module T = T
                     | None -> id
                     | Some x -> x
                   in
-                  Stmt.mk_decl ?loc new_id k ty)
+                  Stmt.mk_decl ~info new_id k ty)
                 (ArgTupleSet.to_list tuples)
           end
       | Stmt.Goal t ->
           (* convert goal *)
-          [ Stmt.goal ?loc (conv_term ~mangle:true ~depth:0 ~subst:Subst.empty t) ]
+          [ Stmt.goal ~info (conv_term ~mangle:true ~depth:0 ~subst:Subst.empty t) ]
       | Stmt.Axiom (Stmt.Axiom_std l) ->
           let l = List.map (conv_term ~mangle:true ~depth:0 ~subst:Subst.empty) l in
-          [ Stmt.axiom ?loc l ]
+          [ Stmt.axiom ~info l ]
       | Stmt.Axiom (Stmt.Axiom_spec l) ->
           let l = aux_cases ~subst:Subst.empty l in
-          if l=[] then [] else [ Stmt.axiom_spec ?loc l ]
+          if l=[] then [] else [ Stmt.axiom_spec ~info l ]
       | Stmt.Axiom (Stmt.Axiom_rec l) ->
           let l = aux_cases ~subst:Subst.empty l in
-          [ Stmt.axiom_rec ?loc l ]
+          [ Stmt.axiom_rec ~info l ]
       | Stmt.TyDef (k, l) ->
           let l = aux_mutual_types l in
           if l=[] then []
-          else [ Stmt.mk_ty_def ?loc k l ]
+          else [ Stmt.mk_ty_def ~info k l ]
     in
     let pb' = NunProblem.statements pb
       |> List.rev (* start at the end *)

@@ -112,7 +112,11 @@ type statement_node =
   | Codata of mutual_types
   | Goal of term (* goal *)
 
-type statement = statement_node Loc.with_loc
+type statement = {
+  stmt_loc: Loc.t option;
+  stmt_name: string option;
+  stmt_value: statement_node;
+}
 
 let wildcard ?loc () = Loc.with_loc ?loc Wildcard
 let builtin ?loc s = Loc.with_loc ?loc (Builtin s)
@@ -134,13 +138,16 @@ let ty_forall_list ?loc = List.fold_right (ty_forall ?loc)
 let forall_list ?loc = List.fold_right (forall ?loc)
 let exists_list ?loc = List.fold_right (exists ?loc)
 
-let decl ?loc v t = Loc.with_loc ?loc (Decl(v,t))
-let axiom ?loc l = Loc.with_loc ?loc (Axiom l)
-let spec ?loc l = Loc.with_loc ?loc (Spec l)
-let rec_ ?loc l = Loc.with_loc ?loc (Rec l)
-let data ?loc l = Loc.with_loc ?loc (Data l)
-let codata ?loc l = Loc.with_loc ?loc (Codata l)
-let goal ?loc t = Loc.with_loc ?loc (Goal t)
+let mk_stmt_ ?loc ?name st =
+  {stmt_loc=loc; stmt_name=name; stmt_value=st; }
+
+let decl ?name ?loc v t = mk_stmt_ ?name ?loc (Decl(v,t))
+let axiom ?name ?loc l = mk_stmt_ ?name ?loc (Axiom l)
+let spec ?name ?loc l = mk_stmt_ ?name ?loc (Spec l)
+let rec_ ?name ?loc l = mk_stmt_ ?name ?loc (Rec l)
+let data ?name ?loc l = mk_stmt_ ?name ?loc (Data l)
+let codata ?name ?loc l = mk_stmt_ ?name ?loc (Codata l)
+let goal ?name ?loc t = mk_stmt_ ?name ?loc (Goal t)
 
 let pf = Format.fprintf
 
@@ -223,7 +230,7 @@ let pp_ty_defs out l =
   in
   pf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_case) l
 
-let print_statement out st = match Loc.get st with
+let print_statement out st = match st.stmt_value with
   | Decl (v, t) -> pf out "@[val %s : %a.@]" v print_term t
   | Axiom l -> pf out "@[axiom @[%a@].@]" (pp_list_ ~sep:";" print_term) l
   | Spec l -> pf out "@[spec %a.@]" pp_mutual_cases l
