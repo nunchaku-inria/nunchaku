@@ -10,3 +10,4 @@ setup.log
 setup.data
 qtest*
 src/main/const.ml
+doc/
