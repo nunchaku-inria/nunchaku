@@ -16,8 +16,11 @@ module type S = sig
   val create : ?prefix:string -> unit -> state
   (** @param prefix the prefix used to generate Skolem symbols *)
 
-  val convert_term : state:state -> T1.t -> T2.t * (id * T2.ty) list
-  (** [convert_term ~state t] returns [t', new_syms] where [t'] is
+  val nnf : T1.t -> T2.t
+  (** Put term in negation normal form *)
+
+  val skolemize : state:state -> T2.t -> T2.t * (id * T2.ty) list
+  (** [skolemize ~state t] returns [t', new_syms] where [t'] is
       the skolemization of [t], and [new_syms] is a set of new symbols
       with their type *)
 
