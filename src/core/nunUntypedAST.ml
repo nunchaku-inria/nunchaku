@@ -28,6 +28,7 @@ module Builtin : sig
     | True
     | False
     | Eq
+    | Equiv
     | Imply
 
   include NunIntf.PRINT with type t := t
@@ -43,6 +44,7 @@ end = struct
     | True
     | False
     | Eq
+    | Equiv
     | Imply
 
   let fixity = function
@@ -54,6 +56,7 @@ end = struct
     | And
     | Or
     | Imply
+    | Equiv
     | Eq -> `Infix
 
   let to_string = function
@@ -65,6 +68,7 @@ end = struct
     | True -> "true"
     | False -> "false"
     | Eq -> "="
+    | Equiv -> "="
     | Imply -> "=>"
 
   let print out s = Format.pp_print_string out (to_string s)
@@ -138,7 +142,7 @@ let not_ ?loc f = app ?loc (builtin ?loc Builtin.Not) [f]
 let and_ ?loc l = app ?loc (builtin ?loc Builtin.And) l
 let or_ ?loc l = app ?loc (builtin ?loc Builtin.Or) l
 let imply ?loc a b = app ?loc (builtin ?loc Builtin.Imply) [a;b]
-let equiv ?loc a b = app ?loc (builtin ?loc Builtin.Eq) [a;b]
+let equiv ?loc a b = app ?loc (builtin ?loc Builtin.Equiv) [a;b]
 let eq ?loc a b = app ?loc (builtin ?loc Builtin.Eq) [a;b]
 let neq ?loc a b = not_ ?loc (eq ?loc a b)
 let forall ?loc v t = Loc.with_loc ?loc (Forall (v, t))
