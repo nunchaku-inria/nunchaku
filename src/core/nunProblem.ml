@@ -63,7 +63,6 @@ module Statement = struct
       (** Axioms are part of an admissible (partial) definition *)
 
   type ('term, 'ty) view =
-    | Include of string * (string list) option (* include *)
     | Decl of id * decl * 'ty
     | Axiom of ('term, 'ty) axiom
     | TyDef of [`Data | `Codata] * 'ty mutual_types
@@ -99,7 +98,6 @@ module Statement = struct
 
   let make_ ~info view = {info;view}
 
-  let mk_include ~info ?which f = make_ ~info (Include (f, which))
   let mk_axiom ~info t = make_ ~info (Axiom t)
   let mk_decl ~info id k decl = make_ ~info (Decl (id,k,decl))
   let mk_ty_def ~info k l = make_ ~info (TyDef (k, l))
@@ -127,7 +125,6 @@ module Statement = struct
   let map ~term:ft ~ty:fty st =
     let info = st.info in
     match st.view with
-    | Include (f,which) -> mk_include ~info ?which f
     | Decl (id,k,t) ->
         mk_decl ~info id k (fty t)
     | Axiom a ->
@@ -157,7 +154,6 @@ module Statement = struct
     | Goal t -> goal ~info (ft t)
 
   let fold ~term ~ty acc st = match st.view with
-    | Include _ -> acc
     | Decl (_, _, t) -> ty acc t
     | Axiom a ->
         begin match a with
@@ -186,11 +182,6 @@ module Statement = struct
   let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
   let print pt pty out t = match t.view with
-    | Include (f, None) ->
-        fpf out "@[<2>include '%s'.@]" f
-    | Include (f, Some l) ->
-        fpf out "@[<2>include %a from '%s'.@]"
-          (CCFormat.list ~start:"(" ~stop:")" ~sep:"," CCFormat.string) l f
     | Decl (id,_,t) ->
         fpf out "@[<2>val %a@ : %a.@]" ID.print_name id pty t
     | Axiom a ->
@@ -305,7 +296,6 @@ let signature ?(init=ID.Map.empty) pb =
   in
   List.fold_left
     (fun sigma st -> match St.view st with
-      | St.Include _ -> sigma
       | St.Decl (id,_,ty) -> declare_ ~sigma id ty
       | St.TyDef (_,l) ->
           List.fold_left

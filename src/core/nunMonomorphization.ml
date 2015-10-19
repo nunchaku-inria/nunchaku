@@ -533,8 +533,6 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       (* process statement *)
       let info = Stmt.info st in
       match Stmt.view st with
-      | Stmt.Include _ ->
-          fail_ "cannot monomorphize an include statement"
       | Stmt.Decl (id,k,ty) ->
           begin match k with
           | Stmt.Decl_type ->

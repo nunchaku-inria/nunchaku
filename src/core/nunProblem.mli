@@ -70,7 +70,6 @@ module Statement : sig
       (** Axioms are part of an admissible (partial) definition *)
 
   type ('term, 'ty) view =
-    | Include of string * (string list) option (* include *)
     | Decl of id * decl * 'ty
     | Axiom of ('term, 'ty) axiom
     | TyDef of [`Data | `Codata] * 'ty mutual_types
@@ -94,7 +93,6 @@ module Statement : sig
   val name : (_,_) t -> string option
   val info : (_,_) t -> info
 
-  val mk_include : info:info -> ?which:string list -> string -> (_,_) t
   val mk_decl : info:info  -> id -> decl -> 'ty -> ('t,'ty) t
   val mk_axiom : info:info -> ('a,'ty) axiom -> ('a, 'ty) t
   val mk_ty_def : info:info -> [`Data | `Codata] -> 'ty mutual_types -> (_, 'ty) t

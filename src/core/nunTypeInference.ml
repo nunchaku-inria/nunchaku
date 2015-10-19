@@ -575,8 +575,6 @@ module Convert(Term : TERM) = struct
     NunUtils.debugf ~section 2 "@[<hv2>infer types in@ %a@ at %a@]"
       A.print_statement st Loc.print_opt loc;
     let st', env = match st.A.stmt_value with
-    | A.Include _ ->
-        ill_formed ~kind:"statement" ?loc "include statement not processed"
     | A.Decl (v, ty) ->
         check_new_ ?loc ~env v;
         let ty = convert_ty_exn ~env ty in
