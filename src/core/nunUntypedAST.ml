@@ -104,6 +104,7 @@ type mutual_cases = (term * string * term list) list
 type mutual_types = (var * var list * (var * ty list) list) list
 
 type statement_node =
+  | Include of string * (string list) option (* file, list of symbols *)
   | Decl of var * ty (* declaration of uninterpreted symbol *)
   | Axiom of term list (* axiom *)
   | Spec of mutual_cases (* mutual spec *)
@@ -122,18 +123,31 @@ let wildcard ?loc () = Loc.with_loc ?loc Wildcard
 let builtin ?loc s = Loc.with_loc ?loc (Builtin s)
 let var ?loc v = Loc.with_loc ?loc (Var v)
 let at_var ?loc v = Loc.with_loc ?loc (AtVar v)
+let const = at_var (* no difference *)
 let meta_var ?loc v = Loc.with_loc ?loc (MetaVar v)
 let app ?loc t l = Loc.with_loc ?loc (App (t,l))
 let fun_ ?loc v t = Loc.with_loc ?loc (Fun(v,t))
 let fun_l ?loc = List.fold_right (fun_ ?loc)
 let let_ ?loc v t u = Loc.with_loc ?loc (Let (v,t,u))
 let ite ?loc a b c = Loc.with_loc ?loc (Ite (a,b,c))
+let ty_prop = builtin Builtin.Prop
+let ty_type = builtin Builtin.Type
+let true_ = builtin Builtin.True
+let false_ = builtin Builtin.False
+let not_ ?loc f = app ?loc (builtin ?loc Builtin.Not) [f]
+let and_ ?loc l = app ?loc (builtin ?loc Builtin.And) l
+let or_ ?loc l = app ?loc (builtin ?loc Builtin.Or) l
+let imply ?loc a b = app ?loc (builtin ?loc Builtin.Imply) [a;b]
+let equiv ?loc a b = app ?loc (builtin ?loc Builtin.Eq) [a;b]
+let eq ?loc a b = app ?loc (builtin ?loc Builtin.Eq) [a;b]
+let neq ?loc a b = not_ ?loc (eq ?loc a b)
 let forall ?loc v t = Loc.with_loc ?loc (Forall (v, t))
 let exists ?loc v t = Loc.with_loc ?loc (Exists (v, t))
 let ty_arrow ?loc a b = Loc.with_loc ?loc (TyArrow (a,b))
 let ty_forall ?loc v t = Loc.with_loc ?loc (TyForall (v,t))
 
 let ty_forall_list ?loc = List.fold_right (ty_forall ?loc)
+let ty_arrow_list ?loc = List.fold_right (ty_arrow ?loc)
 
 let forall_list ?loc = List.fold_right (forall ?loc)
 let exists_list ?loc = List.fold_right (exists ?loc)
@@ -141,6 +155,7 @@ let exists_list ?loc = List.fold_right (exists ?loc)
 let mk_stmt_ ?loc ?name st =
   {stmt_loc=loc; stmt_name=name; stmt_value=st; }
 
+let include_ ?name ?loc ?which f = mk_stmt_ ?name ?loc (Include(f,which))
 let decl ?name ?loc v t = mk_stmt_ ?name ?loc (Decl(v,t))
 let axiom ?name ?loc l = mk_stmt_ ?name ?loc (Axiom l)
 let spec ?name ?loc l = mk_stmt_ ?name ?loc (Spec l)
@@ -231,6 +246,9 @@ let pp_ty_defs out l =
   pf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_case) l
 
 let print_statement out st = match st.stmt_value with
+  | Include (f, None) -> pf out "@[include %s.@]" f
+  | Include (f, Some l) -> pf out "@[include (%a) from %s.@]"
+      (pp_list_ ~sep:"," CCFormat.string) l f
   | Decl (v, t) -> pf out "@[val %s : %a.@]" v print_term t
   | Axiom l -> pf out "@[axiom @[%a@].@]" (pp_list_ ~sep:";" print_term) l
   | Spec l -> pf out "@[spec %a.@]" pp_mutual_cases l
@@ -242,3 +260,19 @@ let print_statement out st = match st.stmt_value with
 let print_statement_list out l =
   Format.fprintf out "@[<v>%a@]"
     (CCFormat.list ~start:"" ~stop:"" ~sep:"" print_statement) l
+
+module TPTP = struct
+  (* additional statements for any TPTP problem *)
+  let prelude =
+    [ decl "$i" ty_type
+    ]
+
+  (* meta-data used in TPTP `additional_info` *)
+  type general_data =
+    | Var of string
+    | Int of int
+    | String of string
+    | App of string * general_data list
+    | List of general_data list
+    | Column of general_data * general_data
+end
