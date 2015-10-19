@@ -99,18 +99,17 @@ let get_debug () = Section.root.Section.level
 
 let debug_fmt_ = Format.err_formatter
 
-let debugf ?(section=Section.root) l msg =
-  if l <= Section.cur_level section
-    then (
-      let now = Time.total () in
-      if section == Section.root
-        then Format.fprintf debug_fmt_ "@[<hov 3>%.3f[]@ " now
-        else Format.fprintf debug_fmt_ "@[<hov 3>%.3f[%s]:@ "
-          now section.Section.full_name;
-        Format.kfprintf
-          (fun fmt -> Format.fprintf fmt "@]@.")
-          debug_fmt_ msg
-    ) else Format.ifprintf debug_fmt_ msg
+let debugf ?(section=Section.root) l msg k =
+  if l <= Section.cur_level section then (
+    let now = Time.total () in
+    if section == Section.root
+    then Format.fprintf debug_fmt_ "@[<hov 3>%.3f[]@ " now
+    else Format.fprintf debug_fmt_ "@[<hov 3>%.3f[%s]:@ "
+      now section.Section.full_name;
+    k (Format.kfprintf
+        (fun fmt -> Format.fprintf fmt "@]@.")
+        debug_fmt_ msg)
+  )
 
 (** {2 Misc} *)
 

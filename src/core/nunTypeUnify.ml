@@ -72,7 +72,8 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
 
   (* bound: set of bound variables, that cannot be unified *)
   let unify_exn ty1 ty2 =
-    Utils.debugf ~section 5 "@[<2>unify %a@ and %a@]" Ty.print ty1 Ty.print ty2;
+    Utils.debugf ~section 5 "@[<2>unify %a@ and %a@]"
+      (fun k-> k Ty.print ty1 Ty.print ty2);
     let bound = ref Subst.empty in
     (* keep a stack of unification attempts *)
     let rec unify_ ~stack ty1 ty2 =

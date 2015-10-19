@@ -73,7 +73,7 @@ let declare_sym ~state ~ctx s arity =
         A.ty_arrow_list args ty_prop
   in
   NunUtils.debugf ~section 1 "declare `%s` with (default) type `%a`"
-    s A.print_term ty;
+    (fun k-> k s A.print_term ty);
   (* declare [s : ty] *)
   StrTbl.replace state.declared s ();
   CCVector.push state.into (A.decl s ty);

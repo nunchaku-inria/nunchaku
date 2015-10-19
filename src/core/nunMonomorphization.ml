@@ -223,7 +223,8 @@ module Make(T : NunTerm_ho.S) : S with module T = T
     let required_id ~state id = SetOfInstances.mem_id state.required id
 
     let schedule ~state ~depth id tup =
-      NunUtils.debugf ~section 3 "require %a on %a" ID.print id ArgTuple.print tup;
+      NunUtils.debugf ~section 3 "require %a on %a"
+        (fun k-> k ID.print id ArgTuple.print tup);
       state.required <- SetOfInstances.add state.required id tup;
       state.on_schedule ~depth id tup
 
@@ -438,7 +439,8 @@ module Make(T : NunTerm_ho.S) : S with module T = T
         else (
           NunUtils.debugf ~section 3
             "@[<2>process case `%a` for@ (%a %a)@ at depth %d@]"
-            P.print case.Stmt.case_defined ID.print_no_id id ArgTuple.print tup depth;
+            (fun k -> k P.print case.Stmt.case_defined ID.print_no_id id
+              ArgTuple.print tup depth);
           (* avoid loops *)
           St.has_processed ~state id tup;
           (* we know [subst case.defined = (id args)], now
@@ -492,8 +494,8 @@ module Make(T : NunTerm_ho.S) : S with module T = T
         else (
           NunUtils.debugf ~section 3
             "@[<2>process type decl `%a : %a` for@ %a@ at depth %d@]"
-            ID.print_no_id tydef.Stmt.ty_id
-            P.print_ty tydef.Stmt.ty_type ArgTuple.print tup depth;
+            (fun k-> k ID.print_no_id tydef.Stmt.ty_id
+            P.print_ty tydef.Stmt.ty_type ArgTuple.print tup depth);
           St.has_processed ~state tydef.Stmt.ty_id tup;
           (* mangle type name. Monomorphized type should be : Type *)
           let id, _ = mangle_ ~state tydef.Stmt.ty_id (ArgTuple.args tup) in
@@ -529,7 +531,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
     (* maps a statement to 0 to n specialized statements *)
     let aux_statement st =
       NunUtils.debugf ~section 2 "@[<2>convert statement@ `%a`@]"
-        (NunProblem.Statement.print P.print P.print_ty) st;
+        (fun k-> k (NunProblem.Statement.print P.print P.print_ty) st);
       (* process statement *)
       let info = Stmt.info st in
       match Stmt.view st with
@@ -584,7 +586,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
     in
     (* some debug *)
     NunUtils.debugf ~section 3 "@[<2>instances:@ @[%a@]@]"
-      SetOfInstances.print state.St.required;
+      (fun k-> k SetOfInstances.print state.St.required);
     pb'
 
   (* TODO *)

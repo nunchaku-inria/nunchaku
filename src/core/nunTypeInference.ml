@@ -395,7 +395,7 @@ module Convert(Term : TERM) = struct
     (* fresh variable *)
     let ty_var = fresh_ty_var_ ~name:v in
     NunUtils.debugf ~section 3 "new variable %a for %s within %a"
-      Term.Ty.print ty_var v A.print_term t;
+      (fun k-> k Term.Ty.print ty_var v A.print_term t);
     (* unify with expected type *)
     CCOpt.iter
       (fun ty ->
@@ -444,7 +444,7 @@ module Convert(Term : TERM) = struct
     in
     if new_vars <> [] then
       NunUtils.debugf ~section 3 "@[generalized `%a`@ w.r.t @[%a@]@]"
-        PrintTerm.print t (CCFormat.list Var.print) new_vars;
+        (fun k-> k PrintTerm.print t (CCFormat.list Var.print) new_vars);
     t, new_vars
 
   module St = NunProblem.Statement
@@ -525,7 +525,7 @@ module Convert(Term : TERM) = struct
           (fun _v t -> Term.ty_arrow Term.ty_type t) vars Term.ty_type in
         let id = ID.make_full ~needs_at:false ~name in
         NunUtils.debugf ~section 3 "@[(co)inductive type %a: %a@]"
-          ID.print_name id PrintTerm.print_ty ty;
+          (fun k-> k ID.print_name id PrintTerm.print_ty ty);
         (* declare *)
         let env' = Env.add_decl ~env name ~id ty in
         env', (id,vars,ty,cstors)
@@ -556,7 +556,7 @@ module Convert(Term : TERM) = struct
             let id' = ID.make_full ~needs_at:(vars<>[]) ~name in
             let env = Env.add_decl ~env name ~id:id' ty' in
             NunUtils.debugf ~section 3 "@[constructor %a: %a@]"
-              ID.print_name id' PrintTerm.print_ty ty';
+              (fun k-> k ID.print_name id' PrintTerm.print_ty ty');
             (* newly built constructor *)
             let c = {St.cstor_name=id'; cstor_type=ty'; cstor_args=ty_args; } in
             env, c
@@ -574,7 +574,7 @@ module Convert(Term : TERM) = struct
     let loc = st.A.stmt_loc in
     let info = {St.name; loc; } in
     NunUtils.debugf ~section 2 "@[<hv2>infer types in@ %a@ at %a@]"
-      A.print_statement st Loc.print_opt loc;
+      (fun k-> k A.print_statement st Loc.print_opt loc);
     let st', env = match st.A.stmt_value with
     | A.Include _ ->
         ill_formed ?loc ~kind:"statement" "includes should have been eliminated"
@@ -611,7 +611,7 @@ module Convert(Term : TERM) = struct
         St.goal ~info t, env
     in
     NunUtils.debugf ~section 2 "@[<2>checked statement@ %a@]"
-      (St.print PrintTerm.print PrintTerm.print_ty) st';
+      (fun k-> k (St.print PrintTerm.print PrintTerm.print_ty) st');
     st', env
 
   let convert_statement ~env st =

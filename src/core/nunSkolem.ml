@@ -193,7 +193,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
           state.new_sym <- (skolem_id, new_sym):: state.new_sym;
           NunUtils.debugf ~section 2
             "@[<2>new Skolem symbol `%a :@ @[%a@]` standing for@ @[`%a`@]@]"
-            ID.print_no_id skolem_id P2.print_ty ty P2.print t;
+            (fun k-> k ID.print_no_id skolem_id P2.print_ty ty P2.print t);
           (* convert [t] and replace [v] with [skolem] in it *)
           let env = env_bind ~env v skolem in
           aux ~env t'
