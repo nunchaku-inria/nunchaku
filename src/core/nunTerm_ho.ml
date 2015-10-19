@@ -711,8 +711,6 @@ module AsFO(T : S) = struct
   let convert_statement st =
     let module St = NunProblem.Statement in
     match St.view st with
-    | St.Include _ ->
-        failwith "Term_ho.AsFO: cannot convert include statement"
     | St.Decl (id, k, ty) ->
         begin match k with
         | St.Decl_type ->
