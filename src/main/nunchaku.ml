@@ -81,7 +81,8 @@ let parse_file ~input () =
       try
         let res = match input with
           | I_nunchaku -> NunParser.parse_statement_list NunLexer.token lexbuf
-          | I_tptp -> NunTPTPParser.parse_statement_list NunTPTPLexer.token lexbuf
+          | I_tptp ->
+              NunTPTPRecursiveParser.parse_statement_list NunTPTPLexer.token lexbuf
         in
         E.return res
       with e ->
@@ -93,7 +94,7 @@ let parse_file ~input () =
 
 let print_input_if_needed statements =
   if !print_ then
-    Format.printf "@[<2>input:@ {%a@]@,}@." A.print_statement_list statements;
+    Format.printf "@[<v2>input: {@,%a@]@,}@." A.print_statement_list statements;
   ()
 
 (* build a pipeline, depending on options *)
@@ -157,7 +158,7 @@ let main () =
 let () =
   E.catch (main ())
     ~ok:(fun m ->
-      Format.printf "@[<2>SAT:@ model {@,%a@]@,}@."
+      Format.printf "@[<v2>SAT: model {@,%a@]@,}@."
         (NunProblem.Model.print NunUntypedAST.print_term) m;
       exit 0
     )

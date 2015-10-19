@@ -1,7 +1,11 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(** {1 Parser for TPTP} *)
+(** {1 Parser for TPTP}
+
+  This parser returns a verbatim representation of the file.
+  You should use {!NunTPTPRecursiveParser} instead.
+*)
 
 %{
 
@@ -102,13 +106,7 @@ parse_statement: s=statement EOI {s}
 parse_term: t=term EOI {t}
 parse_ty: t=term EOI {t}
 parse_answer_tuples: l=answer_tuples EOI { l }
-parse_statement_list:
-  | l=list(statement) EOI
-    {
-      (* the prelude of TPTP: defined types *)
-      let prelude = A.TPTP.prelude in
-      List.append prelude l
-    }
+parse_statement_list: l=list(statement) EOI { l }
 
 answer_tuples:
   | LEFT_BRACKET l=separated_nonempty_list(VLINE, answer_tuple) RIGHT_BRACKET
