@@ -12,15 +12,20 @@ type 'a or_error = [`Ok of 'a | `Error of string ]
 (** {2 Lexing} *)
 
 exception LexError of string
+exception ParseError of Loc.t option * string
 
 let () = Printexc.register_printer
   (function
     | LexError msg -> Some ("lexing error: " ^ msg)
+    | ParseError (loc,msg) ->
+        Some (CCFormat.sprintf "parsing error: %s %a" msg Loc.print_opt loc)
     | _ -> None
   )
 
 let lex_error_ fmt =
-  NunUtils.exn_ksprintf ~f:(fun msg -> raise (LexError msg)) fmt
+  NunUtils.exn_ksprintf fmt ~f:(fun msg -> raise (LexError msg))
+let parse_error_ ?loc fmt =
+  NunUtils.exn_ksprintf fmt ~f:(fun msg -> raise (ParseError (loc,msg)))
 
 type statement = A.statement
 type term = A.term
@@ -41,6 +46,12 @@ module type FORMAT = sig
 end
 
 module Make(F : FORMAT) = struct
+  include F
+
+  type statement = A.statement
+  type term = A.term
+  type ty = A.ty
+  type 'a or_error = [`Ok of 'a | `Error of string ]
 
   let parse_file file =
     try

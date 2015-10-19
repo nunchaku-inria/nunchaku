@@ -70,10 +70,6 @@ let print_version_if_needed () =
   ()
 
 let parse_file ~input () =
-  let lexer, parse = match input with
-    | I_nunchaku -> NunLexer.token, NunParser.parse_statement_list
-    | I_tptp -> NunUtils.not_implemented "tptp parser"
-  in
   let with_in f =
     if !file="" then f stdin
     else CCIO.with_in !file f
@@ -83,7 +79,11 @@ let parse_file ~input () =
       let lexbuf = Lexing.from_channel ic in
       NunLocation.set_file lexbuf (if !file="" then "<stdin>" else !file);
       try
-        E.return (parse lexer lexbuf)
+        let res = match input with
+          | I_nunchaku -> NunParser.parse_statement_list NunLexer.token lexbuf
+          | I_tptp -> NunTPTPParser.parse_statement_list NunTPTPLexer.token lexbuf
+        in
+        E.return res
       with e ->
         E.fail (Printexc.to_string e)
     )

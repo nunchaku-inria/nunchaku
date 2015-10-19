@@ -30,7 +30,7 @@ Library "nunchaku_core"
 
 Library "nunchaku_parsers"
   Path:             src/parsers/
-  Modules:          NunParsingUtils, NunLexer, NunParser
+  Modules:          NunParsingUtils, NunLexer, NunParser, NunTPTPLexer, NunTPTPParser
   Install:          true
   FindlibName:      parsers
   FindlibParent:    nunchaku_core
