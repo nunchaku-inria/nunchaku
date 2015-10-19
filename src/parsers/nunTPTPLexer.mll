@@ -97,7 +97,7 @@ rule token = parse
   | "!=" { NOT_EQUAL }
   | "conjecture" { ROLE_CONJECTURE }
   | "type" { ROLE_TYPE }
-  | "axiom " { ROLE_AXIOM }
+  | "axiom" { ROLE_AXIOM }
   | "definition" { ROLE_DEFINITION }
   | "$ite_f" { ITE_F }
   | "$ite_t" { ITE_T }

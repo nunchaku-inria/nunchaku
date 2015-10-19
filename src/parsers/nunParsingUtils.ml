@@ -18,7 +18,7 @@ let () = Printexc.register_printer
   (function
     | LexError msg -> Some ("lexing error: " ^ msg)
     | ParseError (loc,msg) ->
-        Some (CCFormat.sprintf "parsing error: %s %a" msg Loc.print_opt loc)
+        Some (CCFormat.sprintf "@[<2>parsing error:@ %s@ at %a@]" msg Loc.print_opt loc)
     | _ -> None
   )
 

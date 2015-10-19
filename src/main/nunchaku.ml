@@ -89,7 +89,7 @@ let parse_file ~input () =
     )
   in
   E.map_err
-    (fun msg -> Printf.sprintf "could not parse %s: %s" !file msg) res
+    (fun msg -> CCFormat.sprintf "@[<2>could not parse `%s`:@ %s@]" !file msg) res
 
 let print_input_if_needed statements =
   if !print_ then
