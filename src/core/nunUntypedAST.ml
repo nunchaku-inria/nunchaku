@@ -127,7 +127,6 @@ let wildcard ?loc () = Loc.with_loc ?loc Wildcard
 let builtin ?loc s = Loc.with_loc ?loc (Builtin s)
 let var ?loc v = Loc.with_loc ?loc (Var v)
 let at_var ?loc v = Loc.with_loc ?loc (AtVar v)
-let const = var (* no difference *)
 let meta_var ?loc v = Loc.with_loc ?loc (MetaVar v)
 let rec app ?loc t l = match Loc.get t with
   | App (f, l1) -> app ?loc f (l1 @ l)
@@ -158,8 +157,8 @@ let forall_list ?loc = List.fold_right (forall ?loc)
 let exists_list ?loc = List.fold_right (exists ?loc)
 let fun_list ?loc = List.fold_right (fun_ ?loc)
 
-let forall_term = const "!!"
-let exists_term = const "??"
+let forall_term = var "!!"
+let exists_term = var "??"
 
 let mk_stmt_ ?loc ?name st =
   {stmt_loc=loc; stmt_name=name; stmt_value=st; }
@@ -274,7 +273,7 @@ module TPTP = struct
   (* additional statements for any TPTP problem *)
   let prelude =
     let (==>) = ty_arrow in
-    let ty_term = const "$i" in
+    let ty_term = var "$i" in
     [ decl "$i" ty_type
     ; decl "!!" ((ty_term ==> ty_prop) ==> ty_prop)
     ; decl "??" ((ty_term ==> ty_prop) ==> ty_prop)

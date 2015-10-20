@@ -42,7 +42,7 @@ type state = {
   declared: unit StrTbl.t;
 }
 
-let ty_term = A.const "$i"
+let ty_term = A.var "$i"
 let ty_prop = A.ty_prop (* proposition *)
 let ty_type = A.ty_type
 
