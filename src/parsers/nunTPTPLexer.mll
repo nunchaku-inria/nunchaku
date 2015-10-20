@@ -112,11 +112,22 @@ rule token = parse
   | integer { INTEGER(Lexing.lexeme lexbuf) }
   | rational { RATIONAL(Lexing.lexeme lexbuf) }
   | real { REAL(Lexing.lexeme lexbuf) }
-  | _ as c 
+  | _ as c
     { NunParsingUtils.lex_error_ "lexer fails on char %c" c }
 
 
 {
+  type form = NunUntypedAST.term
+
+  let parse_str_ p s = p token (Lexing.from_string s)
+
+  let try_parse_ p s =
+    try CCError.return (parse_str_ p s)
+    with e -> CCError.fail (Printexc.to_string e)
+
+  let form_of_string = try_parse_ NunTPTPParser.parse_form
+  let form_of_string_exn = parse_str_ NunTPTPParser.parse_form
+
   include NunParsingUtils.Make(struct
     type token = NunTPTPParser.token
 
