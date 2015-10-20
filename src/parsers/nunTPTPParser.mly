@@ -309,6 +309,11 @@ function_term:
     }
 
 plain_term:
+  | WILDCARD
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.wildcard ~loc () (* useful as argument to a term... *)
+    }
   | s=atomic_word
     {
       let loc = L.mk_pos $startpos $endpos in

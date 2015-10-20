@@ -49,6 +49,7 @@ let create_state () = {
 
 let ty_term = A.var "$i"
 let ty_prop = A.ty_prop (* proposition *)
+let ty_type = A.ty_type
 
 let add_stmt ~state st = CCVector.push state.into st
 
@@ -59,12 +60,16 @@ type ctx =
   | Ctx_term
   | Ctx_ty
 
+(* symbol explicitely declared *)
+let declare_sym ~state s =
+  StrTbl.replace state.declared s ()
+
 (* declare symbol with default type and given [arity] *)
-let declare_sym ~state ~ctx s arity =
+let declare_sym_default ~state ~ctx s arity =
   let ty = match ctx with
     | Ctx_ty ->
-        if arity<>0 then failwith "type must be declared";
-        A.ty_type
+        let args = CCList.init arity (fun _ -> ty_type) in
+        A.ty_arrow_list args ty_type
     | Ctx_term ->
         let args = CCList.init arity (fun _ -> ty_term) in
         A.ty_arrow_list args ty_term
@@ -98,20 +103,21 @@ let prop2term = function
 (* add missing declarations of symbols and variables. Pushes
   declarations in [state], and return a new term with all variables
   annotated with a type *)
-let rec declare_missing ~ctx ~state t = match Loc.get t with
+let rec declare_missing ~ctx ~state t =
+  match Loc.get t with
   | A.Wildcard
   | A.MetaVar _
   | A.Builtin _ -> t
   | A.Var v
   | A.AtVar v ->
-      if not (is_declared ~state v) then declare_sym ~ctx ~state v 0;
+      if not (is_declared ~state v) then declare_sym_default ~ctx ~state v 0;
       t
   | A.App (f,l) ->
       begin match Loc.get f with
       | A.AtVar v
       | A.Var v ->
           if not (is_declared ~state v)
-            then declare_sym ~state ~ctx v (List.length l);
+            then declare_sym_default ~state ~ctx v (List.length l);
           let ctx = prop2term ctx in
           let l = List.map (declare_missing ~ctx ~state) l in
           A.app f l
@@ -199,6 +205,7 @@ let rec parse_rec_ ~basedir ~state token lexbuf =
           let l = List.map (declare_missing ~ctx:Ctx_prop ~state) ax_l in
           add_stmt ~state {st with A.stmt_value=A.Axiom l}
       | A.Decl (v,t) ->
+          declare_sym ~state v; (* explicitely declared *)
           let t = declare_missing ~ctx:Ctx_ty ~state t in
           add_stmt ~state {st with A.stmt_value=A.Decl (v,t)}
       | A.Goal f ->

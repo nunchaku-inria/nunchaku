@@ -98,6 +98,7 @@ rule token = parse
   | "conjecture" { ROLE_CONJECTURE }
   | "type" { ROLE_TYPE }
   | "axiom" { ROLE_AXIOM }
+  | "hypothesis" { ROLE_AXIOM }
   | "definition" { ROLE_DEFINITION }
   | "$ite_f" { ITE_F }
   | "$ite_t" { ITE_T }
