@@ -274,7 +274,7 @@ let pipe (type a)(type b) ~print
   let on_encoded = if print
     then
       let module P = NunTerm_ho.Print(T2) in
-      [Format.printf "@[<2>after Skolemization:@ %a@]@."
+      [Format.printf "@[<v2>after Skolemization: %a@]@."
         (NunProblem.print P.print P.print_ty)]
     else []
   in
@@ -298,7 +298,7 @@ let pipe_no_model (type a)(type b) ~print
   let on_encoded = if print
     then
       let module P = NunTerm_ho.Print(T2) in
-      [Format.printf "@[<2>after Skolemization:@ %a@]@."
+      [Format.printf "@[<v2>after Skolemization: %a@]@."
         (NunProblem.print P.print P.print_ty)]
     else []
   in

@@ -10,6 +10,7 @@ module Var = NunVar
 module MetaVar = NunMetaVar
 module Loc = NunLocation
 
+module TI = NunTerm_intf
 module TyI = NunType_intf
 
 type 'a or_error = [`Ok of 'a | `Error of string]
@@ -457,6 +458,46 @@ module Convert(Term : TERM) = struct
       then ill_formedf ~kind:"statement" ?loc
         "identifier %s already defined" name
 
+  (* check that [t] is a monomorphic type or a term in which types
+    are prenex *)
+  let rec monomorphic_ t = match Term.view t with
+    | TI.TyMeta _
+    | TI.TyBuiltin _
+    | TI.Const _ -> true
+    | TI.Var v -> monomorphic_ (Var.ty v)
+    | TI.App (f,l) -> monomorphic_ f && List.for_all monomorphic_ l
+    | TI.AppBuiltin (_,l) -> List.for_all monomorphic_ l
+    | TI.Let (_,t,u) -> monomorphic_ t && monomorphic_ u
+    | TI.Bind (TI.TyForall, _, _) -> false
+    | TI.Bind (_,v,t) -> monomorphic_ (Var.ty v) && monomorphic_ t
+    | TI.TyArrow (a,b) -> monomorphic_ a && monomorphic_ b
+
+  (* check that [t] is a prenex type or a term in which types are monomorphic *)
+  let rec prenex_ t = match Term.view t with
+    | TI.TyBuiltin _
+    | TI.Const _ -> true
+    | TI.Var v -> monomorphic_ (Var.ty v)
+    | TI.App (f,l) -> monomorphic_ f && List.for_all monomorphic_ l
+    | TI.AppBuiltin (_,l) -> List.for_all monomorphic_ l
+    | TI.Bind (TI.TyForall, _, t) -> prenex_ t (* pi v:_. t is prenex if t is *)
+    | TI.Bind (TI.Forall, v, t) when Term.Ty.returns_Type (Var.ty v) ->
+        (* forall v:type. t is prenex if t is *)
+        prenex_ t
+    | TI.Bind (_,v,t) -> monomorphic_ (Var.ty v) && monomorphic_ t
+    | TI.Let (_,t,u) -> monomorphic_ t && monomorphic_ u
+    | TI.TyArrow (a,b) -> monomorphic_ a && monomorphic_ b
+    | TI.TyMeta _ -> true
+
+  let check_ty_is_prenex_ ?loc t =
+    if not (prenex_ t)
+      then ill_formedf ?loc "type `@[%a@]` is not prenex" PrintTerm.print_ty t
+
+  (* does [t] contain only prenex types? *)
+  let check_prenex_types_ ?loc t =
+    if not (prenex_ t)
+      then ill_formedf ?loc
+        "term `@[%a@]` contains non-prenex types" PrintTerm.print t
+
   (* convert [t] into a prop, call [f], generalize [t] *)
   let convert_prop_ ?(before_generalize=CCFun.const ()) ~env t =
     let t = convert_term_exn ~env t in
@@ -472,6 +513,7 @@ module Convert(Term : TERM) = struct
         let t = convert_term_exn ~env untyped_t in
         (* replace meta-variables in [t] by real variables, and return those *)
         let t, vars = generalize ~close:`NoClose t in
+        check_prenex_types_ ?loc t;
         allowed_vars := vars @ !allowed_vars;
         (* declare [v] with the type of [t] *)
         let var, env' =
@@ -497,7 +539,10 @@ module Convert(Term : TERM) = struct
               (CCFormat.list Var.print) bad_vars A.print_term untyped_t
         in
         let l = List.map
-          (fun ax -> convert_prop_ ~before_generalize:check_vars ~env:env' ax)
+          (fun ax ->
+            let ax = convert_prop_ ~before_generalize:check_vars ~env:env' ax in
+            check_prenex_types_ ?loc ax;
+            ax)
           l
       in
         (* return case *)
@@ -514,15 +559,17 @@ module Convert(Term : TERM) = struct
 
   let ty_forall_l_ = List.fold_right (fun v t -> Term.ty_forall v t)
 
-  (* convert type decl *)
-  let convert_tydef ~env l =
+  (* convert mutual (co)inductive types definition *)
+  let convert_tydef ?loc ~env l =
     (* first, declare all the types *)
     let env, l = fold_map_
       (fun env (name,vars,cstors) ->
         (* ensure this defines a type -> type -> ... -> type
           with as many arguments as [List.length vars] *)
         let ty = List.fold_right
-          (fun _v t -> Term.ty_arrow Term.ty_type t) vars Term.ty_type in
+          (fun _v t -> Term.ty_arrow Term.ty_type t)
+          vars Term.ty_type
+        in
         let id = ID.make_full ~needs_at:false ~name in
         NunUtils.debugf ~section 3 "@[(co)inductive type %a: %a@]"
           (fun k-> k ID.print_name id PrintTerm.print_ty ty);
@@ -553,6 +600,7 @@ module Convert(Term : TERM) = struct
           (fun env (name,ty_args) ->
             let ty_args = List.map (convert_ty_exn ~env:env') ty_args in
             let ty' = ty_forall_l_ vars' (arrow_list ty_args ty_being_declared) in
+            check_ty_is_prenex_ ?loc ty';
             let id' = ID.make_full ~needs_at:(vars<>[]) ~name in
             let env = Env.add_decl ~env name ~id:id' ty' in
             NunUtils.debugf ~section 3 "@[constructor %a: %a@]"
@@ -581,14 +629,16 @@ module Convert(Term : TERM) = struct
     | A.Decl (v, ty) ->
         check_new_ ?loc ~env v;
         let ty = convert_ty_exn ~env ty in
+        check_ty_is_prenex_ ?loc ty;
         let id = ID.make_full ~needs_at:(ty_is_poly_ ty) ~name:v in
         let env = Env.add_decl ~env v ~id ty in
         if Term.Ty.returns_Type ty
-        then St.ty_decl ~info id ty, env (* id is a type *)
-        else St.decl ~info id ty, env
+          then St.ty_decl ~info id ty, env (* id is a type *)
+          else St.decl ~info id ty, env
     | A.Axiom l ->
         (* convert terms, and force them to be propositions *)
         let l = List.map (convert_prop_ ?before_generalize:None ~env) l in
+        List.iter (check_prenex_types_ ?loc) l;
         St.axiom ~info l, env
     | A.Spec s ->
         let s = convert_cases ?loc ~env s in
@@ -597,10 +647,10 @@ module Convert(Term : TERM) = struct
         let s = convert_cases ?loc ~env s in
         St.axiom_rec ~info s, env
     | A.Data l ->
-        let env, l = convert_tydef ~env l in
+        let env, l = convert_tydef ?loc ~env l in
         St.data ~info l, env
     | A.Codata l ->
-        let env, l = convert_tydef ~env l in
+        let env, l = convert_tydef ?loc ~env l in
         St.codata ~info l, env
     | A.Goal t ->
         (* infer type for t *)
@@ -608,6 +658,7 @@ module Convert(Term : TERM) = struct
         (* be sure it's a proposition
            XXX: for narrowing, could be of any type? *)
         unify_in_ctx_ ~stack:[] (get_ty_ t) prop;
+        check_prenex_types_ ?loc t;
         St.goal ~info t, env
     in
     NunUtils.debugf ~section 2 "@[<2>checked statement@ %a@]"
