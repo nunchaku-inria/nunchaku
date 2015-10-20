@@ -284,7 +284,9 @@ module Make(T : NunTerm_ho.S) : S with module T = T
     let rec flat_ty_ out t = match T.Ty.view t with
       | TyI.Builtin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
       | TyI.Const id -> ID.print_name out id
-      | TyI.Var v -> failf_ "mangling: cannot mangle variable %a" Var.print v
+      | TyI.Var v ->
+          failf_ "@[<2>mangling: cannot mangle variable `%a` in `@[%a (%a)@]`@]"
+            Var.print v ID.print_name id (CCFormat.list P.print_ty) args
       | TyI.Meta _ -> assert false
       | TyI.App (f,l) ->
           fpf out "%a_%a" flat_ty_ f (pp_list flat_ty_) l
