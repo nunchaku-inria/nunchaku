@@ -155,8 +155,8 @@ statement:
       let loc = L.mk_pos $startpos $endpos in
       A.axiom ~name ~loc [f]
     }
-  | THF LEFT_PAREN name=name COMMA role_as_decl COMMA decl=type_decl annotations RIGHT_PAREN DOT
-  | TFF LEFT_PAREN name=name COMMA role_as_decl COMMA decl=type_decl annotations RIGHT_PAREN DOT
+  | THF LEFT_PAREN name=name COMMA role_as_decl COMMA decl=type_decl(thf_type) annotations RIGHT_PAREN DOT
+  | TFF LEFT_PAREN name=name COMMA role_as_decl COMMA decl=type_decl(tff_type) annotations RIGHT_PAREN DOT
     {
       let s, ty = decl in
       let loc = L.mk_pos $startpos $endpos in
@@ -178,10 +178,10 @@ statement:
       NunParsingUtils.parse_error_ ~loc "expected statement"
     }
 
-type_decl:
-  | LEFT_PAREN tydecl=type_decl RIGHT_PAREN { tydecl }
-  | s=atomic_word COLUMN ty=tff_quantified_type { s, ty }
-  | s=DOLLAR_WORD COLUMN ty=tff_quantified_type { s, ty }
+%public type_decl(TY):
+  | LEFT_PAREN tydecl=type_decl(TY) RIGHT_PAREN { tydecl }
+  | s=atomic_word COLUMN ty=quantified_type(TY) { s, ty }
+  | s=DOLLAR_WORD COLUMN ty=quantified_type(TY) { s, ty }
 
 thf_formula:
   | t=thf_apply_term { t }
@@ -254,7 +254,24 @@ thf_atomic_term:
   | LEFT_PAREN t=thf_formula RIGHT_PAREN { t }
 
 thf_type:
-  | t=tff_type { t }
+  | ty=thf_unary_type { ty }
+  | l=thf_unary_type ARROW r=thf_type
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.ty_arrow ~loc l r
+    }
+
+thf_unary_type:
+  | t=thf_atom_type { t }
+  | LEFT_PAREN t=thf_type RIGHT_PAREN { t }
+
+thf_atom_type:
+  | v=raw_ty_variable
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.var ~loc v
+    }
+  | v=type_const { v }
 
 cnf_formula:
   | LEFT_PAREN c=disjunction RIGHT_PAREN { c }
@@ -458,12 +475,12 @@ system_constant: t=system_functor { t }
 system_functor: s=atomic_system_word { s }
 
 /* prenex quantified type */
-tff_quantified_type:
-  | ty=tff_type { ty }
+%public quantified_type(TY):
+  | ty=TY { ty }
   | FORALL_TY
     LEFT_BRACKET vars=separated_nonempty_list(COMMA, raw_ty_variable) RIGHT_BRACKET
     COLUMN
-    ty=tff_quantified_type
+    ty=quantified_type(TY)
     { A.ty_forall_list vars ty }
 
 /* general type, without quantifiers */
