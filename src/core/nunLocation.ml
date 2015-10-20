@@ -101,6 +101,10 @@ let set_file buf filename =
   buf.lex_curr_p <- {buf.lex_curr_p with pos_fname=filename;};
   ()
 
+let get_file buf =
+  let open Lexing in
+  buf.lex_curr_p.pos_fname
+
 let of_lexbuf lexbuf =
   let start = Lexing.lexeme_start_p lexbuf in
   let end_ = Lexing.lexeme_end_p lexbuf in

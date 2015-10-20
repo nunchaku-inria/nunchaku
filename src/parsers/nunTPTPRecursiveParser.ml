@@ -171,8 +171,14 @@ and enter_typed_var_ ~state (v,ty_opt) f =
   enter_var_ ~state v (fun () -> f (v,ty))
 
 (* parse the lexbuf, and parse its includes recursively *)
-let rec parse_rec_ ~state token lexbuf =
+let rec parse_rec_ ~basedir ~state token lexbuf =
   let l = P.parse_statement_list token lexbuf in
+  (* try the list of files, parse the first existing one *)
+  let rec try_files ?loc ~state token f l = match l with
+    | [] -> error_include_ ?loc f
+    | f' :: _ when Sys.file_exists f' -> parse_file_ ~state token f'
+    | _ :: l' -> try_files ?loc ~state token f l'
+  in
   List.iter
     (fun st ->
       let loc = st.A.stmt_loc in
@@ -180,17 +186,15 @@ let rec parse_rec_ ~state token lexbuf =
       | A.Include (f, _which) ->
           (* TODO: handle partial includes *)
           (* include file *)
-          if Sys.file_exists f then parse_file_ ~state token f
-          else
-            (* use the $TPTP env variable *)
-            begin match tptp_dir () with
-            | None -> error_include_ ?loc f
-            | Some dir ->
-                let f' = Filename.concat dir f in
-                if not (Sys.file_exists f')
-                  then error_include_ ?loc f;
-                parse_file_ ~state token f'
-            end
+          let files =
+            f
+            :: (Filename.concat basedir (Filename.basename f))
+            :: (match tptp_dir () with
+                | None -> []
+                | Some dir -> [Filename.concat dir f] (* $TPTP/f *)
+               )
+          in
+          try_files ?loc ~state token f files
       | A.Axiom ax_l ->
           let l = List.map (declare_missing ~ctx:Ctx_prop ~state) ax_l in
           add_stmt ~state {st with A.stmt_value=A.Axiom l}
@@ -212,12 +216,14 @@ and parse_file_ ~state token f =
     (fun ic ->
       let lexbuf = Lexing.from_channel ic in
       Loc.set_file lexbuf f;
-      parse_rec_ ~state token lexbuf
+      let basedir = Filename.dirname f in
+      parse_rec_ ~basedir ~state token lexbuf
     )
 
 let parse_statement_list token lexbuf =
   let state = create_state() in
-  parse_rec_ ~state token lexbuf;
+  let basedir = Filename.dirname (Loc.get_file lexbuf) in
+  parse_rec_ ~basedir ~state token lexbuf;
   (* the prelude of TPTP: defined types *)
   let l = CCVector.to_list state.into in
   List.append A.TPTP.prelude l

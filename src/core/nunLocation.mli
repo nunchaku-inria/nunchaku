@@ -63,5 +63,8 @@ val get_loc : _ with_loc -> t option
 val set_file : Lexing.lexbuf -> string -> unit
 (** Change the file name used for positions in this lexbuf *)
 
+val get_file : Lexing.lexbuf -> string
+(** Obtain the filename *)
+
 val of_lexbuf : Lexing.lexbuf -> t
 (** Recover a position from a lexbuf *)
