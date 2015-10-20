@@ -95,7 +95,8 @@
 %start <NunUntypedAST.statement> parse_statement
 %start <NunUntypedAST.statement list> parse_statement_list
 %start <NunUntypedAST.term> parse_term
-%start <NunUntypedAST.term> parse_form
+%start <NunUntypedAST.term> parse_fo_form
+%start <NunUntypedAST.term> parse_ho_form
 %start <NunUntypedAST.ty> parse_ty
 
 %start <NunUntypedAST.term list list> parse_answer_tuples
@@ -105,7 +106,8 @@
 
 parse_statement: s=statement EOI {s}
 parse_term: t=term EOI {t}
-parse_form: t=fof_formula EOI {t}
+parse_fo_form: t=fof_formula EOI {t}
+parse_ho_form: t=thf_formula EOI {t}
 parse_ty: t=term EOI {t}
 parse_answer_tuples: l=answer_tuples EOI { l }
 parse_statement_list: l=list(statement) EOI { l }

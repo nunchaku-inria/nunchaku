@@ -125,8 +125,11 @@ rule token = parse
     try CCError.return (parse_str_ p s)
     with e -> CCError.fail (Printexc.to_string e)
 
-  let form_of_string = try_parse_ NunTPTPParser.parse_form
-  let form_of_string_exn = parse_str_ NunTPTPParser.parse_form
+  let fo_form_of_string = try_parse_ NunTPTPParser.parse_fo_form
+  let fo_form_of_string_exn = parse_str_ NunTPTPParser.parse_fo_form
+
+  let ho_form_of_string = try_parse_ NunTPTPParser.parse_ho_form
+  let ho_form_of_string_exn = parse_str_ NunTPTPParser.parse_ho_form
 
   include NunParsingUtils.Make(struct
     type token = NunTPTPParser.token
