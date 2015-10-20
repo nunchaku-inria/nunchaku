@@ -174,6 +174,14 @@ let data ?name ?loc l = mk_stmt_ ?name ?loc (Data l)
 let codata ?name ?loc l = mk_stmt_ ?name ?loc (Codata l)
 let goal ?name ?loc t = mk_stmt_ ?name ?loc (Goal t)
 
+let rec head t = match Loc.get t with
+  | Var v | AtVar v | MetaVar v -> v
+  | App (f,_) -> head f
+  | Wildcard | Builtin _ | TyArrow (_,_)
+  | Fun (_,_) | Let (_,_,_) | Ite (_,_,_)
+  | Forall (_,_) | Exists (_,_) | TyForall (_,_) ->
+      invalid_arg "untypedAST.head"
+
 let pf = Format.fprintf
 
 let rec print_term out term = match Loc.get term with

@@ -647,13 +647,18 @@ module Convert(Term : TERM) = struct
         List.iter (check_prenex_types_ ?loc) l;
         St.axiom ~info l, env (* default *)
     | A.Def (a,b) ->
-        let a = convert_term_exn ~env a in
-        let b = convert_term_exn ~env b in
-        unify_in_ctx_ ~stack:[] (get_ty_ a) (get_ty_ b);
-        let v = Var.of_id (U.head_sym a) ~ty:(get_ty_ a) in
+        let a_defined = convert_term_exn ~env a in
+        let ty = get_ty_ a_defined in
+        (* we are defining the head of [a], so declare it *)
+        let id = U.head_sym a_defined in
+        let var = Var.of_id id ~ty in
+        let env' = Env.add_var ~env (ID.name id) ~var in
+        let a = convert_term_exn ~env:env' a in
+        let b = convert_term_exn ~env:env' b in
+        unify_in_ctx_ ~stack:[] ty (get_ty_ b);
         (* TODO: check that [v] does not occur in [b] *)
         St.axiom_rec ~info
-          [{St.case_alias=v; case_defined=a;
+          [{St.case_alias=var; case_defined=a_defined;
             case_vars=[]; case_axioms=[Term.eq a b]}
           ]
         , env
