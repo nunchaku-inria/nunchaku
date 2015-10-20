@@ -4,6 +4,8 @@
 true: use_menhir
 true: safe_string
 
+<tests> or <tptp>: -traverse
+
 # more warnings
 <src/**/*.ml>: warn(+a), warn(-4), warn(-44), warn(-50)
 
