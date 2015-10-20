@@ -245,6 +245,10 @@ and process_statement_ ~basedir ~state token st =
   | A.Axiom ax_l ->
       let l = List.map (process_form ~state) ax_l in
       add_stmt ~state {st with A.stmt_value=A.Axiom l}
+  | A.Def (a,b) ->
+      let a = declare_missing ~ctx:Ctx_prop ~state a in
+      let b = declare_missing ~ctx:Ctx_prop ~state b in
+      add_stmt ~state {st with A.stmt_value=A.Def (a,b)}
   | A.Decl (v,t) ->
       declare_sym ~state v; (* explicitely declared *)
       let t = declare_missing ~ctx:Ctx_ty ~state t in

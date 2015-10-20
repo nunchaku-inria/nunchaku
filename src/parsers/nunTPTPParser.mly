@@ -125,14 +125,16 @@ answer_tuple:
   | LEFT_BRACKET l=separated_nonempty_list(COMMA,term) RIGHT_BRACKET { Some l }
   | UNDERSCORE { None }
 
-%inline role_as_goal:
+role_as_goal:
   | ROLE_CONJECTURE {}
 
-%inline role_as_axiom:
+role_as_axiom:
   | ROLE_AXIOM {}
+
+role_as_def:
   | ROLE_DEFINITION {}
 
-%inline role_as_decl:
+role_as_decl:
   | ROLE_TYPE {}
 
 %public toplevel_form(ROLE):
@@ -154,6 +156,13 @@ statement:
       let name, f = f in
       let loc = L.mk_pos $startpos $endpos in
       A.axiom ~name ~loc [f]
+    }
+  | THF LEFT_PAREN name=name COMMA role_as_def COMMA def=thf_def
+    annotations RIGHT_PAREN DOT
+    { (* parse a term definition *)
+      let a, b = def in
+      let loc = L.mk_pos $startpos $endpos in
+      A.def ~name ~loc a b
     }
   | THF LEFT_PAREN name=name COMMA role_as_decl COMMA decl=type_decl(thf_type) annotations RIGHT_PAREN DOT
   | TFF LEFT_PAREN name=name COMMA role_as_decl COMMA decl=type_decl(tff_type) annotations RIGHT_PAREN DOT
@@ -183,6 +192,10 @@ statement:
   | s=atomic_word COLUMN ty=quantified_type(TY) { s, ty }
   | s=DOLLAR_WORD COLUMN ty=quantified_type(TY) { s, ty }
 
+thf_def:
+  | a=thf_const EQUAL b=thf_formula {a,b}
+  | LEFT_PAREN d=thf_def RIGHT_PAREN { d }
+
 thf_formula:
   | t=thf_apply_term { t }
   | l=thf_formula o=infix_connective r=thf_unitary_formula
@@ -195,7 +208,9 @@ thf_formula:
       o ?loc:(Some loc) l r
     }
   | error
-    { NunParsingUtils.parse_error_ "not implemented: THF" }
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      NunParsingUtils.parse_error_ ~loc "could not parse THF formula" }
 
 thf_apply_term:
   | t=thf_unitary_formula { t }
@@ -225,13 +240,17 @@ thf_unitary_formula:
 
 thf_unary_formula:
   | t=thf_atomic_term { t }
-  | o=unary_connective LEFT_PAREN t=thf_unary_formula RIGHT_PAREN
+  | o=unary_connective LEFT_PAREN t=thf_formula RIGHT_PAREN
     {
       let loc = L.mk_pos $startpos $endpos in
       o ~loc t
     }
 
 thf_atomic_term:
+  | t=thf_const { t }
+  | LEFT_PAREN t=thf_formula RIGHT_PAREN { t }
+
+thf_const:
   | TRUE { A.true_ }
   | FALSE { A.false_ }
   | HO_FORALL { A.forall_term }
@@ -251,7 +270,6 @@ thf_atomic_term:
       let loc = L.mk_pos $startpos $endpos in
       A.var ~loc v
     }
-  | LEFT_PAREN t=thf_formula RIGHT_PAREN { t }
 
 thf_type:
   | ty=thf_unary_type { ty }

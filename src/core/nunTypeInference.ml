@@ -645,7 +645,18 @@ module Convert(Term : TERM) = struct
         (* convert terms, and force them to be propositions *)
         let l = List.map (convert_prop_ ?before_generalize:None ~env) l in
         List.iter (check_prenex_types_ ?loc) l;
-        St.axiom ~info l, env
+        St.axiom ~info l, env (* default *)
+    | A.Def (a,b) ->
+        let a = convert_term_exn ~env a in
+        let b = convert_term_exn ~env b in
+        unify_in_ctx_ ~stack:[] (get_ty_ a) (get_ty_ b);
+        let v = Var.of_id (U.head_sym a) ~ty:(get_ty_ a) in
+        (* TODO: check that [v] does not occur in [b] *)
+        St.axiom_rec ~info
+          [{St.case_alias=v; case_defined=a;
+            case_vars=[]; case_axioms=[Term.eq a b]}
+          ]
+        , env
     | A.Spec s ->
         let s = convert_cases ?loc ~env s in
         St.axiom_spec ~info s, env

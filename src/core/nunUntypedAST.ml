@@ -114,6 +114,7 @@ type statement_node =
   | Spec of mutual_cases (* mutual spec *)
   | Rec of mutual_cases (* mutual rec *)
   | Data of mutual_types (* inductive type *)
+  | Def of term * term  (* a=b, simple def *)
   | Codata of mutual_types
   | Goal of term (* goal *)
 
@@ -161,13 +162,14 @@ let forall_term = var "!!"
 let exists_term = var "??"
 
 let mk_stmt_ ?loc ?name st =
-  {stmt_loc=loc; stmt_name=name; stmt_value=st; }
+  {stmt_loc=loc; stmt_name=name; stmt_value=st }
 
 let include_ ?name ?loc ?which f = mk_stmt_ ?name ?loc (Include(f,which))
 let decl ?name ?loc v t = mk_stmt_ ?name ?loc (Decl(v,t))
 let axiom ?name ?loc l = mk_stmt_ ?name ?loc (Axiom l)
 let spec ?name ?loc l = mk_stmt_ ?name ?loc (Spec l)
 let rec_ ?name ?loc l = mk_stmt_ ?name ?loc (Rec l)
+let def ?name ?loc a b = mk_stmt_ ?name ?loc (Def (a,b))
 let data ?name ?loc l = mk_stmt_ ?name ?loc (Data l)
 let codata ?name ?loc l = mk_stmt_ ?name ?loc (Codata l)
 let goal ?name ?loc t = mk_stmt_ ?name ?loc (Goal t)
@@ -261,6 +263,9 @@ let print_statement out st = match st.stmt_value with
   | Axiom l -> pf out "@[axiom @[%a@].@]" (pp_list_ ~sep:";" print_term) l
   | Spec l -> pf out "@[spec %a.@]" pp_mutual_cases l
   | Rec l -> pf out "@[rec %a.@]" pp_mutual_cases l
+  | Def (a,b) ->
+      pf out "@[<2>axiom[def]@ @[%a@]@ = @[%a@].@]"
+        print_term_in_arrow a print_term b
   | Data l -> pf out "@[data %a.@]" pp_ty_defs l
   | Codata l -> pf out "@[codata %a.@]" pp_ty_defs l
   | Goal t -> pf out "@[goal %a.@]" print_term t
