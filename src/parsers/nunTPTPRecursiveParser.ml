@@ -271,4 +271,25 @@ let parse_statement_list token lexbuf =
   let l = CCVector.to_list state.into in
   List.append A.TPTP.prelude l
 
+(*$inject
+  module A = NunUntypedAST
+  let parses_ok p t = match p t with `Ok _ -> true | _ -> false
+  let ho_parses_ok = parses_ok NunTPTPLexer.ho_form_of_string
+  let fo_parses_ok = parses_ok NunTPTPLexer.ho_form_of_string
 
+  let term_to_string = CCFormat.to_string A.print_term
+  let term_eq t1 t2 = (term_to_string t1) = (term_to_string t2)
+
+  let pho = NunTPTPLexer.ho_form_of_string_exn
+*)
+
+(*$T
+  ho_parses_ok "![X:$i]: X @ X"
+  ho_parses_ok "a & b & c"
+*)
+
+(*$= & ~printer:term_to_string ~cmp:term_eq
+  (pho "(a & b) & c") (pho "a & b & c")
+  (pho "(a | b) | c") (pho "a | b | c")
+  (pho "(^[X]: (p @ X)) @ q") (pho "^[X]: (p @ X) @ q")
+*)
