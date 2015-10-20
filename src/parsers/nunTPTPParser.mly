@@ -244,7 +244,7 @@ thf_atomic_term:
   | s=atomic_word
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.const ~loc s
+      A.at_var ~loc s
     }
   | v=raw_variable
     {
@@ -408,7 +408,7 @@ plain_term:
   | s=atomic_word
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.const ~loc s
+      A.at_var ~loc s
     }
   | f=functor_ LEFT_PAREN args=arguments RIGHT_PAREN
     {
@@ -420,14 +420,14 @@ functor_:
   | f=atomic_word
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.const ~loc f
+      A.at_var ~loc f
     }
 
 defined_term:
   | t=defined_atom
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.const ~loc t
+      A.at_var ~loc t
     }
   | t=defined_atomic_term { t }
 
@@ -448,12 +448,12 @@ defined_plain_term:
   | s=defined_constant
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.const ~loc s
+      A.at_var ~loc s
     }
   | f=defined_functor LEFT_PAREN args=arguments RIGHT_PAREN
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.const ~loc f) args
+      A.app ~loc (A.at_var ~loc f) args
     }
 
 defined_constant: t=defined_functor { t }
@@ -463,12 +463,12 @@ system_term:
   | c=system_constant
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.const ~loc c
+      A.at_var ~loc c
     }
   | f=system_functor LEFT_PAREN args=arguments RIGHT_PAREN
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.const ~loc f) args
+      A.app ~loc (A.at_var ~loc f) args
     }
 
 system_constant: t=system_functor { t }
