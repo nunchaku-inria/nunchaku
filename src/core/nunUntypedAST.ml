@@ -127,7 +127,7 @@ let wildcard ?loc () = Loc.with_loc ?loc Wildcard
 let builtin ?loc s = Loc.with_loc ?loc (Builtin s)
 let var ?loc v = Loc.with_loc ?loc (Var v)
 let at_var ?loc v = Loc.with_loc ?loc (AtVar v)
-let const = at_var (* no difference *)
+let const = var (* no difference *)
 let meta_var ?loc v = Loc.with_loc ?loc (MetaVar v)
 let rec app ?loc t l = match Loc.get t with
   | App (f, l1) -> app ?loc f (l1 @ l)

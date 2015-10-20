@@ -42,12 +42,7 @@ type state = {
   declared: unit StrTbl.t;
 }
 
-let create_state () = {
-  into = CCVector.create ();
-  declared = StrTbl.create 64;
-}
-
-let ty_term = A.var "$i"
+let ty_term = A.const "$i"
 let ty_prop = A.ty_prop (* proposition *)
 let ty_type = A.ty_type
 
@@ -95,14 +90,21 @@ let enter_var_ ~state v f =
     StrTbl.remove state.declared v;
     raise e
 
-(* close formula universally *)
+let is_tptp_var_ v = match v.[0] with
+  | 'A' .. 'Z' -> true
+  | _ -> false
+
+(* close formula universally. Free variables are variables that are neither
+  - bound (!)
+  - declared in [state] *)
 let close_forall t =
   let fvars = StrTbl.create 16 in
   let bvars = StrTbl.create 16 in
   (* recursively compute set of free vars *)
   let rec compute_fvars t = match Loc.get t with
     | A.Var v ->
-        if not (StrTbl.mem bvars v) then StrTbl.replace fvars v ()
+        if is_tptp_var_ v && not (StrTbl.mem bvars v)
+          then StrTbl.replace fvars v ()
     | A.Wildcard
     | A.Builtin _
     | A.AtVar _
@@ -142,7 +144,8 @@ let rec declare_missing ~ctx ~state t =
   | A.Builtin _ -> t
   | A.Var v
   | A.AtVar v ->
-      if not (is_declared ~state v) then declare_sym_default ~ctx ~state v 0;
+      if not (is_tptp_var_ v) && not (is_declared ~state v)
+        then declare_sym_default ~ctx ~state v 0;
       t
   | A.App (f,l) ->
       begin match Loc.get f with
@@ -215,43 +218,44 @@ let process_form ~state t =
 (* parse the lexbuf, and parse its includes recursively *)
 let rec parse_rec_ ~basedir ~state token lexbuf =
   let l = P.parse_statement_list token lexbuf in
+  List.iter (process_statement_ ~basedir ~state token) l
+
+(* process a single statement *)
+and process_statement_ ~basedir ~state token st =
   (* try the list of files, parse the first existing one *)
   let rec try_files ?loc ~state token f l = match l with
     | [] -> error_include_ ?loc f
     | f' :: _ when Sys.file_exists f' -> parse_file_ ~state token f'
     | _ :: l' -> try_files ?loc ~state token f l'
   in
-  List.iter
-    (fun st ->
-      let loc = st.A.stmt_loc in
-      match st.A.stmt_value with
-      | A.Include (f, _which) ->
-          (* TODO: handle partial includes *)
-          (* include file *)
-          let files =
-            f
-            :: (Filename.concat basedir (Filename.basename f))
-            :: (match tptp_dir () with
-                | None -> []
-                | Some dir -> [Filename.concat dir f] (* $TPTP/f *)
-               )
-          in
-          try_files ?loc ~state token f files
-      | A.Axiom ax_l ->
-          let l = List.map (process_form ~state) ax_l in
-          add_stmt ~state {st with A.stmt_value=A.Axiom l}
-      | A.Decl (v,t) ->
-          declare_sym ~state v; (* explicitely declared *)
-          let t = declare_missing ~ctx:Ctx_ty ~state t in
-          add_stmt ~state {st with A.stmt_value=A.Decl (v,t)}
-      | A.Goal f ->
-          let f = process_form ~state f in
-          add_stmt ~state {st with A.stmt_value=A.Goal f}
-      | A.Spec _
-      | A.Rec _
-      | A.Data _
-      | A.Codata _ -> add_stmt ~state st (* NOTE: should not happen *)
-    ) l
+  let loc = st.A.stmt_loc in
+  match st.A.stmt_value with
+  | A.Include (f, _which) ->
+      (* TODO: handle partial includes *)
+      (* include file *)
+      let files =
+        f
+        :: (Filename.concat basedir (Filename.basename f))
+        :: (match tptp_dir () with
+            | None -> []
+            | Some dir -> [Filename.concat dir f] (* $TPTP/f *)
+           )
+      in
+      try_files ?loc ~state token f files
+  | A.Axiom ax_l ->
+      let l = List.map (process_form ~state) ax_l in
+      add_stmt ~state {st with A.stmt_value=A.Axiom l}
+  | A.Decl (v,t) ->
+      declare_sym ~state v; (* explicitely declared *)
+      let t = declare_missing ~ctx:Ctx_ty ~state t in
+      add_stmt ~state {st with A.stmt_value=A.Decl (v,t)}
+  | A.Goal f ->
+      let f = process_form ~state f in
+      add_stmt ~state {st with A.stmt_value=A.Goal f}
+  | A.Spec _
+  | A.Rec _
+  | A.Data _
+  | A.Codata _ -> add_stmt ~state st (* NOTE: should not happen *)
 
 (* parse the given file *)
 and parse_file_ ~state token f =
@@ -263,13 +267,23 @@ and parse_file_ ~state token f =
       parse_rec_ ~basedir ~state token lexbuf
     )
 
+(* create a state, and push prelude in it *)
+let create_state ~token () =
+  let state = {
+    into = CCVector.create ();
+    declared = StrTbl.create 64;
+  } in
+  (* the prelude of TPTP: defined types *)
+  List.iter
+    (process_statement_ ~basedir:Filename.current_dir_name ~state token)
+    A.TPTP.prelude;
+  state
+
 let parse_statement_list token lexbuf =
-  let state = create_state() in
+  let state = create_state ~token () in
   let basedir = Filename.dirname (Loc.get_file lexbuf) in
   parse_rec_ ~basedir ~state token lexbuf;
-  (* the prelude of TPTP: defined types *)
-  let l = CCVector.to_list state.into in
-  List.append A.TPTP.prelude l
+  CCVector.to_list state.into
 
 (*$inject
   module A = NunUntypedAST
