@@ -146,8 +146,14 @@ module Convert(Term : TERM) = struct
   type env = Env.t
   let empty_env = Env.empty
 
+  (* find the closest available location *)
+  let rec get_loc_ ~stack t = match Loc.get_loc t, stack with
+    | Some l, _ -> Some l
+    | None, [] -> None
+    | None, t' :: stack' -> get_loc_ ~stack:stack' t'
+
   let rec convert_ty_ ~stack ~env (ty:A.ty) =
-    let loc = Loc.get_loc ty in
+    let loc = get_loc_ ~stack ty in
     let stack = push_ ty stack in
     match Loc.get ty with
       | A.Builtin A.Builtin.Prop -> Term.ty_prop
@@ -170,7 +176,7 @@ module Convert(Term : TERM) = struct
                 Term.ty_var ?loc v
           end
       | A.AtVar _ ->
-          ill_formed ~kind:"type" ?loc "@@ syntax is not available for types"
+          ill_formed ~kind:"type" ?loc "@ syntax is not available for types"
       | A.MetaVar v -> Term.ty_meta_var (Env.find_meta_var ~env v)
       | A.TyArrow (a,b) ->
           Term.ty_arrow ?loc
@@ -249,7 +255,7 @@ module Convert(Term : TERM) = struct
 
   (* convert a parsed term into a typed/scoped term *)
   let rec convert_term_ ~stack ~env t =
-    let loc = Loc.get_loc t in
+    let loc = get_loc_ ~stack t in
     let stack = push_ t stack in
     match Loc.get t with
     | A.Builtin A.Builtin.Eq ->
