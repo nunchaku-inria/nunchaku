@@ -42,6 +42,11 @@
 %token LET_TF
 %token LET_FF
 
+%token AT
+%token HO_FORALL
+%token HO_EXISTS
+%token LAMBDA
+
 %token AND
 %token NOTAND
 %token VLINE
@@ -179,8 +184,77 @@ type_decl:
   | s=DOLLAR_WORD COLUMN ty=tff_quantified_type { s, ty }
 
 thf_formula:
+  | f=thf_unitary_formula { f }
+  | l=thf_apply_term o=infix_connective r=thf_apply_term
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      o ?loc:(Some loc) l r }
+  | l=thf_formula o=binary_connective r=thf_formula
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      o ?loc:(Some loc) l r
+    }
   | error
     { NunParsingUtils.parse_error_ "not implemented: THF" }
+
+thf_unitary_formula:
+  | t=thf_unary_formula { t }
+  | q=thf_quantifier
+    LEFT_BRACKET
+      vars=separated_nonempty_list(COMMA, raw_typed_variable(thf_type))
+    RIGHT_BRACKET
+    COLUMN
+    f=thf_unitary_formula
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      q ?loc:(Some loc) vars f
+    }
+
+%inline thf_quantifier:
+  | FORALL { A.forall_list }
+  | EXISTS { A.exists_list }
+  | LAMBDA { A.fun_list }
+
+thf_unary_formula:
+  | TRUE { A.true_ }
+  | FALSE { A.false_ }
+  | HO_FORALL { A.forall_term }
+  | HO_EXISTS { A.exists_term }
+  | t=thf_apply_term { t }
+  | o=unary_connective t=thf_unary_formula
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      o ~loc t
+    }
+
+thf_apply_term:
+  | t=thf_atomic_term { t }
+  | l=thf_apply_term AT r=thf_atomic_term
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.app ~loc l [r]
+    }
+
+thf_atomic_term:
+  | WILDCARD
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.wildcard ~loc () (* useful as argument to a term... *)
+    }
+  | s=atomic_word
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.const ~loc s
+    }
+  | v=raw_variable
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.var ~loc v
+    }
+  | LEFT_PAREN t=thf_formula RIGHT_PAREN { t }
+
+thf_type:
+  | t=tff_type { t }
 
 cnf_formula:
   | LEFT_PAREN c=disjunction RIGHT_PAREN { c }
@@ -269,7 +343,7 @@ atomic_formula:
   | l=term o=infix_connective r=term
     {
       let loc = L.mk_pos $startpos $endpos in
-      o ~loc l r
+      o ?loc:(Some loc) l r
     }
   | t=function_term { t }
 

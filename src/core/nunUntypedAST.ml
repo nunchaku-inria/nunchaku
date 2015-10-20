@@ -131,7 +131,6 @@ let const = at_var (* no difference *)
 let meta_var ?loc v = Loc.with_loc ?loc (MetaVar v)
 let app ?loc t l = Loc.with_loc ?loc (App (t,l))
 let fun_ ?loc v t = Loc.with_loc ?loc (Fun(v,t))
-let fun_l ?loc = List.fold_right (fun_ ?loc)
 let let_ ?loc v t u = Loc.with_loc ?loc (Let (v,t,u))
 let ite ?loc a b c = Loc.with_loc ?loc (Ite (a,b,c))
 let ty_prop = builtin Builtin.Prop
@@ -155,6 +154,10 @@ let ty_arrow_list ?loc = List.fold_right (ty_arrow ?loc)
 
 let forall_list ?loc = List.fold_right (forall ?loc)
 let exists_list ?loc = List.fold_right (exists ?loc)
+let fun_list ?loc = List.fold_right (fun_ ?loc)
+
+let forall_term = const "!!"
+let exists_term = const "??"
 
 let mk_stmt_ ?loc ?name st =
   {stmt_loc=loc; stmt_name=name; stmt_value=st; }
@@ -268,7 +271,11 @@ let print_statement_list out l =
 module TPTP = struct
   (* additional statements for any TPTP problem *)
   let prelude =
+    let (==>) = ty_arrow in
+    let ty_term = const "$i" in
     [ decl "$i" ty_type
+    ; decl "!!" ((ty_term ==> ty_prop) ==> ty_prop)
+    ; decl "??" ((ty_term ==> ty_prop) ==> ty_prop)
     ]
 
   (* meta-data used in TPTP `additional_info` *)

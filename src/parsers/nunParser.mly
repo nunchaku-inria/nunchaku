@@ -189,7 +189,7 @@ term:
   | FUN vars=typed_var+ DOT t=term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.fun_l ~loc vars t
+      A.fun_list ~loc vars t
     }
   | LET v=raw_var EQDEF t=term IN u=term
     {

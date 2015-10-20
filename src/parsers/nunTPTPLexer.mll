@@ -66,6 +66,10 @@ rule token = parse
   | vline { VLINE }
   | '&' { AND }
   | "!>" { FORALL_TY }
+  | "!!" { HO_FORALL }
+  | "??" { HO_EXISTS }
+  | '^' { LAMBDA }
+  | '@' { AT }
   | '!' { FORALL }
   | '?' { EXISTS }
   | "$true" { TRUE }
