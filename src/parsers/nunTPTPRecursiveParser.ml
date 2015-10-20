@@ -95,6 +95,38 @@ let enter_var_ ~state v f =
     StrTbl.remove state.declared v;
     raise e
 
+(* close formula universally *)
+let close_forall t =
+  let fvars = StrTbl.create 16 in
+  let bvars = StrTbl.create 16 in
+  (* recursively compute set of free vars *)
+  let rec compute_fvars t = match Loc.get t with
+    | A.Var v ->
+        if not (StrTbl.mem bvars v) then StrTbl.replace fvars v ()
+    | A.Wildcard
+    | A.Builtin _
+    | A.AtVar _
+    | A.MetaVar _ -> ()
+    | A.App (f,l) -> compute_fvars f; List.iter compute_fvars l
+    | A.Let (v,t,u) -> compute_fvars t; enter_bvar v (fun () -> compute_fvars u)
+    | A.Ite (a,b,c) -> compute_fvars a; compute_fvars b; compute_fvars c
+    | A.Forall (v,t)
+    | A.Exists (v,t)
+    | A.Fun (v,t) -> enter_ty_bvar v (fun () -> compute_fvars t)
+    | A.TyArrow (a,b) -> compute_fvars a; compute_fvars b
+    | A.TyForall (v,t) -> enter_bvar v (fun () -> compute_fvars t)
+  and enter_bvar v f =
+    StrTbl.add bvars v (); let x = f () in StrTbl.remove bvars v; x
+  and enter_ty_bvar (v, tyopt) f =
+    CCOpt.iter compute_fvars tyopt;
+    enter_bvar v f
+  in
+  compute_fvars t;
+  (* typed free variables *)
+  let fvars = StrTbl.to_list fvars
+    |> List.map (fun (v,_) -> v, None) in
+  A.forall_list fvars t
+
 (* subterm of prop -> term *)
 let prop2term = function
   | Ctx_prop -> Ctx_term
@@ -176,6 +208,10 @@ and enter_typed_var_ ~state (v,ty_opt) f =
   in
   enter_var_ ~state v (fun () -> f (v,ty))
 
+let process_form ~state t =
+  let t = declare_missing ~ctx:Ctx_prop ~state t in
+  close_forall t
+
 (* parse the lexbuf, and parse its includes recursively *)
 let rec parse_rec_ ~basedir ~state token lexbuf =
   let l = P.parse_statement_list token lexbuf in
@@ -202,14 +238,14 @@ let rec parse_rec_ ~basedir ~state token lexbuf =
           in
           try_files ?loc ~state token f files
       | A.Axiom ax_l ->
-          let l = List.map (declare_missing ~ctx:Ctx_prop ~state) ax_l in
+          let l = List.map (process_form ~state) ax_l in
           add_stmt ~state {st with A.stmt_value=A.Axiom l}
       | A.Decl (v,t) ->
           declare_sym ~state v; (* explicitely declared *)
           let t = declare_missing ~ctx:Ctx_ty ~state t in
           add_stmt ~state {st with A.stmt_value=A.Decl (v,t)}
       | A.Goal f ->
-          let f = declare_missing ~ctx:Ctx_prop ~state f in
+          let f = process_form ~state f in
           add_stmt ~state {st with A.stmt_value=A.Goal f}
       | A.Spec _
       | A.Rec _
