@@ -334,18 +334,24 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     | Axiom t -> fpf out "@[<2>axiom %a.@]" print_formula t
     | MutualTypes (k, l) ->
         let pp_arg out (id,ty) = fpf out "%a: %a" ID.print_name id print_ty ty in
-        let pp_cstor out c =
-          fpf out "@[<2>(%a@ %a)@]" ID.print_name c.cstor_name
-            (CCFormat.list ~sep:" " ~start:"" ~stop:"" pp_arg) c.cstor_args
+        let pp_tyvars_ out = function
+          | [] -> ()
+          | l -> fpf out "pi %a. " (pp_list_ ID.print_name) l
+        in
+        let pp_cstor out c = match c.cstor_args with
+          | [] -> ID.print_name out c.cstor_name
+          | _ ->
+              fpf out "@[<2>(%a@ %a)@]" ID.print_name c.cstor_name
+                (pp_list_ ~sep:" " pp_arg) c.cstor_args
         in
         let print_data out (name, cstors) =
-          fpf out "@[<2>%a :=@ %a@]"
-            ID.print_name name (CCFormat.list ~sep:" | " pp_cstor) cstors
+          fpf out "@[<hv2>%a :=@ %a@]"
+            ID.print_name name (pp_list_ ~sep:" | " pp_cstor) cstors
         in
-        fpf out "@[<2>%s pi %a. %a.@]"
+        fpf out "@[<hv2>%s %a@,%a.@]"
           (match k with `Data -> "data" | `Codata -> "codata")
-          (CCFormat.list ID.print_name) l.ty_vars
-          (CCFormat.list ~start:"" ~stop:"" ~sep:" and " print_data) l.ty_types
+          pp_tyvars_ l.ty_vars
+          (pp_list_ ~sep:" and " print_data) l.ty_types
     | Goal t -> fpf out "@[<2>goal %a.@]" print_formula t
 
   let print_problem out pb =
