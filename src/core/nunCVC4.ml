@@ -465,8 +465,7 @@ end = struct
         | FOI.Goal _ -> acc
         | FOI.MutualTypes (_,l) ->
             List.fold_left
-              (fun acc (ty, cstors) ->
-                let acc = ID.Set.add ty acc in
+              (fun acc (_ty, cstors) ->
                 List.fold_left
                   (fun acc cstor -> ID.Set.add cstor.FOI.cstor_name acc)
                   acc cstors
