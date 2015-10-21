@@ -240,33 +240,42 @@ module Signature = struct
   let declare ~sigma id ty = ID.Map.add id ty sigma
 end
 
+type 'a vec_ro = ('a, CCVector.ro) CCVector.t
+
 type ('t, 'ty) t = {
-  statements : ('t, 'ty) Statement.t list;
+  statements : ('t, 'ty) Statement.t vec_ro;
 }
 
 let statements t = t.statements
 
-let make statements =
-  { statements; }
+let make statements = { statements; }
+
+let of_list l = make (CCVector.of_list l)
 
 let map_statements ~f st = {
-  statements=CCList.map f st.statements;
+  statements=CCVector.map f st.statements;
 }
 
 let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
-  statements=CCList.flat_map
-    (fun st ->
-      let st' = Statement.map ~term ~ty st in
-      before () @ [st'] @ after ()
-    )
-    p.statements;
+  statements=(
+    let res = CCVector.create () in
+    CCVector.iter
+      (fun st ->
+        let st' = Statement.map ~term ~ty st in
+        CCVector.append_seq res (Sequence.of_list (before ()));
+        CCVector.push res st';
+        CCVector.append_seq res (Sequence.of_list (after ()));
+      ) p.statements;
+    CCVector.freeze res
+  );
 }
 
 let map ~term ~ty pb = map_with ~term ~ty pb
 
 let print pt pty out problem =
   fpf out "{@,%a@,}"
-    (Statement.print_list pt pty) problem.statements
+    (CCVector.print ~start:"" ~stop:"" ~sep:"" (Statement.print pt pty))
+    problem.statements
 
 exception IllFormed of string
 (** Ill-formed problem *)
@@ -280,16 +289,18 @@ let () = Printexc.register_printer
 let ill_formed_ msg = raise (IllFormed msg)
 
 let goal pb =
-  let rec aux acc l = match acc, l with
-    | Some g, [] -> g
-    | None, [] -> ill_formed_ "no goal"
-    | None, {Statement.view=Statement.Goal g;_} :: l' ->
-        aux (Some g) l'
-    | Some _, {Statement.view=Statement.Goal _;_} :: _ ->
-        ill_formed_ "several goals"
-    | acc, _ :: l' -> aux acc l'
+  let n = CCVector.length pb.statements in
+  let rec aux acc i =
+    if i=n
+    then match acc with
+      | Some g -> g
+      | None -> ill_formed_ "no goal"
+    else
+      match CCVector.get pb.statements i with
+      | {Statement.view=Statement.Goal g;_} -> aux (Some g) (i+1)
+      | _ -> aux acc (i+1)
   in
-  aux None pb.statements
+  aux None 0
 
 let signature ?(init=ID.Map.empty) pb =
   let module St = Statement in
@@ -298,7 +309,7 @@ let signature ?(init=ID.Map.empty) pb =
       then ill_formed_ (CCFormat.sprintf "symbol %a declared twice" ID.print id);
     ID.Map.add id ty sigma
   in
-  List.fold_left
+  CCVector.fold
     (fun sigma st -> match St.view st with
       | St.Decl (id,_,ty) -> declare_ ~sigma id ty
       | St.TyDef (_,l) ->

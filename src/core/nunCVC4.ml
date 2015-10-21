@@ -198,7 +198,7 @@ end = struct
       fpf out "(set-option :interactive-mode true)@,";
       fpf out "(set-logic ALL_SUPPORTED)@,"; (* taïaut! *)
       (* write problem *)
-      CCFormat.list ~start:"" ~stop:"" ~sep:""
+      CCVector.print ~start:"" ~stop:"" ~sep:""
         print_statement out pb.FOI.Problem.statements;
       fpf out "@,(check-sat)@]@.";
       ()
@@ -457,7 +457,7 @@ end = struct
   (* set of symbols to find a value for in the model *)
   let compute_symbols_ pb =
     FOI.Problem.statements pb
-    |> List.fold_left
+    |> CCVector.fold
       (fun acc s -> match s with
         | FOI.Decl (id,_) -> ID.Set.add id acc
         | FOI.TyDecl (_,_)

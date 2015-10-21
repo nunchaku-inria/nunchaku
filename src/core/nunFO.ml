@@ -243,12 +243,15 @@ end
 
 (** {2 The Problems sent to Solvers} *)
 module Problem = struct
+  type 'a vec_ro = ('a, CCVector.ro) CCVector.t
+
   type ('f, 't, 'ty) t = {
-    statements: ('f, 't, 'ty) statement list;
+    statements: ('f, 't, 'ty) statement vec_ro;
   }
 
   let make l = {statements=l}
-    let statements t = t.statements
+  let of_list l = make (CCVector.of_list l)
+  let statements t = t.statements
 end
 
 module type PRINT = sig
@@ -346,5 +349,7 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     | Goal t -> fpf out "@[<2>goal %a.@]" print_formula t
 
   let print_problem out pb =
-    fpf out "@[<v>%a@]" (pp_list_ print_statement) (Problem.statements pb)
+    fpf out "@[<v>%a@]"
+      (CCVector.print ~start:"" ~stop:"" ~sep:"" print_statement)
+      (Problem.statements pb)
 end

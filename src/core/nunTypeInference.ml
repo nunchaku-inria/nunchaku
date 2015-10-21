@@ -702,7 +702,7 @@ module Convert(Term : TERM) = struct
           aux (st :: acc) ~env l'
     in
     let l, env = aux [] ~env l in
-    NunProblem.make l, env
+    NunProblem.of_list l, env
 
   let convert_problem ~env st =
     try E.return (convert_problem_exn ~env st)
@@ -720,7 +720,7 @@ let pipe (type a) (type b) ~print
   let print_problem = NunProblem.print PrintT.print T1.Ty.print in
   let on_encoded =
     if print
-    then [Format.printf "@[<2>after type inference:@ %a@]@." print_problem]
+    then [Format.printf "@[<v2>after type inference:@ %a@]@." print_problem]
     else []
   in
   NunTransform.make1
@@ -747,7 +747,7 @@ let pipe_no_model (type a) ~print
   let print_problem = NunProblem.print PrintT.print T1.Ty.print in
   let on_encoded =
     if print
-    then [Format.printf "@[<v2>after type inference: %a@]@." print_problem]
+    then [Format.printf "@[<v2>after type inference:@ %a@]@." print_problem]
     else []
   in
   NunTransform.make1

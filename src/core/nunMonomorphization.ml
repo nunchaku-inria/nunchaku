@@ -317,6 +317,11 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       (fun tydef -> ID.equal id tydef.Stmt.ty_id)
       defs
 
+  let vec_rev_iter_ ~f v =
+    for i=CCVector.length v - 1 downto 0 do
+      f (CCVector.get v i)
+    done
+
   let monomorphize ?(depth_limit=256) ~sigma ~state pb =
     (* map T.t to T.t and, simultaneously, compute relevant instances
        of symbols [t] depends on.
@@ -531,7 +536,9 @@ module Make(T : NunTerm_ho.S) : S with module T = T
     in
 
     (* maps a statement to 0 to n specialized statements *)
-    let aux_statement st =
+    let aux_statement ~res st =
+      (* push new statement *)
+      let push_st = CCVector.push res in
       NunUtils.debugf ~section 2 "@[<2>convert statement@ `%a`@]"
         (fun k-> k (NunProblem.Statement.print P.print P.print_ty) st);
       (* process statement *)
@@ -542,14 +549,14 @@ module Make(T : NunTerm_ho.S) : S with module T = T
           | Stmt.Decl_type ->
               if St.required_id ~state id
               then (* type is needed, keep it *)
-                [ Stmt.ty_decl ~info id
-                    (conv_term ~mangle:false ~depth:0 ~subst:Subst.empty ty) ]
-              else []
+                push_st
+                  (Stmt.ty_decl ~info id
+                    (conv_term ~mangle:false ~depth:0 ~subst:Subst.empty ty))
           | Stmt.Decl_fun
           | Stmt.Decl_prop ->
               let tuples = St.find_tuples ~state id in
               (* for each tuple that requires [id], specialize *)
-              List.map
+              List.iter
                 (fun tup ->
                   (* apply type to tuple *)
                   let ty = SubstUtil.ty_apply ty (ArgTuple.args tup) in
@@ -560,32 +567,34 @@ module Make(T : NunTerm_ho.S) : S with module T = T
                     | None -> id
                     | Some x -> x
                   in
-                  Stmt.mk_decl ~info new_id k ty)
+                  push_st (Stmt.mk_decl ~info new_id k ty)
+                )
                 (ArgTupleSet.to_list tuples)
           end
       | Stmt.Goal t ->
           (* convert goal *)
-          [ Stmt.goal ~info (conv_term ~mangle:true ~depth:0 ~subst:Subst.empty t) ]
+          push_st
+            (Stmt.goal ~info (conv_term ~mangle:true ~depth:0 ~subst:Subst.empty t))
       | Stmt.Axiom (Stmt.Axiom_std l) ->
           let l = List.map (conv_term ~mangle:true ~depth:0 ~subst:Subst.empty) l in
-          [ Stmt.axiom ~info l ]
+          push_st (Stmt.axiom ~info l)
       | Stmt.Axiom (Stmt.Axiom_spec l) ->
           let l = aux_cases ~subst:Subst.empty l in
-          if l=[] then [] else [ Stmt.axiom_spec ~info l ]
+          if l<>[] then push_st (Stmt.axiom_spec ~info l)
       | Stmt.Axiom (Stmt.Axiom_rec l) ->
           let l = aux_cases ~subst:Subst.empty l in
-          [ Stmt.axiom_rec ~info l ]
+          push_st (Stmt.axiom_rec ~info l)
       | Stmt.TyDef (k, l) ->
           let l = aux_mutual_types l in
-          if l=[] then []
-          else [ Stmt.mk_ty_def ~info k l ]
+          if l<>[]
+          then push_st (Stmt.mk_ty_def ~info k l)
     in
-    let pb' = NunProblem.statements pb
-      |> List.rev (* start at the end *)
-      |> CCList.flat_map aux_statement
-      |> List.rev
-      |> NunProblem.make
-    in
+    let res = CCVector.create () in
+    (* iter from the end *)
+    vec_rev_iter_ ~f:(aux_statement ~res) (NunProblem.statements pb);
+    (* reverse in place *)
+    CCVector.rev' res;
+    let pb' = NunProblem.make (CCVector.freeze res) in
     (* some debug *)
     NunUtils.debugf ~section 3 "@[<2>instances:@ @[%a@]@]"
       (fun k-> k SetOfInstances.print state.St.required);
@@ -636,7 +645,7 @@ let pipe (type a) ~print
   let on_encoded = if print
     then
       let module P = NunTerm_ho.Print(T) in
-      [Format.printf "@[<2>after mono:@ %a@]@."
+      [Format.printf "@[<v2>after mono:@ %a@]@."
         (NunProblem.print P.print P.print_ty)]
     else []
   in
@@ -660,7 +669,7 @@ let pipe_no_model (type a) ~print
   let on_encoded = if print
     then
       let module P = NunTerm_ho.Print(T) in
-      [Format.printf "@[<2>after mono:@ %a@]@."
+      [Format.printf "@[<v2>after mono:@ %a@]@."
         (NunProblem.print P.print P.print_ty)]
     else []
   in

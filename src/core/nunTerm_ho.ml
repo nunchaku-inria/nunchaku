@@ -780,9 +780,14 @@ module AsFO(T : S) = struct
         [ FOI.MutualTypes (k, l) ]
 
   let convert_problem p =
-    NunProblem.statements p
-    |> CCList.flat_map convert_statement
-    |> FOI.Problem.make
+    let res = CCVector.create() in
+    CCVector.iter
+      (fun st ->
+        let l = convert_statement st in
+        CCVector.append_seq res (Sequence.of_list l)
+      )
+      (NunProblem.statements p);
+    res |> CCVector.freeze |> FOI.Problem.make
 end
 
 module OfFO(T : S)(FO : NunFO.VIEW) = struct

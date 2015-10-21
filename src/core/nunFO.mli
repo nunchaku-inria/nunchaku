@@ -165,12 +165,15 @@ module Default : S
 
 (** {2 Problem} *)
 module Problem : sig
+  type 'a vec_ro = ('a, CCVector.ro) CCVector.t
+
   type ('f, 't, 'ty) t = {
-    statements: ('f, 't, 'ty) statement list;
+    statements: ('f, 't, 'ty) statement vec_ro;
   }
 
-  val make : ('f, 't, 'ty) statement list -> ('f, 't, 'ty) t
-  val statements : ('f, 't, 'ty) t -> ('f, 't, 'ty) statement list
+  val make : ('f, 't, 'ty) statement vec_ro -> ('f, 't, 'ty) t
+  val of_list : ('f, 't, 'ty) statement list -> ('f, 't, 'ty) t
+  val statements : ('f, 't, 'ty) t -> ('f, 't, 'ty) statement vec_ro
 end
 
 (** {2 IO} *)

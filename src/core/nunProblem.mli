@@ -169,16 +169,18 @@ end
 
 (** {2 Problem: a Set of Statements + Signature} *)
 
+type 'a vec_ro = ('a, CCVector.ro) CCVector.t
+
 type ('t, 'ty) t = private {
-  statements : ('t, 'ty) Statement.t list;
+  statements : ('t, 'ty) Statement.t vec_ro;
 }
 
-val make :
-  ('t, 'ty) Statement.t list ->
-  ('t, 'ty) t
-(** Build a problem from a list of statements *)
+val make : ('t, 'ty) Statement.t vec_ro -> ('t, 'ty) t
+(** Build a problem from statements *)
 
-val statements : ('t, 'ty) t -> ('t, 'ty) Statement.t list
+val of_list : ('t, 'ty) Statement.t list -> ('t, 'ty) t
+
+val statements : ('t, 'ty) t -> ('t, 'ty) Statement.t vec_ro
 
 val map_statements :
   f:(('t, 'ty) Statement.t -> ('t2,'ty2) Statement.t) -> ('t,'ty) t -> ('t2,'ty2) t
