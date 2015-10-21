@@ -248,7 +248,16 @@ thf_unary_formula:
 
 thf_atomic_term:
   | t=thf_const { t }
+  | thf_ite LEFT_PAREN a=thf_formula COMMA b=thf_formula COMMA c=thf_formula RIGHT_PAREN
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.ite ~loc a b c
+    }
   | LEFT_PAREN t=thf_formula RIGHT_PAREN { t }
+
+thf_ite:
+  | ITE_T {}
+  | ITE_F {}
 
 thf_const:
   | TRUE { A.true_ }
