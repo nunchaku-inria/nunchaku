@@ -99,6 +99,8 @@ and ty = term
 (** A variable with, possibly, its type *)
 and typed_var = var * ty option
 
+let view = Loc.get
+
 (* mutual definitions of terms, with their alias (a variable),
    and a list of axioms *)
 type mutual_cases = (term * string * term list) list
