@@ -40,7 +40,40 @@ let rec print_term out t = match A.view t with
       fpf out "@[<2>!>[%a]:@ %a@]" print_var v print_inner t
   | A.App (_, []) -> assert false
   | A.App (f, l) ->
-      fpf out "@[<2>%a(%a)@]" print_inner f (pp_list ~sep:", " print_term) l
+      begin match A.view f with
+      | A.Var _
+      | A.AtVar _ ->
+          fpf out "@[<2>%a(%a)@]"
+            print_inner f (pp_list ~sep:", " print_term) l
+      | A.Builtin b ->
+          begin match b, l with
+          | A.Builtin.True, [] -> fpf out "$true"
+          | A.Builtin.False, [] -> fpf out "$false"
+          | A.Builtin.Prop, [] -> fpf out "$o"
+          | A.Builtin.Type, [] -> fpf out "$tType"
+          | A.Builtin.Not, [f] -> fpf out "~ %a" print_inner f
+          | A.Builtin.And, _ ->
+              fpf out "@[<hv2>%a@]" (pp_list ~sep:" & " print_inner) l
+          | A.Builtin.Or, _ ->
+              fpf out "@[<hv2>%a@]" (pp_list ~sep:" | " print_inner) l
+          | A.Builtin.Eq, [a;b] ->
+              fpf out "@[<hv>%a =@ %a@]" print_inner a print_inner b
+          | A.Builtin.Imply, [a;b] ->
+              fpf out "@[<hv>%a =>@ %a@]" print_inner a print_inner b
+          | A.Builtin.Equiv, [a;b] ->
+              fpf out "@[<hv>%a <=>@ %a@]" print_inner a print_inner b
+          | A.Builtin.Prop ,_
+          | A.Builtin.Type ,_
+          | A.Builtin.Not ,_
+          | A.Builtin.True ,_
+          | A.Builtin.False ,_
+          | A.Builtin.Eq ,_
+          | A.Builtin.Equiv ,_
+          | A.Builtin.Imply ,_ -> assert false
+          end
+      | _ ->
+          NunUtils.not_implementedf "could not apply %a to arguments" print_term f
+      end
   | A.MetaVar _ -> assert false
 
 and print_ty out t = print_term out t
@@ -87,7 +120,7 @@ let print_model out m =
   (* print a single component of the model *)
   let pp_pair out (t,u) =
     let name = mk_name "nun_model" in
-    fpf out "@[<2>fof(%s, fi_functors,@ %a =@ %a).@]"
+    fpf out "@[<2>fof(%s, fi_functors,@ @[%a =@ %a@]).@]"
       name print_term t print_term u
   in
   let header = "% --------------- begin TPTP model ------------"

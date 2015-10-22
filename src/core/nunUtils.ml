@@ -135,3 +135,5 @@ let exn_ksprintf ~f fmt =
     (fun _ -> Format.pp_print_flush out (); raise (f (Buffer.contents buf)))
     out fmt
 
+let not_implementedf fmt = exn_ksprintf fmt ~f:not_implemented
+

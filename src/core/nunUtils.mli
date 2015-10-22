@@ -66,6 +66,9 @@ exception NotImplemented of string
 val not_implemented: string -> 'a
 (** Raise an exception saying the given feature is not implemented *)
 
+val not_implementedf: ('a, Format.formatter, unit, 'b) format4 -> 'a
+(** Format-based version of {!not_implemented} *)
+
 val err_of_exn: exn -> _ or_error
 (** Make an error out of an exception, with the stack trace *)
 
