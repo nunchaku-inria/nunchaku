@@ -44,8 +44,17 @@ module type S = sig
       @param depth_limit recursion limit for specialization of functions
       @param state used to convert forward and backward *)
 
-  (** {6 Convert atomic types to symbols} *)
-  module Mangling : sig
+  val unmangle_model :
+      state:mono_state ->
+      T.t NunProblem.Model.t ->
+      T.t NunProblem.Model.t
+  (** Unmangles constants that have been collapsed with their type arguments *)
+
+  (** {6 Convert atomic types to symbols}
+
+    For instance, [list int] will become [list_int] or something similar.
+    This operation is optional if the backend supports parametrized types. *)
+  module TypeMangling : sig
     type state
     (** Useful for decoding *)
 
@@ -271,6 +280,11 @@ module Make(T : NunTerm_ho.S) : S with module T = T
     (* add dependency on [id] applied to [tup] *)
     let has_processed ~state id tup =
       state.processed <- SetOfInstances.add state.processed id tup
+
+    (* find if [id] is the mangled name of some [id', tup] *)
+    let find_mangled ~state id =
+      try Some (ID.Tbl.find state.unmangle id)
+      with Not_found -> None
   end
 
   type mono_state = St.t
@@ -600,8 +614,33 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       (fun k-> k SetOfInstances.print state.St.required);
     pb'
 
+  let unmangle_term_ ~state t =
+    let rec aux t = match T.view t with
+      | TI.Var v -> T.var (aux_var v)
+      | TI.Const id ->
+          begin match St.find_mangled ~state id with
+          | None -> t
+          | Some (id', args) -> T.app (T.const id') args
+          end
+      | TI.App (f,l) -> T.app (aux f) (List.map aux l)
+      | TI.AppBuiltin (b,l) -> T.app_builtin b (List.map aux l)
+      | TI.Bind (b,v,t) ->
+          T.mk_bind b (aux_var v) (aux t)
+      | TI.Let (v,t,u) -> T.let_ (aux_var v) (aux t) (aux u)
+      | TI.TyBuiltin _ -> t
+      | TI.TyArrow (a,b) -> T.ty_arrow (aux a) (aux b)
+      | TI.TyMeta _ -> assert false
+    and aux_var = Var.update_ty ~f:aux
+    in
+    aux t
+
+  (* rewrite mangled constants to their definition *)
+  let unmangle_model ~state =
+    CCList.map
+      (fun (t,u) -> unmangle_term_ ~state t, unmangle_term_ ~state u)
+
   (* TODO *)
-  module Mangling = struct
+  module TypeMangling = struct
     module Trie = CCTrie.Make(struct
       type char_ = ID.t
       let compare = ID.compare
@@ -659,7 +698,7 @@ let pipe (type a) ~print
       p, state
       (* TODO mangling of types, as an option *)
     )
-    ~decode:(fun _ m -> m)
+    ~decode:(fun state m -> Mono.unmangle_model ~state m)
     ()
 
 let pipe_no_model (type a) ~print

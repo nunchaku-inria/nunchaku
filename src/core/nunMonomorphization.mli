@@ -53,8 +53,17 @@ module type S = sig
       @param depth_limit recursion limit for specialization of functions
       @param state used to convert forward and backward *)
 
-  (** {6 Convert atomic types to symbols} *)
-  module Mangling : sig
+  val unmangle_model :
+      state:mono_state ->
+      T.t NunProblem.Model.t ->
+      T.t NunProblem.Model.t
+  (** Unmangles constants that have been collapsed with their type arguments *)
+
+  (** {6 Convert atomic types to symbols}
+
+    For instance, [list int] will become [list_int] or something similar.
+    This operation is optional if the backend supports parametrized types. *)
+  module TypeMangling : sig
     type state
     (** Useful for decoding *)
 
