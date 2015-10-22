@@ -11,6 +11,12 @@ type input =
 
 let list_inputs_ () = "(available choices: nunchaku tptp)"
 
+type output =
+  | O_nunchaku
+  | O_tptp
+
+let list_outputs_ () = "(available choices: nunchaku tptp)"
+
 type mode =
   | M_model
   | M_proof
@@ -21,6 +27,7 @@ let list_modes_ () = "(available choices: model proof)"
 
 let mode_ = ref M_model
 let input_ = ref I_nunchaku
+let output_ = ref O_nunchaku
 let print_ = ref false
 let print_typed_ = ref false
 let print_skolem_ = ref false
@@ -41,6 +48,12 @@ let set_input_ f =
     | "nunchaku" -> I_nunchaku
     | "tptp" -> I_tptp
     | s -> failwith ("unsupported input format: " ^ s)
+
+let set_output_ f =
+  output_ := match String.lowercase f with
+    | "nunchaku" -> O_nunchaku
+    | "tptp" -> O_tptp
+    | s -> failwith ("unsupported output format: " ^ s)
 
 let set_mode_ f =
   mode_ := match String.lowercase f with
@@ -70,6 +83,7 @@ let options =
   ; "--print-raw-model", Arg.Set NunSolver_intf.print_model_, " print raw model"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
+  ; "--output", Arg.String set_output_, " set output format " ^ list_outputs_ ()
   ; "--mode", Arg.String set_mode_, " search mode" ^ list_modes_ ()
   ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
   ; "--version", Arg.Set version_, " print version and exit"
@@ -209,13 +223,18 @@ let find_proof_ l =
 open CCError.Infix
 
 (* model mode *)
-let main_model statements =
+let main_model ~output statements =
   (* run pipeline *)
   let cpipe = make_model_pipeline() in
   NunTransform.run_closed ~cpipe statements |> find_model_
   >|= fun m ->
-  Format.printf "@[<v2>SAT: model {@,%a@]@,}@."
-    (NunProblem.Model.print NunUntypedAST.print_term) m;
+  begin match output with
+  | O_nunchaku ->
+      Format.printf "@[<v2>SAT: model {@,%a@]@,}@."
+        (NunProblem.Model.print NunUntypedAST.print_term) m;
+  | O_tptp ->
+      Format.printf "@[<v2>%a@]@,@." NunPrintTPTP.print_model m
+  end;
   ()
 
 (* proof mode *)
@@ -240,7 +259,7 @@ let main () =
   >>= fun statements ->
   print_input_if_needed statements;
   match !mode_ with
-  | M_model -> main_model statements
+  | M_model -> main_model ~output:!output_ statements
   | M_proof -> main_proof statements
 
 let () =
