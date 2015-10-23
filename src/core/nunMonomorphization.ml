@@ -52,34 +52,6 @@ module type S = sig
       T.t NunProblem.Model.t ->
       T.t NunProblem.Model.t
   (** Unmangles constants that have been collapsed with their type arguments *)
-
-  (** {6 Convert atomic types to symbols}
-
-    For instance, [list int] will become [list_int] or something similar.
-    This operation is optional if the backend supports parametrized types. *)
-  module TypeMangling : sig
-    type state
-    (** Useful for decoding *)
-
-    val create : unit -> state
-
-    val mangle_term :
-      state:state ->
-      (T.t,T.ty) NunProblem.t ->
-      (T.t,T.ty) NunProblem.t
-
-    val mangle_problem :
-      state:state ->
-      (T.t,T.ty) NunProblem.t ->
-      (T.t,T.ty) NunProblem.t
-
-    val unmangle_term : state:state -> T.t -> T.t
-
-    val unmangle_model :
-        state:state ->
-        T.t NunProblem.Model.t -> T.t NunProblem.Model.t
-    (** Stay in the same term representation, but de-monomorphize *)
-  end
 end
 
 module Make(T : NunTerm_ho.S) : S with module T = T
@@ -640,43 +612,43 @@ module Make(T : NunTerm_ho.S) : S with module T = T
   (* rewrite mangled constants to their definition *)
   let unmangle_model ~state =
     NunProblem.Model.map ~f:(unmangle_term ~state)
+end
 
-  (* TODO *)
-  module TypeMangling = struct
-    module Trie = CCTrie.Make(struct
-      type char_ = ID.t
-      let compare = ID.compare
-      type t = ID.t list
-      let of_list l = l
-      let to_seq = Sequence.of_list
-    end)
+(* TODO *)
+module TypeMangling(T : NunTerm_ho.S) = struct
+  module Trie = CCTrie.Make(struct
+    type char_ = ID.t
+    let compare = ID.compare
+    type t = ID.t list
+    let of_list l = l
+    let to_seq = Sequence.of_list
+  end)
 
-    (* the state contains:
+  (* the state contains:
 
-      - a prefix tree for rewriting application such as [f a b] into [f_a_b]
-      - a reverse table to remember [f_a_b -> f a b] for decoding models
-    *)
+    - a prefix tree for rewriting application such as [f a b] into [f_a_b]
+    - a reverse table to remember [f_a_b -> f a b] for decoding models
+  *)
 
-    type state = {
-      mutable tree: ID.t Trie.t; (* [f a b --> f_a_b] *)
-      rev: T.t ID.Tbl.t; (* new identifier -> monomorphized term *)
-    }
+  type state = {
+    mutable tree: ID.t Trie.t; (* [f a b --> f_a_b] *)
+    rev: T.t ID.Tbl.t; (* new identifier -> monomorphized term *)
+  }
 
-    let create () = {
-      tree=Trie.empty;
-      rev=ID.Tbl.create 64;
-    }
+  let create () = {
+    tree=Trie.empty;
+    rev=ID.Tbl.create 64;
+  }
 
-    let mangle_term ~state:_ _ = assert false (* TODO: traverse term, use trie *)
+  let mangle_term ~state:_ _ = assert false (* TODO: traverse term, use trie *)
 
-    let mangle_problem ~state pb =
-      NunProblem.map ~term:(mangle_term ~state) ~ty:(mangle_term ~state) pb
+  let mangle_problem ~state pb =
+    NunProblem.map ~term:(mangle_term ~state) ~ty:(mangle_term ~state) pb
 
-    let unmangle_term ~state:_ _ = assert false (* TODO reverse mapping *)
+  let unmangle_term ~state:_ _ = assert false (* TODO reverse mapping *)
 
-    let unmangle_model ~state m =
-      NunProblem.Model.map ~f:(unmangle_term ~state) m
-  end
+  let unmangle_model ~state m =
+    NunProblem.Model.map ~f:(unmangle_term ~state) m
 end
 
 let pipe_with (type a) ~decode ~print

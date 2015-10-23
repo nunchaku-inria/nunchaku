@@ -61,37 +61,37 @@ module type S = sig
       T.t NunProblem.Model.t ->
       T.t NunProblem.Model.t
   (** Unmangles constants that have been collapsed with their type arguments *)
-
-  (** {6 Convert atomic types to symbols}
-
-    For instance, [list int] will become [list_int] or something similar.
-    This operation is optional if the backend supports parametrized types. *)
-  module TypeMangling : sig
-    type state
-    (** Useful for decoding *)
-
-    val create : unit -> state
-
-    val mangle_term :
-      state:state ->
-      (T.t,T.ty) NunProblem.t ->
-      (T.t,T.ty) NunProblem.t
-
-    val mangle_problem :
-      state:state ->
-      (T.t,T.ty) NunProblem.t ->
-      (T.t,T.ty) NunProblem.t
-
-    val unmangle_term : state:state -> T.t -> T.t
-
-    val unmangle_model :
-        state:state ->
-        T.t NunProblem.Model.t -> T.t NunProblem.Model.t
-    (** Stay in the same term representation, but de-monomorphize *)
-  end
 end
 
 module Make(T : NunTerm_ho.S) : S with module T = T
+
+(** {2 Convert atomic types to symbols}
+
+  For instance, [list int] will become [list_int] or something similar.
+  This operation is optional if the backend supports parametrized types. *)
+module TypeMangling(T : NunTerm_ho.S) : sig
+  type state
+  (** Useful for decoding *)
+
+  val create : unit -> state
+
+  val mangle_term :
+    state:state ->
+    (T.t,T.ty) NunProblem.t ->
+    (T.t,T.ty) NunProblem.t
+
+  val mangle_problem :
+    state:state ->
+    (T.t,T.ty) NunProblem.t ->
+    (T.t,T.ty) NunProblem.t
+
+  val unmangle_term : state:state -> T.t -> T.t
+
+  val unmangle_model :
+      state:state ->
+      T.t NunProblem.Model.t -> T.t NunProblem.Model.t
+  (** Stay in the same term representation, but de-monomorphize *)
+end
 
 (** Pipeline component *)
 val pipe :
