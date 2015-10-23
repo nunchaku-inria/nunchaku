@@ -223,6 +223,13 @@ let find_proof_ l =
         | Res.Sat _ -> E.return Sat
   with e -> NunUtils.err_of_exn e
 
+(* additional printers *)
+let () = Printexc.register_printer
+  (function
+    | Failure msg -> Some ("failure: " ^ msg)
+    | _ -> None
+  )
+
 open CCError.Infix
 
 (* model mode *)
