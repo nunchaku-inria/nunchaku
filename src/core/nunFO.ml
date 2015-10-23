@@ -48,6 +48,7 @@ type ('f, 't, 'ty) form_view =
   | Equiv of 'f * 'f
   | Forall of 'ty var * 'f
   | Exists of 'ty var * 'f
+  | F_let of 'ty var * 'f * 'f
   | F_ite of 'f * 'f * 'f  (* if then else *)
   | F_fun of 'ty var * 'f (* function *)
 
@@ -150,6 +151,7 @@ module type S = sig
     val equiv : t -> t -> t
     val forall : Ty.t var -> t -> t
     val exists : Ty.t var -> t -> t
+    val f_let : Ty.t var -> t -> t -> t
     val f_ite : t -> t -> t -> t
     val f_fun : Ty.t var -> t -> t
 
@@ -219,6 +221,7 @@ module Default : S = struct
     let equiv a b = make_ (Equiv (a,b))
     let forall v t = make_ (Forall (v,t))
     let exists v t = make_ (Exists (v,t))
+    let f_let v a b = make_ (F_let (v,a,b))
     let f_ite a b c = make_ (F_ite (a,b,c))
     let f_fun v t = make_ (F_fun (v,t))
 
@@ -234,6 +237,7 @@ module Default : S = struct
       | Equiv (a,b) -> equiv (map f a)(map f b)
       | Forall (v,form) -> forall v (map f form)
       | Exists (v,form) -> exists v (map f form)
+      | F_let (v,a,b) -> f_let v (map f a) (map f b)
       | F_ite (a,b,c) -> f_ite (map f a) (map f b) (map f c)
       | F_fun (v,t) -> f_fun v (map f t)
   end
@@ -314,6 +318,9 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
         fpf out "(@[forall %a@ %a@])" Var.print v print_formula f
     | Exists (v,f) ->
         fpf out "(@[forall %a@ %a@])" Var.print v print_formula f
+    | F_let (v,t,u) ->
+        fpf out "@[<2>(let@ %a =@ %a in@ %a)@]"
+          Var.print v print_formula t print_formula u
     | F_ite (a,b,c) ->
         fpf out "(@[f_ite %a@ %a@ %a@])"
           print_formula a print_formula b print_formula c

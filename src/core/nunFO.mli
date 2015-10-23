@@ -47,6 +47,7 @@ type ('f, 't, 'ty) form_view =
   | Equiv of 'f * 'f
   | Forall of 'ty var * 'f
   | Exists of 'ty var * 'f
+  | F_let of 'ty var * 'f * 'f
   | F_ite of 'f * 'f * 'f  (* if then else *)
   | F_fun of 'ty var * 'f (* function *)
 
@@ -152,6 +153,7 @@ module type S = sig
     val equiv : t -> t -> t
     val forall : Ty.t var -> t -> t
     val exists : Ty.t var -> t -> t
+    val f_let : Ty.t var -> t -> t -> t
     val f_ite : t -> t -> t -> t
     val f_fun : Ty.t var -> t -> t
 

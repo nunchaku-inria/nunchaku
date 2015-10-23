@@ -701,7 +701,7 @@ module AsFO(T : S) = struct
       | Bind (Fun,v,t) -> FOI.F_fun (v,t)
       | Bind (Forall, v,f) -> FOI.Forall (v,f)
       | Bind (Exists, v,f) -> FOI.Exists (v,f)
-      | Let (_,_,_) -> FOI.Atom t
+      | Let (v,t,u) -> FOI.F_let (v,t,u)
       | TyArrow (_,_)
       | Bind (TyForall, _,_)
       | TyBuiltin _ -> fail t "no types in FO formulas"
@@ -843,6 +843,9 @@ module OfFO(T : S)(FO : NunFO.VIEW) = struct
     | NunFO.Exists (v,t) ->
         let v = Var.update_ty v ~f:convert_ty in
         T.exists v (convert_formula t)
+    | NunFO.F_let (v,t,u) ->
+        let v = Var.update_ty v ~f:convert_ty in
+        T.let_ v (convert_formula t) (convert_formula u)
     | NunFO.F_ite (a,b,c) ->
         T.ite (convert_formula a) (convert_formula b) (convert_formula c)
     | NunFO.F_fun (v,t) ->

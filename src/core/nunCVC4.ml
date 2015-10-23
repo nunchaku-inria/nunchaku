@@ -156,6 +156,9 @@ end = struct
       | FOI.Exists (v,f) ->
           fpf out "(@[<2>exists@ ((%a %a))@ %a@])"
             Var.print v print_ty (Var.ty v) print_form f
+      | FOI.F_let (v,t,u) ->
+          fpf out "@[<3>(let@ ((%a %a))@ %a@])"
+            Var.print v print_form t print_form u
       | FOI.F_ite (a,b,c) ->
           fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
             print_form a print_form b print_form c
@@ -252,6 +255,8 @@ end = struct
     | NunFO.Atom t -> Some t
     | NunFO.F_fun (v,f) ->
         CCOpt.map (FOBack.T.fun_ v) (as_term_ f)
+    | NunFO.F_let (v,t,u) ->
+        CCOpt.map2 (FOBack.T.let_ v) (as_term_ t) (as_term_ u)
     | NunFO.True
     | NunFO.False
     | NunFO.Eq (_,_)
