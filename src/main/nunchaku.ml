@@ -157,13 +157,16 @@ let make_model_pipeline () =
 let make_proof_pipeline () =
   let open NunTransform.Pipe in
   (* type inference *)
-  let step_ty_infer = NunTypeInference.pipe_no_model ~print:!print_typed_ NunTerm_typed.default in
+  let step_ty_infer = NunTypeInference.pipe_with
+    ~decode:(fun ~signature:_ x->x) ~print:!print_typed_ NunTerm_typed.default in
   (* encodings *)
   let step_skolem =
-    NunSkolem.pipe_no_model ~print:!print_skolem_
+    NunSkolem.pipe_with ~decode:(fun ~find_id_def:_ x->x)  ~print:!print_skolem_
     NunTerm_typed.as_ho NunTerm_ho.default in
   let step_monomorphization =
-    NunMonomorphization.pipe_no_model ~print:!print_mono_ NunTerm_ho.default in
+    NunMonomorphization.pipe_with
+      ~decode:(fun ~decode_term:_ x -> x)
+      ~print:!print_mono_ NunTerm_ho.default in
   (* conversion to FO *)
   let step_fo = NunTerm_ho.to_fo_no_model (module NunTerm_ho.Default) in
   (* setup pipeline *)

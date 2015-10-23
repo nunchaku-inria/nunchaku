@@ -31,6 +31,9 @@ module type S = sig
     (T1.t, T1.ty) NunProblem.t ->
     (T2.t, T2.ty) NunProblem.t
 
+  val find_id_def : state:state -> id -> T2.t option
+  (** Find definition of this Skolemized ID *)
+
   val decode_model :
     state:state -> T2.t NunProblem.Model.t -> T2.t NunProblem.Model.t
 end
@@ -46,10 +49,13 @@ val pipe :
     'b NunProblem.Model.t, 'b NunProblem.Model.t
   ) NunTransform.t
 
-(** Similar to {!pipe} but without getting a model back *)
-val pipe_no_model :
+(** Similar to {!pipe} but with a generic decode function.
+    @param decode is given [find_id_def], which maps Skolemized
+      constants to the formula they define *)
+val pipe_with :
+  decode:(find_id_def:(id -> 'b option) -> 'c -> 'd) ->
   print:bool ->
   (module NunTerm_ho.VIEW with type t = 'a) ->
   (module NunTerm_ho.S with type t = 'b) ->
-  (('a,'a) NunProblem.t, ('b,'b) NunProblem.t, 'c, 'c) NunTransform.t
+  (('a,'a) NunProblem.t, ('b,'b) NunProblem.t, 'c, 'd) NunTransform.t
 

@@ -53,6 +53,9 @@ module type S = sig
       @param depth_limit recursion limit for specialization of functions
       @param state used to convert forward and backward *)
 
+  val unmangle_term : state:mono_state -> T.t -> T.t
+  (** Unmangle a single term: replace mangled constants by their definition *)
+
   val unmangle_model :
       state:mono_state ->
       T.t NunProblem.Model.t ->
@@ -97,9 +100,12 @@ val pipe :
   (('a, 'a) NunProblem.t, ('a,'a) NunProblem.t,
     'a NunProblem.Model.t, 'a NunProblem.Model.t) NunTransform.t
 
-(** Pipeline component without model *)
-val pipe_no_model :
+(** Generic Pipe Component
+    @param decode the decode function that takes an applied [(module S)]
+      in addition to the state *)
+val pipe_with :
+  decode:(decode_term:('a -> 'a) -> 'c -> 'd) ->
   print:bool ->
   (module NunTerm_ho.S with type t = 'a) ->
-  (('a, 'a) NunProblem.t, ('a,'a) NunProblem.t, 'b, 'b) NunTransform.t
+  (('a, 'a) NunProblem.t, ('a,'a) NunProblem.t, 'c, 'd) NunTransform.t
 

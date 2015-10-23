@@ -35,6 +35,9 @@ module type S = sig
     (T1.t, T1.ty) NunProblem.t ->
     (T2.t, T2.ty) NunProblem.t
 
+  val find_id_def : state:state -> id -> T2.t option
+  (** Find definition of this Skolemized ID *)
+
   val decode_model :
     state:state -> T2.t NunProblem.Model.t -> T2.t NunProblem.Model.t
 end
@@ -249,67 +252,66 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
 
   let epsilon = ID.make ~name:"_witness_of"
 
+  let find_id_def ~state id =
+    (* if [id] is a Skolem symbol, use an epsilon to display the
+      existential formula it is the witness of *)
+    try
+      let sym = ID.Tbl.find state.tbl id in
+      let f = sym.sym_defines in
+      Some (T2.app (T2.const epsilon) [f])
+    with Not_found -> None
+
   let decode_model ~state m =
     m |> List.map
         (fun (t,u) -> match T2.view t with
           | TI.Const id ->
-              (* if [id] is a Skolem symbol, use an epsilon to display the
-                existential formula it is the witness of *)
-              begin try
-                let sym = ID.Tbl.find state.tbl id in
-                let f = sym.sym_defines in
-                T2.app (T2.const epsilon) [f], u
-              with Not_found ->
-                t, u
+              begin match find_id_def ~state id with
+                | None -> t, u
+                | Some t' -> t', u
               end
           | _ -> t, u
         )
 end
 
+let pipe_with (type a)(type b) ~decode ~print
+(module T1 : NunTerm_ho.VIEW with type t = a)
+(module T2 : NunTerm_ho.S with type t = b)
+=
+  let module S = Make(T1)(T2) in
+  let on_encoded = if print
+    then
+      let module P = NunTerm_ho.Print(T2) in
+      [Format.printf "@[<v2>after Skolemization: %a@]@."
+        (NunProblem.print P.print P.print_ty)]
+    else []
+  in
+  NunTransform.make1
+    ~name:"skolem"
+    ~on_encoded
+    ~print:S.print_state
+    ~encode:(fun pb ->
+      let state = S.create() in
+      let pb = S.convert_problem ~state pb in
+      pb, state
+    )
+    ~decode:(fun state x ->
+      decode ~find_id_def:(S.find_id_def ~state) x
+    )
+    ()
+
 let pipe (type a)(type b) ~print
 (module T1 : NunTerm_ho.VIEW with type t = a)
 (module T2 : NunTerm_ho.S with type t = b)
 =
-  let module S = Make(T1)(T2) in
-  let on_encoded = if print
-    then
-      let module P = NunTerm_ho.Print(T2) in
-      [Format.printf "@[<v2>after Skolemization: %a@]@."
-        (NunProblem.print P.print P.print_ty)]
-    else []
+  let decode ~find_id_def m =
+    m |> List.map
+        (fun (t,u) -> match T2.view t with
+          | TI.Const id ->
+              begin match find_id_def id with
+                | None -> t, u
+                | Some t' -> t', u
+              end
+          | _ -> t, u
+        )
   in
-  NunTransform.make1
-    ~name:"skolem"
-    ~on_encoded
-    ~print:S.print_state
-    ~encode:(fun pb ->
-      let state = S.create() in
-      let pb = S.convert_problem ~state pb in
-      pb, state
-    )
-    ~decode:(fun state m -> S.decode_model ~state m)
-    ()
-
-let pipe_no_model (type a)(type b) ~print
-(module T1 : NunTerm_ho.VIEW with type t = a)
-(module T2 : NunTerm_ho.S with type t = b)
-=
-  let module S = Make(T1)(T2) in
-  let on_encoded = if print
-    then
-      let module P = NunTerm_ho.Print(T2) in
-      [Format.printf "@[<v2>after Skolemization: %a@]@."
-        (NunProblem.print P.print P.print_ty)]
-    else []
-  in
-  NunTransform.make1
-    ~name:"skolem"
-    ~on_encoded
-    ~print:S.print_state
-    ~encode:(fun pb ->
-      let state = S.create() in
-      let pb = S.convert_problem ~state pb in
-      pb, state
-    )
-    ~decode:(fun _ x -> x)
-    ()
+  pipe_with ~decode ~print (module T1)(module T2)

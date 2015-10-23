@@ -6,6 +6,7 @@
 type 'a or_error = [`Ok of 'a | `Error of string]
 type id = NunID.t
 type 'a var = 'a NunVar.t
+type 'a signature = 'a NunProblem.Signature.t
 type loc = NunLocation.t
 
 exception ScopingError of string * string * loc option
@@ -30,6 +31,8 @@ module Convert(Term : TERM) : sig
   type env
 
   val empty_env : env
+
+  val signature : env -> Term.Ty.t signature
 
   val convert_ty : env:env -> NunUntypedAST.ty -> Term.Ty.t or_error
   (** [convert ~env ty] converts the raw, unscoped type [ty] into a
@@ -75,6 +78,12 @@ module Convert(Term : TERM) : sig
   val convert_problem_exn : env:env -> NunUntypedAST.statement list -> problem * env
 end
 
+(** Decoding function used by {!pipe} *)
+val erase :
+  (module NunTerm_ho.S with type t = 'a) ->
+  'a NunProblem.Model.t ->
+  NunUntypedAST.term NunProblem.Model.t
+
 (** Pipeline component. Takes input and output Term representations. *)
 val pipe :
   print:bool ->
@@ -84,7 +93,8 @@ val pipe :
     'b NunProblem.Model.t, NunUntypedAST.term NunProblem.Model.t)
     NunTransform.t
 
-val pipe_no_model :
+val pipe_with :
+  decode:(signature:'a NunProblem.Signature.t -> 'c -> 'd) ->
   print:bool ->
   (module NunTerm_typed.S with type t = 'a) ->
-  (NunUntypedAST.statement list, ('a, 'a) NunProblem.t, 'b, 'b) NunTransform.t
+  (NunUntypedAST.statement list, ('a, 'a) NunProblem.t, 'c, 'd) NunTransform.t

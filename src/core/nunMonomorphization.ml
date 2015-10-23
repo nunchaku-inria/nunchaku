@@ -44,6 +44,9 @@ module type S = sig
       @param depth_limit recursion limit for specialization of functions
       @param state used to convert forward and backward *)
 
+  val unmangle_term : state:mono_state -> T.t -> T.t
+  (** Unmangle a single term: replace mangled constants by their definition *)
+
   val unmangle_model :
       state:mono_state ->
       T.t NunProblem.Model.t ->
@@ -614,7 +617,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       (fun k-> k SetOfInstances.print state.St.required);
     pb'
 
-  let unmangle_term_ ~state t =
+  let unmangle_term ~state t =
     let rec aux t = match T.view t with
       | TI.Var v -> T.var (aux_var v)
       | TI.Const id ->
@@ -636,8 +639,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
 
   (* rewrite mangled constants to their definition *)
   let unmangle_model ~state =
-    CCList.map
-      (fun (t,u) -> unmangle_term_ ~state t, unmangle_term_ ~state u)
+    NunProblem.Model.map ~f:(unmangle_term ~state)
 
   (* TODO *)
   module TypeMangling = struct
@@ -677,7 +679,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
   end
 end
 
-let pipe (type a) ~print
+let pipe_with (type a) ~decode ~print
 (module T : NunTerm_ho.S with type t = a)
 =
   let module Mono = Make(T) in
@@ -698,29 +700,12 @@ let pipe (type a) ~print
       p, state
       (* TODO mangling of types, as an option *)
     )
-    ~decode:(fun state m -> Mono.unmangle_model ~state m)
+    ~decode:(fun state x ->
+      let decode_term = Mono.unmangle_term ~state in
+      decode ~decode_term x
+    )
     ()
 
-let pipe_no_model (type a) ~print
-(module T : NunTerm_ho.S with type t = a)
-=
-  let module Mono = Make(T) in
-  let on_encoded = if print
-    then
-      let module P = NunTerm_ho.Print(T) in
-      [Format.printf "@[<v2>after mono:@ %a@]@."
-        (NunProblem.print P.print P.print_ty)]
-    else []
-  in
-  NunTransform.make1
-    ~on_encoded
-    ~name:"monomorphization"
-    ~encode:(fun p ->
-      let sigma = NunProblem.signature p in
-      let state = Mono.create () in
-      let p = Mono.monomorphize ~sigma ~state p in
-      p, state
-      (* TODO mangling of types, as an option *)
-    )
-    ~decode:(fun _ x -> x)
-    ()
+let pipe (type a) ~print (t : (module NunTerm_ho.S with type t = a)) =
+  let decode ~decode_term = NunProblem.Model.map ~f:decode_term in
+  pipe_with ~print t ~decode

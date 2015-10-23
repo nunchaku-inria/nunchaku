@@ -9,6 +9,7 @@ module ID = NunID
 module Var = NunVar
 module MetaVar = NunMetaVar
 module Loc = NunLocation
+module Sig = NunProblem.Signature
 
 module TI = NunTerm_intf
 module TyI = NunType_intf
@@ -16,6 +17,7 @@ module TyI = NunType_intf
 type 'a or_error = [`Ok of 'a | `Error of string]
 type id = NunID.t
 type 'a var = 'a Var.t
+type 'a signature = 'a NunProblem.Signature.t
 type loc = Loc.t
 
 let fpf = Format.fprintf
@@ -52,6 +54,11 @@ let () = Printexc.register_printer
 let scoping_error ?loc v msg = raise (ScopingError (v, msg, loc))
 
 module MStr = Map.Make(String)
+
+(* for the environment *)
+type 'ty term_def =
+  | Decl of id * 'ty
+  | Var of 'ty var
 
 (** {2 Typed Term} *)
 module type TERM = NunTerm_typed.S
@@ -94,24 +101,24 @@ module Convert(Term : TERM) = struct
 
   (* Environment *)
 
-  type term_def =
-    | Decl of ID.t * Term.Ty.t
-    | Var of Term.Ty.t var
-
   module Env = struct
     type t = {
-      vars: term_def MStr.t;
+      vars: Term.Ty.t term_def MStr.t;
+      signature : Term.Ty.t signature;
       mutable metas: (string, Term.Ty.t MetaVar.t) Hashtbl.t option;
     }
     (* map names to proper identifiers, with their definition *)
 
     let empty = {
       vars=MStr.empty;
+      signature = Sig.empty;
       metas=None;
     }
 
     let add_decl ~env v ~id ty = {
-      env with vars=MStr.add v (Decl (id, ty)) env.vars
+      env with
+        vars=MStr.add v (Decl (id, ty)) env.vars;
+        signature=Sig.declare ~sigma:env.signature id ty;
     }
 
     let add_var ~env v ~var = {
@@ -145,6 +152,8 @@ module Convert(Term : TERM) = struct
 
   type env = Env.t
   let empty_env = Env.empty
+
+  let signature env = env.Env.signature
 
   (* find the closest available location *)
   let rec get_loc_ ~stack t = match Loc.get_loc t, stack with
@@ -709,56 +718,40 @@ module Convert(Term : TERM) = struct
     with e -> E.of_exn e
 end
 
+let erase (type a)(module T : NunTerm_ho.S with type t=a) m =
+  (* we get back "regular" HO terms *)
+  let module Erase = NunTerm_ho.Erase(T) in
+  let ctx = Erase.create () in
+  NunProblem.Model.map m ~f:(Erase.erase ~ctx)
+
+let pipe_with (type a) ~decode ~print
+(module T : NunTerm_typed.S with type t = a)
+=
+  let module PrintT = NunTerm_ho.Print(T) in
+  (* type inference *)
+  let module Conv = Convert(T) in
+  let print_problem = NunProblem.print PrintT.print T.Ty.print in
+  let on_encoded =
+    if print
+    then [Format.printf "@[<v2>after type inference:@ %a@]@." print_problem]
+    else []
+  in
+  NunTransform.make1
+    ~on_encoded
+    ~name:"type inference"
+    ~encode:(fun l ->
+      let problem, env = l
+        |> Conv.convert_problem_exn ~env:Conv.empty_env
+      in
+      problem, Conv.signature env
+    )
+    ~decode:(fun signature x ->
+      decode ~signature x
+    )
+    ()
+
 let pipe (type a) (type b) ~print
 (module T1 : NunTerm_typed.S with type t = a)
 (module T2 : NunTerm_ho.S with type t = b) =
-  let module PrintT = NunTerm_ho.Print(T1) in
-  (* we get back "regular" HO terms *)
-  let module Erase = NunTerm_ho.Erase(T2) in
-  (* type inference *)
-  let module Conv = Convert(T1) in
-  let print_problem = NunProblem.print PrintT.print T1.Ty.print in
-  let on_encoded =
-    if print
-    then [Format.printf "@[<v2>after type inference:@ %a@]@." print_problem]
-    else []
-  in
-  NunTransform.make1
-    ~on_encoded
-    ~name:"type inference"
-    ~encode:(fun l ->
-      let problem = l
-        |> Conv.convert_problem_exn ~env:Conv.empty_env
-        |> fst
-      in
-      problem, ()
-    )
-    ~decode:(fun () (model : T2.t NunProblem.Model.t) ->
-      let ctx = Erase.create () in
-      NunProblem.Model.map model ~f:(Erase.erase ~ctx)
-    ) ()
-
-let pipe_no_model (type a) ~print
-(module T1 : NunTerm_typed.S with type t = a)
-=
-  let module PrintT = NunTerm_ho.Print(T1) in
-  (* type inference *)
-  let module Conv = Convert(T1) in
-  let print_problem = NunProblem.print PrintT.print T1.Ty.print in
-  let on_encoded =
-    if print
-    then [Format.printf "@[<v2>after type inference:@ %a@]@." print_problem]
-    else []
-  in
-  NunTransform.make1
-    ~on_encoded
-    ~name:"type inference"
-    ~encode:(fun l ->
-      let problem = l
-        |> Conv.convert_problem_exn ~env:Conv.empty_env
-        |> fst
-      in
-      problem, ()
-    )
-    ~decode:(fun () x -> x)
-    ()
+  let decode ~signature:_ m = erase (module T2) m in
+  pipe_with ~decode ~print (module T1)
