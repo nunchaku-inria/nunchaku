@@ -21,10 +21,7 @@ type id = NunID.t
 
 (* TODO: if depth limit reached, activate some "spuriousness" flag? *)
 
-(** {2 Signature} *)
-module type S = sig
-  module T : NunTerm_ho.S
-
+module Make(T : NunTerm_ho.S) : sig
   exception InvalidProblem of string
 
   type mono_state
@@ -66,8 +63,6 @@ module type S = sig
       T.t NunProblem.Model.t
   (** Unmangles constants that have been collapsed with their type arguments *)
 end
-
-module Make(T : NunTerm_ho.S) : S with module T = T
 
 (** {2 Convert atomic types to symbols}
 

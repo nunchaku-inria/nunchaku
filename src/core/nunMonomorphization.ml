@@ -13,53 +13,7 @@ type id = ID.t
 
 let section = NunUtils.Section.make "mono"
 
-module type S = sig
-  module T : NunTerm_ho.S
-
-  exception InvalidProblem of string
-
-  type mono_state
-  (** State used for monomorphizing (to convert [f int (list nat)] to
-      [f_int_list_nat], and back) *)
-
-  val create : unit -> mono_state
-  (** New state *)
-
-  val monomorphize :
-    ?depth_limit:int ->
-    mutualize:bool ->
-    sigma:T.ty NunProblem.Signature.t ->
-    state:mono_state ->
-    (T.t, T.ty) NunProblem.t ->
-    (T.t, T.ty) NunProblem.t
-  (** Filter and specialize definitions of the problem.
-
-      First it finds a set of instances for each symbol
-      such that it is sufficient to instantiate the corresponding (partial)
-      definitions of the symbol with those tuples.
-
-      Then it specializes relevant definitions with the set of tuples
-      computed earlier.
-
-      @param sigma signature of the problem
-      @param depth_limit recursion limit for specialization of functions
-      @param state used to convert forward and backward
-      @param mutualize if true, polymorphic (co)inductive types are specialized
-        in other (co)inductive types that use them
-  *)
-
-  val unmangle_term : state:mono_state -> T.t -> T.t
-  (** Unmangle a single term: replace mangled constants by their definition *)
-
-  val unmangle_model :
-      state:mono_state ->
-      T.t NunProblem.Model.t ->
-      T.t NunProblem.Model.t
-  (** Unmangles constants that have been collapsed with their type arguments *)
-end
-
-module Make(T : NunTerm_ho.S) : S with module T = T
-= struct
+module Make(T : NunTerm_ho.S) = struct
   module T = T
 
   exception InvalidProblem of string
