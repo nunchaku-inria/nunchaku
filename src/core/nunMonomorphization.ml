@@ -149,6 +149,12 @@ module Make(T : NunTerm_ho.S) = struct
   module St = struct
     type depth = int
 
+    (* a callback, registered to be called every time a (id,tup) is needed *)
+    type callback = {
+      cb_id: int;
+      cb_fun: depth:depth -> ID.t -> ArgTuple.t -> unit;
+    }
+
     type t = {
       mangle : (string, ID.t) Hashtbl.t;
         (* mangled name -> mangled ID *)
@@ -158,7 +164,7 @@ module Make(T : NunTerm_ho.S) = struct
         (* tuples that must be instantiated *)
       mutable processed: SetOfInstances.t;
         (* tuples already instantiated (subset of [required]) *)
-      mutable on_schedule : depth:depth -> ID.t -> ArgTuple.t -> unit;
+      mutable on_schedule : callback list;
         (* callback when an instantiation is required *)
     }
 
@@ -170,7 +176,7 @@ module Make(T : NunTerm_ho.S) = struct
       NunUtils.debugf ~section 3 "require %a on %a"
         (fun k-> k ID.print id ArgTuple.print tup);
       state.required <- SetOfInstances.add state.required id tup;
-      state.on_schedule ~depth id tup
+      List.iter (fun cb -> cb.cb_fun ~depth id tup) state.on_schedule
 
     (* find tuples to process that match [t] *)
     let find_matching ~state t =
@@ -191,16 +197,25 @@ module Make(T : NunTerm_ho.S) = struct
       required=SetOfInstances.empty;
       mangle=Hashtbl.create 64;
       unmangle=ID.Tbl.create 64;
-      on_schedule=(fun ~depth:_ _ _ -> ());
+      on_schedule=[];
     }
 
     let find_tuples ~state id = SetOfInstances.args state.required id
 
-    let set_on_schedule ~state f =
-      state.on_schedule <- f
+    let new_callback_ =
+      let n = ref 0 in
+      fun cb_fun ->
+        incr n;
+        { cb_fun; cb_id= !n; }
 
-    let reset_on_schedule ~state =
-      state.on_schedule <- (fun ~depth:_ _ _ -> ())
+    let set_on_schedule ~state f =
+      let cb = new_callback_ f in
+      state.on_schedule <- cb :: state.on_schedule;
+      cb.cb_id
+
+    let remove_callback ~state id =
+      state.on_schedule <-
+        List.filter (fun cb -> cb.cb_id <> id) state.on_schedule
 
     (* remember that (id,tup) -> mangled *)
     let save_mangled ~state id tup ~mangled =
@@ -372,12 +387,13 @@ module Make(T : NunTerm_ho.S) = struct
       (* if we required monomorphization of [id tup], and some case in [l]
          matches [id tup], then push into the queue so that it will be
          processed in the fixpoint *)
-      St.set_on_schedule ~state
+      let callback = St.set_on_schedule ~state
         (fun ~depth id tup -> match find_case_ ~subst ~cases id tup with
           | None -> ()
           | Some (case, subst) ->
               Queue.push (id, tup, depth, case, subst) q
-        );
+        )
+      in
       (* push already required tuples into the queue *)
       List.iter
         (fun case ->
@@ -421,7 +437,7 @@ module Make(T : NunTerm_ho.S) = struct
         )
       done;
       (* remove callback *)
-      St.reset_on_schedule ~state;
+      St.remove_callback ~state callback;
       !res
     in
 
@@ -430,11 +446,12 @@ module Make(T : NunTerm_ho.S) = struct
       let q = Queue.create() in (* task list *)
       let res = ref [] in
       (* whenever a type [id tup] is needed, check if it's in the block *)
-      St.set_on_schedule ~state
+      let callback = St.set_on_schedule ~state
         (fun ~depth id tup -> match find_tydef_ ~defs:l id with
           | None -> () (* not in this block *)
           | Some tydef -> Queue.push (tydef, depth, tup) q (* schedule *)
-        );
+        )
+      in
       (* initialization: already required instances *)
       List.iter
         (fun tydef ->
@@ -482,7 +499,7 @@ module Make(T : NunTerm_ho.S) = struct
         )
       done;
       (* cleanup *)
-      St.reset_on_schedule ~state;
+      St.remove_callback ~state callback;
       !res
     in
 
