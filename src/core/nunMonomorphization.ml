@@ -421,48 +421,8 @@ module Make(T : NunTerm_ho.S) = struct
           new_id env_info.Env.decl_kind new_ty);
     )
 
-  (* monomorphize every statement that declares or defines [id] *)
-  and mono_statements_for_id ~state ~depth id tup =
-    let env_info = match Env.find ~env:state.St.env ~id with
-      | None -> failf_ "could not find definition of %a" ID.print_name id
-      | Some i -> i
-    in
-    let loc = Env.loc env_info in
-    match Env.def env_info with
-    | Env.Fun defs ->
-        (* specialize each definition *)
-        List.iter
-          (fun def -> mono_cases ~state ~depth def tup)
-          defs;
-        St.specialization_is_done ~state id tup
-    | Env.Data (k,tydefs,tydef) ->
-        mono_mutual_types ~state ~depth ~kind:k tydefs tydef tup loc
-    | Env.Cstor (k,tydefs,tydef,_cstor) ->
-        (* specialize constructor means specializing the whole type *)
-        mono_mutual_types ~state ~depth ~kind:k tydefs tydef tup loc
-    | Env.NoDef ->
-        let ty = env_info.Env.ty in
-        begin match env_info.Env.decl_kind with
-        | Stmt.Decl_type ->
-            (* type declaration must be done only once
-               (St.is_already_specialized is not precise enough, because
-               here we must ignore [tup]) *)
-            if not (St.is_already_declared ~state id ArgTuple.empty) then (
-              St.declaration_is_done ~state id ArgTuple.empty;
-              let new_ty = mono_term ~state
-                ~local_state:{depth=0; mangle=false; subst=Subst.empty} ty in
-              St.push_res ~state
-                (Stmt.ty_decl ~info:{Stmt.loc; name=None} id new_ty)
-            )
-        | Stmt.Decl_fun
-        | Stmt.Decl_prop ->
-            decl_sym ~state id tup;
-            (* avoid repeating this declaration *)
-            St.specialization_is_done ~state id tup
-        end
-
   (* specialize mutual cases *)
-  and mono_cases ~state ~depth (kind, mutual_cases, case, loc) tup =
+  let mono_cases ~state ~depth (kind, mutual_cases, case, loc) tup =
     let q = Queue.create () in (* task list, for the fixpoint *)
     let res = ref [] in (* resulting axioms *)
     (* if we required monomorphization of [id tup], and some case in [l]
@@ -539,7 +499,7 @@ module Make(T : NunTerm_ho.S) = struct
 
   (* specialize (co)inductive types
     TODO use config.mutualize *)
-  and mono_mutual_types ~state ~depth ~kind tydefs tydef tup loc =
+  let mono_mutual_types ~state ~depth ~kind tydefs tydef tup loc =
     let q = Queue.create() in (* task list *)
     let res = ref [] in
     (* whenever a type [id tup] is needed, check if it's in the block *)
@@ -602,9 +562,49 @@ module Make(T : NunTerm_ho.S) = struct
     );
     ()
 
+  (* monomorphize every statement that declares or defines [id] *)
+  let mono_statements_for_id ~state ~depth id tup =
+    let env_info = match Env.find ~env:state.St.env ~id with
+      | None -> failf_ "could not find definition of %a" ID.print_name id
+      | Some i -> i
+    in
+    let loc = Env.loc env_info in
+    match Env.def env_info with
+    | Env.Fun defs ->
+        (* specialize each definition *)
+        List.iter
+          (fun def -> mono_cases ~state ~depth def tup)
+          defs;
+        St.specialization_is_done ~state id tup
+    | Env.Data (k,tydefs,tydef) ->
+        mono_mutual_types ~state ~depth ~kind:k tydefs tydef tup loc
+    | Env.Cstor (k,tydefs,tydef,_cstor) ->
+        (* specialize constructor means specializing the whole type *)
+        mono_mutual_types ~state ~depth ~kind:k tydefs tydef tup loc
+    | Env.NoDef ->
+        let ty = env_info.Env.ty in
+        begin match env_info.Env.decl_kind with
+        | Stmt.Decl_type ->
+            (* type declaration must be done only once
+               (St.is_already_specialized is not precise enough, because
+               here we must ignore [tup]) *)
+            if not (St.is_already_declared ~state id ArgTuple.empty) then (
+              St.declaration_is_done ~state id ArgTuple.empty;
+              let new_ty = mono_term ~state
+                ~local_state:{depth=0; mangle=false; subst=Subst.empty} ty in
+              St.push_res ~state
+                (Stmt.ty_decl ~info:{Stmt.loc; name=None} id new_ty)
+            )
+        | Stmt.Decl_fun
+        | Stmt.Decl_prop ->
+            decl_sym ~state id tup;
+            (* avoid repeating this declaration *)
+            St.specialization_is_done ~state id tup
+        end
+
   (* register the statement into the state's [env], so that next statements
     can monomorphize it. Some statements are automatically kept (goal and axiom) *)
-  and mono_statement ~state st =
+  let mono_statement ~state st =
     NunUtils.debugf ~section 2 "@[<2>enter statement@ `%a`@]"
       (fun k-> k (NunStatement.print P.print P.print_ty) st);
     (* process statement *)
