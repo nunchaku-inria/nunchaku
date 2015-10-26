@@ -8,6 +8,7 @@
   constructors to their types, and any symbol to its type *)
 
 type id = NunID.t
+type loc = NunLocation.t
 type 'a printer = Format.formatter -> 'a -> unit
 
 type ('t, 'ty) def =
@@ -27,6 +28,7 @@ type ('t, 'ty) def =
 type ('t, 'ty) info = {
   ty: 'ty; (** type of symbol *)
   def: ('t, 'ty) def;
+  loc: loc option;
 }
 
 (** Maps ID to their type and definitions *)
@@ -41,14 +43,15 @@ val pp_invalid_def_ : exn printer
 val create: unit -> ('t, 'ty) t
 (** Create a new environment *)
 
-val declare : env:('t, 'ty) t -> id:id -> ty:'ty -> unit
+val declare: ?loc:loc -> env:('t, 'ty) t -> id:id -> ty:'ty -> unit
 (** Declare a symbol's type (as undefined, for now) *)
 
-val def_funs : env:('t, 'ty) t -> ('t, 'ty) NunStatement.mutual_cases -> unit
+val def_funs: ?loc:loc -> env:('t, 'ty) t -> ('t, 'ty) NunStatement.mutual_cases -> unit
 (** Add a definition of functions/predicates. They can be already
     defined (or declared). *)
 
-val def_data :
+val def_data:
+  ?loc:loc ->
   env:('t, 'ty) t ->
   kind:[`Data | `Codata] ->
   'ty NunStatement.mutual_types ->

@@ -2,8 +2,10 @@
 
 module ID = NunID
 module Statement = NunStatement
+module Loc = NunLocation
 
 type id = ID.t
+type loc = Loc.t
 type 'a printer = Format.formatter -> 'a -> unit
 
 type ('t, 'ty) def =
@@ -23,6 +25,7 @@ type ('t, 'ty) def =
 type ('t, 'ty) info = {
   ty: 'ty; (** type of symbol *)
   def: ('t, 'ty) def;
+  loc: loc option;
 }
 
 (** Maps ID to their type and definitions *)
@@ -51,9 +54,9 @@ let create() = {infos=ID.Tbl.create 64}
 let check_not_defined_ t ~id ~fail_msg =
   if ID.Tbl.mem t.infos id then errorf_ id fail_msg
 
-let declare ~env:t ~id ~ty =
+let declare ?loc ~env:t ~id ~ty =
   check_not_defined_ t ~id ~fail_msg:"already declared";
-  let info = {ty; def=NoDef} in
+  let info = {loc; ty; def=NoDef} in
   ID.Tbl.replace t.infos id info
 
 let def_funs ~env:t cases =
@@ -74,13 +77,14 @@ let def_funs ~env:t cases =
         errorf_ id "defined function, but not declared previously"
     ) cases
 
-let def_data ~env:t ~kind tys =
+let def_data ?loc ~env:t ~kind tys =
   List.iter
     (fun tydef ->
       (* define type *)
       let id = tydef.Statement.ty_id in
       check_not_defined_ t ~id ~fail_msg:"is (co)data, but already defined";
       let info = {
+        loc;
         ty=tydef.Statement.ty_type;
         def=Data (kind, tys, tydef);
       } in
@@ -91,6 +95,7 @@ let def_data ~env:t ~kind tys =
           let id = cstor.Statement.cstor_name in
           check_not_defined_ t ~id ~fail_msg:"is constructor, but already defined";
           let info = {
+            loc;
             ty=cstor.Statement.cstor_type;
             def=Cstor (tydef, cstor);
           } in

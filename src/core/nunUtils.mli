@@ -59,6 +59,33 @@ val debugf : ?section:Section.t -> int ->
 (** Print a debug message, with the given section and verbosity level.
     The message might be dropped if its level is too high. *)
 
+(** {2 Callbacks} *)
+
+module Callback : sig
+  type 'a t
+  (** Set of callbacks where callbacks have type ['a] *)
+
+  type callback_id = private int
+  (** The unique identifier of a given callback (for removal) *)
+
+  val create : unit -> 'a t
+
+  val register : 'a t -> f:'a -> callback_id
+  (** Register a new callback *)
+
+  val remove : _ t -> id:int -> unit
+  (** Remove the callback with given ID *)
+
+  val iter : 'a t -> f:('a -> unit) -> unit
+  (** Iterate on callbacks *)
+
+  val call1 : ('a -> unit) t -> 'a -> unit
+  (** [call1 l x] is short for [iter l ~f:(fun f -> f x)] *)
+
+  val call2 : ('a -> 'b -> unit) t -> 'a -> 'b -> unit
+  (** [call2 l x y] is short for [iter l ~f:(fun f -> f x y)] *)
+end
+
 (** {2 Misc} *)
 
 exception NotImplemented of string

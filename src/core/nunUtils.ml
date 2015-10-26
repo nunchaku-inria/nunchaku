@@ -111,6 +111,42 @@ let debugf ?(section=Section.root) l msg k =
         debug_fmt_ msg)
   )
 
+module Callback = struct
+  type callback_id = int
+
+  type 'a callback = Nil | Cons of callback_id * 'a * 'a callback
+
+  type 'a t = {
+    mutable lst: 'a callback;
+  }
+
+  let create () = {lst=Nil}
+
+  let register =
+    let n = ref 0 in
+    fun t ~f ->
+      let id = !n in
+      incr n;
+      t.lst <- Cons (id, f, t.lst);
+      id
+
+  let rec remove_rec_ l id = match l with
+    | Nil -> Nil
+    | Cons (id', f, l') ->
+        if id=id' then l' else Cons (id', f, remove_rec_ l' id)
+
+  let remove t ~id = t.lst <- remove_rec_ t.lst id
+
+  let rec iter_rec_ f l = match l with
+    | Nil -> ()
+    | Cons (_, x, l') -> f x; iter_rec_ f l'
+
+  let iter t ~f = iter_rec_ f t.lst
+
+  let call1 t x = iter_rec_ (fun f -> f x) t.lst
+  let call2 t x y = iter_rec_ (fun f -> f x y) t.lst
+end
+
 (** {2 Misc} *)
 
 exception NotImplemented of string
