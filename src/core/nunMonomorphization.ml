@@ -9,6 +9,7 @@ module TI = NunTerm_intf
 module TyI = NunType_intf
 module Stmt = NunStatement
 module Env = NunEnv
+module Callback = NunUtils.Callback
 
 type id = ID.t
 
@@ -16,6 +17,15 @@ let section = NunUtils.Section.make "mono"
 
 module Make(T : NunTerm_ho.S) = struct
   module T = T
+
+  module TyUtils = TyI.Utils(T.Ty)
+  module P = NunTerm_ho.Print(T)
+  module TU = NunTerm_intf.Util(T)
+
+  (* substitution *)
+  module Subst = Var.Subst(struct type t = T.ty end)
+  module SubstUtil = NunTerm_ho.SubstUtil(T)(Subst)
+  module Red = NunReduce.Make(T)(Subst)
 
   exception InvalidProblem of string
 
@@ -30,15 +40,6 @@ module Make(T : NunTerm_ho.S) = struct
   let fail_ msg = raise (InvalidProblem msg)
   let failf_ msg =
     NunUtils.exn_ksprintf msg ~f:(fun msg -> raise (InvalidProblem msg))
-
-  module TyUtils = TyI.Utils(T.Ty)
-  module P = NunTerm_ho.Print(T)
-  module TU = NunTerm_intf.Util(T)
-
-  (* substitution *)
-  module Subst = Var.Subst(struct type t = T.ty end)
-  module SubstUtil = NunTerm_ho.SubstUtil(T)(Subst)
-  module Red = NunReduce.Make(T)(Subst)
 
   (* number of parameters of this (polymorphic?) T.ty type *)
   let rec num_param_ty_ ty = match T.Ty.view ty with
@@ -80,7 +81,7 @@ module Make(T : NunTerm_ho.S) = struct
       | TyI.Arrow _, _ -> false
       | TyI.Var _,_
       | TyI.Meta _,_
-      | TyI.Forall (_,_),_ -> fail_ "type is not ground"
+      | TyI.Forall (_,_),_ -> failf_ "type @[%a@] is not ground" P.print_ty t1
 
     let equal tup1 tup2 =
       CCList.equal ty_ground_eq_ tup1.args tup2.args
@@ -88,7 +89,7 @@ module Make(T : NunTerm_ho.S) = struct
     let print out tup =
       let pp_mangled out = function
         | None -> ()
-        | Some id -> fpf out " as %a" ID.print id
+        | Some id -> fpf out " as %a" ID.print_name id
       in
       fpf out "@[%a%a@]"
         (CCFormat.list ~start:"(" ~stop:")" ~sep:", " P.print_ty) tup.args
@@ -99,8 +100,6 @@ module Make(T : NunTerm_ho.S) = struct
     type t = ArgTuple.t list
 
     let empty = []
-    let to_list l = l
-    let to_seq = Sequence.of_list
 
     let rec mem tup = function
       | [] -> false
@@ -126,8 +125,6 @@ module Make(T : NunTerm_ho.S) = struct
 
     let mem t id tup = ArgTupleSet.mem tup (args t id)
 
-    let mem_id t id = ID.Map.mem id t
-
     let add t id tup =
       let set =
         try ID.Map.find id t
@@ -137,8 +134,8 @@ module Make(T : NunTerm_ho.S) = struct
       ID.Map.add id set t
 
     let print out t =
-      fpf out "@[<hv>instances{@,%a@]@,}"
-        (ID.Map.print ~start:"" ~stop:"" ID.print_no_id ArgTupleSet.print) t
+      fpf out "{@[<hv>%a@]@,}"
+        (ID.Map.print ~start:"" ~stop:"" ID.print_name ArgTupleSet.print) t
   end
 
   let find_ty_ ~env id =
@@ -146,78 +143,68 @@ module Make(T : NunTerm_ho.S) = struct
     with Not_found ->
       fail_ ("symbol " ^ ID.to_string id ^ " is not declared")
 
+  (** Configuration for the monomorphization phase *)
+  type config = {
+    max_depth: int;
+    mutualize: bool;
+  }
+
+  type unmangle_state = (ID.t * T.t list) ID.Tbl.t
+  (* used for unmangling *)
+
   module St = struct
     type depth = int
 
-    (* a callback, registered to be called every time a (id,tup) is needed *)
-    type callback = {
-      cb_id: int;
-      cb_fun: depth:depth -> ID.t -> ArgTuple.t -> unit;
-    }
-
     type t = {
+      env: (T.t, T.ty) Env.t;
+        (* access definitions/declarations by ID *)
+      config: config;
+        (* settings *)
+      output: (T.t, T.ty) Stmt.t CCVector.vector;
+        (* statements that have been specialized *)
+      mutable depth_reached: bool;
+        (* was [max_depth] reached? *)
       mangle : (string, ID.t) Hashtbl.t;
         (* mangled name -> mangled ID *)
-      unmangle : (ID.t * T.t list) ID.Tbl.t;
+      unmangle : unmangle_state;
         (* mangled name -> (id, args) *)
-      mutable required: SetOfInstances.t;
-        (* tuples that must be instantiated *)
-      mutable processed: SetOfInstances.t;
+      mutable already_specialized: SetOfInstances.t;
         (* tuples already instantiated (subset of [required]) *)
-      mutable on_schedule : callback list;
-        (* callback when an instantiation is required *)
+      mutable already_declared: SetOfInstances.t;
+        (* symbols already declared *)
+      specialize: (state:t -> depth:depth -> ID.t -> ArgTuple.t -> unit) Stack.t;
+        (* stack of functions used to specialize a [id, tup] *)
     }
 
-    let is_processed ~state id tup = SetOfInstances.mem state.processed id tup
+    let is_already_specialized ~state id tup =
+      SetOfInstances.mem state.already_specialized id tup
 
-    let required_id ~state id = SetOfInstances.mem_id state.required id
-
-    let schedule ~state ~depth id tup =
-      NunUtils.debugf ~section 3 "require %a on %a"
-        (fun k-> k ID.print id ArgTuple.print tup);
-      state.required <- SetOfInstances.add state.required id tup;
-      List.iter (fun cb -> cb.cb_fun ~depth id tup) state.on_schedule
-
-    (* find tuples to process that match [t] *)
-    let find_matching ~state t =
-      let id = TU.head_sym t in
-      let set = SetOfInstances.args state.required id in
-      ArgTupleSet.to_seq set
-      |> Sequence.filter_map
-        (fun tup ->
-          let t2 = T.app (T.const id) (ArgTuple.args tup) in
-          try
-            let subst = SubstUtil.match_exn t t2 in
-            Some (id, tup, subst)
-          with SubstUtil.UnifError _ -> None
-        )
-
-    let create () = {
-      processed=SetOfInstances.empty;
-      required=SetOfInstances.empty;
+    let create ~config ~env ~specialize () = {
+      env;
+      config;
+      output=CCVector.create ();
+      depth_reached=false;
+      already_specialized=SetOfInstances.empty;
+      already_declared=SetOfInstances.empty;
       mangle=Hashtbl.create 64;
       unmangle=ID.Tbl.create 64;
-      on_schedule=[];
+      specialize=(
+        let st = Stack.create () in
+        Stack.push specialize st;
+        st
+      );
     }
 
-    let find_tuples ~state id = SetOfInstances.args state.required id
+    let depth_limit ~state = state.config.max_depth
 
-    let new_callback_ =
-      let n = ref 0 in
-      fun cb_fun ->
-        incr n;
-        { cb_fun; cb_id= !n; }
-
-    let set_on_schedule ~state f =
-      let cb = new_callback_ f in
-      state.on_schedule <- cb :: state.on_schedule;
-      cb.cb_id
-
-    let remove_callback ~state id =
-      state.on_schedule <-
-        List.filter (fun cb -> cb.cb_id <> id) state.on_schedule
+    let check_depth ~state d =
+      if d>depth_limit ~state && not state.depth_reached then (
+        NunUtils.debugf ~section 1 "caution: depth limit reached" (fun k -> k);
+        state.depth_reached <- true;
+      )
 
     (* remember that (id,tup) -> mangled *)
+
     let save_mangled ~state id tup ~mangled =
       try Hashtbl.find state.mangle mangled
       with Not_found ->
@@ -228,17 +215,39 @@ module Make(T : NunTerm_ho.S) = struct
         mangled'
 
     (* add dependency on [id] applied to [tup] *)
-    let has_processed ~state id tup =
-      state.processed <- SetOfInstances.add state.processed id tup
+    let specialization_is_done ~state id tup =
+      state.already_specialized <-
+        SetOfInstances.add state.already_specialized id tup
 
-    (* find if [id] is the mangled name of some [id', tup] *)
-    let find_mangled ~state id =
-      try Some (ID.Tbl.find state.unmangle id)
-      with Not_found -> None
+    let declaration_is_done ~state id tup =
+      state.already_declared <- SetOfInstances.add state.already_declared id tup
+
+    let is_already_declared ~state id tup =
+      SetOfInstances.mem state.already_declared id tup
+
+    let current_specialize ~state =
+      try Stack.top state.specialize
+      with Stack.Empty ->
+        failf_ "stack of specialize function is empty"
+
+    let push_specialize ~state f = Stack.push f state.specialize
+
+    let pop_specialize ~state = let _ = Stack.pop state.specialize in ()
+
+    (* specialize [id, tup] using the topmost element of [state.specialize]. *)
+    let specialize ~state ~depth id tup =
+      if not (is_already_specialized ~state id tup) then (
+        NunUtils.debugf ~section 3 "specialize %a on %a"
+          (fun k-> k ID.print_name id ArgTuple.print tup);
+        (* avoid loops *)
+        specialization_is_done ~state id tup;
+        let f = current_specialize ~state in
+        f ~state ~depth id tup;
+      )
+
+    (* output statement *)
+    let push_res ~state st = CCVector.push state.output st
   end
-
-  type mono_state = St.t
-  let create = St.create
 
   (* find a specialized name for [id tup] if [tup] not empty.
    returns ID to use, and [Some mangled] if [args <> []], None otherwise
@@ -264,14 +273,20 @@ module Make(T : NunTerm_ho.S) = struct
       let mangled = St.save_mangled ~state id args ~mangled:name in
       mangled, Some mangled
 
-  (* find a case matching [id tup] in [cases], or None *)
-  let find_case_ ~subst ~cases id tup =
+  (* does this case match [id tup]? If yes, return [case, subst] *)
+  let match_case ?(subst=Subst.empty) ~case id tup =
     let t = T.app (T.const id) (ArgTuple.args tup) in
+    CCOpt.map
+      (fun subst -> case, subst)
+      (SubstUtil.match_ ~subst2:subst case.Stmt.case_defined t)
+
+  (* find a case matching [id tup] in [cases], or None *)
+  let find_case_ ?subst ~cases id tup =
     CCList.find_map
       (fun case ->
-        match SubstUtil.match_ ~subst2:subst case.Stmt.case_defined t with
-        | None -> None
-        | Some subst' -> Some (case, subst')
+        CCOpt.map
+          (fun (case,subst) -> cases, case, subst)
+          (match_case ?subst ~case id tup)
       )
       cases
 
@@ -281,308 +296,379 @@ module Make(T : NunTerm_ho.S) = struct
       (fun tydef -> ID.equal id tydef.Stmt.ty_id)
       defs
 
-  let vec_rev_iter_ ~f v =
-    for i=CCVector.length v - 1 downto 0 do
-      f (CCVector.get v i)
-    done
+  (* local state for monomorphization, used in recursive traversal of terms *)
+  type local_state = {
+    depth: int;
+    subst: T.ty Subst.t;
+    mangle: bool;
+  }
 
-  let monomorphize ?(depth_limit=256) ~mutualize:_ ~env ~state pb =
-    (* map T.t to T.t and, simultaneously, compute relevant instances
-       of symbols [t] depends on.
-       @param subst bindings for type variables
-       @param mangle enable/disable mangling (in types...)
-      *)
-    let rec conv_term ~mangle ~depth ~subst t =
-      match T.view t with
-      | TI.AppBuiltin (b,l) ->
-          T.app_builtin b (List.map (conv_term ~mangle ~depth ~subst) l)
-      | TI.Const c ->
-          (* no args, but we require [c] in the output *)
-          St.schedule ~state ~depth:(depth+1) c ArgTuple.empty;
-          T.const c
-      | TI.Var v ->
-          begin match Subst.find ~subst v with
-          | Some t' -> conv_term ~mangle ~depth ~subst t'
-          | None ->
-              let v = aux_var ~subst v in
-              T.var v
-          end
-      | TI.App (f,l) ->
-          (* first, beta-reduce locally *)
-          let f, l, subst = Red.Full.whnf ~subst f l in
-          begin match T.view f with
-          | TI.Bind (TI.Fun, _, _) -> assert false (* beta-reduction failed? *)
-          | TI.AppBuiltin _ ->
-              (* builtins are defined, but examine their args *)
-              let l = List.map (conv_term ~mangle ~subst ~depth) l in
-              T.app (conv_term ~mangle ~subst ~depth f) l
-          | TI.Const id ->
-              (* find type arguments *)
-              let ty = find_ty_ ~env id in
-              let n = num_param_ty_ ty in
-              (* tuple of arguments for [id] *)
-              let tup = take_n_ground_atomic_types_ ~depth ~subst n l in
-              (* mangle? *)
-              let new_id, mangled =
-                if mangle then mangle_ ~state id tup
-                else id, None
-              in
-              (* schedule specialization of [id] *)
-              let tup = ArgTuple.of_list ~mangled tup in
-              St.schedule ~state ~depth:(depth+1) id tup;
-              (* convert arguments.
-                 Drop type arguments iff they are mangled with ID *)
-              let l = if mangled=None then l else CCList.drop n l in
-              let l = List.map (conv_term ~mangle ~depth ~subst) l in
-              T.app (T.const new_id) l
-          | TI.Var v ->
-              (* allow variables in head (in spec/rec and in functions) *)
-              begin match Subst.find ~subst v with
-              | None ->
-                  let v = Var.update_ty v ~f:(conv_term ~depth ~mangle:false ~subst) in
-                  let l = List.map (conv_term ~mangle ~subst ~depth) l in
-                  T.app (T.var v) l
-              | Some t ->
-                  conv_term ~mangle ~depth ~subst (T.app t l)
-              end
-          | _ ->
-              failf_ "cannot monomorphize application term `@[%a@]`" P.print t
-          end
-      | TI.Bind ((TI.Fun | TI.Forall | TI.Exists) as b, v, t) ->
-          T.mk_bind b (aux_var ~subst v) (conv_term ~mangle ~depth ~subst t)
-      | TI.Let (v,t,u) ->
-          T.let_ (aux_var ~subst v)
-            (conv_term ~mangle ~depth ~subst t)
-            (conv_term ~mangle ~depth ~subst u)
-      | TI.TyMeta _ -> failwith "Mono.encode: remaining type meta-variable"
-      | TI.TyBuiltin b -> T.ty_builtin b
-      | TI.TyArrow (a,b) ->
-          T.ty_arrow
-            (conv_term ~mangle ~depth ~subst a)
-            (conv_term ~mangle ~depth ~subst b)
-      | TI.Bind (TI.TyForall,v,t) ->
-          (* TODO: emit warning? *)
-          assert (not (Subst.mem ~subst v));
-          T.ty_forall
-            (aux_var ~subst v)
-            (conv_term ~mangle ~depth ~subst t)
+  (* monomorphize term *)
+  let rec mono_term ~state ~local_state t =
+    match T.view t with
+    | TI.AppBuiltin (b,l) ->
+        T.app_builtin b (List.map (mono_term ~state ~local_state) l)
+    | TI.Const c ->
+        (* no args, but we require [c, ()] in the output *)
+        let depth = local_state.depth+1 in
+        St.specialize ~state ~depth c ArgTuple.empty;
+        T.const c
+    | TI.Var v ->
+        begin match Subst.find ~subst:local_state.subst v with
+        | Some t' -> mono_term ~state ~local_state t'
+        | None ->
+            let v = mono_var ~state ~local_state v in
+            T.var v
+        end
+    | TI.App (f,l) ->
+        (* first, beta-reduce locally; can possibly enrich [subst] *)
+        let f, l, subst = Red.Full.whnf ~subst:local_state.subst f l in
+        let local_state = {local_state with subst; } in
+        begin match T.view f with
+        | TI.Bind (TI.Fun, _, _) -> assert false (* beta-reduction failed? *)
+        | TI.AppBuiltin _ ->
+            (* builtins are defined, but examine their args *)
+            let f = mono_term ~state ~local_state f in
+            let l = List.map (mono_term ~state ~local_state) l in
+            T.app f l
+        | TI.Const id ->
+            (* find type arguments *)
+            let ty = find_ty_ ~env:state.St.env id in
+            let n = num_param_ty_ ty in
+            (* tuple of arguments for [id] *)
+            let tup = take_n_ground_atomic_types_ ~state ~local_state n l in
+            (* mangle? *)
+            let new_id, mangled =
+              if local_state.mangle then mangle_ ~state id tup
+              else id, None
+            in
+            (* specialize specialization of [id] *)
+            let tup = ArgTuple.of_list ~mangled tup in
+            let depth = local_state.depth + 1 in
+            St.specialize ~state ~depth id tup;
+            (* convert arguments.
+               Drop type arguments iff they are mangled with ID *)
+            let l = if mangled=None then l else CCList.drop n l in
+            let l = List.map (mono_term ~state ~local_state) l in
+            T.app (T.const new_id) l
+        | TI.Var v ->
+            (* allow variables in head (in spec/rec and in functions) *)
+            begin match Subst.find ~subst:local_state.subst v with
+            | None ->
+                let v = mono_var ~state ~local_state v in
+                let l = List.map (mono_term ~state ~local_state) l in
+                T.app (T.var v) l
+            | Some t ->
+                mono_term ~state ~local_state (T.app t l)
+            end
+        | _ ->
+            failf_ "cannot monomorphize application term `@[%a@]`" P.print t
+        end
+    | TI.Bind ((TI.Fun | TI.Forall | TI.Exists) as b, v, t) ->
+        T.mk_bind b
+          (mono_var ~state ~local_state v)
+          (mono_term ~state ~local_state t)
+    | TI.Let (v,t,u) ->
+        T.let_ (mono_var ~state ~local_state v)
+          (mono_term ~state ~local_state t)
+          (mono_term ~state ~local_state u)
+    | TI.TyMeta _ -> failwith "Mono.encode: remaining type meta-variable"
+    | TI.TyBuiltin b -> T.ty_builtin b
+    | TI.TyArrow (a,b) ->
+        T.ty_arrow
+          (mono_term ~state ~local_state a)
+          (mono_term ~state ~local_state b)
+    | TI.Bind (TI.TyForall,v,t) ->
+        (* TODO: emit warning? *)
+        assert (not (Subst.mem ~subst:local_state.subst v));
+        T.ty_forall
+          (mono_var ~state ~local_state v)
+          (mono_term ~state ~local_state t)
 
-    and aux_var ~subst v =
-      Var.update_ty ~f:(conv_term ~mangle:false ~depth:0 ~subst) v
+  (* monomorphize a variable (rather, its type) *)
+  and mono_var ~state ~local_state v =
+    Var.update_ty v ~f:(mono_type ~state ~local_state)
 
-    (* take [n] ground atomic type arguments in [l], or fail *)
-    and take_n_ground_atomic_types_ ~depth ~subst n = function
-      | _ when n=0 -> []
-      | [] -> failf_ "not enough arguments (%d missing)" n
-      | t :: l' ->
-          (* do not mangle types *)
-          let t = conv_term ~depth ~mangle:false ~subst t in
-          t :: take_n_ground_atomic_types_ ~depth ~subst (n-1) l'
-    in
+  and mono_type ~state ~local_state t =
+    let local_state = {local_state with mangle=false; } in
+    mono_term ~state ~local_state t
 
-    (* specialize mutual cases *)
-    let aux_cases ~subst cases =
-      let q = Queue.create () in (* task list, for the fixpoint *)
-      let res = ref [] in (* resulting axioms *)
-      (* if we required monomorphization of [id tup], and some case in [l]
-         matches [id tup], then push into the queue so that it will be
-         processed in the fixpoint *)
-      let callback = St.set_on_schedule ~state
-        (fun ~depth id tup -> match find_case_ ~subst ~cases id tup with
-          | None -> ()
-          | Some (case, subst) ->
-              Queue.push (id, tup, depth, case, subst) q
-        )
+  (* take [n] ground atomic type arguments in [l], or fail *)
+  and take_n_ground_atomic_types_ ~state ~local_state n = function
+    | _ when n=0 -> []
+    | [] -> failf_ "not enough arguments (%d missing)" n
+    | t :: l' ->
+        let t = mono_type ~state ~local_state t in
+        t :: take_n_ground_atomic_types_ ~state ~local_state (n-1) l'
+
+  (* declare a symbol that is axiomatized *)
+  and decl_sym ~state id tup =
+    if not (St.is_already_declared ~state id tup) then (
+      (* only declare once *)
+      St.declaration_is_done ~state id tup;
+      let env_info = Env.find_exn ~env:state.St.env ~id in
+      let loc = env_info.Env.loc in
+      (* declare specialized type *)
+      let new_id = match ArgTuple.mangled tup with
+        | None -> id
+        | Some x -> x
       in
-      (* push already required tuples into the queue *)
-      List.iter
-        (fun case ->
-          St.find_matching ~state case.Stmt.case_defined
-          |> Sequence.iter
-            (fun (id, tup, subst) -> Queue.push (id, tup, 0, case, subst) q)
-        ) cases;
-      (* fixpoint *)
-      while not (Queue.is_empty q) do
-        let id, tup, depth, case, subst = Queue.take q in
-        (* check for depth limit and loops *)
-        if depth > depth_limit
-        || St.is_processed ~state id tup then ()
-        else (
-          NunUtils.debugf ~section 3
-            "@[<2>process case `%a` for@ (%a %a)@ at depth %d@]"
-            (fun k -> k P.print case.Stmt.case_defined ID.print_no_id id
-              ArgTuple.print tup depth);
-          (* avoid loops *)
-          St.has_processed ~state id tup;
-          (* we know [subst case.defined = (id args)], now
-              specialize the axioms and other fields *)
-          let update_var = Var.update_ty
-            ~f:(conv_term ~mangle:false ~depth:(depth+1) ~subst) in
-          let axioms = List.map
-            (fun ax -> conv_term ~subst ~depth:(depth+1) ~mangle:true ax)
-            case.Stmt.case_axioms
-          in
-          (* new (specialized) case *)
-          let case_defined =
-            conv_term ~mangle:true ~depth:(depth+1) ~subst case.Stmt.case_defined
-          in
-          let case_head=TU.head_sym case_defined in (* mangled symbol now *)
-          let case' = {Stmt.
-            case_vars=List.map update_var case.Stmt.case_vars;
-            case_head; case_defined;
-            case_alias=update_var case.Stmt.case_alias;
-            case_axioms=axioms;
-          } in
-          CCList.Ref.push res case';
-        )
-      done;
-      (* remove callback *)
-      St.remove_callback ~state callback;
-      !res
-    in
+      let ty = SubstUtil.ty_apply env_info.Env.ty (ArgTuple.args tup) in
+      let new_ty = mono_term ~state
+        ~local_state:{depth=0; mangle=false; subst=Subst.empty} ty in
+      St.push_res ~state
+        (Stmt.mk_decl ~info:{Stmt.loc; name=None}
+          new_id env_info.Env.decl_kind new_ty);
+    )
 
-    (* specialize (co)inductive types *)
-    let aux_mutual_types l =
-      let q = Queue.create() in (* task list *)
-      let res = ref [] in
-      (* whenever a type [id tup] is needed, check if it's in the block *)
-      let callback = St.set_on_schedule ~state
-        (fun ~depth id tup -> match find_tydef_ ~defs:l id with
-          | None -> () (* not in this block *)
-          | Some tydef -> Queue.push (tydef, depth, tup) q (* schedule *)
-        )
-      in
-      (* initialization: already required instances *)
-      List.iter
-        (fun tydef ->
-          St.find_tuples ~state tydef.Stmt.ty_id
-          |> ArgTupleSet.to_seq
-          |> Sequence.iter
-              (fun tup -> Queue.push (tydef, 0, tup) q)
-        ) l;
-      (* fixpoint *)
-      while not (Queue.is_empty q) do
-        let tydef, depth, tup = Queue.pop q in
-        (* check for loops or depth limit *)
-        if depth > depth_limit
-        || St.is_processed ~state tydef.Stmt.ty_id tup then ()
-        else (
-          NunUtils.debugf ~section 3
-            "@[<2>process type decl `%a : %a` for@ %a@ at depth %d@]"
-            (fun k-> k ID.print_no_id tydef.Stmt.ty_id
-            P.print_ty tydef.Stmt.ty_type ArgTuple.print tup depth);
-          St.has_processed ~state tydef.Stmt.ty_id tup;
-          (* mangle type name. Monomorphized type should be : Type *)
-          let id, _ = mangle_ ~state tydef.Stmt.ty_id (ArgTuple.args tup) in
-          let ty = T.ty_type in
-          (* specialize each constructor *)
-          let cstors = List.map
-            (fun c ->
-              (* mangle ID *)
-              let id', _ = mangle_ ~state c.Stmt.cstor_name (ArgTuple.args tup) in
-              (* apply, then convert type. Arity should match. *)
-              let ty', subst =
-                SubstUtil.ty_apply_full c.Stmt.cstor_type (ArgTuple.args tup)
-              in
-              let ty' = SubstUtil.eval ~subst ty'
-              and args' = List.map
-                (conv_term ~mangle:true ~depth:(depth+1) ~subst)
-                c.Stmt.cstor_args
-              in
-              {Stmt.cstor_name=id'; cstor_type=ty'; cstor_args=args'; }
+  (* monomorphize every statement that declares or defines [id] *)
+  and mono_statements_for_id ~state ~depth id tup =
+    let env_info = match Env.find ~env:state.St.env ~id with
+      | None -> failf_ "could not find definition of %a" ID.print_name id
+      | Some i -> i
+    in
+    let loc = Env.loc env_info in
+    match Env.def env_info with
+    | Env.Fun defs ->
+        (* specialize each definition *)
+        List.iter
+          (fun def -> mono_cases ~state ~depth def tup)
+          defs;
+        St.specialization_is_done ~state id tup
+    | Env.Data (k,tydefs,tydef) ->
+        mono_mutual_types ~state ~depth ~kind:k tydefs tydef tup loc
+    | Env.Cstor (k,tydefs,tydef,_cstor) ->
+        (* specialize constructor means specializing the whole type *)
+        mono_mutual_types ~state ~depth ~kind:k tydefs tydef tup loc
+    | Env.NoDef ->
+        let ty = env_info.Env.ty in
+        begin match env_info.Env.decl_kind with
+        | Stmt.Decl_type ->
+            (* type declaration must be done only once
+               (St.is_already_specialized is not precise enough, because
+               here we must ignore [tup]) *)
+            if not (St.is_already_declared ~state id ArgTuple.empty) then (
+              St.declaration_is_done ~state id ArgTuple.empty;
+              let new_ty = mono_term ~state
+                ~local_state:{depth=0; mangle=false; subst=Subst.empty} ty in
+              St.push_res ~state
+                (Stmt.ty_decl ~info:{Stmt.loc; name=None} id new_ty)
             )
-            tydef.Stmt.ty_cstors
-          in
-          (* add resulting type *)
-          let tydef' = {Stmt.ty_id=id; ty_type=ty; ty_cstors=cstors; ty_vars=[]; } in
-          CCList.Ref.push res tydef'
-        )
-      done;
-      (* cleanup *)
-      St.remove_callback ~state callback;
-      !res
-    in
+        | Stmt.Decl_fun
+        | Stmt.Decl_prop ->
+            decl_sym ~state id tup;
+            (* avoid repeating this declaration *)
+            St.specialization_is_done ~state id tup
+        end
 
-    (* maps a statement to 0 to n specialized statements *)
-    let aux_statement ~res st =
-      (* push new statement *)
-      let push_st = CCVector.push res in
-      NunUtils.debugf ~section 2 "@[<2>convert statement@ `%a`@]"
-        (fun k-> k (NunStatement.print P.print P.print_ty) st);
-      (* process statement *)
-      let info = Stmt.info st in
-      match Stmt.view st with
-      | Stmt.Decl (id,k,ty) ->
-          begin match k with
-          | Stmt.Decl_type ->
-              if St.required_id ~state id
-              then (* type is needed, keep it *)
-                push_st
-                  (Stmt.ty_decl ~info id
-                    (conv_term ~mangle:false ~depth:0 ~subst:Subst.empty ty))
-          | Stmt.Decl_fun
-          | Stmt.Decl_prop ->
-              let tuples = St.find_tuples ~state id in
-              (* for each tuple that requires [id], specialize *)
-              List.iter
-                (fun tup ->
-                  (* apply type to tuple *)
-                  let ty = SubstUtil.ty_apply ty (ArgTuple.args tup) in
-                  (* require symbols in the type *)
-                  let ty = conv_term ~mangle:false ~depth:0 ~subst:Subst.empty ty in
-                  (* return new statement *)
-                  let new_id = match ArgTuple.mangled tup with
-                    | None -> id
-                    | Some x -> x
-                  in
-                  push_st (Stmt.mk_decl ~info new_id k ty)
-                )
-                (ArgTupleSet.to_list tuples)
-          end
-      | Stmt.Goal t ->
-          (* convert goal *)
-          push_st
-            (Stmt.goal ~info (conv_term ~mangle:true ~depth:0 ~subst:Subst.empty t))
-      | Stmt.Axiom (Stmt.Axiom_std l) ->
-          let l = List.map (conv_term ~mangle:true ~depth:0 ~subst:Subst.empty) l in
-          push_st (Stmt.axiom ~info l)
-      | Stmt.Axiom (Stmt.Axiom_spec l) ->
-          let l = aux_cases ~subst:Subst.empty l in
-          if l<>[] then push_st (Stmt.axiom_spec ~info l)
-      | Stmt.Axiom (Stmt.Axiom_rec l) ->
-          let l = aux_cases ~subst:Subst.empty l in
-          push_st (Stmt.axiom_rec ~info l)
-      | Stmt.TyDef (k, l) ->
-          let l = aux_mutual_types l in
-          if l<>[]
-          then push_st (Stmt.mk_ty_def ~info k l)
-    in
-    let res = CCVector.create () in
-    (* iter from the end *)
-    vec_rev_iter_ ~f:(aux_statement ~res) (NunProblem.statements pb);
-    (* reverse in place *)
-    CCVector.rev' res;
-    let pb' = NunProblem.make (CCVector.freeze res) in
-    (* some debug *)
-    NunUtils.debugf ~section 3 "@[<2>instances:@ @[%a@]@]"
-      (fun k-> k SetOfInstances.print state.St.required);
-    pb'
+  (* specialize mutual cases *)
+  and mono_cases ~state ~depth (kind, mutual_cases, case, loc) tup =
+    let q = Queue.create () in (* task list, for the fixpoint *)
+    let res = ref [] in (* resulting axioms *)
+    (* if we required monomorphization of [id tup], and some case in [l]
+       matches [id tup], then push into the queue so that it will be
+       processed in the fixpoint. Otherwise, [id] must be declared/defined
+       earlier and must be processed before we are done with [mutual_cases] *)
+    let specialize' = St.current_specialize ~state in
+    St.push_specialize ~state
+      (fun ~state ~depth id tup ->
+        match find_case_ ~cases:mutual_cases id tup with
+        | None ->
+            (* delegate to previous specialization function *)
+            specialize' ~state ~depth id tup
+        | Some (_cases, case, subst) ->
+            (* same mutual block, process in fixpoint. *)
+            Queue.push (tup, depth, case, subst) q
+      );
+    (* push first tuple in queue *)
+    begin match match_case ~case case.Stmt.case_head tup with
+      | None -> ()  (* definition does not match, do nothing *)
+      | Some (case, subst) ->
+            (* same mutual block, process in fixpoint. *)
+            Queue.push (tup, depth, case, subst) q
+    end;
+    (* fixpoint *)
+    while not (Queue.is_empty q) do
+      let tup, depth, case, subst = Queue.take q in
+      let id = case.Stmt.case_head in
+      (* check for depth limit *)
+      St.check_depth ~state depth;
+      if depth > St.depth_limit ~state then ()
+      else (
+        NunUtils.debugf ~section 3
+          "@[<2>process case `%a` for@ (%a %a)@ at depth %d@]"
+          (fun k -> k P.print case.Stmt.case_defined ID.print_no_id id
+            ArgTuple.print tup depth);
+        (* we know [subst case.defined = (id args)], now
+            specialize the axioms and other fields *)
+        let local_state = {subst; depth=depth+1; mangle=true} in
+        let axioms = List.map
+          (fun ax ->
+            mono_term ~state ~local_state ax
+          )
+          case.Stmt.case_axioms
+        in
+        (* new (specialized) case *)
+        let case_defined = mono_term ~state ~local_state case.Stmt.case_defined in
+        let case_head=TU.head_sym case_defined in (* mangled symbol now *)
+        let case' = {Stmt.
+          case_vars=[]; (* should be monomorphic now *)
+          case_head;
+          case_defined;
+          case_alias=mono_var ~state ~local_state case.Stmt.case_alias;
+          case_axioms=axioms;
+        } in
+        (* declare the symbol *)
+        decl_sym ~state id tup;
+        (* push new case to the list *)
+        CCList.Ref.push res case';
+      )
+    done;
+    (* remove callback *)
+    St.pop_specialize ~state;
+    (* push result, if any *)
+    if !res <> []
+    then
+      let ax = match kind with
+        | `Rec -> Stmt.Axiom_rec !res
+        | `Spec -> Stmt.Axiom_spec !res
+      in
+      let stmt = Stmt.mk_axiom ~info:{Stmt.name=None; loc;} ax in
+      St.push_res ~state stmt;
+    ()
 
-  (* TODO:
-      - store, for each statement, a list of symbols it uses
-      - at the end, topo sort on the list of statements (with
-          [s in st->symbols] meaning the declaration of [s] being before [st])
+  (* specialize (co)inductive types
+    TODO use config.mutualize *)
+  and mono_mutual_types ~state ~depth ~kind tydefs tydef tup loc =
+    let q = Queue.create() in (* task list *)
+    let res = ref [] in
+    (* whenever a type [id tup] is needed, check if it's in the block *)
+    let specialize' = St.current_specialize ~state in
+    St.push_specialize ~state
+      (fun ~state ~depth id tup ->
+        match find_tydef_ ~defs:tydefs id with
+        | None ->
+            (* not in this block, use the previous specialization fun *)
+            NunUtils.debugf ~section 4
+              "%a not in same block, fallback to previous specialize function"
+              (fun k -> k ID.print_name id);
+            specialize' ~state ~depth id tup
+        | Some tydef ->
+            (* specialize in the same block of mutual types *)
+            Queue.push (tydef, depth, tup) q
+      );
+    (* initialization: push the first tuple to process *)
+    Queue.push (tydef, depth, tup) q;
+    (* fixpoint *)
+    while not (Queue.is_empty q) do
+      let tydef, depth, tup = Queue.pop q in
+      (* check for depth limit *)
+      St.check_depth ~state depth;
+      if depth > St.depth_limit ~state then ()
+      else (
+        NunUtils.debugf ~section 3
+          "@[<2>process type decl `%a : %a` for@ %a@ at depth %d@]"
+          (fun k-> k ID.print_no_id tydef.Stmt.ty_id
+          P.print_ty tydef.Stmt.ty_type ArgTuple.print tup depth);
+        (* mangle type name. Monomorphized type should be : Type *)
+        let id, _ = mangle_ ~state tydef.Stmt.ty_id (ArgTuple.args tup) in
+        let ty = T.ty_type in
+        (* specialize each constructor *)
+        let cstors = List.map
+          (fun c ->
+            (* mangle ID *)
+            let id', _ = mangle_ ~state c.Stmt.cstor_name (ArgTuple.args tup) in
+            (* apply, then convert type. Arity should match. *)
+            let ty', subst =
+              SubstUtil.ty_apply_full c.Stmt.cstor_type (ArgTuple.args tup)
+            in
+            let ty' = SubstUtil.eval ~subst ty' in
+            let local_state = {mangle=true; depth=depth+1; subst} in
+            let args' = List.map (mono_term ~state ~local_state) c.Stmt.cstor_args in
+            {Stmt.cstor_name=id'; cstor_type=ty'; cstor_args=args'; }
+          )
+          tydef.Stmt.ty_cstors
+        in
+        (* add resulting type *)
+        let tydef' = {Stmt.ty_id=id; ty_type=ty; ty_cstors=cstors; ty_vars=[]; } in
+        CCList.Ref.push res tydef'
+      )
+    done;
+    (* cleanup *)
+    St.pop_specialize ~state;
+    if !res <> [] then (
+      let stmt = Stmt.mk_ty_def ~info:{Stmt.name=None; loc} kind !res in
+      St.push_res ~state stmt;
+    );
+    ()
+
+  (* register the statement into the state's [env], so that next statements
+    can monomorphize it. Some statements are automatically kept (goal and axiom) *)
+  and mono_statement ~state st =
+    NunUtils.debugf ~section 2 "@[<2>enter statement@ `%a`@]"
+      (fun k-> k (NunStatement.print P.print P.print_ty) st);
+    (* process statement *)
+    let info = Stmt.info st in
+    let loc = Stmt.loc st in
+    begin match Stmt.view st with
+    | Stmt.Decl (id,k,ty) ->
+        (* declare the statement (in case it is needed later) *)
+        Env.declare ?loc ~kind:k ~env:state.St.env id ty
+    | Stmt.Goal g ->
+        (* convert goal *)
+        let g = mono_term ~state
+          ~local_state:{subst=Subst.empty; depth=0; mangle=true} g
+        in
+        St.push_res ~state (Stmt.goal ~info g)
+    | Stmt.Axiom (Stmt.Axiom_std l) ->
+        (* keep axioms *)
+        let local_state={mangle=true; depth=0; subst=Subst.empty} in
+        let l = List.map (mono_term ~state ~local_state) l in
+        St.push_res ~state (Stmt.axiom ~info l)
+    | Stmt.Axiom (Stmt.Axiom_spec l) ->
+        Env.def_funs ?loc ~kind:`Spec ~env:state.St.env l;
+    | Stmt.Axiom (Stmt.Axiom_rec l) ->
+        Env.def_funs ?loc ~kind:`Rec ~env:state.St.env l;
+    | Stmt.TyDef (k, l) ->
+        Env.def_data ?loc ~kind:k ~env:state.St.env l;
+    end
+
+
+  (* TODO: use mutualize:
       - if (co)data t1 uses (co)data t2 which is not in same block (nested),
         put specialized version of t2 in same block as t1
   *)
+
+  let monomorphize ?(depth_limit=256) ~mutualize pb =
+    (* create the state used for monomorphization. Toplevel function
+      for specializing (id,tup) is [mono_statements_for_id] *)
+    let config = {
+      max_depth=depth_limit;
+      mutualize;
+    } in
+    let env = Env.create () in
+    let state = St.create ~config ~env ~specialize:mono_statements_for_id () in
+    (* iterate on statements *)
+    CCVector.iter
+      (fun st -> mono_statement ~state st)
+      (NunProblem.statements pb);
+    (* output result. If depth limit reached we might be incomplete *)
+    let meta = NunProblem.metadata pb in
+    let meta = NunProblem.Metadata.add_incomplete meta state.St.depth_reached in
+    let pb' = NunProblem.make ~meta (CCVector.freeze state.St.output) in
+    (* some debug *)
+    NunUtils.debugf ~section 3 "@[<2>instances:@ @[%a@]@]"
+      (fun k-> k SetOfInstances.print state.St.already_specialized);
+    pb', state.St.unmangle
 
   let unmangle_term ~state t =
     let rec aux t = match T.view t with
       | TI.Var v -> T.var (aux_var v)
       | TI.Const id ->
-          begin match St.find_mangled ~state id with
-          | None -> t
-          | Some (id', args) -> T.app (T.const id') args
+          begin try
+            let id', args = ID.Tbl.find state id in
+            T.app (T.const id') args
+          with Not_found -> t
           end
       | TI.App (f,l) -> T.app (aux f) (List.map aux l)
       | TI.AppBuiltin (b,l) -> T.app_builtin b (List.map aux l)
@@ -646,16 +732,14 @@ let pipe_with (type a) ~decode ?(mutualize=true) ~print
     then
       let module P = NunTerm_ho.Print(T) in
       [Format.printf "@[<v2>after mono: %a@]@."
-        (NunProblem.print P.print P.print_ty)]
+        (NunProblem.print ~pty_in_app:P.print_in_app P.print P.print_ty)]
     else []
   in
   NunTransform.make1
     ~on_encoded
     ~name:"monomorphization"
     ~encode:(fun p ->
-      let env = NunProblem.env p in
-      let state = Mono.create () in
-      let p = Mono.monomorphize ~mutualize ~env ~state p in
+      let p, state = Mono.monomorphize ~mutualize p in
       p, state
       (* TODO mangling of types, as an option *)
     )

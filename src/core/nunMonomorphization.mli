@@ -24,20 +24,14 @@ type id = NunID.t
 module Make(T : NunTerm_ho.S) : sig
   exception InvalidProblem of string
 
-  type mono_state
-  (** State used for monomorphizing (to convert [f int (list nat)] to
-      [f_int_list_nat], and back) *)
-
-  val create : unit -> mono_state
-  (** New state *)
+  type unmangle_state
+  (** State used to un-mangle specialized symbols *)
 
   val monomorphize :
     ?depth_limit:int ->
     mutualize:bool ->
-    env:(T.t,T.ty) NunEnv.t ->
-    state:mono_state ->
     (T.t, T.ty) NunProblem.t ->
-    (T.t, T.ty) NunProblem.t
+    (T.t, T.ty) NunProblem.t * unmangle_state
   (** Filter and specialize definitions of the problem.
 
       First it finds a set of instances for each symbol
@@ -47,18 +41,18 @@ module Make(T : NunTerm_ho.S) : sig
       Then it specializes relevant definitions with the set of tuples
       computed earlier.
 
-      @param env environment defined by the problem
       @param depth_limit recursion limit for specialization of functions
-      @param state used to convert forward and backward
       @param mutualize if true, polymorphic (co)inductive types are specialized
         in other (co)inductive types that use them
+      @return a new list of (monomorphized) statements, and the final
+        state obtained after monomorphization
   *)
 
-  val unmangle_term : state:mono_state -> T.t -> T.t
+  val unmangle_term : state:unmangle_state -> T.t -> T.t
   (** Unmangle a single term: replace mangled constants by their definition *)
 
   val unmangle_model :
-      state:mono_state ->
+      state:unmangle_state ->
       T.t NunModel.t ->
       T.t NunModel.t
   (** Unmangles constants that have been collapsed with their type arguments *)
