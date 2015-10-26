@@ -204,6 +204,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       mutable processed: SetOfInstances.t;
         (* tuples already instantiated (subset of [required]) *)
       mutable on_schedule : depth:depth -> ID.t -> ArgTuple.t -> unit;
+        (* callback when an instantiation is required *)
     }
 
     let is_processed ~state id tup = SetOfInstances.mem state.processed id tup
@@ -315,11 +316,10 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       f (CCVector.get v i)
     done
 
-  let monomorphize ?(depth_limit=256) ~mutualize ~sigma ~state pb =
+  let monomorphize ?(depth_limit=256) ~mutualize:_ ~sigma ~state pb =
     (* map T.t to T.t and, simultaneously, compute relevant instances
        of symbols [t] depends on.
        @param subst bindings for type variables
-       @param f called on every schedule
        @param mangle enable/disable mangling (in types...)
       *)
     let rec conv_term ~mangle ~depth ~subst t =
@@ -452,10 +452,13 @@ module Make(T : NunTerm_ho.S) : S with module T = T
             case.Stmt.case_axioms
           in
           (* new (specialized) case *)
+          let case_defined =
+            conv_term ~mangle:true ~depth:(depth+1) ~subst case.Stmt.case_defined
+          in
+          let case_head=TU.head_sym case_defined in (* mangled symbol now *)
           let case' = {Stmt.
             case_vars=List.map update_var case.Stmt.case_vars;
-            case_defined=conv_term ~mangle:true
-              ~depth:(depth+1) ~subst case.Stmt.case_defined;
+            case_head; case_defined;
             case_alias=update_var case.Stmt.case_alias;
             case_axioms=axioms;
           } in

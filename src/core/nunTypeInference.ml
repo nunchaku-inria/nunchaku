@@ -535,6 +535,12 @@ module Convert(Term : TERM) = struct
           let var = Var.make ~name:v ~ty:(get_ty_ t) in
           var, Env.add_var ~env v ~var
         in
+        (* head symbol *)
+        let case_head =
+          try U.head_sym t
+          with Not_found ->
+            ill_formedf ?loc ~kind:"mutual def" "does not have a head symbol"
+        in
         (* now convert axioms in the new env. They should contain no
           type variables but [vars]. *)
         let check_vars t =
@@ -559,9 +565,9 @@ module Convert(Term : TERM) = struct
             check_prenex_types_ ?loc ax;
             ax)
           l
-      in
+        in
         (* return case *)
-        {St.case_alias=var; case_defined=t; case_axioms=l; case_vars=vars;}
+        {St.case_alias=var; case_head; case_defined=t; case_axioms=l; case_vars=vars;}
       )
       l
 
@@ -667,7 +673,7 @@ module Convert(Term : TERM) = struct
         unify_in_ctx_ ~stack:[] ty (get_ty_ b);
         (* TODO: check that [v] does not occur in [b] *)
         St.axiom_rec ~info
-          [{St.case_alias=var; case_defined=a_defined;
+          [{St.case_alias=var; case_defined=a_defined; case_head=id;
             case_vars=[]; case_axioms=[Term.eq a b]}
           ]
         , env

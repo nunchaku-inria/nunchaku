@@ -22,6 +22,7 @@ module Statement : sig
   type ('t,'ty) case = {
     case_vars: 'ty NunVar.t list; (* alpha_1, ..., alpha_n *)
     case_defined: 't; (* t *)
+    case_head: id;  (* head symbol of [case_defined] *)
     case_alias: 'ty NunVar.t; (* v *)
     case_axioms: 't list; (* axioms *)
   }
@@ -153,7 +154,9 @@ module Statement : sig
   val print_list : 'a printer -> 'b printer -> ('a,'b) t list printer
 end
 
-(** {2 Signature} *)
+(** {2 Signature}
+
+  Maps symbols to their type *)
 
 module Signature : sig
   type 'ty t = 'ty NunID.Map.t

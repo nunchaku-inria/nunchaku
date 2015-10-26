@@ -27,6 +27,7 @@ module Statement = struct
   type ('t,'ty) case = {
     case_vars: 'ty NunVar.t list; (* alpha_1, ..., alpha_n *)
     case_defined: 't; (* t *)
+    case_head: id;  (* head symbol of [case_defined] *)
     case_alias: 'ty NunVar.t; (* v *)
     case_axioms: 't list; (* axioms *)
   }
@@ -116,6 +117,7 @@ module Statement = struct
   let map_case ~term ~ty t = {
     case_vars=List.map (Var.update_ty ~f:ty) t.case_vars;
     case_defined=term t.case_defined;
+    case_head=t.case_head;
     case_axioms=List.map term t.case_axioms;
     case_alias=Var.update_ty ~f:ty t.case_alias;
   }
