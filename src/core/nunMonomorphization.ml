@@ -27,6 +27,7 @@ module type S = sig
 
   val monomorphize :
     ?depth_limit:int ->
+    mutualize:bool ->
     sigma:T.ty NunProblem.Signature.t ->
     state:mono_state ->
     (T.t, T.ty) NunProblem.t ->
@@ -42,7 +43,10 @@ module type S = sig
 
       @param sigma signature of the problem
       @param depth_limit recursion limit for specialization of functions
-      @param state used to convert forward and backward *)
+      @param state used to convert forward and backward
+      @param mutualize if true, polymorphic (co)inductive types are specialized
+        in other (co)inductive types that use them
+  *)
 
   val unmangle_term : state:mono_state -> T.t -> T.t
   (** Unmangle a single term: replace mangled constants by their definition *)
@@ -62,7 +66,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
 
   let () = Printexc.register_printer
     (function
-      | InvalidProblem msg -> Some ("invalid problem: " ^ msg)
+      | InvalidProblem msg -> Some ("monomorphization: invalid problem: " ^ msg)
       | _ -> None
     )
 
@@ -311,7 +315,7 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       f (CCVector.get v i)
     done
 
-  let monomorphize ?(depth_limit=256) ~sigma ~state pb =
+  let monomorphize ?(depth_limit=256) ~mutualize ~sigma ~state pb =
     (* map T.t to T.t and, simultaneously, compute relevant instances
        of symbols [t] depends on.
        @param subst bindings for type variables
@@ -589,6 +593,14 @@ module Make(T : NunTerm_ho.S) : S with module T = T
       (fun k-> k SetOfInstances.print state.St.required);
     pb'
 
+  (* TODO:
+      - store, for each statement, a list of symbols it uses
+      - at the end, topo sort on the list of statements (with
+          [s in st->symbols] meaning the declaration of [s] being before [st])
+      - if (co)data t1 uses (co)data t2 which is not in same block (nested),
+        put specialized version of t2 in same block as t1
+  *)
+
   let unmangle_term ~state t =
     let rec aux t = match T.view t with
       | TI.Var v -> T.var (aux_var v)
@@ -651,7 +663,7 @@ module TypeMangling(T : NunTerm_ho.S) = struct
     NunProblem.Model.map ~f:(unmangle_term ~state) m
 end
 
-let pipe_with (type a) ~decode ~print
+let pipe_with (type a) ~decode ?(mutualize=true) ~print
 (module T : NunTerm_ho.S with type t = a)
 =
   let module Mono = Make(T) in
@@ -668,7 +680,7 @@ let pipe_with (type a) ~decode ~print
     ~encode:(fun p ->
       let sigma = NunProblem.signature p in
       let state = Mono.create () in
-      let p = Mono.monomorphize ~sigma ~state p in
+      let p = Mono.monomorphize ~mutualize ~sigma ~state p in
       p, state
       (* TODO mangling of types, as an option *)
     )
@@ -678,6 +690,6 @@ let pipe_with (type a) ~decode ~print
     )
     ()
 
-let pipe (type a) ~print (t : (module NunTerm_ho.S with type t = a)) =
+let pipe (type a) ?mutualize ~print (t : (module NunTerm_ho.S with type t = a)) =
   let decode ~decode_term = NunProblem.Model.map ~f:decode_term in
-  pipe_with ~print t ~decode
+  pipe_with ~print ?mutualize t ~decode
