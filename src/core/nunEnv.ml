@@ -9,13 +9,22 @@ type loc = Loc.t
 type 'a printer = Format.formatter -> 'a -> unit
 
 type ('t, 'ty) def =
-  | Fun of ('t, 'ty) Statement.mutual_cases list
+  | Fun of
+    ( [`Rec | `Spec] *
+      ('t, 'ty) NunStatement.mutual_cases *
+      ('t,'ty) NunStatement.case *
+      loc option
+    ) list
       (** ID is a defined fun/predicate. Can be defined in several places *)
 
-  | Data of [`Codata | `Data] * 'ty Statement.mutual_types * 'ty Statement.tydef
+  | Data of [`Codata | `Data] * 'ty NunStatement.mutual_types * 'ty NunStatement.tydef
       (** ID is a (co)data *)
 
-  | Cstor of 'ty Statement.tydef * 'ty Statement.ty_constructor
+  | Cstor of
+      [`Codata | `Data] *
+      'ty NunStatement.mutual_types *
+      'ty NunStatement.tydef *
+      'ty NunStatement.ty_constructor
       (** ID is a constructor (of the given type) *)
 
   | NoDef
@@ -24,8 +33,9 @@ type ('t, 'ty) def =
 (** All information on a given symbol *)
 type ('t, 'ty) info = {
   ty: 'ty; (** type of symbol *)
-  def: ('t, 'ty) def;
+  decl_kind: NunStatement.decl;
   loc: loc option;
+  def: ('t, 'ty) def;
 }
 
 (** Maps ID to their type and definitions *)
@@ -49,17 +59,22 @@ let () = Printexc.register_printer
 let errorf_ id msg =
   NunUtils.exn_ksprintf msg ~f:(fun msg -> raise (InvalidDef(id,msg)))
 
+let loc t = t.loc
+let def t = t.def
+let ty t = t.ty
+let decl_kind t = t.decl_kind
+
 let create() = {infos=ID.Tbl.create 64}
 
 let check_not_defined_ t ~id ~fail_msg =
   if ID.Tbl.mem t.infos id then errorf_ id fail_msg
 
-let declare ?loc ~env:t ~id ~ty =
+let declare ?loc ~kind ~env:t id ty =
   check_not_defined_ t ~id ~fail_msg:"already declared";
-  let info = {loc; ty; def=NoDef} in
+  let info = {loc; decl_kind=kind; ty; def=NoDef} in
   ID.Tbl.replace t.infos id info
 
-let def_funs ~env:t cases =
+let def_funs ?loc ~kind ~env:t cases =
   List.iter
     (fun c ->
       let id = c.Statement.case_head in
@@ -71,7 +86,7 @@ let def_funs ~env:t cases =
           | Fun l -> l
           | NoDef -> [] (* first def of id *)
         in
-        let def = Fun (cases :: l) in
+        let def = Fun ((kind, cases, c, loc) :: l) in
         ID.Tbl.replace t.infos id {info with def; }
       with Not_found ->
         errorf_ id "defined function, but not declared previously"
@@ -85,6 +100,7 @@ let def_data ?loc ~env:t ~kind tys =
       check_not_defined_ t ~id ~fail_msg:"is (co)data, but already defined";
       let info = {
         loc;
+        decl_kind=Statement.Decl_type;
         ty=tydef.Statement.ty_type;
         def=Data (kind, tys, tydef);
       } in
@@ -96,8 +112,9 @@ let def_data ?loc ~env:t ~kind tys =
           check_not_defined_ t ~id ~fail_msg:"is constructor, but already defined";
           let info = {
             loc;
+            decl_kind=Statement.Decl_fun;
             ty=cstor.Statement.cstor_type;
-            def=Cstor (tydef, cstor);
+            def=Cstor (kind,tys,tydef, cstor);
           } in
           ID.Tbl.replace t.infos id info;
         ) tydef.Statement.ty_cstors

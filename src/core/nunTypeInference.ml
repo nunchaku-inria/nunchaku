@@ -717,7 +717,7 @@ module Convert(Term : TERM) = struct
           aux (st :: acc) ~env l'
     in
     let l, env = aux [] ~env l in
-    NunProblem.of_list l, env
+    NunProblem.of_list ~meta:NunProblem.Metadata.default l, env
 
   let convert_problem ~env st =
     try E.return (convert_problem_exn ~env st)

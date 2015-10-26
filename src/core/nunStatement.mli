@@ -145,5 +145,5 @@ val fold :
 
 (** {2 Print} *)
 
-val print : 'a printer -> 'b printer -> ('a,'b) t printer
-val print_list : 'a printer -> 'b printer -> ('a,'b) t list printer
+val print : ?pty_in_app:'b printer -> 'a printer -> 'b printer -> ('a,'b) t printer
+val print_list : ?pty_in_app:'b printer -> 'a printer -> 'b printer -> ('a,'b) t list printer

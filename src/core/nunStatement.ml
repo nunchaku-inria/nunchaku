@@ -176,7 +176,7 @@ let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
 let fpf = Format.fprintf
 
-let print pt pty out t = match t.view with
+let print ?pty_in_app pt pty out t = match t.view with
   | Decl (id,_,t) ->
       fpf out "@[<2>val %a@ : %a.@]" ID.print_name id pty t
   | Axiom a ->
@@ -201,7 +201,7 @@ let print pt pty out t = match t.view with
       | Axiom_rec t -> print_cases ~what:"rec" out t
       end
   | TyDef (k, l) ->
-      let pty_in_app out t = fpf out "(%a)" pty t in
+      let pty_in_app = CCOpt.get (fun out -> fpf out "(%a)" pty) pty_in_app in
       let ppcstors out c =
         fpf out "@[<hv2>%a %a@]"
           ID.print_name c.cstor_name (pplist ~sep:" " pty_in_app) c.cstor_args in
@@ -216,6 +216,6 @@ let print pt pty out t = match t.view with
         (pplist ~sep:" and " print_def) l
   | Goal t -> fpf out "@[<2>goal %a.@]" pt t
 
-let print_list pt pty out l =
+let print_list ?pty_in_app pt pty out l =
   fpf out "@[<v>%a@]"
-    (CCFormat.list ~start:"" ~stop:"" ~sep:"" (print pt pty)) l
+    (CCFormat.list ~start:"" ~stop:"" ~sep:"" (print ?pty_in_app pt pty)) l

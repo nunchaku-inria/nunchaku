@@ -12,13 +12,22 @@ type loc = NunLocation.t
 type 'a printer = Format.formatter -> 'a -> unit
 
 type ('t, 'ty) def =
-  | Fun of ('t, 'ty) NunStatement.mutual_cases list
+  | Fun of
+    ( [`Rec | `Spec] *
+      ('t, 'ty) NunStatement.mutual_cases *
+      ('t,'ty) NunStatement.case *
+      loc option
+    ) list
       (** ID is a defined fun/predicate. Can be defined in several places *)
 
   | Data of [`Codata | `Data] * 'ty NunStatement.mutual_types * 'ty NunStatement.tydef
       (** ID is a (co)data *)
 
-  | Cstor of 'ty NunStatement.tydef * 'ty NunStatement.ty_constructor
+  | Cstor of
+      [`Codata | `Data] *
+      'ty NunStatement.mutual_types *
+      'ty NunStatement.tydef *
+      'ty NunStatement.ty_constructor
       (** ID is a constructor (of the given type) *)
 
   | NoDef
@@ -27,8 +36,9 @@ type ('t, 'ty) def =
 (** All information on a given symbol *)
 type ('t, 'ty) info = {
   ty: 'ty; (** type of symbol *)
-  def: ('t, 'ty) def;
+  decl_kind: NunStatement.decl;
   loc: loc option;
+  def: ('t, 'ty) def;
 }
 
 (** Maps ID to their type and definitions *)
@@ -43,10 +53,26 @@ val pp_invalid_def_ : exn printer
 val create: unit -> ('t, 'ty) t
 (** Create a new environment *)
 
-val declare: ?loc:loc -> env:('t, 'ty) t -> id:id -> ty:'ty -> unit
+val loc: (_,_) info -> loc option
+val def: ('t,'ty) info -> ('t,'ty) def
+val ty: (_,'ty) info -> 'ty
+val decl_kind: (_,_) info -> NunStatement.decl
+
+val declare:
+  ?loc:loc ->
+  kind:NunStatement.decl ->
+  env:('t, 'ty) t ->
+  id ->
+  'ty ->
+  unit
 (** Declare a symbol's type (as undefined, for now) *)
 
-val def_funs: ?loc:loc -> env:('t, 'ty) t -> ('t, 'ty) NunStatement.mutual_cases -> unit
+val def_funs:
+  ?loc:loc ->
+  kind:[`Rec | `Spec] ->
+  env:('t, 'ty) t ->
+  ('t, 'ty) NunStatement.mutual_cases ->
+  unit
 (** Add a definition of functions/predicates. They can be already
     defined (or declared). *)
 

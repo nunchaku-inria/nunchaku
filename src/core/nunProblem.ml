@@ -20,16 +20,23 @@ let fpf = Format.fprintf
 
 type 'a vec_ro = ('a, CCVector.ro) CCVector.t
 
-type metadata = {
-  incomplete: bool;  (* in case some depth limit was reached *)
-}
+module Metadata = struct
+  type t = {
+    incomplete: bool;
+  }
+
+  let default = {incomplete=false}
+  let set_incomplete _ = {incomplete=true}
+  let add_incomplete m b = {incomplete=m.incomplete||b}
+end
 
 type ('t, 'ty) t = {
   statements : ('t, 'ty) Statement.t vec_ro;
-  metadata: metadata;
+  metadata: Metadata.t;
 }
 
 let statements t = t.statements
+let metadata t = t.metadata
 
 let make ~meta statements = { metadata=meta; statements; }
 
@@ -57,9 +64,9 @@ let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
 
 let map ~term ~ty pb = map_with ~term ~ty pb
 
-let print pt pty out problem =
+let print ?pty_in_app pt pty out problem =
   fpf out "{@,%a@,}"
-    (CCVector.print ~start:"" ~stop:"" ~sep:"" (Statement.print pt pty))
+    (CCVector.print ~start:"" ~stop:"" ~sep:"" (Statement.print ?pty_in_app pt pty))
     problem.statements
 
 exception IllFormed of string

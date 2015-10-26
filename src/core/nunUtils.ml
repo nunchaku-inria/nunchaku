@@ -122,11 +122,11 @@ module Callback = struct
 
   let create () = {lst=Nil}
 
-  let register =
-    let n = ref 0 in
-    fun t ~f ->
-      let id = !n in
-      incr n;
+  let count_ = ref 0
+
+  let register t ~f =
+      let id = !count_ in
+      incr count_;
       t.lst <- Cons (id, f, t.lst);
       id
 

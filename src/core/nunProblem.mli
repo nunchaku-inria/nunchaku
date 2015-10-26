@@ -12,22 +12,28 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 
 type 'a vec_ro = ('a, CCVector.ro) CCVector.t
 
-type metadata = {
-  incomplete: bool;  (* in case some depth limit was reached *)
-}
+module Metadata : sig
+  type t = private {
+    incomplete: bool;
+  }
+
+  val default: t
+  val set_incomplete: t -> t
+  val add_incomplete: t -> bool -> t
+end
 
 type ('t, 'ty) t = private {
   statements : ('t, 'ty) NunStatement.t vec_ro;
-  metadata: metadata;
+  metadata: Metadata.t;
 }
 
-val make : meta:metadata -> ('t, 'ty) NunStatement.t vec_ro -> ('t, 'ty) t
+val make : meta:Metadata.t -> ('t, 'ty) NunStatement.t vec_ro -> ('t, 'ty) t
 (** Build a problem from statements *)
 
-val of_list : meta:metadata -> ('t, 'ty) NunStatement.t list -> ('t, 'ty) t
+val of_list : meta:Metadata.t -> ('t, 'ty) NunStatement.t list -> ('t, 'ty) t
 
 val statements : ('t, 'ty) t -> ('t, 'ty) NunStatement.t vec_ro
-val metadata : (_,_) t -> metadata
+val metadata : (_,_) t -> Metadata.t
 
 val map_statements :
   f:(('t, 'ty) NunStatement.t -> ('t2,'ty2) NunStatement.t) -> ('t,'ty) t -> ('t2,'ty2) t
@@ -45,7 +51,7 @@ val map_with :
     and the statements they return
     are added respectively before or after the translation of [st]. *)
 
-val print : 'a printer -> 'b printer -> ('a,'b) t printer
+val print : ?pty_in_app:'b printer -> 'a printer -> 'b printer -> ('a,'b) t printer
 (** Printer for a problem *)
 
 exception IllFormed of string

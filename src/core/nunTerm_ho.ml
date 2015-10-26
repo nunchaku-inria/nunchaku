@@ -200,7 +200,7 @@ module Print(T : VIEW) = struct
           print a print b print c
     | AppBuiltin (b, []) -> CCFormat.string out (NunBuiltin.T.to_string b)
     | AppBuiltin (f, [a;b]) when NunBuiltin.T.fixity f = `Infix ->
-        fpf out "@[<hv>%a@ %s %a@]"
+        fpf out "@[<hv>%a@ %s@ %a@]"
           print_in_app a (NunBuiltin.T.to_string f) print_in_app b
     | AppBuiltin (b,l) ->
         fpf out "@[<2>%s@ %a@]" (NunBuiltin.T.to_string b)
@@ -227,7 +227,7 @@ module Print(T : VIEW) = struct
         print out t
     | App (_,_) | AppBuiltin (_,_::_)
     | Bind _ | Let _
-    | TyArrow (_,_) -> fpf out "@[(%a)@]" print t
+    | TyArrow (_,_) -> fpf out "(@[%a@])" print t
 
   and print_in_binder out t = match T.view t with
     | TyBuiltin _ | Var _
@@ -235,7 +235,7 @@ module Print(T : VIEW) = struct
         print out t
     | Bind _
     | Let _
-    | TyArrow (_,_) -> fpf out "@[(%a)@]" print t
+    | TyArrow (_,_) -> fpf out "(@[%a@])" print t
 end
 
 (** {2 Utils with Substitutions} *)
