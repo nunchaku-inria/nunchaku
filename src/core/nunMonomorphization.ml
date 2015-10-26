@@ -7,8 +7,8 @@ module ID = NunID
 module Var = NunVar
 module TI = NunTerm_intf
 module TyI = NunType_intf
-module Stmt = NunProblem.Statement
-module Env = NunProblem.Env
+module Stmt = NunStatement
+module Env = NunEnv
 
 type id = ID.t
 
@@ -491,7 +491,7 @@ module Make(T : NunTerm_ho.S) = struct
       (* push new statement *)
       let push_st = CCVector.push res in
       NunUtils.debugf ~section 2 "@[<2>convert statement@ `%a`@]"
-        (fun k-> k (NunProblem.Statement.print P.print P.print_ty) st);
+        (fun k-> k (NunStatement.print P.print P.print_ty) st);
       (* process statement *)
       let info = Stmt.info st in
       match Stmt.view st with
@@ -581,7 +581,7 @@ module Make(T : NunTerm_ho.S) = struct
 
   (* rewrite mangled constants to their definition *)
   let unmangle_model ~state =
-    NunProblem.Model.map ~f:(unmangle_term ~state)
+    NunModel.map ~f:(unmangle_term ~state)
 end
 
 (* TODO *)
@@ -618,7 +618,7 @@ module TypeMangling(T : NunTerm_ho.S) = struct
   let unmangle_term ~state:_ _ = assert false (* TODO reverse mapping *)
 
   let unmangle_model ~state m =
-    NunProblem.Model.map ~f:(unmangle_term ~state) m
+    NunModel.map ~f:(unmangle_term ~state) m
 end
 
 let pipe_with (type a) ~decode ?(mutualize=true) ~print
@@ -649,5 +649,5 @@ let pipe_with (type a) ~decode ?(mutualize=true) ~print
     ()
 
 let pipe (type a) ?mutualize ~print (t : (module NunTerm_ho.S with type t = a)) =
-  let decode ~decode_term = NunProblem.Model.map ~f:decode_term in
+  let decode ~decode_term = NunModel.map ~f:decode_term in
   pipe_with ~print ?mutualize t ~decode

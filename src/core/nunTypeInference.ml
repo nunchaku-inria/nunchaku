@@ -9,7 +9,7 @@ module ID = NunID
 module Var = NunVar
 module MetaVar = NunMetaVar
 module Loc = NunLocation
-module Sig = NunProblem.Signature
+module Sig = NunSignature
 
 module TI = NunTerm_intf
 module TyI = NunType_intf
@@ -17,7 +17,7 @@ module TyI = NunType_intf
 type 'a or_error = [`Ok of 'a | `Error of string]
 type id = NunID.t
 type 'a var = 'a Var.t
-type 'a signature = 'a NunProblem.Signature.t
+type 'a signature = 'a Sig.t
 type loc = Loc.t
 
 let fpf = Format.fprintf
@@ -463,7 +463,7 @@ module Convert(Term : TERM) = struct
         (fun k-> k PrintTerm.print t (CCFormat.list Var.print) new_vars);
     t, new_vars
 
-  module St = NunProblem.Statement
+  module St = NunStatement
 
   type statement = (Term.t, Term.Ty.t) St.t
 
@@ -728,7 +728,7 @@ let erase (type a)(module T : NunTerm_ho.S with type t=a) m =
   (* we get back "regular" HO terms *)
   let module Erase = NunTerm_ho.Erase(T) in
   let ctx = Erase.create () in
-  NunProblem.Model.map m ~f:(Erase.erase ~ctx)
+  NunModel.map m ~f:(Erase.erase ~ctx)
 
 let pipe_with (type a) ~decode ~print
 (module T : NunTerm_typed.S with type t = a)

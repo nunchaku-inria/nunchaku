@@ -116,7 +116,7 @@ module SubstUtil(T : S)(Subst : NunVar.SUBST with type ty = T.ty) : sig
       [ty' , subst] such that [subst ty' = apply t l].
       @raise Error if the arguments do not match *)
 
-  type signature = T.ty NunProblem.Signature.t
+  type signature = T.ty NunSignature.t
 
   val ty : sigma:signature -> T.t -> T.ty or_error
   (** Compute the type of the given term in the given signature *)
@@ -169,7 +169,7 @@ module OfFO(T : S)(FO : NunFO.VIEW) : sig
   val convert_term : FO.T.t -> T.t
   val convert_formula : FO.Formula.t -> T.t
 
-  val convert_model : FO.term_or_form NunProblem.Model.t -> T.t NunProblem.Model.t
+  val convert_model : FO.term_or_form NunModel.t -> T.t NunModel.t
 end
 
 val to_fo :
@@ -177,8 +177,8 @@ val to_fo :
   (module NunFO.S with type T.t = 't and type formula = 'f) ->
   (('a, 'a) NunProblem.t,
     ('a, 'a, 'a) NunFO.Problem.t,
-    ('t,'f) NunFO.term_or_form_view NunProblem.Model.t,
-    'a NunProblem.Model.t
+    ('t,'f) NunFO.term_or_form_view NunModel.t,
+    'a NunModel.t
   ) NunTransform.t
 
 val to_fo_no_model :

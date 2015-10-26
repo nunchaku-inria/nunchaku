@@ -6,7 +6,7 @@ type 'a printer = Format.formatter -> 'a -> unit
 
 type term = NunUntypedAST.term
 type form= NunUntypedAST.term
-type model = term NunProblem.Model.t
+type model = term NunModel.t
 
 val print_term : term printer
 

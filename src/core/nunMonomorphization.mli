@@ -34,7 +34,7 @@ module Make(T : NunTerm_ho.S) : sig
   val monomorphize :
     ?depth_limit:int ->
     mutualize:bool ->
-    env:(T.t,T.ty) NunProblem.Env.t ->
+    env:(T.t,T.ty) NunEnv.t ->
     state:mono_state ->
     (T.t, T.ty) NunProblem.t ->
     (T.t, T.ty) NunProblem.t
@@ -59,8 +59,8 @@ module Make(T : NunTerm_ho.S) : sig
 
   val unmangle_model :
       state:mono_state ->
-      T.t NunProblem.Model.t ->
-      T.t NunProblem.Model.t
+      T.t NunModel.t ->
+      T.t NunModel.t
   (** Unmangles constants that have been collapsed with their type arguments *)
 end
 
@@ -88,7 +88,7 @@ module TypeMangling(T : NunTerm_ho.S) : sig
 
   val unmangle_model :
       state:state ->
-      T.t NunProblem.Model.t -> T.t NunProblem.Model.t
+      T.t NunModel.t -> T.t NunModel.t
   (** Stay in the same term representation, but de-monomorphize *)
 end
 
@@ -98,7 +98,7 @@ val pipe :
   print:bool ->
   (module NunTerm_ho.S with type t = 'a) ->
   (('a, 'a) NunProblem.t, ('a,'a) NunProblem.t,
-    'a NunProblem.Model.t, 'a NunProblem.Model.t) NunTransform.t
+    'a NunModel.t, 'a NunModel.t) NunTransform.t
 
 (** Generic Pipe Component
     @param decode the decode function that takes an applied [(module S)]

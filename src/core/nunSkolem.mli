@@ -35,7 +35,7 @@ module type S = sig
   (** Find definition of this Skolemized ID *)
 
   val decode_model :
-    state:state -> T2.t NunProblem.Model.t -> T2.t NunProblem.Model.t
+    state:state -> T2.t NunModel.t -> T2.t NunModel.t
 end
 
 module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
@@ -46,7 +46,7 @@ val pipe :
   (module NunTerm_ho.VIEW with type t = 'a) ->
   (module NunTerm_ho.S with type t = 'b) ->
   (('a,'a) NunProblem.t, ('b,'b) NunProblem.t,
-    'b NunProblem.Model.t, 'b NunProblem.Model.t
+    'b NunModel.t, 'b NunModel.t
   ) NunTransform.t
 
 (** Similar to {!pipe} but with a generic decode function.

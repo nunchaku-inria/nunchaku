@@ -380,7 +380,7 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
     let t, subst = ty_apply_full t l in
     if Subst.is_empty subst then t else eval ~subst t
 
-  type signature = T.ty NunProblem.Signature.t
+  type signature = T.ty NunSignature.t
 
   let rec ty_exn ~sigma t = match T.view t with
     | Const id ->
@@ -712,7 +712,7 @@ module AsFO(T : S) = struct
   type term_or_form = (T.t, formula) NunFO.term_or_form_view
 
   let convert_statement st =
-    let module St = NunProblem.Statement in
+    let module St = NunStatement in
     match St.view st with
     | St.Decl (id, k, ty) ->
         begin match k with
@@ -856,7 +856,7 @@ module OfFO(T : S)(FO : NunFO.VIEW) = struct
     | NunFO.Term t -> convert_term t
     | NunFO.Form f -> convert_formula f
 
-  let convert_model m = NunProblem.Model.map ~f:convert_t_or_f m
+  let convert_model m = NunModel.map ~f:convert_t_or_f m
 end
 
 let to_fo (type a)(type b)(type c)

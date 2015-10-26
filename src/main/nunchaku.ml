@@ -241,7 +241,7 @@ let main_model ~output statements =
   begin match output with
   | O_nunchaku ->
       Format.printf "@[<v2>SAT: model {@,%a@]@,}@."
-        (NunProblem.Model.print NunUntypedAST.print_term) m;
+        (NunModel.print NunUntypedAST.print_term) m;
   | O_tptp ->
       Format.printf "@[<v2>%a@]@,@." NunPrintTPTP.print_model m
   end;

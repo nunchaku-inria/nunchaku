@@ -4,7 +4,7 @@
 (* {1 TPTP Printer} *)
 
 module A = NunUntypedAST
-module M = NunProblem.Model
+module M = NunModel
 module Var = NunVar
 module ID = NunID
 
@@ -12,7 +12,7 @@ type 'a printer = Format.formatter -> 'a -> unit
 
 type term = NunUntypedAST.term
 type form= NunUntypedAST.term
-type model = term NunProblem.Model.t
+type model = term M.t
 
 let fpf = Format.fprintf
 let section = NunUtils.Section.make "print_tptp"

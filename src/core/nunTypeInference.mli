@@ -6,7 +6,7 @@
 type 'a or_error = [`Ok of 'a | `Error of string]
 type id = NunID.t
 type 'a var = 'a NunVar.t
-type 'a signature = 'a NunProblem.Signature.t
+type 'a signature = 'a NunSignature.t
 type loc = NunLocation.t
 
 exception ScopingError of string * string * loc option
@@ -64,7 +64,7 @@ module Convert(Term : TERM) : sig
       @return a pair [(t', vars)] such that, roughly, [app t' vars = t],
         or [t'] is [forall vars t], or [t'] contains [vars] *)
 
-  type statement = (Term.t, Term.Ty.t) NunProblem.Statement.t
+  type statement = (Term.t, Term.Ty.t) NunStatement.t
 
   val convert_statement : env:env -> NunUntypedAST.statement -> (statement * env) or_error
 
@@ -81,8 +81,8 @@ end
 (** Decoding function used by {!pipe} *)
 val erase :
   (module NunTerm_ho.S with type t = 'a) ->
-  'a NunProblem.Model.t ->
-  NunUntypedAST.term NunProblem.Model.t
+  'a NunModel.t ->
+  NunUntypedAST.term NunModel.t
 
 (** Pipeline component. Takes input and output Term representations. *)
 val pipe :
@@ -90,11 +90,11 @@ val pipe :
   (module NunTerm_typed.S with type t = 'a) ->
   (module NunTerm_ho.S with type t = 'b) ->
   (NunUntypedAST.statement list, ('a, 'a) NunProblem.t,
-    'b NunProblem.Model.t, NunUntypedAST.term NunProblem.Model.t)
+    'b NunModel.t, NunUntypedAST.term NunModel.t)
     NunTransform.t
 
 val pipe_with :
-  decode:(signature:'a NunProblem.Signature.t -> 'c -> 'd) ->
+  decode:(signature:'a NunSignature.t -> 'c -> 'd) ->
   print:bool ->
   (module NunTerm_typed.S with type t = 'a) ->
   (NunUntypedAST.statement list, ('a, 'a) NunProblem.t, 'c, 'd) NunTransform.t

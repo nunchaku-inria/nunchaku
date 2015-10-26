@@ -39,7 +39,7 @@ module type S = sig
   (** Find definition of this Skolemized ID *)
 
   val decode_model :
-    state:state -> T2.t NunProblem.Model.t -> T2.t NunProblem.Model.t
+    state:state -> T2.t NunModel.t -> T2.t NunModel.t
 end
 
 module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
@@ -50,7 +50,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
 
   module P2 = NunTerm_ho.Print(T2)
   module Subst = NunVar.Subst(T2)
-  module Stmt = NunProblem.Statement
+  module Stmt = NunStatement
 
   type new_sym = {
     sym_defines : T2.t; (* what is the formula represented by the symbol *)
