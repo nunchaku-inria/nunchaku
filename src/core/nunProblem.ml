@@ -20,21 +20,28 @@ let fpf = Format.fprintf
 
 type 'a vec_ro = ('a, CCVector.ro) CCVector.t
 
+type metadata = {
+  incomplete: bool;  (* in case some depth limit was reached *)
+}
+
 type ('t, 'ty) t = {
   statements : ('t, 'ty) Statement.t vec_ro;
+  metadata: metadata;
 }
 
 let statements t = t.statements
 
-let make statements = { statements; }
+let make ~meta statements = { metadata=meta; statements; }
 
-let of_list l = make (CCVector.of_list l)
+let of_list ~meta l = make ~meta (CCVector.of_list l)
 
-let map_statements ~f st = {
-  statements=CCVector.map f st.statements;
+let map_statements ~f pb = {
+  metadata=pb.metadata;
+  statements=CCVector.map f pb.statements;
 }
 
 let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
+  metadata=p.metadata;
   statements=(
     let res = CCVector.create () in
     CCVector.iter
@@ -107,16 +114,19 @@ let env ?init:(env=Env.create()) pb =
   let module St = Statement in
   try
     CCVector.iter
-      (fun st -> match St.view st with
-        | St.Decl (id,_,ty) ->
-            Env.declare ~env ~id ~ty
+      (fun st ->
+        let loc = Statement.loc st in
+        match St.view st with
+        | St.Decl (id,kind,ty) ->
+            Env.declare ?loc ~kind ~env id ty
         | St.TyDef (kind,l) ->
-            Env.def_data ~env ~kind l
+            Env.def_data ?loc ~env ~kind l
         | St.Goal _ -> ()
         | St.Axiom (St.Axiom_std _) -> ()
-        | St.Axiom (St.Axiom_spec l)
+        | St.Axiom (St.Axiom_spec l) ->
+            Env.def_funs ?loc ~kind:`Spec ~env l
         | St.Axiom (St.Axiom_rec l) ->
-            Env.def_funs ~env l
+            Env.def_funs ?loc ~kind:`Rec ~env l
       ) pb.statements;
     env
   with Env.InvalidDef _ as e ->

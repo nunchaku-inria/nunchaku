@@ -12,16 +12,22 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 
 type 'a vec_ro = ('a, CCVector.ro) CCVector.t
 
-type ('t, 'ty) t = private {
-  statements : ('t, 'ty) NunStatement.t vec_ro;
+type metadata = {
+  incomplete: bool;  (* in case some depth limit was reached *)
 }
 
-val make : ('t, 'ty) NunStatement.t vec_ro -> ('t, 'ty) t
+type ('t, 'ty) t = private {
+  statements : ('t, 'ty) NunStatement.t vec_ro;
+  metadata: metadata;
+}
+
+val make : meta:metadata -> ('t, 'ty) NunStatement.t vec_ro -> ('t, 'ty) t
 (** Build a problem from statements *)
 
-val of_list : ('t, 'ty) NunStatement.t list -> ('t, 'ty) t
+val of_list : meta:metadata -> ('t, 'ty) NunStatement.t list -> ('t, 'ty) t
 
 val statements : ('t, 'ty) t -> ('t, 'ty) NunStatement.t vec_ro
+val metadata : (_,_) t -> metadata
 
 val map_statements :
   f:(('t, 'ty) NunStatement.t -> ('t2,'ty2) NunStatement.t) -> ('t,'ty) t -> ('t2,'ty2) t
