@@ -226,6 +226,13 @@ module Env : sig
 
   val find_exn : env:('t, 'ty) t -> id:id -> ('t, 'ty) info
   (** @raise Not_found if ID not defined *)
+
+  val find_ty : env:('t, 'ty) t -> id:id -> 'ty
+  (** Find the type of a symbol
+      @raise Not_found if the symbol is not declared *)
+
+  val mem : env:(_,_) t -> id:id -> bool
+  (** @return true if the symbol is at least declared *)
 end
 
 (** {2 Problem: a Set of Statements + Signature} *)

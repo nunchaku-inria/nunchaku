@@ -8,6 +8,7 @@ module Var = NunVar
 module TI = NunTerm_intf
 module TyI = NunType_intf
 module Stmt = NunProblem.Statement
+module Env = NunProblem.Env
 
 type id = ID.t
 
@@ -140,8 +141,8 @@ module Make(T : NunTerm_ho.S) = struct
         (ID.Map.print ~start:"" ~stop:"" ID.print_no_id ArgTupleSet.print) t
   end
 
-  let find_ty_ ~sigma id =
-    try NunProblem.Signature.find_exn ~sigma id
+  let find_ty_ ~env id =
+    try Env.find_ty ~env ~id
     with Not_found ->
       fail_ ("symbol " ^ ID.to_string id ^ " is not declared")
 
@@ -270,7 +271,7 @@ module Make(T : NunTerm_ho.S) = struct
       f (CCVector.get v i)
     done
 
-  let monomorphize ?(depth_limit=256) ~mutualize:_ ~sigma ~state pb =
+  let monomorphize ?(depth_limit=256) ~mutualize:_ ~env ~state pb =
     (* map T.t to T.t and, simultaneously, compute relevant instances
        of symbols [t] depends on.
        @param subst bindings for type variables
@@ -302,7 +303,7 @@ module Make(T : NunTerm_ho.S) = struct
               T.app (conv_term ~mangle ~subst ~depth f) l
           | TI.Const id ->
               (* find type arguments *)
-              let ty = find_ty_ ~sigma id in
+              let ty = find_ty_ ~env id in
               let n = num_param_ty_ ty in
               (* tuple of arguments for [id] *)
               let tup = take_n_ground_atomic_types_ ~depth ~subst n l in
@@ -635,9 +636,9 @@ let pipe_with (type a) ~decode ?(mutualize=true) ~print
     ~on_encoded
     ~name:"monomorphization"
     ~encode:(fun p ->
-      let sigma = NunProblem.signature p in
+      let env = NunProblem.env p in
       let state = Mono.create () in
-      let p = Mono.monomorphize ~mutualize ~sigma ~state p in
+      let p = Mono.monomorphize ~mutualize ~env ~state p in
       p, state
       (* TODO mangling of types, as an option *)
     )

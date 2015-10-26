@@ -34,7 +34,7 @@ module Make(T : NunTerm_ho.S) : sig
   val monomorphize :
     ?depth_limit:int ->
     mutualize:bool ->
-    sigma:T.ty NunProblem.Signature.t ->
+    env:(T.t,T.ty) NunProblem.Env.t ->
     state:mono_state ->
     (T.t, T.ty) NunProblem.t ->
     (T.t, T.ty) NunProblem.t
@@ -47,7 +47,7 @@ module Make(T : NunTerm_ho.S) : sig
       Then it specializes relevant definitions with the set of tuples
       computed earlier.
 
-      @param sigma signature of the problem
+      @param env environment defined by the problem
       @param depth_limit recursion limit for specialization of functions
       @param state used to convert forward and backward
       @param mutualize if true, polymorphic (co)inductive types are specialized

@@ -340,6 +340,10 @@ module Env = struct
   let find ~env:t ~id =
     try Some (find_exn ~env:t ~id)
     with Not_found -> None
+
+  let mem ~env ~id = ID.Tbl.mem env.infos id
+
+  let find_ty ~env ~id = (find_exn ~env ~id).ty
 end
 
 type 'a vec_ro = ('a, CCVector.ro) CCVector.t
