@@ -170,6 +170,64 @@ module Signature : sig
   val declare : sigma:'a t -> id -> 'a -> 'a t
 end
 
+(** {2 Environment}
+
+  Maps (co)inductive types to their definition, functions
+  to their specifications/axioms/recursive specifications,
+  constructors to their types, and any symbol to its type *)
+
+module Env : sig
+  type ('t, 'ty) def =
+    | Fun of ('t, 'ty) Statement.mutual_cases list
+        (** ID is a defined fun/predicate. Can be defined in several places *)
+
+    | Data of [`Codata | `Data] * 'ty Statement.mutual_types * 'ty Statement.tydef
+        (** ID is a (co)data *)
+
+    | Cstor of 'ty Statement.tydef * 'ty Statement.ty_constructor
+        (** ID is a constructor (of the given type) *)
+
+    | NoDef
+        (** Undefined symbol *)
+
+  (** All information on a given symbol *)
+  type ('t, 'ty) info = {
+    ty: 'ty; (** type of symbol *)
+    def: ('t, 'ty) def;
+  }
+
+  (** Maps ID to their type and definitions *)
+  type ('t, 'ty) t = private {
+    infos: ('t, 'ty) info NunID.Tbl.t;
+  }
+
+  exception InvalidDef of id * string
+
+  val create: unit -> ('t, 'ty) t
+  (** Create a new environment *)
+
+  val declare : env:('t, 'ty) t -> id:id -> ty:'ty -> unit
+  (** Declare a symbol's type (as undefined, for now) *)
+
+  val def_funs : env:('t, 'ty) t -> ('t, 'ty) Statement.mutual_cases -> unit
+  (** Add a definition of functions/predicates. They can be already
+      defined (or declared). *)
+
+  val def_data :
+    env:('t, 'ty) t ->
+    kind:[`Data | `Codata] ->
+    'ty Statement.mutual_types ->
+    unit
+  (** Define a new set of mutually recursive (co)data types.
+      Also defines their constructors.
+      @raise InvalidDef if some type/constructor already defined/declared *)
+
+  val find : env:('t, 'ty) t -> id:id -> ('t, 'ty) info option
+
+  val find_exn : env:('t, 'ty) t -> id:id -> ('t, 'ty) info
+  (** @raise Not_found if ID not defined *)
+end
+
 (** {2 Problem: a Set of Statements + Signature} *)
 
 type 'a vec_ro = ('a, CCVector.ro) CCVector.t
@@ -216,6 +274,11 @@ val signature : ?init:'ty Signature.t -> (_, 'ty) t -> 'ty Signature.t
 (** Gather the signature of every declared symbol
     @param init initial signature, if any
     @raise IllFormed if some symbol is declared twice *)
+
+val env : ?init:('t,'ty) Env.t -> ('t, 'ty) t -> ('t,'ty) Env.t
+(** Build an environment defining/declaring every symbol of the problem.
+    @param init initial env, if any
+    @raise IllFormed if some declarations/definitions do not agree *)
 
 (** {2 Model} *)
 
