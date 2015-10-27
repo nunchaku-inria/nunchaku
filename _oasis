@@ -19,10 +19,13 @@ Library "nunchaku_core"
   Path:             src/core/
   Modules:          NunID, NunVar, NunMetaVar, NunLocation, NunIntf, NunUtils,
                     NunTransform, NunType_intf, NunUntypedAST, NunModel,
-                    NunTerm_typed, NunTypeUnify, NunTypeInference,
+                    NunTerm_typed, NunTypeUnify,
                     NunProblem, NunTerm_ho, NunFO, NunBuiltin, NunTerm_intf,
                     NunReduce, NunSolver_intf, NunEnv, NunSignature,
-                    NunStatement, NunCVC4, NunSkolem, NunMonomorphization
+                    NunStatement, NunCVC4,
+                    transformations/NunSkolem,
+                    transformations/NunTypeInference,
+                    transformations/NunMonomorphization
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.sexp, containers.iter,
