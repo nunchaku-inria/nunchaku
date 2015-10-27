@@ -1,0 +1,91 @@
+= Pipeline components
+
+== Recursive Functions
+
+The recursive (well-founded) functions need to be encoded:
+
+----
+val fib : nat -> nat
+
+let rec fib n =
+  if n = 0 then 0
+  else if n = 1 then 1
+  else
+    fib (n-1) + fib (n-2)
+----
+
+requires quantification over `nat : type` which is infinite. Instead we
+approximate its argument by `gamma_nat : type` (uninterpreted type to be
+dealt with by finite model finding) and it becomes:
+
+----
+val fib : nat -> nat
+
+let rec fib (gamma_nat n) =
+  if gamma_nat n = 0 then 0
+  else if gamma_nat n = 1 then 1
+  else
+    exists m1 m2.
+      gamma_nat m1 = (gamma_nat n) - 1 && gamma_nat m2 = (gamma_nat n) - 2
+      =>
+      fib (gamma_nat (n-1)) + fib (gamma_nat (n-2))
+----
+
+See 'Model Finding for Recursive Functions in SMT'
+
+== Inductive Predicates
+
+Syntax:
+
+----
+inductive even : nat -> prop :=
+  even 0 ;
+  even n => even n ;  # not well-founded!
+  even n => even (n+2).
+----
+
+Two possible approaches.
+
+Reference http://www.cl.cam.ac.uk/~jrh13/papers/ind.html[]
+
+=== À la Coq
+
+Add an argument that is used to make the recursion well-founded (or productive,
+for coinductive predicates).
+
+----
+data even_witness :=
+  | case0
+  | case_same even_witness
+  | case_plus2 even_witness.
+
+val even' : even_witness -> nat -> prop
+
+rec even' :=
+  even' case0 0 ;
+  even' (case_same w) n = even' w n ;
+  even' (case_plus2 w) (n+2) = even' w n.
+----
+
+Note that every case is now well-founded.
+
+=== À la Nitpick
+
+Approximation that depends on the polarity. Declare `even2 : nat -> nat -> prop`
+where the first `nat` is an index.
+
+|===
+| positive | negative
+
+| `even2 0 _ = false`
+| `even2 0 _ = true`
+
+| `even2 k n = even2 (k-1) 0 ∨ even2 (k-1) n ∨ even2 (k-1) (n-2)`
+| same
+|===
+
+Then `even n` is either `exists k. even2 k n`, or we can enumerate `k`
+starting from `0` (or CVC4 could).
+
+
+
