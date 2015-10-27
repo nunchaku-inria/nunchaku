@@ -270,6 +270,17 @@ module Make(T : NunTerm_ho.S) = struct
       let mangled = St.save_mangled ~state id args ~mangled:name in
       mangled, Some mangled
 
+  (* should [id] be mangled? in all cases, yes, except if it's an
+     uninterpreted type. *)
+  let should_be_mangled_ ~state id =
+    match Env.find_exn ~env:state.St.env ~id with
+    | {Env.def=(Env.Fun _ | Env.Cstor _ | Env.Data _); _} ->
+        true (* defined objects: mangle *)
+    | {Env.def=Env.NoDef; decl_kind=(Stmt.Decl_fun | Stmt.Decl_prop); _} ->
+        true (* functions and prop: mangle *)
+    | {Env.def=Env.NoDef; decl_kind=Stmt.Decl_type; _} ->
+        false (* uninterpreted poly types: do not mangle *)
+
   (* does this case match [id tup]? If yes, return [case, subst] *)
   let match_case ?(subst=Subst.empty) ~case id tup =
     let t = T.app (T.const id) (ArgTuple.args tup) in
@@ -297,7 +308,6 @@ module Make(T : NunTerm_ho.S) = struct
   type local_state = {
     depth: int;
     subst: T.ty Subst.t;
-    mangle: bool;
   }
 
   (* monomorphize term *)
@@ -336,7 +346,7 @@ module Make(T : NunTerm_ho.S) = struct
             let tup = take_n_ground_atomic_types_ ~state ~local_state n l in
             (* mangle? *)
             let new_id, mangled =
-              if local_state.mangle then mangle_ ~state id tup
+              if should_be_mangled_ ~state id then mangle_ ~state id tup
               else id, None
             in
             (* specialize specialization of [id] *)
@@ -386,9 +396,7 @@ module Make(T : NunTerm_ho.S) = struct
   and mono_var ~state ~local_state v =
     Var.update_ty v ~f:(mono_type ~state ~local_state)
 
-  and mono_type ~state ~local_state t =
-    let local_state = {local_state with mangle=false; } in
-    mono_term ~state ~local_state t
+  and mono_type ~state ~local_state t = mono_term ~state ~local_state t
 
   (* take [n] ground atomic type arguments in [l], or fail *)
   and take_n_ground_atomic_types_ ~state ~local_state n = function
@@ -411,8 +419,7 @@ module Make(T : NunTerm_ho.S) = struct
         | Some x -> x
       in
       let ty = SubstUtil.ty_apply env_info.Env.ty (ArgTuple.args tup) in
-      let new_ty = mono_term ~state
-        ~local_state:{depth=0; mangle=false; subst=Subst.empty} ty in
+      let new_ty = mono_type ~state ~local_state:{depth=0; subst=Subst.empty} ty in
       St.push_res ~state
         (Stmt.mk_decl ~info:{Stmt.loc; name=None}
           new_id env_info.Env.decl_kind new_ty);
@@ -461,7 +468,7 @@ module Make(T : NunTerm_ho.S) = struct
         St.specialization_is_done ~state id tup;
         (* we know [subst case.defined = (id args)], now
             specialize the axioms and other fields *)
-        let local_state = {subst; depth=depth+1; mangle=true} in
+        let local_state = {subst; depth=depth+1; } in
         let axioms = List.map
           (fun ax ->
             mono_term ~state ~local_state ax
@@ -560,7 +567,7 @@ module Make(T : NunTerm_ho.S) = struct
               SubstUtil.ty_apply_full c.Stmt.cstor_type (ArgTuple.args tup)
             in
             let ty' = SubstUtil.eval ~subst ty' in
-            let local_state = {mangle=true; depth=depth+1; subst} in
+            let local_state = {depth=depth+1; subst} in
             let args' = List.map (mono_term ~state ~local_state) c.Stmt.cstor_args in
             {Stmt.cstor_name=id'; cstor_type=ty'; cstor_args=args'; }
           )
@@ -607,8 +614,8 @@ module Make(T : NunTerm_ho.S) = struct
                here we must ignore [tup]) *)
             if not (St.is_already_declared ~state id ArgTuple.empty) then (
               St.declaration_is_done ~state id ArgTuple.empty;
-              let new_ty = mono_term ~state
-                ~local_state:{depth=0; mangle=false; subst=Subst.empty} ty in
+              let new_ty = mono_type ~state
+                ~local_state:{depth=0; subst=Subst.empty} ty in
               St.push_res ~state
                 (Stmt.ty_decl ~info:{Stmt.loc; name=None} id new_ty)
             )
@@ -634,12 +641,12 @@ module Make(T : NunTerm_ho.S) = struct
     | Stmt.Goal g ->
         (* convert goal *)
         let g = mono_term ~state
-          ~local_state:{subst=Subst.empty; depth=0; mangle=true} g
+          ~local_state:{subst=Subst.empty; depth=0; } g
         in
         St.push_res ~state (Stmt.goal ~info g)
     | Stmt.Axiom (Stmt.Axiom_std l) ->
         (* keep axioms *)
-        let local_state={mangle=true; depth=0; subst=Subst.empty} in
+        let local_state={depth=0; subst=Subst.empty} in
         let l = List.map (mono_term ~state ~local_state) l in
         St.push_res ~state (Stmt.axiom ~info l)
     | Stmt.Axiom (Stmt.Axiom_spec l) ->
