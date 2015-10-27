@@ -176,7 +176,9 @@ let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
 let fpf = Format.fprintf
 
-let print ?pty_in_app pt pty out t = match t.view with
+let print ?pty_in_app pt pty out t =
+  let pty_in_app = CCOpt.get (fun out -> fpf out "(%a)" pty) pty_in_app in
+  match t.view with
   | Decl (id,_,t) ->
       fpf out "@[<2>val %a@ : %a.@]" ID.print_name id pty t
   | Axiom a ->
@@ -201,19 +203,23 @@ let print ?pty_in_app pt pty out t = match t.view with
       | Axiom_rec t -> print_cases ~what:"rec" out t
       end
   | TyDef (k, l) ->
-      let pty_in_app = CCOpt.get (fun out -> fpf out "(%a)" pty) pty_in_app in
       let ppcstors out c =
         fpf out "@[<hv2>%a %a@]"
           ID.print_name c.cstor_name (pplist ~sep:" " pty_in_app) c.cstor_args in
       let print_def out tydef =
-        fpf out "@[<v2>%a %a :=@ @[<v>%a@]@]"
+        fpf out "@[<hv2>%a %a :=@ @[<v>%a@]@]"
           ID.print_name tydef.ty_id
           (pplist ~sep:" " Var.print) tydef.ty_vars
           (pplist ~sep:" | " ppcstors) tydef.ty_cstors
       in
-      fpf out "@[<hv2>%s@ %a.@]"
-        (match k with `Data -> "data" | `Codata -> "codata")
-        (pplist ~sep:" and " print_def) l
+      fpf out "@[<hv2>%s@ "
+        (match k with `Data -> "data" | `Codata -> "codata");
+      List.iteri
+        (fun i tydef ->
+          if i>0 then fpf out "@,and ";
+          print_def out tydef
+        ) l;
+      fpf out ".@]"
   | Goal t -> fpf out "@[<2>goal %a.@]" pt t
 
 let print_list ?pty_in_app pt pty out l =

@@ -736,7 +736,8 @@ let pipe_with (type a) ~decode ~print
   let module PrintT = NunTerm_ho.Print(T) in
   (* type inference *)
   let module Conv = Convert(T) in
-  let print_problem = NunProblem.print PrintT.print T.Ty.print in
+  let print_problem = NunProblem.print
+    ~pty_in_app:PrintT.print_in_app PrintT.print T.Ty.print in
   let on_encoded =
     if print
     then [Format.printf "@[<v2>after type inference: %a@]@." print_problem]
