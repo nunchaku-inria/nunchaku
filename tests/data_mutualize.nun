@@ -1,0 +1,40 @@
+
+# (co)inductive types with need for mutualization
+# EXPECT: OK
+
+
+# prelude: nat
+data nat :=
+  | zero
+  | succ nat.
+
+val plus : nat -> nat -> nat.
+rec plus :=
+  forall x. plus zero x = x;
+  forall x y. plus (succ x) y = succ (plus x y).
+
+# tree and list
+data list a :=
+  | nil
+  | cons a (list a).
+
+val unit : type.
+val one : unit.
+
+data tree :=
+  | node unit (list tree).  # need to specialize list_tree here
+
+val size : tree -> nat.
+val size_list : list tree -> nat.
+
+rec size :=
+  forall x l. size (node x l) = succ (size_list l)
+and size_list :=
+  size_list nil = zero;
+  forall t l. size_list (cons t l) = plus (size t) (size_list l).
+
+# compute size of some tree
+goal
+  let t := node one (cons (node one nil) nil) in
+  let t2 := node one (cons t (cons t nil)) in
+  exists n. size t2 = n.
