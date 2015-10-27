@@ -236,14 +236,12 @@ module Make(T : NunTerm_ho.S) = struct
 
     (* specialize [id, tup] using the topmost element of [state.specialize]. *)
     let specialize ~state ~depth id tup =
-      if not (is_already_specialized ~state id tup) then (
-        NunUtils.debugf ~section 3 "specialize %a on %a"
+      if not (is_already_specialized ~state id tup)
+        then NunUtils.debugf ~section 3 "specialize %a on %a"
           (fun k-> k ID.print_name id ArgTuple.print tup);
-        (* avoid loops *)
-        specialization_is_done ~state id tup;
-        let f = current_specialize ~state in
-        f ~state ~depth id tup;
-      )
+      (* avoid loops *)
+      let f = current_specialize ~state in
+      f ~state ~depth id tup
 
     (* output statement *)
     let push_res ~state st = CCVector.push state.output st
@@ -453,12 +451,15 @@ module Make(T : NunTerm_ho.S) = struct
       let id = case.Stmt.case_head in
       (* check for depth limit *)
       St.check_depth ~state depth;
-      if depth > St.depth_limit ~state then ()
+      if depth > St.depth_limit ~state
+      || St.is_already_specialized ~state id tup
+      then ()
       else (
         NunUtils.debugf ~section 3
           "@[<2>process case `%a` for@ (%a %a)@ at depth %d@]"
           (fun k -> k P.print case.Stmt.case_defined ID.print_no_id id
             ArgTuple.print tup depth);
+        St.specialization_is_done ~state id tup;
         (* we know [subst case.defined = (id args)], now
             specialize the axioms and other fields *)
         let local_state = {subst; depth=depth+1; mangle=true} in
@@ -524,12 +525,15 @@ module Make(T : NunTerm_ho.S) = struct
       let tydef, depth, tup = Queue.pop q in
       (* check for depth limit *)
       St.check_depth ~state depth;
-      if depth > St.depth_limit ~state then ()
+      if depth > St.depth_limit ~state
+      || St.is_already_specialized ~state tydef.Stmt.ty_id tup
+      then ()
       else (
         NunUtils.debugf ~section 3
           "@[<2>process type decl `%a : %a` for@ %a@ at depth %d@]"
           (fun k-> k ID.print_no_id tydef.Stmt.ty_id
           P.print_ty tydef.Stmt.ty_type ArgTuple.print tup depth);
+        St.specialization_is_done ~state tydef.Stmt.ty_id tup;
         (* mangle type name. Monomorphized type should be : Type *)
         let id, _ = mangle_ ~state tydef.Stmt.ty_id (ArgTuple.args tup) in
         let ty = T.ty_type in

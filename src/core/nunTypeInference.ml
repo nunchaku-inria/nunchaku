@@ -739,7 +739,7 @@ let pipe_with (type a) ~decode ~print
   let print_problem = NunProblem.print PrintT.print T.Ty.print in
   let on_encoded =
     if print
-    then [Format.printf "@[<v2>after type inference:@ %a@]@." print_problem]
+    then [Format.printf "@[<v2>after type inference: %a@]@." print_problem]
     else []
   in
   NunTransform.make1
