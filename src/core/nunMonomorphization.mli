@@ -29,7 +29,6 @@ module Make(T : NunTerm_ho.S) : sig
 
   val monomorphize :
     ?depth_limit:int ->
-    mutualize:bool ->
     (T.t, T.ty) NunProblem.t ->
     (T.t, T.ty) NunProblem.t * unmangle_state
   (** Filter and specialize definitions of the problem.
@@ -42,8 +41,6 @@ module Make(T : NunTerm_ho.S) : sig
       computed earlier.
 
       @param depth_limit recursion limit for specialization of functions
-      @param mutualize if true, polymorphic (co)inductive types are specialized
-        in other (co)inductive types that use them
       @return a new list of (monomorphized) statements, and the final
         state obtained after monomorphization
   *)
@@ -88,7 +85,6 @@ end
 
 (** Pipeline component *)
 val pipe :
-  ?mutualize:bool ->
   print:bool ->
   (module NunTerm_ho.S with type t = 'a) ->
   (('a, 'a) NunProblem.t, ('a,'a) NunProblem.t,
@@ -99,7 +95,6 @@ val pipe :
       in addition to the state *)
 val pipe_with :
   decode:(decode_term:('a -> 'a) -> 'c -> 'd) ->
-  ?mutualize:bool ->
   print:bool ->
   (module NunTerm_ho.S with type t = 'a) ->
   (('a, 'a) NunProblem.t, ('a,'a) NunProblem.t, 'c, 'd) NunTransform.t

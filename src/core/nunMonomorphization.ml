@@ -146,7 +146,6 @@ module Make(T : NunTerm_ho.S) = struct
   (** Configuration for the monomorphization phase *)
   type config = {
     max_depth: int;
-    mutualize: bool;
   }
 
   type unmangle_state = (ID.t * T.t list) ID.Tbl.t
@@ -498,24 +497,38 @@ module Make(T : NunTerm_ho.S) = struct
       St.push_res ~state stmt;
     ()
 
-  (* specialize (co)inductive types
-    TODO use config.mutualize *)
+  (* specialize (co)inductive types *)
   let mono_mutual_types ~state ~depth ~kind tydefs tydef tup loc =
+    let tydefs = ref tydefs in
     let q = Queue.create() in (* task list *)
     let res = ref [] in
     (* whenever a type [id tup] is needed, check if it's in the block *)
     let specialize' = St.current_specialize ~state in
     St.push_specialize ~state
       (fun ~state ~depth id tup ->
-        match find_tydef_ ~defs:tydefs id with
+        match find_tydef_ ~defs:!tydefs id with
         | None ->
-            (* not in this block, use the previous specialization fun *)
-            NunUtils.debugf ~section 4
-              "%a not in same block, fallback to previous specialize function"
-              (fun k -> k ID.print_name id);
-            specialize' ~state ~depth id tup
+            begin match Env.find ~env:state.St.env ~id with
+            | Some {Env.def=Env.Data (kind', tydefs', tydef'); _} ->
+                (* make id and current type mutual, even though they were not *)
+                if kind <> kind'
+                  then failf_
+                    "@[<2>cannot handle nested {(co)data, data}:@ @[<h>{%a, %a}@]@]"
+                    ID.print_name id ID.print_name tydef.Stmt.ty_id;
+                tydefs := tydefs' @ !tydefs; (* bigger recursive block! *)
+                Queue.push (tydef', depth, tup) q
+            | _ ->
+                (* not in this block, use the previous specialization fun *)
+                NunUtils.debugf ~section 4
+                  "%a not in same block, fallback to previous specialize function"
+                  (fun k -> k ID.print_name id);
+                specialize' ~state ~depth id tup
+            end
         | Some tydef ->
             (* specialize in the same block of mutual types *)
+            NunUtils.debugf ~section 4
+              "%a in same block, specialize in same (co)data"
+              (fun k -> k ID.print_name id);
             Queue.push (tydef, depth, tup) q
       );
     (* initialization: push the first tuple to process *)
@@ -637,18 +650,11 @@ module Make(T : NunTerm_ho.S) = struct
         Env.def_data ?loc ~kind:k ~env:state.St.env l;
     end
 
-
-  (* TODO: use mutualize:
-      - if (co)data t1 uses (co)data t2 which is not in same block (nested),
-        put specialized version of t2 in same block as t1
-  *)
-
-  let monomorphize ?(depth_limit=256) ~mutualize pb =
+  let monomorphize ?(depth_limit=256) pb =
     (* create the state used for monomorphization. Toplevel function
       for specializing (id,tup) is [mono_statements_for_id] *)
     let config = {
       max_depth=depth_limit;
-      mutualize;
     } in
     let env = Env.create () in
     let state = St.create ~config ~env ~specialize:mono_statements_for_id () in
@@ -728,7 +734,7 @@ module TypeMangling(T : NunTerm_ho.S) = struct
     NunModel.map ~f:(unmangle_term ~state) m
 end
 
-let pipe_with (type a) ~decode ?(mutualize=true) ~print
+let pipe_with (type a) ~decode ~print
 (module T : NunTerm_ho.S with type t = a)
 =
   let module Mono = Make(T) in
@@ -743,7 +749,7 @@ let pipe_with (type a) ~decode ?(mutualize=true) ~print
     ~on_encoded
     ~name:"monomorphization"
     ~encode:(fun p ->
-      let p, state = Mono.monomorphize ~mutualize p in
+      let p, state = Mono.monomorphize p in
       p, state
       (* TODO mangling of types, as an option *)
     )
@@ -753,6 +759,6 @@ let pipe_with (type a) ~decode ?(mutualize=true) ~print
     )
     ()
 
-let pipe (type a) ?mutualize ~print (t : (module NunTerm_ho.S with type t = a)) =
+let pipe (type a) ~print (t : (module NunTerm_ho.S with type t = a)) =
   let decode ~decode_term = NunModel.map ~f:decode_term in
-  pipe_with ~print ?mutualize t ~decode
+  pipe_with ~print t ~decode
