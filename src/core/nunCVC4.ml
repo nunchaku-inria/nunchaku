@@ -9,6 +9,8 @@ module ID = NunID
 module Sol = NunSolver_intf
 module FOI = NunFO
 
+let section = NunUtils.Section.make "cvc4"
+
 module DSexp = CCSexpM.MakeDecode(struct
   type 'a t = 'a
   let return x = x
@@ -370,6 +372,8 @@ end = struct
      symbols: set of symbols to get values for
      tbl: string -> ID *)
   let get_model_ ~symbols ~tbl s =
+    NunUtils.debugf ~section 3 "@[<2>ask for values of@ %a@]"
+      (fun k -> k (ID.Set.print ~start:"(" ~sep:" " ~stop:")" ID.print_name) symbols);
     fpf s.fmt "(@[<hv2>get-value@ %a@])@."
       (ID.Set.print ~start:"(" ~sep:" " ~stop:")" ID.print_name)
       symbols;
@@ -468,13 +472,7 @@ end = struct
         | FOI.TyDecl (_,_)
         | FOI.Axiom _
         | FOI.Goal _ -> acc
-        | FOI.MutualTypes (_,l) ->
-            List.fold_left
-              (fun acc (_ty, cstors) ->
-                List.fold_left
-                  (fun acc cstor -> ID.Set.add cstor.FOI.cstor_name acc)
-                  acc cstors
-              ) acc l.FOI.ty_types
+        | FOI.MutualTypes (_,_) -> acc
       ) ID.Set.empty
 
   let solve ?(timeout=30.) problem =
