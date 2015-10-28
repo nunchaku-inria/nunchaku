@@ -127,7 +127,7 @@ module Default = struct
   let fun_ ?loc ~ty v t = make_ ?loc ~ty (Bind(Fun,v, t))
   let let_ ?loc v t u = make_ ?loc ?ty:u.ty (Let (v, t, u))
   let match_with ?loc ~ty t l =
-    if l=[] then invalid_arg "Term_typed.case: empty list";
+    if ID.Map.is_empty l then invalid_arg "Term_typed.case: no cases";
     make_ ?loc ~ty (Match (t, l))
   let ite ?loc a b c = make_ ?loc ?ty:b.ty (AppBuiltin (NunBuiltin.T.Ite, [a;b;c]))
   let forall ?loc v t = mk_bind ?loc ~ty:prop Forall v t

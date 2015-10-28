@@ -96,7 +96,7 @@ module Default : S = struct
   let fun_ v t = make_ (Bind (Fun,v, t))
   let let_ v t u = make_ (Let (v, t, u))
   let match_with t l =
-    if l=[] then invalid_arg "Term_ho.case: empty list";
+    if ID.Map.is_empty l then invalid_arg "Term_ho.case: empty list of cases";
     make_ (Match (t,l))
   let ite a b c =
     app (builtin NunBuiltin.T.Ite) [a;b;c]
@@ -219,12 +219,12 @@ module Print(T : VIEW) = struct
     | Let (v,t,u) ->
         fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
     | Match (t,l) ->
-        let pp_case out (id,vars,t) =
+        let pp_case out (id,(vars,t)) =
           fpf out "@[<hv2>| %a %a ->@ %a@]"
             ID.print_name id (pp_list_ ~sep:" " Var.print) vars print t
         in
         fpf out "@[<hv2>match @[%a@] with@ %a end@]"
-          print t (pp_list_ ~sep:"" pp_case) l
+          print t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
     | Bind (b, v, t) ->
         let s = match b with
           | Fun -> "fun" | Forall -> "forall" | Exists -> "exists" | TyForall -> "pi"
@@ -296,10 +296,10 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
         let subst = Subst.add ~subst v2 t2 in
         equal ~subst u1 u2
     | Match (t1,l1), Match (t2,l2) ->
-        List.length l1 = List.length l2 &&
+        ID.Map.cardinal l1 = ID.Map.cardinal l2 &&
         equal ~subst t1 t2 &&
         List.for_all2
-          (fun (id1,vars1,rhs1) (id2,vars2,rhs2) ->
+          (fun (id1,(vars1,rhs1)) (id2,(vars2,rhs2)) ->
             assert (List.length vars1=List.length vars2);
             ID.equal id1 id2
             &&
@@ -313,8 +313,8 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
             in
             equal ~subst rhs1 rhs2
           )
-          (cases_normalize l1) (* sort lists by ID *)
-          (cases_normalize l2)
+          (cases_to_list l1) (* list, sorted by ID *)
+          (cases_to_list l2)
     | Var _, _
     | Match _, _
     | TyBuiltin _,_
@@ -354,11 +354,11 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
         T.let_ v' t (eval ~subst u)
     | Match (t,l) ->
         let t = eval ~subst t in
-        let l = List.map
-          (fun (id,vars,rhs) ->
+        let l = ID.Map.map
+          (fun (vars,rhs) ->
             let vars' = Var.fresh_copies vars in
             let subst = Subst.add_list ~subst vars (List.map T.var vars') in
-            id, vars', eval ~subst rhs
+            vars', eval ~subst rhs
           ) l
         in
         T.match_with t l
@@ -462,8 +462,9 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
         | TyForall -> T.ty_type
         end
     | Let (_,_,u) -> ty_exn ~sigma u
-    | Match (_,[]) -> assert false
-    | Match (_,(_,_,t) :: _) -> ty_exn ~sigma t
+    | Match (_,m) ->
+        let _, (_, rhs) = ID.Map.choose m in
+        ty_exn ~sigma rhs
     | TyMeta _ -> assert false
     | TyBuiltin b ->
         begin match b with
@@ -953,7 +954,7 @@ module Convert(T1 : VIEW)(T2 : S) = struct
     | Match (t,l) ->
         T2.match_with
           (convert t)
-          (List.map (fun (c,vars,rhs) -> c, List.map aux_var vars, convert rhs) l)
+          (ID.Map.map (fun (vars,rhs) -> List.map aux_var vars, convert rhs) l)
     | TyBuiltin b -> T2.ty_builtin b
     | TyArrow (a,b) -> T2.ty_arrow (convert a)(convert b)
     | TyMeta _ -> assert false

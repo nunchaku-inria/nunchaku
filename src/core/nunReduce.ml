@@ -134,19 +134,19 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
           end
       | B.Ite,_ -> assert false
 
-    (* see whether [st] matches a case in [l] *)
-    let rec lookup_case_ st l = match l with
-      | [] -> None
-      | (c, vars, rhs) :: l' ->
-          match T.view st.head with
-            | TI.Const id when ID.equal c id ->
-                (* it matches! arity should match too, otherwise the
-                 term is ill-typed *)
-                let subst = Subst.add_list ~subst:st.subst vars st.args in
-                Some (rhs, subst)
-            | _ ->
-                (* not same constructor, or not a Const *)
-                lookup_case_ st l'
+    (* see whether [st] matches a case in [m] *)
+    let lookup_case_ st m = match T.view st.head with
+      | TI.Const id ->
+          begin try
+            let vars, rhs = ID.Map.find id m in
+            (* it matches! arity should match too, otherwise the
+             term is ill-typed *)
+            let subst = Subst.add_list ~subst:st.subst vars st.args in
+            Some (rhs, subst)
+          with Not_found ->
+            None
+          end
+      | _ -> None
 
     (* reduce until the head is not a function *)
     let rec whnf_ st = match T.view st.head with
@@ -226,13 +226,13 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
           begin match lookup_case_ st_t l with
             | None ->
                 (* just replace the head and evaluate each branch *)
-                let l = List.map
-                  (fun (c,vars,rhs) ->
+                let l = ID.Map.map
+                  (fun (vars,rhs) ->
                     let vars' = Var.fresh_copies vars in
                     let subst' = Subst.add_list ~subst:st.subst vars
                       (List.map T.var vars') in
                     let rhs' = snf_term rhs ~subst:subst' in
-                    c,vars',rhs'
+                    vars',rhs'
                   )
                   l
                 in

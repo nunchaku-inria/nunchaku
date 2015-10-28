@@ -398,10 +398,15 @@ module Convert(Term : TERM) = struct
     | A.Match (t,l) ->
         let t = convert_term_ ~stack ~env t in
         let ty_t = get_ty_ t in
-        let l = List.map
-          (fun (c,vars,rhs) ->
+        (* build map (cstor -> case) for pattern match *)
+        let m = List.fold_left
+          (fun m (c,vars,rhs) ->
             (* find the constructor and the (co)inductive type *)
             let c, ty_c = Env.find_cstor ~env c in
+            if ID.Map.mem c m
+              then ill_formedf ?loc ~kind:"match"
+                "constructor %a occurs twice in the list of cases"
+                ID.print_name c;
             (* make scoped variables and infer their type from [t] *)
             let vars' = List.map
               (fun name -> Var.make ~name ~ty:(fresh_ty_var_ ~name)) vars in
@@ -410,24 +415,27 @@ module Convert(Term : TERM) = struct
             (* now infer the type of [rhs] *)
             let env = Env.add_vars ~env vars vars' in
             let rhs = convert_term_ ~stack ~env rhs in
-            c, vars', rhs
-          ) l
+            ID.Map.add c (vars', rhs) m
+          ) ID.Map.empty l
         in
         (* force all right-hand sides to have the same type *)
-        let ty = match l with
-          | [] -> ill_formedf ?loc ~kind:"match" "pattern-match needs at least one case"
-          | (_,_,rhs) :: l' ->
-              let ty = get_ty_ rhs in
-              List.iter
-                (fun (_,_,rhs') -> unify_in_ctx_ ~stack:[] ty (get_ty_ rhs'))
-                l';
-              ty
+        let ty = try
+          let (id,(_,rhs)) = ID.Map.choose m in
+          let ty = get_ty_ rhs in
+          ID.Map.iter
+            (fun id' (_,rhs') ->
+              if not (ID.equal id id')
+                then unify_in_ctx_ ~stack:[] ty (get_ty_ rhs'))
+            m;
+          ty
+        with Not_found ->
+          ill_formedf ?loc ~kind:"match" "pattern-match needs at least one case"
         in
         (* TODO: also check exhaustiveness *)
-        if not (TI.cases_well_formed l)
+        if not (TI.cases_well_formed m)
           then ill_formedf ?loc ~kind:"match"
             "ill-formed pattern match (non linear pattern or duplicated constructor)";
-        Term.match_with ~ty t l
+        Term.match_with ~ty t m
     | A.Ite (a,b,c) ->
         let a = convert_term_ ~stack ~env a in
         let b = convert_term_ ~stack ~env b in
@@ -562,8 +570,8 @@ module Convert(Term : TERM) = struct
     | TI.Let (_,t,u) -> monomorphic_ t && monomorphic_ u
     | TI.Match (t,l) ->
         monomorphic_ t &&
-        List.for_all
-          (fun (_,vars,rhs) ->
+        ID.Map.for_all
+          (fun _ (vars,rhs) ->
             List.for_all (fun v -> monomorphic_ (Var.ty v)) vars &&
             monomorphic_ rhs
           ) l
@@ -586,8 +594,8 @@ module Convert(Term : TERM) = struct
     | TI.Let (_,t,u) -> monomorphic_ t && monomorphic_ u
     | TI.Match (t,l) ->
         monomorphic_ t &&
-        List.for_all
-          (fun (_,vars,rhs) ->
+        ID.Map.for_all
+          (fun _ (vars,rhs) ->
             List.for_all (fun v -> monomorphic_ (Var.ty v)) vars &&
             monomorphic_ rhs
           ) l

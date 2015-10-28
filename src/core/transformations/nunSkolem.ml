@@ -119,7 +119,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
         T2.let_ (nnf_var_ v) (nnf t) (nnf u)
     | TI.Match (t,l) ->
         T2.match_with (nnf t)
-          (List.map (fun (c,vars,rhs) -> c,List.map nnf_var_ vars,nnf rhs) l)
+          (ID.Map.map (fun (vars,rhs) -> List.map nnf_var_ vars,nnf rhs) l)
     | TI.TyBuiltin b -> T2.ty_builtin b
     | TI.TyArrow (a,b) -> T2.ty_arrow (nnf a) (nnf b)
     | TI.TyMeta _ -> assert false
@@ -210,8 +210,8 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
           enter_var_ ~env v (fun env v -> T2.let_ v t (aux ~env u))
       | TI.Match (t, l) ->
           let t = aux ~env t in
-          let l = List.map
-            (fun (c,vars,rhs) ->
+          let l = ID.Map.map
+            (fun (vars,rhs) ->
               let env, vars' = NunUtils.fold_map
                 (fun env v ->
                   let v' = aux_var ~env v in
@@ -219,7 +219,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
                   env, v'
                 ) env vars
               in
-              c, vars', aux ~env rhs
+              vars', aux ~env rhs
             ) l
           in
           T2.match_with t l

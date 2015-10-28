@@ -381,10 +381,10 @@ module Make(T : NunTerm_ho.S) = struct
           (mono_term ~state ~local_state u)
     | TI.Match (t,l) ->
         let t = mono_term ~state ~local_state t in
-        let l = List.map
-          (fun (c,vars,rhs) ->
+        let l = ID.Map.map
+          (fun (vars,rhs) ->
             let vars = List.map (mono_var ~state ~local_state) vars in
-            c, vars, mono_term ~state ~local_state rhs
+            vars, mono_term ~state ~local_state rhs
           ) l
         in
         T.match_with t l
@@ -703,7 +703,7 @@ module Make(T : NunTerm_ho.S) = struct
       | TI.Let (v,t,u) -> T.let_ (aux_var v) (aux t) (aux u)
       | TI.Match (t,l) ->
           let t = aux t in
-          let l = List.map (fun (c,vars,rhs) -> c, List.map aux_var vars, aux rhs) l in
+          let l = ID.Map.map (fun (vars,rhs) -> List.map aux_var vars, aux rhs) l in
           T.match_with t l
       | TI.TyBuiltin _ -> t
       | TI.TyArrow (a,b) -> T.ty_arrow (aux a) (aux b)

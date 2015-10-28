@@ -15,29 +15,22 @@ type binder =
   | Fun
   | TyForall
 
-type 'a case = id * 'a var list * 'a
-(** A pattern match case: [ constructor, vars, right-hand side ]
+type 'a case = 'a var list * 'a
+(** A pattern match case for a given constructor [ vars, right-hand side ]
     The pattern must be linear (variable list does not contain duplicates) *)
 
-(** A list of cases (sorted by increasing ID) *)
-type 'a cases = 'a case list
+(** A list of cases (indexed by constructor) *)
+type 'a cases = 'a case ID.Map.t
 
-let cases_normalize l = List.sort (fun (id1,_,_) (id2,_,_) -> ID.compare id1 id2) l
+let cases_to_list = ID.Map.to_list
 
-(* check that:
-    - each case is linear (all vars are different)
-    - each case has a distinct ID
-*)
-let cases_well_formed (type a) l =
-  let is_linear_ (_,vars,_) =
+(* check that: each case is linear (all vars are different) *)
+let cases_well_formed (type a) m =
+  let is_linear_ _ (vars,_) =
     let module VarSet = Var.Set(struct type t = a end) in
     VarSet.cardinal (VarSet.of_list vars) = List.length vars
   in
-  List.for_all is_linear_ l
-  &&
-  ( let ids = List.fold_left (fun acc (id,_,_) -> ID.Set.add id acc) ID.Set.empty l in
-    ID.Set.cardinal ids = List.length l
-  )
+  ID.Map.for_all is_linear_ m
 
 type 'a view =
   | Const of id (** top-level symbol *)
@@ -105,7 +98,7 @@ end = struct
       | Var v -> aux_var v
       | Match (t,l) ->
           aux t;
-          List.iter (fun (_,vars,rhs) -> List.iter aux_var vars; aux rhs) l
+          ID.Map.iter (fun _ (vars,rhs) -> List.iter aux_var vars; aux rhs) l
       | App (f,l) -> aux f; List.iter aux l
       | Bind (_,v,t) -> aux (Var.ty v); aux t
       | Let (v,t,u) -> aux (Var.ty v); aux t; aux u
@@ -125,8 +118,8 @@ end = struct
           aux ~bound f; List.iter (aux ~bound) l
       | Match (t,l) ->
           aux ~bound t;
-          List.iter
-            (fun (_,vars,rhs) ->
+          ID.Map.iter
+            (fun _ (vars,rhs) ->
               let bound = List.fold_right VarSet.add vars bound in
               aux ~bound rhs
             ) l
@@ -146,7 +139,9 @@ end = struct
           | Var v
           | Bind (_,v,_)
           | Let (v,_,_) -> Sequence.return v
-          | Match (_,l) -> Sequence.(of_list l >>= fun (_,vars,_) -> of_list vars)
+          | Match (_,l) ->
+              let open Sequence.Infix in
+              ID.Map.to_seq l >>= fun (_,(vars,_)) -> Sequence.of_list vars
           | AppBuiltin _
           | Const _
           | App (_,_)
