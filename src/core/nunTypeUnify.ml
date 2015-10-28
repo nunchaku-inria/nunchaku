@@ -97,6 +97,7 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
           end
       | TyI.Meta v1, TyI.Meta v2 when MetaVar.equal v1 v2 -> ()
       | TyI.Meta var, _ when MetaVar.can_bind var ->
+          (* TODO: check that ty2 is closed! not bound vars allowed *)
           if occur_check_ ~var ty2
             then
               failf ~stack

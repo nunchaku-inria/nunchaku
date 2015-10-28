@@ -31,6 +31,10 @@
 %token AT
 %token META_VAR
 
+%token MATCH
+%token WITH 
+%token END
+
 %token LOGIC_TRUE
 %token LOGIC_FALSE
 %token LOGIC_AND
@@ -135,6 +139,12 @@ const:
       A.builtin ~loc B.False
     }
 
+%public case(TERM):
+  | v=raw_var l=raw_var* ARROW t=TERM { v, l, t }
+
+%public cases(TERM):
+  | l=separated_nonempty_list(VERTICAL_BAR, case(TERM)) { l }
+
 atomic_term:
   | v=var { v }
   | v=at_var { v }
@@ -196,6 +206,11 @@ term:
       let loc = L.mk_pos $startpos $endpos in
       A.let_ ~loc v t u
     }
+  | MATCH t=term WITH l=cases(term) END
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.match_with ~loc t l
+    }
   | IF a=term THEN b=term ELSE c=term
     {
       let loc = L.mk_pos $startpos $endpos in
@@ -227,7 +242,7 @@ term:
       raise (A.ParseError loc)
     }
 
-case:
+def:
   | v=raw_var EQDEF l=separated_nonempty_list(SEMI_COLUMN,term)
     {
       let loc = L.mk_pos $startpos $endpos in
@@ -236,8 +251,8 @@ case:
   | t=term AS v=raw_var EQDEF l=separated_nonempty_list(SEMI_COLUMN, term)
     { t, v, l }
 
-mutual_cases:
-  | l=separated_nonempty_list(AND, case) { l }
+mutual_defs:
+  | l=separated_nonempty_list(AND, def) { l }
 
 constructor:
   | v=raw_var l=atomic_term* { v, l }
@@ -263,12 +278,12 @@ statement:
       let loc = L.mk_pos $startpos $endpos in
       A.axiom ~loc l
     }
-  | SPEC l=mutual_cases DOT
+  | SPEC l=mutual_defs DOT
     {
       let loc = L.mk_pos $startpos $endpos in
       A.spec ~loc l
     }
-  | REC l=mutual_cases DOT
+  | REC l=mutual_defs DOT
     {
       let loc = L.mk_pos $startpos $endpos in
       A.rec_ ~loc l

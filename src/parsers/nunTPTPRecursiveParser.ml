@@ -90,6 +90,10 @@ let enter_var_ ~state v f =
     StrTbl.remove state.declared v;
     raise e
 
+let rec enter_vars_ ~state l f = match l with
+  | [] -> f ()
+  | v :: l' -> enter_var_ ~state v (fun () -> enter_vars_ ~state l' f)
+
 let is_tptp_var_ v = match v.[0] with
   | 'A' .. 'Z' -> true
   | _ -> false
@@ -111,6 +115,12 @@ let close_forall t =
     | A.MetaVar _ -> ()
     | A.App (f,l) -> compute_fvars f; List.iter compute_fvars l
     | A.Let (v,t,u) -> compute_fvars t; enter_bvar v (fun () -> compute_fvars u)
+    | A.Match (t,l) ->
+        compute_fvars t;
+        List.iter
+          (fun (_,vars,rhs) ->
+            enter_bvars vars (fun () -> compute_fvars rhs)
+          ) l
     | A.Ite (a,b,c) -> compute_fvars a; compute_fvars b; compute_fvars c
     | A.Forall (v,t)
     | A.Exists (v,t)
@@ -119,6 +129,9 @@ let close_forall t =
     | A.TyForall (v,t) -> enter_bvar v (fun () -> compute_fvars t)
   and enter_bvar v f =
     StrTbl.add bvars v (); let x = f () in StrTbl.remove bvars v; x
+  and enter_bvars l f = match l with
+    | [] -> f ()
+    | v :: l' -> enter_bvar v (fun () -> enter_bvars l' f)
   and enter_ty_bvar (v, tyopt) f =
     CCOpt.iter compute_fvars tyopt;
     enter_bvar v f
@@ -138,6 +151,7 @@ let prop2term = function
   declarations in [state], and return a new term with all variables
   annotated with a type *)
 let rec declare_missing ~ctx ~state t =
+  let loc = Loc.get_loc t in
   match Loc.get t with
   | A.Wildcard
   | A.MetaVar _
@@ -155,7 +169,7 @@ let rec declare_missing ~ctx ~state t =
             then declare_sym_default ~state ~ctx v (List.length l);
           let ctx = prop2term ctx in
           let l = List.map (declare_missing ~ctx ~state) l in
-          A.app f l
+          A.app ?loc f l
       | A.Builtin b ->
           begin match b with
           | A.Builtin.And
@@ -164,9 +178,9 @@ let rec declare_missing ~ctx ~state t =
           | A.Builtin.Imply
           | A.Builtin.Equiv ->
               let l = List.map (declare_missing ~ctx:Ctx_prop ~state) l in
-              A.app f l
+              A.app ?loc f l
           | A.Builtin.Eq ->
-              A.app f (List.map (declare_missing ~ctx:Ctx_term ~state) l)
+              A.app ?loc f (List.map (declare_missing ~ctx:Ctx_term ~state) l)
           | A.Builtin.Prop
           | A.Builtin.Type
           | A.Builtin.True
@@ -174,31 +188,40 @@ let rec declare_missing ~ctx ~state t =
           end
       | _ ->
         let ctx = prop2term ctx in
-        A.app f (List.map (declare_missing ~ctx ~state) l)
+        A.app ?loc f (List.map (declare_missing ~ctx ~state) l)
       end;
   | A.Fun (v,t) ->
       enter_typed_var_ ~state v
-        (fun v -> A.fun_ v (declare_missing ~ctx ~state t))
+        (fun v -> A.fun_ ?loc v (declare_missing ~ctx ~state t))
   | A.Let (v,t,u) ->
       let t = declare_missing ~ctx ~state t in
       enter_var_ ~state v
-        (fun () -> A.let_ v t (declare_missing ~ctx ~state u))
+        (fun () -> A.let_ ?loc v t (declare_missing ~ctx ~state u))
+  | A.Match (t,l) ->
+      let t = declare_missing ~ctx ~state t in
+      let l = List.map
+        (fun (c,vars,rhs) ->
+          enter_vars_ ~state vars
+            (fun () -> c, vars, declare_missing ~ctx ~state rhs)
+        ) l
+      in
+      A.match_with ?loc t l
   | A.Ite (a,b,c) ->
-      A.ite
+      A.ite ?loc
         (declare_missing ~state ~ctx:Ctx_prop a)
         (declare_missing ~state ~ctx b)
         (declare_missing ~state ~ctx c)
   | A.TyForall (v,t) ->
       enter_var_ ~state v
-        (fun () -> A.ty_forall v (declare_missing ~ctx:Ctx_ty ~state t))
+        (fun () -> A.ty_forall ?loc v (declare_missing ~ctx:Ctx_ty ~state t))
   | A.Forall (v,t) ->
       enter_typed_var_ ~state v
-        (fun v -> A.forall v (declare_missing ~ctx:Ctx_prop ~state t))
+        (fun v -> A.forall ?loc v (declare_missing ~ctx:Ctx_prop ~state t))
   | A.Exists (v,t) ->
       enter_typed_var_ ~state v
-        (fun v -> A.exists v (declare_missing ~ctx:Ctx_prop ~state t))
+        (fun v -> A.exists ?loc v (declare_missing ~ctx:Ctx_prop ~state t))
   | A.TyArrow (a,b) ->
-      A.ty_arrow
+      A.ty_arrow ?loc
         (declare_missing ~ctx:Ctx_ty ~state a)
         (declare_missing ~ctx:Ctx_ty ~state b)
 

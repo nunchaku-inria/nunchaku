@@ -86,6 +86,10 @@ module Callback : sig
   (** [call2 l x y] is short for [iter l ~f:(fun f -> f x y)] *)
 end
 
+(** {2 Lists} *)
+
+val fold_map : ('b -> 'a -> 'b * 'c) -> 'b -> 'a list -> 'b * 'c list
+
 (** {2 Misc} *)
 
 exception NotImplemented of string

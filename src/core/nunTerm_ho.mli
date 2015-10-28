@@ -32,6 +32,7 @@ module type S = sig
   val app : t -> t list -> t
   val fun_ : ty var -> t -> t
   val let_ : ty var -> t -> t -> t
+  val match_with : t -> t NunTerm_intf.cases -> t
   val ite : t -> t -> t -> t
   val forall : ty var -> t -> t
   val exists : ty var -> t -> t

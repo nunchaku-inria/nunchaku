@@ -56,6 +56,7 @@ module type S = sig
   val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
   val fun_ : ?loc:loc -> ty:Ty.t -> ty var -> t -> t
   val let_ : ?loc:loc -> ty var -> t -> t -> t
+  val match_with : ?loc:loc -> ty:Ty.t -> t -> ty NunTerm_intf.cases -> t
   val ite : ?loc:loc -> t -> t -> t -> t
   val forall : ?loc:loc -> ty var -> t -> t
   val exists : ?loc:loc -> ty var -> t -> t
@@ -125,6 +126,9 @@ module Default = struct
   let mk_bind ?loc ~ty b v t = make_ ?loc ~ty (Bind (b,v,t))
   let fun_ ?loc ~ty v t = make_ ?loc ~ty (Bind(Fun,v, t))
   let let_ ?loc v t u = make_ ?loc ?ty:u.ty (Let (v, t, u))
+  let match_with ?loc ~ty t l =
+    if l=[] then invalid_arg "Term_typed.case: empty list";
+    make_ ?loc ~ty (Match (t, l))
   let ite ?loc a b c = make_ ?loc ?ty:b.ty (AppBuiltin (NunBuiltin.T.Ite, [a;b;c]))
   let forall ?loc v t = mk_bind ?loc ~ty:prop Forall v t
   let exists ?loc v t = mk_bind ?loc ~ty:prop Exists v t
@@ -154,8 +158,7 @@ module Default = struct
       | Bind(TyForall,v,t) -> TyI.Forall (v,t)
       | TyMeta v -> TyI.Meta v
       | AppBuiltin _
-      | Bind _
-      | Let _ -> assert false
+      | Bind _ | Let _ | Match _ -> assert false
 
     include TyI.Utils(struct type t = term let view = view end)
 

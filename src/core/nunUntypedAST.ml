@@ -85,6 +85,7 @@ and term_node =
   | App of term * term list
   | Fun of typed_var * term
   | Let of var * term * term
+  | Match of term * (var * var list * term) list
   | Ite of term * term * term
   | Forall of typed_var * term
   | Exists of typed_var * term
@@ -136,6 +137,7 @@ let rec app ?loc t l = match Loc.get t with
   | _ -> Loc.with_loc ?loc (App (t,l))
 let fun_ ?loc v t = Loc.with_loc ?loc (Fun(v,t))
 let let_ ?loc v t u = Loc.with_loc ?loc (Let (v,t,u))
+let match_with ?loc t l = Loc.with_loc ?loc (Match (t,l))
 let ite ?loc a b c = Loc.with_loc ?loc (Ite (a,b,c))
 let ty_prop = builtin Builtin.Prop
 let ty_type = builtin Builtin.Type
@@ -180,11 +182,13 @@ let rec head t = match Loc.get t with
   | Var v | AtVar v | MetaVar v -> v
   | App (f,_) -> head f
   | Wildcard | Builtin _ | TyArrow (_,_)
-  | Fun (_,_) | Let (_,_,_) | Ite (_,_,_)
+  | Fun (_,_) | Let _ | Match _ | Ite (_,_,_)
   | Forall (_,_) | Exists (_,_) | TyForall (_,_) ->
       invalid_arg "untypedAST.head"
 
 let pf = Format.fprintf
+
+let pp_list_ ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
 let rec print_term out term = match Loc.get term with
   | Wildcard -> CCFormat.string out "_"
@@ -203,12 +207,18 @@ let rec print_term out term = match Loc.get term with
       end
   | App (a, l) ->
       pf out "@[<2>%a@ %a@]"
-        print_term_inner a
-        (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_term_inner) l
+        print_term_inner a (pp_list_ ~sep:" " print_term_inner) l
   | Fun (v, t) ->
       pf out "@[<2>fun %a.@ %a@]" print_typed_var v print_term t
   | Let (v,t,u) ->
       pf out "@[<2>let %s :=@ %a in@ %a@]" v print_term t print_term u
+    | Match (t,l) ->
+        let pp_case out (id,vars,t) =
+          pf out "@[<hv2>| %s %a ->@ %a@]"
+            id (pp_list_ ~sep:" " CCFormat.string) vars print_term t
+        in
+        pf out "@[<hv2>match @[%a@] with@ %a end@]"
+          print_term t (pp_list_ ~sep:"" pp_case) l
   | Ite (a,b,c) ->
       pf out "@[<hv2>if %a@ then %a@ else %a@]"
         print_term_inner a print_term b print_term c
@@ -222,7 +232,7 @@ let rec print_term out term = match Loc.get term with
   | TyForall (v, t) ->
       pf out "@[<2>pi %s:type.@ %a@]" v print_term t
 and print_term_inner out term = match Loc.get term with
-  | App _ | Fun _ | Let _ | Ite _
+  | App _ | Fun _ | Let _ | Ite _ | Match _
   | Forall _ | Exists _ | TyForall _ | TyArrow _ ->
       pf out "(%a)" print_term term
   | Builtin _ | AtVar _ | Var _ | MetaVar _ | Wildcard -> print_term out term
@@ -231,7 +241,7 @@ and print_term_in_arrow out t = match Loc.get t with
   | Builtin _
   | Var _ | AtVar _ | MetaVar _
   | App (_,_) -> print_term out t
-  | Let (_,_,_)
+  | Let _ | Match _
   | Ite _
   | Forall (_,_)
   | Exists (_,_)

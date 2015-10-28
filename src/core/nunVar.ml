@@ -20,6 +20,8 @@ let make ~ty ~name =
 let fresh_copy v =
   { v with id=ID.fresh_copy v.id }
 
+let fresh_copies l = List.map fresh_copy l
+
 let of_id ~ty id = {id;ty}
 
 let ty t = t.ty
@@ -50,6 +52,10 @@ module type SUBST = sig
 
   val add : subst:'a t -> var -> 'a -> 'a t
 
+  val add_list : subst:'a t -> var list -> 'a list -> 'a t
+  (** [add_list ~subst v t] add each binding [v_i -> t_i] to the subst.
+      @raise Invalid_argument if [List.length v <> List.length t] *)
+
   val remove : subst:'a t -> var -> 'a t
   (** Remove binding for this variable.
       {b careful} if other bindings depend on this variable's binding... *)
@@ -61,7 +67,7 @@ module type SUBST = sig
   val to_list : 'a t -> (var * 'a) list
 end
 
-module Subst(Ty : sig type t end) = struct
+module Subst(Ty : sig type t end) : SUBST with type ty = Ty.t = struct
   type ty = Ty.t
   type var = Ty.t t
 
@@ -77,6 +83,12 @@ module Subst(Ty : sig type t end) = struct
 
   let add ~subst v x = M.add v x subst
 
+  let rec add_list ~subst v t = match v, t with
+    | [], [] -> subst
+    | [], _
+    | _, [] -> invalid_arg "Subst.add_list"
+    | v :: v', t :: t' -> add_list ~subst:(add ~subst v t) v' t'
+
   let remove ~subst v = M.remove v subst
 
   let mem ~subst v = M.mem v subst
@@ -88,7 +100,7 @@ module Subst(Ty : sig type t end) = struct
   let to_list s = M.fold (fun v x acc -> (v,x)::acc) s []
 end
 
-module Set(Ty : sig type t end) = Set.Make(struct
+module Set(Ty : sig type t end) = CCSet.Make(struct
   type 'a _t = 'a t
   type t = Ty.t _t
   let compare = compare

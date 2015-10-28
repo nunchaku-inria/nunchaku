@@ -42,6 +42,7 @@ module type S = sig
   val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
   val fun_ : ?loc:loc -> ty:Ty.t -> ty var -> t -> t
   val let_ : ?loc:loc -> ty var -> t -> t -> t
+  val match_with : ?loc:loc -> ty:Ty.t -> t -> ty NunTerm_intf.cases -> t
   val ite : ?loc:loc -> t -> t -> t -> t
   val forall : ?loc:loc -> ty var -> t -> t
   val exists : ?loc:loc -> ty var -> t -> t

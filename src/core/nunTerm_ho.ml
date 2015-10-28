@@ -44,6 +44,7 @@ module type S = sig
   val app : t -> t list -> t
   val fun_ : ty var -> t -> t
   val let_ : ty var -> t -> t -> t
+  val match_with : t -> t NunTerm_intf.cases -> t
   val ite : t -> t -> t -> t
   val forall : ty var -> t -> t
   val exists : ty var -> t -> t
@@ -94,6 +95,9 @@ module Default : S = struct
   let mk_bind b v t = make_ (Bind (b,v,t))
   let fun_ v t = make_ (Bind (Fun,v, t))
   let let_ v t u = make_ (Let (v, t, u))
+  let match_with t l =
+    if l=[] then invalid_arg "Term_ho.case: empty list";
+    make_ (Match (t,l))
   let ite a b c =
     app (builtin NunBuiltin.T.Ite) [a;b;c]
   let forall v t = make_ (Bind(Forall,v, t))
@@ -126,6 +130,7 @@ module Default : S = struct
       | TyMeta _ -> assert false
       | AppBuiltin _
       | Bind _
+      | Match _
       | Let _ -> assert false
 
     let is_Type t = match t.view with
@@ -190,6 +195,9 @@ module Print(T : VIEW) = struct
 
   let fpf = Format.fprintf
 
+  let pp_list_ ?(start="") ?(stop="") ~sep pp =
+    CCFormat.list ~start ~stop ~sep pp
+
   let rec print out t = match T.view t with
     | TyBuiltin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
     | Const id -> ID.print_no_id out id
@@ -204,12 +212,19 @@ module Print(T : VIEW) = struct
           print_in_app a (NunBuiltin.T.to_string f) print_in_app b
     | AppBuiltin (b,l) ->
         fpf out "@[<2>%s@ %a@]" (NunBuiltin.T.to_string b)
-          (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_in_app) l
+          (pp_list_ ~sep:" " print_in_app) l
     | App (f,l) ->
         fpf out "@[<2>%a@ %a@]" print_in_app f
-          (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_in_app) l
+          (pp_list_ ~sep:" " print_in_app) l
     | Let (v,t,u) ->
         fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
+    | Match (t,l) ->
+        let pp_case out (id,vars,t) =
+          fpf out "@[<hv2>| %a %a ->@ %a@]"
+            ID.print_name id (pp_list_ ~sep:" " Var.print) vars print t
+        in
+        fpf out "@[<hv2>match @[%a@] with@ %a end@]"
+          print t (pp_list_ ~sep:"" pp_case) l
     | Bind (b, v, t) ->
         let s = match b with
           | Fun -> "fun" | Forall -> "forall" | Exists -> "exists" | TyForall -> "pi"
@@ -226,7 +241,7 @@ module Print(T : VIEW) = struct
     | AppBuiltin (_,[]) | TyBuiltin _ | Var _ | Const _ | TyMeta _ ->
         print out t
     | App (_,_) | AppBuiltin (_,_::_)
-    | Bind _ | Let _
+    | Bind _ | Let _ | Match _
     | TyArrow (_,_) -> fpf out "(@[%a@])" print t
 
   and print_in_binder out t = match T.view t with
@@ -234,7 +249,7 @@ module Print(T : VIEW) = struct
     | Const _ | TyMeta _ | App (_,_) | AppBuiltin _ ->
         print out t
     | Bind _
-    | Let _
+    | Let _ | Match _
     | TyArrow (_,_) -> fpf out "(@[%a@])" print t
 end
 
@@ -273,14 +288,35 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
     | Bind (b1, v1, t1), Bind (b2, v2, t2) ->
         b1 = b2 &&
         ( let v = Var.fresh_copy v1 in
-          let subst = Subst.add ~subst v1 (T.ty_var v) in
-          let subst = Subst.add ~subst v2 (T.ty_var v) in
+          let subst = Subst.add ~subst v1 (T.var v) in
+          let subst = Subst.add ~subst v2 (T.var v) in
           equal ~subst t1 t2 )
     | Let (v1,t1,u1), Let (v2,t2,u2) ->
         let subst = Subst.add ~subst v1 t1 in
         let subst = Subst.add ~subst v2 t2 in
         equal ~subst u1 u2
+    | Match (t1,l1), Match (t2,l2) ->
+        List.length l1 = List.length l2 &&
+        equal ~subst t1 t2 &&
+        List.for_all2
+          (fun (id1,vars1,rhs1) (id2,vars2,rhs2) ->
+            assert (List.length vars1=List.length vars2);
+            ID.equal id1 id2
+            &&
+            let subst = List.fold_right2
+              (fun v1 v2 subst ->
+                let v = Var.fresh_copy v1 in
+                let subst = Subst.add ~subst v1 (T.var v) in
+                let subst = Subst.add ~subst v2 (T.var v) in
+                subst
+              ) vars1 vars2 subst
+            in
+            equal ~subst rhs1 rhs2
+          )
+          (cases_normalize l1) (* sort lists by ID *)
+          (cases_normalize l2)
     | Var _, _
+    | Match _, _
     | TyBuiltin _,_
     | AppBuiltin _,_
     | Const _,_
@@ -316,6 +352,16 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
         let t = eval ~subst t in
         let subst = Subst.add ~subst v (T.var v') in
         T.let_ v' t (eval ~subst u)
+    | Match (t,l) ->
+        let t = eval ~subst t in
+        let l = List.map
+          (fun (id,vars,rhs) ->
+            let vars' = Var.fresh_copies vars in
+            let subst = Subst.add_list ~subst vars (List.map T.var vars') in
+            id, vars', eval ~subst rhs
+          ) l
+        in
+        T.match_with t l
     | Var v ->
         begin try Subst.find_exn ~subst v
         with Not_found -> t
@@ -416,6 +462,8 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
         | TyForall -> T.ty_type
         end
     | Let (_,_,u) -> ty_exn ~sigma u
+    | Match (_,[]) -> assert false
+    | Match (_,(_,_,t) :: _) -> ty_exn ~sigma t
     | TyMeta _ -> assert false
     | TyBuiltin b ->
         begin match b with
@@ -469,7 +517,8 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
           let subst = match_ subst a1 a2 in
           match_ subst b1 b2
       | Bind _, _
-      | Let (_, _, _), _ -> invalid_arg "pattern is not first-order"
+      | Let (_, _, _), _
+      | Match _, _ -> invalid_arg "pattern is not first-order"
       | TyBuiltin b1, TyBuiltin b2 when NunBuiltin.Ty.equal b1 b2 -> subst
       | TyMeta _, _ -> assert false
       | AppBuiltin _, _
@@ -577,6 +626,7 @@ module Erase(T : VIEW) = struct
           (fun v' ->
             Untyped.let_ v' t (erase ~ctx u)
           )
+    | Match _ -> assert false (* TODO *)
     | TyBuiltin b ->
         let b = match b with
           | NunBuiltin.Ty.Prop -> Untyped.Builtin.Prop
@@ -638,6 +688,7 @@ module AsFO(T : S) = struct
       | Bind (Fun,_,_) -> fail t "no function in type"
       | Bind ((Forall | Exists),_,_) -> fail t "no quantifier in type"
       | Let (_,_,_) -> fail t "no let in type"
+      | Match _ -> fail t "no case in type"
       | TyBuiltin b ->
           begin match b with
           | NunBuiltin.Ty.Prop -> FOI.TyBuiltin FOI.TyBuiltin.Prop
@@ -671,6 +722,7 @@ module AsFO(T : S) = struct
       | Bind (Fun,v,t) -> FOI.Fun (v, t)
       | Bind ((Forall | Exists), _,_) -> fail t "no quantifiers in FO terms"
       | Let (v,t,u) -> FOI.Let (v, t, u)
+      | Match _ -> fail t "no case in FO terms"
       | TyBuiltin _
       | TyArrow (_,_)
       | Bind (TyForall, _,_) -> fail t "no types in FO terms"
@@ -702,6 +754,7 @@ module AsFO(T : S) = struct
       | Bind (Forall, v,f) -> FOI.Forall (v,f)
       | Bind (Exists, v,f) -> FOI.Exists (v,f)
       | Let (v,t,u) -> FOI.F_let (v,t,u)
+      | Match _ -> fail t "no match in FO formulas"
       | TyArrow (_,_)
       | Bind (TyForall, _,_)
       | TyBuiltin _ -> fail t "no types in FO formulas"
@@ -897,6 +950,10 @@ module Convert(T1 : VIEW)(T2 : S) = struct
     | App (f,l) -> T2.app (convert f) (List.map convert l)
     | Bind (b,v,t) -> T2.mk_bind b (aux_var v) (convert t)
     | Let (v,t,u) -> T2.let_ (aux_var v) (convert t) (convert u)
+    | Match (t,l) ->
+        T2.match_with
+          (convert t)
+          (List.map (fun (c,vars,rhs) -> c, List.map aux_var vars, convert rhs) l)
     | TyBuiltin b -> T2.ty_builtin b
     | TyArrow (a,b) -> T2.ty_arrow (convert a)(convert b)
     | TyMeta _ -> assert false
@@ -965,6 +1022,8 @@ module OfUntyped(T : S) = struct
           enter_var_ ~ty v (fun v -> T.fun_ v (aux t))
       | A.Let _ ->
           error_ t "`let` unsupported (no way of inferring the type)"
+      | A.Match _ ->
+          error_ t "`match` unsupported (no way of inferring the type of variables)"
       | A.Ite (a,b,c) -> T.ite (aux a) (aux b) (aux c)
       | A.Forall ((v,Some ty),t) ->
           enter_var_ ~ty v (fun v -> T.forall v (aux t))

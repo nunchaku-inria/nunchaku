@@ -25,6 +25,9 @@ val fresh_copy : 'ty t -> 'ty t
 (** [fresh_copy v] makes a variable that looks like [v] but has a fresh
     identifier *)
 
+val fresh_copies : 'ty t list -> 'ty t list
+(** Fresh copy each element of the list *)
+
 val of_id : ty:'ty -> id -> 'ty t
 (** [of_id ~ty id] makes a variable with the given ID *)
 
@@ -56,6 +59,10 @@ module type SUBST = sig
 
   val add : subst:'a t -> var -> 'a -> 'a t
 
+  val add_list : subst:'a t -> var list -> 'a list -> 'a t
+  (** [add_list ~subst v t] add each binding [v_i -> t_i] to the subst.
+      @raise Invalid_argument if [List.length v <> List.length t] *)
+
   val remove : subst:'a t -> var -> 'a t
   (** Remove binding for this variable.
       {b careful} if other bindings depend on this variable's binding... *)
@@ -71,6 +78,6 @@ module Subst(Ty : sig type t end) : SUBST with type ty = Ty.t
 
 (** {2 Data structures} *)
 
-module Set(Ty : sig type t end) : Set.S with type elt = Ty.t t
+module Set(Ty : sig type t end) : CCSet.S with type elt = Ty.t t
 
 

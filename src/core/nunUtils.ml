@@ -147,6 +147,15 @@ module Callback = struct
   let call2 t x y = iter_rec_ (fun f -> f x y) t.lst
 end
 
+(** {2 Lists} *)
+
+let rec fold_map f acc l = match l with
+  | [] -> acc, []
+  | x :: tail ->
+      let acc, y = f acc x in
+      let acc, tail' = fold_map f acc tail in
+      acc, y :: tail'
+
 (** {2 Misc} *)
 
 exception NotImplemented of string

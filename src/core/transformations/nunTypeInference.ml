@@ -105,6 +105,7 @@ module Convert(Term : TERM) = struct
     type t = {
       vars: Term.Ty.t term_def MStr.t;
       signature : Term.Ty.t signature;
+      cstors: (string, id * Term.Ty.t) Hashtbl.t;  (* constructor ID + type *)
       mutable metas: (string, Term.Ty.t MetaVar.t) Hashtbl.t option;
     }
     (* map names to proper identifiers, with their definition *)
@@ -112,6 +113,7 @@ module Convert(Term : TERM) = struct
     let empty = {
       vars=MStr.empty;
       signature = Sig.empty;
+      cstors=Hashtbl.create 16;
       metas=None;
     }
 
@@ -125,11 +127,25 @@ module Convert(Term : TERM) = struct
       env with vars=MStr.add v (Var var) env.vars
     }
 
+    let add_vars ~env v l =
+      assert (List.length v = List.length l);
+      List.fold_left2 (fun env v v' -> add_var ~env v ~var:v') env v l
+
     let mem_var ~env v = MStr.mem v env.vars
+
+    let add_cstor ~env ~name c ty =
+      if Hashtbl.mem env.cstors name
+        then ill_formedf ~kind:"constructor"
+          "a constructor named %s is already defined" name;
+      Hashtbl.add env.cstors name (c,ty)
 
     let find_var ?loc ~env v =
       try MStr.find v env.vars
       with Not_found -> scoping_error ?loc v "not bound in environment"
+
+    let find_cstor ?loc ~env c =
+      try Hashtbl.find env.cstors c
+      with Not_found -> scoping_error ?loc c "not a known constructor"
 
     (* find a meta-var by its name, create it if non existent *)
     let find_meta_var ~env v =
@@ -197,6 +213,7 @@ module Convert(Term : TERM) = struct
           Term.ty_forall ?loc var (convert_ty_ ~stack ~env t)
       | A.Fun (_,_) -> ill_formed ?loc "no functions in types"
       | A.Let (_,_,_) -> ill_formed ?loc "no let in types"
+      | A.Match _ -> ill_formed ?loc "no match in types"
       | A.Ite _ -> ill_formed ?loc "no if/then/else in types"
       | A.Forall (_,_)
       | A.Exists (_,_) -> ill_formed ?loc "no quantifiers in types"
@@ -257,6 +274,33 @@ module Convert(Term : TERM) = struct
           let subst = add ~subst v (Term.ty_var v') in
           Term.ty_forall ?loc v' (eval ~subst t)
   end
+
+  let ty_apply t l =
+    let apply_error t =
+      type_errorf ~stack:[] "cannot apply type `@[%a@]` to anything" PrintTerm.print_ty t
+    in
+    let rec app_ ~subst t l = match Term.Ty.view t, l with
+      | _, [] -> Subst.eval ~subst t
+      | TyI.Builtin _, _
+      | TyI.App (_,_),_
+      | TyI.Const _, _ ->
+          apply_error t
+      | TyI.Var v, _ ->
+          begin try
+            let t = Subst.find_exn ~subst v in
+            app_ ~subst t l
+          with Not_found ->
+            apply_error t
+          end
+      | TyI.Meta _,_ -> assert false
+      | TyI.Arrow (a, t'), b :: l' ->
+          unify_in_ctx_ ~stack:[] a b;
+          app_ ~subst t' l'
+      | TyI.Forall (v,t'), b :: l' ->
+          let subst = Subst.add ~subst v b in
+          app_ ~subst t' l'
+    in
+    app_ ~subst:Subst.empty t l
 
   let is_eq_ t = match Loc.get t with
     | A.Builtin A.Builtin.Eq -> true
@@ -351,6 +395,39 @@ module Convert(Term : TERM) = struct
         let env = Env.add_var ~env v ~var in
         let u = convert_term_ ~stack ~env u in
         Term.let_ ?loc var t u
+    | A.Match (t,l) ->
+        let t = convert_term_ ~stack ~env t in
+        let ty_t = get_ty_ t in
+        let l = List.map
+          (fun (c,vars,rhs) ->
+            (* find the constructor and the (co)inductive type *)
+            let c, ty_c = Env.find_cstor ~env c in
+            (* make scoped variables and infer their type from [t] *)
+            let vars' = List.map
+              (fun name -> Var.make ~name ~ty:(fresh_ty_var_ ~name)) vars in
+            let ty' = ty_apply ty_c (List.map Var.ty vars') in
+            unify_in_ctx_ ~stack:[] ty_t ty';
+            (* now infer the type of [rhs] *)
+            let env = Env.add_vars ~env vars vars' in
+            let rhs = convert_term_ ~stack ~env rhs in
+            c, vars', rhs
+          ) l
+        in
+        (* force all right-hand sides to have the same type *)
+        let ty = match l with
+          | [] -> ill_formedf ?loc ~kind:"match" "pattern-match needs at least one case"
+          | (_,_,rhs) :: l' ->
+              let ty = get_ty_ rhs in
+              List.iter
+                (fun (_,_,rhs') -> unify_in_ctx_ ~stack:[] ty (get_ty_ rhs'))
+                l';
+              ty
+        in
+        (* TODO: also check exhaustiveness *)
+        if not (TI.cases_well_formed l)
+          then ill_formedf ?loc ~kind:"match"
+            "ill-formed pattern match (non linear pattern or duplicated constructor)";
+        Term.match_with ~ty t l
     | A.Ite (a,b,c) ->
         let a = convert_term_ ~stack ~env a in
         let b = convert_term_ ~stack ~env b in
@@ -463,9 +540,9 @@ module Convert(Term : TERM) = struct
         (fun k-> k PrintTerm.print t (CCFormat.list Var.print) new_vars);
     t, new_vars
 
-  module St = NunStatement
+  module Stmt = NunStatement
 
-  type statement = (Term.t, Term.Ty.t) St.t
+  type statement = (Term.t, Term.Ty.t) Stmt.t
 
   (* checks that the name is not declared/defined already *)
   let check_new_ ?loc ~env name =
@@ -483,6 +560,13 @@ module Convert(Term : TERM) = struct
     | TI.App (f,l) -> monomorphic_ f && List.for_all monomorphic_ l
     | TI.AppBuiltin (_,l) -> List.for_all monomorphic_ l
     | TI.Let (_,t,u) -> monomorphic_ t && monomorphic_ u
+    | TI.Match (t,l) ->
+        monomorphic_ t &&
+        List.for_all
+          (fun (_,vars,rhs) ->
+            List.for_all (fun v -> monomorphic_ (Var.ty v)) vars &&
+            monomorphic_ rhs
+          ) l
     | TI.Bind (TI.TyForall, _, _) -> false
     | TI.Bind (_,v,t) -> monomorphic_ (Var.ty v) && monomorphic_ t
     | TI.TyArrow (a,b) -> monomorphic_ a && monomorphic_ b
@@ -500,6 +584,13 @@ module Convert(Term : TERM) = struct
         prenex_ t
     | TI.Bind (_,v,t) -> monomorphic_ (Var.ty v) && monomorphic_ t
     | TI.Let (_,t,u) -> monomorphic_ t && monomorphic_ u
+    | TI.Match (t,l) ->
+        monomorphic_ t &&
+        List.for_all
+          (fun (_,vars,rhs) ->
+            List.for_all (fun v -> monomorphic_ (Var.ty v)) vars &&
+            monomorphic_ rhs
+          ) l
     | TI.TyArrow (a,b) -> monomorphic_ a && monomorphic_ b
     | TI.TyMeta _ -> true
 
@@ -567,23 +658,16 @@ module Convert(Term : TERM) = struct
           l
         in
         (* return case *)
-        {St.case_alias=var; case_head; case_defined=t; case_axioms=l; case_vars=vars;}
+        {Stmt.case_alias=var; case_head; case_defined=t; case_axioms=l; case_vars=vars;}
       )
       l
-
-  let rec fold_map_ f acc l = match l with
-    | [] -> acc, []
-    | x :: tail ->
-        let acc, y = f acc x in
-        let acc, tail' = fold_map_ f acc tail in
-        acc, y :: tail'
 
   let ty_forall_l_ = List.fold_right (fun v t -> Term.ty_forall v t)
 
   (* convert mutual (co)inductive types definition *)
   let convert_tydef ?loc ~env l =
     (* first, declare all the types *)
-    let env, l = fold_map_
+    let env, l = NunUtils.fold_map
       (fun env (name,vars,cstors) ->
         (* ensure this defines a type -> type -> ... -> type
           with as many arguments as [List.length vars] *)
@@ -600,12 +684,12 @@ module Convert(Term : TERM) = struct
       ) env l
     in
     (* then declare constructors. *)
-    fold_map_
+    NunUtils.fold_map
       (fun env (id,vars,ty_id,cstors) ->
         (* Type variables are declared in each constructor's scope,
             but not in the scope of other types in the
             same recursive definition *)
-        let env', vars' = fold_map_
+        let env', vars' = NunUtils.fold_map
           (fun env v ->
             let var = Var.make ~name:v ~ty:Term.ty_type in
             Env.add_var ~env v ~var, var
@@ -617,7 +701,7 @@ module Convert(Term : TERM) = struct
             (List.map (fun v->Term.var v) vars')
         in
         (* for each constructor, find its type and declare it *)
-        let env, cstors = fold_map_
+        let env, cstors = NunUtils.fold_map
           (fun env (name,ty_args) ->
             let ty_args = List.map (convert_ty_exn ~env:env') ty_args in
             let ty' = ty_forall_l_ vars' (arrow_list ty_args ty_being_declared) in
@@ -627,11 +711,12 @@ module Convert(Term : TERM) = struct
             NunUtils.debugf ~section 3 "@[constructor %a: %a@]"
               (fun k-> k ID.print_name id' PrintTerm.print_ty ty');
             (* newly built constructor *)
-            let c = {St.cstor_name=id'; cstor_type=ty'; cstor_args=ty_args; } in
+            let c = {Stmt.cstor_name=id'; cstor_type=ty'; cstor_args=ty_args; } in
+            Env.add_cstor ~env ~name id' ty';
             env, c
           ) env cstors
         in
-        let tydef = {St.
+        let tydef = {Stmt.
           ty_id=id; ty_vars=vars'; ty_type=ty_id; ty_cstors=cstors
         } in
         env, tydef
@@ -641,7 +726,7 @@ module Convert(Term : TERM) = struct
   let convert_statement_exn ~env st =
     let name = st.A.stmt_name in
     let loc = st.A.stmt_loc in
-    let info = {St.name; loc; } in
+    let info = {Stmt.name; loc; } in
     NunUtils.debugf ~section 2 "@[<hv2>infer types in@ %a@ at %a@]"
       (fun k-> k A.print_statement st Loc.print_opt loc);
     let st', env = match st.A.stmt_value with
@@ -654,13 +739,13 @@ module Convert(Term : TERM) = struct
         let id = ID.make_full ~needs_at:(ty_is_poly_ ty) ~name:v in
         let env = Env.add_decl ~env v ~id ty in
         if Term.Ty.returns_Type ty
-          then St.ty_decl ~info id ty, env (* id is a type *)
-          else St.decl ~info id ty, env
+          then Stmt.ty_decl ~info id ty, env (* id is a type *)
+          else Stmt.decl ~info id ty, env
     | A.Axiom l ->
         (* convert terms, and force them to be propositions *)
         let l = List.map (convert_prop_ ?before_generalize:None ~env) l in
         List.iter (check_prenex_types_ ?loc) l;
-        St.axiom ~info l, env (* default *)
+        Stmt.axiom ~info l, env (* default *)
     | A.Def (a,b) ->
         let a_defined = convert_term_exn ~env a in
         let ty = get_ty_ a_defined in
@@ -672,23 +757,23 @@ module Convert(Term : TERM) = struct
         let b = convert_term_exn ~env:env' b in
         unify_in_ctx_ ~stack:[] ty (get_ty_ b);
         (* TODO: check that [v] does not occur in [b] *)
-        St.axiom_rec ~info
-          [{St.case_alias=var; case_defined=a_defined; case_head=id;
+        Stmt.axiom_rec ~info
+          [{Stmt.case_alias=var; case_defined=a_defined; case_head=id;
             case_vars=[]; case_axioms=[Term.eq a b]}
           ]
         , env
     | A.Spec s ->
         let s = convert_cases ?loc ~env s in
-        St.axiom_spec ~info s, env
+        Stmt.axiom_spec ~info s, env
     | A.Rec s ->
         let s = convert_cases ?loc ~env s in
-        St.axiom_rec ~info s, env
+        Stmt.axiom_rec ~info s, env
     | A.Data l ->
         let env, l = convert_tydef ?loc ~env l in
-        St.data ~info l, env
+        Stmt.data ~info l, env
     | A.Codata l ->
         let env, l = convert_tydef ?loc ~env l in
-        St.codata ~info l, env
+        Stmt.codata ~info l, env
     | A.Goal t ->
         (* infer type for t *)
         let t = convert_term_exn ~env t in
@@ -696,10 +781,10 @@ module Convert(Term : TERM) = struct
            XXX: for narrowing, could be of any type? *)
         unify_in_ctx_ ~stack:[] (get_ty_ t) prop;
         check_prenex_types_ ?loc t;
-        St.goal ~info t, env
+        Stmt.goal ~info t, env
     in
     NunUtils.debugf ~section 2 "@[<2>checked statement@ %a@]"
-      (fun k-> k (St.print PrintTerm.print PrintTerm.print_ty) st');
+      (fun k-> k (Stmt.print PrintTerm.print PrintTerm.print_ty) st');
     st', env
 
   let convert_statement ~env st =

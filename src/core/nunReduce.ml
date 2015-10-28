@@ -3,6 +3,7 @@
 
 (** {1 Reductions, including Beta Reduction} *)
 
+module ID = NunID
 module Var = NunVar
 module TI = NunTerm_intf
 
@@ -82,7 +83,8 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       | TI.Var _
       | TI.App (_,_)
       | TI.Bind (_,_,_)
-      | TI.Let (_,_,_)
+      | TI.Let _
+      | TI.Match _
       | TI.TyBuiltin _
       | TI.TyArrow (_,_)
       | TI.TyMeta _ ->
@@ -132,6 +134,20 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
           end
       | B.Ite,_ -> assert false
 
+    (* see whether [st] matches a case in [l] *)
+    let rec lookup_case_ st l = match l with
+      | [] -> None
+      | (c, vars, rhs) :: l' ->
+          match T.view st.head with
+            | TI.Const id when ID.equal c id ->
+                (* it matches! arity should match too, otherwise the
+                 term is ill-typed *)
+                let subst = Subst.add_list ~subst:st.subst vars st.args in
+                Some (rhs, subst)
+            | _ ->
+                (* not same constructor, or not a Const *)
+                lookup_case_ st l'
+
     (* reduce until the head is not a function *)
     let rec whnf_ st = match T.view st.head with
       | TI.Const _ -> st
@@ -156,6 +172,16 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
                 args=args';
                 subst=Subst.add ~subst:st.subst v a
               }
+          end
+      | TI.Match (t, l) ->
+          let st_t = whnf_ {head=t; args=[]; subst=st.subst; } in
+          (* see whether [st] matches some case *)
+          begin match lookup_case_ st_t l with
+            | None ->
+                (* just replace the head *)
+                { st with head=T.match_with (term_of_state st_t) l }
+            | Some (rhs, subst) ->
+                whnf_ {st with head=rhs; subst; }
           end
       | TI.Bind ((TI.Forall | TI.Exists | TI.TyForall), _, _)
       | TI.Let _
@@ -194,6 +220,26 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       | TI.Let (v,t,u) ->
           let t = snf_term ~subst:st.subst t in
           enter_snf_ st v u (fun v u -> T.let_ v t u)
+      | TI.Match (t,l) ->
+          let st_t = snf_ {head=t; args=[]; subst=st.subst; } in
+          (* see whether [st] matches some case *)
+          begin match lookup_case_ st_t l with
+            | None ->
+                (* just replace the head and evaluate each branch *)
+                let l = List.map
+                  (fun (c,vars,rhs) ->
+                    let vars' = Var.fresh_copies vars in
+                    let subst' = Subst.add_list ~subst:st.subst vars
+                      (List.map T.var vars') in
+                    let rhs' = snf_term rhs ~subst:subst' in
+                    c,vars',rhs'
+                  )
+                  l
+                in
+                { st with head=T.match_with (term_of_state st_t) l }
+            | Some (rhs, subst) ->
+                whnf_ {st with head=rhs; subst; }
+          end
       | TI.TyMeta _ -> assert false
 
     (* compute the SNF of this term in [subst] *)

@@ -27,6 +27,7 @@ let rec print_term out t = match A.view t with
   | A.Fun (v,t) ->
       fpf out "@[<2>^[%a]:@ %a@]" print_tyvar v print_inner t
   | A.Let _ -> NunUtils.not_implemented "print let in TPTP"
+  | A.Match _ -> NunUtils.not_implemented "print match in TPTP"
   | A.Ite (a,b,c) ->
       fpf out "$ite_t(@[<hv>%a,@ %a,@ %a@])"
         print_term a print_term b print_term c
@@ -94,6 +95,7 @@ and print_inner out t = match A.view t with
       | _ -> print_term out t
       end
   | A.Fun (_,_)
+  | A.Match _
   | A.Forall (_,_)
   | A.Exists (_,_)
   | A.TyArrow (_,_)
@@ -163,6 +165,7 @@ let preprocess_model m =
         let t = find_cst_term ~state t in
         let u = find_cst_term ~state:(pre_state_bind ~state v) u in
         A.let_ (mk_var v) t u
+    | A.Match _ -> NunUtils.not_implemented "replace in match"
     | A.Ite (a,b,c) ->
         let a = find_cst_term ~state a in
         let b = find_cst_term ~state b in
@@ -221,6 +224,7 @@ let preprocess_model m =
           preprocess_pair ~state t u2 >>= fun u2 ->
           preprocess_pair ~state t u3 >|= fun u3 ->
           A.ite u1 u2 u3
+      | A.Match _ -> NunUtils.not_implemented "printTPTP: match"
   in
   let state = pre_state_create() in
   let m' = m

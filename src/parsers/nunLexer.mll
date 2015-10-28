@@ -56,6 +56,9 @@ rule token = parse
   | "prop" { PROP }
   | "axiom" { AXIOM }
   | "goal" { GOAL }
+  | "match" { MATCH }
+  | "with" { WITH }
+  | "end" { END }
   | "let" { LET }
   | "in" { IN }
   | "if" { IF }

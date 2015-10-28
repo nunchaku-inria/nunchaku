@@ -32,7 +32,7 @@ let print_ = ref false
 let print_typed_ = ref false
 let print_skolem_ = ref false
 let print_mono_ = ref false
-let print_mutualize_ = ref false
+let print_recursion_elim_ = ref false
 let print_fo_ = ref false
 let print_smt_ = ref false
 let timeout_ = ref 30
@@ -79,7 +79,8 @@ let options =
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
   ; "--print-skolem", Arg.Set print_skolem_, " print input after Skolemization"
   ; "--print-mono", Arg.Set print_mono_, " print input after monomorphization"
-  ; "--print-mutualize", Arg.Set print_mutualize_, " print input after mutualization"
+  ; "--print-rec-elim", Arg.Set print_recursion_elim_,
+      " print input after elimination of recursive functions"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set NunSolver_intf.print_model_, " print raw model"
@@ -139,6 +140,8 @@ let make_model_pipeline () =
     NunTerm_typed.as_ho NunTerm_ho.default in
   let step_monomorphization =
     NunMonomorphization.pipe ~print:!print_mono_ NunTerm_ho.default in
+  let step_recursion_elim =
+    NunElimRecursion.pipe ~print:!print_recursion_elim_ NunTerm_ho.default in
   (* conversion to FO *)
   let step_fo = NunTerm_ho.to_fo
     (module NunTerm_ho.Default) (module NunFO.Default)
@@ -148,6 +151,7 @@ let make_model_pipeline () =
     step_ty_infer @@@
     step_skolem @@@
     step_monomorphization @@@
+    step_recursion_elim @@@
     step_fo @@@
     id
   in

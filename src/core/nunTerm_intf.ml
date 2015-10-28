@@ -15,6 +15,30 @@ type binder =
   | Fun
   | TyForall
 
+type 'a case = id * 'a var list * 'a
+(** A pattern match case: [ constructor, vars, right-hand side ]
+    The pattern must be linear (variable list does not contain duplicates) *)
+
+(** A list of cases (sorted by increasing ID) *)
+type 'a cases = 'a case list
+
+let cases_normalize l = List.sort (fun (id1,_,_) (id2,_,_) -> ID.compare id1 id2) l
+
+(* check that:
+    - each case is linear (all vars are different)
+    - each case has a distinct ID
+*)
+let cases_well_formed (type a) l =
+  let is_linear_ (_,vars,_) =
+    let module VarSet = Var.Set(struct type t = a end) in
+    VarSet.cardinal (VarSet.of_list vars) = List.length vars
+  in
+  List.for_all is_linear_ l
+  &&
+  ( let ids = List.fold_left (fun acc (id,_,_) -> ID.Set.add id acc) ID.Set.empty l in
+    ID.Set.cardinal ids = List.length l
+  )
+
 type 'a view =
   | Const of id (** top-level symbol *)
   | Var of 'a var (** bound variable *)
@@ -22,6 +46,7 @@ type 'a view =
   | AppBuiltin of NunBuiltin.T.t * 'a list (** built-in operation *)
   | Bind of binder * 'a var * 'a
   | Let of 'a var * 'a * 'a
+  | Match of 'a * 'a cases (** shallow pattern-match *)
   | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
   | TyArrow of 'a * 'a  (** Arrow type *)
   | TyMeta of 'a NunMetaVar.t
@@ -77,11 +102,15 @@ end = struct
       | TyMeta _
       | AppBuiltin _
       | Const _ -> ()
-      | Var v -> aux (Var.ty v)
+      | Var v -> aux_var v
+      | Match (t,l) ->
+          aux t;
+          List.iter (fun (_,vars,rhs) -> List.iter aux_var vars; aux rhs) l
       | App (f,l) -> aux f; List.iter aux l
       | Bind (_,v,t) -> aux (Var.ty v); aux t
       | Let (v,t,u) -> aux (Var.ty v); aux t; aux u
       | TyArrow (a,b) -> aux a; aux b
+    and aux_var v = aux (Var.ty v)
     in
     aux t
 
@@ -94,6 +123,13 @@ end = struct
           if VarSet.mem v bound then () else yield v
       | App (f,l) ->
           aux ~bound f; List.iter (aux ~bound) l
+      | Match (t,l) ->
+          aux ~bound t;
+          List.iter
+            (fun (_,vars,rhs) ->
+              let bound = List.fold_right VarSet.add vars bound in
+              aux ~bound rhs
+            ) l
       | AppBuiltin (_,l) -> List.iter (aux ~bound) l
       | Bind (_,v,t) -> aux ~bound:(VarSet.add v bound) t
       | Let (v,t,u) -> aux ~bound t; aux ~bound:(VarSet.add v bound) u
@@ -105,17 +141,18 @@ end = struct
 
   let to_seq_vars t =
     to_seq t
-    |> Sequence.filter_map
+    |> Sequence.flat_map
         (fun t -> match T.view t with
           | Var v
           | Bind (_,v,_)
-          | Let (v,_,_) -> Some v
+          | Let (v,_,_) -> Sequence.return v
+          | Match (_,l) -> Sequence.(of_list l >>= fun (_,vars,_) -> of_list vars)
           | AppBuiltin _
           | Const _
           | App (_,_)
           | TyBuiltin _
           | TyArrow (_,_)
-          | TyMeta _ -> None
+          | TyMeta _ -> Sequence.empty
         )
 
   let to_seq_meta_vars t =
@@ -128,6 +165,7 @@ end = struct
           | AppBuiltin _
           | Const _
           | Let _
+          | Match _
           | App (_,_)
           | TyBuiltin _
           | TyArrow (_,_) -> None
