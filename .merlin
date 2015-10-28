@@ -1,7 +1,9 @@
 S src/core
+S src/core/transformations/
 S src/main/
 S src/parsers/
 B _build/src/core
+B _build/src/core/transformations/
 B _build/src/main/
 B _build/src/parsers
 PKG containers
