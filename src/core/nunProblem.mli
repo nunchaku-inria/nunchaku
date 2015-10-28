@@ -38,6 +38,13 @@ val metadata : (_,_) t -> Metadata.t
 val map_statements :
   f:(('t, 'ty) NunStatement.t -> ('t2,'ty2) NunStatement.t) -> ('t,'ty) t -> ('t2,'ty2) t
 
+val flat_map_statements :
+  f:(('t, 'ty) NunStatement.t -> ('t2,'ty2) NunStatement.t list) ->
+  ('t,'ty) t ->
+  ('t2,'ty2) t
+(** Map each statement to a list of statements, and flatten the result into
+    a new problem *)
+
 val map : term:('a -> 'b) -> ty:('tya -> 'tyb) -> ('a, 'tya) t -> ('b, 'tyb) t
 
 val map_with :

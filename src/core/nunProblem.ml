@@ -47,6 +47,16 @@ let map_statements ~f pb = {
   statements=CCVector.map f pb.statements;
 }
 
+let flat_map_statements ~f pb =
+  let res = CCVector.create () in
+  CCVector.iter
+    (fun st ->
+      let new_stmts = f st in
+      List.iter (CCVector.push res) new_stmts
+    ) pb.statements;
+  let res = CCVector.freeze res in
+  { metadata=pb.metadata; statements=res; }
+
 let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
   metadata=p.metadata;
   statements=(
