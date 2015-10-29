@@ -719,13 +719,16 @@ module Convert(Term : TERM) = struct
             NunUtils.debugf ~section 3 "@[constructor %a: %a@]"
               (fun k-> k ID.print_name id' PrintTerm.print_ty ty');
             (* newly built constructor *)
-            let c = {Stmt.cstor_name=id'; cstor_type=ty'; cstor_args=ty_args; } in
+            let c = {Stmt.
+              cstor_name=id'; cstor_type=ty';
+              cstor_args=ty_args; cstor_selectors=None; cstor_tester=None;
+            } in
             Env.add_cstor ~env ~name id' ty';
             env, c
           ) env cstors
         in
         let tydef = {Stmt.
-          ty_id=id; ty_vars=vars'; ty_type=ty_id; ty_cstors=cstors
+          ty_id=id; ty_vars=vars'; ty_type=ty_id; ty_cstors=cstors;
         } in
         env, tydef
       )

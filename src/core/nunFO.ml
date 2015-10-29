@@ -63,11 +63,17 @@ type 'ty toplevel_ty = 'ty list * 'ty
 type 'ty constructor = {
   cstor_name: id;
   cstor_args: (id * 'ty) list; (* each arg: (selector, type) *)
+  cstor_tester: id; (* test whether a term starts with this constructor *)
+}
+
+type 'ty tydef = {
+  ty_name: id;
+  ty_cstors: 'ty constructor list;
 }
 
 type 'ty mutual_types = {
-  ty_vars: id list;  (* type parameters *)
-  ty_types : (id * 'ty constructor list) list;
+  tys_vars: id list;  (* type parameters *)
+  tys_defs : 'ty tydef list;
 }
 
 type ('f, 't, 'ty) statement =
@@ -351,14 +357,15 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
               fpf out "@[<2>(%a@ %a)@]" ID.print_name c.cstor_name
                 (pp_list_ ~sep:" " pp_arg) c.cstor_args
         in
-        let print_data out (name, cstors) =
+        let print_tydef out tydef =
           fpf out "@[<hv2>%a :=@ %a@]"
-            ID.print_name name (pp_list_ ~sep:" | " pp_cstor) cstors
+            ID.print_name tydef.ty_name
+            (pp_list_ ~sep:" | " pp_cstor) tydef.ty_cstors
         in
         fpf out "@[<hv2>%s %a@,%a.@]"
           (match k with `Data -> "data" | `Codata -> "codata")
-          pp_tyvars_ l.ty_vars
-          (pp_list_ ~sep:" and " print_data) l.ty_types
+          pp_tyvars_ l.tys_vars
+          (pp_list_ ~sep:" and " print_tydef) l.tys_defs
     | Goal t -> fpf out "@[<2>goal %a.@]" print_formula t
 
   let print_problem out pb =

@@ -807,6 +807,11 @@ module AsFO(T : S) = struct
           (* for now, generate dummy selectors *)
           {FOI.
             cstor_name=c.St.cstor_name;
+            cstor_tester=(match c.St.cstor_tester with
+              | Some id -> id
+              | None ->
+                  ID.make ~name:(Printf.sprintf "is-%s" (ID.name c.St.cstor_name))
+            );
             cstor_args=List.map
               (fun a ->
                 let selector = ID.make
@@ -819,18 +824,18 @@ module AsFO(T : S) = struct
           }
         in
         (* gather all variables *)
-        let ty_vars =
+        let tys_vars =
           CCList.flat_map (fun tydef -> List.map Var.id tydef.St.ty_vars) l
         (* convert declarations *)
-        and ty_types = List.map
+        and tys_defs = List.map
           (fun tydef ->
             let id = tydef.St.ty_id in
             let cstors = List.map (convert_cstor id) tydef.St.ty_cstors in
             n := 0;
-            id, cstors
+            {FOI.ty_name=id; ty_cstors=cstors; }
           ) l
         in
-        let l = {FOI.  ty_vars; ty_types; } in
+        let l = {FOI.tys_vars; tys_defs; } in
         [ FOI.MutualTypes (k, l) ]
 
   let convert_problem p =

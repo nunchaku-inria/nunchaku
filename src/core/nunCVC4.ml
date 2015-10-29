@@ -185,15 +185,16 @@ end = struct
           fpf out "(@[<2>%a@ %a@])" ID.print_name c.FOI.cstor_name
             (pp_list pp_arg) c.FOI.cstor_args
         in
-        let print_data out (name, cstors) =
+        let print_tydef out tydef =
           fpf out "(@[<2>%a@ %a@])"
-            ID.print_name name (pp_list pp_cstor) cstors
+            ID.print_name tydef.FOI.ty_name
+            (pp_list pp_cstor) tydef.FOI.ty_cstors
         in
         fpf out "(@[<2>%s (%a) (%a)@])"
           (match k with `Data -> "declare-datatypes"
             | `Codata -> "declare-codatatypes")
-          (pp_list ID.print_name) l.FOI.ty_vars
-          (pp_list print_data) l.FOI.ty_types
+          (pp_list ID.print_name) l.FOI.tys_vars
+          (pp_list print_tydef) l.FOI.tys_defs
 
     in
     fun out pb ->

@@ -62,11 +62,17 @@ type 'ty toplevel_ty = 'ty list * 'ty
 type 'ty constructor = {
   cstor_name: id;
   cstor_args: (id * 'ty) list; (* each arg: (selector, type) *)
+  cstor_tester: id; (* test whether a term starts with this constructor *)
+}
+
+type 'ty tydef = {
+  ty_name: id;
+  ty_cstors: 'ty constructor list;
 }
 
 type 'ty mutual_types = {
-  ty_vars: id list;  (* type parameters *)
-  ty_types : (id * 'ty constructor list) list;
+  tys_vars: id list;  (* type parameters *)
+  tys_defs : 'ty tydef list;
 }
 
 (* TODO: try to merge back with NunProblem? *)
