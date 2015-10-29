@@ -9,6 +9,8 @@ module ID = NunID
 module Sol = NunSolver_intf
 module FOI = NunFO
 
+type id = ID.t
+
 let section = NunUtils.Section.make "cvc4"
 
 module DSexp = CCSexpM.MakeDecode(struct
@@ -36,13 +38,27 @@ end = struct
 
   type problem = (FO.Formula.t, FO.T.t, FO.Ty.t) NunFO.Problem.t
 
+  type decoded_sym =
+    | ID of id (* regular fun *)
+    | DataTest of id
+    | DataSelect of id * int
+
+  type decode_state = {
+    decode_tbl: (string, decoded_sym) Hashtbl.t;
+      (* map (stringof ID) -> ID, and other builtins *)
+  }
+
+  let create_decode_state() = {
+    decode_tbl=Hashtbl.create 32;
+  }
+
   (* the solver is dealt with through stdin/stdout *)
   type t = {
     oc : out_channel;
     fmt : Format.formatter; (* prints on [oc] *)
     ic : in_channel;
     symbols : ID.Set.t; (* set of symbols to ask values for in the model *)
-    tbl : (string, ID.t) Hashtbl.t; (* map (stringof ID) -> ID *)
+    decode: decode_state;
     mutable sexp : DSexp.t;
     mutable closed : bool;
     mutable res : model_elt Sol.Res.t option;
@@ -75,7 +91,7 @@ end = struct
       fmt=Format.formatter_of_out_channel oc;
       ic;
       symbols;
-      tbl=Hashtbl.create 32;
+      decode=create_decode_state();
       closed=false;
       sexp=DSexp.make ~bufsize:4_000 (input ic);
       res=None;
@@ -89,12 +105,24 @@ end = struct
     CCFormat.list ~sep:" " ~start ~stop pp
 
   (* print problems. [on_id (to_string id) id] is called every time
-      and id is printed.  *)
+      an id is printed.  *)
   let print_problem_ ~on_id =
     (* print ID and remember its name for parsing model afterward *)
     let rec print_id out id =
       let name = ID.name id in
-      on_id name id;
+      on_id name (ID id);
+      CCFormat.string out name
+
+    (* print [is-c] for a constructor [c] *)
+    and print_tester out c =
+      let name = Printf.sprintf "is-%s" (ID.name c) in
+      on_id name (DataTest c);
+      CCFormat.string out name
+
+    (* print [select-c-n] to select the n-th argument of [c] *)
+    and print_select out (c,n) =
+      let name = Printf.sprintf "_select_%s_%d" (ID.name c) n in
+      on_id name (DataSelect (c,n));
       CCFormat.string out name
 
     (* print type (a monomorphic type) in SMT *)
@@ -123,6 +151,10 @@ end = struct
       | FOI.App (f,l) ->
           fpf out "(@[%a@ %a@])"
             print_id f (pp_list print_term) l
+      | FOI.DataTest (c,t) ->
+          fpf out "(@[%a@ %a@])" print_tester c print_term t
+      | FOI.DataSelect (c,n,t) ->
+          fpf out "(@[%a@ %a@])" print_select (c,n) print_term t
       | FOI.Fun (v,t) ->
           fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
             Var.print v print_ty (Var.ty v) print_term t
@@ -179,11 +211,13 @@ end = struct
       | FOI.Goal t ->
           fpf out "(@[assert@ %a@])" print_form t
       | FOI.MutualTypes (k, l) ->
-        let pp_arg out (id,ty) =
-          fpf out "(@[<h>%a %a@])" ID.print_name id print_ty ty in
+        let pp_arg out (c,i,ty) =
+          fpf out "(@[<h>%a %a@])" print_select (c,i) print_ty ty in
         let pp_cstor out c =
+          (* add selectors *)
+          let args = List.mapi (fun i ty -> c.FOI.cstor_name,i,ty) c.FOI.cstor_args in
           fpf out "(@[<2>%a@ %a@])" ID.print_name c.FOI.cstor_name
-            (pp_list pp_arg) c.FOI.cstor_args
+            (pp_list pp_arg) args
         in
         let print_tydef out tydef =
           fpf out "(@[<2>%a@ %a@])"
@@ -210,8 +244,8 @@ end = struct
       ()
 
   let send_ s problem =
-    let on_id name id =
-      Hashtbl.replace s.tbl name id
+    let on_id name def =
+      Hashtbl.replace s.decode.decode_tbl name def
     in
     fpf s.fmt "%a@." (print_problem_ ~on_id) problem;
     ()
@@ -224,32 +258,37 @@ end = struct
   let error_ e = raise (Error e)
 
   (* parse an identifier *)
-  let parse_id_ ~tbl = function
+  let parse_atom_ ~state = function
     | `Atom s ->
-        begin try Hashtbl.find tbl s
+        begin try Hashtbl.find state.decode_tbl s
         with Not_found ->
           (* introduced by CVC4 in the model; make a new ID *)
           let id = ID.make ~name:s in
-          Hashtbl.replace tbl s id;
-          id
+          Hashtbl.replace state.decode_tbl s (ID id);
+          ID id
         end
     | _ -> error_ "expected ID, got a list"
 
+  let parse_id_ ~state s = match parse_atom_ ~state s with
+    | ID id -> id
+    | DataTest _
+    | DataSelect _ -> error_ "expected ID, got data test/select"
+
   (* parse an atomic type *)
-  let rec parse_ty_ ~tbl = function
+  let rec parse_ty_ ~state = function
     | `Atom _ as f ->
-        let id = parse_id_ ~tbl f in
+        let id = parse_id_ ~state f in
         FOBack.Ty.const id
     | `List (`Atom _ as f :: l) ->
-        let id = parse_id_ ~tbl f in
-        let l = List.map (parse_ty_ ~tbl) l in
+        let id = parse_id_ ~state f in
+        let l = List.map (parse_ty_ ~state) l in
         FOBack.Ty.app id l
     | _ -> error_ "invalid type"
 
-  let parse_var_ ~tbl = function
+  let parse_var_ ~state = function
     | `List [`Atom _ as v; ty] ->
-        let id = parse_id_ ~tbl v in
-        let ty = parse_ty_ ~tbl ty in
+        let id = parse_id_ ~state v in
+        let ty = parse_ty_ ~state ty in
         Var.of_id ~ty id
     | _ -> error_ "expected typed variable"
 
@@ -273,33 +312,44 @@ end = struct
     | NunFO.F_ite (_,_,_) -> None
 
   (* parse a ground term *)
-  let rec parse_term_ ~tbl = function
-    | `Atom _ as t -> FOBack.T.const (parse_id_ ~tbl t)
+  let rec parse_term_ ~state = function
+    | `Atom _ as t -> FOBack.T.const (parse_id_ ~state t)
     | `List [`Atom "LAMBDA"; `List bindings; body] ->
         (* lambda term *)
-        let bindings = List.map (parse_var_ ~tbl) bindings in
-        let body = parse_term_ ~tbl body in
+        let bindings = List.map (parse_var_ ~state) bindings in
+        let body = parse_term_ ~state body in
         List.fold_right FOBack.T.fun_ bindings body
     | `List [`Atom "ite"; a; b; c] ->
-        let a = parse_formula_ ~tbl a in
-        let b = parse_term_ ~tbl b in
-        let c = parse_term_ ~tbl c in
+        let a = parse_formula_ ~state a in
+        let b = parse_term_ ~state b in
+        let c = parse_term_ ~state c in
         FOBack.T.ite a b c
     | `List (`Atom _ as f :: l) ->
-        let f = parse_id_ ~tbl f in
-        let l = List.map (parse_term_ ~tbl) l in
-        FOBack.T.app f l
+        begin match parse_atom_ ~state f, l with
+          | ID f, _ ->
+              (* regular function app *)
+              let l = List.map (parse_term_ ~state) l in
+              FOBack.T.app f l
+          | DataTest c, [t] ->
+              let t = parse_term_ ~state t in
+              FOBack.T.data_test c t
+          | DataTest _, _ -> error_ "invalid arity for DataTest"
+          | DataSelect (c,n), [t] ->
+              let t = parse_term_ ~state t in
+              FOBack.T.data_select c n t
+          | DataSelect _, _ -> error_ "invalid arity for DataSelect"
+        end
     | `List (`List _ :: _) -> error_ "non first-order list"
     | `List [] -> error_ "expected term, got empty list"
 
-  and parse_formula_ ~tbl s =
+  and parse_formula_ ~state s =
     let module F = FOBack.Formula in
     match s with
     | `Atom "true" -> F.true_
     | `Atom "false" -> F.false_
     | `List [`Atom "="; a; b] ->
-        let a = parse_term_or_formula_ ~tbl a in
-        let b = parse_term_or_formula_ ~tbl b in
+        let a = parse_term_or_formula_ ~state a in
+        let b = parse_term_or_formula_ ~state b in
         begin match a, b with
         | NunFO.Term a,NunFO.Term b -> F.eq a b
         | NunFO.Form a,NunFO.Form b -> F.equiv a b
@@ -307,33 +357,33 @@ end = struct
         | NunFO.Term a,NunFO.Form b -> F.equiv (F.atom a) b
         end
     | `List [`Atom "not"; f] ->
-        let f = parse_formula_ ~tbl f in
+        let f = parse_formula_ ~state f in
         F.not_ f
     | `List (`Atom "and" :: l) ->
-        F.and_ (List.map (parse_formula_ ~tbl) l)
+        F.and_ (List.map (parse_formula_ ~state) l)
     | `List (`Atom "or" :: l) ->
-        F.or_ (List.map (parse_formula_ ~tbl) l)
+        F.or_ (List.map (parse_formula_ ~state) l)
     | `List [`Atom "forall"; `List bindings; f] ->
-        let bindings = List.map (parse_var_ ~tbl) bindings in
-        let f = parse_formula_ ~tbl f in
+        let bindings = List.map (parse_var_ ~state) bindings in
+        let f = parse_formula_ ~state f in
         List.fold_right F.forall bindings f
     | `List [`Atom "exists"; `List bindings; f] ->
-        let bindings = List.map (parse_var_ ~tbl) bindings in
-        let f = parse_formula_ ~tbl f in
+        let bindings = List.map (parse_var_ ~state) bindings in
+        let f = parse_formula_ ~state f in
         List.fold_right F.exists bindings f
     | `List [`Atom "LAMBDA"; `List bindings; body] ->
         (* lambda term *)
-        let bindings = List.map (parse_var_ ~tbl) bindings in
-        let body = parse_formula_ ~tbl body in
+        let bindings = List.map (parse_var_ ~state) bindings in
+        let body = parse_formula_ ~state body in
         List.fold_right FOBack.Formula.f_fun bindings body
     | `List [`Atom "=>"; a; b] ->
-        let a = parse_formula_ ~tbl a in
-        let b = parse_formula_ ~tbl b in
+        let a = parse_formula_ ~state a in
+        let b = parse_formula_ ~state b in
         F.imply a b
     | `List [`Atom "ite"; a; b; c] ->
-        let a = parse_formula_ ~tbl a in
-        let b = parse_term_or_formula_ ~tbl b in
-        let c = parse_term_or_formula_ ~tbl c in
+        let a = parse_formula_ ~state a in
+        let b = parse_term_or_formula_ ~state b in
+        let c = parse_term_or_formula_ ~state c in
         begin match b, c with
           | NunFO.Term b, NunFO.Term c ->
               F.atom (FOBack.T.ite a b c)
@@ -342,26 +392,26 @@ end = struct
           | NunFO.Term b, NunFO.Form c -> F.f_ite a (F.atom b) c
         end
     | _ ->
-        let t = parse_term_ ~tbl s in
+        let t = parse_term_ ~state s in
         F.atom t
 
-  and parse_term_or_formula_ ~tbl t =
-    let f = parse_formula_ ~tbl t in
+  and parse_term_or_formula_ ~state t =
+    let f = parse_formula_ ~state t in
     (* [f] might be a term *)
     match as_term_ f with
     | None -> NunFO.Form f
     | Some t -> NunFO.Term t
 
-  (* tbl: string -> ID *)
-  let parse_model_ ~tbl = function
+  (* state: decode_state *)
+  let parse_model_ ~state = function
     | `Atom _ -> error_ "expected model, got atom"
     | `List assoc ->
       (* parse model *)
       let m = List.fold_left
         (fun m -> function
           | `List [`Atom _ as s; term] ->
-              let id = parse_id_ ~tbl s in
-              let t = parse_term_or_formula_ ~tbl term in
+              let id = parse_id_ ~state s in
+              let t = parse_term_or_formula_ ~state term in
               ID.Map.add id t m
           | _ -> error_ "expected pair key/value in the model"
         )
@@ -372,7 +422,7 @@ end = struct
   (* read model from CVC4 instance [s]
      symbols: set of symbols to get values for
      tbl: string -> ID *)
-  let get_model_ ~symbols ~tbl s =
+  let get_model_ ~symbols ~state s =
     NunUtils.debugf ~section 3 "@[<2>ask for values of@ %a@]"
       (fun k -> k (ID.Set.print ~start:"(" ~sep:" " ~stop:")" ID.print_name) symbols);
     fpf s.fmt "(@[<hv2>get-value@ %a@])@."
@@ -384,7 +434,7 @@ end = struct
     | `Ok sexp ->
         if !Sol.print_model_
           then Format.eprintf "@[raw model:@ @[<hov>%a@]@]@." CCSexpM.print sexp;
-        let m = parse_model_ ~tbl sexp in
+        let m = parse_model_ ~state sexp in
         (* check all symbols are defined *)
         let ok = ID.Set.to_seq symbols
           |> Sequence.for_all (fun s -> ID.Map.mem s m)
@@ -405,6 +455,8 @@ end = struct
           begin try ID.Map.find id rules (* apply rule *)
           with Not_found -> t
           end
+      | NunFO.DataTest(c,t) -> FOBack.T.data_test c (rewrite_term_ ~rules t)
+      | NunFO.DataSelect(c,n,t) -> FOBack.T.data_select c n (rewrite_term_ ~rules t)
       | NunFO.App (id, l) -> FOBack.T.app id (List.map (rewrite_term_ ~rules) l)
       | NunFO.Fun (v,t) ->
           (* no capture, rules rewrite to closed terms *)
@@ -437,12 +489,12 @@ end = struct
     List.map (fun (t,u) -> rewrite_ ~rules t, rewrite_ ~rules u) m
 
   (* read the result *)
-  let read_res_ ~symbols ~tbl s =
+  let read_res_ ~symbols ~state s =
     match DSexp.next s.sexp with
     | `Ok (`Atom "unsat") ->
         Sol.Res.Unsat
     | `Ok (`Atom "sat") ->
-        let m = get_model_ ~symbols ~tbl s |> rewrite_model_ in
+        let m = get_model_ ~symbols ~state s |> rewrite_model_ in
         Sol.Res.Sat m
     | `Ok (`Atom "unknown") ->
         Sol.Res.Timeout
@@ -458,7 +510,7 @@ end = struct
     | Some r -> r
     | None ->
         let r =
-          try read_res_ ~symbols:t.symbols ~tbl:t.tbl t
+          try read_res_ ~symbols:t.symbols ~state:t.decode t
           with Error e -> Sol.Res.Error e
         in
         t.res <- Some r;

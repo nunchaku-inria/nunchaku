@@ -30,6 +30,8 @@ type ('f, 't, 'ty) view =
   | Builtin of Builtin.t
   | Var of 'ty var
   | App of id * 't list
+  | DataTest of id * 't
+  | DataSelect of id * int * 't
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
   | Ite of 'f * 't * 't
@@ -61,8 +63,7 @@ type 'ty toplevel_ty = 'ty list * 'ty
 
 type 'ty constructor = {
   cstor_name: id;
-  cstor_args: (id * 'ty) list; (* each arg: (selector, type) *)
-  cstor_tester: id; (* test whether a term starts with this constructor *)
+  cstor_args: 'ty list; (* each arg: (selector, type) *)
 }
 
 type 'ty tydef = {
@@ -137,6 +138,8 @@ module type S = sig
     val builtin : Builtin.t -> t
     val const : id -> t
     val app : id -> t list -> t
+    val data_test : id -> t -> t
+    val data_select : id -> int -> t -> t
     val var : Ty.t var -> t
     val let_ : Ty.t var -> t -> t -> t
     val fun_ : Ty.t var -> t -> t

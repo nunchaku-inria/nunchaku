@@ -578,7 +578,7 @@ module Make(T : NunTerm_ho.S) = struct
             let ty' = SubstUtil.eval ~subst ty' in
             let local_state = {depth=depth+1; subst} in
             let args' = List.map (mono_term ~state ~local_state) c.Stmt.cstor_args in
-            { c with Stmt.cstor_name=id'; cstor_type=ty'; cstor_args=args';  }
+            { Stmt.cstor_name=id'; cstor_type=ty'; cstor_args=args';  }
           )
           tydef.Stmt.ty_cstors
         in

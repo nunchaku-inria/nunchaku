@@ -31,6 +31,8 @@ type ('f, 't, 'ty) view =
   | Builtin of Builtin.t
   | Var of 'ty var
   | App of id * 't list
+  | DataTest of id * 't
+  | DataSelect of id * int * 't
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
   | Ite of 'f * 't * 't
@@ -62,8 +64,7 @@ type 'ty toplevel_ty = 'ty list * 'ty
 
 type 'ty constructor = {
   cstor_name: id;
-  cstor_args: (id * 'ty) list; (* each arg: (selector, type) *)
-  cstor_tester: id; (* test whether a term starts with this constructor *)
+  cstor_args: 'ty list; (* each arg: (selector, type) *)
 }
 
 type 'ty tydef = {
@@ -135,6 +136,8 @@ module type S = sig
     val builtin : Builtin.t -> t
     val const : id -> t
     val app : id -> t list -> t
+    val data_test : id -> t -> t
+    val data_select : id -> int -> t -> t
     val var : Ty.t var -> t
     val let_ : Ty.t var -> t -> t -> t
     val fun_ : Ty.t var -> t -> t
@@ -197,6 +200,8 @@ module Default : S = struct
     let app id l = make_ (App(id,l))
     let const id = make_ (App(id,[]))
     let var v = make_ (Var v)
+    let data_test c t = make_ (DataTest (c,t))
+    let data_select c n t = make_ (DataSelect (c,n,t))
     let let_ v t u = make_ (Let(v,t,u))
     let fun_ v t = make_ (Fun (v,t))
     let ite f t u = make_ (Ite (f,t,u))
@@ -299,15 +304,19 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     | Var v -> Var.print out v
     | App (f,[]) -> ID.print_no_id out f
     | App (f,l) ->
-        fpf out "@[<2>(%a@ %a)@]" ID.print_no_id f (pp_list_ print_term) l
+        fpf out "(@[<2>%a@ %a@])" ID.print_no_id f (pp_list_ print_term) l
     | Fun (v,t) ->
-        fpf out "@[<2>(fun %a:%a.@ %a)@]"
+        fpf out "(@[<2>fun %a:%a.@ %a@])"
           Var.print v print_ty (Var.ty v) print_term t
+    | DataTest (c,t) ->
+        fpf out "(@[<2>is-%a@ %a@])" ID.print_name c print_term t
+    | DataSelect (c,n,t) ->
+        fpf out "(@[<2>select-%a-%d@ %a@])" ID.print_name c n print_term t
     | Let (v,t,u) ->
-        fpf out "@[<2>(let@ %a =@ %a in@ %a)@]"
+        fpf out "(@[<2>let@ %a =@ %a in@ %a@])"
           Var.print v print_term t print_term u
     | Ite (a,b,c) ->
-        fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
+        fpf out "(@[<2>ite@ %a@ %a@ %a@])"
           print_formula a print_term b print_term c
 
   and print_formula out f = match FO.Formula.view f with
@@ -346,7 +355,7 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
         fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id v print_toplevel_ty ty
     | Axiom t -> fpf out "@[<2>axiom %a.@]" print_formula t
     | MutualTypes (k, l) ->
-        let pp_arg out (id,ty) = fpf out "%a: %a" ID.print_name id print_ty ty in
+        let pp_arg = print_ty in
         let pp_tyvars_ out = function
           | [] -> ()
           | l -> fpf out "pi %a. " (pp_list_ ID.print_name) l

@@ -720,8 +720,7 @@ module Convert(Term : TERM) = struct
               (fun k-> k ID.print_name id' PrintTerm.print_ty ty');
             (* newly built constructor *)
             let c = {Stmt.
-              cstor_name=id'; cstor_type=ty';
-              cstor_args=ty_args; cstor_selectors=None; cstor_tester=None;
+              cstor_name=id'; cstor_type=ty'; cstor_args=ty_args;
             } in
             Env.add_cstor ~env ~name id' ty';
             env, c

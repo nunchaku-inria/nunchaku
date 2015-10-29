@@ -15,6 +15,7 @@
 module ID = NunID
 module Var = NunVar
 module TyI = NunType_intf
+module Sig = NunSignature
 
 type id = NunID.t
 type 'a var = 'a NunVar.t
@@ -206,6 +207,10 @@ module Print(T : VIEW) = struct
     | AppBuiltin (NunBuiltin.T.Ite, [a;b;c]) ->
         fpf out "@[<2>if %a@ then %a@ else %a@]"
           print a print b print c
+    | AppBuiltin (NunBuiltin.T.DataTest c, [t]) ->
+        fpf out "@[<2>is-%a@ %a@]" ID.print_name c print t
+    | AppBuiltin (NunBuiltin.T.DataSelect (c,n), [t]) ->
+        fpf out "@[<2>select-%a-%d@ %a@]" ID.print_name c n print t
     | AppBuiltin (b, []) -> CCFormat.string out (NunBuiltin.T.to_string b)
     | AppBuiltin (f, [a;b]) when NunBuiltin.T.fixity f = `Infix ->
         fpf out "@[<hv>%a@ %s@ %a@]"
@@ -426,7 +431,17 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
     let t, subst = ty_apply_full t l in
     if Subst.is_empty subst then t else eval ~subst t
 
-  type signature = T.ty NunSignature.t
+  let rec get_ty_arg_ ty i = match T.Ty.view ty with
+    | TyI.App (_,_)
+    | TyI.Builtin _
+    | TyI.Const _
+    | TyI.Var _
+    | TyI.Meta _ -> None
+    | TyI.Arrow (a,b) ->
+        if i=0 then Some a else get_ty_arg_ b (i-1)
+    | TyI.Forall (_,_) -> None
+
+  type signature = T.ty Sig.t
 
   let rec ty_exn ~sigma t = match T.view t with
     | Const id ->
@@ -447,6 +462,19 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
           | B.False
           | B.Ite
           | B.Eq -> T.ty_prop
+          | B.DataTest id ->
+              (* id: a->b->tau, where tau inductive; is-id: tau->prop *)
+              let ty = Sig.find_exn ~sigma id in
+              T.ty_arrow (T.Ty.returns ty) T.ty_prop
+          | B.DataSelect (id,n) ->
+              (* id: a_1->a_2->tau, where tau inductive; select-id-i: tau->a_i*)
+              let ty = Sig.find_exn ~sigma id in
+              begin match get_ty_arg_ ty n with
+              | None ->
+                  failwith "cannot infer type, wrong argument to DataSelect"
+              | Some ty_arg ->
+                  T.ty_arrow (T.Ty.returns ty) ty_arg
+              end
         end
     | Var v -> Var.ty v
     | App (f,l) ->
@@ -605,7 +633,9 @@ module Erase(T : VIEW) = struct
           | B.Imply -> Untyped.Builtin.Imply
           | B.Equiv -> Untyped.Builtin.Equiv
           | B.Eq  -> Untyped.Builtin.Eq
-          | B.Ite -> assert false
+          | B.DataSelect _
+          | B.DataTest _
+          | B.Ite -> assert false (* wrong arity: those are not terms *)
         in
         Untyped.app (Untyped.builtin b) (List.map (erase ~ctx) l)
     | Const id -> Untyped.var (find_ ~ctx id)
@@ -712,6 +742,8 @@ module AsFO(T : S) = struct
 
     let view t = match T.view t with
       | AppBuiltin (NunBuiltin.T.Ite, [a;b;c]) -> FOI.Ite (a,b,c)
+      | AppBuiltin (NunBuiltin.T.DataTest c, [t]) -> FOI.DataTest (c,t)
+      | AppBuiltin (NunBuiltin.T.DataSelect (c,n), [t]) -> FOI.DataSelect (c,n,t)
       | AppBuiltin _ -> fail t "no builtin in terms"
       | Const id -> FOI.App (id, [])
       | Var v -> FOI.Var v
@@ -746,6 +778,8 @@ module AsFO(T : S) = struct
           | NunBuiltin.T.Ite, [a;b;c] -> FOI.F_ite (a,b,c)
           | NunBuiltin.T.Equiv, [a;b] -> FOI.Equiv (a,b)
           | NunBuiltin.T.Eq, [a;b] -> FOI.Eq (a,b)
+          | NunBuiltin.T.DataSelect _, _
+          | NunBuiltin.T.DataTest _, _ -> FOI.Atom t
           | _ -> assert false
           end
       | App _
@@ -802,25 +836,11 @@ module AsFO(T : S) = struct
     | St.Goal f ->
         [ FOI.Goal f ]
     | St.TyDef (k, l) ->
-        let n = ref 0 in
         let convert_cstor ty_id c =
-          (* for now, generate dummy selectors *)
+          (* extract or generate {selectors, tester} for each constructor *)
           {FOI.
             cstor_name=c.St.cstor_name;
-            cstor_tester=(match c.St.cstor_tester with
-              | Some id -> id
-              | None ->
-                  ID.make ~name:(Printf.sprintf "is-%s" (ID.name c.St.cstor_name))
-            );
-            cstor_args=List.map
-              (fun a ->
-                let selector = ID.make
-                  ~name:(Printf.sprintf "_select_%s_%d" (ID.name ty_id) !n)
-                in
-                incr n;
-                selector, a
-              )
-              c.St.cstor_args;
+            cstor_args=c.St.cstor_args;
           }
         in
         (* gather all variables *)
@@ -831,7 +851,6 @@ module AsFO(T : S) = struct
           (fun tydef ->
             let id = tydef.St.ty_id in
             let cstors = List.map (convert_cstor id) tydef.St.ty_cstors in
-            n := 0;
             {FOI.ty_name=id; ty_cstors=cstors; }
           ) l
         in
@@ -859,7 +878,9 @@ module OfFO(T : S)(FO : NunFO.VIEW) = struct
         let l = List.map convert_ty l in
         T.ty_app (T.ty_const f) l
 
-  and convert_term t = match FO.T.view t with
+  and convert_term t =
+    let module B = NunBuiltin.T in
+    match FO.T.view t with
     | NunFO.Builtin b ->
         let b = match b with
           | NunFO.Builtin.Int _ -> NunUtils.not_implemented "conversion from int"
@@ -873,6 +894,10 @@ module OfFO(T : S)(FO : NunFO.VIEW) = struct
     | NunFO.Fun (v,t) ->
         let v = Var.update_ty v ~f:convert_ty in
         T.fun_ v (convert_term t)
+    | NunFO.DataTest (c,t) ->
+        T.app_builtin (B.DataTest c) [convert_term t]
+    | NunFO.DataSelect (c,n,t) ->
+        T.app_builtin (B.DataSelect (c,n)) [convert_term t]
     | NunFO.Let (v,t,u) ->
         let v = Var.update_ty v ~f:convert_ty in
         T.let_ v (convert_term t) (convert_term u)

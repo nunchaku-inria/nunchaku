@@ -72,13 +72,16 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
           if U.equal ~subst a b
           then BTrue
           else BPartial (T.eq a b)
-      | TI.AppBuiltin (NunBuiltin.T.Not, [f]) ->
+      | TI.AppBuiltin (B.Not, [f]) ->
           begin match eval_bool ~eval ~subst f with
           | BTrue -> BFalse
           | BFalse -> BTrue
           | BPartial t -> BPartial (T.app_builtin B.Not [t])
           end
-      | TI.AppBuiltin ((B.Imply | B.Equiv | B.Ite | B.Eq | B.Not), _) -> assert false
+      | TI.AppBuiltin ((B.Imply | B.Equiv | B.Eq | B.Not), _) ->
+          assert false (* wrong arity *)
+      | TI.AppBuiltin ((B.Ite | B.DataSelect _ | B.DataTest _), _) ->
+          invalid_arg "not boolean operators"
       | TI.Const _
       | TI.Var _
       | TI.App (_,_)
@@ -112,7 +115,7 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
           | BPartial _ -> BPartial default
 
     (* evaluate [b l] using [eval] *)
-    let eval_builtin ~eval b l ~st =
+    let eval_app_builtin ~eval b l ~st =
       let module B = NunBuiltin.T in
       (* auxiliary function *)
       let eval_term ~subst t = term_of_state (eval {args=[]; head=t; subst}) in
@@ -132,7 +135,11 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
           | BFalse -> eval {st with head=c}
           | BPartial a' -> {st with head=T.ite a' b c}
           end
-      | B.Ite,_ -> assert false
+      | B.DataTest _, [_] ->
+          NunUtils.not_implemented "evaluation of DataTest"
+      | B.DataSelect (_,_), [_] ->
+          NunUtils.not_implemented "evaluation of DataSelect"
+      | (B.Ite | B.DataSelect _ | B.DataTest _),_ -> assert false
 
     (* see whether [st] matches a case in [m] *)
     let lookup_case_ st m = match T.view st.head with
@@ -153,7 +160,7 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       | TI.Const _ -> st
       | TI.AppBuiltin ((NunBuiltin.T.False | NunBuiltin.T.True), _) -> st
       | TI.AppBuiltin (b, l) ->
-          eval_builtin ~eval:whnf_ ~st b l
+          eval_app_builtin ~eval:whnf_ ~st b l
       | TI.Var v ->
           (* dereference, if any *)
           begin match Subst.find ~subst:st.subst v with
@@ -204,7 +211,7 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       | TI.AppBuiltin (_,[]) -> st
       | TI.AppBuiltin (b,l) ->
           let l = List.map (snf_term ~subst:st.subst) l in
-          eval_builtin ~eval:snf_ ~st b l
+          eval_app_builtin ~eval:snf_ ~st b l
       | TI.Bind (TI.TyForall,_,_)
       | TI.TyArrow (_,_) ->
           st (* NOTE: depend types might require beta-reduction in types *)

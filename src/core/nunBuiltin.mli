@@ -1,7 +1,9 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(** {1 Builtin Symbols} *)
+(** {1 Builtin Symbols and Operators} *)
+
+type id = NunID.t
 
 module Ty : sig
   type t =
@@ -23,6 +25,8 @@ module T : sig
     | Equiv
     | Ite
     | Eq
+    | DataTest of id (** Test whether [t : tau] starts with given constructor *)
+    | DataSelect of id * int (** Select n-th argument of given constructor *)
   val fixity : t -> [`Infix | `Prefix]
   val to_string : t -> string
   val equal : t -> t -> bool

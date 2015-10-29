@@ -30,15 +30,11 @@ val case_axioms : ('t,'ty) case -> 't list
 (** mutual definition of several terms *)
 type ('t,'ty) mutual_cases = ('t,'ty) case list
 
-(* TODO: selectors? *)
-
 (** A type constructor: name + type of arguments *)
 type 'ty ty_constructor = {
   cstor_name: id; (** Name *)
   cstor_args: 'ty list; (** type arguments *)
   cstor_type: 'ty; (** type of the constructor (shortcut) *)
-  cstor_selectors: (id list) option;  (** If present, same length as [cstor_args] *)
-  cstor_tester: id option; (** If present, predicate of ty [cstor_type -> prop] *)
 }
 
 (** A (co)inductive type. The type variables [ty_vars] occur freely in
