@@ -15,23 +15,27 @@ let rec fib n =
 ----
 
 requires quantification over `nat : type` which is infinite. Instead we
-approximate its argument by `gamma_nat : type` (uninterpreted type to be
+approximate its argument by `gamma_nat : pseudo_nat -> nat` (uninterpreted type to be
 dealt with by finite model finding) and it becomes:
 
 ----
 val fib : nat -> nat
 
-let rec fib (gamma_nat n) =
-  if gamma_nat n = 0 then 0
-  else if gamma_nat n = 1 then 1
-  else
-    exists m1 m2.
+forall x. gamma_nat x = 0 => fib (gamma_nat x) = 0.
+forall x. gamma_nat x = 1 => fib (gamma_nat x) = 1.
+forall x.
+  exists m1 m2.
       gamma_nat m1 = (gamma_nat n) - 1 && gamma_nat m2 = (gamma_nat n) - 2
       =>
-      fib (gamma_nat (n-1)) + fib (gamma_nat (n-2))
+      fib (gamma_nat n) = fib (gamma_nat m1) + fib (gamma_nat m2))
 ----
 
-See 'Model Finding for Recursive Functions in SMT'
+See 'Model Finding for Recursive Functions in SMT'. Also, model extraction
+should only translate `fib` on a domain restricted to values
+that are in the image of `gamma_nat` (other values are "junk").
+
+For (co)inductive types, selectors and tester should be used since SMT
+solvers do not have pattern-matching (yet?).
 
 == Inductive Predicates
 
