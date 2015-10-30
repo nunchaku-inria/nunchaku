@@ -147,9 +147,7 @@ let make_model_pipeline () =
     *)
   in
   (* conversion to FO *)
-  let step_fo = NunTerm_ho.to_fo
-    (module NunTerm_ho.Default) (module NunFO.Default)
-  in
+  let step_fo = NunTerm_ho.to_fo NunTerm_ho.default NunFO.default in
   (* setup pipeline *)
   let pipe =
     step_ty_infer @@@
@@ -160,8 +158,7 @@ let make_model_pipeline () =
     id
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  let module T = NunTerm_ho.AsFO(NunTerm_ho.Default) in
-  NunCVC4.close_pipe (module T)
+  NunCVC4.close_pipe NunFO.default_view
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 let make_proof_pipeline () =
@@ -178,7 +175,7 @@ let make_proof_pipeline () =
       ~decode:(fun ~decode_term:_ x -> x)
       ~print:!print_mono_ NunTerm_ho.default in
   (* conversion to FO *)
-  let step_fo = NunTerm_ho.to_fo_no_model (module NunTerm_ho.Default) in
+  let step_fo = NunTerm_ho.to_fo_no_model NunTerm_ho.default NunFO.default in
   (* setup pipeline *)
   let pipe =
     step_ty_infer @@@
@@ -188,8 +185,7 @@ let make_proof_pipeline () =
     id
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  let module T = NunTerm_ho.AsFO(NunTerm_ho.Default) in
-  NunCVC4.close_pipe (module T)
+  NunCVC4.close_pipe NunFO.default_view
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 (* search for results *)

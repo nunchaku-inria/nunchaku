@@ -125,6 +125,7 @@ module type S = sig
 
     val const : id -> t
     val app : id -> t list -> t
+    val builtin : TyBuiltin.t -> t
     val arrow : t list -> t -> toplevel_ty
   end
 
@@ -182,6 +183,7 @@ module Default : S = struct
     let make_ view = {view}
     let const id = make_ (TyApp (id, []))
     let app id l = make_ (TyApp (id, l))
+    let builtin b = make_ (TyBuiltin b)
     let arrow a l = a,l
   end
 
@@ -255,6 +257,14 @@ module Default : S = struct
 
   type term_or_form = (T.t, Formula.t) term_or_form_view
 end
+
+let default = (module Default : S with type formula = Default.formula
+               and type T.t = Default.T.t
+               and type Ty.t = Default.Ty.t)
+
+let default_view = (module Default : VIEW with type formula = Default.formula
+               and type T.t = Default.T.t
+               and type Ty.t = Default.Ty.t)
 
 (** {2 The Problems sent to Solvers} *)
 module Problem = struct

@@ -127,6 +127,7 @@ module type S = sig
 
     val const : id -> t
     val app : id -> t list -> t
+    val builtin : TyBuiltin.t -> t
     val arrow : t list -> t -> toplevel_ty
   end
 
@@ -173,6 +174,14 @@ module type S = sig
 end
 
 module Default : S
+
+val default : (module S with type formula = Default.formula
+               and type T.t = Default.T.t
+               and type Ty.t = Default.Ty.t)
+
+val default_view : (module VIEW with type formula = Default.formula
+                   and type T.t = Default.T.t
+                   and type Ty.t = Default.Ty.t)
 
 (** {2 Problem} *)
 module Problem : sig

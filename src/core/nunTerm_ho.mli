@@ -145,22 +145,16 @@ module SubstUtil(T : S)(Subst : NunVar.SUBST with type ty = T.ty) : sig
   (* TODO: unification *)
 end
 
-(** {2 View as FO terms}
+(** {2 Conversion to FO Terms} *)
 
-  The views can fail if the terms are actually not first order *)
-
-module AsFO(T : S) : sig
+module ToFO(T : VIEW)(T2 : NunFO.S) : sig
   exception NotInFO of string * T.t
   (** Raised if a term is not in the first-order fragment *)
 
   (** Convert a problem in a "cheap" way (without allocating new terms) *)
   val convert_problem :
     (T.t, T.ty) NunProblem.t ->
-    (T.t, T.t, T.ty) NunFO.Problem.t
-
-  include NunFO.VIEW with type T.t = T.t
-    and type Ty.t = T.ty
-    and type formula = T.t
+    (T2.Formula.t, T2.T.t, T2.Ty.t) NunFO.Problem.t
 end
 
 (** {2 Convert FO to HO} *)
@@ -175,16 +169,17 @@ end
 
 val to_fo :
   (module S with type t = 'a) ->
-  (module NunFO.S with type T.t = 't and type formula = 'f) ->
+  (module NunFO.S with type T.t = 't and type formula = 'f and type Ty.t = 'ty) ->
   (('a, 'a) NunProblem.t,
-    ('a, 'a, 'a) NunFO.Problem.t,
+    ('f, 't, 'ty) NunFO.Problem.t,
     ('t,'f) NunFO.term_or_form_view NunModel.t,
     'a NunModel.t
   ) NunTransform.t
 
 val to_fo_no_model :
   (module S with type t = 'a) ->
-  (('a, 'a) NunProblem.t, ('a, 'a, 'a) NunFO.Problem.t, 'b, 'b) NunTransform.t
+  (module NunFO.S with type T.t = 't and type formula = 'f and type Ty.t = 'ty) ->
+  (('a, 'a) NunProblem.t, ('f, 't, 'ty) NunFO.Problem.t, 'b, 'b) NunTransform.t
 
 (** {2 Conversion} *)
 

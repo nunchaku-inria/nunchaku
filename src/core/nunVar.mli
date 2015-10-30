@@ -52,7 +52,7 @@ module type SUBST = sig
   type var = ty t
 
   type 'a t
-  (** A substitution for those variables *)
+  (** A substitution for variables with type [ty], to terms ['a] *)
 
   val empty : 'a t
   val is_empty : _ t -> bool
