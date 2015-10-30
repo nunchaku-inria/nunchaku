@@ -721,14 +721,14 @@ module ToFO(T : VIEW)(FO : NunFO.S) = struct
 
   let conv_var = Var.update_ty ~f:conv_ty
 
+  (* find arguments *)
+  let rec flat_arrow_ t = match T.Ty.view t with
+    | TyI.Arrow (a, b) ->
+        let args, ret = flat_arrow_ b in
+        a :: args, ret
+    | _ -> [], t
+
   let conv_top_ty t =
-    (* find arguments *)
-    let rec flat_arrow_ t = match T.Ty.view t with
-      | TyI.Arrow (a, b) ->
-          let args, ret = flat_arrow_ b in
-          a :: args, ret
-      | _ -> [], t
-    in
     let args, ret = flat_arrow_ t in
     let args = List.map conv_ty args
     and ret = conv_ty ret in
@@ -817,7 +817,7 @@ module ToFO(T : VIEW)(FO : NunFO.S) = struct
     | St.Decl (id, k, ty) ->
         begin match k with
         | St.Decl_type ->
-            let args, _ = conv_top_ty ty in
+            let args, _ = flat_arrow_ ty in
             let n = List.length args in
             [ FOI.TyDecl (id, n) ]
         | St.Decl_fun ->
