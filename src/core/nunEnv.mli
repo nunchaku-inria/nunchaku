@@ -11,13 +11,17 @@ type id = NunID.t
 type loc = NunLocation.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-type ('t, 'ty) def =
-  | Fun of
-    ( [`Rec | `Spec] *
-      ('t, 'ty) NunStatement.mutual_cases *
-      ('t,'ty) NunStatement.case *
+type ('t, 'ty) fun_def =
+  | Rec of
+      ('t, 'ty) NunStatement.rec_defs *
+      ('t,'ty) NunStatement.rec_def *
       loc option
-    ) list
+  | Spec of
+      ('t, 'ty) NunStatement.spec_defs *
+      loc option
+
+type ('t, 'ty) def =
+  | Fun of ('t, 'ty) fun_def list
       (** ID is a defined fun/predicate. Can be defined in several places *)
 
   | Data of [`Codata | `Data] * 'ty NunStatement.mutual_types * 'ty NunStatement.tydef
@@ -67,11 +71,18 @@ val declare:
   unit
 (** Declare a symbol's type (as undefined, for now) *)
 
-val def_funs:
+val rec_funs:
   ?loc:loc ->
-  kind:[`Rec | `Spec] ->
   env:('t, 'ty) t ->
-  ('t, 'ty) NunStatement.mutual_cases ->
+  ('t, 'ty) NunStatement.rec_defs ->
+  unit
+(** Add a definition of functions/predicates. They can be already
+    defined (or declared). *)
+
+val spec_funs:
+  ?loc:loc ->
+  env:('t, 'ty) t ->
+  ('t, 'ty) NunStatement.spec_defs ->
   unit
 (** Add a definition of functions/predicates. They can be already
     defined (or declared). *)

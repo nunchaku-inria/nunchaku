@@ -4,6 +4,7 @@ module Var = NunVar
 module ID = NunID
 
 type id = ID.t
+type 'a var = 'a NunVar.t
 type loc = NunLocation.t
 type 'a printer = Format.formatter -> 'a -> unit
 
@@ -12,19 +13,31 @@ type decl =
   | Decl_fun
   | Decl_prop
 
-(** defines [t], aliased as local variable [v], with the [axioms].
-  All the type variables [alpha_1, ..., alpha_n] are free in [t]
-  and in [axioms], and no other type variable should occur. *)
-type ('t,'ty) case = {
-  case_vars: 'ty NunVar.t list; (* alpha_1, ..., alpha_n *)
-  case_defined: 't; (* t *)
-  case_head: id;  (* head symbol of [case_defined] *)
-  case_alias: 'ty NunVar.t; (* v *)
-  case_axioms: 't list; (* axioms *)
+type ('t,'ty) defined = {
+  defined_term: 't;  (* term being defined/specified *)
+  defined_head: id; (* head symbol of [defined_term] *)
+  defined_ty_args: 'ty list; (* type arguments. *)
+  defined_alias: 'ty var;  (* alias for [defined_term] *)
 }
 
-(* mutual definition of several terms *)
-type ('t,'ty) mutual_cases = ('t,'ty) case list
+type ('t, 'ty) equation =
+  'ty var list (* universally quantified vars *)
+  * 't list (* arguments to the defined term *)
+  * 't  (* right-hand side of equation *)
+
+type ('t,'ty) rec_def = {
+  rec_vars: 'ty var list; (* alpha_1, ..., alpha_n *)
+  rec_defined: ('t, 'ty) defined;
+  rec_eqns: ('t, 'ty) equation list; (* list of equations defining the term *)
+}
+
+type ('t, 'ty) rec_defs = ('t, 'ty) rec_def list
+
+type ('t, 'ty) spec_defs = {
+  spec_vars: 'ty var list; (* type variables used by defined terms *)
+  spec_defined: ('t, 'ty) defined list;  (* terms being specified together *)
+  spec_axioms: 't list;  (* free-form axioms *)
+}
 
 (** A type constructor: name + type of arguments *)
 type 'ty ty_constructor = {
@@ -49,9 +62,9 @@ type 'ty mutual_types = 'ty tydef list
 type ('t,'ty) axiom =
   | Axiom_std of 't list
     (** Axiom list that can influence consistency (no assumptions) *)
-  | Axiom_spec of ('t,'ty) mutual_cases
+  | Axiom_spec of ('t,'ty) spec_defs
     (** Axioms can be safely ignored, they are consistent *)
-  | Axiom_rec of ('t,'ty) mutual_cases
+  | Axiom_rec of ('t,'ty) rec_defs
     (** Axioms are part of an admissible (partial) definition *)
 
 type ('term, 'ty) view =
@@ -72,11 +85,6 @@ type ('term, 'ty) t = {
   view: ('term, 'ty) view;
   info: info;
 }
-
-let case_defined t = t.case_defined
-let case_axioms t = t.case_axioms
-let case_alias t = t.case_alias
-let case_vars t = t.case_vars
 
 let tydef_vars t = t.ty_vars
 let tydef_id t = t.ty_id
@@ -105,15 +113,29 @@ let data ~info l = mk_ty_def ~info `Data l
 let codata ~info l = mk_ty_def ~info `Codata l
 let goal ~info t = make_ ~info (Goal t)
 
-let map_case ~term ~ty t = {
-  case_vars=List.map (Var.update_ty ~f:ty) t.case_vars;
-  case_defined=term t.case_defined;
-  case_head=t.case_head;
-  case_axioms=List.map term t.case_axioms;
-  case_alias=Var.update_ty ~f:ty t.case_alias;
+let map_defined ~term ~ty d = {
+  defined_head=d.defined_head;
+  defined_alias=Var.update_ty ~f:ty d.defined_alias;
+  defined_ty_args=List.map ty d.defined_ty_args;
+  defined_term=term d.defined_term;
 }
 
-let map_cases ~term ~ty t = List.map (map_case ~term ~ty) t
+let map_eqn ~term ~ty (vars,args,rhs) =
+  List.map (Var.update_ty ~f:ty) vars, List.map term args, term rhs
+
+let map_rec_def ~term ~ty t = {
+  rec_vars=List.map (Var.update_ty ~f:ty) t.rec_vars;
+  rec_defined=map_defined ~term ~ty t.rec_defined;
+  rec_eqns=List.map (map_eqn ~term ~ty) t.rec_eqns;
+}
+
+let map_rec_defs ~term ~ty t = List.map (map_rec_def ~term ~ty) t
+
+let map_spec_defs ~term ~ty t = {
+  spec_vars=List.map (Var.update_ty ~f:ty) t.spec_vars;
+  spec_defined=List.map (map_defined ~term ~ty) t.spec_defined;
+  spec_axioms=List.map term t.spec_axioms;
+}
 
 let map ~term:ft ~ty:fty st =
   let info = st.info in
@@ -124,9 +146,9 @@ let map ~term:ft ~ty:fty st =
       begin match a with
       | Axiom_std l -> axiom ~info (List.map ft l)
       | Axiom_spec t ->
-          axiom_spec ~info (map_cases ~term:ft ~ty:fty t)
+          axiom_spec ~info (map_spec_defs ~term:ft ~ty:fty t)
       | Axiom_rec t ->
-          axiom_rec ~info (map_cases ~term:ft ~ty:fty t)
+          axiom_rec ~info (map_rec_defs ~term:ft ~ty:fty t)
       end
   | TyDef (k, l) ->
       let l = List.map
@@ -146,21 +168,32 @@ let map ~term:ft ~ty:fty st =
       mk_ty_def ~info k l
   | Goal t -> goal ~info (ft t)
 
-let fold ~term ~ty acc st = match st.view with
+let fold_defined ~term ~ty acc d =
+  let acc = ty acc (Var.ty d.defined_alias) in
+  term acc d.defined_term
+
+let fold ~term ~ty acc st =
+  let fold_vars acc l = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc l in
+  match st.view with
   | Decl (_, _, t) -> ty acc t
   | Axiom a ->
       begin match a with
       | Axiom_std l -> List.fold_left term acc l
-      | Axiom_spec t
+      | Axiom_spec t ->
+          let acc = fold_vars acc t.spec_vars in
+          let acc = List.fold_left (fold_defined ~term ~ty) acc t.spec_defined in
+          List.fold_left term acc t.spec_axioms
       | Axiom_rec t ->
           List.fold_left
-            (fun acc case ->
-              let acc = term acc case.case_defined in
-              let acc = ty acc (Var.ty case.case_alias) in
-              let acc = List.fold_left
-                (fun acc v -> ty acc (Var.ty v))
-                acc case.case_vars in
-              List.fold_left term acc case.case_axioms
+            (fun acc def ->
+              let acc = fold_defined ~term ~ty acc def.rec_defined in
+              let acc = fold_vars acc def.rec_vars in
+              List.fold_left
+                (fun acc (vars,args,rhs) ->
+                  let acc = fold_vars acc vars in
+                  let acc = List.fold_left term acc args in
+                  term acc rhs
+                ) acc def.rec_eqns
             )
             acc t
       end
@@ -182,25 +215,48 @@ let print ?pty_in_app pt pty out t =
   | Decl (id,_,t) ->
       fpf out "@[<2>val %a@ : %a.@]" ID.print_name id pty t
   | Axiom a ->
-      let print_cases ~what out l =
-        let print_case out c =
-          fpf out "@[<v2>@[%a@] as %a :=@ @[<v>%a@]@]"
-            pt c.case_defined Var.print c.case_alias
-            (pplist ~sep:"; " pt) c.case_axioms
+      let pp_defined out d =
+        fpf out "@[<h>%a as %a@]"
+          pt d.defined_term Var.print d.defined_alias
+      and pp_typed_var out v =
+        fpf out "@[<2>%a:%a@]" Var.print v pty (Var.ty v)
+      in
+      let pp_rec_defs out l =
+        (* print equation *)
+        let pp_eqn t out (vars,args,rhs) =
+          if vars=[]
+          then fpf out "@[<hv>%a %a =@ %a@]"
+            pt t (pplist ~sep:" " pt) args pt rhs
+          else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a %a =@ %a@]@]"
+            (pplist ~sep:" " pp_typed_var) vars pt t
+            (pplist ~sep:" " pt) args pt rhs
         in
-        fpf out "@[<hov>%s " what;
+        let pp_eqns t = pplist ~sep:";" (pp_eqn t) in
+        let pp_def out d =
+          fpf out "@[<hv2>%a :=@ %a@]"
+            pp_defined d.rec_defined
+            (pp_eqns d.rec_defined.defined_term) d.rec_eqns
+        in
+        fpf out "@[<hov>rec ";
         List.iteri
-          (fun i case ->
+          (fun i def ->
             if i>0 then fpf out "@,and ";
-            print_case out case
+            pp_def out def
           ) l;
         fpf out ".@]"
+      and pp_spec_defs out d =
+        let ppterms = pplist ~sep:";" pt in
+        let pp_defined_list out =
+          fpf out "@[<v>%a@]" (pplist ~sep:" and " pp_defined)
+        in
+        fpf out "@[<hv2>spec @[<hv>%a@] :=@ %a@]"
+          pp_defined_list d.spec_defined ppterms d.spec_axioms
       in
       begin match a with
       | Axiom_std l ->
           fpf out "@[<hv2>axiom@ %a.@]" (pplist ~sep:"; " pt) l
-      | Axiom_spec t -> print_cases ~what:"spec" out t
-      | Axiom_rec t -> print_cases ~what:"rec" out t
+      | Axiom_spec t -> pp_spec_defs out t
+      | Axiom_rec t -> pp_rec_defs out t
       end
   | TyDef (k, l) ->
       let ppcstors out c =

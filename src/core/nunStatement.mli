@@ -4,6 +4,7 @@
 
 type id = NunID.t
 type loc = NunLocation.t
+type 'a var = 'a NunVar.t
 type 'a printer = Format.formatter -> 'a -> unit
 
 type decl =
@@ -11,24 +12,39 @@ type decl =
   | Decl_fun
   | Decl_prop
 
-(** defines [t], aliased as local variable [v], with the [axioms].
-  All the type variables [alpha_1, ..., alpha_n] are free in [t]
-  and in [axioms], and no other type variable should occur. *)
-type ('t,'ty) case = {
-  case_vars: 'ty NunVar.t list; (* alpha_1, ..., alpha_n *)
-  case_defined: 't; (* t *)
-  case_head: id;  (* head symbol of [case_defined] *)
-  case_alias: 'ty NunVar.t; (* v *)
-  case_axioms: 't list; (* axioms *)
+
+type ('t,'ty) defined = {
+  defined_term: 't;  (* term being defined/specified *)
+  defined_head: id; (* head symbol of [defined_term] *)
+  defined_ty_args: 'ty list; (* type arguments. *)
+  defined_alias: 'ty var;  (* alias for [defined_term] *)
+}
+(** A term that is being defined/specified.
+  Invariants:
+
+  - [defined_term = app (const defined_head) defined_args]
+  - [Var.ty defined_alias = type of defined_term]
+
+*)
+
+type ('t, 'ty) equation =
+  'ty var list (* universally quantified vars *)
+  * 't list (* arguments to the defined term *)
+  * 't  (* right-hand side of equation *)
+
+type ('t,'ty) rec_def = {
+  rec_vars: 'ty var list; (* alpha_1, ..., alpha_n *)
+  rec_defined: ('t, 'ty) defined;
+  rec_eqns: ('t, 'ty) equation list; (* list of equations defining the term *)
 }
 
-val case_vars : ('t,'ty) case -> 'ty NunVar.t list
-val case_alias : ('t,'ty) case -> 'ty NunVar.t
-val case_defined : ('t,'ty) case -> 't
-val case_axioms : ('t,'ty) case -> 't list
+type ('t, 'ty) rec_defs = ('t, 'ty) rec_def list
 
-(** mutual definition of several terms *)
-type ('t,'ty) mutual_cases = ('t,'ty) case list
+type ('t, 'ty) spec_defs = {
+  spec_vars: 'ty var list; (* type variables used by defined terms *)
+  spec_defined: ('t, 'ty) defined list;  (* terms being specified together *)
+  spec_axioms: 't list;  (* free-form axioms *)
+}
 
 (** A type constructor: name + type of arguments *)
 type 'ty ty_constructor = {
@@ -46,21 +62,22 @@ type 'ty tydef = {
   ty_cstors : 'ty ty_constructor list;
 }
 
+(** Mutual definitions of several types *)
+type 'ty mutual_types = 'ty tydef list
+
 val tydef_vars : 'ty tydef -> 'ty NunVar.t list
 val tydef_id : _ tydef -> id
 val tydef_type : 'ty tydef -> 'ty
 val tydef_cstors : 'ty tydef -> 'ty ty_constructor list
 
-(** Mutual definitions of several types *)
-type 'ty mutual_types = 'ty tydef list
 
 (** Flavour of axiom *)
 type ('t,'ty) axiom =
   | Axiom_std of 't list
     (** Axiom list that can influence consistency (no assumptions) *)
-  | Axiom_spec of ('t,'ty) mutual_cases
+  | Axiom_spec of ('t,'ty) spec_defs
     (** Axioms can be safely ignored, they are consistent *)
-  | Axiom_rec of ('t,'ty) mutual_cases
+  | Axiom_rec of ('t,'ty) rec_defs
     (** Axioms are part of an admissible (partial) definition *)
 
 type ('term, 'ty) view =
@@ -105,10 +122,10 @@ val axiom : info:info -> 'a list -> ('a,_) t
 
 val axiom1 : info:info -> 'a -> ('a,_) t
 
-val axiom_spec : info:info -> ('a,'ty) mutual_cases -> ('a,'ty) t
+val axiom_spec : info:info -> ('a,'ty) spec_defs -> ('a,'ty) t
 (** Axiom that can be ignored if not explicitely depended upon by the goal *)
 
-val axiom_rec : info:info -> ('a,'ty) mutual_cases -> ('a,'ty) t
+val axiom_rec : info:info -> ('a,'ty) rec_defs -> ('a,'ty) t
 (** Axiom that is part of an admissible (mutual, partial) definition. *)
 
 val data : info:info -> 'ty mutual_types -> (_, 'ty) t
@@ -118,17 +135,35 @@ val codata : info:info -> 'ty mutual_types -> (_, 'ty) t
 val goal : info:info -> 'a -> ('a,_) t
 (** The goal of the problem *)
 
-val map_case :
+val map_defined:
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty) case ->
-  ('t2, 'ty2) case
+  ('t, 'ty) defined ->
+  ('t2, 'ty2) defined
 
-val map_cases :
+val map_eqn:
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty) mutual_cases ->
-  ('t2, 'ty2) mutual_cases
+  ('t, 'ty) equation ->
+  ('t2, 'ty2) equation
+
+val map_rec_def :
+  term:('t -> 't2) ->
+  ty:('ty -> 'ty2) ->
+  ('t, 'ty) rec_def ->
+  ('t2, 'ty2) rec_def
+
+val map_rec_defs :
+  term:('t -> 't2) ->
+  ty:('ty -> 'ty2) ->
+  ('t, 'ty) rec_defs ->
+  ('t2, 'ty2) rec_defs
+
+val map_spec_defs :
+  term:('t -> 't2) ->
+  ty:('ty -> 'ty2) ->
+  ('t, 'ty) spec_defs ->
+  ('t2, 'ty2) spec_defs
 
 val map :
   term:('t -> 't2) ->

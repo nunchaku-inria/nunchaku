@@ -32,7 +32,7 @@
 %token META_VAR
 
 %token MATCH
-%token WITH 
+%token WITH
 %token END
 
 %token LOGIC_TRUE
@@ -242,17 +242,26 @@ term:
       raise (A.ParseError loc)
     }
 
-def:
-  | v=raw_var EQDEF l=separated_nonempty_list(SEMI_COLUMN,term)
+%inline defined_term:
+  | v=raw_var
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.var ~loc v, v, l
+      A.var ~loc v, v
     }
-  | t=term AS v=raw_var EQDEF l=separated_nonempty_list(SEMI_COLUMN, term)
-    { t, v, l }
+  | t=apply_term AS v=raw_var { t, v }
 
-mutual_defs:
-  | l=separated_nonempty_list(AND, def) { l }
+rec_def:
+  | t=defined_term EQDEF l=separated_nonempty_list(SEMI_COLUMN,term)
+    { let t,var = t in t, var, l }
+
+rec_defs:
+  | l=separated_nonempty_list(AND, rec_def) { l }
+
+spec_defs:
+  | vars=separated_nonempty_list(AND, defined_term)
+    EQDEF
+    l=separated_nonempty_list(SEMI_COLUMN,term)
+    { vars, l }
 
 constructor:
   | v=raw_var l=atomic_term* { v, l }
@@ -278,12 +287,12 @@ statement:
       let loc = L.mk_pos $startpos $endpos in
       A.axiom ~loc l
     }
-  | SPEC l=mutual_defs DOT
+  | SPEC l=spec_defs DOT
     {
       let loc = L.mk_pos $startpos $endpos in
       A.spec ~loc l
     }
-  | REC l=mutual_defs DOT
+  | REC l=rec_defs DOT
     {
       let loc = L.mk_pos $startpos $endpos in
       A.rec_ ~loc l

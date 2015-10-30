@@ -141,9 +141,9 @@ let env ?init:(env=Env.create()) pb =
         | St.Goal _ -> ()
         | St.Axiom (St.Axiom_std _) -> ()
         | St.Axiom (St.Axiom_spec l) ->
-            Env.def_funs ?loc ~kind:`Spec ~env l
+            Env.spec_funs ?loc ~env l
         | St.Axiom (St.Axiom_rec l) ->
-            Env.def_funs ?loc ~kind:`Rec ~env l
+            Env.rec_funs ?loc ~env l
       ) pb.statements;
     env
   with Env.InvalidDef _ as e ->

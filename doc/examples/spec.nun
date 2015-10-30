@@ -11,13 +11,13 @@ val even : nat -> prop.
 val odd : nat -> prop.
 
 rec even :=
-  even z ;
-  ~ (even (s z));
-  forall n. (even n = odd (s n))
+  even z = true ;
+  even (s z) = false;
+  forall n. (even (s n) = odd n)
 and odd :=
-  odd (s z);
-  ~ (odd z);
-  forall n. (odd n = even (s n)).
+  odd (s z) = true;
+  odd z = false;
+  forall n. (odd (s n) = even n).
 
 val list : type -> type.
 val nil : pi a. list a.
@@ -30,8 +30,10 @@ val tail : pi a. list a -> list a.
 # specification for lists of polymorphic lists
 spec @head (list ?a) as head :=
     head nil = nil;
-    forall x l. head (cons x l) = x
-and @tail (list ?a) as tail :=
+    forall x l. head (cons x l) = x.
+
+# why not specify two symbols at the same time?
+spec @tail (list ?a) as tail and @cons (list ?a) as cons :=
     tail nil = nil;
     forall x l. tail (cons x l) = l.
 

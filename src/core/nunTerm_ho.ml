@@ -817,26 +817,39 @@ module AsFO(T : S) = struct
         end
     | St.Axiom a ->
         let mk_ax x = FOI.Axiom x in
+        let subst_add_defined ?(subst=Subst.empty) d =
+          Subst.add ~subst d.St.defined_alias d.St.defined_term
+        in
+        let subst_add_defined_l ?(subst=Subst.empty) l =
+          List.fold_left (fun subst d -> subst_add_defined ~subst d) subst l
+        in
         begin match a with
         | St.Axiom_std l ->
             List.map mk_ax l
-        | St.Axiom_spec s
+        | St.Axiom_spec s ->
+            let subst = subst_add_defined_l s.St.spec_defined in
+            List.map
+              (fun ax -> mk_ax (SubstUtil.eval ~subst ax))
+              s.St.spec_axioms
         | St.Axiom_rec s ->
             CCList.flat_map
-              (fun c ->
+              (fun def ->
                 (* evaluate axioms by replacing the alias by the defined term *)
-                let subst = Subst.add ~subst:Subst.empty
-                  c.St.case_alias c.St.case_defined in
+                let subst = subst_add_defined def.St.rec_defined in
                 List.map
-                  (fun ax -> mk_ax (SubstUtil.eval ~subst ax))
-                  (St.case_axioms c)
+                  (fun (vars,args,rhs) ->
+                    let t = Term.eq (Term.app def.St.rec_defined.St.defined_term args) rhs in
+                    let t = List.fold_right Term.forall vars t in
+                    mk_ax (SubstUtil.eval ~subst t)
+                  )
+                  def.St.rec_eqns
               )
               s
         end
     | St.Goal f ->
         [ FOI.Goal f ]
     | St.TyDef (k, l) ->
-        let convert_cstor ty_id c =
+        let convert_cstor c =
           (* extract or generate {selectors, tester} for each constructor *)
           {FOI.
             cstor_name=c.St.cstor_name;
@@ -850,7 +863,7 @@ module AsFO(T : S) = struct
         and tys_defs = List.map
           (fun tydef ->
             let id = tydef.St.ty_id in
-            let cstors = List.map (convert_cstor id) tydef.St.ty_cstors in
+            let cstors = List.map convert_cstor tydef.St.ty_cstors in
             {FOI.ty_name=id; ty_cstors=cstors; }
           ) l
         in

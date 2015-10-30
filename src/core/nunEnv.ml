@@ -1,20 +1,24 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 module ID = NunID
-module Statement = NunStatement
+module Stmt = NunStatement
 module Loc = NunLocation
 
 type id = ID.t
 type loc = Loc.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-type ('t, 'ty) def =
-  | Fun of
-    ( [`Rec | `Spec] *
-      ('t, 'ty) NunStatement.mutual_cases *
-      ('t,'ty) NunStatement.case *
+type ('t, 'ty) fun_def =
+  | Rec of
+      ('t, 'ty) NunStatement.rec_defs *
+      ('t,'ty) NunStatement.rec_def *
       loc option
-    ) list
+  | Spec of
+      ('t, 'ty) NunStatement.spec_defs *
+      loc option
+
+type ('t, 'ty) def =
+  | Fun of ('t, 'ty) fun_def list
       (** ID is a defined fun/predicate. Can be defined in several places *)
 
   | Data of [`Codata | `Data] * 'ty NunStatement.mutual_types * 'ty NunStatement.tydef
@@ -74,10 +78,10 @@ let declare ?loc ~kind ~env:t id ty =
   let info = {loc; decl_kind=kind; ty; def=NoDef} in
   ID.Tbl.replace t.infos id info
 
-let def_funs ?loc ~kind ~env:t cases =
+let rec_funs ?loc ~env:t defs =
   List.iter
-    (fun c ->
-      let id = c.Statement.case_head in
+    (fun def ->
+      let id = def.Stmt.rec_defined.Stmt.defined_head in
       try
         let info = ID.Tbl.find t.infos id in
         let l = match info.def with
@@ -86,38 +90,56 @@ let def_funs ?loc ~kind ~env:t cases =
           | Fun l -> l
           | NoDef -> [] (* first def of id *)
         in
-        let def = Fun ((kind, cases, c, loc) :: l) in
+        let def = Fun ((Rec(defs, def, loc)) :: l) in
         ID.Tbl.replace t.infos id {info with def; }
       with Not_found ->
         errorf_ id "defined function, but not declared previously"
-    ) cases
+    ) defs
+
+let spec_funs ?loc ~env:t spec =
+  List.iter
+    (fun defined ->
+      let id = defined.Stmt.defined_head in
+      try
+        let info = ID.Tbl.find t.infos id in
+        let l = match info.def with
+          | Data _ -> errorf_ id "defined as both function and (co)data"
+          | Cstor _ -> errorf_ id "defined as both function and constructor"
+          | Fun l -> l
+          | NoDef -> [] (* first def of id *)
+        in
+        let def = Fun ((Spec(spec, loc)) :: l) in
+        ID.Tbl.replace t.infos id {info with def; }
+      with Not_found ->
+        errorf_ id "defined function, but not declared previously"
+    ) spec.Stmt.spec_defined
 
 let def_data ?loc ~env:t ~kind tys =
   List.iter
     (fun tydef ->
       (* define type *)
-      let id = tydef.Statement.ty_id in
+      let id = tydef.Stmt.ty_id in
       check_not_defined_ t ~id ~fail_msg:"is (co)data, but already defined";
       let info = {
         loc;
-        decl_kind=Statement.Decl_type;
-        ty=tydef.Statement.ty_type;
+        decl_kind=Stmt.Decl_type;
+        ty=tydef.Stmt.ty_type;
         def=Data (kind, tys, tydef);
       } in
       ID.Tbl.replace t.infos id info;
       (* define constructors *)
       List.iter
         (fun cstor ->
-          let id = cstor.Statement.cstor_name in
+          let id = cstor.Stmt.cstor_name in
           check_not_defined_ t ~id ~fail_msg:"is constructor, but already defined";
           let info = {
             loc;
-            decl_kind=Statement.Decl_fun;
-            ty=cstor.Statement.cstor_type;
+            decl_kind=Stmt.Decl_fun;
+            ty=cstor.Stmt.cstor_type;
             def=Cstor (kind,tys,tydef, cstor);
           } in
           ID.Tbl.replace t.infos id info;
-        ) tydef.Statement.ty_cstors
+        ) tydef.Stmt.ty_cstors
     ) tys
 
 let find_exn ~env:t ~id = ID.Tbl.find t.infos id

@@ -231,6 +231,11 @@ module Convert(Term : TERM) = struct
     let name = "ty_" ^ name in
     Term.ty_meta_var (MetaVar.make ~name)
 
+  (* number of "implicit" arguments (quantified) *)
+  let rec num_implicit_ ty = match Term.Ty.view ty with
+    | TyI.Forall (_,ty') -> 1 + num_implicit_ ty'
+    | _ -> 0
+
   (* explore the type [ty], and add fresh type variables in the corresponding
      positions of [l] *)
   let rec fill_implicit_ ?loc ty l =
@@ -620,53 +625,181 @@ module Convert(Term : TERM) = struct
     let t, _ = generalize ~close:`Forall t in
     t
 
-  let convert_cases ?loc ~env l =
+  (* checks that [t] only contains free variables from [vars].
+    behavior depends on [rel]:
+      {ul
+        {- rel = `Equal means the set of free variables must be equal to [vars]}
+        {- rel = `Subset means the set of free variables must be subset}
+      }
+  *)
+  let check_vars ~vars ~rel t =
+    let module VarSet = Var.Set(struct type t = Term.ty end) in
+    let vars = VarSet.of_list vars in
+    let fvars = U.to_seq_free_vars t
+      |> Sequence.filter
+        (fun v -> Term.Ty.returns_Type (Var.ty v))
+      |> VarSet.of_seq
+    in
+    match rel with
+      | `Equal ->
+          if VarSet.equal fvars vars then `Ok
+          else
+            let symdiff = VarSet.(union (diff fvars vars) (diff vars fvars) |> to_list) in
+            `Bad symdiff
+      | `Subset ->
+          if VarSet.subset fvars vars then `Ok
+          else `Bad VarSet.(diff fvars vars |> to_list)
+
+  (* convert [t as v] into a [Stmt.defined].
+     [t] will be applied to fresh type variables if it lacks some type arguments.
+     Also returns type variables
+    of [t] that have been generalized, and the new env.
+    @param pre_check called before generalization of [t] *)
+  let convert_defined ?loc ?(pre_check=CCFun.const()) ~env t v =
+    let t = convert_term_exn ~env t in
+    (* ensure [t] is applied to all required type arguments *)
+    let num_missing_args = num_implicit_ (get_ty_ t) in
+    let l = CCList.init num_missing_args (fun _ -> fresh_ty_var_ ~name:"_") in
+    let t = Term.app ~ty:(ty_apply (get_ty_ t) l) t l in
+    pre_check t;
+    (* replace meta-variables in [t] by real variables, and return those *)
+    let t, vars = generalize ~close:`NoClose t in
+    check_prenex_types_ ?loc t;
+    (* declare [v] with the type of [t] *)
+    let var = Var.make ~name:v ~ty:(get_ty_ t) in
+    (* head symbol and type arguments *)
+    let defined_head, defined_ty_args =
+      let id_ t =
+        try U.head_sym t
+        with Not_found ->
+          ill_formedf ?loc ~kind:"defined_term" "does not have a head symbol"
+      in
+      match Term.view t with
+      | TI.Const id -> id, []
+      | TI.App (f, l) ->
+          let f = id_ f in
+          let ty_f = Sig.find_exn ~sigma:env.Env.signature f in
+          let n = num_implicit_ ty_f in
+          assert (List.length l >= n);  (* we called [fill_implicit_] above *)
+          f, CCList.take n l
+      | _ ->
+          ill_formedf ?loc ~kind:"defined_term"
+            "`@[%a@]` is not a function application" PrintTerm.print t
+    in
+    NunUtils.debugf ~section 4
+      "@[<2>defined term `@[%a@]` has type tuple @[%a@]@]"
+        (fun k -> k PrintTerm.print t
+          (CCFormat.list PrintTerm.print_ty) defined_ty_args);
+    let defined = {Stmt.
+      defined_alias=var; defined_head; defined_term=t; defined_ty_args;
+    } in
+    defined, vars
+
+  (* convert a specification *)
+  let convert_spec_defs ?loc ~env (untyped_defined_l, ax_l) =
+    (* what are we specifying? a list of [Stmt.defined] terms *)
+    let defined, env', vars = match untyped_defined_l with
+      | [] -> assert false (* parser error *)
+      | (t,v) :: tail ->
+          let defined, vars = convert_defined ?loc ~env t v in
+          let env' = Env.add_var ~env v ~var:defined.Stmt.defined_alias in
+          let env', l = NunUtils.fold_map
+            (fun env' (t',v') ->
+              let pre_check t' =
+              (* check that [free_vars t = vars] *)
+                match check_vars ~vars ~rel:`Equal t' with
+                | `Ok -> ()
+                | `Bad vars ->
+                    ill_formedf ?loc ~kind:"spec"
+                      "@[<2>the set of free type variables in two terms `@[%a@]` \
+                      and `@[%a@]` of the same \
+                      specification are not equal:@ @[%a@] occur in only \
+                      one of them@]"
+                      PrintTerm.print defined.Stmt.defined_term
+                      PrintTerm.print t' (CCFormat.list Var.print) vars
+              in
+              let defined', _ = convert_defined ?loc ~pre_check ~env t' v' in
+              let env' = Env.add_var ~env:env' v' ~var:defined'.Stmt.defined_alias in
+              env', defined'
+            )
+            env' tail
+          in
+          defined::l, env', vars
+    in
+    (* convert axioms. Use [env'] so that defined terms are represented
+      by their aliases. *)
+    let axioms = List.map
+      (fun ax ->
+        (* check that all the free type variables in [ax] occur in
+            the defined term(s) *)
+        let before_generalize t =
+          match check_vars ~vars ~rel:`Subset t with
+          | `Ok -> ()
+          | `Bad bad_vars ->
+              ill_formedf ?loc ~kind:"spec"
+                "@[<2>axiom contains type variables @[`%a`@]@ \
+                  that do not occur in defined term@ @[`%a`@]@]"
+                (CCFormat.list Var.print) bad_vars PrintTerm.print t
+        in
+        convert_prop_ ~before_generalize ~env:env' ax
+      ) ax_l
+    in
+    {Stmt. spec_axioms=axioms; spec_vars=vars; spec_defined=defined; }
+
+  (* extract [forall vars. f args = rhs] from a prop *)
+  let rec extract_eqn ~f t = match Term.view t with
+    | TI.Bind (TI.Forall, v, t') ->
+        CCOpt.map (fun (vars,args,rhs) -> v::vars, args,rhs) (extract_eqn ~f t')
+    | TI.AppBuiltin (NunBuiltin.T.Eq, [l;r]) ->
+        begin match Term.view l with
+        | TI.App (f', args) ->
+            begin match Term.view f' with
+            | TI.Var f' when Var.equal f f' -> Some ([], args, r)
+            | _ -> None
+            end
+        | _ -> None
+        end
+    | _ -> None
+
+  let convert_rec_defs ?loc ~env l =
     let allowed_vars = ref [] in (* type variables that can occur in axioms *)
     List.map
       (fun (untyped_t,v,l) ->
-        let t = convert_term_exn ~env untyped_t in
-        (* replace meta-variables in [t] by real variables, and return those *)
-        let t, vars = generalize ~close:`NoClose t in
-        check_prenex_types_ ?loc t;
+        let defined, vars = convert_defined ?loc ~env untyped_t v in
         allowed_vars := vars @ !allowed_vars;
-        (* declare [v] with the type of [t] *)
-        let var, env' =
-          let var = Var.make ~name:v ~ty:(get_ty_ t) in
-          var, Env.add_var ~env v ~var
-        in
-        (* head symbol *)
-        let case_head =
-          try U.head_sym t
-          with Not_found ->
-            ill_formedf ?loc ~kind:"mutual def" "does not have a head symbol"
-        in
-        (* now convert axioms in the new env. They should contain no
-          type variables but [vars]. *)
-        let check_vars t =
-          (* bad variables: occur freely in axiom but not in [vars] *)
-          let bad_vars = U.to_seq_free_vars t
-            |> Sequence.filter
-              (fun v -> Term.Ty.returns_Type (Var.ty v))
-            |> Sequence.filter
-                (fun v -> not (CCList.Set.mem ~eq:Var.equal v !allowed_vars))
-            |> Sequence.to_rev_list
-            |> CCList.sort_uniq ~cmp:Var.compare
-          in
-          if bad_vars <> []
-            then ill_formedf ?loc ~kind:"mutual def"
-              "@[<2>axiom contains type variables @[`%a`@]@ \
-              that do not occur in defined term@ @[`%a`@]@]"
-              (CCFormat.list Var.print) bad_vars A.print_term untyped_t
-        in
-        let l = List.map
+        (* declare [v] in the scope of equations *)
+        let env' = Env.add_var ~env v ~var:defined.Stmt.defined_alias in
+        let rec_eqns = List.map
           (fun ax ->
-            let ax = convert_prop_ ~before_generalize:check_vars ~env:env' ax in
+            (* sanity check: equation must not contain other type variables *)
+            let before_generalize t =
+              match check_vars ~vars:!allowed_vars ~rel:`Subset t with
+              | `Ok -> ()
+              | `Bad vars ->
+                  ill_formedf ?loc ~kind:"rec def"
+                    "@[<2>equation `@[%a@]`,@ in definition of `@[%a@]`,@ \
+                      contains type variables `@[%a@]` that do not occur \
+                    in defined term@]"
+                    A.print_term ax PrintTerm.print defined.Stmt.defined_term
+                    (CCFormat.list Var.print) vars
+            in
+            let ax = convert_prop_ ~before_generalize ~env:env' ax in
             check_prenex_types_ ?loc ax;
-            ax)
+            (* decompose into a proper equation *)
+            let f = defined.Stmt.defined_alias in
+            match extract_eqn ~f ax with
+            | None ->
+                ill_formedf ?loc
+                  "@[<2>expected `@[forall <vars>.@ @[%a@] @[<hv><args>@ =@ <rhs>@]@]`@]"
+                    Var.print f
+            | Some eqn -> eqn
+          )
           l
         in
         (* return case *)
-        {Stmt.case_alias=var; case_head; case_defined=t; case_axioms=l; case_vars=vars;}
+        {Stmt.
+          rec_defined=defined; rec_vars= vars; rec_eqns;
+        }
       )
       l
 
@@ -763,20 +896,22 @@ module Convert(Term : TERM) = struct
         let id = U.head_sym a_defined in
         let var = Var.of_id id ~ty in
         let env' = Env.add_var ~env (ID.name id) ~var in
-        let a = convert_term_exn ~env:env' a in
         let b = convert_term_exn ~env:env' b in
+        let eqn = [], [], b in
         unify_in_ctx_ ~stack:[] ty (get_ty_ b);
         (* TODO: check that [v] does not occur in [b] *)
+        let defined = {Stmt.
+          defined_alias=var; defined_head=id; defined_term=a_defined;
+          defined_ty_args=[];
+        } in
         Stmt.axiom_rec ~info
-          [{Stmt.case_alias=var; case_defined=a_defined; case_head=id;
-            case_vars=[]; case_axioms=[Term.eq a b]}
-          ]
+          [{Stmt.rec_defined=defined; rec_vars=[]; rec_eqns=[eqn]; }]
         , env
     | A.Spec s ->
-        let s = convert_cases ?loc ~env s in
+        let s = convert_spec_defs ?loc ~env s in
         Stmt.axiom_spec ~info s, env
     | A.Rec s ->
-        let s = convert_cases ?loc ~env s in
+        let s = convert_rec_defs ?loc ~env s in
         Stmt.axiom_rec ~info s, env
     | A.Data l ->
         let env, l = convert_tydef ?loc ~env l in
