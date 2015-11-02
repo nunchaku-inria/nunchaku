@@ -833,43 +833,26 @@ module ToFO(T : S)(FO : NunFO.S) = struct
         end
     | St.Axiom a ->
         let mk_ax x = FOI.Axiom x in
-        let subst_add_defined ?(subst=Subst.empty) d =
-          Subst.add ~subst d.St.defined_alias d.St.defined_term
-        in
-        let subst_add_defined_l ?(subst=Subst.empty) l =
-          List.fold_left (fun subst d -> subst_add_defined ~subst d) subst l
-        in
         begin match a with
         | St.Axiom_std l ->
-            List.map (fun ax -> conv_form_rec ax |> mk_ax) l
+            List.map (fun ax -> conv_form ax |> mk_ax) l
         | St.Axiom_spec s ->
-            let subst = subst_add_defined_l s.St.spec_defined in
             List.map
-              (fun ax -> ax |> SU.eval ~subst |> conv_form_rec |> mk_ax)
+              (fun ax -> ax |> conv_form |> mk_ax)
               s.St.spec_axioms
         | St.Axiom_rec s ->
-            (* replace aliases with real term everywhere *)
-            let subst = List.fold_left
-              (fun subst def -> subst_add_defined ~subst def.St.rec_defined)
-              Subst.empty s
-            in
             CCList.flat_map
               (fun def ->
-                (* evaluate axioms by replacing the alias by the defined term *)
                 let head = def.St.rec_defined.St.defined_head in
                 List.map
                   (fun (vars,args,rhs) ->
                     let vars = List.map conv_var vars in
-                    let args = args
-                      |> List.map (SU.eval ~subst)
-                      |> List.map conv_term
-                    in
+                    let args = List.map conv_term args in
                     let lhs = FO.T.app head args in
-                    let rhs = SU.eval ~subst rhs in
                     let f =
                       if returns_prop_ (Sig.find_exn ~sigma head)
                       then
-                        FO.Formula.equiv (FO.Formula.atom lhs) (conv_form_rec rhs)
+                        FO.Formula.equiv (FO.Formula.atom lhs) (conv_form rhs)
                       else FO.Formula.eq lhs (conv_term rhs)
                     in
                     let f = List.fold_right FO.Formula.forall vars f in
@@ -880,7 +863,7 @@ module ToFO(T : S)(FO : NunFO.S) = struct
               s
         end
     | St.Goal f ->
-        [ FOI.Goal (conv_form_rec f) ]
+        [ FOI.Goal (conv_form f) ]
     | St.TyDef (k, l) ->
         let convert_cstor c =
           {FOI.

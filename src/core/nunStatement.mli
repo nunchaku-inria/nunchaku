@@ -17,13 +17,12 @@ type ('t,'ty) defined = {
   defined_term: 't;  (* term being defined/specified *)
   defined_head: id; (* head symbol of [defined_term] *)
   defined_ty_args: 'ty list; (* type arguments. *)
-  defined_alias: 'ty var;  (* alias for [defined_term] *)
 }
 (** A term that is being defined/specified.
   Invariants:
 
   - [defined_term = app (const defined_head) defined_args]
-  - [Var.ty defined_alias = type of defined_term]
+  - [length defined_ty_args = number of type params of defined_head]
 
 *)
 

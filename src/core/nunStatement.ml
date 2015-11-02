@@ -17,7 +17,6 @@ type ('t,'ty) defined = {
   defined_term: 't;  (* term being defined/specified *)
   defined_head: id; (* head symbol of [defined_term] *)
   defined_ty_args: 'ty list; (* type arguments. *)
-  defined_alias: 'ty var;  (* alias for [defined_term] *)
 }
 
 type ('t, 'ty) equation =
@@ -115,7 +114,6 @@ let goal ~info t = make_ ~info (Goal t)
 
 let map_defined ~term ~ty d = {
   defined_head=d.defined_head;
-  defined_alias=Var.update_ty ~f:ty d.defined_alias;
   defined_ty_args=List.map ty d.defined_ty_args;
   defined_term=term d.defined_term;
 }
@@ -169,7 +167,7 @@ let map ~term:ft ~ty:fty st =
   | Goal t -> goal ~info (ft t)
 
 let fold_defined ~term ~ty acc d =
-  let acc = ty acc (Var.ty d.defined_alias) in
+  let acc = List.fold_left ty acc d.defined_ty_args in
   term acc d.defined_term
 
 let fold ~term ~ty acc st =
@@ -215,9 +213,7 @@ let print ?pty_in_app pt pty out t =
   | Decl (id,_,t) ->
       fpf out "@[<2>val %a@ : %a.@]" ID.print_name id pty t
   | Axiom a ->
-      let pp_defined out d =
-        fpf out "@[<h>%a as %a@]"
-          pt d.defined_term Var.print d.defined_alias
+      let pp_defined out d = fpf out "@[<h>%a@]" pt d.defined_term
       and pp_typed_var out v =
         fpf out "@[<2>%a:%a@]" Var.print v pty (Var.ty v)
       in

@@ -56,9 +56,10 @@ let scoping_error ?loc v msg = raise (ScopingError (v, msg, loc))
 module MStr = Map.Make(String)
 
 (* for the environment *)
-type 'ty term_def =
+type ('t, 'ty) term_def =
   | Decl of id * 'ty
   | Var of 'ty var
+  | Def of 't (* variable := this term *)
 
 (** {2 Typed Term} *)
 module type TERM = NunTerm_typed.S
@@ -103,7 +104,7 @@ module Convert(Term : TERM) = struct
 
   module Env = struct
     type t = {
-      vars: Term.Ty.t term_def MStr.t;
+      vars: (Term.t, Term.Ty.t) term_def MStr.t;
       signature : Term.Ty.t signature;
       cstors: (string, id * Term.Ty.t) Hashtbl.t;  (* constructor ID + type *)
       mutable metas: (string, Term.Ty.t MetaVar.t) Hashtbl.t option;
@@ -130,6 +131,10 @@ module Convert(Term : TERM) = struct
     let add_vars ~env v l =
       assert (List.length v = List.length l);
       List.fold_left2 (fun env v v' -> add_var ~env v ~var:v') env v l
+
+    let add_def ~env v ~as_ = {
+      env with vars=MStr.add v (Def as_) env.vars;
+    }
 
     let mem_var ~env v = MStr.mem v env.vars
 
@@ -199,6 +204,7 @@ module Convert(Term : TERM) = struct
             | Var v ->
                 unify_in_ctx_ ~stack (Term.Ty.returns (Var.ty v)) Term.ty_type;
                 Term.ty_var ?loc v
+            | Def t -> t  (* expand def *)
           end
       | A.AtVar _ ->
           ill_formed ~kind:"type" ?loc "@ syntax is not available for types"
@@ -341,6 +347,7 @@ module Convert(Term : TERM) = struct
           | Decl (id, ty) ->
               Term.const ?loc ~ty id
           | Var var -> Term.var ?loc var
+          | Def t -> t
         end
     | A.MetaVar v -> Term.ty_meta_var (Env.find_meta_var ~env v)
     | A.App (f, [a;b]) when is_eq_ f ->
@@ -368,6 +375,7 @@ module Convert(Term : TERM) = struct
           | Decl (id, ty) ->
               Term.const ?loc ~ty id, ty
           | Var var -> Term.var ?loc var, Var.ty var
+          | Def t -> t, get_ty_ t
         in
         (* add potential implicit args *)
         let l = fill_implicit_ ?loc ty_head [] in
@@ -652,10 +660,9 @@ module Convert(Term : TERM) = struct
 
   (* convert [t as v] into a [Stmt.defined].
      [t] will be applied to fresh type variables if it lacks some type arguments.
-     Also returns type variables
-    of [t] that have been generalized, and the new env.
+     Also returns type variables of [t] that have been generalized, and the new env.
     @param pre_check called before generalization of [t] *)
-  let convert_defined ?loc ?(pre_check=CCFun.const()) ~env t v =
+  let convert_defined ?loc ?(pre_check=CCFun.const()) ~env t =
     let t = convert_term_exn ~env t in
     (* ensure [t] is applied to all required type arguments *)
     let num_missing_args = num_implicit_ (get_ty_ t) in
@@ -665,8 +672,6 @@ module Convert(Term : TERM) = struct
     (* replace meta-variables in [t] by real variables, and return those *)
     let t, vars = generalize ~close:`NoClose t in
     check_prenex_types_ ?loc t;
-    (* declare [v] with the type of [t] *)
-    let var = Var.make ~name:v ~ty:(get_ty_ t) in
     (* head symbol and type arguments *)
     let defined_head, defined_ty_args =
       let id_ t =
@@ -691,7 +696,7 @@ module Convert(Term : TERM) = struct
         (fun k -> k PrintTerm.print t
           (CCFormat.list PrintTerm.print_ty) defined_ty_args);
     let defined = {Stmt.
-      defined_alias=var; defined_head; defined_term=t; defined_ty_args;
+      defined_head; defined_term=t; defined_ty_args;
     } in
     defined, vars
 
@@ -701,8 +706,9 @@ module Convert(Term : TERM) = struct
     let defined, env', vars = match untyped_defined_l with
       | [] -> assert false (* parser error *)
       | (t,v) :: tail ->
-          let defined, vars = convert_defined ?loc ~env t v in
-          let env' = Env.add_var ~env v ~var:defined.Stmt.defined_alias in
+          let defined, vars = convert_defined ?loc ~env t in
+          (* locally, ensure that [v] refers to the defined term *)
+          let env' = Env.add_def ~env v ~as_:defined.Stmt.defined_term  in
           let env', l = NunUtils.fold_map
             (fun env' (t',v') ->
               let pre_check t' =
@@ -718,8 +724,9 @@ module Convert(Term : TERM) = struct
                       PrintTerm.print defined.Stmt.defined_term
                       PrintTerm.print t' (CCFormat.list Var.print) vars
               in
-              let defined', _ = convert_defined ?loc ~pre_check ~env t' v' in
-              let env' = Env.add_var ~env:env' v' ~var:defined'.Stmt.defined_alias in
+              let defined', _ = convert_defined ?loc ~pre_check ~env t' in
+              let var' = Var.make ~name:v' ~ty:(get_ty_ defined'.Stmt.defined_term) in
+              let env' = Env.add_var ~env:env' v' ~var:var' in
               env', defined'
             )
             env' tail
@@ -727,7 +734,7 @@ module Convert(Term : TERM) = struct
           defined::l, env', vars
     in
     (* convert axioms. Use [env'] so that defined terms are represented
-      by their aliases. *)
+      by their aliases; then, dereference aliases to make them disappear *)
     let axioms = List.map
       (fun ax ->
         (* check that all the free type variables in [ax] occur in
@@ -754,7 +761,7 @@ module Convert(Term : TERM) = struct
         begin match Term.view l with
         | TI.App (f', args) ->
             begin match Term.view f' with
-            | TI.Var f' when Var.equal f f' -> Some ([], args, r)
+            | TI.Const f' when ID.equal f f' -> Some ([], args, r)
             | _ -> None
             end
         | _ -> None
@@ -767,10 +774,10 @@ module Convert(Term : TERM) = struct
         in which the variables are in scope *)
     let env', l' = NunUtils.fold_map
       (fun env' (untyped_t,v,l) ->
-        let defined, vars = convert_defined ?loc ~env untyped_t v in
+        let defined, vars = convert_defined ?loc ~env untyped_t in
         allowed_vars := vars @ !allowed_vars;
         (* declare [v] in the scope of equations *)
-        let env' = Env.add_var ~env:env' v ~var:defined.Stmt.defined_alias in
+        let env' = Env.add_def ~env:env' v ~as_:defined.Stmt.defined_term in
         env', (defined,vars,l)
       ) env l
     in
@@ -794,12 +801,12 @@ module Convert(Term : TERM) = struct
             let ax = convert_prop_ ~before_generalize ~env:env' ax in
             check_prenex_types_ ?loc ax;
             (* decompose into a proper equation *)
-            let f = defined.Stmt.defined_alias in
+            let f = defined.Stmt.defined_head in
             match extract_eqn ~f ax with
             | None ->
                 ill_formedf ?loc
                   "@[<2>expected `@[forall <vars>.@ @[%a@] @[<hv><args>@ =@ <rhs>@]@]`@]"
-                    Var.print f
+                    ID.print_name f
             | Some eqn -> eqn
           )
           l
@@ -902,15 +909,13 @@ module Convert(Term : TERM) = struct
         let ty = get_ty_ a_defined in
         (* we are defining the head of [a], so declare it *)
         let id = U.head_sym a_defined in
-        let var = Var.of_id id ~ty in
-        let env' = Env.add_var ~env (ID.name id) ~var in
+        let env' = Env.add_def  ~env (ID.name id) ~as_:a_defined in
         let b = convert_term_exn ~env:env' b in
         let eqn = [], [], b in
         unify_in_ctx_ ~stack:[] ty (get_ty_ b);
         (* TODO: check that [v] does not occur in [b] *)
         let defined = {Stmt.
-          defined_alias=var; defined_head=id; defined_term=a_defined;
-          defined_ty_args=[];
+          defined_head=id; defined_term=a_defined; defined_ty_args=[];
         } in
         Stmt.axiom_rec ~info
           [{Stmt.rec_defined=defined; rec_vars=[]; rec_eqns=[eqn]; }]
