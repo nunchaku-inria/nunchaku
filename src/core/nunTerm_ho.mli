@@ -147,7 +147,7 @@ end
 
 (** {2 Conversion to FO Terms} *)
 
-module ToFO(T : VIEW)(T2 : NunFO.S) : sig
+module ToFO(T : S)(T2 : NunFO.S) : sig
   exception NotInFO of string * T.t
   (** Raised if a term is not in the first-order fragment *)
 

@@ -763,12 +763,20 @@ module Convert(Term : TERM) = struct
 
   let convert_rec_defs ?loc ~env l =
     let allowed_vars = ref [] in (* type variables that can occur in axioms *)
-    List.map
-      (fun (untyped_t,v,l) ->
+    (* first, build new variables for the defined terms, and build [env']
+        in which the variables are in scope *)
+    let env', l' = NunUtils.fold_map
+      (fun env' (untyped_t,v,l) ->
         let defined, vars = convert_defined ?loc ~env untyped_t v in
         allowed_vars := vars @ !allowed_vars;
         (* declare [v] in the scope of equations *)
-        let env' = Env.add_var ~env v ~var:defined.Stmt.defined_alias in
+        let env' = Env.add_var ~env:env' v ~var:defined.Stmt.defined_alias in
+        env', (defined,vars,l)
+      ) env l
+    in
+    (* convert the equations *)
+    List.map
+      (fun (defined,vars,l) ->
         let rec_eqns = List.map
           (fun ax ->
             (* sanity check: equation must not contain other type variables *)
@@ -798,10 +806,10 @@ module Convert(Term : TERM) = struct
         in
         (* return case *)
         {Stmt.
-          rec_defined=defined; rec_vars= vars; rec_eqns;
+          rec_defined=defined; rec_vars=vars; rec_eqns;
         }
       )
-      l
+      l'
 
   let ty_forall_l_ = List.fold_right (fun v t -> Term.ty_forall v t)
 

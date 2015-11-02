@@ -680,7 +680,7 @@ module Erase(T : VIEW) = struct
       )
 end
 
-module ToFO(T : VIEW)(FO : NunFO.S) = struct
+module ToFO(T : S)(FO : NunFO.S) = struct
   module Term = T (* alias for shadowing *)
   exception NotInFO of string * T.t
 
@@ -734,75 +734,77 @@ module ToFO(T : VIEW)(FO : NunFO.S) = struct
     and ret = conv_ty ret in
     args, ret
 
-  let rec conv_term ~subst t = match T.view t with
+  let rec conv_term t = match T.view t with
     | AppBuiltin (NunBuiltin.T.Ite, [a;b;c]) ->
-        FO.T.ite (conv_form ~subst a) (conv_term ~subst b) (conv_term ~subst c)
+        FO.T.ite (conv_form_rec a) (conv_term b) (conv_term c)
     | AppBuiltin (NunBuiltin.T.DataTest c, [t]) ->
-        FO.T.data_test c (conv_term ~subst t)
+        FO.T.data_test c (conv_term t)
     | AppBuiltin (NunBuiltin.T.DataSelect (c,n), [t]) ->
-        FO.T.data_select c n (conv_term ~subst t)
+        FO.T.data_select c n (conv_term t)
     | AppBuiltin _ -> fail_ t "no builtin in terms"
     | Const id -> FO.T.const id
-    | Var v ->
-        begin match Subst.find ~subst v with
-        | Some t -> t
-        | None -> FO.T.var (conv_var v)
-        end
+    | Var v -> FO.T.var (conv_var v)
     | App (f,l) ->
         begin match T.view f with
-        | Const id -> FO.T.app id (List.map (conv_term ~subst) l)
+        | Const id -> FO.T.app id (List.map conv_term l)
         | _ -> fail_ t "application of non-constant term"
         end
-    | Bind (Fun,v,t) -> FO.T.fun_ (conv_var v) (conv_term ~subst t)
+    | Bind (Fun,v,t) -> FO.T.fun_ (conv_var v) (conv_term t)
     | Bind ((Forall | Exists), _,_) -> fail_ t "no quantifiers in FO terms"
     | Let (v,t,u) ->
-        FO.T.let_ (conv_var v) (conv_term ~subst t) (conv_term ~subst u)
+        FO.T.let_ (conv_var v) (conv_term t) (conv_term u)
     | Match _ -> fail_ t "no case in FO terms"
     | TyBuiltin _
     | TyArrow (_,_)
     | Bind (TyForall, _,_) -> fail_ t "no types in FO terms"
     | TyMeta _ -> assert false
 
-  and conv_form ~subst t = match T.view t with
+  and conv_form_rec t = match T.view t with
     | AppBuiltin (b,l) ->
         begin match b, l with
         | NunBuiltin.T.True, [] -> FO.Formula.true_
         | NunBuiltin.T.False, [] -> FO.Formula.false_
-        | NunBuiltin.T.Not, [f] -> FO.Formula.not_ (conv_form ~subst f)
-        | NunBuiltin.T.Or, l -> FO.Formula.or_ (List.map (conv_form ~subst) l)
-        | NunBuiltin.T.And, l -> FO.Formula.and_ (List.map (conv_form ~subst) l)
+        | NunBuiltin.T.Not, [f] -> FO.Formula.not_ (conv_form_rec f)
+        | NunBuiltin.T.Or, l -> FO.Formula.or_ (List.map conv_form_rec l)
+        | NunBuiltin.T.And, l -> FO.Formula.and_ (List.map conv_form_rec l)
         | NunBuiltin.T.Imply, [a;b] ->
-            FO.Formula.imply (conv_form ~subst a) (conv_form ~subst b)
+            FO.Formula.imply (conv_form_rec a) (conv_form_rec b)
         | NunBuiltin.T.Ite, [a;b;c] ->
             FO.Formula.f_ite
-              (conv_form ~subst a)(conv_form ~subst b) (conv_form ~subst c)
+              (conv_form_rec a)(conv_form_rec b) (conv_form_rec c)
         | NunBuiltin.T.Equiv, [a;b] ->
-            FO.Formula.equiv (conv_form ~subst a)(conv_form ~subst b)
+            FO.Formula.equiv (conv_form_rec a)(conv_form_rec b)
         | NunBuiltin.T.Eq, [a;b] ->
             (* TODO: here use signature! maybe it's an equivalence *)
-            FO.Formula.eq (conv_term ~subst a)(conv_term ~subst b)
+            FO.Formula.eq (conv_term a)(conv_term b)
         | NunBuiltin.T.DataSelect _, _
         | NunBuiltin.T.DataTest _, _ ->
-            FO.Formula.atom (conv_term ~subst t)
+            FO.Formula.atom (conv_term t)
         | _ -> assert false
         end
     | App _
-    | Const _ -> FO.Formula.atom (conv_term ~subst t)
+    | Const _ -> FO.Formula.atom (conv_term t)
     | Var _ -> fail_ t "no variable in FO formulas"
     | Bind (Fun,v,t) ->
-        FO.Formula.f_fun (conv_var v) (conv_form ~subst t)
+        FO.Formula.f_fun (conv_var v) (conv_form_rec t)
     | Bind (Forall, v,f) ->
-        FO.Formula.forall (conv_var v) (conv_form ~subst f)
+        FO.Formula.forall (conv_var v) (conv_form_rec f)
     | Bind (Exists, v,f) ->
-        FO.Formula.exists (conv_var v) (conv_form ~subst f)
+        FO.Formula.exists (conv_var v) (conv_form_rec f)
     | Let (v,t,u) ->
         FO.Formula.f_let
-          (conv_var v) (conv_form ~subst t) (conv_form ~subst u)
+          (conv_var v) (conv_form_rec t) (conv_form_rec u)
     | Match _ -> fail_ t "no match in FO formulas"
     | TyArrow (_,_)
     | Bind (TyForall, _,_)
     | TyBuiltin _ -> fail_ t "no types in FO formulas"
     | TyMeta _ -> assert false
+
+  let conv_form f =
+    let module P = Print(T) in
+    NunUtils.debugf 3
+      "@[<2>convert to FO the formula `@[%a@]`@]" (fun k -> k P.print f);
+    conv_form_rec f
 
   (* does [ty] return prop? *)
   let returns_prop_ ty =
@@ -810,6 +812,8 @@ module ToFO(T : VIEW)(FO : NunFO.S) = struct
     match T.Ty.view (TU.returns ty) with
       | TyI.Builtin NunBuiltin.Ty.Prop -> true
       | _ -> false
+
+  module SU = SubstUtil(T)(Subst)
 
   let convert_statement ~sigma st =
     let module St = NunStatement in
@@ -830,38 +834,43 @@ module ToFO(T : VIEW)(FO : NunFO.S) = struct
     | St.Axiom a ->
         let mk_ax x = FOI.Axiom x in
         let subst_add_defined ?(subst=Subst.empty) d =
-          Subst.add ~subst
-            d.St.defined_alias
-            (conv_term ~subst d.St.defined_term)
+          Subst.add ~subst d.St.defined_alias d.St.defined_term
         in
         let subst_add_defined_l ?(subst=Subst.empty) l =
           List.fold_left (fun subst d -> subst_add_defined ~subst d) subst l
         in
         begin match a with
         | St.Axiom_std l ->
-            List.map (fun ax -> conv_form ~subst:Subst.empty ax |> mk_ax) l
+            List.map (fun ax -> conv_form_rec ax |> mk_ax) l
         | St.Axiom_spec s ->
             let subst = subst_add_defined_l s.St.spec_defined in
             List.map
-              (fun ax -> conv_form ~subst ax |> mk_ax)
+              (fun ax -> ax |> SU.eval ~subst |> conv_form_rec |> mk_ax)
               s.St.spec_axioms
         | St.Axiom_rec s ->
+            (* replace aliases with real term everywhere *)
+            let subst = List.fold_left
+              (fun subst def -> subst_add_defined ~subst def.St.rec_defined)
+              Subst.empty s
+            in
             CCList.flat_map
               (fun def ->
                 (* evaluate axioms by replacing the alias by the defined term *)
-                let subst = subst_add_defined def.St.rec_defined in
                 let head = def.St.rec_defined.St.defined_head in
                 List.map
                   (fun (vars,args,rhs) ->
                     let vars = List.map conv_var vars in
-                    let lhs = FO.T.app head (List.map (conv_term ~subst) args) in
+                    let args = args
+                      |> List.map (SU.eval ~subst)
+                      |> List.map conv_term
+                    in
+                    let lhs = FO.T.app head args in
+                    let rhs = SU.eval ~subst rhs in
                     let f =
                       if returns_prop_ (Sig.find_exn ~sigma head)
                       then
-                        FO.Formula.equiv
-                          (FO.Formula.atom lhs)
-                          (conv_form ~subst rhs)
-                      else FO.Formula.eq lhs (conv_term ~subst rhs)
+                        FO.Formula.equiv (FO.Formula.atom lhs) (conv_form_rec rhs)
+                      else FO.Formula.eq lhs (conv_term rhs)
                     in
                     let f = List.fold_right FO.Formula.forall vars f in
                     mk_ax f
@@ -871,7 +880,7 @@ module ToFO(T : VIEW)(FO : NunFO.S) = struct
               s
         end
     | St.Goal f ->
-        [ FOI.Goal (conv_form ~subst:Subst.empty f) ]
+        [ FOI.Goal (conv_form_rec f) ]
     | St.TyDef (k, l) ->
         let convert_cstor c =
           {FOI.
