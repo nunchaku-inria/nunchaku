@@ -58,7 +58,8 @@ val map_with :
     and the statements they return
     are added respectively before or after the translation of [st]. *)
 
-val print : ?pty_in_app:'b printer -> 'a printer -> 'b printer -> ('a,'b) t printer
+val print : ?pt_in_app:'a printer -> ?pty_in_app:'b printer ->
+            'a printer -> 'b printer -> ('a,'b) t printer
 (** Printer for a problem *)
 
 exception IllFormed of string

@@ -822,7 +822,9 @@ let pipe_with (type a) ~decode ~print
     then
       let module P = NunTerm_ho.Print(T) in
       [Format.printf "@[<v2>after mono: %a@]@."
-        (NunProblem.print ~pty_in_app:P.print_in_app P.print P.print_ty)]
+        (NunProblem.print
+          ~pty_in_app:P.print_in_app ~pt_in_app:P.print_in_app
+          P.print P.print_ty)]
     else []
   in
   NunTransform.make1

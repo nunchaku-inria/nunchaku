@@ -207,7 +207,8 @@ let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
 let fpf = Format.fprintf
 
-let print ?pty_in_app pt pty out t =
+let print ?pt_in_app ?pty_in_app pt pty out t =
+  let pt_in_app = CCOpt.get (fun out -> fpf out "(%a)" pt) pt_in_app in
   let pty_in_app = CCOpt.get (fun out -> fpf out "(%a)" pty) pty_in_app in
   match t.view with
   | Decl (id,_,t) ->
@@ -222,10 +223,10 @@ let print ?pty_in_app pt pty out t =
         let pp_eqn t out (vars,args,rhs) =
           if vars=[]
           then fpf out "@[<hv>%a %a =@ %a@]"
-            pt t (pplist ~sep:" " pt) args pt rhs
+            pt t (pplist ~sep:" " pt_in_app) args pt rhs
           else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a %a =@ %a@]@]"
             (pplist ~sep:" " pp_typed_var) vars pt t
-            (pplist ~sep:" " pt) args pt rhs
+            (pplist ~sep:" " pt_in_app) args pt rhs
         in
         let pp_eqns t = pplist ~sep:";" (pp_eqn t) in
         let pp_def out d =
@@ -274,6 +275,8 @@ let print ?pty_in_app pt pty out t =
       fpf out ".@]"
   | Goal t -> fpf out "@[<2>goal %a.@]" pt t
 
-let print_list ?pty_in_app pt pty out l =
+let print_list ?pt_in_app ?pty_in_app pt pty out l =
   fpf out "@[<v>%a@]"
-    (CCFormat.list ~start:"" ~stop:"" ~sep:"" (print ?pty_in_app pt pty)) l
+    (CCFormat.list ~start:"" ~stop:"" ~sep:""
+      (print ?pt_in_app ?pty_in_app pt pty))
+    l

@@ -74,9 +74,10 @@ let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
 
 let map ~term ~ty pb = map_with ~term ~ty pb
 
-let print ?pty_in_app pt pty out problem =
+let print ?pt_in_app ?pty_in_app pt pty out problem =
   fpf out "{@,%a@,}"
-    (CCVector.print ~start:"" ~stop:"" ~sep:"" (Statement.print ?pty_in_app pt pty))
+    (CCVector.print ~start:"" ~stop:"" ~sep:""
+      (Statement.print ?pt_in_app ?pty_in_app pt pty))
     problem.statements
 
 exception IllFormed of string

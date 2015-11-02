@@ -302,7 +302,9 @@ let pipe_with (type a)(type b) ~decode ~print
     then
       let module P = NunTerm_ho.Print(T2) in
       [Format.printf "@[<v2>after Skolemization: %a@]@."
-        (NunProblem.print P.print P.print_ty)]
+        (NunProblem.print
+          ~pt_in_app:P.print_in_app ~pty_in_app:P.print_in_app
+          P.print P.print_ty)]
     else []
   in
   NunTransform.make1

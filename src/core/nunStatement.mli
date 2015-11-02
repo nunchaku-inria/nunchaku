@@ -177,5 +177,15 @@ val fold :
 
 (** {2 Print} *)
 
-val print : ?pty_in_app:'b printer -> 'a printer -> 'b printer -> ('a,'b) t printer
-val print_list : ?pty_in_app:'b printer -> 'a printer -> 'b printer -> ('a,'b) t list printer
+val print : ?pt_in_app:'a printer -> ?pty_in_app:'b printer ->
+            'a printer -> 'b printer -> ('a,'b) t printer
+(** [print pt ptr] is a statement printer that relies upon [pt] to print
+    terms/formulas and [pty] to print types.
+    @param pt_in_app optional printer to print terms with additional () around
+      them if required
+    @param pty_in_app optional printer to print types with additional () around
+      them if required
+*)
+
+val print_list : ?pt_in_app:'a printer -> ?pty_in_app:'b printer ->
+                 'a printer -> 'b printer -> ('a,'b) t list printer
