@@ -1,0 +1,25 @@
+x 2015-10-02 2015-09-30 scoping and type inference from AST
+x 2015-10-05 2015-09-30 basic printing to CVC4
+x 2015-10-05 2015-10-02 distinct cases Var/Meta (one unifies, the other doesn't) due:2015-10-05
+x 2015-10-06 2015-10-05 conversion term_typed -> term_ho
+x 2015-10-07 2015-10-05 add a notion of goal?
+x 2015-10-07 2015-09-30 basic parsing of CVC4
+x 2015-10-07 2015-10-06 conversion ho -> fo
+x 2015-10-12 2015-10-08 parser/problem: axiomes [def,spec], avec plusieurs cas (équations rec); merger def/def_prop, decl/ty_decl
+x 2015-10-12 2015-10-12 fix conflicts in parser
+x 2015-10-12 2015-10-05 basic monomorphization term_ho -> term_fo
+x 2015-10-12 2015-09-30 pipeline parsing -> scoping/type infer -> cvc4
+x 2015-10-12 2015-10-07 interdire re-definition de symboles
+x 2015-10-14 2015-10-12 refactor AST (make Eq,Ite builtins; factor binders together)
+x 2015-10-14 2015-10-14 fix/check typing in syntax.nun
+x 2015-10-15 2015-10-14 extend monomorphization to (co)data
+x 2015-10-16 2015-10-15 sanity checks on (co)inductive types at type inference
+x 2015-10-16 2015-10-14 send (co)data to CVC4
+x 2015-10-20 2015-10-19 search for included files in same dir as problem
+x 2015-10-20 2015-10-16 restrictions on typing: prenex polymorphism
+x 2015-10-20 2015-10-19 parse THF fragment
+x 2015-10-21 2015-10-07 parser TPTP
+x 2015-10-21 2015-10-20 add ite in THF
+x 2015-10-22 2015-10-20 use vector instead of list for statements?
+x 2015-10-23 2015-10-22 make `pipe` operators that take `decode` as arg
+x 2015-10-27 2015-10-15 un-nesting/mutualization of (co)data

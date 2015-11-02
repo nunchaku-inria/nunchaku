@@ -1,0 +1,14 @@
+(A) 2015-10-07 afficher modèle dans syntaxe TPTP correspondante id:1
+2015-10-02 recursive definitions (with well-foundedness check)
+(B) 2015-10-05 narrowing pipeline + basic (FO) symbolic evaluation+refinement
+2015-10-13 printer/parser in some easy S-expr format
+2015-10-14 detect some WF defs in TPTP
+2015-10-15 create a logo; push it on github team
+2015-10-20 add let in THF
+(B) 2015-10-23 printTPTP: need types (differentiate type args from term args; 1 domain decl per type) p:1
+(A) 2015-10-27 implement and document recursion elim id:3
+(B) 2015-10-27 mail to Andrew about recursive functions (trigger + case split > *); link Claire Dross paper?
+(B) 2015-10-29 flag to print signature (post-ty inference)
+(A) 2015-10-30 fix mangling p:2
+(A) 2015-10-30 fix remaining bugs id:2 p:3
+(A) 2015-10-30 fix scoping in spec/rec (alias not used) p:2
