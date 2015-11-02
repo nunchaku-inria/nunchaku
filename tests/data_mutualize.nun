@@ -1,6 +1,6 @@
 
 # (co)inductive types with need for mutualization
-# EXPECT: OK
+# EXPECT: SAT
 
 
 # prelude: nat

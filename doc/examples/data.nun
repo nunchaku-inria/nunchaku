@@ -1,6 +1,6 @@
 
 # (co)inductive types
-# EXPECT: OK
+# EXPECT: SAT
 
 data list a :=
     | nil

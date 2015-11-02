@@ -1,6 +1,6 @@
 
 # monomorphization trick
-# EXPECT: OK
+# EXPECT: SAT
 
 data a :=
     | A

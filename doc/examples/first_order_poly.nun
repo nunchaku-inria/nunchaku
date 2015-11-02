@@ -1,6 +1,6 @@
 
 # Simple types, should have a model easily
-# EXPECT: OK
+# EXPECT: SAT
 
 val term : type.
 val term2 : type.
