@@ -2,10 +2,9 @@
 # recursive spec and rec
 # EXPECT: SAT
 
-val nat : type.
-
-val z : nat.
-val s : nat -> nat.
+data nat :=
+  | z
+  | s nat.
 
 val even : nat -> prop.
 val odd : nat -> prop.
@@ -19,9 +18,9 @@ and odd :=
   odd z = false;
   forall n. (odd (s n) = even n).
 
-val list : type -> type.
-val nil : pi a. list a.
-val cons : pi a. a -> list a -> list a.
+data list a :=
+  | nil
+  | cons a (list a).
 
 # partial funs
 val head : pi a. list a -> a.
@@ -33,8 +32,9 @@ spec @head (list ?a) as head :=
     forall x l. head (cons x l) = x.
 
 # why not specify two symbols at the same time?
-spec @tail (list ?a) as tail and @cons (list ?a) as cons :=
+spec @tail (list ?a) as tail and @head (list ?a) as hd :=
     tail nil = nil;
+    hd nil = nil;
     forall x l. tail (cons x l) = l.
 
 # specification for lists of nat
