@@ -28,7 +28,7 @@ let grep_expect f =
         |> Gen.map String.lowercase
         |> Gen.filter_map
           (function
-            | "# expect: ok" -> Some Ok
+            | "# expect: sat" -> Some Ok
             | "# expect: error"
             | "# expect: fail" -> Some Error
             | _ -> None
