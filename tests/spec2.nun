@@ -1,0 +1,24 @@
+
+# EXPECT: SAT
+
+val term : type.
+
+data list a :=
+  | nil
+  | cons a (list a).
+
+val array : type -> type.
+
+# why not?
+val array_nil : pi a. array a.
+val array_cons : pi a. a -> array a -> array a.
+
+val f : pi a. a -> prop.
+val g : pi a. a -> prop.
+
+spec @f (list ?a) as f and @g (array ?a) as g :=
+  forall x l. f (cons x l) = g (array_cons x array_nil).
+
+
+goal exists (t:term) l. f (cons t l).
+
