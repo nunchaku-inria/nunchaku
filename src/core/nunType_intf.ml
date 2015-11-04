@@ -9,88 +9,83 @@ module MetaVar = NunMetaVar
 
 type id = NunID.t
 type 'a var = 'a Var.t
+type 'a printer = Format.formatter -> 'a -> unit
 
-type 'a view =
+type ('a, 'inv) view =
   | Builtin of NunBuiltin.Ty.t (** Builtin type *)
   | Const of id
-  | Var of 'a var (** Constant or bound variable *)
-  | Meta of 'a NunMetaVar.t (** Meta-variable, used for unification *)
+  | Var :
+      'a var (** Constant or bound variable *)
+      -> ('a, <poly:[`Poly];..>) view
+  | Meta :
+      'a NunMetaVar.t (** Meta-variable, used for unification *)
+      -> ('a, <meta: [`Meta];..>) view
   | App of 'a * 'a list
   | Arrow of 'a * 'a
-  | Forall of 'a var * 'a  (** Polymorphic type *)
+  | Forall :   (** Polymorphic type *)
+      'a var
+      * 'a
+      -> ('a, <poly: [`Poly];..>) view
 
-(** {2 Basic Interface} *)
-module type S = sig
-  type t
+type ('t, 'inv) repr = ('t -> ('t, 'inv) view)
+(** A representation of types with concrete type ['t], and invariants
+    ['inv].
+    The view function must follow {!deref} pointers *)
 
-  val view : t -> t view
-end
+let view ~repr t = repr t
 
-module type UTILS = sig
-  type t
-  val is_Type : t -> bool (** type == Type? *)
-  val returns_Type : t -> bool (** type == forall ... -> ... -> ... -> Type? *)
-  val returns : t -> t (** follow forall/arrows to get return type.  *)
-  val is_Kind : t -> bool (** type == Kind? *)
-  val to_seq : t -> t Sequence.t
-end
+let is_Type ~repr t = match repr t with
+  | Builtin NunBuiltin.Ty.Type -> true
+  | _ -> false
 
-module type AS_TERM = sig
-  type term
-  type t = term
+let is_Kind ~repr t = match repr t with
+  | Builtin NunBuiltin.Ty.Kind -> true
+  | _ -> false
 
-  include S with type t := t
-  include UTILS with type t := t
-end
+let rec returns
+: type t inv. repr:(t,inv) repr -> t -> t
+= fun ~repr t -> match repr t with
+  | Arrow (_, t') -> returns ~repr t'
+  | Forall (_, t') -> returns ~repr t'
+  | _ -> t
 
-module type PRINTABLE = sig
-  include S
-  include NunIntf.PRINT with type t := t
-end
+let returns_Type ~repr t = match repr (returns ~repr t) with
+  | Builtin NunBuiltin.Ty.Type -> true
+  | _ -> false
 
-(** {2 Utils} *)
-module Utils(Ty : S) : UTILS with type t = Ty.t = struct
-  type t = Ty.t
+let to_seq
+: type inv t. repr:(t, inv) repr -> t -> t Sequence.t
+= fun ~repr ty yield ->
+  let rec aux : t -> unit = fun ty ->
+    yield ty;
+    match repr ty with
+    | Builtin _
+    | Const _ -> ()
+    | Var _ -> ()
+    | Meta _ -> ()
+    | App (f,l) -> aux f; List.iter aux l
+    | Arrow (a,b) -> aux a; aux b
+    | Forall (_,t) -> aux t
+  in aux ty
 
-  let is_Type t = match Ty.view t with
-    | Builtin NunBuiltin.Ty.Type -> true
-    | _ -> false
+type packed = Packed : 't * ('t, _) repr -> packed
 
-  let is_Kind t = match Ty.view t with
-    | Builtin NunBuiltin.Ty.Kind -> true
-    | _ -> false
-
-  let rec returns t = match Ty.view t with
-    | Arrow (_, t')
-    | Forall (_, t') -> returns t'
-    | _ -> t
-
-  let returns_Type t = match Ty.view (returns t) with
-    | Builtin NunBuiltin.Ty.Type -> true
-    | _ -> false
-
-  let to_seq ty yield =
-    let rec aux ty =
-      yield ty;
-      match Ty.view ty with
-      | Builtin _
-      | Const _
-      | Var _
-      | Meta _ -> ()
-      | App (f,l) -> aux f; List.iter aux l
-      | Arrow (a,b) -> aux a; aux b
-      | Forall (_,t) -> aux t
-    in aux ty
-end
+let pack ~repr t = Packed (t,repr)
 
 (** {2 Print Types} *)
 
-type 'a printer = Format.formatter -> 'a -> unit
+type 't print_funs = {
+  print: 't printer;
+  print_in_app: 't printer;
+  print_in_arrow: 't printer;
+}
 
-module Print(Ty : S) = struct
-  let fpf = Format.fprintf
+let fpf = Format.fprintf
 
-  let rec print out ty = match Ty.view ty with
+let mk_print
+: type t inv. repr:(t,inv)repr -> t print_funs
+= fun ~repr ->
+  let rec print out (ty:t) = match repr ty with
     | Builtin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
     | Meta v -> MetaVar.print out v
     | Const id -> ID.print_no_id out id
@@ -102,14 +97,22 @@ module Print(Ty : S) = struct
         fpf out "@[<2>%a ->@ %a@]" print_in_arrow a print b
     | Forall (v,t) ->
         fpf out "@[<2>pi %a:type.@ %a@]" Var.print v print t
-  and print_in_app out t = match Ty.view t with
-    | Builtin _ | Var _ | Const _ | Meta _ -> print out t
+  and print_in_app out t = match repr t with
+    | Builtin _ | Const _ -> print out t
+    | Var _ -> print out t
+    | Meta _ -> print out t
     | App (_,_)
-    | Arrow (_,_)
+    | Arrow (_,_) -> fpf out "@[(%a)@]" print t
     | Forall (_,_) -> fpf out "@[(%a)@]" print t
-  and print_in_arrow out t = match Ty.view t with
-    | Builtin _ | Var _ | Const _ | Meta _
-    | App (_,_) -> print out t
-    | Arrow (_,_)
+  and print_in_arrow out t = match repr t with
+    | Builtin _ | Const _ | App (_,_) -> print out t
+    | Var _ -> print out t
+    | Meta _ -> print out t
+    | Arrow (_,_) -> fpf out "@[(%a)@]" print t
     | Forall (_,_) -> fpf out "@[(%a)@]" print t
-end
+  in
+  { print; print_in_app; print_in_arrow; }
+
+let print ~repr = (mk_print ~repr).print
+let print_in_app ~repr = (mk_print ~repr).print_in_app
+let print_in_arrow ~repr = (mk_print ~repr).print_in_arrow

@@ -8,54 +8,52 @@ type id = NunID.t
 (* TODO miniscoping *)
 
 module type S = sig
-  module T1 : NunTerm_ho.VIEW
+  module T1 : NunTerm_ho.REPR
   module T2 : NunTerm_ho.S
 
-  type state
+  type 'i state
 
-  val create : ?prefix:string -> unit -> state
+  val create : ?prefix:string -> unit -> 'i state
   (** @param prefix the prefix used to generate Skolem symbols *)
 
-  val nnf : T1.t -> T2.t
+  val nnf : 'inv T1.t -> 'inv T2.t
   (** Put term in negation normal form *)
 
-  val skolemize : state:state -> T2.t -> T2.t * (id * T2.ty) list
+  val skolemize : state:'i state -> 'i T2.t -> 'i T2.t * (id * 'i T2.t) list
   (** [skolemize ~state t] returns [t', new_syms] where [t'] is
       the skolemization of [t], and [new_syms] is a set of new symbols
       with their type *)
 
-  val print_state : Format.formatter -> state -> unit
+  val print_state : Format.formatter -> _ state -> unit
 
   val convert_problem :
-    state:state ->
-    (T1.t, T1.ty) NunProblem.t ->
-    (T2.t, T2.ty) NunProblem.t
+    state:'i state ->
+    ('i T1.t, 'i T1.t, 'inv) NunProblem.t ->
+    ('i T2.t, 'i T2.t, 'inv) NunProblem.t
 
-  val find_id_def : state:state -> id -> T2.t option
+  val find_id_def : state:'i state -> id -> 'i T2.t option
   (** Find definition of this Skolemized ID *)
 
   val decode_model :
-    state:state -> T2.t NunModel.t -> T2.t NunModel.t
+    state:'i state -> 'i T2.t NunModel.t -> 'i T2.t NunModel.t
+
+  val pipe :
+    print:bool ->
+    (('inv T1.t,'inv T1.t,'inv_p) NunProblem.t,
+      ('inv T2.t,'inv T2.t,'inv_p) NunProblem.t,
+      'inv T2.t NunModel.t, 'inv T2.t NunModel.t
+    ) NunTransform.t
+
+  (** Similar to {!pipe} but with a generic decode function.
+      @param decode is given [find_id_def], which maps Skolemized
+        constants to the formula they define *)
+  val pipe_with :
+    decode:(find_id_def:(id -> 'inv T2.t option) -> 'c -> 'd) ->
+    print:bool ->
+    (('inv T1.t,'inv T1.t,'inv_p) NunProblem.t,
+      ('inv T2.t,'inv T2.t,'inv_p) NunProblem.t, 'c, 'd
+    ) NunTransform.t
 end
 
-module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
+module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.S)
   : S with module T1 = T1 and module T2 = T2
-
-val pipe :
-  print:bool ->
-  (module NunTerm_ho.VIEW with type t = 'a) ->
-  (module NunTerm_ho.S with type t = 'b) ->
-  (('a,'a) NunProblem.t, ('b,'b) NunProblem.t,
-    'b NunModel.t, 'b NunModel.t
-  ) NunTransform.t
-
-(** Similar to {!pipe} but with a generic decode function.
-    @param decode is given [find_id_def], which maps Skolemized
-      constants to the formula they define *)
-val pipe_with :
-  decode:(find_id_def:(id -> 'b option) -> 'c -> 'd) ->
-  print:bool ->
-  (module NunTerm_ho.VIEW with type t = 'a) ->
-  (module NunTerm_ho.S with type t = 'b) ->
-  (('a,'a) NunProblem.t, ('b,'b) NunProblem.t, 'c, 'd) NunTransform.t
-

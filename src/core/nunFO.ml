@@ -77,6 +77,7 @@ type 'ty mutual_types = {
   tys_defs : 'ty tydef list;
 }
 
+(** Problem *)
 type ('f, 't, 'ty) statement =
   | TyDecl of id * int  (** number of arguments *)
   | Decl of id * 'ty toplevel_ty
@@ -85,9 +86,12 @@ type ('f, 't, 'ty) statement =
   | Goal of 'f
 
 (** models, for instance, might contain both formulas and terms *)
-type ('t, 'f) term_or_form_view =
+type ('t, 'f) term_or_form =
   | Term of 't
   | Form of 'f
+
+type ('t, 'f) term_or_form_ = ('t, 'f) term_or_form
+(** Alias for avoiding recursive defs *)
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
@@ -110,7 +114,7 @@ module type VIEW = sig
     val view : t -> (t, T.t, Ty.t) form_view
   end
 
-  type term_or_form = (T.t, Formula.t) term_or_form_view
+  type term_or_form = (T.t, Formula.t) term_or_form_
 end
 
 (** {2 View and Build Formulas, Terms, Types} *)
@@ -168,8 +172,14 @@ module type S = sig
     val map : (T.t -> T.t) -> t -> t
   end
 
-  type term_or_form = (T.t, Formula.t) term_or_form_view
+  type term_or_form = (T.t, Formula.t) term_or_form_
 end
+
+type ('f, 't, 'ty) repr =
+  (module VIEW with type formula = 'f and type T.t = 't and type Ty.t = 'ty)
+
+type ('f, 't, 'ty) build =
+  (module S with type formula = 'f and type T.t = 't and type Ty.t = 'ty)
 
 module Default : S = struct
   module Ty = struct
@@ -255,16 +265,20 @@ module Default : S = struct
       | F_fun (v,t) -> f_fun v (map f t)
   end
 
-  type term_or_form = (T.t, Formula.t) term_or_form_view
+  type term_or_form = (T.t, Formula.t) term_or_form_
 end
 
-let default = (module Default : S with type formula = Default.formula
-               and type T.t = Default.T.t
-               and type Ty.t = Default.Ty.t)
+let default_repr
+: (Default.formula, Default.T.t, Default.Ty.t) repr
+= (module Default : VIEW with type formula = Default.formula
+     and type T.t = Default.T.t
+     and type Ty.t = Default.Ty.t)
 
-let default_view = (module Default : VIEW with type formula = Default.formula
-               and type T.t = Default.T.t
-               and type Ty.t = Default.Ty.t)
+let default_build
+: (Default.formula, Default.T.t, Default.Ty.t) build
+= (module Default : S with type formula = Default.formula
+     and type T.t = Default.T.t
+     and type Ty.t = Default.Ty.t)
 
 (** {2 The Problems sent to Solvers} *)
 module Problem = struct

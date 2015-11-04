@@ -8,17 +8,18 @@ type id = ID.t
 type loc = Loc.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-type ('t, 'ty) fun_def =
+
+type ('t, 'ty, 'inv) fun_def =
   | Rec of
-      ('t, 'ty) NunStatement.rec_defs *
-      ('t,'ty) NunStatement.rec_def *
+      ('t, 'ty, 'inv) NunStatement.rec_defs *
+      ('t, 'ty, 'inv) NunStatement.rec_def *
       loc option
   | Spec of
       ('t, 'ty) NunStatement.spec_defs *
       loc option
 
-type ('t, 'ty) def =
-  | Fun of ('t, 'ty) fun_def list
+type ('t, 'ty, 'inv) def =
+  | Fun of ('t, 'ty, 'inv) fun_def list
       (** ID is a defined fun/predicate. Can be defined in several places *)
 
   | Data of [`Codata | `Data] * 'ty NunStatement.mutual_types * 'ty NunStatement.tydef
@@ -35,16 +36,16 @@ type ('t, 'ty) def =
       (** Undefined symbol *)
 
 (** All information on a given symbol *)
-type ('t, 'ty) info = {
+type ('t, 'ty, 'inv) info = {
   ty: 'ty; (** type of symbol *)
   decl_kind: NunStatement.decl;
   loc: loc option;
-  def: ('t, 'ty) def;
+  def: ('t, 'ty, 'inv) def;
 }
 
 (** Maps ID to their type and definitions *)
-type ('t, 'ty) t = {
-  infos: ('t, 'ty) info NunID.Tbl.t;
+type ('t, 'ty, 'inv) t = {
+  infos: ('t, 'ty, 'inv) info NunID.Tbl.t;
 }
 
 exception InvalidDef of id * string

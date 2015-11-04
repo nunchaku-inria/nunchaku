@@ -6,20 +6,26 @@
 module ID = NunID
 module Var = NunVar
 module TI = NunTerm_intf
+module Subst = Var.Subst
 
-module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
-  (* utils *)
-  module U = NunTerm_ho.SubstUtil(T)(Subst)
+type ('t, 'inv) build = ('t, 'inv) NunTerm_ho.build
 
-  (* low level implementation *)
+(* low level implementation *)
+module Make(T : NunTerm_ho.S) = struct
+  module T = struct
+    include T
+    include NunTerm_ho.Util(T)
+  end
+  module U = NunTerm_ho.SubstUtil(T)
+
   module Full = struct
-    type subst = T.ty Subst.t
+    type 't subst = ('t, 't) Subst.t
 
     (* head applied to args, in environment subst *)
-    type state = {
-      head: T.t;
-      args: T.t list;
-      subst: subst;
+    type 't state = {
+      head: 't;
+      args: 't list;
+      subst: 't subst;
     }
 
     let push_args ~st l = l @ st.args
@@ -33,19 +39,33 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
             let l = List.map (U.eval ~subst:st.subst) l in
             T.app head l
 
-    type bool_ =
+    type 't bool_ =
       | BTrue
       | BFalse
-      | BPartial of T.t
+      | BPartial of 't
+
+    type 't eval = subst:'t subst -> 't -> 't
 
     (* evaluate boolean operators. Subterms are evaluated with [eval] *)
-    let rec eval_bool ~eval ~subst t =
+    let rec eval_bool
+    : type inv. eval:inv T.t eval -> subst:inv T.t subst -> inv T.t -> inv T.t bool_
+    = fun ~eval ~subst t ->
       let module B = NunBuiltin.T in
-      match T.view t with
+      (* base case *)
+      let basic ~subst t =
+        let t' = eval ~subst t in
+        match T.repr t' with
+        | TI.AppBuiltin (B.True, _) -> BTrue
+        | TI.AppBuiltin (B.False, _) -> BFalse
+        | _ -> BPartial t'
+      in
+      match T.repr t with
       | TI.AppBuiltin (B.True, _) -> BTrue
       | TI.AppBuiltin (B.False, _) -> BFalse
-      | TI.AppBuiltin (B.And, l) -> eval_and_l ~eval ~default:t ~subst l
-      | TI.AppBuiltin (B.Or, l) -> eval_or_l ~eval ~default:t ~subst l
+      | TI.AppBuiltin (B.And, l) ->
+          eval_and_l ~eval ~default:t ~subst l
+      | TI.AppBuiltin (B.Or, l) ->
+          eval_or_l ~eval ~default:t ~subst l
       | TI.AppBuiltin (B.Imply, [a;b]) ->
           (* truth table *)
           begin match eval_bool ~eval ~subst a, eval_bool ~eval ~subst b with
@@ -82,23 +102,21 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
           assert false (* wrong arity *)
       | TI.AppBuiltin ((B.Ite | B.DataSelect _ | B.DataTest _), _) ->
           invalid_arg "not boolean operators"
+      | TI.TyVar _ -> basic ~subst t
+      | TI.Bind _ -> basic ~subst t
       | TI.Const _
       | TI.Var _
-      | TI.App (_,_)
-      | TI.Bind (_,_,_)
+      | TI.App _
       | TI.Let _
       | TI.Match _
       | TI.TyBuiltin _
-      | TI.TyArrow (_,_)
-      | TI.TyMeta _ ->
-          (* predicate, let, etc. just try to evaluate it *)
-          let t' = eval ~subst t in
-          match T.view t' with
-          | TI.AppBuiltin (B.True, _) -> BTrue
-          | TI.AppBuiltin (B.False, _) -> BFalse
-          | _ -> BPartial t'
+      | TI.TyArrow (_,_) -> basic ~subst t
+      | TI.TyMeta _ -> BPartial t
 
-    and eval_and_l ~eval ~default ~subst l = match l with
+    and eval_and_l
+    : type inv. eval:inv T.t eval ->
+        default:inv T.t -> subst:inv T.t subst -> inv T.t list -> inv T.t bool_
+    = fun ~eval ~default ~subst l -> match l with
       | [] -> BTrue
       | t :: l' ->
           match eval_bool ~eval ~subst t with
@@ -106,7 +124,10 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
           | BFalse -> BFalse
           | BPartial _ -> BPartial default
 
-    and eval_or_l ~eval ~default ~subst l = match l with
+    and eval_or_l
+    : type inv. eval:inv T.t eval ->
+        default:inv T.t -> subst:inv T.t subst -> inv T.t list -> inv T.t bool_
+    = fun ~eval ~default ~subst l -> match l with
       | [] -> BFalse
       | t :: l' ->
           match eval_bool ~eval ~subst t with
@@ -115,10 +136,14 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
           | BPartial _ -> BPartial default
 
     (* evaluate [b l] using [eval] *)
-    let eval_app_builtin ~eval b l ~st =
+    let eval_app_builtin
+    : type inv. eval:(inv T.t state -> inv T.t state) ->
+        NunBuiltin.T.t -> inv T.t list -> st:inv T.t state -> inv T.t state
+    = fun ~eval b l ~st ->
       let module B = NunBuiltin.T in
       (* auxiliary function *)
-      let eval_term ~subst t = term_of_state (eval {args=[]; head=t; subst}) in
+      let eval_term ~subst t =
+        term_of_state (eval {args=[]; head=t; subst}) in
       match b, l with
       | (B.True | B.False), _ -> st (* normal form *)
       | (B.And | B.Eq | B.Imply | B.Equiv | B.Not | B.Or), _ ->
@@ -142,7 +167,7 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       | (B.Ite | B.DataSelect _ | B.DataTest _),_ -> assert false
 
     (* see whether [st] matches a case in [m] *)
-    let lookup_case_ st m = match T.view st.head with
+    let lookup_case_ st m = match T.repr st.head with
       | TI.Const id ->
           begin try
             let vars, rhs = ID.Map.find id m in
@@ -156,12 +181,20 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       | _ -> None
 
     (* reduce until the head is not a function *)
-    let rec whnf_ st = match T.view st.head with
+    let rec whnf_
+    : type inv. inv T.t state -> inv T.t state
+    = fun st -> match T.repr st.head with
       | TI.Const _ -> st
       | TI.AppBuiltin ((NunBuiltin.T.False | NunBuiltin.T.True), _) -> st
       | TI.AppBuiltin (b, l) ->
           eval_app_builtin ~eval:whnf_ ~st b l
       | TI.Var v ->
+          (* dereference, if any *)
+          begin match Subst.find ~subst:st.subst v with
+          | None -> st
+          | Some t -> whnf_ {st with head=t}
+          end
+      | TI.TyVar v ->
           (* dereference, if any *)
           begin match Subst.find ~subst:st.subst v with
           | None -> st
@@ -190,7 +223,8 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
             | Some (rhs, subst) ->
                 whnf_ {st with head=rhs; subst; }
           end
-      | TI.Bind ((TI.Forall | TI.Exists | TI.TyForall), _, _)
+      | TI.Bind (TI.TyForall, _, _) -> assert false
+      | TI.Bind ((TI.Forall | TI.Exists), _, _) -> st
       | TI.Let _
       | TI.TyBuiltin _
       | TI.TyArrow _ -> st
@@ -201,21 +235,26 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       st.head, st.args, st.subst
 
     (* strong normal form *)
-    let rec snf_ st =
+    let rec snf_
+    : type inv. inv T.t state -> inv T.t state
+    = fun st ->
       (* first, head reduction *)
       let st = whnf_ st in
       (* then, reduce subterms *)
-      match T.view st.head with
+      match T.repr st.head with
       | TI.TyBuiltin _
       | TI.Const _
       | TI.AppBuiltin (_,[]) -> st
       | TI.AppBuiltin (b,l) ->
           let l = List.map (snf_term ~subst:st.subst) l in
           eval_app_builtin ~eval:snf_ ~st b l
-      | TI.Bind (TI.TyForall,_,_)
+      | TI.Bind (TI.TyForall,_,_) -> st
       | TI.TyArrow (_,_) ->
           st (* NOTE: depend types might require beta-reduction in types *)
       | TI.Var v ->
+          assert (not (Subst.mem ~subst:st.subst v));
+          st
+      | TI.TyVar v ->
           assert (not (Subst.mem ~subst:st.subst v));
           st
       | TI.App (_,_) -> assert false  (* not WHNF *)
@@ -250,12 +289,20 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       | TI.TyMeta _ -> assert false
 
     (* compute the SNF of this term in [subst] *)
-    and snf_term ~subst t = term_of_state (snf_ {head=t; subst; args=[]})
+    and snf_term
+    : type inv. subst:inv T.t subst -> inv T.t -> inv T.t
+    = fun ~subst t ->
+      term_of_state (snf_ {head=t; subst; args=[]})
 
     (* enter the scope of [v] and compute [snf t] *)
-    and enter_snf_ st v t f =
+    and enter_snf_
+    : type inv.
+        inv T.t state -> inv T.t Var.t -> inv T.t ->
+        (inv T.t Var.t -> inv T.t -> inv T.t) -> inv T.t state
+    = fun st v t f ->
       let v' = Var.fresh_copy v in
-      let head = snf_term t ~subst:(Subst.add ~subst:st.subst v (T.var v')) in
+      let head = snf_term t
+        ~subst:(Subst.add ~subst:st.subst v (T.var v')) in
       {st with head=f v' head; }
   end
 
@@ -263,15 +310,17 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
 
   (** {6 Reduction State} *)
 
-  let whnf t =
+  let whnf
+  : type inv. inv T.t -> inv T.t
+  = fun t ->
     let st = Full.whnf_ {Full.subst=Subst.empty; head=t; args=[]} in
     Full.term_of_state st
 
-  let snf t =
+  let snf
+  : type inv. inv T.t -> inv T.t
+  = fun t ->
     let st = Full.snf_ {Full.subst=Subst.empty; head=t; args=[]} in
     Full.term_of_state st
 end
-
-
 
 

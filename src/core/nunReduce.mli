@@ -3,23 +3,26 @@
 
 (** {1 Reductions, including Beta Reduction} *)
 
-module Make(T : NunTerm_ho.S)(Subst : NunVar.SUBST with type ty = T.ty) : sig
+(* TODO: delta-reduction (expand definitions of Const) *)
 
-  (* TODO: delta-reduction (expand definitions of Const) *)
+type ('t, 'inv) build = ('t, 'inv) NunTerm_ho.build
 
-  val whnf : T.t -> T.t
+module Make(T : NunTerm_ho.S) : sig
+  val whnf : 'inv T.t -> 'inv T.t
   (** Weak Head Normal Form *)
 
-  val snf : T.t -> T.t
+  val snf : 'inv T.t -> 'inv T.t
   (** Strong Normal Form (reduce under functions) *)
 
   module Full : sig
-    type subst = T.t Subst.t
+    type 't subst = ('t,'t) NunVar.Subst.t
+
+    (* TODO: expose the internal "state" record? *)
 
     val whnf :
-      ?subst:subst->
-      T.t ->
-      T.t list ->
-      (T.t * T.t list * subst)
+      ?subst:'inv T.t subst->
+      'inv T.t ->
+      'inv T.t list ->
+      ('inv T.t * 'inv T.t list * 'inv T.t subst)
   end
 end

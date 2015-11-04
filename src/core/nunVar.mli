@@ -47,34 +47,31 @@ val to_string : _ t -> string
 
 (** {2 Substitutions} *)
 
-module type SUBST = sig
-  type ty
-  type var = ty t
+module Subst : sig
+  type 'a var = 'a t
 
-  type 'a t
-  (** A substitution for variables with type [ty], to terms ['a] *)
+  type ('ty, 'a) t
+  (** A substitution for variables of type ['ty], to terms ['a] *)
 
-  val empty : 'a t
+  val empty : _ t
   val is_empty : _ t -> bool
 
-  val add : subst:'a t -> var -> 'a -> 'a t
+  val add : subst:('ty,'a) t -> 'ty var -> 'a -> ('ty,'a) t
 
-  val add_list : subst:'a t -> var list -> 'a list -> 'a t
+  val add_list : subst:('ty,'a) t -> 'ty var list -> 'a list -> ('ty,'a) t
   (** [add_list ~subst v t] add each binding [v_i -> t_i] to the subst.
       @raise Invalid_argument if [List.length v <> List.length t] *)
 
-  val remove : subst:'a t -> var -> 'a t
+  val remove : subst:('ty,'a) t -> 'ty var -> ('ty,'a) t
   (** Remove binding for this variable.
       {b careful} if other bindings depend on this variable's binding... *)
 
-  val mem : subst:'a t -> var -> bool
-  val find : subst:'a t -> var -> 'a option
-  val find_exn : subst:'a t -> var -> 'a  (** @raise Not_found if var not bound *)
+  val mem : subst:('ty,'a) t -> 'ty var -> bool
+  val find : subst:('ty,'a) t -> 'ty var -> 'a option
+  val find_exn : subst:('ty,'a) t -> 'ty var -> 'a  (** @raise Not_found if var not bound *)
 
-  val to_list : 'a t -> (var * 'a) list
+  val to_list : ('ty,'a) t -> ('ty var * 'a) list
 end
-
-module Subst(Ty : sig type t end) : SUBST with type ty = Ty.t
 
 (** {2 Data structures} *)
 

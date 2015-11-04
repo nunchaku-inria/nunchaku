@@ -19,18 +19,24 @@ type ('t,'ty) defined = {
   defined_ty_args: 'ty list; (* type arguments. *)
 }
 
-type ('t, 'ty) equation =
-  'ty var list (* universally quantified vars *)
-  * 't list (* arguments to the defined term *)
-  * 't  (* right-hand side of equation *)
+type ('t, 'ty, 'k) equation =
+  | Eqn_linear :
+      'ty var list (* universally quantified vars, also arguments to [f] *)
+      * 't (* right-hand side of equation *)
+      -> ('t, 'ty, [`Linear]) equation
+  | Eqn_nested :
+      'ty var list (* universally quantified vars *)
+      * 't list (* arguments to the defined term *)
+      * 't  (* right-hand side of equation *)
+      -> ('t, 'ty, [`Nested]) equation
 
-type ('t,'ty) rec_def = {
+type ('t,'ty,'kind) rec_def = {
   rec_vars: 'ty var list; (* alpha_1, ..., alpha_n *)
   rec_defined: ('t, 'ty) defined;
-  rec_eqns: ('t, 'ty) equation list; (* list of equations defining the term *)
+  rec_eqns: ('t, 'ty,'kind) equation list; (* list of equations defining the term *)
 }
 
-type ('t, 'ty) rec_defs = ('t, 'ty) rec_def list
+type ('t, 'ty,'kind) rec_defs = ('t, 'ty,'kind) rec_def list
 
 type ('t, 'ty) spec_defs = {
   spec_vars: 'ty var list; (* type variables used by defined terms *)
@@ -58,17 +64,17 @@ type 'ty tydef = {
 type 'ty mutual_types = 'ty tydef list
 
 (** Flavour of axiom *)
-type ('t,'ty) axiom =
+type ('t,'ty,'kind) axiom =
   | Axiom_std of 't list
     (** Axiom list that can influence consistency (no assumptions) *)
   | Axiom_spec of ('t,'ty) spec_defs
     (** Axioms can be safely ignored, they are consistent *)
-  | Axiom_rec of ('t,'ty) rec_defs
+  | Axiom_rec of ('t,'ty,'kind) rec_defs
     (** Axioms are part of an admissible (partial) definition *)
 
-type ('term, 'ty) view =
+type ('term, 'ty, 'inv) view =
   | Decl of id * decl * 'ty
-  | Axiom of ('term, 'ty) axiom
+  | Axiom of ('term, 'ty, 'inv) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
   | Goal of 'term
 
@@ -78,12 +84,12 @@ type info = {
   name: string option;
 }
 
-let info_default = { loc=None; name=None; }
-
-type ('term, 'ty) t = {
-  view: ('term, 'ty) view;
+type ('term, 'ty, 'inv) t = {
+  view: ('term, 'ty, 'inv) view;
   info: info;
 }
+
+let info_default = { loc=None; name=None; }
 
 let tydef_vars t = t.ty_vars
 let tydef_id t = t.ty_id
@@ -118,8 +124,18 @@ let map_defined ~term ~ty d = {
   defined_term=term d.defined_term;
 }
 
-let map_eqn ~term ~ty (vars,args,rhs) =
-  List.map (Var.update_ty ~f:ty) vars, List.map term args, term rhs
+let map_eqn
+: type a a1 b b1 inv.
+    term:(a -> a1) -> ty:(b -> b1) -> (a,b,inv) equation -> (a1,b1,inv) equation
+= fun ~term ~ty eqn ->
+    match eqn with
+    | Eqn_nested (vars,args,rhs) ->
+        Eqn_nested
+          ( List.map (Var.update_ty ~f:ty) vars,
+            List.map term args,
+            term rhs)
+    | Eqn_linear (vars,rhs) ->
+        Eqn_linear (List.map (Var.update_ty ~f:ty) vars, term rhs)
 
 let map_rec_def ~term ~ty t = {
   rec_vars=List.map (Var.update_ty ~f:ty) t.rec_vars;
@@ -170,7 +186,18 @@ let fold_defined ~term ~ty acc d =
   let acc = List.fold_left ty acc d.defined_ty_args in
   term acc d.defined_term
 
-let fold ~term ~ty acc st =
+let fold_eqn_ (type inv) ~term ~ty acc (e:(_,_,inv) equation) =
+  let fold_vars acc l = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc l in
+  match e with
+  | Eqn_nested (vars,args,rhs) ->
+      let acc = fold_vars acc vars in
+      let acc = List.fold_left term acc args in
+      term acc rhs
+  | Eqn_linear (vars,rhs) ->
+      let acc = fold_vars acc vars in
+      term acc rhs
+
+let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
   let fold_vars acc l = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc l in
   match st.view with
   | Decl (_, _, t) -> ty acc t
@@ -186,12 +213,7 @@ let fold ~term ~ty acc st =
             (fun acc def ->
               let acc = fold_defined ~term ~ty acc def.rec_defined in
               let acc = fold_vars acc def.rec_vars in
-              List.fold_left
-                (fun acc (vars,args,rhs) ->
-                  let acc = fold_vars acc vars in
-                  let acc = List.fold_left term acc args in
-                  term acc rhs
-                ) acc def.rec_eqns
+              List.fold_left (fold_eqn_ ~term ~ty) acc def.rec_eqns
             )
             acc t
       end
@@ -220,13 +242,21 @@ let print ?pt_in_app ?pty_in_app pt pty out t =
       in
       let pp_rec_defs out l =
         (* print equation *)
-        let pp_eqn t out (vars,args,rhs) =
-          if vars=[]
-          then fpf out "@[<hv>%a %a =@ %a@]"
-            pt t (pplist ~sep:" " pt_in_app) args pt rhs
-          else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a %a =@ %a@]@]"
-            (pplist ~sep:" " pp_typed_var) vars pt t
-            (pplist ~sep:" " pt_in_app) args pt rhs
+        let pp_eqn (type inv) t out (e:(_,_,inv) equation) =
+          match e with
+          | Eqn_linear (vars,rhs) ->
+              if vars=[]
+              then fpf out "@[<hv>%a =@ %a@]" pt t pt rhs
+              else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a %a =@ %a@]@]"
+                (pplist ~sep:" " pp_typed_var) vars pt t
+                (pplist ~sep:" " pp_typed_var) vars pt rhs
+          | Eqn_nested (vars,args,rhs) ->
+              if vars=[]
+              then fpf out "@[<hv>%a %a =@ %a@]"
+                pt t (pplist ~sep:" " pt_in_app) args pt rhs
+              else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a %a =@ %a@]@]"
+                (pplist ~sep:" " pp_typed_var) vars pt t
+                (pplist ~sep:" " pt_in_app) args pt rhs
         in
         let pp_eqns t = pplist ~sep:";" (pp_eqn t) in
         let pp_def out d =

@@ -30,10 +30,11 @@ module Metadata = struct
   let add_incomplete m b = {incomplete=m.incomplete||b}
 end
 
-type ('t, 'ty) t = {
-  statements : ('t, 'ty) Statement.t vec_ro;
+type ('t, 'ty, 'inv) t = {
+  statements : ('t, 'ty, 'inv) NunStatement.t vec_ro;
   metadata: Metadata.t;
 }
+
 
 let statements t = t.statements
 let metadata t = t.metadata
