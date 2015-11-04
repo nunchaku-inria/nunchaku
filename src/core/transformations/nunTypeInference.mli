@@ -9,6 +9,8 @@ type 'a var = 'a NunVar.t
 type 'a signature = 'a NunSignature.t
 type loc = NunLocation.t
 
+type stmt_invariant = NunMark.nested
+
 exception ScopingError of string * string * loc option
 (** Scoping error for the given variable *)
 
@@ -64,14 +66,14 @@ module Convert(Term : TERM) : sig
       @return a pair [(t', vars)] such that, roughly, [app t' vars = t],
         or [t'] is [forall vars t], or [t'] contains [vars] *)
 
-  type statement = (Term.t, Term.Ty.t) NunStatement.t
+  type statement = (Term.t, Term.Ty.t, stmt_invariant) NunStatement.t
 
   val convert_statement : env:env -> NunUntypedAST.statement -> (statement * env) or_error
 
   val convert_statement_exn : env:env -> NunUntypedAST.statement -> statement * env
   (** Unsafe version of {!convert} *)
 
-  type problem = (Term.t, Term.Ty.t) NunProblem.t
+  type problem = (Term.t, Term.Ty.t, stmt_invariant) NunProblem.t
 
   val convert_problem : env:env -> NunUntypedAST.statement list -> (problem * env) or_error
 
@@ -89,7 +91,7 @@ val pipe :
   print:bool ->
   (module NunTerm_typed.S with type t = 'a) ->
   (module NunTerm_ho.S with type t = 'b) ->
-  (NunUntypedAST.statement list, ('a, 'a) NunProblem.t,
+  (NunUntypedAST.statement list, ('a, 'a, stmt_invariant) NunProblem.t,
     'b NunModel.t, NunUntypedAST.term NunModel.t)
     NunTransform.t
 
@@ -97,4 +99,6 @@ val pipe_with :
   decode:(signature:'a NunSignature.t -> 'c -> 'd) ->
   print:bool ->
   (module NunTerm_typed.S with type t = 'a) ->
-  (NunUntypedAST.statement list, ('a, 'a) NunProblem.t, 'c, 'd) NunTransform.t
+  (NunUntypedAST.statement list,
+    ('a, 'a, stmt_invariant) NunProblem.t, 'c, 'd
+  ) NunTransform.t

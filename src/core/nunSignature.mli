@@ -16,5 +16,5 @@ val find_exn : sigma:'a t -> id -> 'a (** @raise Not_found if not present *)
 
 val declare : sigma:'a t -> id -> 'a -> 'a t
 
-val add_statement : sigma:'a t -> (_,'a) NunStatement.t -> 'a t
+val add_statement : sigma:'a t -> (_,'a,_) NunStatement.t -> 'a t
 (** Update the signature with the content of the given statement *)

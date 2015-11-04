@@ -5,21 +5,33 @@
 
 type id = NunID.t
 type 'a var = 'a NunVar.t
+type 'a printer = Format.formatter -> 'a -> unit
 
-type 'a view =
+type ('a, 'inv) view =
   | Builtin of NunBuiltin.Ty.t (** Builtin type *)
   | Const of id
-  | Var of 'a var (** Constant or bound variable *)
-  | Meta of 'a NunMetaVar.t (** Meta-variable, used for unification *)
+  | Var :
+      'a var (** Constant or bound variable *)
+      -> ('a, <poly:NunMark.polymorph;..>) view
+  | Meta :
+      'a NunMetaVar.t (** Meta-variable, used for unification *)
+      -> ('a, <meta: NunMark.with_meta;..>) view
   | App of 'a * 'a list
   | Arrow of 'a * 'a
-  | Forall of 'a var * 'a  (** Polymorphic type *)
+  | Forall :   (** Polymorphic type *)
+      'a var
+      * 'a
+      -> ('a, <poly: NunMark.polymorph;..>) view
 
 (** {2 Basic Interface} *)
 module type S = sig
+  type invariant_poly
+  type invariant_meta
+  type invariant = <poly: invariant_poly; meta: invariant_meta>
+
   type t
 
-  val view : t -> t view
+  val view : t -> (t, invariant) view
   (** View must follow {!deref} pointers *)
 end
 
@@ -49,8 +61,6 @@ end
 module Utils(Ty : S) : UTILS with type t = Ty.t
 
 (** {2 Print Types} *)
-
-type 'a printer = Format.formatter -> 'a -> unit
 
 module Print(Ty : S) : sig
   val print : Ty.t printer

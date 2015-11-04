@@ -24,19 +24,48 @@ type 'a printer = Format.formatter -> 'a -> unit
 
 open NunTerm_intf
 
-module type VIEW = sig
+module type POLY_VIEW = sig
   include NunTerm_intf.VIEW
 
   module Ty : sig
+    type 'i t = 'i ty
+    val view : 'i t -> ('i t,'i) NunType_intf.view
+  end
+end
+
+module type VIEW = sig
+  type invariant_poly
+  type invariant_meta
+  type invariant = <poly: invariant_poly; meta: invariant_meta>
+
+  type t
+  type ty = t
+
+  val view : t -> (t, invariant) NunTerm_intf.view
+
+  module Ty : sig
     type t = ty
-    val view : t -> t NunType_intf.view
+    val view : t -> (t,invariant) NunType_intf.view
   end
 end
 
 module type S = sig
-  include NunTerm_intf.VIEW
+  type invariant_poly
+  type invariant_meta
+  type invariant = <poly: invariant_poly; meta: invariant_meta>
 
-  module Ty : NunType_intf.AS_TERM with type term = t and type t = ty
+  val poly : invariant_poly NunMark.poly_witness
+
+  type t
+  type ty = t
+
+  val view : t -> (t, invariant) NunTerm_intf.view
+  val build : (t, invariant) NunTerm_intf.view -> t
+
+  module Ty : NunType_intf.AS_TERM
+    with type term = t and type t = ty
+    and type invariant_poly = invariant_poly
+    and type invariant_meta = invariant_meta
 
   val const : id -> t
   val builtin : NunBuiltin.T.t -> t
@@ -51,7 +80,7 @@ module type S = sig
   val exists : ty var -> t -> t
   val eq : t -> t -> t
 
-  val mk_bind : NunTerm_intf.binder -> Ty.t var -> t -> t
+  val mk_bind : invariant_poly NunTerm_intf.binder -> Ty.t var -> t -> t
 
   val ty_type : Ty.t (** Type of types *)
   val ty_kind : Ty.t (** Type of ty_type *)
@@ -59,15 +88,27 @@ module type S = sig
 
   val ty_builtin : NunBuiltin.Ty.t -> Ty.t
   val ty_const : id -> Ty.t
-  val ty_var : ty var -> Ty.t
   val ty_app : Ty.t -> Ty.t list -> Ty.t
-  val ty_forall : ty var -> Ty.t -> Ty.t
   val ty_arrow : Ty.t -> Ty.t -> Ty.t
 end
 
-module Default : S = struct
+module type S_POLY = sig
+  type invariant_meta
+  include S
+    with type invariant_poly = NunMark.polymorph
+  and type invariant_meta := invariant_meta
+
+  val ty_var : ty var -> Ty.t
+  val ty_forall : ty var -> Ty.t -> Ty.t
+end
+
+module Default_(I : sig type poly type meta end) = struct
+  type invariant_poly = I.poly
+  type invariant_meta = I.meta
+  type invariant = <poly: invariant_poly; meta: invariant_meta>
+
   type t = {
-    view: t view;
+    view: (t, invariant) view;
   }
   type ty = t
 
@@ -78,61 +119,48 @@ module Default : S = struct
 
   let view t = t.view
 
-  let make_raw_ view = { view}
+  let make_raw_ view = {view}
 
-  let make_ view = match view with
+  let build view = match view with
+    | App (t, []) -> t
     | App ({view=App (f, l1); _}, l2) ->
         make_raw_ (App (f, l1 @ l2))
+    | App ({view=AppBuiltin (b, l1); _}, l2) ->
+        make_raw_ (AppBuiltin (b, l1 @ l2))
     | _ -> make_raw_ view
 
-  let app_builtin s l = make_ (AppBuiltin (s,l))
+  let app_builtin s l = build (AppBuiltin (s,l))
   let builtin s = app_builtin s []
-  let const id = make_ (Const id)
-  let var v = make_ (Var v)
-  let app t l = match t.view, l with
-    | _, [] -> t
-    | AppBuiltin (b, l1), _ -> app_builtin b (l1@l)
-    | _ -> make_ (App (t, l))
-  let mk_bind b v t = make_ (Bind (b,v,t))
-  let fun_ v t = make_ (Bind (Fun,v, t))
-  let let_ v t u = make_ (Let (v, t, u))
+  let const id = build (Const id)
+  let var v = build (Var v)
+  let app t l = build (App(t,l))
+  let mk_bind (b:invariant_poly binder) v t = build (Bind (b,v,t))
+  let fun_ v t = build (Bind (Fun,v, t))
+  let let_ v t u = build (Let (v, t, u))
   let match_with t l =
     if ID.Map.is_empty l then invalid_arg "Term_ho.case: empty list of cases";
-    make_ (Match (t,l))
+    build (Match (t,l))
   let ite a b c =
     app (builtin NunBuiltin.T.Ite) [a;b;c]
-  let forall v t = make_ (Bind(Forall,v, t))
-  let exists v t = make_ (Bind(Exists,v, t))
+  let forall v t = build (Bind(Forall,v, t))
+  let exists v t = build (Bind(Exists,v, t))
   let eq a b = app (builtin NunBuiltin.T.Eq) [a;b]
 
   let ty_type = type_
   let ty_kind = kind_
   let ty_prop = prop
 
-  let ty_builtin b = make_ (TyBuiltin b)
+  let ty_builtin b = build (TyBuiltin b)
   let ty_const id = const id
-  let ty_var v = var v
   let ty_app f l =
     if l=[] then f else app f l
-  let ty_arrow a b = make_ (TyArrow (a,b))
-  let ty_forall a b = make_ (Bind(TyForall,a,b))
+  let ty_arrow a b = build (TyArrow (a,b))
 
-  module Ty = struct
+  module Ty1 = struct
     type term = t
     type t = ty
-
-    let view t = match t.view with
-      | TyBuiltin b -> TyI.Builtin b
-      | Const id -> TyI.Const id
-      | Var v -> TyI.Var v
-      | App (f,l) -> TyI.App (f,l)
-      | TyArrow (a,b) -> TyI.Arrow (a,b)
-      | Bind(TyForall,v,t) -> TyI.Forall (v,t)
-      | TyMeta _ -> assert false
-      | AppBuiltin _
-      | Bind _
-      | Match _
-      | Let _ -> assert false
+    type invariant_meta = I.meta
+    type invariant_poly = I.poly
 
     let is_Type t = match t.view with
       | TyBuiltin NunBuiltin.Ty.Type -> true
@@ -142,31 +170,117 @@ module Default : S = struct
       | TyBuiltin NunBuiltin.Ty.Kind -> true
       | _ -> false
 
-    let rec returns t = match t.view with
-      | TyArrow (_, t')
+    let rec returns (t:t) = match t.view with
+      | TyArrow (_, t') -> returns t'
       | Bind (TyForall, _, t') -> returns t'
       | _ -> t
 
     let returns_Type t = match (returns t).view with
       | TyBuiltin NunBuiltin.Ty.Type -> true
       | _ -> false
+  end
+end
 
-    let to_seq t yield =
-      let rec aux ty =
+module DefaultMono
+: S
+  with type invariant_poly = NunMark.monomorph
+  and type invariant_meta = NunMark.without_meta
+= struct
+  include Default_(struct
+    type poly = M.monomorph
+    type meta = M.without_meta
+  end)
+
+  let poly = M.Mono
+
+  module Ty = struct
+    include Ty1
+    type invariant = <poly: invariant_poly; meta: invariant_meta>
+
+    let view (t:t): (t,invariant) TyI.view = match t.view with
+      | TyBuiltin b -> TyI.Builtin b
+      | Const id -> TyI.Const id
+      | App (f,l) -> TyI.App (f,l)
+      | TyArrow (a,b) -> TyI.Arrow (a,b)
+      | Var _
+      | AppBuiltin _
+      | Bind _
+      | Match _
+      | Let _ -> assert false
+
+    let to_seq (t:t) yield =
+      let rec aux (ty:t) =
         yield ty;
         match view ty with
         | TyI.Builtin _
-        | TyI.Const _
-        | TyI.Var _
-        | TyI.Meta _ -> ()
+        | TyI.Const _ -> ()
         | TyI.App (f,l) -> aux f; List.iter aux l
         | TyI.Arrow (a,b) -> aux a; aux b
+      in
+      aux t
+
+    include TyI.Print(struct
+      type invariant_meta = NunMark.without_meta
+      type invariant_poly = NunMark.monomorph
+      type invariant = <poly: invariant_poly; meta: invariant_meta>
+      type t = ty
+      let view = view
+    end)
+  end
+end
+
+module DefaultPoly
+: S_POLY
+  with type invariant_poly = NunMark.polymorph
+  and type invariant_meta = NunMark.without_meta
+= struct
+  include Default_(struct
+    type meta = M.without_meta
+    type poly = M.polymorph
+  end)
+
+  let poly = M.Poly
+
+  module Ty = struct
+    include Ty1
+    type invariant = <poly: invariant_poly; meta: invariant_meta>
+
+    let view (t:t): (t,invariant) TyI.view = match t.view with
+      | TyBuiltin b -> TyI.Builtin b
+      | Const id -> TyI.Const id
+      | App (f,l) -> TyI.App (f,l)
+      | TyArrow (a,b) -> TyI.Arrow (a,b)
+      | Var v -> TyI.Var v
+      | Bind (TyForall, v, t) -> TyI.Forall (v,t)
+      | AppBuiltin _
+      | Bind _
+      | Match _
+      | Let _ -> assert false
+
+    let to_seq t yield =
+      let rec aux (ty:t) =
+        yield ty;
+        match view ty with
+        | TyI.Builtin _
+        | TyI.Const _ -> ()
+        | TyI.App (f,l) -> aux f; List.iter aux l
+        | TyI.Arrow (a,b) -> aux a; aux b
+        | TyI.Var _ -> ()
         | TyI.Forall (_,t) -> aux t
       in
       aux t
 
-    include TyI.Print(struct type t = ty let view = view end)
+    include TyI.Print(struct
+      type invariant_meta = NunMark.without_meta
+      type invariant_poly = NunMark.polymorph
+      type invariant = <poly: invariant_poly; meta: invariant_meta>
+      type t = ty
+      let view = view
+    end)
   end
+
+  let ty_var v = var v
+  let ty_forall a b = build (Bind(TyForall,a,b))
 end
 
 (*$T
@@ -175,7 +289,15 @@ end
   not (Default.Ty.returns_Type Default.(ty_arrow ty_type ty_prop))
 *)
 
-let default = (module Default : S with type t = Default.t)
+let default_poly =
+  (module DefaultPoly : S with type t = DefaultPoly.t
+  and type invariant_poly = NunMark.polymorph
+  and type invariant_meta = NunMark.without_meta)
+
+let default_mono =
+  (module DefaultMono : S with type t = DefaultMono.t
+  and type invariant_poly = NunMark.monomorph
+  and type invariant_meta = NunMark.without_meta)
 
 (** {2 Printing} *)
 
@@ -243,19 +365,19 @@ module Print(T : VIEW) = struct
   and print_ty_in_arrow out ty = print_in_binder out ty
 
   and print_in_app out t = match T.view t with
-    | AppBuiltin (_,[]) | TyBuiltin _ | Var _ | Const _ | TyMeta _ ->
-        print out t
+    | AppBuiltin (_,[]) | TyBuiltin _ | Const _ -> print out t
+    | TyMeta _ -> print out t
+    | Var _ -> print out t
     | App (_,_) | AppBuiltin (_,_::_)
     | Bind _ | Let _ | Match _
     | TyArrow (_,_) -> fpf out "(@[%a@])" print t
 
   and print_in_binder out t = match T.view t with
-    | TyBuiltin _ | Var _
-    | Const _ | TyMeta _ | App (_,_) | AppBuiltin _ ->
+    | TyBuiltin _ | Const _ | App (_,_) | AppBuiltin _ ->
         print out t
-    | Bind _
-    | Let _ | Match _
-    | TyArrow (_,_) -> fpf out "(@[%a@])" print t
+    | Var _ -> print out t
+    | TyMeta _ -> print out t
+    | Bind _ | Let _ | Match _ | TyArrow (_,_) -> fpf out "(@[%a@])" print t
 end
 
 (** {2 Utils with Substitutions} *)
@@ -325,11 +447,11 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
     | TyBuiltin _,_
     | AppBuiltin _,_
     | Const _,_
-    | TyMeta _,_
     | App (_,_),_
     | Bind _, _
     | Let (_,_,_),_
     | TyArrow (_,_),_ -> false
+    | TyMeta _,_ -> false
 
   let rec deref ~subst t = match T.view t with
     | Var v ->
@@ -342,7 +464,7 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
   (* NOTE: when dependent types are added, substitution in types is needed *)
 
   let rec eval ~subst t = match T.view t with
-    | TyMeta _
+    | TyMeta _ -> t
     | Const _
     | TyBuiltin _ -> t
     | AppBuiltin (_,[]) -> t
@@ -434,8 +556,8 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
   let rec get_ty_arg_ ty i = match T.Ty.view ty with
     | TyI.App (_,_)
     | TyI.Builtin _
-    | TyI.Const _
-    | TyI.Var _
+    | TyI.Const _ -> None
+    | TyI.Var _ -> None
     | TyI.Meta _ -> None
     | TyI.Arrow (a,b) ->
         if i=0 then Some a else get_ty_arg_ b (i-1)
@@ -443,7 +565,7 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
 
   type signature = T.ty Sig.t
 
-  let rec ty_exn ~sigma t = match T.view t with
+  let rec ty_exn ~sigma (t:T.t) = match T.view t with
     | Const id ->
         begin try NunID.Map.find id sigma
         with Not_found -> raise (Undefined id)
@@ -483,9 +605,15 @@ module SubstUtil(T : S)(Subst : Var.SUBST with type ty = T.ty) = struct
         begin match b with
         | Forall
         | Exists -> T.ty_arrow (Var.ty v) T.ty_prop
-        | Fun  ->
+        | Fun ->
             if T.Ty.returns_Type (Var.ty v)
-            then T.ty_forall v (ty_exn ~sigma t)
+            then match T.poly with
+              | NunMark.Poly ->
+                  (* FIXME: this branch should unify T.invariant_poly=polymorph,
+                    but doesn't. Why? *)
+                  T.build (Bind(Obj.magic TyForall, v, ty_exn ~sigma t))
+              | NunMark.Mono ->
+                  failwith "Term_ho.ty: polymorphic type"
             else T.ty_arrow (Var.ty v) (ty_exn ~sigma t)
         | TyForall -> T.ty_type
         end
@@ -680,9 +808,15 @@ module Erase(T : VIEW) = struct
       )
 end
 
-module ToFO(T : S)(FO : NunFO.S) = struct
+module ToFO(T : S
+  with type invariant_poly = NunMark.monomorph
+  and type invariant_meta = NunMark.without_meta
+)(FO : NunFO.S) = struct
   module Term = T (* alias for shadowing *)
   exception NotInFO of string * T.t
+
+  type term = T.t
+  type ty = T.ty
 
   let () = Printexc.register_printer
     (function
@@ -709,15 +843,12 @@ module ToFO(T : S)(FO : NunFO.S) = struct
         | NunBuiltin.Ty.Type -> fail_ t "type belongs to HO fragment"
         end
     | TyI.Const id -> FO.Ty.const id
-    | TyI.Var _ -> fail_ t "variable in type"
-    | TyI.Meta _ -> fail_ t "meta in type"
     | TyI.App (f,l) ->
         begin match T.Ty.view f with
         | TyI.Const id -> FO.Ty.app id (List.map conv_ty l)
         | _ -> fail_ t "non-constant application"
         end
     | TyI.Arrow _ -> fail_ t "arrow in atomic type"
-    | TyI.Forall (_,_) -> fail_ t "polymorphic type"
 
   let conv_var = Var.update_ty ~f:conv_ty
 
@@ -755,9 +886,7 @@ module ToFO(T : S)(FO : NunFO.S) = struct
         FO.T.let_ (conv_var v) (conv_term t) (conv_term u)
     | Match _ -> fail_ t "no case in FO terms"
     | TyBuiltin _
-    | TyArrow (_,_)
-    | Bind (TyForall, _,_) -> fail_ t "no types in FO terms"
-    | TyMeta _ -> assert false
+    | TyArrow (_,_) -> fail_ t "no types in FO terms"
 
   and conv_form_rec t = match T.view t with
     | AppBuiltin (b,l) ->
@@ -796,9 +925,7 @@ module ToFO(T : S)(FO : NunFO.S) = struct
           (conv_var v) (conv_form_rec t) (conv_form_rec u)
     | Match _ -> fail_ t "no match in FO formulas"
     | TyArrow (_,_)
-    | Bind (TyForall, _,_)
     | TyBuiltin _ -> fail_ t "no types in FO formulas"
-    | TyMeta _ -> assert false
 
   let conv_form f =
     let module P = Print(T) in
@@ -815,7 +942,7 @@ module ToFO(T : S)(FO : NunFO.S) = struct
 
   module SU = SubstUtil(T)(Subst)
 
-  let convert_statement ~sigma st =
+  let convert_statement ~sigma (st:(_,_,M.linear) NunStatement.t) =
     let module St = NunStatement in
     match St.view st with
     | St.Decl (id, k, ty) ->
@@ -845,9 +972,10 @@ module ToFO(T : S)(FO : NunFO.S) = struct
               (fun def ->
                 let head = def.St.rec_defined.St.defined_head in
                 List.map
-                  (fun (vars,args,rhs) ->
+                  (fun eqn -> match eqn with
+                  | St.Eqn_linear (vars,rhs) ->
                     let vars = List.map conv_var vars in
-                    let args = List.map conv_term args in
+                    let args = List.map FO.T.var vars in
                     let lhs = FO.T.app head args in
                     let f =
                       if returns_prop_ (Sig.find_exn ~sigma head)
@@ -973,14 +1101,16 @@ module OfFO(T : S)(FO : NunFO.VIEW) = struct
 end
 
 let to_fo (type a)(type b)(type c)(type d)
-(module T : S with type t = a)
+(module T : S with type t = a
+    and type invariant_poly = NunMark.monomorph
+    and type invariant_meta = NunMark.without_meta)
 (module FO : NunFO.S with type T.t = b and type Ty.t = d and type formula = c) =
   let module Sol = NunSolver_intf in
   let module Conv = ToFO(T)(FO) in
   let module ConvBack = OfFO(T)(FO) in
   NunTransform.make1
   ~name:"to_fo"
-  ~encode:(fun (pb:(T.t, T.ty) NunProblem.t) ->
+  ~encode:(fun pb ->
     let pb' = Conv.convert_problem pb in
     pb', ()
   )
@@ -990,12 +1120,14 @@ let to_fo (type a)(type b)(type c)(type d)
   ()
 
 let to_fo_no_model (type a)(type b)(type c)(type d)
-(module T : S with type t = a)
+(module T : S with type t = a
+    and type invariant_poly = NunMark.monomorph
+    and type invariant_meta = NunMark.without_meta)
 (module FO : NunFO.S with type T.t = b and type Ty.t = d and type formula = c) =
   let module Conv = ToFO(T)(FO) in
   NunTransform.make1
   ~name:"to_fo"
-  ~encode:(fun (pb:(T.t, T.ty) NunProblem.t) ->
+  ~encode:(fun pb ->
     let pb' = Conv.convert_problem pb in
     pb', ()
   )
@@ -1004,7 +1136,10 @@ let to_fo_no_model (type a)(type b)(type c)(type d)
 
 (** {2 Conversion} *)
 
-module Convert(T1 : VIEW)(T2 : S) = struct
+module Convert(T1 : VIEW)(T2 : S
+  with type invariant_poly=T1.invariant_poly
+  and type invariant_meta=T1.invariant_meta
+) = struct
   let rec convert t = match T1.view t with
     | AppBuiltin (b,l) -> T2.app_builtin b (List.map convert l)
     | Const id -> T2.const id
@@ -1025,7 +1160,7 @@ end
 
 (** {2 Conversion of UntypedAST to HO, without Type-Checking} *)
 
-module OfUntyped(T : S) = struct
+module OfUntyped(T : S_POLY) = struct
   module A = NunUntypedAST
   module Loc = NunLocation
 

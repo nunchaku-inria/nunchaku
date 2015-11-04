@@ -44,7 +44,7 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
     match Ty.view ty with
     | TyI.App (f, l) ->
         occur_check_ ~var f || List.exists (occur_check_ ~var) l
-    | TyI.Var _ (* bound var *)
+    | TyI.Var _ -> false (* bound var *)
     | TyI.Const _
     | TyI.Builtin _ -> false
     | TyI.Meta var' ->
@@ -131,14 +131,14 @@ module Make(Ty : NunType_intf.PRINTABLE) = struct
           let v = Var.make ~ty:(Var.ty v1) ~name:"?" in
           bound := Subst.add ~subst:(Subst.add ~subst:!bound v2 v) v1 v;
           unify_ ~stack t1 t2
-      | TyI.Meta _, _
       | TyI.Const _, _
-      | TyI.Var _, _
       | TyI.Builtin _,_
       | TyI.App (_,_),_
-      | TyI.Arrow (_,_),_
-      | TyI.Forall (_,_),_ ->
+      | TyI.Arrow (_,_),_ ->
           fail ~stack "incompatible types"
+      | TyI.Var _, _ -> fail ~stack "incompatible types"
+      | TyI.Forall (_,_),_ -> fail ~stack "incompatible types"
+      | TyI.Meta _, _ -> fail ~stack "incompatible types"
     in
     unify_ ~stack:[] ty1 ty2
 

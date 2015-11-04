@@ -19,7 +19,7 @@ Library "nunchaku_core"
   Path:             src/core/
   Modules:          NunID, NunVar, NunMetaVar, NunLocation, NunIntf, NunUtils,
                     NunTransform, NunType_intf, NunUntypedAST, NunModel,
-                    NunTerm_typed, NunTypeUnify,
+                    NunTerm_typed, NunTypeUnify, NunMark,
                     NunProblem, NunTerm_ho, NunFO, NunBuiltin, NunTerm_intf,
                     NunReduce, NunSolver_intf, NunEnv, NunSignature,
                     NunStatement, NunCVC4,

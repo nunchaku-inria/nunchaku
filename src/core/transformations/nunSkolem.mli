@@ -10,6 +10,8 @@ type id = NunID.t
 module type S = sig
   module T1 : NunTerm_ho.VIEW
   module T2 : NunTerm_ho.S
+    with type invariant_poly = T1.invariant_poly
+    and type invariant_meta = T1.invariant_meta
 
   type state
 
@@ -28,8 +30,8 @@ module type S = sig
 
   val convert_problem :
     state:state ->
-    (T1.t, T1.ty) NunProblem.t ->
-    (T2.t, T2.ty) NunProblem.t
+    (T1.t, T1.ty, 'inv) NunProblem.t ->
+    (T2.t, T2.ty, 'inv) NunProblem.t
 
   val find_id_def : state:state -> id -> T2.t option
   (** Find definition of this Skolemized ID *)
@@ -38,14 +40,17 @@ module type S = sig
     state:state -> T2.t NunModel.t -> T2.t NunModel.t
 end
 
-module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
-  : S with module T1 = T1 and module T2 = T2
+module Make(T1 : NunTerm_ho.VIEW)(T2 :
+  NunTerm_ho.S
+  with type invariant_poly = T1.invariant_poly
+  and type invariant_meta = T1.invariant_meta
+) : S with module T1 = T1 and module T2 = T2
 
 val pipe :
   print:bool ->
   (module NunTerm_ho.VIEW with type t = 'a) ->
   (module NunTerm_ho.S with type t = 'b) ->
-  (('a,'a) NunProblem.t, ('b,'b) NunProblem.t,
+  (('a,'a,'inv) NunProblem.t, ('b,'b,'inv) NunProblem.t,
     'b NunModel.t, 'b NunModel.t
   ) NunTransform.t
 
@@ -57,5 +62,5 @@ val pipe_with :
   print:bool ->
   (module NunTerm_ho.VIEW with type t = 'a) ->
   (module NunTerm_ho.S with type t = 'b) ->
-  (('a,'a) NunProblem.t, ('b,'b) NunProblem.t, 'c, 'd) NunTransform.t
+  (('a,'a,'inv) NunProblem.t, ('b,'b,'inv) NunProblem.t, 'c, 'd) NunTransform.t
 

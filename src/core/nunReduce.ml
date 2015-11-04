@@ -89,14 +89,15 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       | TI.Let _
       | TI.Match _
       | TI.TyBuiltin _
-      | TI.TyArrow (_,_)
-      | TI.TyMeta _ ->
+      | TI.TyArrow (_,_) ->
           (* predicate, let, etc. just try to evaluate it *)
           let t' = eval ~subst t in
-          match T.view t' with
+          begin match T.view t' with
           | TI.AppBuiltin (B.True, _) -> BTrue
           | TI.AppBuiltin (B.False, _) -> BFalse
           | _ -> BPartial t'
+          end
+      | TI.TyMeta _ -> BPartial t
 
     and eval_and_l ~eval ~default ~subst l = match l with
       | [] -> BTrue
@@ -190,7 +191,8 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
             | Some (rhs, subst) ->
                 whnf_ {st with head=rhs; subst; }
           end
-      | TI.Bind ((TI.Forall | TI.Exists | TI.TyForall), _, _)
+      | TI.Bind (TI.TyForall, _, _) -> assert false
+      | TI.Bind ((TI.Forall | TI.Exists), _, _)
       | TI.Let _
       | TI.TyBuiltin _
       | TI.TyArrow _ -> st
@@ -212,7 +214,7 @@ module Make(T : NunTerm_ho.S)(Subst : Var.SUBST with type ty = T.ty) = struct
       | TI.AppBuiltin (b,l) ->
           let l = List.map (snf_term ~subst:st.subst) l in
           eval_app_builtin ~eval:snf_ ~st b l
-      | TI.Bind (TI.TyForall,_,_)
+      | TI.Bind (TI.TyForall,_,_) -> st
       | TI.TyArrow (_,_) ->
           st (* NOTE: depend types might require beta-reduction in types *)
       | TI.Var v ->

@@ -19,30 +19,48 @@ type loc = Loc.t
 type id = NunID.t
 type 'a var = 'a Var.t
 
-type 'a view = 'a NunTerm_intf.view
+type ('a,'inv) view = ('a,'inv) NunTerm_intf.view
 
 open NunTerm_intf
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
-  include NunTerm_intf.VIEW
+  type invariant =
+    <meta:NunMark.with_meta; poly: NunMark.polymorph>
 
-  val ty : t -> ty option
-  (** The type of a term *)
-
-  module Ty : NunType_intf.S with type t = ty
-end
-
-(** {2 Full Signature} *)
-module type S = sig
-  include NunTerm_intf.VIEW
+  type t
+  type ty = t
+  val view : t -> (t, invariant) view
 
   val ty : t -> ty option
   (** The type of a term *)
 
   module Ty : sig
-    include NunType_intf.AS_TERM with type term = t and type t = ty
+    type ty = t
+    val view : t -> (t,invariant) NunType_intf.view
+  end
+end
+
+(** {2 Full Signature} *)
+module type S = sig
+  type invariant =
+    <meta:NunMark.with_meta; poly: NunMark.polymorph>
+
+  type t
+  type ty = t
+
+  val view : t -> (t, invariant) view
+
+  val ty : t -> ty option
+  (** The type of a term *)
+
+  module Ty : sig
+    include NunType_intf.AS_TERM
+      with type term = t and type t = ty
+      and type invariant_poly = NunMark.polymorph
+      and type invariant_meta = NunMark.with_meta
     include NunIntf.PRINT with type t := t
+    type ty = t
 
     val is_ty : term -> bool (** [is_ty t] same as [is_Type (type of t)] *)
   end
@@ -62,7 +80,13 @@ module type S = sig
   val exists : ?loc:loc -> ty var -> t -> t
   val eq : ?loc:loc -> t -> t -> t
 
-  val mk_bind : ?loc:loc -> ty:Ty.t -> NunTerm_intf.binder -> Ty.t var -> t -> t
+  val mk_bind :
+    ?loc:loc ->
+    ty:Ty.t ->
+    NunMark.polymorph NunTerm_intf.binder ->
+    Ty.t var ->
+    t ->
+    t
 
   val ty_type : Ty.t (** Type of types *)
   val ty_prop : Ty.t (** Propositions *)
@@ -78,14 +102,17 @@ end
 
 (** {2 Default Instance} *)
 module Default = struct
+  type invariant =
+    <meta:NunMark.with_meta; poly: NunMark.polymorph>
+
   type t = {
-    view : t view;
+    view : (t,invariant) view;
     loc : Loc.t option;
     mutable ty : t option;
   }
 
   (* dereference the term, if it is a variable, until it is not bound *)
-  let rec deref_rec_ t = match t.view with
+  let rec deref_rec_ (t:t) = match t.view with
     | TyMeta var ->
         begin match MetaVar.deref var with
         | None -> t
@@ -146,7 +173,10 @@ module Default = struct
   let ty_arrow ?loc a b = make_ ?loc ~ty:type_ (TyArrow (a,b))
   let ty_forall ?loc a b = mk_bind ?loc ~ty:type_ TyForall a b
 
-  module Ty = struct
+  module Ty1 = struct
+    type invariant_poly = M.polymorph
+    type invariant_meta = M.with_meta
+    type invariant = <meta: invariant_meta; poly: invariant_poly>
     type term = t
 
     let view t = match (deref_rec_ t).view with
@@ -159,22 +189,29 @@ module Default = struct
       | TyMeta v -> TyI.Meta v
       | AppBuiltin _
       | Bind _ | Let _ | Match _ -> assert false
+  end
 
-    include TyI.Utils(struct type t = term let view = view end)
+  (* the real [Ty] module *)
+  module Ty = struct
+    include Ty1
+    include TyI.Utils(struct include Ty1 type t = term end)
+    type ty = t
 
     let is_ty t = match t.ty with
       | Some ty -> is_Type ty
       | _ -> false
 
-    include TyI.Print(struct type _t = t type t = _t let view = view end)
+    include TyI.Print(struct include Ty1 type t_ = t type t = t_ end)
   end
 
   include NunTerm_ho.Print(struct
+    type invariant_poly = M.polymorph
+    type invariant_meta = M.with_meta
+    type invariant = <meta: invariant_meta; poly: invariant_poly>
     type ty = t
     type t = ty
-
     let view = view
-    module Ty = Ty
+    module Ty = struct include Ty1 type t = term end
   end)
 end
 
@@ -186,17 +223,50 @@ end
 
 let default = (module Default : S with type t = Default.t)
 
-module AsHO(T : VIEW) = struct
+module AsHO(T : VIEW)
+:
+  NunTerm_ho.VIEW
+    with type invariant_poly = NunMark.polymorph
+    and type invariant_meta = NunMark.without_meta
+    and type t = T.t and type ty = T.t
+= struct
   type t = T.t
-  type ty = T.ty
+  type ty = t
 
-  let view t = match T.view t with
-    | TyMeta _ -> failwith "Term_typed.AsHO.view: remaining meta"
-    | v -> v
+  type invariant_poly = M.polymorph
+  type invariant_meta = M.without_meta
+  type invariant = <meta: invariant_meta; poly: invariant_poly>
 
-  module Ty = T.Ty
+  let fail_ () = failwith "Term_typed.AsHO.view: remaining meta"
+
+  let view (t:t):(t,invariant) view = match T.view t with
+    | TyMeta _ -> fail_ ()
+    | Const _
+    | Var _
+    | App (_,_)
+    | AppBuiltin (_,_)
+    | Bind (_,_,_)
+    | Let (_,_,_)
+    | Match (_,_)
+    | TyBuiltin _
+    | TyArrow (_,_) as v -> v
+
+  module Ty = struct
+    type t = ty
+
+    let view (t:t):(t,invariant) TyI.view = match T.Ty.view t with
+      | TyI.Meta _ -> fail_ ()
+      | TyI.Builtin _
+      | TyI.Const _
+      | TyI.Var _
+      | TyI.App (_,_)
+      | TyI.Arrow (_,_)
+      | TyI.Forall (_,_) as v -> v
+  end
 end
 
 let as_ho =
   let module T = AsHO(Default) in
-  (module T : NunTerm_ho.VIEW with type t = Default.t)
+  (module T : NunTerm_ho.VIEW with type t = Default.t
+  and type invariant_meta=NunMark.without_meta
+  and type invariant_poly=NunMark.polymorph)

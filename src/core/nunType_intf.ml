@@ -6,24 +6,38 @@
 module ID = NunID
 module Var = NunVar
 module MetaVar = NunMetaVar
+module M = NunMark
 
 type id = NunID.t
 type 'a var = 'a Var.t
+type 'a printer = Format.formatter -> 'a -> unit
 
-type 'a view =
+type ('a, 'inv) view =
   | Builtin of NunBuiltin.Ty.t (** Builtin type *)
   | Const of id
-  | Var of 'a var (** Constant or bound variable *)
-  | Meta of 'a NunMetaVar.t (** Meta-variable, used for unification *)
+  | Var :
+      'a var (** Constant or bound variable *)
+      -> ('a, <poly:NunMark.polymorph;..>) view
+  | Meta :
+      'a NunMetaVar.t (** Meta-variable, used for unification *)
+      -> ('a, <meta: NunMark.with_meta;..>) view
   | App of 'a * 'a list
   | Arrow of 'a * 'a
-  | Forall of 'a var * 'a  (** Polymorphic type *)
+  | Forall :   (** Polymorphic type *)
+      'a var
+      * 'a
+      -> ('a, <poly: NunMark.polymorph;..>) view
 
 (** {2 Basic Interface} *)
 module type S = sig
+  type invariant_poly
+  type invariant_meta
+  type invariant = <poly: invariant_poly; meta: invariant_meta>
+
   type t
 
-  val view : t -> t view
+  val view : t -> (t, invariant) view
+  (** View must follow {!deref} pointers *)
 end
 
 module type UTILS = sig
@@ -61,7 +75,7 @@ module Utils(Ty : S) : UTILS with type t = Ty.t = struct
     | _ -> false
 
   let rec returns t = match Ty.view t with
-    | Arrow (_, t')
+    | Arrow (_, t') -> returns t'
     | Forall (_, t') -> returns t'
     | _ -> t
 
@@ -70,12 +84,12 @@ module Utils(Ty : S) : UTILS with type t = Ty.t = struct
     | _ -> false
 
   let to_seq ty yield =
-    let rec aux ty =
+    let rec aux (ty:t) =
       yield ty;
       match Ty.view ty with
       | Builtin _
-      | Const _
-      | Var _
+      | Const _ -> ()
+      | Var _ -> ()
       | Meta _ -> ()
       | App (f,l) -> aux f; List.iter aux l
       | Arrow (a,b) -> aux a; aux b
@@ -84,8 +98,6 @@ module Utils(Ty : S) : UTILS with type t = Ty.t = struct
 end
 
 (** {2 Print Types} *)
-
-type 'a printer = Format.formatter -> 'a -> unit
 
 module Print(Ty : S) = struct
   let fpf = Format.fprintf
@@ -103,13 +115,16 @@ module Print(Ty : S) = struct
     | Forall (v,t) ->
         fpf out "@[<2>pi %a:type.@ %a@]" Var.print v print t
   and print_in_app out t = match Ty.view t with
-    | Builtin _ | Var _ | Const _ | Meta _ -> print out t
+    | Builtin _ | Const _ -> print out t
+    | Var _ -> print out t
+    | Meta _ -> print out t
     | App (_,_)
-    | Arrow (_,_)
+    | Arrow (_,_) -> fpf out "@[(%a)@]" print t
     | Forall (_,_) -> fpf out "@[(%a)@]" print t
   and print_in_arrow out t = match Ty.view t with
-    | Builtin _ | Var _ | Const _ | Meta _
-    | App (_,_) -> print out t
-    | Arrow (_,_)
+    | Builtin _ | Const _ | App (_,_) -> print out t
+    | Var _ -> print out t
+    | Meta _ -> print out t
+    | Arrow (_,_) -> fpf out "@[(%a)@]" print t
     | Forall (_,_) -> fpf out "@[(%a)@]" print t
 end

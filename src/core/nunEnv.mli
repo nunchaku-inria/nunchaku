@@ -11,17 +11,17 @@ type id = NunID.t
 type loc = NunLocation.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-type ('t, 'ty) fun_def =
+type ('t, 'ty, 'inv) fun_def =
   | Rec of
-      ('t, 'ty) NunStatement.rec_defs *
-      ('t,'ty) NunStatement.rec_def *
+      ('t, 'ty, 'inv) NunStatement.rec_defs *
+      ('t, 'ty, 'inv) NunStatement.rec_def *
       loc option
   | Spec of
       ('t, 'ty) NunStatement.spec_defs *
       loc option
 
-type ('t, 'ty) def =
-  | Fun of ('t, 'ty) fun_def list
+type ('t, 'ty, 'inv) def =
+  | Fun of ('t, 'ty, 'inv) fun_def list
       (** ID is a defined fun/predicate. Can be defined in several places *)
 
   | Data of [`Codata | `Data] * 'ty NunStatement.mutual_types * 'ty NunStatement.tydef
@@ -38,34 +38,34 @@ type ('t, 'ty) def =
       (** Undefined symbol *)
 
 (** All information on a given symbol *)
-type ('t, 'ty) info = {
+type ('t, 'ty, 'inv) info = {
   ty: 'ty; (** type of symbol *)
   decl_kind: NunStatement.decl;
   loc: loc option;
-  def: ('t, 'ty) def;
+  def: ('t, 'ty, 'inv) def;
 }
 
 (** Maps ID to their type and definitions *)
-type ('t, 'ty) t = private {
-  infos: ('t, 'ty) info NunID.Tbl.t;
+type ('t, 'ty, 'inv) t = private {
+  infos: ('t, 'ty, 'inv) info NunID.Tbl.t;
 }
 
 exception InvalidDef of id * string
 
 val pp_invalid_def_ : exn printer
 
-val create: unit -> ('t, 'ty) t
+val create: unit -> _ t
 (** Create a new environment *)
 
-val loc: (_,_) info -> loc option
-val def: ('t,'ty) info -> ('t,'ty) def
-val ty: (_,'ty) info -> 'ty
-val decl_kind: (_,_) info -> NunStatement.decl
+val loc: _ info -> loc option
+val def: ('t,'ty,'inv) info -> ('t,'ty,'inv) def
+val ty: (_,'ty,_) info -> 'ty
+val decl_kind: _ info -> NunStatement.decl
 
 val declare:
   ?loc:loc ->
   kind:NunStatement.decl ->
-  env:('t, 'ty) t ->
+  env:('t, 'ty, _) t ->
   id ->
   'ty ->
   unit
@@ -73,15 +73,15 @@ val declare:
 
 val rec_funs:
   ?loc:loc ->
-  env:('t, 'ty) t ->
-  ('t, 'ty) NunStatement.rec_defs ->
+  env:('t, 'ty, 'inv) t ->
+  ('t, 'ty, 'inv) NunStatement.rec_defs ->
   unit
 (** Add a definition of functions/predicates. They can be already
     defined (or declared). *)
 
 val spec_funs:
   ?loc:loc ->
-  env:('t, 'ty) t ->
+  env:('t, 'ty, 'inv) t ->
   ('t, 'ty) NunStatement.spec_defs ->
   unit
 (** Add a definition of functions/predicates. They can be already
@@ -89,7 +89,7 @@ val spec_funs:
 
 val def_data:
   ?loc:loc ->
-  env:('t, 'ty) t ->
+  env:('t, 'ty, 'inv) t ->
   kind:[`Data | `Codata] ->
   'ty NunStatement.mutual_types ->
   unit
@@ -97,14 +97,14 @@ val def_data:
     Also defines their constructors.
     @raise InvalidDef if some type/constructor already defined/declared *)
 
-val find : env:('t, 'ty) t -> id:id -> ('t, 'ty) info option
+val find : env:('t, 'ty, 'inv) t -> id:id -> ('t, 'ty, 'inv) info option
 
-val find_exn : env:('t, 'ty) t -> id:id -> ('t, 'ty) info
+val find_exn : env:('t, 'ty, 'inv) t -> id:id -> ('t, 'ty, 'inv) info
 (** @raise Not_found if ID not defined *)
 
-val find_ty : env:('t, 'ty) t -> id:id -> 'ty
+val find_ty : env:('t, 'ty, _) t -> id:id -> 'ty
 (** Find the type of a symbol
     @raise Not_found if the symbol is not declared *)
 
-val mem : env:(_,_) t -> id:id -> bool
+val mem : env:_ t -> id:id -> bool
 (** @return true if the symbol is at least declared *)

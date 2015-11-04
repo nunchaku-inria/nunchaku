@@ -22,60 +22,72 @@ module Metadata : sig
   val add_incomplete: t -> bool -> t
 end
 
-type ('t, 'ty) t = private {
-  statements : ('t, 'ty) NunStatement.t vec_ro;
+type ('t, 'ty, 'inv) t = private {
+  statements : ('t, 'ty, 'inv) NunStatement.t vec_ro;
   metadata: Metadata.t;
 }
 
-val make : meta:Metadata.t -> ('t, 'ty) NunStatement.t vec_ro -> ('t, 'ty) t
+val make :
+  meta:Metadata.t ->
+  ('t, 'ty, 'inv) NunStatement.t vec_ro ->
+  ('t, 'ty, 'inv) t
 (** Build a problem from statements *)
 
-val of_list : meta:Metadata.t -> ('t, 'ty) NunStatement.t list -> ('t, 'ty) t
+val of_list :
+  meta:Metadata.t ->
+  ('t, 'ty, 'inv) NunStatement.t list ->
+  ('t, 'ty, 'inv) t
 
-val statements : ('t, 'ty) t -> ('t, 'ty) NunStatement.t vec_ro
-val metadata : (_,_) t -> Metadata.t
+val statements : ('t, 'ty, 'inv) t -> ('t, 'ty, 'inv) NunStatement.t vec_ro
+val metadata : _ t -> Metadata.t
 
 val map_statements :
-  f:(('t, 'ty) NunStatement.t -> ('t2,'ty2) NunStatement.t) -> ('t,'ty) t -> ('t2,'ty2) t
+  f:(('t, 'ty, 'inv) NunStatement.t -> ('t2,'ty2,'inv2) NunStatement.t) ->
+  ('t,'ty,'inv) t ->
+  ('t2,'ty2,'inv2) t
 
 val flat_map_statements :
-  f:(('t, 'ty) NunStatement.t -> ('t2,'ty2) NunStatement.t list) ->
-  ('t,'ty) t ->
-  ('t2,'ty2) t
+  f:(('t, 'ty,'inv) NunStatement.t -> ('t2,'ty2,'inv2) NunStatement.t list) ->
+  ('t,'ty,'inv) t ->
+  ('t2,'ty2, 'inv2) t
 (** Map each statement to a list of statements, and flatten the result into
     a new problem *)
 
-val map : term:('a -> 'b) -> ty:('tya -> 'tyb) -> ('a, 'tya) t -> ('b, 'tyb) t
-
-val map_with :
-  ?before:(unit -> ('b, 'tyb) NunStatement.t list) ->
-  ?after:(unit -> ('b, 'tyb) NunStatement.t list) ->
+val map :
   term:('a -> 'b) ->
   ty:('tya -> 'tyb) ->
-  ('a, 'tya) t -> ('b, 'tyb) t
+  ('a, 'tya, 'inv) t ->
+  ('b, 'tyb, 'inv) t
+
+val map_with :
+  ?before:(unit -> ('b, 'tyb, 'inv) NunStatement.t list) ->
+  ?after:(unit -> ('b, 'tyb, 'inv) NunStatement.t list) ->
+  term:('a -> 'b) ->
+  ty:('tya -> 'tyb) ->
+  ('a, 'tya, 'inv) t -> ('b, 'tyb, 'inv) t
 (** [map_with ~add ~term ~ty pb] is similar to [map ~term ~ty pb], but after
     processing each statement [st], [after ()] and [before()] are called,
     and the statements they return
     are added respectively before or after the translation of [st]. *)
 
 val print : ?pt_in_app:'a printer -> ?pty_in_app:'b printer ->
-            'a printer -> 'b printer -> ('a,'b) t printer
+            'a printer -> 'b printer -> ('a,'b,_) t printer
 (** Printer for a problem *)
 
 exception IllFormed of string
 (** Ill-formed problem *)
 
-val goal : ('t, _) t -> 't
+val goal : ('t, _, _) t -> 't
 (** [goal pb] returns the unique goal of [pb], or fails. A problem that doesn't
     have a single goal is ill-formed
     @raise IllFormed if the problem doesn't have exactly one goal *)
 
-val signature : ?init:'ty NunSignature.t -> (_, 'ty) t -> 'ty NunSignature.t
+val signature : ?init:'ty NunSignature.t -> (_, 'ty, _) t -> 'ty NunSignature.t
 (** Gather the signature of every declared symbol
     @param init initial signature, if any
     @raise IllFormed if some symbol is declared twice *)
 
-val env : ?init:('t,'ty) NunEnv.t -> ('t, 'ty) t -> ('t,'ty) NunEnv.t
+val env : ?init:('t,'ty, 'inv) NunEnv.t -> ('t, 'ty, 'inv) t -> ('t,'ty, 'inv) NunEnv.t
 (** Build an environment defining/declaring every symbol of the problem.
     @param init initial env, if any
     @raise IllFormed if some declarations/definitions do not agree *)

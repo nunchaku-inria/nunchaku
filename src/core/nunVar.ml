@@ -45,7 +45,7 @@ module type SUBST = sig
   type var = ty t
 
   type 'a t
-  (** A substitution for those variables *)
+  (** A substitution for variables with type [ty], to terms ['a] *)
 
   val empty : 'a t
   val is_empty : _ t -> bool
@@ -71,17 +71,14 @@ module Subst(Ty : sig type t end) : SUBST with type ty = Ty.t = struct
   type ty = Ty.t
   type var = Ty.t t
 
-  module M = Map.Make(struct
-    type t = var
-    let compare = compare
-  end)
+  module M = ID.Map
 
-  type 'a t = 'a M.t
+  type 'a t = (var * 'a) M.t
 
   let empty = M.empty
   let is_empty = M.is_empty
 
-  let add ~subst v x = M.add v x subst
+  let add ~subst v x = M.add v.id (v,x) subst
 
   let rec add_list ~subst v t = match v, t with
     | [], [] -> subst
@@ -89,15 +86,15 @@ module Subst(Ty : sig type t end) : SUBST with type ty = Ty.t = struct
     | _, [] -> invalid_arg "Subst.add_list"
     | v :: v', t :: t' -> add_list ~subst:(add ~subst v t) v' t'
 
-  let remove ~subst v = M.remove v subst
+  let remove ~subst v = M.remove v.id subst
 
-  let mem ~subst v = M.mem v subst
+  let mem ~subst v = M.mem v.id subst
 
-  let find_exn ~subst v = M.find v subst
+  let find_exn ~subst v = snd (M.find v.id subst)
 
   let find ~subst v = try Some (find_exn ~subst v) with Not_found -> None
 
-  let to_list s = M.fold (fun v x acc -> (v,x)::acc) s []
+  let to_list s = M.fold (fun _ (v,x) acc -> (v,x)::acc) s []
 end
 
 module Set(Ty : sig type t end) = CCSet.Make(struct

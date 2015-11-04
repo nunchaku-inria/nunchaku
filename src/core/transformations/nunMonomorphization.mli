@@ -21,7 +21,13 @@ type id = NunID.t
 
 (* TODO: if depth limit reached, activate some "spuriousness" flag? *)
 
-module Make(T : NunTerm_ho.S) : sig
+module Make
+(T1 : NunTerm_ho.S
+      with type invariant_meta=NunMark.without_meta)
+(T2 : NunTerm_ho.S
+      with type invariant_meta=NunMark.without_meta
+      and type invariant_poly=NunMark.monomorph)
+: sig
   exception InvalidProblem of string
 
   type unmangle_state
@@ -29,8 +35,8 @@ module Make(T : NunTerm_ho.S) : sig
 
   val monomorphize :
     ?depth_limit:int ->
-    (T.t, T.ty) NunProblem.t ->
-    (T.t, T.ty) NunProblem.t * unmangle_state
+    (T1.t, T1.ty, 'inv) NunProblem.t ->
+    (T2.t, T2.ty, 'inv) NunProblem.t * unmangle_state
   (** Filter and specialize definitions of the problem.
 
       First it finds a set of instances for each symbol
@@ -45,13 +51,13 @@ module Make(T : NunTerm_ho.S) : sig
         state obtained after monomorphization
   *)
 
-  val unmangle_term : state:unmangle_state -> T.t -> T.t
+  val unmangle_term : state:unmangle_state -> T2.t -> T1.t
   (** Unmangle a single term: replace mangled constants by their definition *)
 
   val unmangle_model :
       state:unmangle_state ->
-      T.t NunModel.t ->
-      T.t NunModel.t
+      T2.t NunModel.t ->
+      T1.t NunModel.t
   (** Unmangles constants that have been collapsed with their type arguments *)
 end
 
@@ -67,13 +73,13 @@ module TypeMangling(T : NunTerm_ho.S) : sig
 
   val mangle_term :
     state:state ->
-    (T.t,T.ty) NunProblem.t ->
-    (T.t,T.ty) NunProblem.t
+    (T.t,T.ty,'inv) NunProblem.t ->
+    (T.t,T.ty,'inv) NunProblem.t
 
   val mangle_problem :
     state:state ->
-    (T.t,T.ty) NunProblem.t ->
-    (T.t,T.ty) NunProblem.t
+    (T.t,T.ty,'inv) NunProblem.t ->
+    (T.t,T.ty,'inv) NunProblem.t
 
   val unmangle_term : state:state -> T.t -> T.t
 
@@ -86,16 +92,28 @@ end
 (** Pipeline component *)
 val pipe :
   print:bool ->
-  (module NunTerm_ho.S with type t = 'a) ->
-  (('a, 'a) NunProblem.t, ('a,'a) NunProblem.t,
-    'a NunModel.t, 'a NunModel.t) NunTransform.t
+  (module NunTerm_ho.S
+    with type invariant_meta=NunMark.without_meta and type t = 'a) ->
+  (module NunTerm_ho.S
+    with type invariant_meta=NunMark.without_meta
+    and type invariant_poly=NunMark.monomorph
+    and type t = 'b) ->
+  (('a, 'a, 'inv) NunProblem.t,
+    ('b, 'b, 'inv) NunProblem.t,
+    'a NunModel.t, 'a NunModel.t
+  ) NunTransform.t
 
 (** Generic Pipe Component
     @param decode the decode function that takes an applied [(module S)]
       in addition to the state *)
 val pipe_with :
-  decode:(decode_term:('a -> 'a) -> 'c -> 'd) ->
+  decode:(decode_term:('b -> 'a) -> 'c -> 'd) ->
   print:bool ->
-  (module NunTerm_ho.S with type t = 'a) ->
-  (('a, 'a) NunProblem.t, ('a,'a) NunProblem.t, 'c, 'd) NunTransform.t
+  (module NunTerm_ho.S
+    with type invariant_meta=NunMark.without_meta and type t = 'a) ->
+  (module NunTerm_ho.S
+    with type invariant_meta=NunMark.without_meta
+    and type invariant_poly=NunMark.monomorph
+    and type t = 'b) ->
+  (('a, 'a, 'inv) NunProblem.t, ('b,'b,'inv) NunProblem.t, 'c, 'd) NunTransform.t
 

@@ -7,28 +7,46 @@ type id = NunID.t
 type 'a var = 'a NunVar.t
 type loc = NunLocation.t
 
-type 'a view = 'a NunTerm_intf.view
+type ('a,'inv) view = ('a,'inv) NunTerm_intf.view
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
-  include NunTerm_intf.VIEW
+  type invariant =
+    <meta:NunMark.with_meta; poly: NunMark.polymorph>
 
-  val ty : t -> ty option
-  (** The type of a term *)
-
-  module Ty : NunType_intf.S with type t = ty
-end
-
-(** {2 Full Signature} *)
-module type S = sig
-  include NunTerm_intf.VIEW
+  type t
+  type ty = t
+  val view : t -> (t, invariant) view
 
   val ty : t -> ty option
   (** The type of a term *)
 
   module Ty : sig
-    include NunType_intf.AS_TERM with type term = t and type t = ty
+    type ty = t
+    val view : t -> (t,invariant) NunType_intf.view
+  end
+end
+
+(** {2 Full Signature} *)
+module type S = sig
+  type invariant =
+    <meta:NunMark.with_meta; poly: NunMark.polymorph>
+
+  type t
+  type ty = t
+
+  val view : t -> (t, invariant) view
+
+  val ty : t -> ty option
+  (** The type of a term *)
+
+  module Ty : sig
+    include NunType_intf.AS_TERM
+      with type term = t and type t = ty
+      and type invariant_poly = NunMark.polymorph
+      and type invariant_meta = NunMark.with_meta
     include NunIntf.PRINT with type t := t
+    type ty = t
 
     val is_ty : term -> bool (** [is_ty t] same as [is_Type (type of t)] *)
   end
@@ -48,7 +66,13 @@ module type S = sig
   val exists : ?loc:loc -> ty var -> t -> t
   val eq : ?loc:loc -> t -> t -> t
 
-  val mk_bind : ?loc:loc -> ty:Ty.t -> NunTerm_intf.binder -> Ty.t var -> t -> t
+  val mk_bind :
+    ?loc:loc ->
+    ty:Ty.t ->
+    NunMark.polymorph NunTerm_intf.binder ->
+    Ty.t var ->
+    t ->
+    t
 
   val ty_type : Ty.t (** Type of types *)
   val ty_prop : Ty.t (** Propositions *)
@@ -78,7 +102,12 @@ val default : (module S with type t = Default.t)
   only for reading — writing requires providing the type at every
   application *)
 
-module AsHO(T : VIEW) : NunTerm_ho.VIEW
-  with type t = T.t and type ty = T.ty
+module AsHO(T : VIEW) :
+  NunTerm_ho.VIEW
+    with type invariant_poly = NunMark.polymorph
+    and type invariant_meta = NunMark.without_meta
+    and type t = T.t and type ty = T.t
 
-val as_ho : (module NunTerm_ho.VIEW with type t = Default.t)
+val as_ho : (module NunTerm_ho.VIEW with type t = Default.t
+  and type invariant_meta=NunMark.without_meta
+  and type invariant_poly=NunMark.polymorph)

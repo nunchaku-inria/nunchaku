@@ -14,6 +14,8 @@ let section = NunUtils.Section.make "skolem"
 module type S = sig
   module T1 : NunTerm_ho.VIEW
   module T2 : NunTerm_ho.S
+    with type invariant_poly = T1.invariant_poly
+    and type invariant_meta = T1.invariant_meta
 
   type state
 
@@ -32,8 +34,8 @@ module type S = sig
 
   val convert_problem :
     state:state ->
-    (T1.t, T1.ty) NunProblem.t ->
-    (T2.t, T2.ty) NunProblem.t
+    (T1.t, T1.ty, 'inv) NunProblem.t ->
+    (T2.t, T2.ty, 'inv) NunProblem.t
 
   val find_id_def : state:state -> id -> T2.t option
   (** Find definition of this Skolemized ID *)
@@ -42,8 +44,11 @@ module type S = sig
     state:state -> T2.t NunModel.t -> T2.t NunModel.t
 end
 
-module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
-  : S with module T1 = T1 and module T2 = T2
+module Make(T1 : NunTerm_ho.VIEW)(T2 :
+  NunTerm_ho.S
+  with type invariant_poly = T1.invariant_poly
+  and type invariant_meta = T1.invariant_meta
+) : S with module T1 = T1 and module T2 = T2
 = struct
   module T1 = T1
   module T2 = T2
@@ -161,7 +166,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
 
   let skolemize_ ~state t =
     (* recursive traversal *)
-    let rec aux ~env t = match T2.view t with
+    let rec aux ~env (t:T2.t) = match T2.view t with
       | TI.Const id -> T2.const id
       | TI.Var v ->
           let t = match Subst.find ~subst:env.subst v with
@@ -185,7 +190,10 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 : NunTerm_ho.S)
           end
       | TI.App (f,l) ->
           T2.app (aux ~env f) (List.map (aux ~env) l)
-      | TI.Bind ((TI.Fun | TI.TyForall | TI.Forall) as b, v,t) ->
+      | TI.Bind (TI.TyForall, v, t) ->
+          enter_var_ ~env v
+            (fun env v -> T2.mk_bind TI.TyForall v (aux ~env t))
+      | TI.Bind ((TI.Fun | TI.Forall) as b, v, t) ->
           enter_var_ ~env v
             (fun env v -> T2.mk_bind b v (aux ~env t))
       | TI.Bind (TI.Exists, v, t') ->

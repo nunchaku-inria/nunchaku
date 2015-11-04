@@ -5,15 +5,16 @@
 
 module ID = NunID
 module Var = NunVar
+module M = NunMark
 
 type id = NunID.t
 type 'a var = 'a NunVar.t
 
-type binder =
+type _ binder =
   | Forall
   | Exists
   | Fun
-  | TyForall
+  | TyForall : M.polymorph binder
 
 type 'a case = 'a var list * 'a
 (** A pattern match case for a given constructor [ vars, right-hand side ]
@@ -32,17 +33,23 @@ let cases_well_formed (type a) m =
   in
   ID.Map.for_all is_linear_ m
 
-type 'a view =
+type ('a, 'inv) view =
   | Const of id (** top-level symbol *)
   | Var of 'a var (** bound variable *)
   | App of 'a * 'a list
   | AppBuiltin of NunBuiltin.T.t * 'a list (** built-in operation *)
-  | Bind of binder * 'a var * 'a
+  | Bind :
+      'inv_b binder
+      * 'a var
+      * 'a
+      -> ('a, <poly:'inv_b; meta:_>) view
   | Let of 'a var * 'a * 'a
   | Match of 'a * 'a cases (** shallow pattern-match *)
   | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
   | TyArrow of 'a * 'a  (** Arrow type *)
-  | TyMeta of 'a NunMetaVar.t
+  | TyMeta :
+      'a NunMetaVar.t ->
+      ('a, <meta:M.with_meta; poly:_>) view
 
 (* NOTE: Eq has its own case (in Builtin), because its type parameter is often hidden.
    For instance, when we parse a model back from TPTP or SMT, equalities
@@ -54,32 +61,32 @@ type 'a view =
  *)
 
 module type VIEW = sig
-  type t
-  type ty = t
+  type 'inv t
+  type 'inv ty = 'inv t
 
-  val view : t -> t view
+  val view : 'inv t -> ('inv t, 'inv) view
 end
 
 (** {2 Utils} *)
 
 module Util(T : VIEW) : sig
-  val to_seq : T.t -> T.t Sequence.t
+  val to_seq : 'inv T.t -> 'inv T.t Sequence.t
   (** Iterate on sub-terms *)
 
-  val to_seq_vars : T.t -> T.ty var Sequence.t
+  val to_seq_vars : 'inv T.t -> 'inv T.ty var Sequence.t
   (** Iterate on variables *)
 
-  val to_seq_free_vars : T.t -> T.ty var Sequence.t
-  (** Iterate on free variables *)
+  val to_seq_free_vars : (<meta:M.with_meta;..> as 'inv) T.t -> 'inv T.ty var Sequence.t
+  (** Iterate on free variables. Only for terms that have meta-variables. *)
 
-  val head_sym : T.t -> id
+  val head_sym : _ T.t -> id
   (** Search for a head symbol
       @raise Not_found if not an application/const *)
 
   val free_meta_vars :
-    ?init:T.ty NunMetaVar.t NunID.Map.t ->
-    T.t ->
-    T.ty NunMetaVar.t NunID.Map.t
+    ?init:(<meta:M.with_meta;poly:_> as 'inv) T.ty NunMetaVar.t NunID.Map.t ->
+    'inv T.t ->
+    'inv T.ty NunMetaVar.t NunID.Map.t
   (** The free type meta-variables in [t] *)
 end = struct
   let rec head_sym t = match T.view t with
@@ -87,12 +94,12 @@ end = struct
     | Const id -> id
     | _ -> raise Not_found
 
-  let to_seq t yield =
-    let rec aux t =
+  let to_seq (type inv) (t:inv T.t) (yield:inv T.t -> unit) : unit =
+    let rec aux (t:inv T.t) : unit =
       yield t;
       match T.view t with
+      | TyMeta _ -> ()
       | TyBuiltin _
-      | TyMeta _
       | AppBuiltin _
       | Const _ -> ()
       | Var v -> aux_var v
@@ -107,10 +114,9 @@ end = struct
     in
     aux t
 
-  module VarSet = Var.Set(struct type t = T.ty end)
-
-  let to_seq_free_vars t yield =
-    let rec aux ~bound t = match T.view t with
+  let to_seq_free_vars (type inv) (t:inv T.t) yield =
+    let module VarSet = Var.Set(struct type t = inv T.ty end) in
+    let rec aux ~bound (t:inv T.t) = match T.view t with
       | Const _ -> ()
       | Var v ->
           if VarSet.mem v bound then () else yield v
@@ -132,12 +138,12 @@ end = struct
     in
     aux ~bound:VarSet.empty t
 
-  let to_seq_vars t =
+  let to_seq_vars (type inv) (t:inv T.t) =
     to_seq t
     |> Sequence.flat_map
-        (fun t -> match T.view t with
-          | Var v
-          | Bind (_,v,_)
+        (fun (t:inv T.t) -> match T.view t with
+          | Var v -> Sequence.return v
+          | Bind (_,v,_) -> Sequence.return v
           | Let (v,_,_) -> Sequence.return v
           | Match (_,l) ->
               let open Sequence.Infix in
@@ -146,7 +152,7 @@ end = struct
           | Const _
           | App (_,_)
           | TyBuiltin _
-          | TyArrow (_,_)
+          | TyArrow (_,_) -> Sequence.empty
           | TyMeta _ -> Sequence.empty
         )
 
