@@ -25,7 +25,8 @@ Library "nunchaku_core"
                     NunStatement, NunCVC4,
                     transformations/NunSkolem,
                     transformations/NunTypeInference,
-                    transformations/NunMonomorphization
+                    transformations/NunMonomorphization,
+                    transformations/NunElimRecursion
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.sexp, containers.iter,

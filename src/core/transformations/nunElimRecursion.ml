@@ -14,12 +14,14 @@ let section = NunUtils.Section.make "recursion_elim"
 
 module Make(T : NunTerm_ho.S) = struct
   module PrintT = NunTerm_ho.Print(T)
+  module Subst = Var.Subst(T)
+  module SubstUtil = NunTerm_ho.SubstUtil(T)(Subst)
 
   (* how to encode a single recursive function/predicate *)
   type fun_encoding = {
     fun_abstract_ty: T.ty;
       (* type of abstract values for the function *)
-    fun_concretization: (ID.t * T.ty) list;
+    fun_concretization: (id * T.ty) list;
       (* for each parameter, concretization function *)
   }
 
@@ -47,7 +49,8 @@ module Make(T : NunTerm_ho.S) = struct
   exception TranslationFailed of T.t * string
   (* not supposed to escape *)
 
-  let fail_tr_ t msg = raise (TranslationFailed (t,msg))
+  let fail_tr_ t msg =
+    NunUtils.exn_ksprintf msg ~f:(fun msg -> raise (TranslationFailed (t,msg)))
 
   type polarity =
     | Pos
@@ -55,11 +58,13 @@ module Make(T : NunTerm_ho.S) = struct
     | NoPolarity
 
   type local_state = {
-    defining: (T.ty Var.t * fun_encoding) option;
+    defining: (ID.t * fun_encoding) option;
       (* the function we are defining recursively (if any), and its
           abstract type and projectors *)
     pol: polarity;
       (* local polarity *)
+    subst: T.t Subst.t;
+      (* local substitution *)
   }
 
   let inv_pol ls = {ls with
@@ -77,12 +82,19 @@ module Make(T : NunTerm_ho.S) = struct
     | TyI.Builtin B.Prop -> true
     | TyI.Builtin B.Kind
     | TyI.Builtin B.Type -> false
-    | TyI.Const _
-    | TyI.Var _
-    | TyI.Meta _
-    | TyI.App (_,_)
-    | TyI.Arrow (_,_)
-    | TyI.Forall (_,_) -> false
+    | TyI.Const _ | TyI.Var _ | TyI.Meta _ | TyI.App _
+    | TyI.Arrow _ | TyI.Forall _ -> false
+
+  (* list of argument types that (monomorphic) type expects *)
+  let rec ty_args_ ty = match T.Ty.view ty with
+    | TyI.Builtin _ | TyI.Const _ | TyI.Var _ | TyI.Meta _ | TyI.App (_,_) -> []
+    | TyI.Arrow (a,ty') -> a :: ty_args_ ty'
+    | TyI.Forall _ -> assert false
+
+  (* is [t] a variable bound in [local_state.subst]? *)
+  let is_var_in_subst_ ~local_state t = match T.view t with
+    | TI.Var v when Subst.mem ~subst:local_state.subst v -> true
+    | _ -> false
 
   module B = NunBuiltin.T
 
@@ -104,19 +116,61 @@ module Make(T : NunTerm_ho.S) = struct
     | Neg -> mk_or_ [t; mk_not_ (mk_and_ conds)], []
     | NoPolarity -> t, conds
 
+  (* TODO:
+    - apply substitution eagerly (build it when we enter `forall_f x. f x = t`)
+    - when we meet `f t1...tn`:
+        - add 1 constraint `exists alpha. And_i (proj_i alpha = t_i)`;
+        - keep same term
+  *)
+
   (* translate term/formula recursively. Returns new term and a list
     of side-conditions (guards) *)
   let rec tr_term ~state ~local_state t =
     match T.view t with
     | TI.TyMeta _ -> assert false
     | TI.Const _ -> t, []
-    | TI.Var _ -> t, []
+    | TI.Var v ->
+        (* substitute if needed; no side-condition *)
+        let t = CCOpt.get t (Subst.find ~subst:local_state.subst v) in
+        t, []
     | TI.App (f,l) ->
         begin match T.view f, local_state.defining with
-          | TI.Var v, Some (v', fundef) when Var.equal v v'  ->
+          | TI.Const f_id, Some (f', fundef) when ID.equal f_id f' ->
               (* we are defining this particular function *)
-              assert false (* TODO *)
-          | TI.Const _, _ -> assert false
+              if List.length l <> List.length fundef.fun_concretization
+                then fail_tr_ t
+                  "defined function is partially applied (%d arguments, expected %d)"
+                  (List.length l) (List.length fundef.fun_concretization);
+              if List.for_all (is_var_in_subst_ ~local_state) l
+              then
+                (* simply substitute, no side-conditions *)
+                let l' = List.map
+                  (fun t -> match T.view t with
+                    | TI.Var v -> Subst.find_exn v ~subst:local_state.subst
+                    | _ -> assert false
+                  )
+                  l
+                in
+                T.app f l', []
+              else (
+                (* existential variable *)
+                let alpha = Var.make ~name:"alpha" ~ty:fundef.fun_abstract_ty in
+                let conds = ref [] in
+                let eqns = ref [] in
+                let l' = List.map2
+                  (fun arg (proj,_ty_proj) ->
+                    let arg', cond_arg = tr_term ~state ~local_state arg in
+                    let eqn = T.eq arg (T.app (T.const proj) [T.var alpha]) in
+                    eqns := eqn :: !eqns;
+                    conds := cond_arg @ !conds;
+                    arg'
+                  )
+                  l
+                  fundef.fun_concretization
+                in
+                conds := (T.exists alpha (mk_and_ !eqns)) :: !conds;
+                T.app f l', !conds
+              )
           | _ -> assert false (* TODO *)
         end
     | TI.AppBuiltin (b,l) ->
@@ -157,7 +211,6 @@ module Make(T : NunTerm_ho.S) = struct
         | B.Eq,_ -> assert false
         end
     | TI.Bind (TI.Forall,v,t) ->
-        begin match 
         let t', conds = tr_term ~state ~local_state t in
         T.forall v t',  List.map (T.forall v) conds
     | TI.Bind (TI.Exists,v,t) ->
@@ -174,11 +227,11 @@ module Make(T : NunTerm_ho.S) = struct
         let l = ID.Map.map
           (fun (vars,rhs) ->
             let rhs, conds = tr_term ~state ~local_state rhs in
-            l := conds @ !l;
+            conds' := conds @ !conds';
             vars,rhs
           ) l
         in
-        T.match_with t l, ct @ !l
+        T.match_with t l, ct @ !conds'
     | TI.Bind (TI.TyForall,_,_)
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> t, []
@@ -190,58 +243,104 @@ module Make(T : NunTerm_ho.S) = struct
     let local_state = {
       defining=None;
       pol=Pos;
-      new_tys=[];
+      subst=Subst.empty;
     } in
     (* update signature *)
     state.sigma <- Sig.add_statement ~sigma:state.sigma st;
     let info = Stmt.info st in
-    (* try to update the statement *)
-    try
-      let st' = match Stmt.view st with
-        | Stmt.Decl _ -> st (* no type declaration changes *)
-        | Stmt.TyDef (_,_) -> st (* no (co) data changes *)
-        | Stmt.Axiom l ->
-            begin match l with
-            | Stmt.Axiom_rec l ->
-                (* TODO: declare abstract type + projectors first *)
-                (* transform each axiom, considering case_head as rec. defined *)
-                let l = List.map
-                  (fun case ->
-                    let local_state = {local_state with
-                      defining=Some case.Stmt.case_head;
-                    } in
-                    let axioms' =
-                      List.map (tr_term_top ~state ~local_state) case.Stmt.case_axioms
-                    in
-                    {case with Stmt.case_axioms=axioms'}
-                  ) l
-                in
-                Stmt.axiom_rec ~info l
-            | Stmt.Axiom_spec l ->
-                let l = List.map
-                  (fun case ->
-                    let axioms' =
-                      List.map (tr_term_top ~state ~local_state) case.Stmt.case_axioms
-                    in
-                    {case with Stmt.case_axioms=axioms'}
-                  ) l
-                in
-                Stmt.axiom_spec ~info l
-            | Stmt.Axiom_std l ->
-                let l = List.map (tr_term_top ~state ~local_state) l in
-                Stmt.axiom ~info l
-            end
-        | Stmt.Goal g ->
-            Stmt.goal ~info (tr_term_top ~state ~local_state g)
-      in
-      (* put [st'] after the new statements, because those are type declarations *)
-      List.rev (st' :: local_state.side_statements)
-    with TranslationFailed (t, msg) ->
-      (* could not translate, keep old statement *)
-      NunUtils.debugf ~section 1
-        "[<2>recursion elimination in@ @[%a@]@ failed on subterm @[%a@]:@ %s@]"
-          (fun k -> k (Stmt.print PrintT.print PrintT.print_ty) st PrintT.print t msg);
-      [st]
+    match Stmt.view st with
+    | Stmt.Decl _ -> [st] (* no type declaration changes *)
+    | Stmt.TyDef (_,_) -> [st] (* no (co) data changes *)
+    | Stmt.Axiom l ->
+        begin match l with
+        | Stmt.Axiom_rec l ->
+            (* transform each axiom, considering case_head as rec. defined *)
+            let new_stmts = ref [] in
+            let add_stmt = CCList.Ref.push new_stmts in
+            let l' = List.map
+              (fun def ->
+                try
+                  let id = def.Stmt.rec_defined.Stmt.defined_head in
+                  (* declare abstract type + projectors first *)
+                  let name = "alpha_" ^ ID.name id in
+                  let abs_type_id = ID.make ~name in
+                  let abs_type = T.ty_const abs_type_id in
+                  let ty = Sig.find_exn ~sigma:state.sigma id in
+                  (* projection function: one per argument. It has
+                    type  [abs_type -> type of arg] *)
+                  let projectors =
+                    List.mapi
+                      (fun i ty_arg ->
+                        let id = ID.make
+                          ~name:(Printf.sprintf "proj_%s_%d" name i)
+                        in
+                        id, T.ty_arrow abs_type ty_arg
+                      )
+                      (ty_args_ ty)
+                  in
+                  let fun_encoding = {
+                    fun_abstract_ty=abs_type;
+                    fun_concretization=projectors;
+                  } in
+                  (* put abstract type + projectors in local state *)
+                  let local_state = {local_state with
+                    defining=Some (id, fun_encoding);
+                  } in
+                  let eqns' = List.map
+                    (fun (vars,args,rhs) ->
+                      (* quantify over abstract variable now *)
+                      let alpha = Var.make ~ty:abs_type ~name:"alpha" in
+                      (* replace [x_i] by [proj_i var] *)
+                      assert (List.length args = List.length projectors);
+                      let subst' = Subst.add_list
+                        ~subst:local_state.subst
+                        vars
+                        (List.map
+                          (fun (proj,_) -> T.app (T.const proj) [T.var alpha])
+                          projectors)
+                      in
+                      let local_state = { local_state with subst=subst' } in
+                      (* convert arguments and right-hand side *)
+                      let args' = List.map (tr_term_top ~state ~local_state) args in
+                      let rhs' = tr_term_top ~state ~local_state rhs in
+                      [alpha], args', rhs'
+                    )
+                    def.Stmt.rec_eqns
+                  in
+                  (* declare abstract type + projectors *)
+                  add_stmt (Stmt.decl ~info:Stmt.info_default abs_type_id abs_type);
+                  List.iter
+                    (fun (proj,ty_proj) ->
+                      add_stmt (Stmt.decl ~info:Stmt.info_default proj ty_proj);
+                    ) fun_encoding.fun_concretization;
+                  (* return new set of equations *)
+                  {def with Stmt.rec_eqns=eqns'}
+                with TranslationFailed (t, msg) ->
+                  (* could not translate, keep old definition *)
+                  NunUtils.debugf ~section 1
+                    "[<2>recursion elimination in@ @[%a@]@ \
+                      failed on subterm @[%a@]:@ %s@]"
+                      (fun k -> k
+                        (Stmt.print PrintT.print PrintT.print_ty) st
+                        PrintT.print t msg);
+                  def
+              ) l
+              in
+              (* add new statements (type declarations) before l' *)
+              List.rev_append !new_stmts [Stmt.axiom_rec ~info l']
+        | Stmt.Axiom_spec spec ->
+            let axioms' =
+              List.map
+                (tr_term_top ~state ~local_state)
+                spec.Stmt.spec_axioms
+            in
+            [Stmt.axiom_spec ~info {spec with Stmt.spec_axioms=axioms'}]
+        | Stmt.Axiom_std l ->
+            let l = List.map (tr_term_top ~state ~local_state) l in
+            [Stmt.axiom ~info l]
+        end
+    | Stmt.Goal g ->
+        [Stmt.goal ~info (tr_term_top ~state ~local_state g)]
 
   let elim_recursion pb =
     let state = create_state() in

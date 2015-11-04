@@ -141,10 +141,7 @@ let make_model_pipeline () =
   let step_monomorphization =
     NunMonomorphization.pipe ~print:!print_mono_ NunTerm_ho.default in
   let step_recursion_elim =
-    NunTransform.nop ()
-    (* TODO
     NunElimRecursion.pipe ~print:!print_recursion_elim_ NunTerm_ho.default
-    *)
   in
   (* conversion to FO *)
   let step_fo = NunTerm_ho.to_fo NunTerm_ho.default NunFO.default in
