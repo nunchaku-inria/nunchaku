@@ -3,6 +3,7 @@
 
 (** {1 Terms with Types} *)
 
+module TI = NunTerm_intf
 module TyI = NunType_intf
 
 module Loc = NunLocation
@@ -21,199 +22,107 @@ type 'a var = 'a Var.t
 
 type ('a,'inv) view = ('a,'inv) NunTerm_intf.view
 
-open NunTerm_intf
+type invariant = <meta:NunMark.with_meta; poly: NunMark.polymorph>
 
-(** {2 Read-Only View} *)
-module type VIEW = sig
-  type invariant =
-    <meta:NunMark.with_meta; poly: NunMark.polymorph>
+type 't repr = {
+  repr: ('t, invariant) NunTerm_intf.repr;
+  ty: 't -> 't option;
+  loc: 't -> loc option;
+}
 
-  type t
-  type ty = t
-  val view : t -> (t, invariant) view
+type 't build = {
+  b_repr: 't repr;
+  b_build: ?loc:loc -> ty:'t -> ('t, invariant) view -> 't;
+  b_kind: 't;
+}
+(** Builder is specific: we also need the type of the term, and an
+    optional location. *)
 
-  val ty : t -> ty option
-  (** The type of a term *)
+let view ~repr t = repr.repr t
+let loc ~repr t = repr.loc t
+let ty ~repr t = repr.ty t
+let ty_exn ~repr t = match repr.ty t with
+  | None -> raise Not_found
+  | Some t -> t
 
-  module Ty : sig
-    type ty = t
-    val view : t -> (t,invariant) NunType_intf.view
-  end
-end
+let build ~build ?loc ~ty v = build.b_build ?loc ~ty v
 
-(** {2 Full Signature} *)
-module type S = sig
-  type invariant =
-    <meta:NunMark.with_meta; poly: NunMark.polymorph>
+(* special constants: kind and type *)
+let kind_ ~build = build.b_kind
 
-  type t
-  type ty = t
+let ty_type ~build =
+  build.b_build ?loc:None ~ty:build.b_kind (TI.TyBuiltin NunBuiltin.Ty.Type)
 
-  val view : t -> (t, invariant) view
+let ty_prop ~build =
+  build.b_build ?loc:None ~ty:(ty_type ~build) (TI.TyBuiltin NunBuiltin.Ty.Prop)
 
-  val ty : t -> ty option
-  (** The type of a term *)
+let app_builtin ~build ?loc ~ty s l =
+  build.b_build ?loc ~ty (TI.AppBuiltin (s,l))
 
-  module Ty : sig
-    include NunType_intf.AS_TERM
-      with type term = t and type t = ty
-      and type invariant_poly = NunMark.polymorph
-      and type invariant_meta = NunMark.with_meta
-    include NunIntf.PRINT with type t := t
-    type ty = t
+let builtin ~build ?loc ~ty s = app_builtin ~build ?loc ~ty s []
 
-    val is_ty : term -> bool (** [is_ty t] same as [is_Type (type of t)] *)
-  end
+let const ~build ?loc ~ty id =
+  build.b_build ?loc ~ty (TI.Const id)
 
-  val loc : t -> loc option
+let var ~build ?loc v = build.b_build ?loc ~ty:(Var.ty v) (TI.Var v)
 
-  val const : ?loc:loc -> ty:Ty.t -> id -> t
-  val builtin : ?loc:loc -> ty:Ty.t -> NunBuiltin.T.t -> t
-  val app_builtin : ?loc:loc -> ty:Ty.t -> NunBuiltin.T.t -> t list -> t
-  val var : ?loc:loc -> Ty.t var -> t
-  val app : ?loc:loc -> ty:Ty.t -> t -> t list -> t
-  val fun_ : ?loc:loc -> ty:Ty.t -> ty var -> t -> t
-  val let_ : ?loc:loc -> ty var -> t -> t -> t
-  val match_with : ?loc:loc -> ty:Ty.t -> t -> ty NunTerm_intf.cases -> t
-  val ite : ?loc:loc -> t -> t -> t -> t
-  val forall : ?loc:loc -> ty var -> t -> t
-  val exists : ?loc:loc -> ty var -> t -> t
-  val eq : ?loc:loc -> t -> t -> t
+let app ~build ?loc ~ty t l =
+  build.b_build ?loc ~ty (TI.App(t,l))
 
-  val mk_bind :
-    ?loc:loc ->
-    ty:Ty.t ->
-    NunMark.polymorph NunTerm_intf.binder ->
-    Ty.t var ->
-    t ->
-    t
+let mk_bind ~build ?loc ~ty b v t = build.b_build ?loc ~ty (TI.Bind (b,v,t))
 
-  val ty_type : Ty.t (** Type of types *)
-  val ty_prop : Ty.t (** Propositions *)
+let fun_ ~build ?loc ~ty v t = build.b_build ?loc ~ty (TI.Bind(TI.Fun,v, t))
 
-  val ty_builtin : ?loc:loc -> NunBuiltin.Ty.t -> Ty.t
-  val ty_const : ?loc:loc -> id -> Ty.t
-  val ty_var : ?loc:loc -> ty var -> Ty.t
-  val ty_meta_var : ?loc:loc -> Ty.t NunMetaVar.t -> Ty.t  (** Meta-variable, ready for unif *)
-  val ty_app : ?loc:loc -> Ty.t -> Ty.t list -> Ty.t
-  val ty_forall : ?loc:loc -> ty var -> Ty.t -> Ty.t
-  val ty_arrow : ?loc:loc -> Ty.t -> Ty.t -> Ty.t
-end
+let let_ ~build ?loc v t u =
+  build.b_build ?loc ~ty:(ty_exn ~repr:build.b_repr u) (TI.Let (v, t, u))
 
-(** {2 Default Instance} *)
-module Default = struct
-  type invariant =
-    <meta:NunMark.with_meta; poly: NunMark.polymorph>
+let match_with ~build ?loc ~ty t l =
+  if ID.Map.is_empty l then invalid_arg "Term_typed.case: no cases";
+  build.b_build ?loc ~ty (TI.Match (t, l))
 
-  type t = {
-    view : (t,invariant) view;
-    loc : Loc.t option;
-    mutable ty : t option;
-  }
+let ite ~build ?loc a b c =
+  build.b_build?loc ~ty:(ty_exn ~repr:build.b_repr b)
+    (TI.AppBuiltin (NunBuiltin.T.Ite, [a;b;c]))
 
-  (* dereference the term, if it is a variable, until it is not bound *)
-  let rec deref_rec_ (t:t) = match t.view with
-    | TyMeta var ->
-        begin match MetaVar.deref var with
-        | None -> t
-        | Some t' ->
-            let root = deref_rec_ t' in
-            (* path compression *)
-            if t' != root then MetaVar.rebind ~var root;
-            root
-        end
-    | _ -> t
+let forall ~build ?loc v t =
+  mk_bind ~build ?loc ~ty:(ty_prop ~build) TI.Forall v t
 
-  let view t = (deref_rec_ t).view
+let exists ~build ?loc v t =
+  mk_bind ~build ?loc ~ty:(ty_prop ~build) TI.Exists v t
 
-  let loc t = t.loc
+let eq ~build ?loc a b =
+  app_builtin ~build ?loc ~ty:(ty_prop ~build) NunBuiltin.T.Eq [a;b]
 
-  let ty t = t.ty
+let ty_builtin ~build ?loc b =
+  build.b_build ?loc ~ty:(ty_type ~build) (TI.TyBuiltin b)
 
-  (* special constants: kind and type *)
-  let kind_ = {view=TyBuiltin NunBuiltin.Ty.Kind; loc=None; ty=None}
-  let type_ = {view=TyBuiltin NunBuiltin.Ty.Type; loc=None; ty=Some kind_}
-  let prop = {view=TyBuiltin NunBuiltin.Ty.Prop; loc=None; ty=Some type_}
+let ty_const ~build ?loc id =
+  const ~build ?loc ~ty:(ty_type ~build) id
 
-  let make_raw_ ~loc ~ty view = { view; loc; ty}
+let ty_var ~build ?loc v = var ~build ?loc v
 
-  let make_ ?loc ?ty view = match view with
-    | App ({view=App (f, l1); loc; _}, l2) ->
-        make_raw_ ~loc ~ty (App (f, l1 @ l2))
-    | _ -> make_raw_ ~loc ~ty view
+let ty_meta_var ~build ?loc v = build.b_build ?loc ~ty:(ty_type ~build) (TI.TyMeta v)
 
-  let app_builtin ?loc ~ty s l = make_ ?loc ~ty (AppBuiltin (s,l))
-  let builtin ?loc ~ty s = app_builtin ?loc ~ty s []
-  let const ?loc ~ty id = make_ ?loc ~ty (Const id)
-  let var ?loc v = make_ ?loc ~ty:(Var.ty v) (Var v)
-  let app ?loc ~ty t l = match (deref_rec_ t).view, l with
-    | _, [] -> t
-    | AppBuiltin (b, l1), _ -> app_builtin ?loc ~ty b (l1@l)
-    | _ ->  make_ ?loc ~ty (App (t, l))
-  let mk_bind ?loc ~ty b v t = make_ ?loc ~ty (Bind (b,v,t))
-  let fun_ ?loc ~ty v t = make_ ?loc ~ty (Bind(Fun,v, t))
-  let let_ ?loc v t u = make_ ?loc ?ty:u.ty (Let (v, t, u))
-  let match_with ?loc ~ty t l =
-    if ID.Map.is_empty l then invalid_arg "Term_typed.case: no cases";
-    make_ ?loc ~ty (Match (t, l))
-  let ite ?loc a b c = make_ ?loc ?ty:b.ty (AppBuiltin (NunBuiltin.T.Ite, [a;b;c]))
-  let forall ?loc v t = mk_bind ?loc ~ty:prop Forall v t
-  let exists ?loc v t = mk_bind ?loc ~ty:prop Exists v t
-  let eq ?loc a b = app_builtin ?loc ~ty:prop NunBuiltin.T.Eq [a;b]
+let ty_app ~build ?loc f l = app ~build ?loc ~ty:(ty_type ~build) f l
 
-  let ty_type = type_
-  let ty_prop = prop
+let ty_arrow ~build ?loc a b =
+  build.b_build ?loc ~ty:(ty_type ~build) (TI.TyArrow (a,b))
 
-  let ty_builtin ?loc b = make_ ?loc ~ty:type_ (TyBuiltin b)
-  let ty_const ?loc id = const ?loc ~ty:type_ id
-  let ty_var ?loc v = var ?loc v
-  let ty_meta_var ?loc v = make_ ?loc ~ty:type_ (TyMeta v)
-  let ty_app ?loc f l =
-    if l=[] then f else app ?loc ~ty:type_ f l
-  let ty_arrow ?loc a b = make_ ?loc ~ty:type_ (TyArrow (a,b))
-  let ty_forall ?loc a b = mk_bind ?loc ~ty:type_ TyForall a b
+let ty_forall ~build ?loc a b =
+  mk_bind ~build ?loc ~ty:(ty_type ~build) TI.TyForall a b
 
-  module Ty1 = struct
-    type invariant_poly = M.polymorph
-    type invariant_meta = M.with_meta
-    type invariant = <meta: invariant_meta; poly: invariant_poly>
-    type term = t
-
-    let view t = match (deref_rec_ t).view with
-      | TyBuiltin b -> TyI.Builtin b
-      | Const id -> TyI.Const id
-      | Var v -> TyI.Var v
-      | App (f,l) -> TyI.App (f,l)
-      | TyArrow (a,b) -> TyI.Arrow (a,b)
-      | Bind(TyForall,v,t) -> TyI.Forall (v,t)
-      | TyMeta v -> TyI.Meta v
-      | AppBuiltin _
-      | Bind _ | Let _ | Match _ -> assert false
-  end
-
-  (* the real [Ty] module *)
-  module Ty = struct
-    include Ty1
-    include TyI.Utils(struct include Ty1 type t = term end)
-    type ty = t
-
-    let is_ty t = match t.ty with
-      | Some ty -> is_Type ty
-      | _ -> false
-
-    include TyI.Print(struct include Ty1 type t_ = t type t = t_ end)
-  end
-
-  include NunTerm_ho.Print(struct
-    type invariant_poly = M.polymorph
-    type invariant_meta = M.with_meta
-    type invariant = <meta: invariant_meta; poly: invariant_poly>
-    type ty = t
-    type t = ty
-    let view = view
-    module Ty = struct include Ty1 type t = term end
-  end)
-end
+(* representation as a type *)
+let as_ty ~repr : (_,invariant) TyI.repr
+= fun t -> match repr.repr t with
+  | TI.TyBuiltin b -> TyI.Builtin b
+  | TI.Const id -> TyI.Const id
+  | TI.Var v -> TyI.Var v
+  | TI.App (f,l) -> TyI.App (f,l)
+  | TI.TyArrow (a,b) -> TyI.Arrow (a,b)
+  | TI.Bind(TI.TyForall,v,t) -> TyI.Forall (v,t)
+  | TI.TyMeta v -> TyI.Meta v
+  | TI.AppBuiltin _
+  | TI.Bind _ | TI.Let _ | TI.Match _ -> assert false
 
 (*$T
   Default.Ty.returns_Type Default.ty_type
@@ -221,52 +130,63 @@ end
   not (Default.Ty.returns_Type Default.(ty_arrow ty_type ty_prop))
 *)
 
-let default = (module Default : S with type t = Default.t)
+let is_ty ~repr t = TyI.is_Type ~repr:(as_ty ~repr) (ty_exn ~repr t)
 
-module AsHO(T : VIEW)
-:
-  NunTerm_ho.VIEW
-    with type invariant_poly = NunMark.polymorph
-    and type invariant_meta = NunMark.without_meta
-    and type t = T.t and type ty = T.t
-= struct
-  type t = T.t
-  type ty = t
+type default = {
+  view : (default,invariant) view;
+  d_loc : Loc.t option;
+  mutable d_ty : default option;
+}
 
-  type invariant_poly = M.polymorph
-  type invariant_meta = M.without_meta
-  type invariant = <meta: invariant_meta; poly: invariant_poly>
+(* dereference the term, if it is a variable, until it is not bound *)
+let rec deref_rec_ t = match t.view with
+  | TI.TyMeta var ->
+      begin match MetaVar.deref var with
+      | None -> t
+      | Some t' ->
+          let root = deref_rec_ t' in
+          (* path compression *)
+          if t' != root then MetaVar.rebind ~var root;
+          root
+      end
+  | _ -> t
 
-  let fail_ () = failwith "Term_typed.AsHO.view: remaining meta"
+let default_repr = {
+  repr=(fun t -> (deref_rec_ t).view);
+  loc=(fun t -> t.d_loc);
+  ty=(fun t -> t.d_ty);
+}
 
-  let view (t:t):(t,invariant) view = match T.view t with
-    | TyMeta _ -> fail_ ()
-    | Const _
-    | Var _
-    | App (_,_)
-    | AppBuiltin (_,_)
-    | Bind (_,_,_)
-    | Let (_,_,_)
-    | Match (_,_)
-    | TyBuiltin _
-    | TyArrow (_,_) as v -> v
+let make_raw_ ~loc ~ty view = { view; d_loc=loc; d_ty=Some ty; }
 
-  module Ty = struct
-    type t = ty
+let b_build ?loc ~ty view = match view with
+  | TI.App ({view=TI.App (f, l1); d_loc=loc; _}, l2) ->
+      make_raw_ ~loc ~ty (TI.App (f, l1 @ l2))
+  | TI.App ({view=TI.AppBuiltin (b, l1); d_loc=loc; _}, l2) ->
+      make_raw_ ~loc ~ty (TI.AppBuiltin (b, l1@l2))
+  | _ -> make_raw_ ~loc ~ty view
 
-    let view (t:t):(t,invariant) TyI.view = match T.Ty.view t with
-      | TyI.Meta _ -> fail_ ()
-      | TyI.Builtin _
-      | TyI.Const _
-      | TyI.Var _
-      | TyI.App (_,_)
-      | TyI.Arrow (_,_)
-      | TyI.Forall (_,_) as v -> v
-  end
-end
+let default_build : default build = {
+  b_repr = default_repr;
+  b_build;
+  b_kind={view=TI.TyBuiltin NunBuiltin.Ty.Kind; d_loc=None; d_ty=None; }
+}
 
-let as_ho =
-  let module T = AsHO(Default) in
-  (module T : NunTerm_ho.VIEW with type t = Default.t
-  and type invariant_meta=NunMark.without_meta
-  and type invariant_poly=NunMark.polymorph)
+let as_ho ~repr : ('t, invariant) NunTerm_ho.repr =
+  let fail_ () = failwith "Term_typed.as_ho: remaining meta" in
+  let view t = match repr.repr t with
+    | TI.TyMeta _ -> fail_ ()
+    | TI.Const _
+    | TI.Var _
+    | TI.App (_,_)
+    | TI.AppBuiltin (_,_)
+    | TI.Bind (_,_,_)
+    | TI.Let (_,_,_)
+    | TI.Match (_,_)
+    | TI.TyBuiltin _
+    | TI.TyArrow (_,_) as v -> v
+  in
+  view
+
+let default_print =
+  NunTerm_ho.mk_print ~repr:(as_ho ~repr:default_repr)

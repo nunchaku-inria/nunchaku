@@ -11,133 +11,89 @@ type 'a var = 'a NunVar.t
 type 'a or_error = [`Ok of 'a | `Error of string]
 type 'a printer = Format.formatter -> 'a -> unit
 
-module type POLY_VIEW = sig
-  include NunTerm_intf.VIEW
+type ('t, 'inv) repr = ('t, 'inv) NunTerm_intf.repr
 
-  module Ty : sig
-    type 'i t = 'i ty
-    val view : 'i t -> ('i t,'i) NunType_intf.view
-  end
-end
+type ('t, 'inv) build = ('t, 'inv) NunTerm_intf.build
 
-module type VIEW = sig
-  type invariant_poly
-  type invariant_meta
-  type invariant = <poly: invariant_poly; meta: invariant_meta>
+val as_ty : repr:('t, 'inv) repr -> ('t, 'inv) NunType_intf.repr
+(** View of a term as a type. *)
 
-  type t
-  type ty = t
+(** {2 Utils} *)
 
-  val view : t -> (t, invariant) NunTerm_intf.view
+val const : build:('t, 'inv) build -> id -> 't
+val builtin : build:('t, 'inv) build -> NunBuiltin.T.t -> 't
+val app_builtin : build:('t, 'inv) build -> NunBuiltin.T.t -> 't list -> 't
+val var : build:('t, 'inv) build -> 't var -> 't
+val app : build:('t, 'inv) build -> 't -> 't list -> 't
+val fun_ : build:('t, <poly:_;..>) build -> 't var -> 't -> 't
+val let_ : build:('t, 'inv) build -> 't var -> 't -> 't -> 't
+val match_with : build:('t, 'inv) build -> 't -> 't NunTerm_intf.cases -> 't
+val ite : build:('t, 'inv) build -> 't -> 't -> 't -> 't
+val forall : build:('t, <poly:_;..>) build -> 't var -> 't -> 't
+val exists : build:('t, <poly:_;..>) build -> 't var -> 't -> 't
+val eq : build:('t, 'inv) build -> 't -> 't -> 't
 
-  module Ty : sig
-    type t = ty
-    val view : t -> (t,invariant) NunType_intf.view
-  end
-end
+val mk_bind :
+  build:('t, <poly:'poly;..> as 'inv) build ->
+  'poly NunTerm_intf.binder ->
+  't var -> 't -> 't
 
-module type S = sig
-  type invariant_poly
-  type invariant_meta
-  type invariant = <poly: invariant_poly; meta: invariant_meta>
+val ty_type : build:('t, 'inv) build -> 't (** Type of types *)
+val ty_kind : build:('t, 'inv) build -> 't (** Type of ty_type *)
+val ty_prop : build:('t, 'inv) build -> 't (** Propositions *)
 
-  val poly : invariant_poly NunMark.poly_witness
+val ty_builtin : build:('t, 'inv) build -> NunBuiltin.Ty.t -> 't
+val ty_const : build:('t, 'inv) build ->id -> 't
+val ty_app : build:('t, 'inv) build -> 't -> 't list -> 't
+val ty_arrow : build:('t, 'inv) build -> 't -> 't -> 't
 
-  type t
-  type ty = t
+val ty_var : build:('t, <poly:NunMark.polymorph;..> as 'inv) build -> 't var -> 't
+val ty_forall : build:('t, <poly:NunMark.polymorph;..> as 'inv) build -> 't var -> 't -> 't
 
-  val view : t -> (t, invariant) NunTerm_intf.view
-  val build : (t, invariant) NunTerm_intf.view -> t
+type 'inv default
+(** Default representation for terms *)
 
-  module Ty : NunType_intf.AS_TERM
-    with type term = t and type t = ty
-    and type invariant_poly = invariant_poly
-    and type invariant_meta = invariant_meta
-
-  val const : id -> t
-  val builtin : NunBuiltin.T.t -> t
-  val app_builtin : NunBuiltin.T.t -> t list -> t
-  val var : Ty.t var -> t
-  val app : t -> t list -> t
-  val fun_ : ty var -> t -> t
-  val let_ : ty var -> t -> t -> t
-  val match_with : t -> t NunTerm_intf.cases -> t
-  val ite : t -> t -> t -> t
-  val forall : ty var -> t -> t
-  val exists : ty var -> t -> t
-  val eq : t -> t -> t
-
-  val mk_bind : invariant_poly NunTerm_intf.binder -> Ty.t var -> t -> t
-
-  val ty_type : Ty.t (** Type of types *)
-  val ty_kind : Ty.t (** Type of ty_type *)
-  val ty_prop : Ty.t (** Propositions *)
-
-  val ty_builtin : NunBuiltin.Ty.t -> Ty.t
-  val ty_const : id -> Ty.t
-  val ty_app : Ty.t -> Ty.t list -> Ty.t
-  val ty_arrow : Ty.t -> Ty.t -> Ty.t
-end
-
-module type S_POLY = sig
-  type invariant_meta
-  include S
-    with type invariant_poly = NunMark.polymorph
-    and type invariant_meta := invariant_meta
-
-  val ty_var : ty var -> Ty.t
-  val ty_forall : ty var -> Ty.t -> Ty.t
-end
-
-module DefaultPoly
-  : S_POLY
-  with type invariant_poly = NunMark.polymorph
-  and type invariant_meta = NunMark.without_meta
-
-module DefaultMono
-  : S
-  with type invariant_poly = NunMark.monomorph
-  and type invariant_meta = NunMark.without_meta
-
-val default_poly :
-  (module S with type t = DefaultPoly.t
-  and type invariant_poly = NunMark.polymorph
-  and type invariant_meta = NunMark.without_meta)
-
-val default_mono :
-  (module S with type t = DefaultMono.t
-  and type invariant_poly = NunMark.monomorph
-  and type invariant_meta = NunMark.without_meta)
+val default_repr : ('inv default, 'inv) repr
+val default_build : ('inv default, 'inv) build
 
 (** {2 Printing} *)
 
-module type PRINT = sig
-  type term
-  type ty = term
+type 't print_funs = {
+  print : 't printer;
+  print_in_app : 't printer;
+  print_in_binder : 't printer;
+  print_ty : 't printer;
+}
 
-  val print : term printer
-  val print_in_app : term printer
-  val print_in_binder : term printer
+val mk_print: repr:('t, _) repr -> 't print_funs
 
-  val print_ty : ty printer
-end
+val print : repr:('t, _) repr -> 't printer
+val print_in_app : repr:('t, _) repr -> 't printer
+val print_in_binder : repr:('t, _) repr -> 't printer
+val print_ty : repr:('t, _) repr -> 't printer
 
-module Print(T : VIEW) : PRINT with type term = T.t and type ty = T.ty
+(** {2 Packed Term}
+
+  A term packed with its representation *)
+
+type packed = Packed : 't * ('t, _) repr -> packed
+
+val pack : repr:('t, _) repr -> 't -> packed
 
 (** {2 Type Erasure} *)
 
-module Erase(T : VIEW) : sig
+module Erase : sig
   module Untyped = NunUntypedAST
 
   type ctx
   (** Disambiguation context *)
 
   val create : unit -> ctx
-  (** New context *)
+  (** New context for the given term representation *)
 
-  val erase : ctx:ctx -> T.t -> Untyped.term
+  val erase : repr:('t, _) repr -> ctx:ctx -> 't -> Untyped.term
 
-  val erase_ty : ctx:ctx -> T.ty -> Untyped.ty
+  val erase_ty : repr:('t, _) repr -> ctx:ctx -> 't -> Untyped.ty
 end
 
 (** {2 Substitutions} *)
@@ -145,47 +101,47 @@ end
 exception Undefined of id
 (** When a symbol is not defined *)
 
-module SubstUtil(T : S)(Subst : NunVar.SUBST with type ty = T.ty) : sig
-  type subst = T.t Subst.t
+module SubstUtil : sig
+  type 't subst = ('t, 't) NunVar.Subst.t
 
-  val equal : subst:subst -> T.t -> T.t -> bool
+  val equal : build:('t,_) build -> subst:'t subst -> 't -> 't -> bool
   (** Equality modulo substitution *)
 
-  val deref : subst:subst -> T.t -> T.t
+  val deref : repr:('t,_) repr -> subst:'t subst -> 't -> 't
   (** [deref ~subst t] dereferences [t] as long as it is a variable
       bound in [subst]. *)
 
-  val eval : subst:subst -> T.t -> T.t
+  val eval : build:('t,_) build -> subst:'t subst -> 't -> 't
   (** Applying a substitution *)
 
-  exception ApplyError of string * T.t * T.t list
+  exception ApplyError of string * packed * packed list
   (** Raised when a type application fails *)
 
-  val ty_apply : T.ty -> T.t list -> T.ty
-  (** [apply t l] computes the type of [f args] where [f : t] and [args : l]
-      @raise ApplyError if the arguments do not match *)
-
-  val ty_apply_full : T.ty -> T.t list -> T.ty * subst
+  val ty_apply_full : build:('t,_) build -> 't -> 't list -> 't * 't subst
   (** [ty_apply_full ty l] is like [apply t l], but it returns a pair
       [ty' , subst] such that [subst ty' = apply t l].
       @raise ApplyError if the arguments do not match *)
 
-  type signature = T.ty NunSignature.t
+  val ty_apply : build:('t,_) build -> 't -> 't list -> 't
+  (** [apply t l] computes the type of [f args] where [f : t] and [args : l].
+      @raise ApplyError if the arguments do not match *)
 
-  val ty : sigma:signature -> T.t -> T.ty or_error
-  (** Compute the type of the given term in the given signature.
-      @param poly an explicit witness of whether polymorphism is allowed
-        (necessary to compute the type of a function... or fail) *)
+  type 't signature = 't NunSignature.t
 
-  val ty_exn : sigma:signature -> T.t -> T.ty
+  val ty : build:('t,<poly:NunMark.polymorph;meta:'m>) build ->
+           sigma:'t signature -> 't -> 't or_error
+  (** Compute the type of the given term in the given signature. *)
+
+  val ty_exn : build:('t,<poly:NunMark.polymorph;meta:'m>) build ->
+               sigma:'t signature -> 't -> 't
   (** Same as {!ty} but unsafe.
       @raise Failure in case of error at an application
       @raise Undefined in case some symbol is not defined *)
 
-  exception UnifError of string * T.t * T.t
+  exception UnifError of string * packed * packed
   (** Raised for unification or matching errors *)
 
-  val match_exn : ?subst2:subst -> T.t -> T.t -> subst
+  val match_exn : build:('t, _) build -> ?subst2:'t subst -> 't -> 't -> 't subst
   (** [match_exn ~subst2 t1 t2] matches the pattern [t1] against [subst2 t2].
       Variables in [subst2 t2] are not bound.
       We assume [t1] and [subst2 t2] do not share variables, and we assume
@@ -194,7 +150,7 @@ module SubstUtil(T : S)(Subst : NunVar.SUBST with type ty = T.ty) : sig
       @raise UnifError if they don't match
       @raise Invalid_argument if [t1] is not a valid pattern *)
 
-  val match_ : ?subst2:subst -> T.t -> T.t -> subst option
+  val match_ : build:('t, _) build -> ?subst2:'t subst -> 't -> 't -> 't subst option
   (** Safe version of {!match_exn}
       @raise Invalid_argument if [t1] is not a valid pattern *)
 
@@ -203,69 +159,83 @@ end
 
 (** {2 Conversion to FO Terms} *)
 
-module ToFO(T : S
-  with type invariant_poly = NunMark.monomorph
-  and type invariant_meta = NunMark.without_meta
-)(T2 : NunFO.S) : sig
-  type term = T.t
-  type ty = T.ty
+type to_fo_invariant = <poly:NunMark.monomorph; meta:NunMark.without_meta>
 
-  exception NotInFO of string * term
+module ToFO(FO : NunFO.S) : sig
+  exception NotInFO of string * packed
   (** Raised if a term is not in the first-order fragment *)
 
-  (** Convert a problem to a FO problem *)
+  type invariant = to_fo_invariant
+
   val convert_problem :
-    (term, ty, NunMark.linear) NunProblem.t ->
-    (T2.Formula.t, T2.T.t, T2.Ty.t) NunFO.Problem.t
+    repr:('t1,invariant) repr ->
+    ('t1,'t1,NunMark.linear) NunProblem.t ->
+    (FO.Formula.t,FO.T.t,FO.Ty.t) NunFO.Problem.t
+  (** Convert a problem in HO representation to a FO representation
+      @raise NotInFO if some terms in the input problem are not regular
+        first-order terms. *)
 end
 
 (** {2 Convert FO to HO} *)
 
-module OfFO(T : S)(FO : NunFO.VIEW) : sig
-  val convert_ty : FO.Ty.t -> T.ty
-  val convert_term : FO.T.t -> T.t
-  val convert_formula : FO.Formula.t -> T.t
+module OfFO(FO : NunFO.VIEW) : sig
+  val convert_ty :
+    build:('t,_) build ->
+    FO.Ty.t ->
+    't
 
-  val convert_model : FO.term_or_form NunModel.t -> T.t NunModel.t
+  val convert_term :
+    build:('t,<poly:_;..>) build ->
+    FO.T.t ->
+    't
+
+  val convert_formula :
+    build:('t,<poly:_;..>) build ->
+    FO.Formula.t ->
+    't
+
+  val convert_model :
+    build:('t,<poly:_;..>) build ->
+    FO.term_or_form NunModel.t ->
+    't NunModel.t
 end
 
 val to_fo :
-  (module S with type t = 'a
-    and type invariant_poly = NunMark.monomorph
-    and type invariant_meta = NunMark.without_meta) ->
-  (module NunFO.S with type T.t = 't and type formula = 'f and type Ty.t = 'ty) ->
-  (('a, 'a, NunMark.linear) NunProblem.t,
-    ('f, 't, 'ty) NunFO.Problem.t,
-    ('t,'f) NunFO.term_or_form_view NunModel.t,
-    'a NunModel.t
+  build1:('t1, to_fo_invariant) build ->
+  build2:('f2,'t2,'ty2) NunFO.build ->
+  (('t1, 't1, NunMark.linear) NunProblem.t,
+    ('f2, 't2, 'ty2) NunFO.Problem.t,
+    ('t2,'f2) NunFO.term_or_form NunModel.t,
+    't1 NunModel.t
   ) NunTransform.t
 
 val to_fo_no_model :
-  (module S with type t = 'a
-    and type invariant_poly = NunMark.monomorph
-    and type invariant_meta = NunMark.without_meta) ->
-  (module NunFO.S with type T.t = 't and type formula = 'f and type Ty.t = 'ty) ->
-  (('a, 'a, NunMark.linear) NunProblem.t,
-    ('f, 't, 'ty) NunFO.Problem.t,
+  repr1:('t1, to_fo_invariant) repr ->
+  build2:('f2,'t2,'ty2) NunFO.build ->
+  (('t1, 't1, NunMark.linear) NunProblem.t,
+    ('f2, 't2, 'ty2) NunFO.Problem.t,
     'b, 'b
   ) NunTransform.t
 
-(** {2 Conversion} *)
+(** {2 Conversion}
 
-module Convert(T1 : VIEW)(T2 : S
-  with type invariant_poly=T1.invariant_poly
-  and type invariant_meta=T1.invariant_meta
-) : sig
-  val convert : T1.t -> T2.t
-end
+  Direct conversion between two representations *)
+
+val convert :
+  repr1:('t1,'inv) repr ->
+  build2:('t2,'inv) build ->
+  't1 ->
+  't2
 
 (** {2 Conversion of UntypedAST to HO, without Type-Checking}
 
   This should be useful mostly for tests: parse and convert a term to a usable
   format in a simple way *)
 
-module OfUntyped(T : S_POLY) : sig
+module OfUntyped : sig
   exception Error of NunUntypedAST.term * string
 
-  val convert_term : NunUntypedAST.term -> T.t
+  type invariant = <meta:NunMark.without_meta; poly:NunMark.polymorph>
+
+  val convert_term : build:('t,invariant) build -> NunUntypedAST.term -> 't
 end

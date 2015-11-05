@@ -5,43 +5,36 @@
 
     Useful for finite-model finding in CVC4 *)
 
-module Make(T : NunTerm_ho.S
-  with type invariant_poly=NunMark.monomorph
-  and type invariant_meta=NunMark.without_meta)
-: sig
+type invariant = <poly:NunMark.monomorph; meta:NunMark.without_meta>
 
-  type decode_state
+type 't decode_state
 
-  val elim_recursion :
-    (T.t, T.ty, NunMark.linear) NunProblem.t ->
-    (T.t, T.ty, NunMark.linear) NunProblem.t * decode_state
+val elim_recursion :
+  build:('t, invariant) NunTerm_ho.build ->
+  ('t, 't, NunMark.linear) NunProblem.t ->
+  ('t, 't, NunMark.linear) NunProblem.t * 't decode_state
 
-  val decode_term : state:decode_state -> T.t -> T.t
+val decode_term : state:'t decode_state -> 't -> 't
 
-  val decode_model : state:decode_state -> T.t NunModel.t -> T.t NunModel.t
-end
+val decode_model : state:'t decode_state -> 't NunModel.t -> 't NunModel.t
 
 (** Pipeline component *)
 val pipe :
   print:bool ->
-  (module NunTerm_ho.S with type t = 'a
-    and type invariant_poly=NunMark.monomorph
-    and type invariant_meta=NunMark.without_meta) ->
-  (('a, 'a, NunMark.linear) NunProblem.t,
-    ('a, 'a, NunMark.linear) NunProblem.t,
-    'a NunModel.t, 'a NunModel.t) NunTransform.t
+  build:('t, invariant) NunTerm_ho.build ->
+  (('t, 't, NunMark.linear) NunProblem.t,
+    ('t, 't, NunMark.linear) NunProblem.t,
+    't NunModel.t, 't NunModel.t) NunTransform.t
 
 (** Generic Pipe Component
     @param decode the decode function that takes an applied [(module S)]
       in addition to the state *)
 val pipe_with :
-  decode:(decode_term:('a -> 'a) -> 'c -> 'd) ->
+  decode:(decode_term:('t -> 't) -> 'c -> 'd) ->
   print:bool ->
-  (module NunTerm_ho.S with type t = 'a
-    and type invariant_poly=NunMark.monomorph
-    and type invariant_meta=NunMark.without_meta) ->
-  (('a, 'a, NunMark.linear) NunProblem.t,
-    ('a,'a, NunMark.linear) NunProblem.t,
+  build:('t, invariant) NunTerm_ho.build ->
+  (('t, 't, NunMark.linear) NunProblem.t,
+    ('t, 't, NunMark.linear) NunProblem.t,
     'c, 'd
   ) NunTransform.t
 

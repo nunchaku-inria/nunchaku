@@ -23,47 +23,45 @@ type ('a, 'inv) view =
       * 'a
       -> ('a, <poly: NunMark.polymorph;..>) view
 
-(** {2 Basic Interface} *)
-module type S = sig
-  type invariant_poly
-  type invariant_meta
-  type invariant = <poly: invariant_poly; meta: invariant_meta>
+type ('t, 'inv) repr = ('t -> ('t, 'inv) view)
+(** A representation of types with concrete type ['t], and invariants
+    ['inv].
+    The view function must follow {!deref} pointers *)
 
-  type t
-
-  val view : t -> (t, invariant) view
-  (** View must follow {!deref} pointers *)
-end
-
-module type UTILS = sig
-  type t
-  val is_Type : t -> bool (** type == Type? *)
-  val returns_Type : t -> bool (** type == forall ... -> ... -> ... -> Type? *)
-  val returns : t -> t (** follow forall/arrows to get return type.  *)
-  val is_Kind : t -> bool (** type == Kind? *)
-  val to_seq : t -> t Sequence.t
-end
-
-module type AS_TERM = sig
-  type term
-  type t = term
-
-  include S with type t := t
-  include UTILS with type t := t
-end
-
-module type PRINTABLE = sig
-  include S
-  include NunIntf.PRINT with type t := t
-end
+val view : repr:('t, 'inv) repr -> 't -> ('t, 'inv) view
 
 (** {2 Utils} *)
-module Utils(Ty : S) : UTILS with type t = Ty.t
+
+val is_Type : repr:('t, 'inv) repr -> 't -> bool
+(** type == Type? *)
+
+val returns_Type : repr:('t,'inv) repr -> 't -> bool
+(** type == forall ... -> ... -> ... -> Type? *)
+
+val returns : repr:('t,'inv) repr -> 't -> 't
+(** follow forall/arrows to get return type.  *)
+
+val is_Kind : repr:('t,_) repr -> 't -> bool
+(** type == Kind? *)
+
+val to_seq : repr:('t,'inv) repr -> 't -> 't Sequence.t
+
+(** {2 Type packed with its representation} *)
+
+type packed = Packed : 't * ('t, _) repr -> packed
+
+val pack : repr:('t, _) repr -> 't -> packed
 
 (** {2 Print Types} *)
+type 't print_funs = {
+  print: 't printer;
+  print_in_app: 't printer;
+  print_in_arrow: 't printer;
+}
 
-module Print(Ty : S) : sig
-  val print : Ty.t printer
-  val print_in_app : Ty.t printer
-  val print_in_arrow : Ty.t printer
-end
+val mk_print : repr:('t,_) repr -> 't print_funs
+(** Make printers for this type *)
+
+val print: repr:('t,_) repr -> 't printer
+val print_in_app: repr:('t,_) repr -> 't printer
+val print_in_arrow: repr:('t,_) repr -> 't printer

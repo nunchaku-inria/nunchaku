@@ -40,40 +40,12 @@ let to_string v = ID.to_string v.id
 
 (** {2 Substitutions} *)
 
-module type SUBST = sig
-  type ty
-  type var = ty t
-
-  type 'a t
-  (** A substitution for variables with type [ty], to terms ['a] *)
-
-  val empty : 'a t
-  val is_empty : _ t -> bool
-
-  val add : subst:'a t -> var -> 'a -> 'a t
-
-  val add_list : subst:'a t -> var list -> 'a list -> 'a t
-  (** [add_list ~subst v t] add each binding [v_i -> t_i] to the subst.
-      @raise Invalid_argument if [List.length v <> List.length t] *)
-
-  val remove : subst:'a t -> var -> 'a t
-  (** Remove binding for this variable.
-      {b careful} if other bindings depend on this variable's binding... *)
-
-  val mem : subst:'a t -> var -> bool
-  val find : subst:'a t -> var -> 'a option
-  val find_exn : subst:'a t -> var -> 'a  (** @raise Not_found if var not bound *)
-
-  val to_list : 'a t -> (var * 'a) list
-end
-
-module Subst(Ty : sig type t end) : SUBST with type ty = Ty.t = struct
-  type ty = Ty.t
-  type var = Ty.t t
+module Subst = struct
+  type 'ty var = 'ty t
 
   module M = ID.Map
 
-  type 'a t = (var * 'a) M.t
+  type ('ty,'a) t = ('ty var * 'a) M.t
 
   let empty = M.empty
   let is_empty = M.is_empty

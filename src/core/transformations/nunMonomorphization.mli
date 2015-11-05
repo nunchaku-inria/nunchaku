@@ -21,13 +21,21 @@ type id = NunID.t
 
 (* TODO: if depth limit reached, activate some "spuriousness" flag? *)
 
-module Make
-(T1 : NunTerm_ho.S
-      with type invariant_meta=NunMark.without_meta)
-(T2 : NunTerm_ho.S
-      with type invariant_meta=NunMark.without_meta
-      and type invariant_poly=NunMark.monomorph)
-: sig
+type invariant1 = <meta:NunMark.without_meta; poly:NunMark.polymorph>
+type invariant2 = <meta:NunMark.without_meta; poly:NunMark.monomorph>
+
+module type PARAM = sig
+  type term1
+  type term2
+
+  val build1: (term1, invariant1) NunTerm_ho.build
+  val build2: (term2, invariant2) NunTerm_ho.build
+end
+
+module Make(P : PARAM) : sig
+  type term1 = P.term1
+  type term2 = P.term2
+
   exception InvalidProblem of string
 
   type unmangle_state
@@ -35,8 +43,8 @@ module Make
 
   val monomorphize :
     ?depth_limit:int ->
-    (T1.t, T1.ty, 'inv) NunProblem.t ->
-    (T2.t, T2.ty, 'inv) NunProblem.t * unmangle_state
+    (term1, term1, 'inv) NunProblem.t ->
+    (term2, term2, 'inv) NunProblem.t * unmangle_state
   (** Filter and specialize definitions of the problem.
 
       First it finds a set of instances for each symbol
@@ -51,13 +59,13 @@ module Make
         state obtained after monomorphization
   *)
 
-  val unmangle_term : state:unmangle_state -> T2.t -> T1.t
+  val unmangle_term : state:unmangle_state -> term2 -> term1
   (** Unmangle a single term: replace mangled constants by their definition *)
 
   val unmangle_model :
       state:unmangle_state ->
-      T2.t NunModel.t ->
-      T1.t NunModel.t
+      term2 NunModel.t ->
+      term1 NunModel.t
   (** Unmangles constants that have been collapsed with their type arguments *)
 end
 
@@ -65,55 +73,47 @@ end
 
   For instance, [list int] will become [list_int] or something similar.
   This operation is optional if the backend supports parametrized types. *)
-module TypeMangling(T : NunTerm_ho.S) : sig
-  type state
+module TypeMangling : sig
+  type 't state
   (** Useful for decoding *)
 
-  val create : unit -> state
+  val create : build:('t, _) NunTerm_ho.build -> unit -> 't state
 
   val mangle_term :
-    state:state ->
-    (T.t,T.ty,'inv) NunProblem.t ->
-    (T.t,T.ty,'inv) NunProblem.t
+    state:'t state ->
+    't ->
+    't
 
   val mangle_problem :
-    state:state ->
-    (T.t,T.ty,'inv) NunProblem.t ->
-    (T.t,T.ty,'inv) NunProblem.t
+    state:' state ->
+    ('t,'t,'inv) NunProblem.t ->
+    ('t,'t,'inv) NunProblem.t
 
-  val unmangle_term : state:state -> T.t -> T.t
+  val unmangle_term : state:'t state -> 't -> 't
 
   val unmangle_model :
-      state:state ->
-      T.t NunModel.t -> T.t NunModel.t
+      state:'t state ->
+      't NunModel.t -> 't NunModel.t
   (** Stay in the same term representation, but de-monomorphize *)
 end
 
 (** Pipeline component *)
 val pipe :
   print:bool ->
-  (module NunTerm_ho.S
-    with type invariant_meta=NunMark.without_meta and type t = 'a) ->
-  (module NunTerm_ho.S
-    with type invariant_meta=NunMark.without_meta
-    and type invariant_poly=NunMark.monomorph
-    and type t = 'b) ->
-  (('a, 'a, 'inv) NunProblem.t,
-    ('b, 'b, 'inv) NunProblem.t,
-    'a NunModel.t, 'a NunModel.t
+  build1:('t1, invariant1) NunTerm_ho.build ->
+  build2:('t2, invariant2) NunTerm_ho.build ->
+  (('t1, 't1, 'inv) NunProblem.t,
+    ('t2, 't2, 'inv) NunProblem.t,
+    't1 NunModel.t, 't1 NunModel.t
   ) NunTransform.t
 
 (** Generic Pipe Component
     @param decode the decode function that takes an applied [(module S)]
       in addition to the state *)
 val pipe_with :
-  decode:(decode_term:('b -> 'a) -> 'c -> 'd) ->
+  decode:(decode_term:('t2 -> 't1) -> 'c -> 'd) ->
   print:bool ->
-  (module NunTerm_ho.S
-    with type invariant_meta=NunMark.without_meta and type t = 'a) ->
-  (module NunTerm_ho.S
-    with type invariant_meta=NunMark.without_meta
-    and type invariant_poly=NunMark.monomorph
-    and type t = 'b) ->
-  (('a, 'a, 'inv) NunProblem.t, ('b,'b,'inv) NunProblem.t, 'c, 'd) NunTransform.t
+  build1:('t1, invariant1) NunTerm_ho.build ->
+  build2:('t2, invariant2) NunTerm_ho.build ->
+  (('t1, 't1, 'inv) NunProblem.t, ('t2,'t2,'inv) NunProblem.t, 'c, 'd) NunTransform.t
 

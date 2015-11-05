@@ -16,6 +16,7 @@ module type S = sig
   module T2 : NunTerm_ho.S
     with type invariant_poly = T1.invariant_poly
     and type invariant_meta = T1.invariant_meta
+    and type invariant = T1.invariant
 
   type state
 
@@ -48,6 +49,7 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 :
   NunTerm_ho.S
   with type invariant_poly = T1.invariant_poly
   and type invariant_meta = T1.invariant_meta
+  and type invariant = T1.invariant
 ) : S with module T1 = T1 and module T2 = T2
 = struct
   module T1 = T1
@@ -191,6 +193,8 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 :
       | TI.App (f,l) ->
           T2.app (aux ~env f) (List.map (aux ~env) l)
       | TI.Bind (TI.TyForall, v, t) ->
+          (* FIXME: here we know T2.invariant_poly = T1.invariant_poly = polymorph
+             but the typechecker isn't aware. *)
           enter_var_ ~env v
             (fun env v -> T2.mk_bind TI.TyForall v (aux ~env t))
       | TI.Bind ((TI.Fun | TI.Forall) as b, v, t) ->
@@ -301,9 +305,11 @@ module Make(T1 : NunTerm_ho.VIEW)(T2 :
         )
 end
 
-let pipe_with (type a)(type b) ~decode ~print
-(module T1 : NunTerm_ho.VIEW with type t = a)
-(module T2 : NunTerm_ho.S with type t = b)
+let pipe_with (type a)(type b)(type p)(type m) ~decode ~print
+  (module T1: NunTerm_ho.VIEW with type t = a
+    and type invariant_poly=p and type invariant_meta=m)
+  (module T2: NunTerm_ho.S with type t = b
+    and type invariant_poly=p and type invariant_meta=m)
 =
   let module S = Make(T1)(T2) in
   let on_encoded = if print
@@ -329,9 +335,11 @@ let pipe_with (type a)(type b) ~decode ~print
     )
     ()
 
-let pipe (type a)(type b) ~print
-(module T1 : NunTerm_ho.VIEW with type t = a)
-(module T2 : NunTerm_ho.S with type t = b)
+let pipe (type a)(type b)(type p)(type m) ~print
+  (module T1: NunTerm_ho.VIEW with type t = a
+    and type invariant_poly=p and type invariant_meta=m)
+  (module T2: NunTerm_ho.S with type t = b
+    and type invariant_poly=p and type invariant_meta=m)
 =
   let decode ~find_id_def m =
     m |> List.map
