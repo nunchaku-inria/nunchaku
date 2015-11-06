@@ -66,12 +66,8 @@ type ('a, 'inv) view =
 type ('t, 'inv) repr = 't -> ('t, 'inv) view
 (** A concrete representation of terms by the type [t'] *)
 
-type ('t, 'inv) build = {
-  b_repr: ('t, 'inv) repr;
-  b_build: ('t, 'inv) view -> 't;
-}
-(** A builder for a concrete representation with type ['t]. It contains
-    the corresponding representation. *)
+type ('t, 'inv) build = ('t, 'inv) view -> 't
+(** A builder for a concrete representation with type ['t]. *)
 
 (** {2 Utils} *)
 

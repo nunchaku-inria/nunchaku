@@ -7,18 +7,16 @@ module ID = NunID
 module Var = NunVar
 module TI = NunTerm_intf
 module Subst = Var.Subst
-module U = NunTerm_ho.SubstUtil
 
 type ('t, 'inv) build = ('t, 'inv) NunTerm_ho.build
 
 (* low level implementation *)
-module Make(T : NunTerm_ho.BUILD) = struct
-  let build = T.build
-
+module Make(T : NunTerm_ho.S) = struct
   module T = struct
     include T
     include NunTerm_ho.Util(T)
   end
+  module U = NunTerm_ho.SubstUtil(T)
 
   module Full = struct
     type 't subst = ('t, 't) Subst.t
@@ -34,11 +32,11 @@ module Make(T : NunTerm_ho.BUILD) = struct
 
     (* convert a state back to a term *)
     let term_of_state st =
-      let head = U.eval ~build ~subst:st.subst st.head in
+      let head = U.eval ~subst:st.subst st.head in
       match st.args with
         | [] -> head
         | l ->
-            let l = List.map (U.eval ~build ~subst:st.subst) l in
+            let l = List.map (U.eval ~subst:st.subst) l in
             T.app head l
 
     type 't bool_ =
@@ -56,12 +54,12 @@ module Make(T : NunTerm_ho.BUILD) = struct
       (* base case *)
       let basic ~subst t =
         let t' = eval ~subst t in
-        match build.TI.b_repr t' with
+        match T.repr t' with
         | TI.AppBuiltin (B.True, _) -> BTrue
         | TI.AppBuiltin (B.False, _) -> BFalse
         | _ -> BPartial t'
       in
-      match build.TI.b_repr t with
+      match T.repr t with
       | TI.AppBuiltin (B.True, _) -> BTrue
       | TI.AppBuiltin (B.False, _) -> BFalse
       | TI.AppBuiltin (B.And, l) ->
@@ -91,7 +89,7 @@ module Make(T : NunTerm_ho.BUILD) = struct
           let a = eval ~subst a in
           let b = eval ~subst b in
           (* TODO: if [a] and [b] fully evaluated, return False? *)
-          if U.equal ~build ~subst a b
+          if U.equal ~subst a b
           then BTrue
           else BPartial (T.eq a b)
       | TI.AppBuiltin (B.Not, [f]) ->
@@ -169,7 +167,7 @@ module Make(T : NunTerm_ho.BUILD) = struct
       | (B.Ite | B.DataSelect _ | B.DataTest _),_ -> assert false
 
     (* see whether [st] matches a case in [m] *)
-    let lookup_case_ st m = match build.TI.b_repr st.head with
+    let lookup_case_ st m = match T.repr st.head with
       | TI.Const id ->
           begin try
             let vars, rhs = ID.Map.find id m in
@@ -185,7 +183,7 @@ module Make(T : NunTerm_ho.BUILD) = struct
     (* reduce until the head is not a function *)
     let rec whnf_
     : type inv. inv T.t state -> inv T.t state
-    = fun st -> match build.TI.b_repr st.head with
+    = fun st -> match T.repr st.head with
       | TI.Const _ -> st
       | TI.AppBuiltin ((NunBuiltin.T.False | NunBuiltin.T.True), _) -> st
       | TI.AppBuiltin (b, l) ->
@@ -243,7 +241,7 @@ module Make(T : NunTerm_ho.BUILD) = struct
       (* first, head reduction *)
       let st = whnf_ st in
       (* then, reduce subterms *)
-      match build.TI.b_repr st.head with
+      match T.repr st.head with
       | TI.TyBuiltin _
       | TI.Const _
       | TI.AppBuiltin (_,[]) -> st

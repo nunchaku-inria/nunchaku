@@ -9,76 +9,89 @@ type loc = NunLocation.t
 
 type ('a,'inv) view = ('a,'inv) NunTerm_intf.view
 
-type invariant = <meta:NunMark.with_meta; poly: NunMark.polymorph>
+type invariant = <meta:[`Meta]; poly: [`Poly]>
 
-type 't repr = {
-  repr: ('t, invariant) NunTerm_intf.repr;
-  ty: 't -> 't option;
-  loc: 't -> loc option;
-}
+type 't repr = ('t, invariant) NunTerm_intf.repr
 
-type 't build = {
-  b_repr: 't repr;
-  b_build: ?loc:loc -> ty:'t -> ('t, invariant) view -> 't;
-  b_kind: 't;
-}
+type 't build = ?loc:loc -> ty:'t -> ('t, invariant) view -> 't
 (** Builder is specific: we also need the type of the term, and an
     optional location. *)
 
+module type REPR = sig
+  type t
+  val repr : t repr
+  val ty: t -> t option
+  val loc: t -> loc option
+end
+
+module type BUILD = sig
+  type t
+  val build : t build
+  val kind : t (* impossible to build otherwise *)
+end
+
+module type S = sig
+  type t
+  include REPR with type t := t
+  include BUILD with type t := t
+end
+
 (** {2 Utils} *)
 
-val view : repr:'t repr -> 't -> ('t, invariant) view
-val ty: repr:'t repr -> 't -> 't option
-val ty_exn : repr:'t repr -> 't -> 't  (** @raise Not_found if there is not type *)
-val loc : repr:'t repr -> 't -> loc option
-val build : build:'t build -> ?loc:loc -> ty:'t -> ('t, invariant) view -> 't
+module Util(T : S) : sig
+  type t = T.t
 
-val const : build:'t build -> ?loc:loc -> ty:'t -> id -> 't
-val builtin : build:'t build -> ?loc:loc -> ty:'t -> NunBuiltin.T.t -> 't
-val app_builtin : build:'t build -> ?loc:loc -> ty:'t -> NunBuiltin.T.t -> 't list -> 't
-val var : build:'t build -> ?loc:loc -> 't var -> 't
-val app : build:'t build -> ?loc:loc -> ty:'t -> 't -> 't list -> 't
-val fun_ : build:'t build -> ?loc:loc -> ty:'t -> 't var -> 't -> 't
-val let_ : build:'t build -> ?loc:loc -> 't var -> 't -> 't -> 't
-val match_with : build:'t build -> ?loc:loc -> ty:'t -> 't -> 't NunTerm_intf.cases -> 't
-val ite : build:'t build -> ?loc:loc -> 't -> 't -> 't -> 't
-val forall : build:'t build -> ?loc:loc -> 't var -> 't -> 't
-val exists : build:'t build -> ?loc:loc -> 't var -> 't -> 't
-val eq : build:'t build -> ?loc:loc -> 't -> 't -> 't
+  val view : t -> (t, invariant) view
+  val ty: t -> t option
+  val ty_exn : t -> t  (** @raise Not_found if there is not type *)
+  val loc : t -> loc option
 
-val mk_bind :
-  build:'t build ->
-  ?loc:loc ->
-  ty:'t ->
-  NunMark.polymorph NunTerm_intf.binder ->
-  't var ->
-  't ->
-  't
+  val const : ?loc:loc -> ty:t -> id -> t
+  val builtin : ?loc:loc -> ty:t -> NunBuiltin.T.t -> t
+  val app_builtin : ?loc:loc -> ty:t -> NunBuiltin.T.t -> t list -> t
+  val var : ?loc:loc -> t var -> t
+  val app : ?loc:loc -> ty:t -> t -> t list -> t
+  val fun_ : ?loc:loc -> ty:t -> t var -> t -> t
+  val let_ : ?loc:loc -> t var -> t -> t -> t
+  val match_with : ?loc:loc -> ty:t -> t -> t NunTerm_intf.cases -> t
+  val ite : ?loc:loc -> t -> t -> t -> t
+  val forall : ?loc:loc -> t var -> t -> t
+  val exists : ?loc:loc -> t var -> t -> t
+  val eq : ?loc:loc -> t -> t -> t
 
-val ty_type : build:'t build -> 't (** Type of types *)
-val ty_prop : build:'t build -> 't (** Propositions *)
+  val mk_bind :
+    ?loc:loc ->
+    ty:t ->
+    NunMark.polymorph NunTerm_intf.binder ->
+    t var ->
+    t ->
+    t
 
-val ty_builtin : build:'t build -> ?loc:loc -> NunBuiltin.Ty.t -> 't
-val ty_const : build:'t build -> ?loc:loc -> id -> 't
-val ty_var : build:'t build -> ?loc:loc -> 't var -> 't
-val ty_meta_var : build:'t build -> ?loc:loc -> 't NunMetaVar.t -> 't  (** Meta-variable, ready for unif *)
-val ty_app : build:'t build -> ?loc:loc -> 't -> 't list -> 't
-val ty_forall : build:'t build -> ?loc:loc -> 't var -> 't -> 't
-val ty_arrow : build:'t build -> ?loc:loc -> 't -> 't -> 't
+  val ty_type : t (** Type of types *)
+  val ty_prop : t (** Propositions *)
 
-val as_ty : repr:'t repr -> ('t, invariant) NunType_intf.repr
-(** See a term as a type *)
+  val ty_builtin : ?loc:loc -> NunBuiltin.Ty.t -> t
+  val ty_const : ?loc:loc -> id -> t
+  val ty_var : ?loc:loc -> t var -> t
+  val ty_meta_var : ?loc:loc -> t NunMetaVar.t -> t  (** Meta-variable, ready for unif *)
+  val ty_app : ?loc:loc -> t -> t list -> t
+  val ty_forall : ?loc:loc -> t var -> t -> t
+  val ty_arrow : ?loc:loc -> t -> t -> t
 
-val is_ty: repr:'t repr -> 't -> bool
-(** [is_ty t] same as [is_Type (type of t)] *)
+  val as_ty : (t, invariant) NunType_intf.repr
+  (** See a term as a type *)
+
+  val is_ty: t -> bool
+  (** [is_ty t] same as [is_Type (type of t)] *)
+end
 
 (** {2 Default Instance} *)
 
-type default
+module Default : sig
+  include S
 
-val default_repr : default repr
-val default_build : default build
-val default_print : default NunTerm_ho.print_funs
+  val print_funs : t NunTerm_ho.print_funs
+end
 
 (** {2 View as {!NunTerm_ho.VIEW}}
 

@@ -26,7 +26,7 @@ type 'a sequence = ('a -> unit) -> unit
 
 type ('t,'inv) repr = ('t,'inv) NunType_intf.repr
 
-type 'inv_p invariant = <poly: 'inv_p; meta: NunMark.with_meta>
+type 'inv_p invariant = <poly: 'inv_p; meta: [`Meta]>
 (** Invariant: must have meta-variables *)
 
 exception Fail of (NunType_intf.packed * NunType_intf.packed) list * string

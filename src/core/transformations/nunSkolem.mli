@@ -9,7 +9,7 @@ type id = NunID.t
 
 module type S = sig
   module T1 : NunTerm_ho.REPR
-  module T2 : NunTerm_ho.BUILD
+  module T2 : NunTerm_ho.S
 
   type 'i state
 
@@ -55,5 +55,5 @@ module type S = sig
     ) NunTransform.t
 end
 
-module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.BUILD)
+module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.S)
   : S with module T1 = T1 and module T2 = T2

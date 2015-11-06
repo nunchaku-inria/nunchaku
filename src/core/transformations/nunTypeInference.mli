@@ -9,7 +9,7 @@ type 'a var = 'a NunVar.t
 type 'a signature = 'a NunSignature.t
 type loc = NunLocation.t
 
-type stmt_invariant = NunMark.nested
+type stmt_invariant = [`Nested]
 
 exception ScopingError of string * string * loc option
 (** Scoping error for the given variable *)
@@ -26,35 +26,35 @@ type attempt_stack = NunUntypedAST.term list
 exception TypeError of string * attempt_stack
 (** Raised when the input is ill-typed or could not be inferred. *)
 
-module Convert : sig
-  type 't env
+module Convert(T : NunTerm_typed.S) : sig
+  type env
 
-  val empty_env : build:'t NunTerm_typed.build -> 't env
+  val empty_env : env
   (** Make a new, empty environment. The build function will be used
-      to construct new terms *)
+      to construct new T.ts *)
 
-  val signature : 't env -> 't signature
+  val signature : env -> T.t signature
 
-  val convert_ty : env:'t env -> NunUntypedAST.ty -> 't or_error
+  val convert_ty : env:env -> NunUntypedAST.ty -> T.t or_error
   (** [convert ~env ty] converts the raw, unscoped type [ty] into a
       type from the representation [Ty.t].
       It returns an error if the type is ill-scoped. *)
 
-  val convert_ty_exn : env:'t env -> NunUntypedAST.ty -> 't
-  (** @raise ScopingError if the type isn't well-scoped *)
+  val convert_ty_exn : env:env -> NunUntypedAST.ty -> T.t
+  (** @raise ScopingError if the type isnT.t well-scoped *)
 
-  val convert_term : env:'t env -> NunUntypedAST.term -> 't or_error
+  val convert_term : env:env -> NunUntypedAST.term -> T.t or_error
   (** [convert ~env ty] converts the raw, unscoped type [ty] into a
       type from the representation [Ty.t].
       It returns an error if the type is ill-scoped. *)
 
-  val convert_term_exn : env:'t env -> NunUntypedAST.term -> 't
+  val convert_term_exn : env:env -> NunUntypedAST.term -> T.t
   (** Unsafe version of {!convert}
       @raise TypeError if it fails to  type properly *)
 
   val generalize : close:[`Forall | `Fun | `NoClose] ->
-                   't -> 't * 't var list
-  (** Generalize a term [t] by parametrizing it over its free {b type}
+                   T.t -> T.t * T.t var list
+  (** Generalize a T.t [t] by parametrizing it over its free {b type}
       variables.
       @param close decides how [t] is generalized
         {ul
@@ -65,52 +65,50 @@ module Convert : sig
       @return a pair [(t', vars)] such that, roughly, [app t' vars = t],
         or [t'] is [forall vars t], or [t'] contains [vars] *)
 
-  type 't statement = ('t, 't, stmt_invariant) NunStatement.t
+  type statement = (T.t, T.t, stmt_invariant) NunStatement.t
 
   val convert_statement :
-    env:'t env ->
+    env:env ->
     NunUntypedAST.statement ->
-    ('t statement * 't env) or_error
+    (statement * env) or_error
 
   val convert_statement_exn :
-    env:'t env ->
+    env:env ->
     NunUntypedAST.statement ->
-    't statement * 't env
+    statement * env
   (** Unsafe version of {!convert} *)
 
-  type 't problem = ('t, 't, stmt_invariant) NunProblem.t
+  type problem = (T.t, T.t, stmt_invariant) NunProblem.t
 
   val convert_problem :
-    env:'t env ->
+    env:env ->
     NunUntypedAST.statement list ->
-    ('t problem * 't env) or_error
+    (problem * env) or_error
 
   val convert_problem_exn :
-    env:'t env ->
+    env:env ->
     NunUntypedAST.statement list ->
-    't problem * 't env
+    problem * env
 end
 
-(** Decoding function used by {!pipe} *)
-val erase :
-  repr:('t, _) NunTerm_ho.repr ->
-  't NunModel.t ->
-  NunUntypedAST.term NunModel.t
+module Make(T1 : NunTerm_typed.S)(T2 : NunTerm_ho.S) : sig
+  type inv2 = <meta:[`NoMeta]; poly:[`Poly]>
 
-(** Pipeline component. Takes input and output Term representations. *)
-val pipe :
-  print:bool ->
-  build1:'t1 NunTerm_typed.build ->
-  build2:('t2, NunTerm_typed.invariant) NunTerm_ho.build ->
-  (NunUntypedAST.statement list,
-    ('t1, 't1, stmt_invariant) NunProblem.t,
-    't2 NunModel.t, NunUntypedAST.term NunModel.t)
-    NunTransform.t
+  (** Decoding function used by {!pipe} *)
+  val erase : inv2 T2.t NunModel.t -> NunUntypedAST.term NunModel.t
 
-val pipe_with :
-  decode:(signature:'a NunSignature.t -> 'c -> 'd) ->
-  print:bool ->
-  build:'t NunTerm_typed.build ->
-  (NunUntypedAST.statement list,
-    ('t, 't, stmt_invariant) NunProblem.t, 'c, 'd
-  ) NunTransform.t
+  (** Pipeline component. Takes input and output Term representations. *)
+  val pipe :
+    print:bool ->
+    (NunUntypedAST.statement list,
+      (T1.t, T1.t, stmt_invariant) NunProblem.t,
+      inv2 T2.t NunModel.t, NunUntypedAST.term NunModel.t)
+      NunTransform.t
+
+  val pipe_with :
+    decode:(signature:T1.t NunSignature.t -> 'c -> 'd) ->
+    print:bool ->
+    (NunUntypedAST.statement list,
+      (T1.t, T1.t, stmt_invariant) NunProblem.t, 'c, 'd
+    ) NunTransform.t
+end

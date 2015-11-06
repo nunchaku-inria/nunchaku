@@ -14,7 +14,7 @@ let section = NunUtils.Section.make "skolem"
 
 module type S = sig
   module T1 : NunTerm_ho.REPR
-  module T2 : NunTerm_ho.BUILD
+  module T2 : NunTerm_ho.S
 
   type 'i state
 
@@ -60,14 +60,12 @@ module type S = sig
     ) NunTransform.t
 end
 
-module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.BUILD)
+module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.S)
 : S with module T1 = T1 and module T2 = T2
 = struct
   module T1 = T1
   module T2 = T2
-  module T2B = NunTerm_ho.Util(T2)
-
-  let repr2 = T2.build.TI.b_repr
+  module U = NunTerm_ho.Util(T2)
 
   module Subst = NunVar.Subst
   module Stmt = NunStatement
@@ -108,62 +106,60 @@ module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.BUILD)
     ID.make ~name:(state.prefix ^ string_of_int n)
 
   module B = NunBuiltin.T
-  let mk_true = T2B.builtin B.True
-  let mk_false = T2B.builtin B.False
-  let mk_not a = T2B.app_builtin B.Not [a]
-  let mk_and a b = T2B.app_builtin B.And [a;b]
-  let mk_or a b = T2B.app_builtin B.Or [a;b]
-  let mk_ite a b c = T2B.app_builtin B.Ite [a;b;c]
+  let mk_not a = U.app_builtin B.Not [a]
+  let mk_and a b = U.app_builtin B.And [a;b]
+  let mk_or a b = U.app_builtin B.Or [a;b]
+  let mk_ite a b c = U.app_builtin B.Ite [a;b;c]
 
   (* first, negation normal form *)
   let rec nnf
   : type inv. inv T1.t -> inv T2.t
   = fun t -> match T1.repr t with
-    | TI.Const id -> T2B.const id
-    | TI.Var v -> T2B.var (nnf_var_ v)
-    | TI.TyVar v -> T2B.ty_var (nnf_var_ v)
-    | TI.App (f,l) -> T2B.app (nnf f) (List.map nnf l)
+    | TI.Const id -> U.const id
+    | TI.Var v -> U.var (nnf_var_ v)
+    | TI.TyVar v -> U.ty_var (nnf_var_ v)
+    | TI.App (f,l) -> U.app (nnf f) (List.map nnf l)
     | TI.AppBuiltin (b,l) ->
         begin match b, l with
-        | B.True, _ -> mk_true
-        | B.False, _ -> mk_false
+        | B.True, _ -> U.builtin B.True
+        | B.False, _ -> U.builtin B.False
         | B.Or, _
         | B.And, _
         | B.Ite, _
-        | B.Eq, _ -> T2B.app_builtin b (List.map nnf l)
+        | B.Eq, _ -> U.app_builtin b (List.map nnf l)
         | B.Imply, [a;b] -> mk_or (nnf_neg a) (nnf b)
         | B.Equiv, [a;b] -> (* a => b & b => a *)
             mk_and (mk_or (nnf_neg a) (nnf b)) (mk_or (nnf_neg b) (nnf a))
         | B.Not, [f] -> nnf_neg f
         | _ -> assert false
         end
-    | TI.Bind (k,v,t) -> T2B.mk_bind k (nnf_var_ v) (nnf t)
+    | TI.Bind (k,v,t) -> U.mk_bind k (nnf_var_ v) (nnf t)
     | TI.Let (v,t,u) ->
-        T2B.let_ (nnf_var_ v) (nnf t) (nnf u)
+        U.let_ (nnf_var_ v) (nnf t) (nnf u)
     | TI.Match (t,l) ->
-        T2B.match_with (nnf t)
+        U.match_with (nnf t)
           (ID.Map.map (fun (vars,rhs) -> List.map nnf_var_ vars,nnf rhs) l)
-    | TI.TyBuiltin b -> T2B.ty_builtin b
-    | TI.TyArrow (a,b) -> T2B.ty_arrow (nnf a) (nnf b)
+    | TI.TyBuiltin b -> U.ty_builtin b
+    | TI.TyArrow (a,b) -> U.ty_arrow (nnf a) (nnf b)
     | TI.TyMeta _ -> assert false
 
   (* negation + negation normal form *)
   and nnf_neg
   : type inv. inv T1.t -> inv T2.t
   = fun t -> match T1.repr t with
-    | TI.Const id -> mk_not (T2B.const id)
-    | TI.Var v -> mk_not (T2B.var (nnf_var_ v))
-    | TI.TyVar v -> mk_not (T2B.ty_var (nnf_var_ v))
-    | TI.App (f,l) -> mk_not (T2B.app (nnf f) (List.map nnf l))
+    | TI.Const id -> mk_not (U.const id)
+    | TI.Var v -> mk_not (U.var (nnf_var_ v))
+    | TI.TyVar v -> mk_not (U.ty_var (nnf_var_ v))
+    | TI.App (f,l) -> mk_not (U.app (nnf f) (List.map nnf l))
     | TI.AppBuiltin (b,l) ->
         begin match b, l with
-        | B.True, _ -> mk_false
-        | B.False, _ -> mk_true
-        | B.Or, l -> T2B.app_builtin B.And (List.map nnf_neg l)
-        | B.And, l -> T2B.app_builtin B.Or (List.map nnf_neg l)
+        | B.True, _ -> U.builtin B.False
+        | B.False, _ -> U.builtin B.True
+        | B.Or, l -> U.app_builtin B.And (List.map nnf_neg l)
+        | B.And, l -> U.app_builtin B.Or (List.map nnf_neg l)
         | B.Ite, [a;b;c] ->
             mk_ite (nnf a) (nnf_neg b) (nnf_neg c)
-        | B.Eq, _ -> mk_not (T2B.app_builtin b (List.map nnf l))
+        | B.Eq, _ -> mk_not (U.app_builtin b (List.map nnf l))
         | B.Imply, [a;b] ->
             mk_and (nnf a) (nnf_neg b)  (* a & not b *)
         | B.Equiv, [a;b] -> (* not a & b | not b & a *)
@@ -171,16 +167,16 @@ module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.BUILD)
         | B.Not, [f] -> nnf f (* not not f -> f *)
         | _ -> assert false
         end
-    | TI.Bind (TI.Forall, v,t) -> T2B.exists (nnf_var_ v) (nnf_neg t)
-    | TI.Bind (TI.Exists, v,t) -> T2B.forall (nnf_var_ v) (nnf_neg t)
+    | TI.Bind (TI.Forall, v,t) -> U.exists (nnf_var_ v) (nnf_neg t)
+    | TI.Bind (TI.Exists, v,t) -> U.forall (nnf_var_ v) (nnf_neg t)
     | TI.Bind (TI.Fun,_,_) -> failwith "cannot skolemize function"
     | TI.Bind (TI.TyForall,_,_) -> failwith "cannot skolemize `ty_forall`"
     | TI.Let (v,t,u) ->
-        T2B.let_ (nnf_var_ v) (nnf t) (nnf u)
+        U.let_ (nnf_var_ v) (nnf t) (nnf u)
     | TI.Match _ ->
         mk_not (nnf t)
-    | TI.TyBuiltin b -> T2B.ty_builtin b
-    | TI.TyArrow (a,b) -> T2B.ty_arrow (nnf a) (nnf b)
+    | TI.TyBuiltin b -> U.ty_builtin b
+    | TI.TyArrow (a,b) -> U.ty_arrow (nnf a) (nnf b)
     | TI.TyMeta _ -> assert false
 
   and nnf_var_
@@ -193,16 +189,16 @@ module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.BUILD)
     (* recursive traversal *)
     let rec aux
     : env:inv env -> inv T2.t -> inv T2.t
-    = fun ~env t -> match repr2 t with
-      | TI.Const id -> T2B.const id
+    = fun ~env t -> match T2.repr t with
+      | TI.Const id -> U.const id
       | TI.Var v ->
           begin match Subst.find ~subst:env.subst v with
-            | None -> T2B.var (aux_var ~env v)
+            | None -> U.var (aux_var ~env v)
             | Some t -> t
           end
       | TI.TyVar v ->
           begin match Subst.find ~subst:env.subst v with
-            | None -> T2B.ty_var (aux_var ~env v)
+            | None -> U.ty_var (aux_var ~env v)
             | Some t -> t
           end
       | TI.AppBuiltin (b,l) ->
@@ -214,42 +210,42 @@ module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.BUILD)
           | B.And, _
           | B.Ite, _
           | B.Eq, _ ->
-              T2B.app_builtin b (List.map (aux ~env) l)
+              U.app_builtin b (List.map (aux ~env) l)
           | B.Imply, _
           | B.Equiv, _ -> assert false
           | _ -> assert false
           end
       | TI.App (f,l) ->
-          T2B.app (aux ~env f) (List.map (aux ~env) l)
+          U.app (aux ~env f) (List.map (aux ~env) l)
       | TI.Bind (TI.TyForall, v, t) ->
-          (* FIXME: here we know T2B.invariant_poly = T1.invariant_poly = polymorph
+          (* FIXME: here we know U.invariant_poly = T1.invariant_poly = polymorph
              but the typechecker isn't aware. *)
           enter_var_ ~env v
-            (fun env v -> T2B.mk_bind TI.TyForall v (aux ~env t))
+            (fun env v -> U.mk_bind TI.TyForall v (aux ~env t))
       | TI.Bind ((TI.Fun | TI.Forall) as b, v, t) ->
           enter_var_ ~env v
-            (fun env v -> T2B.mk_bind b v (aux ~env t))
+            (fun env v -> U.mk_bind b v (aux ~env t))
       | TI.Bind (TI.Exists, v, t') ->
           (* type of Skolem function *)
           let ty_ret = aux ~env (Var.ty v) in
           let ty_args = List.map Var.ty env.vars in
-          let ty = List.fold_right T2B.ty_arrow ty_args ty_ret in
+          let ty = List.fold_right U.ty_arrow ty_args ty_ret in
           (* create new skolem function *)
           let skolem_id = new_sym ~state in
-          let skolem = T2B.app (T2B.const skolem_id) (List.map T2B.var env.vars) in
+          let skolem = U.app (U.const skolem_id) (List.map U.var env.vars) in
           let new_sym = { sym_defines=t; sym_ty=ty } in
           ID.Tbl.add state.tbl skolem_id new_sym;
           state.new_sym <- (skolem_id, new_sym):: state.new_sym;
           NunUtils.debugf ~section 2
             "@[<2>new Skolem symbol `%a :@ @[%a@]` standing for@ @[`%a`@]@]"
             (fun k-> k ID.print_no_id skolem_id
-                (T.print_ty ~repr:repr2) ty (T.print ~repr:repr2) t);
+                (T.print_ty ~repr:T2.repr) ty (T.print ~repr:T2.repr) t);
           (* convert [t] and replace [v] with [skolem] in it *)
           let env = env_bind ~env v skolem in
           aux ~env t'
       | TI.Let (v,t,u) ->
           let t = aux ~env t in
-          enter_var_ ~env v (fun env v -> T2B.let_ v t (aux ~env u))
+          enter_var_ ~env v (fun env v -> U.let_ v t (aux ~env u))
       | TI.Match (t, l) ->
           let t = aux ~env t in
           let l = ID.Map.map
@@ -264,9 +260,9 @@ module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.BUILD)
               vars', aux ~env rhs
             ) l
           in
-          T2B.match_with t l
-      | TI.TyBuiltin b -> T2B.ty_builtin b
-      | TI.TyArrow (a,b) -> T2B.ty_arrow (aux ~env a) (aux ~env b)
+          U.match_with t l
+      | TI.TyBuiltin b -> U.ty_builtin b
+      | TI.TyArrow (a,b) -> U.ty_arrow (aux ~env a) (aux ~env b)
       | TI.TyMeta _ -> assert false
 
     and aux_var
@@ -313,8 +309,8 @@ module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.BUILD)
     let pp_sym out (id,s) =
       fpf out "@[<2>%a: %a@ standing for `@[%a@]`@]"
         ID.print_no_id id
-          (T.print_ty ~repr:repr2) s.sym_ty
-          (T.print ~repr:repr2) s.sym_defines
+          (T.print_ty ~repr:T2.repr) s.sym_ty
+          (T.print ~repr:T2.repr) s.sym_defines
     in
     fpf out "@[<2>skolem table {@,%a@]@,}"
       (CCFormat.seq pp_sym) (ID.Tbl.to_seq st.tbl)
@@ -327,12 +323,12 @@ module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.BUILD)
     try
       let sym = ID.Tbl.find state.tbl id in
       let f = sym.sym_defines in
-      Some (T2B.app (T2B.const epsilon) [f])
+      Some (U.app (U.const epsilon) [f])
     with Not_found -> None
 
   let decode_model ~state m =
     m |> List.map
-        (fun (t,u) -> match repr2 t with
+        (fun (t,u) -> match T2.repr t with
           | TI.Const id ->
               begin match find_id_def ~state id with
                 | None -> t, u
@@ -346,9 +342,9 @@ module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.BUILD)
       then
         [Format.printf "@[<v2>after Skolemization: %a@]@."
           (NunProblem.print
-            ~pt_in_app:(T.print_in_app ~repr:repr2)
-            ~pty_in_app:(T.print_in_app ~repr:repr2)
-            (T.print ~repr:repr2) (T.print_ty ~repr:repr2))]
+            ~pt_in_app:(T.print_in_app ~repr:T2.repr)
+            ~pty_in_app:(T.print_in_app ~repr:T2.repr)
+            (T.print ~repr:T2.repr) (T.print_ty ~repr:T2.repr))]
       else []
     in
     NunTransform.make1
@@ -368,7 +364,7 @@ module Make(T1 : NunTerm_ho.REPR)(T2 : NunTerm_ho.BUILD)
   let pipe ~print =
     let decode ~find_id_def m =
       m |> List.map
-          (fun (t,u) -> match repr2 t with
+          (fun (t,u) -> match T2.repr t with
             | TI.Const id ->
                 begin match find_id_def id with
                   | None -> t, u

@@ -7,7 +7,7 @@
 
 type ('t, 'inv) build = ('t, 'inv) NunTerm_ho.build
 
-module Make(T : NunTerm_ho.BUILD) : sig
+module Make(T : NunTerm_ho.S) : sig
   val whnf : 'inv T.t -> 'inv T.t
   (** Weak Head Normal Form *)
 

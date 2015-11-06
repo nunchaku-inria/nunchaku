@@ -28,63 +28,74 @@ type ('t, 'inv) repr = ('t, 'inv) NunTerm_intf.repr
 type ('t, 'inv) build = ('t, 'inv) NunTerm_intf.build
 
 module type REPR = sig
-  type +'inv t
+  type 'inv t
   val repr : ('inv t,'inv) repr
 end
 
 module type BUILD = sig
-  type +'inv t
+  type 'inv t
   val build : ('inv t,'inv) build
 end
 
-type 'inv default = {
-  view: ('inv default, 'inv) view;
-}
+module type S = sig
+  type 'inv t
+  include REPR with type 'a t := 'a t
+  include BUILD with type 'a t := 'a t
+end
 
-let default_repr t = t.view
+module Default : S = struct
+  type 'inv t = {
+    view: ('inv t, 'inv) view;
+  }
 
-let make_raw_ view = {view}
+  let repr t = t.view
 
-let build view = match view with
-  | App (t, []) -> t
-  | App ({view=App (f, l1); _}, l2) ->
-      make_raw_ (App (f, l1 @ l2))
-  | App ({view=AppBuiltin (b, l1); _}, l2) ->
-      make_raw_ (AppBuiltin (b, l1 @ l2))
-  | _ -> make_raw_ view
+  let make_raw_ view = {view}
 
-let default_build = {
-  b_repr=default_repr;
-  b_build=build;
-}
+  let build view = match view with
+    | App (t, []) -> t
+    | App ({view=App (f, l1); _}, l2) ->
+        make_raw_ (App (f, l1 @ l2))
+    | App ({view=AppBuiltin (b, l1); _}, l2) ->
+        make_raw_ (AppBuiltin (b, l1 @ l2))
+    | _ -> make_raw_ view
+end
 
-let app_builtin ~build s l = build.b_build (AppBuiltin (s,l))
+(** {2 Packed Term} *)
+
+type packed = Packed : 't * ('t, _) repr -> packed
+
+let pack ~repr t = Packed (t, repr)
+
+(** {2 Utils} *)
+
+let app_builtin ~build s l = build (AppBuiltin (s,l))
 let builtin ~build s = app_builtin ~build s []
-let const ~build id = build.b_build (Const id)
-let var ~build v = build.b_build (Var v)
-let app ~build t l = build.b_build (App(t,l))
-let mk_bind ~build b v t = build.b_build (Bind (b,v,t))
-let fun_ ~build v t = build.b_build (Bind (Fun,v, t))
-let let_ ~build v t u = build.b_build (Let (v, t, u))
+let const ~build id = build (Const id)
+let var ~build v = build (Var v)
+let app ~build t l = build (App(t,l))
+let mk_bind ~build b v t = build (Bind (b,v,t))
+let fun_ ~build v t = build (Bind (Fun,v, t))
+let let_ ~build v t u = build (Let (v, t, u))
 let match_with ~build t l =
   if ID.Map.is_empty l then invalid_arg "Term_ho.case: empty list of cases";
-  build.b_build (Match (t,l))
+  build (Match (t,l))
 let ite ~build a b c =
   app ~build (builtin ~build NunBuiltin.T.Ite) [a;b;c]
-let forall ~build v t = build.b_build (Bind(Forall,v, t))
-let exists ~build v t = build.b_build (Bind(Exists,v, t))
+let forall ~build v t = build (Bind(Forall,v, t))
+let exists ~build v t = build (Bind(Exists,v, t))
 let eq ~build a b = app ~build (builtin ~build NunBuiltin.T.Eq) [a;b]
 
-let ty_type ~build = build.b_build (TyBuiltin NunBuiltin.Ty.Type)
-let ty_kind ~build = build.b_build (TyBuiltin NunBuiltin.Ty.Kind)
-let ty_prop ~build = build.b_build (TyBuiltin NunBuiltin.Ty.Prop)
+let ty_type ~build = build (TyBuiltin NunBuiltin.Ty.Type)
+let ty_kind ~build = build (TyBuiltin NunBuiltin.Ty.Kind)
+let ty_prop ~build = build (TyBuiltin NunBuiltin.Ty.Prop)
 
-let ty_builtin ~build b = build.b_build (TyBuiltin b)
+let ty_builtin ~build b = build (TyBuiltin b)
 let ty_const ~build id = const ~build id
 let ty_app ~build f l = if l=[] then f else app ~build f l
-let ty_arrow ~build a b = build.b_build (TyArrow (a,b))
-let ty_forall ~build v t = build.b_build (Bind (TyForall,v,t))
-let ty_var ~build v = build.b_build (TyVar v)
+let ty_arrow ~build a b = build (TyArrow (a,b))
+let ty_forall ~build v t = build (Bind (TyForall,v,t))
+let ty_var ~build v = build (TyVar v)
 
 let as_ty
 : type t inv.  repr:(t,inv) repr -> (t,inv) TyI.repr
@@ -108,36 +119,39 @@ let as_ty
   not (Default.Ty.returns_Type Default.(ty_arrow ty_type ty_prop))
 *)
 
-module Util(T : BUILD) = struct
+module Util(T : S) = struct
   let build = T.build
 
-  let ty_type = build.b_build (TyBuiltin NunBuiltin.Ty.Type)
-  let ty_kind = build.b_build (TyBuiltin NunBuiltin.Ty.Kind)
-  let ty_prop = build.b_build (TyBuiltin NunBuiltin.Ty.Prop)
+  let ty_type () = build (TyBuiltin NunBuiltin.Ty.Type)
+  let ty_kind () = build (TyBuiltin NunBuiltin.Ty.Kind)
+  let ty_prop () = build (TyBuiltin NunBuiltin.Ty.Prop)
 
-  let app_builtin s l = build.b_build (AppBuiltin (s,l))
+  let app_builtin s l = build (AppBuiltin (s,l))
   let builtin s = app_builtin s []
-  let const id = build.b_build (Const id)
-  let var v = build.b_build (Var v)
-  let app t l = build.b_build (App(t,l))
-  let mk_bind b v t = build.b_build (Bind (b,v,t))
-  let fun_ v t = build.b_build (Bind (Fun,v, t))
-  let let_ v t u = build.b_build (Let (v, t, u))
+  let const id = build (Const id)
+  let var v = build (Var v)
+  let app t l = build (App(t,l))
+  let mk_bind b v t = build (Bind (b,v,t))
+  let fun_ v t = build (Bind (Fun,v, t))
+  let let_ v t u = build (Let (v, t, u))
   let match_with t l =
     if ID.Map.is_empty l then invalid_arg "Term_ho.case: empty list of cases";
-    build.b_build (Match (t,l))
+    build (Match (t,l))
   let ite a b c =
     app (builtin NunBuiltin.T.Ite) [a;b;c]
-  let forall v t = build.b_build (Bind(Forall,v, t))
-  let exists v t = build.b_build (Bind(Exists,v, t))
+  let forall v t = build (Bind(Forall,v, t))
+  let exists v t = build (Bind(Exists,v, t))
   let eq a b = app (builtin NunBuiltin.T.Eq) [a;b]
 
-  let ty_builtin b = build.b_build (TyBuiltin b)
+  let ty_builtin b = build (TyBuiltin b)
   let ty_const id = const id
   let ty_app f l = if l=[] then f else app f l
-  let ty_arrow a b = build.b_build (TyArrow (a,b))
-  let ty_forall v t = build.b_build (Bind (TyForall,v,t))
-  let ty_var v = build.b_build (TyVar v)
+  let ty_arrow a b = build (TyArrow (a,b))
+  let ty_forall v t = build (Bind (TyForall,v,t))
+  let ty_var v = build (TyVar v)
+
+  let as_ty t = as_ty ~repr:T.repr t
+  let pack t = pack ~repr:T.repr t
 end
 
 (** {2 Printing} *)
@@ -223,12 +237,6 @@ let print_ty ~repr = (mk_print ~repr).print_ty
 let print_in_app ~repr = (mk_print ~repr).print_in_app
 let print_in_binder ~repr = (mk_print ~repr).print_in_binder
 
-(** {2 Packed Term} *)
-
-type packed = Packed : 't * ('t, _) repr -> packed
-
-let pack ~repr t = Packed (t, repr)
-
 (** {2 Utils with Substitutions} *)
 
 exception Undefined of id
@@ -239,46 +247,48 @@ let () = Printexc.register_printer
     | _ -> None
   )
 
-module SubstUtil = struct
+module SubstUtil(T : S) = struct
   module Subst = Var.Subst
-  type 't subst = ('t, 't) Subst.t
+  module U = Util(T)
 
-  let equal
-  : type t inv. build:(t,inv) build -> subst:t subst -> t -> t -> bool
-  = fun ~build ~subst ty1 ty2 ->
-    let rec aux ~subst ty1 ty2 = match build.b_repr ty1, build.b_repr ty2 with
+  type 'i subst = ('i T.t, 'i T.t) Subst.t
+
+  let rec equal
+  : type inv. subst:inv subst -> inv T.t -> inv T.t -> bool
+  = fun ~subst ty1 ty2 ->
+    match T.repr ty1, T.repr ty2 with
     | Const id1, Const id2 -> ID.equal id1 id2
     | Var v1, _ when Subst.mem ~subst v1 ->
-        aux ~subst (Subst.find_exn ~subst v1) ty2
+        equal ~subst (Subst.find_exn ~subst v1) ty2
     | _, Var v2 when Subst.mem ~subst v2 ->
-        aux ~subst ty1 (Subst.find_exn ~subst v2)
+        equal ~subst ty1 (Subst.find_exn ~subst v2)
     | TyVar v1, TyVar v2 -> Var.equal v1 v2
     | Var v1, Var v2 -> Var.equal v1 v2
     | AppBuiltin (b1,l1), AppBuiltin (b2,l2) ->
         NunBuiltin.T.equal b1 b2 &&
         List.length l1 = List.length l2 &&
-        List.for_all2 (aux ~subst) l1 l2
+        List.for_all2 (equal ~subst) l1 l2
     | TyBuiltin b1, TyBuiltin b2 -> NunBuiltin.Ty.equal b1 b2
     | TyMeta v1, TyMeta v2 -> NunMetaVar.equal v1 v2
     | App (f1,l1), App (f2, l2) ->
-        aux ~subst f1 f2
+        equal ~subst f1 f2
           && List.length l1 = List.length l2
-          && List.for_all2 (aux ~subst) l1 l2
+          && List.for_all2 (equal ~subst) l1 l2
     | TyArrow (a1,b1), TyArrow (a2,b2) ->
-        aux ~subst a1 a2 && aux ~subst b1 b2
+        equal ~subst a1 a2 && equal ~subst b1 b2
     | Bind (b1, v1, t1), Bind (b2, v2, t2) ->
         b1 = b2 &&
         ( let v = Var.fresh_copy v1 in
-          let subst = Subst.add ~subst v1 (var ~build v) in
-          let subst = Subst.add ~subst v2 (var ~build v) in
-          aux ~subst t1 t2 )
+          let subst = Subst.add ~subst v1 (U.var v) in
+          let subst = Subst.add ~subst v2 (U.var v) in
+          equal ~subst t1 t2)
     | Let (v1,t1,u1), Let (v2,t2,u2) ->
         let subst = Subst.add ~subst v1 t1 in
         let subst = Subst.add ~subst v2 t2 in
-        aux ~subst u1 u2
+        equal ~subst u1 u2
     | Match (t1,l1), Match (t2,l2) ->
         ID.Map.cardinal l1 = ID.Map.cardinal l2 &&
-        aux ~subst t1 t2 &&
+        equal ~subst t1 t2 &&
         List.for_all2
           (fun (id1,(vars1,rhs1)) (id2,(vars2,rhs2)) ->
             assert (List.length vars1=List.length vars2);
@@ -287,12 +297,12 @@ module SubstUtil = struct
             let subst = List.fold_right2
               (fun v1 v2 subst ->
                 let v = Var.fresh_copy v1 in
-                let subst = Subst.add ~subst v1 (var ~build v) in
-                let subst = Subst.add ~subst v2 (var ~build v) in
+                let subst = Subst.add ~subst v1 (U.var v) in
+                let subst = Subst.add ~subst v2 (U.var v) in
                 subst
               ) vars1 vars2 subst
             in
-            aux ~subst rhs1 rhs2
+            equal ~subst rhs1 rhs2
           )
           (cases_to_list l1) (* list, sorted by ID *)
           (cases_to_list l2)
@@ -307,55 +317,56 @@ module SubstUtil = struct
     | Bind _, _ -> false
     | TyMeta _,_ -> false
     | TyVar _, _ -> false
-    in aux ~subst ty1 ty2
+  and aux_bvar ~subst v1 v2 t1 t2 =
+    let v = Var.fresh_copy v1 in
+    let subst = Subst.add ~subst v1 (U.var v) in
+    let subst = Subst.add ~subst v2 (U.var v) in
+    equal ~subst t1 t2
 
-  let rec deref ~repr ~subst t = match repr t with
+  let rec deref ~subst t = match T.repr t with
     | Var v ->
         begin match Subst.find ~subst v with
         | None -> t
-        | Some t' -> deref ~repr ~subst t'
+        | Some t' -> deref ~subst t'
         end
     | _ -> t
 
   (* NOTE: when dependent types are added, substitution in types is needed *)
 
-  let eval
-  : type t inv. build:(t,inv) build -> subst:t subst -> t -> t
-  = fun ~build ~subst t ->
-    let rec aux ~subst t = match build.b_repr t with
+  let rec eval
+  : type inv. subst:inv subst -> inv T.t -> inv T.t
+  = fun ~subst t -> match T.repr t with
     | TyMeta _ -> t
     | Const _
     | TyBuiltin _ -> t
     | AppBuiltin (_,[]) -> t
     | AppBuiltin (b,l) ->
-        app_builtin ~build b (List.map (aux ~subst) l)
+        U.app_builtin b (List.map (eval ~subst) l)
     | Bind (b, v, t) ->
         let v' = Var.fresh_copy v in
-        let subst = Subst.add ~subst v (var ~build v') in
-        mk_bind ~build b v' (aux ~subst t)
+        let subst = Subst.add ~subst v (U.var v') in
+        U.mk_bind b v' (eval ~subst t)
     | Let (v,t,u) ->
         let v' = Var.fresh_copy v in
-        let t = aux ~subst t in
-        let subst = Subst.add ~subst v (var ~build v') in
-        let_ ~build v' t (aux ~subst u)
+        let t = eval ~subst t in
+        let subst = Subst.add ~subst v (U.var v') in
+        U.let_ v' t (eval ~subst u)
     | Match (t,l) ->
-        let t = aux ~subst t in
+        let t = eval ~subst t in
         let l = ID.Map.map
           (fun (vars,rhs) ->
             let vars' = Var.fresh_copies vars in
-            let subst = Subst.add_list ~subst vars (List.map (var ~build) vars') in
-            vars', aux ~subst rhs
+            let subst = Subst.add_list ~subst vars (List.map U.var vars') in
+            vars', eval ~subst rhs
           ) l
         in
-        match_with ~build t l
+        U.match_with t l
     | Var v -> CCOpt.get t (Subst.find ~subst v)
     | TyVar v -> CCOpt.get t (Subst.find ~subst v)
     | App (f,l) ->
-        app ~build (aux ~subst f) (List.map (aux ~subst) l)
+        U.app (eval ~subst f) (List.map (eval ~subst) l)
     | TyArrow (a,b) ->
-        ty_arrow ~build (aux ~subst a) (aux ~subst b)
-    in
-    aux ~subst t
+        U.ty_arrow (eval ~subst a) (eval ~subst b)
 
   exception ApplyError of string * packed * packed list
   (** Raised when a type application fails *)
@@ -380,43 +391,42 @@ module SubstUtil = struct
       | _ -> None
     )
 
-  let error_apply_ msg ~hd ~l = raise (ApplyError (msg, hd, l))
-  let error_unif_ msg t1 t2 = raise (UnifError (msg, t1, t2))
+  let error_apply_ msg ~hd ~l = raise (ApplyError (msg, U.pack hd, List.map U.pack l))
+  let error_unif_ msg t1 t2 = raise (UnifError (msg, U.pack t1, U.pack t2))
 
   let ty_apply_full
-  : type t inv.  build:(t,inv) build -> t -> t list -> t * t subst
-  = fun ~build t l ->
-    let pack = pack ~repr:build.b_repr in
-    let rec app_ ~subst t l = match as_ty ~repr:build.b_repr t, l with
+  : type inv. inv T.t -> inv T.t list -> inv T.t * inv subst
+  = fun t l ->
+    let rec app_
+    : type inv. subst:inv subst -> inv T.t -> inv T.t list -> inv T.t * inv subst
+    = fun ~subst t l -> match U.as_ty t, l with
       | _, [] -> t, subst
       | TyI.Builtin _, _
       | TyI.App (_,_),_
       | TyI.Const _, _ ->
-          error_apply_ "cannot apply this type"
-            ~hd:(pack t) ~l:(List.map pack l)
+          error_apply_ "cannot apply this type" ~hd:t ~l
       | TyI.Var v, _ ->
           begin try
             let t = Subst.find_exn ~subst v in
             app_ ~subst t l
           with Not_found ->
-            error_apply_
-              "cannot apply this type" ~hd:(pack t) ~l:(List.map pack l)
+            error_apply_ "cannot apply this type" ~hd:t ~l
           end
       | TyI.Meta _,_ -> assert false
       | TyI.Arrow (a, t'), b :: l' ->
-          if equal ~build ~subst a b
+          if equal ~subst a b
           then app_ ~subst t' l'
           else error_apply_
-            "type mismatch on first argument" ~hd:(pack t) ~l:(List.map pack l)
+            "type mismatch on first argument" ~hd:t ~l
       | TyI.Forall (v,t'), b :: l' ->
           let subst = Subst.add ~subst v b in
           app_ ~subst t' l'
     in
     app_ ~subst:Subst.empty t l
 
-  let ty_apply ~build t l =
-    let t, subst = ty_apply_full ~build t l in
-    if Subst.is_empty subst then t else eval ~build ~subst t
+  let ty_apply t l =
+    let t, subst = ty_apply_full t l in
+    if Subst.is_empty subst then t else eval ~subst t
 
   let rec get_ty_arg_
   : type t inv. repr:(t,inv) TyI.repr -> t -> int -> t option
@@ -430,24 +440,21 @@ module SubstUtil = struct
         if i=0 then Some a else get_ty_arg_ ~repr b (i-1)
     | TyI.Forall (_,_) -> None
 
-  type 't signature = 't Sig.t
+  type 'i signature = 'i T.t Sig.t
 
-  let ty_exn
-  : type t inv_m.
-      build:(t,<poly:NunMark.polymorph;meta:inv_m>) build ->
-      sigma:t signature -> t -> t
-  = fun ~build ~sigma t ->
-    let ty_repr = as_ty ~repr:build.b_repr in
-    let rec ty_exn ~sigma t = match build.b_repr t with
+  let rec ty_exn
+  : type inv_m.
+      sigma:(<poly:[`Poly];meta:inv_m> as 'inv) signature -> 'inv T.t -> 'inv T.t
+  = fun ~sigma t -> match T.repr t with
     | Const id ->
         begin try NunID.Map.find id sigma
         with Not_found -> raise (Undefined id)
         end
     | AppBuiltin (b,_) ->
         let module B = NunBuiltin.T in
-        let prop = ty_prop ~build in
-        let prop1 = ty_arrow ~build prop prop in
-        let prop2 = ty_arrow ~build prop (ty_arrow ~build prop prop) in
+        let prop = U.ty_prop () in
+        let prop1 = U.ty_arrow prop prop in
+        let prop2 = U.ty_arrow prop (U.ty_arrow prop prop) in
         begin match b with
           | B.Equiv
           | B.Imply
@@ -461,34 +468,32 @@ module SubstUtil = struct
           | B.DataTest id ->
               (* id: a->b->tau, where tau inductive; is-id: tau->prop *)
               let ty = Sig.find_exn ~sigma id in
-              ty_arrow ~build
-                (TyI.returns ~repr:ty_repr ty)
-                prop
+              U.ty_arrow (TyI.returns ~repr:U.as_ty ty) prop
           | B.DataSelect (id,n) ->
               (* id: a_1->a_2->tau, where tau inductive; select-id-i: tau->a_i*)
               let ty = Sig.find_exn ~sigma id in
-              begin match get_ty_arg_ ~repr:ty_repr ty n with
+              begin match get_ty_arg_ ~repr:U.as_ty ty n with
               | None ->
                   failwith "cannot infer type, wrong argument to DataSelect"
               | Some ty_arg ->
-                  ty_arrow ~build (TyI.returns ~repr:ty_repr ty) ty_arg
+                  U.ty_arrow (TyI.returns ~repr:U.as_ty ty) ty_arg
               end
         end
     | Var v -> Var.ty v
     | TyVar v ->
-        assert (equal ~build ~subst:Subst.empty (ty_type ~build) (Var.ty v));
+        assert (equal ~subst:Subst.empty (U.ty_type()) (Var.ty v));
         Var.ty v
     | App (f,l) ->
-        ty_apply ~build (ty_exn ~sigma f) (List.map (ty_exn ~sigma) l)
+        ty_apply (ty_exn ~sigma f) (List.map (ty_exn ~sigma) l)
     | Bind (b,v,t) ->
         begin match b with
         | Forall
-        | Exists -> ty_arrow ~build (Var.ty v) (ty_prop ~build)
+        | Exists -> U.ty_arrow (Var.ty v) (U.ty_prop())
         | Fun ->
-            if TyI.returns_Type ~repr:ty_repr (Var.ty v)
-            then ty_forall ~build v (ty_exn ~sigma t)
-            else ty_arrow ~build (Var.ty v) (ty_exn ~sigma t)
-        | TyForall -> ty_type ~build
+            if TyI.returns_Type ~repr:U.as_ty (Var.ty v)
+            then U.ty_forall v (ty_exn ~sigma t)
+            else U.ty_arrow (Var.ty v) (ty_exn ~sigma t)
+        | TyForall -> U.ty_type()
         end
     | Let (_,_,u) -> ty_exn ~sigma u
     | Match (_,m) ->
@@ -498,38 +503,37 @@ module SubstUtil = struct
     | TyBuiltin b ->
         begin match b with
         | NunBuiltin.Ty.Kind -> failwith "Term_ho.ty: kind has no type"
-        | NunBuiltin.Ty.Type -> ty_kind ~build
-        | NunBuiltin.Ty.Prop -> ty_type ~build
+        | NunBuiltin.Ty.Type -> U.ty_kind()
+        | NunBuiltin.Ty.Prop -> U.ty_type()
         end
-    | TyArrow (_,_) -> ty_type ~build
-    in
-    ty_exn ~sigma t
+    | TyArrow (_,_) -> U.ty_type()
 
-  let ty ~build ~sigma t =
-    try CCError.return (ty_exn ~build ~sigma t)
+  let ty ~sigma t =
+    try CCError.return (ty_exn ~sigma t)
     with e -> NunUtils.err_of_exn e
 
   (* return lists of same length, for
     unification or matching in the case of application *)
-  let unif_l_ ~build f1 l1 f2 l2 =
+  let unif_l_ f1 l1 f2 l2 =
     let n1 = List.length l1 in
     let n2 = List.length l2 in
     if n1=n2 then f1::l1, f2::l2
     else if n1<n2 then
       let l2_1, l2_2 = CCList.take_drop (n2-n1) l2 in
-      f1::l1, (app ~build f2 l2_1) :: l2_2
+      f1::l1, (U.app f2 l2_1) :: l2_2
     else
       let l1_1, l1_2 = CCList.take_drop (n1-n2) l1 in
-      (app ~build f1 l1_1) :: l1_2, f2 :: l2
+      (U.app f1 l1_1) :: l1_2, f2 :: l2
 
   let match_exn
-  : type t inv. build:(t, inv) build -> ?subst2:t subst -> t -> t -> t subst
-  = fun ~build ?(subst2=Subst.empty) t1 t2 ->
-    let pack = pack ~repr:build.b_repr in
+  : type inv. ?subst2:inv subst -> inv T.t -> inv T.t -> inv subst
+  = fun ?(subst2=Subst.empty) t1 t2 ->
     (* bound: bound variables in t1 and t2 *)
-    let rec match_ subst t1 t2 =
-      let t2 = deref ~repr:build.b_repr ~subst:subst2 t2 in
-      match build.b_repr t1, build.b_repr t2 with
+    let rec match_
+    : inv subst -> inv T.t -> inv T.t -> inv subst
+    = fun subst t1 t2 ->
+      let t2 = deref ~subst:subst2 t2 in
+      match T.repr t1, T.repr t2 with
       | AppBuiltin (b1,l1), AppBuiltin (b2,l2)
           when NunBuiltin.T.equal b1 b2 && List.length l1 = List.length l2 ->
             List.fold_left2 match_ subst l1 l2
@@ -538,7 +542,7 @@ module SubstUtil = struct
       | TyVar v1, _ -> match_var subst v1 t1 t2
       | App (f1, l1), App (f2, l2) ->
           (* right-parenthesed application *)
-          let l1, l2 = unif_l_ ~build f1 l1 f2 l2 in
+          let l1, l2 = unif_l_ f1 l1 f2 l2 in
           List.fold_left2 match_ subst l1 l2
       | TyArrow (a1, b1), TyArrow (a2,b2) ->
           let subst = match_ subst a1 a2 in
@@ -552,21 +556,21 @@ module SubstUtil = struct
       | Const _, _
       | App (_, _), _
       | TyArrow _, _
-      | TyBuiltin _, _ -> error_unif_ "do not match" (pack t1) (pack t2)
+      | TyBuiltin _, _ -> error_unif_ "do not match" t1 t2
     and match_var subst v t1 t2 =
       match Subst.find ~subst v with
       | None ->
           (* NOTE: no occur check, we assume t1 and t2 share no variables *)
           Subst.add ~subst v t2
       | Some t1' ->
-          if equal ~build ~subst t1' t2
+          if equal ~subst t1' t2
             then subst
-            else error_unif_ "incompatible variable binding" (pack t1) (pack t2)
+            else error_unif_ "incompatible variable binding" t1 t2
     in
     match_ Subst.empty t1 t2
 
-  let match_ ~build ?subst2 t1 t2 =
-    try Some (match_exn ~build ?subst2 t1 t2)
+  let match_ ?subst2 t1 t2 =
+    try Some (match_exn ?subst2 t1 t2)
     with UnifError _ -> None
 
   (* TODO write test *)
@@ -691,7 +695,7 @@ module Erase = struct
   let erase_ty = erase
 end
 
-type to_fo_invariant = <poly:NunMark.monomorph; meta:NunMark.without_meta>
+type to_fo_invariant = <poly:[`Mono]; meta:[`NoMeta]>
 
 module ToFO(FO : NunFO.S) = struct
   exception NotInFO of string * packed
@@ -832,7 +836,7 @@ module ToFO(FO : NunFO.S) = struct
       | TyI.Builtin NunBuiltin.Ty.Prop -> true
       | _ -> false
 
-  let convert_statement ~repr ~sigma (st:(_,_,M.linear) NunStatement.t) =
+  let convert_statement ~repr ~sigma (st:(_,_,[`Linear]) NunStatement.t) =
     let module St = NunStatement in
     match St.view st with
     | St.Decl (id, k, ty) ->
@@ -917,123 +921,109 @@ module ToFO(FO : NunFO.S) = struct
     res |> CCVector.freeze |> FOI.Problem.make
 end
 
-module OfFO(FO : NunFO.VIEW) = struct
-  let rec convert_ty ~build t = match FO.Ty.view t with
+module OfFO(T:S)(FO : NunFO.VIEW) = struct
+  module U = Util(T)
+  type t = to_fo_invariant T.t
+
+  let rec convert_ty t = match FO.Ty.view t with
     | NunFO.TyBuiltin b ->
         let b = match b with
           | NunFO.TyBuiltin.Prop -> NunBuiltin.Ty.Prop
-        in ty_builtin ~build b
+        in U.ty_builtin b
     | NunFO.TyApp (f,l) ->
-        let l = List.map (convert_ty ~build) l in
-        ty_app ~build (ty_const ~build f) l
+        let l = List.map convert_ty l in
+        U.ty_app (U.ty_const f) l
 
-  let rec convert_term ~build t =
+  let rec convert_term t =
     let module B = NunBuiltin.T in
-    let rec aux t = match FO.T.view t with
+    match FO.T.view t with
     | NunFO.Builtin b ->
         let b = match b with
           | NunFO.Builtin.Int _ -> NunUtils.not_implemented "conversion from int"
         in
-        builtin ~build b
+        U.builtin b
     | NunFO.Var v ->
-        var ~build (Var.update_ty v ~f:(convert_ty ~build))
+        U.var (Var.update_ty v ~f:(convert_ty))
     | NunFO.App (f,l) ->
-        let l = List.map aux l in
-        app ~build (const ~build f) l
+        let l = List.map convert_term l in
+        U.app (U.const f) l
     | NunFO.Fun (v,t) ->
-        let v = Var.update_ty v ~f:(convert_ty ~build) in
-        fun_ ~build v (aux t)
+        let v = Var.update_ty v ~f:(convert_ty) in
+        U.fun_ v (convert_term t)
     | NunFO.DataTest (c,t) ->
-        app_builtin ~build (B.DataTest c) [aux t]
+        U.app_builtin (B.DataTest c) [convert_term t]
     | NunFO.DataSelect (c,n,t) ->
-        app_builtin ~build (B.DataSelect (c,n)) [aux t]
+        U.app_builtin (B.DataSelect (c,n)) [convert_term t]
     | NunFO.Let (v,t,u) ->
-        let v = Var.update_ty v ~f:(convert_ty ~build) in
-        let_ ~build v (aux t) (aux u)
+        let v = Var.update_ty v ~f:(convert_ty) in
+        U.let_ v (convert_term t) (convert_term u)
     | NunFO.Ite (a,b,c) ->
-        ite ~build (convert_formula ~build a) (aux b) (aux c)
-    in
-    aux t
+        U.ite (convert_formula a) (convert_term b) (convert_term c)
 
-  and convert_formula ~build f =
+  and convert_formula f =
     let module B = NunBuiltin.T in
-    let rec aux f = match FO.Formula.view f with
-    | NunFO.Atom t -> convert_term ~build t
-    | NunFO.True -> builtin ~build B.True
-    | NunFO.False -> builtin ~build B.False
-    | NunFO.Eq (a,b) -> eq ~build (convert_term ~build a) (convert_term ~build b)
+    match FO.Formula.view f with
+    | NunFO.Atom t -> convert_term t
+    | NunFO.True -> U.builtin B.True
+    | NunFO.False -> U.builtin B.False
+    | NunFO.Eq (a,b) -> U.eq (convert_term a) (convert_term b)
     | NunFO.And l ->
-        app ~build (builtin ~build B.And) (List.map aux l)
+        U.app (U.builtin B.And) (List.map convert_formula l)
     | NunFO.Or l ->
-        app ~build (builtin ~build B.Or) (List.map aux l)
+        U.app (U.builtin B.Or) (List.map convert_formula l)
     | NunFO.Not f ->
-        app ~build (builtin ~build B.Not) [aux f]
+        U.app (U.builtin B.Not) [convert_formula f]
     | NunFO.Imply (a,b) ->
-        app ~build (builtin ~build B.Imply) [aux a; aux b]
+        U.app (U.builtin B.Imply) [convert_formula a; convert_formula b]
     | NunFO.Equiv (a,b) ->
-        eq ~build (aux a) (aux b)
+        U.eq (convert_formula a) (convert_formula b)
     | NunFO.Forall (v,t) ->
-        let v = Var.update_ty v ~f:aux_ty in
-        forall ~build v (aux t)
+        let v = Var.update_ty v ~f:convert_formula_ty in
+        U.forall v (convert_formula t)
     | NunFO.Exists (v,t) ->
-        let v = Var.update_ty v ~f:aux_ty in
-        exists ~build v (aux t)
+        let v = Var.update_ty v ~f:convert_formula_ty in
+        U.exists v (convert_formula t)
     | NunFO.F_let (v,t,u) ->
-        let v = Var.update_ty v ~f:aux_ty in
-        let_ ~build v (aux t) (aux u)
+        let v = Var.update_ty v ~f:convert_formula_ty in
+        U.let_ v (convert_formula t) (convert_formula u)
     | NunFO.F_ite (a,b,c) ->
-        ite ~build (aux a) (aux b) (aux c)
+        U.ite (convert_formula a) (convert_formula b) (convert_formula c)
     | NunFO.F_fun (v,t) ->
-        let v = Var.update_ty v ~f:aux_ty in
-        fun_ ~build v (aux t)
-    and aux_ty = convert_ty ~build in
-    aux f
+        let v = Var.update_ty v ~f:convert_formula_ty in
+        U.fun_ v (convert_formula t)
+  and convert_formula_ty = convert_ty
 
-  let convert_t_or_f ~build = function
-    | NunFO.Term t -> convert_term ~build t
-    | NunFO.Form f -> convert_formula ~build f
+  let convert_t_or_f = function
+    | NunFO.Term t -> convert_term t
+    | NunFO.Form f -> convert_formula f
 
-  let convert_model ~build m =
-    NunModel.map ~f:(convert_t_or_f ~build) m
+  let convert_model m = NunModel.map ~f:(convert_t_or_f) m
 end
 
-let to_fo (type f2)(type t2)(type ty2)
-  ~(build1:('t1, to_fo_invariant) build)
-  ~(build2:(f2,t2,ty2) NunFO.build)
-=
-  let module Sol = NunSolver_intf in
-  let (module FO : NunFO.S
-      with type formula = f2
-      and type T.t = t2 and type Ty.t = ty2) = build2 in
-  let module Conv = ToFO(FO) in
-  let module ConvBack = OfFO(FO) in
-  NunTransform.make1
-  ~name:"to_fo"
-  ~encode:(fun pb ->
-    let pb' = Conv.convert_problem ~repr:build1.b_repr pb in
-    pb', ()
-  )
-  ~decode:(fun _st m ->
-    ConvBack.convert_model ~build:build1 m
-  )
-  ()
+module TransFO(T1 : S)(T2 : NunFO.S) = struct
+  module Conv = ToFO(T2)
+  module ConvBack = OfFO(T1)(T2)
 
-let to_fo_no_model (type f2)(type t2)(type ty2)
-  ~(repr1:('t1,to_fo_invariant) repr)
-  ~(build2:(f2,t2,ty2) NunFO.build)
-=
-  let (module FO : NunFO.S
-      with type formula = f2
-      and type T.t = t2 and type Ty.t = ty2) = build2 in
-  let module Conv = ToFO(FO) in
-  NunTransform.make1
-  ~name:"to_fo"
-  ~encode:(fun pb ->
-    let pb' = Conv.convert_problem ~repr:repr1 pb in
-    pb', ()
-  )
-  ~decode:(fun _ x -> x)
-  ()
+  let to_fo =
+    NunTransform.make1
+    ~name:"to_fo"
+    ~encode:(fun pb ->
+      let pb' = Conv.convert_problem ~repr:T1.repr pb in
+      pb', ()
+    )
+    ~decode:(fun _st m -> ConvBack.convert_model m)
+    ()
+
+  let to_fo_with ~decode =
+    NunTransform.make1
+    ~name:"to_fo"
+    ~encode:(fun pb ->
+      let pb' = Conv.convert_problem ~repr:T1.repr pb in
+      pb', ()
+    )
+    ~decode:(fun _ x -> decode x)
+    ()
+end
 
 (** {2 Conversion} *)
 
@@ -1067,7 +1057,7 @@ module OfUntyped = struct
   module A = NunUntypedAST
   module Loc = NunLocation
 
-  type invariant = <meta:NunMark.without_meta; poly:NunMark.polymorph>
+  type invariant = <meta:[`NoMeta]; poly:[`Poly]>
 
   exception Error of A.term * string
 

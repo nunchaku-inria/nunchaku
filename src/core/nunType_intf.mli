@@ -12,16 +12,16 @@ type ('a, 'inv) view =
   | Const of id
   | Var :
       'a var (** Constant or bound variable *)
-      -> ('a, <poly:NunMark.polymorph;..>) view
+      -> ('a, <poly:[`Poly];..>) view
   | Meta :
       'a NunMetaVar.t (** Meta-variable, used for unification *)
-      -> ('a, <meta: NunMark.with_meta;..>) view
+      -> ('a, <meta: [`Meta];..>) view
   | App of 'a * 'a list
   | Arrow of 'a * 'a
   | Forall :   (** Polymorphic type *)
       'a var
       * 'a
-      -> ('a, <poly: NunMark.polymorph;..>) view
+      -> ('a, <poly: [`Poly];..>) view
 
 type ('t, 'inv) repr = ('t -> ('t, 'inv) view)
 (** A representation of types with concrete type ['t], and invariants
