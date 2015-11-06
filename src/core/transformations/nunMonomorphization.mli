@@ -21,20 +21,12 @@ type id = NunID.t
 
 (* TODO: if depth limit reached, activate some "spuriousness" flag? *)
 
-type invariant1 = <meta:NunMark.without_meta; poly:NunMark.polymorph>
-type invariant2 = <meta:NunMark.without_meta; poly:NunMark.monomorph>
+type inv1 = <meta:[`NoMeta]; poly:[`Poly]>
+type inv2 = <meta:[`NoMeta]; poly:[`Mono]>
 
-module type PARAM = sig
-  type term1
-  type term2
-
-  val build1: (term1, invariant1) NunTerm_ho.build
-  val build2: (term2, invariant2) NunTerm_ho.build
-end
-
-module Make(P : PARAM) : sig
-  type term1 = P.term1
-  type term2 = P.term2
+module Make(T : NunTerm_ho.S) : sig
+  type term1 = inv1 T.t
+  type term2 = inv2 T.t
 
   exception InvalidProblem of string
 
@@ -67,53 +59,22 @@ module Make(P : PARAM) : sig
       term2 NunModel.t ->
       term1 NunModel.t
   (** Unmangles constants that have been collapsed with their type arguments *)
+
+  val pipe :
+    print:bool ->
+    ((term1, term1, 'inv) NunProblem.t,
+      (term2, term2, 'inv) NunProblem.t,
+      term2 NunModel.t, term1 NunModel.t
+    ) NunTransform.t
+  (** Pipeline component *)
+
+  val pipe_with :
+    decode:(decode_term:(term2 -> term1) -> 'c -> 'd) ->
+    print:bool ->
+    ((term1, term1, 'inv) NunProblem.t,
+      (term2, term2, 'inv) NunProblem.t, 'c, 'd
+    ) NunTransform.t
+  (** Generic Pipe Component
+      @param decode the decode function that takes an applied [(module S)]
+        in addition to the state *)
 end
-
-(** {2 Convert atomic types to symbols}
-
-  For instance, [list int] will become [list_int] or something similar.
-  This operation is optional if the backend supports parametrized types. *)
-module TypeMangling : sig
-  type 't state
-  (** Useful for decoding *)
-
-  val create : build:('t, _) NunTerm_ho.build -> unit -> 't state
-
-  val mangle_term :
-    state:'t state ->
-    't ->
-    't
-
-  val mangle_problem :
-    state:' state ->
-    ('t,'t,'inv) NunProblem.t ->
-    ('t,'t,'inv) NunProblem.t
-
-  val unmangle_term : state:'t state -> 't -> 't
-
-  val unmangle_model :
-      state:'t state ->
-      't NunModel.t -> 't NunModel.t
-  (** Stay in the same term representation, but de-monomorphize *)
-end
-
-(** Pipeline component *)
-val pipe :
-  print:bool ->
-  build1:('t1, invariant1) NunTerm_ho.build ->
-  build2:('t2, invariant2) NunTerm_ho.build ->
-  (('t1, 't1, 'inv) NunProblem.t,
-    ('t2, 't2, 'inv) NunProblem.t,
-    't1 NunModel.t, 't1 NunModel.t
-  ) NunTransform.t
-
-(** Generic Pipe Component
-    @param decode the decode function that takes an applied [(module S)]
-      in addition to the state *)
-val pipe_with :
-  decode:(decode_term:('t2 -> 't1) -> 'c -> 'd) ->
-  print:bool ->
-  build1:('t1, invariant1) NunTerm_ho.build ->
-  build2:('t2, invariant2) NunTerm_ho.build ->
-  (('t1, 't1, 'inv) NunProblem.t, ('t2,'t2,'inv) NunProblem.t, 'c, 'd) NunTransform.t
-
