@@ -5,7 +5,6 @@
 
 module ID = NunID
 module Var = NunVar
-module M = NunMark
 
 type id = NunID.t
 type 'a var = 'a NunVar.t
@@ -14,7 +13,7 @@ type _ binder =
   | Forall
   | Exists
   | Fun
-  | TyForall : M.polymorph binder
+  | TyForall : [`Poly] binder
 
 type 'a case = 'a var list * 'a
 (** A pattern match case for a given constructor [ vars, right-hand side ]
@@ -47,12 +46,12 @@ type ('a, 'inv) view =
   | Match of 'a * 'a cases (** shallow pattern-match *)
   | TyVar :
       'a var
-      -> ('a, <poly:NunMark.polymorph;..>) view
+      -> ('a, <poly:[`Poly];..>) view
   | TyBuiltin of NunBuiltin.Ty.t (** Builtin type *)
   | TyArrow of 'a * 'a  (** Arrow type *)
   | TyMeta :
       'a NunMetaVar.t ->
-      ('a, <meta:M.with_meta; poly:_>) view
+      ('a, <meta:[`Meta]; poly:_>) view
 
 (* NOTE: Eq has its own case (in Builtin), because its type parameter is often hidden.
    For instance, when we parse a model back from TPTP or SMT, equalities
@@ -106,7 +105,7 @@ let to_seq
 
 (** Iterate on free variables. Only for terms that have meta-variables. *)
 let to_seq_free_vars
-: type t. repr:(t,(<meta:M.with_meta;..> as 'inv)) repr -> t -> t var Sequence.t
+: type t. repr:(t,(<meta:[`Meta];..> as 'inv)) repr -> t -> t var Sequence.t
 = fun (type t_) ~repr t yield ->
   let module VarSet = Var.Set(struct type t = t_ end) in
   let rec aux ~bound (t:t_) = match repr t with
@@ -176,7 +175,7 @@ let to_seq_meta_vars (type t) ~repr (t:t) =
 let free_meta_vars
 : type t.
   ?init:t NunMetaVar.t NunID.Map.t ->
-  repr:(t, (<meta:M.with_meta;poly:_> as 'inv)) repr ->
+  repr:(t, (<meta:[`Meta];poly:_> as 'inv)) repr ->
   t ->
   t NunMetaVar.t NunID.Map.t
 = fun ?(init=ID.Map.empty) ~repr t ->

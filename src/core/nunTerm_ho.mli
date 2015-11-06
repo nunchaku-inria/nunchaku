@@ -101,8 +101,8 @@ module Util(T : S) : sig
   val ty_app : 'inv T.t -> 'inv T.t list -> 'inv T.t
   val ty_arrow : 'inv T.t -> 'inv T.t -> 'inv T.t
 
-  val ty_var : (<poly:NunMark.polymorph;..> as 'inv) T.t var -> 'inv T.t
-  val ty_forall : (<poly:NunMark.polymorph;..> as 'inv) T.t var -> 'inv T.t -> 'inv T.t
+  val ty_var : (<poly:[`Poly];..> as 'inv) T.t var -> 'inv T.t
+  val ty_forall : (<poly:[`Poly];..> as 'inv) T.t var -> 'inv T.t -> 'inv T.t
 
   val as_ty : ('inv T.t, 'inv) NunType_intf.repr
   val pack: 'inv T.t -> packed
@@ -245,14 +245,14 @@ module OfFO(T:S)(FO : NunFO.VIEW) : sig
 end
 
 module TransFO(T1 : S)(T2 : NunFO.S) : sig
-  val to_fo :
+  val pipe :
     ((to_fo_invariant T1.t, to_fo_invariant T1.t, [`Linear]) NunProblem.t,
       (T2.Formula.t, T2.T.t, T2.Ty.t) NunFO.Problem.t,
       (T2.T.t,T2.Formula.t) NunFO.term_or_form NunModel.t,
       to_fo_invariant T1.t NunModel.t
     ) NunTransform.t
 
-  val to_fo_with :
+  val pipe_with :
     decode:('b -> 'c) ->
     ((to_fo_invariant T1.t, to_fo_invariant T1.t, [`Linear]) NunProblem.t,
       (T2.Formula.t, T2.T.t, T2.Ty.t) NunFO.Problem.t,

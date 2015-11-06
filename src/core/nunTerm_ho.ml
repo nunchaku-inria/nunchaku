@@ -317,11 +317,6 @@ module SubstUtil(T : S) = struct
     | Bind _, _ -> false
     | TyMeta _,_ -> false
     | TyVar _, _ -> false
-  and aux_bvar ~subst v1 v2 t1 t2 =
-    let v = Var.fresh_copy v1 in
-    let subst = Subst.add ~subst v1 (U.var v) in
-    let subst = Subst.add ~subst v2 (U.var v) in
-    equal ~subst t1 t2
 
   let rec deref ~subst t = match T.repr t with
     | Var v ->
@@ -1004,7 +999,7 @@ module TransFO(T1 : S)(T2 : NunFO.S) = struct
   module Conv = ToFO(T2)
   module ConvBack = OfFO(T1)(T2)
 
-  let to_fo =
+  let pipe =
     NunTransform.make1
     ~name:"to_fo"
     ~encode:(fun pb ->
@@ -1014,7 +1009,7 @@ module TransFO(T1 : S)(T2 : NunFO.S) = struct
     ~decode:(fun _st m -> ConvBack.convert_model m)
     ()
 
-  let to_fo_with ~decode =
+  let pipe_with ~decode =
     NunTransform.make1
     ~name:"to_fo"
     ~encode:(fun pb ->

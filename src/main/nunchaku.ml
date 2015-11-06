@@ -131,20 +131,22 @@ let print_input_if_needed statements =
 (* build a pipeline, depending on options *)
 let make_model_pipeline () =
   let open NunTransform.Pipe in
+  let module HO = NunTerm_ho.Default in
+  let module Typed = NunTerm_typed.Default in
+  let module TypedAsHO = NunTerm_typed.AsHO(Typed) in
   (* type inference *)
-  let step_ty_infer = NunTypeInference.pipe ~print:!print_typed_
-    NunTerm_typed.default NunTerm_ho.default in
+  let module Step_tyinfer = NunTypeInference.Make(Typed)(HO) in
+  let step_ty_infer = Step_tyinfer.pipe ~print:!print_typed_ in
   (* encodings *)
-  let step_skolem =
-    NunSkolem.pipe ~print:!print_skolem_
-    NunTerm_typed.as_ho NunTerm_ho.default in
-  let step_monomorphization =
-    NunMonomorphization.pipe ~print:!print_mono_ NunTerm_ho.default in
-  let step_recursion_elim =
-    NunElimRecursion.pipe ~print:!print_recursion_elim_ NunTerm_ho.default
-  in
+  let module Step_skolem = NunSkolem.Make(TypedAsHO)(HO) in
+  let step_skolem = Step_skolem.pipe ~print:!print_skolem_ in
+  let module Step_mono = NunMonomorphization.Make(HO) in
+  let step_monomorphization = Step_mono.pipe ~print:!print_mono_ in
+  let module Step_rec_elim = NunElimRecursion.Make(HO) in
+  let step_recursion_elim = Step_rec_elim.pipe ~print:!print_recursion_elim_ in
   (* conversion to FO *)
-  let step_fo = NunTerm_ho.to_fo NunTerm_ho.default NunFO.default in
+  let module Step_tofo = NunTerm_ho.TransFO(HO)(NunFO.Default) in
+  let step_fo = Step_tofo.pipe in
   (* setup pipeline *)
   let pipe =
     step_ty_infer @@@
@@ -155,34 +157,42 @@ let make_model_pipeline () =
     id
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  NunCVC4.close_pipe NunFO.default_view
+  NunCVC4.close_pipe NunFO.default_repr
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 let make_proof_pipeline () =
   let open NunTransform.Pipe in
+  let module HO = NunTerm_ho.Default in
+  let module Typed = NunTerm_typed.Default in
+  let module TypedAsHO = NunTerm_typed.AsHO(Typed) in
   (* type inference *)
-  let step_ty_infer = NunTypeInference.pipe_with
-    ~decode:(fun ~signature:_ x->x) ~print:!print_typed_ NunTerm_typed.default in
+  let module Step_tyinfer = NunTypeInference.Make(Typed)(HO) in
+  let step_ty_infer = Step_tyinfer.pipe_with
+    ~decode:(fun ~signature:_ x->x) ~print:!print_typed_ in
   (* encodings *)
-  let step_skolem =
-    NunSkolem.pipe_with ~decode:(fun ~find_id_def:_ x->x)  ~print:!print_skolem_
-    NunTerm_typed.as_ho NunTerm_ho.default in
-  let step_monomorphization =
-    NunMonomorphization.pipe_with
-      ~decode:(fun ~decode_term:_ x -> x)
-      ~print:!print_mono_ NunTerm_ho.default in
+  let module Step_skolem = NunSkolem.Make(TypedAsHO)(HO) in
+  let step_skolem = Step_skolem.pipe_with
+     ~decode:(fun ~find_id_def:_ x->x) ~print:!print_skolem_ in
+  let module Step_mono = NunMonomorphization.Make(HO) in
+  let step_monomorphization = Step_mono.pipe_with
+    ~decode:(fun ~decode_term:_ x -> x) ~print:!print_mono_ in
+  let module Step_rec_elim = NunElimRecursion.Make(HO) in
+  let step_recursion_elim = Step_rec_elim.pipe_with
+    ~decode:(fun ~decode_term:_ x -> x) ~print:!print_recursion_elim_ in
   (* conversion to FO *)
-  let step_fo = NunTerm_ho.to_fo_no_model NunTerm_ho.default NunFO.default in
+  let module Step_tofo = NunTerm_ho.TransFO(HO)(NunFO.Default) in
+  let step_fo = Step_tofo.pipe_with ~decode:(fun x->x) in
   (* setup pipeline *)
   let pipe =
     step_ty_infer @@@
     step_skolem @@@
     step_monomorphization @@@
+    step_recursion_elim @@@
     step_fo @@@
     id
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  NunCVC4.close_pipe NunFO.default_view
+  NunCVC4.close_pipe NunFO.default_repr
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 (* search for results *)

@@ -23,12 +23,12 @@ type ('t, 'ty, 'k) equation =
   | Eqn_linear :
       'ty var list (* universally quantified vars, also arguments to [f] *)
       * 't (* right-hand side of equation *)
-      -> ('t, 'ty, NunMark.linear) equation
+      -> ('t, 'ty, [`Linear]) equation
   | Eqn_nested :
       'ty var list (* universally quantified vars *)
       * 't list (* arguments to the defined term *)
       * 't  (* right-hand side of equation *)
-      -> ('t, 'ty, NunMark.nested) equation
+      -> ('t, 'ty, [`Nested]) equation
 
 type ('t,'ty,'kind) rec_def = {
   rec_vars: 'ty var list; (* alpha_1, ..., alpha_n *)

@@ -5,37 +5,36 @@
 
     Useful for finite-model finding in CVC4 *)
 
-type invariant = <poly:NunMark.monomorph; meta:NunMark.without_meta>
+type invariant = <poly:[`Mono]; meta:[`NoMeta]>
 
-type 't decode_state
+module Make(T : NunTerm_ho.S) : sig
+  type term = invariant T.t
+  type decode_state
 
-val elim_recursion :
-  build:('t, invariant) NunTerm_ho.build ->
-  ('t, 't, NunMark.linear) NunProblem.t ->
-  ('t, 't, NunMark.linear) NunProblem.t * 't decode_state
+  val elim_recursion :
+    (term, term, [`Linear]) NunProblem.t ->
+    (term, term, [`Linear]) NunProblem.t * decode_state
 
-val decode_term : state:'t decode_state -> 't -> 't
+  val decode_term : state:decode_state -> term -> term
 
-val decode_model : state:'t decode_state -> 't NunModel.t -> 't NunModel.t
+  val decode_model : state:decode_state -> term NunModel.t -> term NunModel.t
 
-(** Pipeline component *)
-val pipe :
-  print:bool ->
-  build:('t, invariant) NunTerm_ho.build ->
-  (('t, 't, NunMark.linear) NunProblem.t,
-    ('t, 't, NunMark.linear) NunProblem.t,
-    't NunModel.t, 't NunModel.t) NunTransform.t
+  (** Pipeline component *)
+  val pipe :
+    print:bool ->
+    ((term, term, [`Linear]) NunProblem.t,
+      (term, term, [`Linear]) NunProblem.t,
+      term NunModel.t, term NunModel.t) NunTransform.t
 
-(** Generic Pipe Component
-    @param decode the decode function that takes an applied [(module S)]
-      in addition to the state *)
-val pipe_with :
-  decode:(decode_term:('t -> 't) -> 'c -> 'd) ->
-  print:bool ->
-  build:('t, invariant) NunTerm_ho.build ->
-  (('t, 't, NunMark.linear) NunProblem.t,
-    ('t, 't, NunMark.linear) NunProblem.t,
-    'c, 'd
-  ) NunTransform.t
-
+  (** Generic Pipe Component
+      @param decode the decode function that takes an applied [(module S)]
+        in addition to the state *)
+  val pipe_with :
+    decode:(decode_term:(term -> term) -> 'c -> 'd) ->
+    print:bool ->
+    ((term, term, [`Linear]) NunProblem.t,
+      (term, term, [`Linear]) NunProblem.t,
+      'c, 'd
+    ) NunTransform.t
+end
 
