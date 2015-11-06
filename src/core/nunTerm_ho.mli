@@ -18,6 +18,16 @@ type ('t, 'inv) build = ('t, 'inv) NunTerm_intf.build
 val as_ty : repr:('t, 'inv) repr -> ('t, 'inv) NunType_intf.repr
 (** View of a term as a type. *)
 
+module type REPR = sig
+  type +'inv t
+  val repr : ('inv t,'inv) repr
+end
+
+module type BUILD = sig
+  type +'inv t
+  val build : ('inv t,'inv) build
+end
+
 (** {2 Utils} *)
 
 val const : build:('t, 'inv) build -> id -> 't
@@ -49,6 +59,39 @@ val ty_arrow : build:('t, 'inv) build -> 't -> 't -> 't
 
 val ty_var : build:('t, <poly:NunMark.polymorph;..> as 'inv) build -> 't var -> 't
 val ty_forall : build:('t, <poly:NunMark.polymorph;..> as 'inv) build -> 't var -> 't -> 't
+
+module Util(T : BUILD) : sig
+  val const : id -> 'inv T.t
+  val builtin : NunBuiltin.T.t -> 'inv T.t
+  val app_builtin : NunBuiltin.T.t -> 'inv T.t list -> 'inv T.t
+  val var : 'inv T.t var -> 'inv T.t
+  val app : 'inv T.t -> 'inv T.t list -> 'inv T.t
+  val fun_ : (<poly:_;..> as 'inv) T.t var -> 'inv T.t -> 'inv T.t
+  val let_ : 'inv T.t var -> 'inv T.t -> 'inv T.t -> 'inv T.t
+  val match_with : 'inv T.t -> 'inv T.t NunTerm_intf.cases -> 'inv T.t
+  val ite : 'inv T.t -> 'inv T.t -> 'inv T.t -> 'inv T.t
+  val forall : (<poly:_;..> as 'inv) T.t var -> 'inv T.t -> 'inv T.t
+  val exists : (<poly:_;..> as 'inv) T.t var -> 'inv T.t -> 'inv T.t
+  val eq : 'inv T.t -> 'inv T.t -> 'inv T.t
+
+  val mk_bind :
+    'inv_p NunTerm_intf.binder ->
+    (<poly:'inv_p;..> as 'inv) T.t var -> 'inv T.t -> 'inv T.t
+
+  val ty_type : 'inv T.t (** Type of types *)
+  val ty_kind : 'inv T.t (** Type of ty_type *)
+  val ty_prop : 'inv T.t (** Propositions *)
+
+  val ty_builtin : NunBuiltin.Ty.t -> 'inv T.t
+  val ty_const : id -> 'inv T.t
+  val ty_app : 'inv T.t -> 'inv T.t list -> 'inv T.t
+  val ty_arrow : 'inv T.t -> 'inv T.t -> 'inv T.t
+
+  val ty_var : (<poly:NunMark.polymorph;..> as 'inv) T.t var -> 'inv T.t
+  val ty_forall : (<poly:NunMark.polymorph;..> as 'inv) T.t var -> 'inv T.t -> 'inv T.t
+end
+
+(** {2 Default Implementation} *)
 
 type 'inv default
 (** Default representation for terms *)

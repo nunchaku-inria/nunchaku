@@ -7,21 +7,22 @@
 
 type ('t, 'inv) build = ('t, 'inv) NunTerm_ho.build
 
-val whnf : build:('t, _) build -> 't -> 't
-(** Weak Head Normal Form *)
+module Make(T : NunTerm_ho.BUILD) : sig
+  val whnf : 'inv T.t -> 'inv T.t
+  (** Weak Head Normal Form *)
 
-val snf : build:('t, _) build -> 't -> 't
-(** Strong Normal Form (reduce under functions) *)
+  val snf : 'inv T.t -> 'inv T.t
+  (** Strong Normal Form (reduce under functions) *)
 
-module Full : sig
-  type 't subst = ('t,'t) NunVar.Subst.t
+  module Full : sig
+    type 't subst = ('t,'t) NunVar.Subst.t
 
-  (* TODO: expose the internal "state" record? *)
+    (* TODO: expose the internal "state" record? *)
 
-  val whnf :
-    build:('t, _) build ->
-    ?subst:'t subst->
-    't ->
-    't list ->
-    ('t * 't list * 't subst)
+    val whnf :
+      ?subst:'inv T.t subst->
+      'inv T.t ->
+      'inv T.t list ->
+      ('inv T.t * 'inv T.t list * 'inv T.t subst)
+  end
 end

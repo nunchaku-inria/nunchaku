@@ -27,6 +27,16 @@ open NunTerm_intf
 type ('t, 'inv) repr = ('t, 'inv) NunTerm_intf.repr
 type ('t, 'inv) build = ('t, 'inv) NunTerm_intf.build
 
+module type REPR = sig
+  type +'inv t
+  val repr : ('inv t,'inv) repr
+end
+
+module type BUILD = sig
+  type +'inv t
+  val build : ('inv t,'inv) build
+end
+
 type 'inv default = {
   view: ('inv default, 'inv) view;
 }
@@ -47,11 +57,6 @@ let default_build = {
   b_repr=default_repr;
   b_build=build;
 }
-
-(* special constants: kind and type *)
-let kind_ = {view=TyBuiltin NunBuiltin.Ty.Kind}
-let type_ = {view=TyBuiltin NunBuiltin.Ty.Type}
-let prop = {view=TyBuiltin NunBuiltin.Ty.Prop}
 
 let app_builtin ~build s l = build.b_build (AppBuiltin (s,l))
 let builtin ~build s = app_builtin ~build s []
@@ -102,6 +107,38 @@ let as_ty
   Default.Ty.returns_Type Default.(ty_arrow ty_prop ty_type)
   not (Default.Ty.returns_Type Default.(ty_arrow ty_type ty_prop))
 *)
+
+module Util(T : BUILD) = struct
+  let build = T.build
+
+  let ty_type = build.b_build (TyBuiltin NunBuiltin.Ty.Type)
+  let ty_kind = build.b_build (TyBuiltin NunBuiltin.Ty.Kind)
+  let ty_prop = build.b_build (TyBuiltin NunBuiltin.Ty.Prop)
+
+  let app_builtin s l = build.b_build (AppBuiltin (s,l))
+  let builtin s = app_builtin s []
+  let const id = build.b_build (Const id)
+  let var v = build.b_build (Var v)
+  let app t l = build.b_build (App(t,l))
+  let mk_bind b v t = build.b_build (Bind (b,v,t))
+  let fun_ v t = build.b_build (Bind (Fun,v, t))
+  let let_ v t u = build.b_build (Let (v, t, u))
+  let match_with t l =
+    if ID.Map.is_empty l then invalid_arg "Term_ho.case: empty list of cases";
+    build.b_build (Match (t,l))
+  let ite a b c =
+    app (builtin NunBuiltin.T.Ite) [a;b;c]
+  let forall v t = build.b_build (Bind(Forall,v, t))
+  let exists v t = build.b_build (Bind(Exists,v, t))
+  let eq a b = app (builtin NunBuiltin.T.Eq) [a;b]
+
+  let ty_builtin b = build.b_build (TyBuiltin b)
+  let ty_const id = const id
+  let ty_app f l = if l=[] then f else app f l
+  let ty_arrow a b = build.b_build (TyArrow (a,b))
+  let ty_forall v t = build.b_build (Bind (TyForall,v,t))
+  let ty_var v = build.b_build (TyVar v)
+end
 
 (** {2 Printing} *)
 
@@ -589,7 +626,7 @@ module Erase = struct
       remove_ ~ctx (Var.id v);
       raise e
 
-  let rec erase
+  let erase
   : type t inv. repr:(t,inv) repr -> ctx:ctx -> t -> Untyped.term
   = fun ~repr ~ctx t ->
     let rec aux t = match repr t with
