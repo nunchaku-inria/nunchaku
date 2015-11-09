@@ -251,7 +251,7 @@ let print ?pt_in_app ?pty_in_app pt pty out t =
       let pp_rec_defs out l =
         let pp_sides out l =
           if l=[] then ()
-          else fpf out "@[<hv2>%a@] =>@ " (pplist ~sep:" && " pt_in_app) l
+          else fpf out "@[<hv2>%a => @]" (pplist ~sep:" && " pt_in_app) l
         in
         (* print equation *)
         let pp_eqn (type inv) t out (e:(_,_,inv) equation) =

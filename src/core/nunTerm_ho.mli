@@ -224,7 +224,7 @@ module ToFO(FO : NunFO.S) : sig
 
   val convert_problem :
     repr:('t1,invariant) repr ->
-    ('t1,'t1,[`Linear]) NunProblem.t ->
+    ('t1,'t1,_) NunProblem.t ->
     (FO.Formula.t,FO.T.t,FO.Ty.t) NunFO.Problem.t
   (** Convert a problem in HO representation to a FO representation
       @raise NotInFO if some terms in the input problem are not regular
@@ -246,8 +246,8 @@ module OfFO(T:S)(FO : NunFO.VIEW) : sig
 end
 
 module TransFO(T1 : S)(T2 : NunFO.S) : sig
-  val pipe :
-    ((to_fo_invariant T1.t, to_fo_invariant T1.t, [`Linear]) NunProblem.t,
+  val pipe : unit ->
+    ((to_fo_invariant T1.t, to_fo_invariant T1.t, _) NunProblem.t,
       (T2.Formula.t, T2.T.t, T2.Ty.t) NunFO.Problem.t,
       (T2.T.t,T2.Formula.t) NunFO.term_or_form NunModel.t,
       to_fo_invariant T1.t NunModel.t
@@ -255,7 +255,7 @@ module TransFO(T1 : S)(T2 : NunFO.S) : sig
 
   val pipe_with :
     decode:('b -> 'c) ->
-    ((to_fo_invariant T1.t, to_fo_invariant T1.t, [`Linear]) NunProblem.t,
+    ((to_fo_invariant T1.t, to_fo_invariant T1.t, _) NunProblem.t,
       (T2.Formula.t, T2.T.t, T2.Ty.t) NunFO.Problem.t,
       'b, 'c
     ) NunTransform.t

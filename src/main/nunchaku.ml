@@ -150,7 +150,7 @@ let make_model_pipeline () =
   let step_recursion_elim = Step_rec_elim.pipe ~print:!print_recursion_elim_ in
   (* conversion to FO *)
   let module Step_tofo = NunTerm_ho.TransFO(HO)(NunFO.Default) in
-  let step_fo = Step_tofo.pipe in
+  let step_fo = Step_tofo.pipe () in
   (* setup pipeline *)
   let pipe =
     step_ty_infer @@@
