@@ -41,7 +41,7 @@ let () = Printexc.register_printer
   (function
     | Fail (stack, msg) ->
         let pp2 out (Ty.Packed(ty1,repr1),Ty.Packed(ty2,repr2)) =
-          fpf out "@[<hv2>trying to unify@ %a@ and %a@]"
+          fpf out "@[<hv2>trying to unify@ `%a`@ and `%a`@]"
             (Ty.print ~repr:repr1) ty1 (Ty.print ~repr:repr2) ty2
         in
         Some (spf "@[<hv2>unification error: %s:@ %a"
@@ -84,7 +84,7 @@ let rec flatten_app_ ~repr f l = match Ty.view ~repr f with
 let unify_exn
 : type t inv. repr:(t,inv invariant) Ty.repr -> t -> t -> unit
 = fun ~repr ty1 ty2 ->
-  Utils.debugf ~section 5 "@[<2>unify %a@ and %a@]"
+  Utils.debugf ~section 5 "@[<hv2>unify `@[%a@]`@ and `@[%a@]`@]"
     (fun k-> k (Ty.print ~repr) ty1 (Ty.print ~repr) ty2);
   let bound = ref Subst.empty in
   (* keep a stack of unification attempts *)

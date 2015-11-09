@@ -52,7 +52,7 @@ exception InvalidDef of id * string
 
 let pp_invalid_def_ out = function
   | InvalidDef (id, msg) ->
-      Format.fprintf out "invalid definition for ID %a: %s" ID.print_name id msg
+      Format.fprintf out "@[<2>invalid definition for `%a`:@ %s@]" ID.print_name id msg
   | _ -> assert false
 
 let () = Printexc.register_printer
@@ -94,7 +94,7 @@ let rec_funs ?loc ~env:t defs =
         let def = Fun ((Rec(defs, def, loc)) :: l) in
         {infos=ID.PerTbl.replace t.infos id {info with def; }}
       with Not_found ->
-        errorf_ id "defined function, but not declared previously"
+        errorf_ id "function is defined but was never declared"
     ) t defs
 
 let spec_funs ?loc ~env:t spec =
@@ -112,7 +112,7 @@ let spec_funs ?loc ~env:t spec =
         let def = Fun ((Spec(spec, loc)) :: l) in
         {infos=ID.PerTbl.replace t.infos id {info with def; }}
       with Not_found ->
-        errorf_ id "defined function, but not declared previously"
+        errorf_ id "function is defined but was never declared"
     ) t spec.Stmt.spec_defined
 
 let def_data ?loc ~env:t ~kind tys =

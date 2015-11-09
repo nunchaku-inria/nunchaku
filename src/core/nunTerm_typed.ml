@@ -108,7 +108,7 @@ module Util(T : S) = struct
   let ty_const ?loc id =
     const ?loc ~ty:(ty_type()) id
 
-  let ty_var ?loc v = var ?loc v
+  let ty_var ?loc v = build ?loc ~ty:(Var.ty v) (TI.TyVar v)
 
   let ty_meta_var ?loc v = build ?loc ~ty:(ty_type()) (TI.TyMeta v)
 
@@ -169,7 +169,8 @@ module Default = struct
     mutable d_ty : 'i t option;
   }
 
-  (* dereference the term, if it is a variable, until it is not bound *)
+  (* dereference the term, if it is a variable, until it is not bound;
+   also does some simplifications *)
   let rec deref_rec_
   : type inv. inv t -> inv t
   = fun t -> match t.view with
@@ -191,6 +192,7 @@ module Default = struct
   let make_raw_ ~loc ~ty view = { view; d_loc=loc; d_ty=Some ty; }
 
   let build ?loc ~ty view = match view with
+    | TI.App (f, []) -> f
     | TI.App ({view=TI.App (f, l1); d_loc=loc; _}, l2) ->
         make_raw_ ~loc ~ty (TI.App (f, l1 @ l2))
     | TI.App ({view=TI.AppBuiltin (b, l1); d_loc=loc; _}, l2) ->

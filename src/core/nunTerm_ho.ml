@@ -838,8 +838,7 @@ module ToFO(FO : NunFO.S) = struct
     | St.Decl (id, k, ty) ->
         begin match k with
         | St.Decl_type ->
-            let args, _ = flat_arrow_ ~repr ty in
-            let n = List.length args in
+            let n = TyI.num_param ~repr:(as_ty ~repr) ty in
             [ FOI.TyDecl (id, n) ]
         | St.Decl_fun ->
             let ty = conv_top_ty ~repr ty in

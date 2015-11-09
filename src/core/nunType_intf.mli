@@ -46,6 +46,8 @@ val is_Kind : repr:('t,_) repr -> 't -> bool
 
 val to_seq : repr:('t,_) repr -> 't -> 't Sequence.t
 
+val num_param : repr:('t,_) repr -> 't -> int
+
 (** {2 Type packed with its representation} *)
 
 type packed = Packed : 't * ('t, _) repr -> packed

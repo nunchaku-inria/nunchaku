@@ -53,6 +53,21 @@ let returns_Type ~repr t = match repr (returns ~repr t) with
   | Builtin NunBuiltin.Ty.Type -> true
   | _ -> false
 
+(* number of parameters of this (polymorphic?) T.t type *)
+let rec num_param
+: type t inv. repr:(t,inv) repr -> t -> int
+= fun ~repr ty -> match repr ty with
+  | Meta _ -> 0
+  | Var _ -> 0
+  | Const _
+  | App _
+  | Builtin _ -> 0
+  | Arrow (_,t') ->
+      if is_Type ~repr t'
+        then 1 + num_param ~repr t'
+        else 0  (* asks for term parameters *)
+  | Forall (_,t) -> 1 + num_param ~repr t
+
 let to_seq
 : type inv t. repr:(t, inv) repr -> t -> t Sequence.t
 = fun ~repr ty yield ->
@@ -90,6 +105,7 @@ let mk_print
     | Meta v -> MetaVar.print out v
     | Const id -> ID.print_no_id out id
     | Var v -> Var.print out v
+    | App (_, []) -> assert false
     | App (f,l) ->
         fpf out "@[<2>%a@ %a@]" print_in_app f
           (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_in_app) l

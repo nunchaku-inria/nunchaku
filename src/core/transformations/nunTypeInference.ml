@@ -63,6 +63,7 @@ module MStr = Map.Make(String)
 (* for the environment *)
 type ('t, 'ty) term_def =
   | Decl of id * 'ty
+  | TyVar of 'ty var
   | Var of 'ty var
   | Def of 't (* variable := this term *)
 
@@ -130,9 +131,12 @@ module Convert(Term : NunTerm_typed.S) = struct
       env with signature=Sig.declare ~sigma:env.signature id ty;
     }
 
-    let add_var ~env v ~var = {
-      env with vars=MStr.add v (Var var) env.vars
-    }
+    let add_var ~env v ~var =
+      let decl =
+        if TyI.returns_Type ~repr:U.as_ty (Var.ty var)
+        then TyVar var else Var var
+      in
+      { env with vars=MStr.add v decl env.vars }
 
     let add_vars ~env v l =
       assert (List.length v = List.length l);
@@ -207,7 +211,8 @@ module Convert(Term : NunTerm_typed.S) = struct
                 (* var: _ ... _ -> Type mandatory *)
                 unify_in_ctx_ ~stack (TyI.returns ~repr:U.as_ty t) (U.ty_type());
                 U.ty_const ?loc id
-            | Var v ->
+            | Var v -> ill_formedf ~kind:"type" "term variable %a in type" Var.print v
+            | TyVar v ->
                 unify_in_ctx_ ~stack
                   (TyI.returns ~repr:U.as_ty (Var.ty v))
                   (U.ty_type());
@@ -355,6 +360,7 @@ module Convert(Term : NunTerm_typed.S) = struct
         begin match Env.find_var ?loc ~env v with
           | Decl (id, ty) ->
               U.const ?loc ~ty id
+          | TyVar v -> U.ty_var ?loc v
           | Var var -> U.var ?loc var
           | Def t -> t
         end
@@ -384,6 +390,7 @@ module Convert(Term : NunTerm_typed.S) = struct
           | Decl (id, ty) ->
               U.const ?loc ~ty id, ty
           | Var var -> U.var ?loc var, Var.ty var
+          | TyVar v -> U.ty_var ?loc v, Var.ty v
           | Def t -> t, U.ty_exn t
         in
         (* add potential implicit args *)
@@ -553,26 +560,38 @@ module Convert(Term : NunTerm_typed.S) = struct
   exception InvalidTerm of term1 * string
   (* term (or its type) is not valid, for given reason *)
 
+  let () = Printexc.register_printer
+    (function
+      | InvalidTerm (t, msg) ->
+          Some (spf "@[<2>invalid term `@[%a@]`:@ %s@]" print_term t msg)
+      | _ -> None)
+
   let invalid_term_ t msg = raise (InvalidTerm (t,msg))
+
+  (* TODO remove this translation, replace by a view that
+     fails on Meta. Idea:
+       declare a new REPR that looks polymorphic, and a view on it
+       that forces <meta:[`NoMeta]> for any input *)
 
   (* check that [t] is a monomorphic type or a term in which types
     are prenex, without metas ; convert it into a [term2] *)
   let rec as_mono_term2_ (t:term1) : term2 =
     (* do not evaluate [ty] yet, if [t=kind] it would fail *)
     let ty() = as_mono_term2_ (U.ty_exn t) in
+    let loc = Term.loc t in
     match U.view t with
     | TI.TyMeta _ -> invalid_term_ t "remaining meta-variable"
-    | TI.TyBuiltin b -> U.ty_builtin b
-    | TI.Const id -> U.const ~ty:(ty()) id
-    | TI.Var v -> U.var (as_mono_var_ v)
+    | TI.TyBuiltin b -> U.ty_builtin ?loc b
+    | TI.Const id -> U.const ?loc ~ty:(ty()) id
+    | TI.Var v -> U.var ?loc (as_mono_var_ v)
     | TI.App (f,l) ->
         let ty = ty() in
-        U.app ~ty (as_mono_term2_ f) (List.map as_mono_term2_ l)
+        U.app ?loc ~ty (as_prenex_term2_ f) (List.map as_mono_term2_ l)
     | TI.AppBuiltin (b,l) ->
         let ty = ty() in
-        U.app_builtin ~ty b (List.map as_mono_term2_ l)
+        U.app_builtin ?loc ~ty b (List.map as_mono_term2_ l)
     | TI.Let (v,t,u) ->
-        U.let_ (as_mono_var_ v) (as_mono_term2_ t) (as_mono_term2_ u)
+        U.let_ ?loc (as_mono_var_ v) (as_mono_term2_ t) (as_mono_term2_ u)
     | TI.Match (t,l) ->
         let ty = ty () in
         let t = as_mono_term2_ t in
@@ -581,21 +600,20 @@ module Convert(Term : NunTerm_typed.S) = struct
             List.map as_mono_var_ vars, as_mono_term2_ rhs
           ) l
         in
-        U.match_with ~ty t l
-    | TI.TyVar _ ->
-        invalid_term_ t "non-monomorphic type in non-prenex position"
+        U.match_with ?loc ~ty t l
+    | TI.TyVar v -> U.ty_var ?loc (as_mono_var_ v)
     | TI.Bind (TI.TyForall, _, _) ->
         invalid_term_ t "quantified type in non-prenex position"
     | TI.Bind (b,v,t) ->
         let ty = ty() in
-        U.mk_bind ~ty b (as_mono_var_ v) (as_mono_term2_ t)
+        U.mk_bind ?loc ~ty b (as_mono_var_ v) (as_mono_term2_ t)
     | TI.TyArrow (a,b) ->
-        U.ty_arrow (as_mono_term2_ a) (as_mono_term2_ b)
+        U.ty_arrow ?loc (as_mono_term2_ a) (as_mono_term2_ b)
   and as_mono_var_ v = Var.update_ty v ~f:as_mono_term2_
 
   (* check that [t] is a prenex type or a term in which types are monomorphic,
     and convert it to a [term2] *)
-  let rec as_prenex_term2_ (t:term1) : term2 =
+  and as_prenex_term2_ (t:term1) : term2 =
     let ty() = as_prenex_term2_ (U.ty_exn t) in
     match U.view t with
     | TI.TyBuiltin b -> U.ty_builtin b
@@ -604,7 +622,7 @@ module Convert(Term : NunTerm_typed.S) = struct
     | TI.Var v -> as_mono_term2_ (Var.ty v)
     | TI.App (f,l) ->
         let ty = ty() in
-        U.app ~ty (as_mono_term2_ f) (List.map as_mono_term2_ l)
+        U.app ~ty (as_prenex_term2_ f) (List.map as_mono_term2_ l)
     | TI.AppBuiltin (b,l) ->
         let ty = ty() in
         U.app_builtin ~ty b (List.map as_mono_term2_ l)
@@ -645,8 +663,11 @@ module Convert(Term : NunTerm_typed.S) = struct
           print_term t msg print_term t'
 
   let generalize ~close t =
+    NunUtils.debugf ~section 5 "@[<2>generalize `@[%a@]`, by %s@]"
+      (fun k->k print_term t
+      (match close with `Fun -> "fun" | `Forall -> "forall" | `NoClose -> "no_close"));
     (* type meta-variables *)
-    let vars = Unif.free_meta_vars ~repr:U.as_ty t |> ID.Map.to_list in
+    let vars = TI.free_meta_vars ~repr:Term.repr t |> ID.Map.to_list in
     let t, new_vars = List.fold_right
       (fun (_,var) (t,new_vars) ->
         (* transform the meta-variable into a regular (type) variable *)
@@ -904,7 +925,7 @@ module Convert(Term : NunTerm_typed.S) = struct
         let ty_being_declared =
           U.app ~ty:(U.ty_type())
             (U.const ~ty:ty_id id)
-            (List.map (fun v->U.var v) vars')
+            (List.map (fun v->U.ty_var v) vars')
         in
         (* for each constructor, find its type and declare it *)
         let env, cstors = NunUtils.fold_map

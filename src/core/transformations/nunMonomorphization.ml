@@ -48,18 +48,6 @@ module Make(T : NunTerm_ho.S) = struct
   let failf_ msg =
     NunUtils.exn_ksprintf msg ~f:(fun msg -> raise (InvalidProblem msg))
 
-  (* number of parameters of this (polymorphic?) T.t type *)
-  let rec num_param_ty_ (ty:inv1 T.t) = match U.as_ty ty with
-    | TyI.Var _
-    | TyI.Const _
-    | TyI.App _
-    | TyI.Builtin _ -> 0
-    | TyI.Arrow (_,t') ->
-        if TyI.is_Type ~repr:U.as_ty t'
-          then 1 + num_param_ty_ t'
-          else 0  (* asks for term parameters *)
-    | TyI.Forall (_,t) -> 1 + num_param_ty_ t
-
   (* A tuple of arguments that a given function symbol should be
      instantiated with *)
   module ArgTuple = struct
@@ -357,7 +345,7 @@ module Make(T : NunTerm_ho.S) = struct
         | TI.Const id ->
             (* find type arguments *)
             let ty = find_ty_ ~env:state.St.env id in
-            let n = num_param_ty_ ty in
+            let n = TyI.num_param ~repr:U.as_ty ty in
             (* tuple of arguments for [id], not encoded yet *)
             let unmangled_tup = take_n_ground_atomic_types_ ~state ~local_state n l in
             let mangled_tup = List.map (mono_type ~state ~local_state) unmangled_tup in
@@ -449,10 +437,11 @@ module Make(T : NunTerm_ho.S) = struct
     )
 
   let mono_defined ~state ~local_state d =
-    Stmt.map_defined
-      ~term:(mono_term ~state ~local_state)
-      ~ty:(mono_type ~state ~local_state)
-      d
+    let defined_term = mono_term ~state ~local_state d.Stmt.defined_term in
+    let defined_ty_args =
+      List.map (mono_type ~state ~local_state) d.Stmt.defined_ty_args in
+    let defined_head = TI.head_sym ~repr:T.repr defined_term in
+    {Stmt. defined_term; defined_head; defined_ty_args; }
 
   (* specialize mutual recursive definitions *)
   let mono_rec_defs ~state ~depth (defs, def, loc) tup =
