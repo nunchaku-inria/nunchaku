@@ -862,7 +862,7 @@ module ToFO(FO : NunFO.S) = struct
                 let head = def.St.rec_defined.St.defined_head in
                 List.map
                   (fun eqn -> match eqn with
-                  | St.Eqn_linear (vars,rhs) ->
+                  | St.Eqn_linear (vars,rhs,side) ->
                     let vars = List.map (conv_var ~repr) vars in
                     let args = List.map FO.T.var vars in
                     let lhs = FO.T.app head args in
@@ -874,6 +874,9 @@ module ToFO(FO : NunFO.S) = struct
                           (conv_form ~repr rhs)
                       else FO.Formula.eq lhs (conv_term ~repr rhs)
                     in
+                    (* add side conditions *)
+                    let side = FO.Formula.and_ (List.map (conv_form ~repr) side) in
+                    let f = FO.Formula.imply side f in
                     let f = List.fold_right FO.Formula.forall vars f in
                     mk_ax f
                   )

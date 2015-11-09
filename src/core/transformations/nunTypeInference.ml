@@ -877,7 +877,7 @@ module Convert(Term : NunTerm_typed.S) = struct
                 ill_formedf ?loc
                   "@[<2>expected `@[forall <vars>.@ @[%a@] @[<hv><args>@ =@ <rhs>@]@]`@]"
                     ID.print_name f
-            | Some (vars,args,rhs) -> Stmt.Eqn_nested (vars, args, rhs)
+            | Some (vars,args,rhs) -> Stmt.Eqn_nested (vars, args, rhs, [])
           )
           l
         in
@@ -985,7 +985,7 @@ module Convert(Term : NunTerm_typed.S) = struct
         let id = TI.head_sym ~repr:U.view a_defined in
         let env' = Env.add_def  ~env (ID.name id) ~as_:a_defined in
         let b = convert_term_exn ~env:env' b in
-        let eqn = Stmt.Eqn_nested ([], [], as_prenex_term2_ b) in
+        let eqn = Stmt.Eqn_nested ([], [], as_prenex_term2_ b, []) in
         unify_in_ctx_ ~stack:[] ty (U.ty_exn b);
         (* TODO: check that [v] does not occur in [b] *)
         let defined = {Stmt.

@@ -23,11 +23,13 @@ type ('t, 'ty, 'k) equation =
   | Eqn_linear :
       'ty var list (* universally quantified vars, also arguments to [f] *)
       * 't (* right-hand side of equation *)
+      * 't list (* side conditions *)
       -> ('t, 'ty, [`Linear]) equation
   | Eqn_nested :
       'ty var list (* universally quantified vars *)
-      * 't list (* arguments to the defined term *)
+      * 't list (* arguments (patterns) to the defined term *)
       * 't  (* right-hand side of equation *)
+      * 't list (* additional conditions *)
       -> ('t, 'ty, [`Nested]) equation
 
 type ('t,'ty,'kind) rec_def = {
@@ -129,13 +131,17 @@ let map_eqn
     term:(a -> a1) -> ty:(b -> b1) -> (a,b,inv) equation -> (a1,b1,inv) equation
 = fun ~term ~ty eqn ->
     match eqn with
-    | Eqn_nested (vars,args,rhs) ->
+    | Eqn_nested (vars,args,rhs,side) ->
         Eqn_nested
           ( List.map (Var.update_ty ~f:ty) vars,
             List.map term args,
-            term rhs)
-    | Eqn_linear (vars,rhs) ->
-        Eqn_linear (List.map (Var.update_ty ~f:ty) vars, term rhs)
+            term rhs,
+            List.map term side)
+    | Eqn_linear (vars,rhs,side) ->
+        Eqn_linear
+          ( List.map (Var.update_ty ~f:ty) vars,
+            term rhs,
+            List.map term side)
 
 let map_rec_def ~term ~ty t = {
   rec_vars=List.map (Var.update_ty ~f:ty) t.rec_vars;
@@ -189,13 +195,15 @@ let fold_defined ~term ~ty acc d =
 let fold_eqn_ (type inv) ~term ~ty acc (e:(_,_,inv) equation) =
   let fold_vars acc l = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc l in
   match e with
-  | Eqn_nested (vars,args,rhs) ->
+  | Eqn_nested (vars,args,rhs,side) ->
       let acc = fold_vars acc vars in
       let acc = List.fold_left term acc args in
-      term acc rhs
-  | Eqn_linear (vars,rhs) ->
+      let acc = term acc rhs in
+      List.fold_left term acc side
+  | Eqn_linear (vars,rhs,side) ->
       let acc = fold_vars acc vars in
-      term acc rhs
+      let acc = term acc rhs in
+      List.fold_left term acc side
 
 let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
   let fold_vars acc l = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc l in
@@ -241,21 +249,25 @@ let print ?pt_in_app ?pty_in_app pt pty out t =
         fpf out "@[<2>%a:%a@]" Var.print v pty (Var.ty v)
       in
       let pp_rec_defs out l =
+        let pp_sides out l =
+          if l=[] then ()
+          else fpf out "@[<hv2>%a@] =>@ " (pplist ~sep:" && " pt_in_app) l
+        in
         (* print equation *)
         let pp_eqn (type inv) t out (e:(_,_,inv) equation) =
           match e with
-          | Eqn_linear (vars,rhs) ->
+          | Eqn_linear (vars,rhs,side) ->
               if vars=[]
-              then fpf out "@[<hv>%a =@ %a@]" pt t pt rhs
-              else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a %a =@ %a@]@]"
-                (pplist ~sep:" " pp_typed_var) vars pt t
+              then fpf out "@[<hv>%a@,%a =@ %a@]" pp_sides side pt t pt rhs
+              else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a@,%a %a =@ %a@]@]"
+                (pplist ~sep:" " pp_typed_var) vars pp_sides side pt t
                 (pplist ~sep:" " pp_typed_var) vars pt rhs
-          | Eqn_nested (vars,args,rhs) ->
+          | Eqn_nested (vars,args,rhs,side) ->
               if vars=[]
-              then fpf out "@[<hv>%a %a =@ %a@]"
-                pt t (pplist ~sep:" " pt_in_app) args pt rhs
-              else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a %a =@ %a@]@]"
-                (pplist ~sep:" " pp_typed_var) vars pt t
+              then fpf out "@[<hv>%a@,%a %a =@ %a@]"
+                pt t (pplist ~sep:" " pt_in_app) args pt rhs pp_sides side
+              else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a@,%a %a =@ %a@]@]"
+                (pplist ~sep:" " pp_typed_var) vars pp_sides side pt t
                 (pplist ~sep:" " pt_in_app) args pt rhs
         in
         let pp_eqns t = pplist ~sep:";" (pp_eqn t) in

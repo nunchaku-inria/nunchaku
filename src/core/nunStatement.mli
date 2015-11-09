@@ -22,11 +22,13 @@ type ('t, 'ty, 'k) equation =
   | Eqn_linear :
       'ty var list (* universally quantified vars, also arguments to [f] *)
       * 't (* right-hand side of equation *)
+      * 't list (* side conditions *)
       -> ('t, 'ty, [`Linear]) equation
   | Eqn_nested :
       'ty var list (* universally quantified vars *)
-      * 't list (* arguments to the defined term *)
+      * 't list (* arguments (patterns) to the defined term *)
       * 't  (* right-hand side of equation *)
+      * 't list (* additional conditions *)
       -> ('t, 'ty, [`Nested]) equation
 
 type ('t,'ty,'kind) rec_def = {
