@@ -182,8 +182,8 @@ let () = Printexc.register_printer
 let not_implemented feat = raise (NotImplemented feat)
 
 let err_of_exn e =
-  let msg = Printexc.to_string e in
   let trace = Printexc.get_backtrace () in
+  let msg = Printexc.to_string e in
   CCError.fail (msg ^ "\n" ^ trace)
 
 let exn_ksprintf ~f fmt =
