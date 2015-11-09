@@ -46,6 +46,12 @@ val map_statements :
   ('t,'ty,'inv) t ->
   ('t2,'ty2,'inv2) t
 
+val fold_map_statements :
+  f:('acc -> ('t, 'ty, 'inv) NunStatement.t -> 'acc * ('t2,'ty2,'inv2) NunStatement.t) ->
+  x:'acc ->
+  ('t,'ty,'inv) t ->
+  'acc * ('t2,'ty2,'inv2) t
+
 val flat_map_statements :
   f:(('t, 'ty,'inv) NunStatement.t -> ('t2,'ty2,'inv2) NunStatement.t list) ->
   ('t,'ty,'inv) t ->

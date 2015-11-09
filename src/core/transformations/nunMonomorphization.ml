@@ -151,7 +151,7 @@ module Make(T : NunTerm_ho.S) = struct
   end
 
   let find_ty_ ~env id =
-    try Env.find_ty ~env ~id
+    try Env.find_ty_exn ~env id
     with Not_found ->
       fail_ ("symbol " ^ ID.to_string id ^ " is not declared")
 
@@ -280,7 +280,7 @@ module Make(T : NunTerm_ho.S) = struct
   (* should [id] be mangled? in all cases, yes, except if it's an
      uninterpreted type. *)
   let should_be_mangled_ ~state id =
-    match Env.find_exn ~env:state.St.env ~id with
+    match Env.find_exn ~env:state.St.env id with
     | {Env.def=(Env.Fun _ | Env.Cstor _ | Env.Data _); _} ->
         true (* defined objects: mangle *)
     | {Env.def=Env.NoDef; decl_kind=(Stmt.Decl_fun | Stmt.Decl_prop); _} ->
@@ -434,7 +434,7 @@ module Make(T : NunTerm_ho.S) = struct
     if not (St.is_already_declared ~state id tup) then (
       (* only declare once *)
       St.declaration_is_done ~state id tup;
-      let env_info = Env.find_exn ~env:state.St.env ~id in
+      let env_info = Env.find_exn ~env:state.St.env id in
       let loc = env_info.Env.loc in
       (* declare specialized type *)
       let new_id = match ArgTuple.mangled tup with
@@ -577,7 +577,7 @@ module Make(T : NunTerm_ho.S) = struct
       (fun ~state ~depth id tup ->
         match find_tydef_ ~defs:!tydefs id with
         | None ->
-            begin match Env.find ~env:state.St.env ~id with
+            begin match Env.find ~env:state.St.env id with
             | Some {Env.def=Env.Data (kind', tydefs', tydef'); _} ->
                 (* make id and current type mutual, even though they were not *)
                 if kind <> kind'
@@ -655,7 +655,7 @@ module Make(T : NunTerm_ho.S) = struct
 
   (* monomorphize every statement that declares or defines [id] *)
   let mono_statements_for_id ~state ~depth id tup =
-    let env_info = match Env.find ~env:state.St.env ~id with
+    let env_info = match Env.find ~env:state.St.env id with
       | None -> failf_ "could not find definition of %a" ID.print_name id
       | Some i -> i
     in

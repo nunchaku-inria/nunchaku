@@ -147,6 +147,19 @@ module Callback = struct
   let call2 t x y = iter_rec_ (fun f -> f x y) t.lst
 end
 
+(** {2 Vector} *)
+
+let vec_fold_map f acc v =
+  let v' = CCVector.create () in
+  let acc = CCVector.fold
+    (fun acc x ->
+      let acc, y = f acc x in
+      CCVector.push v' y;
+      acc
+    ) acc v
+  in
+  acc, v'
+
 (** {2 Lists} *)
 
 let rec fold_map f acc l = match l with

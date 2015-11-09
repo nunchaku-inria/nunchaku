@@ -48,6 +48,11 @@ let map_statements ~f pb = {
   statements=CCVector.map f pb.statements;
 }
 
+let fold_map_statements ~f ~x pb =
+  let acc, statements = NunUtils.vec_fold_map f x pb.statements in
+  let statements = CCVector.freeze statements in
+  acc, { pb with statements }
+
 let flat_map_statements ~f pb =
   let res = CCVector.create () in
   CCVector.iter

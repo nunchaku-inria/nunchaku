@@ -32,19 +32,19 @@ val view : repr:('t, 'inv) repr -> 't -> ('t, 'inv) view
 
 (** {2 Utils} *)
 
-val is_Type : repr:('t, 'inv) repr -> 't -> bool
+val is_Type : repr:('t,_) repr -> 't -> bool
 (** type == Type? *)
 
-val returns_Type : repr:('t,'inv) repr -> 't -> bool
+val returns_Type : repr:('t,_) repr -> 't -> bool
 (** type == forall ... -> ... -> ... -> Type? *)
 
-val returns : repr:('t,'inv) repr -> 't -> 't
+val returns : repr:('t,_) repr -> 't -> 't
 (** follow forall/arrows to get return type.  *)
 
 val is_Kind : repr:('t,_) repr -> 't -> bool
 (** type == Kind? *)
 
-val to_seq : repr:('t,'inv) repr -> 't -> 't Sequence.t
+val to_seq : repr:('t,_) repr -> 't -> 't Sequence.t
 
 (** {2 Type packed with its representation} *)
 

@@ -176,7 +176,8 @@ module SubstUtil(T : S) : sig
   (** [apply t l] computes the type of [f args] where [f : t] and [args : l].
       @raise ApplyError if the arguments do not match *)
 
-  type 'inv signature = 'inv T.t NunSignature.t
+  type 'inv signature = id -> 'inv T.t option
+  (** A signature is a way to obtain the type of a variable *)
 
   val ty :
     sigma:'inv signature ->

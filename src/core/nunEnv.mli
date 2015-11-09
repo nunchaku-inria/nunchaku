@@ -97,14 +97,17 @@ val def_data:
     Also defines their constructors.
     @raise InvalidDef if some type/constructor already defined/declared *)
 
-val find : env:('t, 'ty, 'inv) t -> id:id -> ('t, 'ty, 'inv) info option
+val find : env:('t, 'ty, 'inv) t -> id -> ('t, 'ty, 'inv) info option
 
-val find_exn : env:('t, 'ty, 'inv) t -> id:id -> ('t, 'ty, 'inv) info
+val find_exn : env:('t, 'ty, 'inv) t -> id -> ('t, 'ty, 'inv) info
 (** @raise Not_found if ID not defined *)
 
-val find_ty : env:('t, 'ty, _) t -> id:id -> 'ty
+val find_ty_exn : env:('t, 'ty, _) t -> id -> 'ty
 (** Find the type of a symbol
     @raise Not_found if the symbol is not declared *)
+
+val find_ty : env:('t, 'ty, _) t -> id -> 'ty option
+(** Safe version of {!find_ty_exn} *)
 
 val mem : env:_ t -> id:id -> bool
 (** @return true if the symbol is at least declared *)

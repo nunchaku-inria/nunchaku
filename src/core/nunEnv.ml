@@ -143,12 +143,14 @@ let def_data ?loc ~env:t ~kind tys =
         ) t tydef.Stmt.ty_cstors
     ) t tys
 
-let find_exn ~env:t ~id = ID.PerTbl.find t.infos id
+let find_exn ~env:t id = ID.PerTbl.find t.infos id
 
-let find ~env:t ~id =
-  try Some (find_exn ~env:t ~id)
+let find ~env:t id =
+  try Some (find_exn ~env:t id)
   with Not_found -> None
 
 let mem ~env ~id = ID.PerTbl.mem env.infos id
 
-let find_ty ~env ~id = (find_exn ~env ~id).ty
+let find_ty_exn ~env id = (find_exn ~env id).ty
+
+let find_ty ~env id = CCOpt.map (fun x -> x.ty) (find ~env id)

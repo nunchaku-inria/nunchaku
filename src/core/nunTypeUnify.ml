@@ -16,9 +16,10 @@ let section = Utils.Section.make "unif"
   module Var = NunVar
   module MetaVar = NunMetaVar
   module T = NunTerm_typed.Default
+  module U = NunTerm_typed.Util(T)
   module ID = NunID
-  module Ty = T.Ty
-  module U = Make(Ty)
+
+  let repr = T.repr
 
 *)
 
@@ -154,15 +155,15 @@ let unify_exn
   unify_ ~stack:[] ty1 ty2
 
 (*$R
-  let v = T.ty_meta_var (MetaVar.make ~name:"x") in
-  let f = T.ty_var (Var.make ~ty:T.ty_type ~name:"f") in
+  let v = U.ty_meta_var (MetaVar.make ~name:"x") in
+  let f = U.ty_var (Var.make ~ty:(U.ty_type())  ~name:"f") in
   let a' = ID.make ~name:"a" in
-  let a = T.ty_const a' in
-  let t1 = T.ty_app f [v] in
-  let t2 = T.ty_app f [a] in
-  U.unify_exn t1 t2;
+  let a = U.ty_const a' in
+  let t1 = U.ty_app f [v] in
+  let t2 = U.ty_app f [a] in
+  unify_exn ~repr t1 t2;
   assert_bool "v is a"
-    (match Ty.view v with
+    (match U.as_ty v with
       | NunType_intf.Const id' -> ID.equal a' id'
       | _ -> false
     );

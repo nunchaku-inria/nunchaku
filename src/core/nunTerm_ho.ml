@@ -435,16 +435,17 @@ module SubstUtil(T : S) = struct
         if i=0 then Some a else get_ty_arg_ ~repr b (i-1)
     | TyI.Forall (_,_) -> None
 
-  type 'i signature = 'i T.t Sig.t
+  type 'inv signature = id -> 'inv T.t option
+
+  let find_ty_ ~sigma id = match sigma id with
+    | Some ty -> ty
+    | None -> raise (Undefined id)
 
   let rec ty_exn
   : type inv_m.
       sigma:(<poly:[`Poly];meta:inv_m> as 'inv) signature -> 'inv T.t -> 'inv T.t
   = fun ~sigma t -> match T.repr t with
-    | Const id ->
-        begin try NunID.Map.find id sigma
-        with Not_found -> raise (Undefined id)
-        end
+    | Const id -> find_ty_ ~sigma id
     | AppBuiltin (b,_) ->
         let module B = NunBuiltin.T in
         let prop = U.ty_prop () in
@@ -462,11 +463,11 @@ module SubstUtil(T : S) = struct
           | B.Eq -> prop
           | B.DataTest id ->
               (* id: a->b->tau, where tau inductive; is-id: tau->prop *)
-              let ty = Sig.find_exn ~sigma id in
+              let ty = find_ty_ ~sigma id in
               U.ty_arrow (TyI.returns ~repr:U.as_ty ty) prop
           | B.DataSelect (id,n) ->
               (* id: a_1->a_2->tau, where tau inductive; select-id-i: tau->a_i*)
-              let ty = Sig.find_exn ~sigma id in
+              let ty = find_ty_ ~sigma id in
               begin match get_ty_arg_ ~repr:U.as_ty ty n with
               | None ->
                   failwith "cannot infer type, wrong argument to DataSelect"
