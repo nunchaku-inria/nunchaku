@@ -13,7 +13,7 @@ module Make(T : NunTerm_ho.S) : sig
 
   val elim_recursion :
     (term, term, [`Linear]) NunProblem.t ->
-    (term, term, [`Linear]) NunProblem.t * decode_state
+    (term, term, [`Nested]) NunProblem.t * decode_state
 
   val decode_term : state:decode_state -> term -> term
 
@@ -23,7 +23,7 @@ module Make(T : NunTerm_ho.S) : sig
   val pipe :
     print:bool ->
     ((term, term, [`Linear]) NunProblem.t,
-      (term, term, [`Linear]) NunProblem.t,
+      (term, term, [`Nested]) NunProblem.t,
       term NunModel.t, term NunModel.t) NunTransform.t
 
   (** Generic Pipe Component
@@ -33,7 +33,7 @@ module Make(T : NunTerm_ho.S) : sig
     decode:(decode_term:(term -> term) -> 'c -> 'd) ->
     print:bool ->
     ((term, term, [`Linear]) NunProblem.t,
-      (term, term, [`Linear]) NunProblem.t,
+      (term, term, [`Nested]) NunProblem.t,
       'c, 'd
     ) NunTransform.t
 end

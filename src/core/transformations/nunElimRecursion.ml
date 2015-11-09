@@ -135,8 +135,10 @@ module Make(T : NunTerm_ho.S) = struct
     | TI.Const _ -> t, []
     | TI.Var v ->
         (* substitute if needed; no side-condition *)
-        let t = CCOpt.get t (Subst.find ~subst:local_state.subst v) in
-        t, []
+        let t' = match Subst.find ~subst:local_state.subst v with
+          | None -> SubstUtil.eval ~subst:local_state.subst t
+          | Some t -> t
+        in t', []
     | TI.App (f,l) ->
         begin match T.repr f, local_state.defining with
           | TI.Const f_id, Some (f', fundef) when ID.equal f_id f' ->
@@ -151,8 +153,7 @@ module Make(T : NunTerm_ho.S) = struct
                 let l' = List.map
                   (fun t -> match T.repr t with
                     | TI.Var v -> Subst.find_exn v ~subst:local_state.subst
-                    | _ -> assert false
-                  )
+                    | _ -> assert false)
                   l
                 in
                 U.app f l', []
@@ -175,7 +176,11 @@ module Make(T : NunTerm_ho.S) = struct
                 conds := (U.exists alpha (mk_and_ !eqns)) :: !conds;
                 U.app f l', !conds
               )
-          | _ -> assert false (* TODO *)
+          | TI.Const f_id, _ ->
+              let t = SubstUtil.eval ~subst:local_state.subst t in
+              t, [] (* TODO: iterate on subterms? *)
+          | _ ->
+              fail_tr_ t "could not convert non-FO application"
         end
     | TI.AppBuiltin (b,l) ->
         begin match b, l with
@@ -208,7 +213,8 @@ module Make(T : NunTerm_ho.S) = struct
               (U.app_builtin B.Eq [a;b])
               (List.append cond_a cond_b)
         | B.DataTest _, _
-        | B.DataSelect (_,_), _ -> t, []
+        | B.DataSelect (_,_), _ ->
+            SubstUtil.eval ~subst:local_state.subst t, []
         | B.Not,_
         | B.Imply,_
         | B.Ite,_
@@ -239,7 +245,9 @@ module Make(T : NunTerm_ho.S) = struct
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> t, []
 
-  let tr_term_top ~state ~local_state t = fst (tr_term ~state ~local_state t)
+  let tr_term_top ~state ~local_state t =
+    NunUtils.debugf ~section 4 "@[<2>convert toplevel term `@[%a@]`@]" (fun k -> k print_term t);
+    fst (tr_term ~state ~local_state t)
 
   (* translate a statement *)
   let tr_statement ~state st =
@@ -252,8 +260,8 @@ module Make(T : NunTerm_ho.S) = struct
     state.sigma <- Sig.add_statement ~sigma:state.sigma st;
     let info = Stmt.info st in
     match Stmt.view st with
-    | Stmt.Decl _ -> [st] (* no type declaration changes *)
-    | Stmt.TyDef (_,_) -> [st] (* no (co) data changes *)
+    | Stmt.Decl (id,k,l) -> [Stmt.mk_decl ~info id k l] (* no type declaration changes *)
+    | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l] (* no (co) data changes *)
     | Stmt.Axiom l ->
         begin match l with
         | Stmt.Axiom_rec l ->
@@ -265,7 +273,7 @@ module Make(T : NunTerm_ho.S) = struct
                 try
                   let id = def.Stmt.rec_defined.Stmt.defined_head in
                   (* declare abstract type + projectors first *)
-                  let name = "alpha_" ^ ID.name id in
+                  let name = "G_" ^ ID.name id in
                   let abs_type_id = ID.make ~name in
                   let abs_type = U.ty_const abs_type_id in
                   let ty = Sig.find_exn ~sigma:state.sigma id in
@@ -290,27 +298,27 @@ module Make(T : NunTerm_ho.S) = struct
                     defining=Some (id, fun_encoding);
                   } in
                   let eqns' = List.map
-                    (fun (Stmt.Eqn_linear (vars,rhs)) ->
+                    (fun (Stmt.Eqn_linear (vars,rhs,side)) ->
                       (* quantify over abstract variable now *)
-                      let alpha = Var.make ~ty:abs_type ~name:"alpha" in
+                      let alpha = Var.make ~ty:abs_type ~name:"a" in
                       (* replace [x_i] by [proj_i var] *)
                       assert (List.length vars = List.length projectors);
-                      let subst' = Subst.add_list
-                        ~subst:local_state.subst
-                        vars
-                        (List.map
-                          (fun (proj,_) -> U.app (U.const proj) [U.var alpha])
-                          projectors)
+                      let args' = List.map
+                        (fun (proj,_) -> U.app (U.const proj) [U.var alpha])
+                        projectors
                       in
+                      let subst' = Subst.add_list ~subst:local_state.subst vars args' in
                       let local_state = { local_state with subst=subst' } in
                       (* convert right-hand side *)
                       let rhs' = tr_term_top ~state ~local_state rhs in
-                      Stmt.Eqn_linear ([alpha], rhs')
+                      (* FIXME: need to invert polarity and collect side-conditions? *)
+                      let side' = List.map (tr_term_top ~state ~local_state) side in
+                      Stmt.Eqn_nested ([alpha], args', rhs', side')
                     )
                     def.Stmt.rec_eqns
                   in
                   (* declare abstract type + projectors *)
-                  add_stmt (Stmt.decl ~info:Stmt.info_default abs_type_id abs_type);
+                  add_stmt (Stmt.ty_decl ~info:Stmt.info_default abs_type_id (U.ty_type()));
                   List.iter
                     (fun (proj,ty_proj) ->
                       add_stmt (Stmt.decl ~info:Stmt.info_default proj ty_proj);
@@ -324,7 +332,7 @@ module Make(T : NunTerm_ho.S) = struct
                       failed on subterm @[%a@]:@ %s@]"
                       (fun k -> k
                         (Stmt.print print_term print_ty) st print_term t msg);
-                  def
+                  assert false (* TODO: return [def] after translating it? *)
               ) l
               in
               (* add new statements (type declarations) before l' *)
