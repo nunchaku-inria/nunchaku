@@ -25,6 +25,7 @@ Library "nunchaku_core"
                     NunStatement, NunCVC4,
                     transformations/NunSkolem,
                     transformations/NunTypeInference,
+                    transformations/NunFlattenEquation,
                     transformations/NunMonomorphization,
                     transformations/NunElimRecursion
   Install:          true
