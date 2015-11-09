@@ -35,3 +35,4 @@ val print_name : Format.formatter -> t -> unit
 module Map : CCMap.S with type key = t
 module Set : CCSet.S with type elt = t
 module Tbl : CCHashtbl.S with type key = t
+module PerTbl : CCPersistentHashtbl.S with type key = t

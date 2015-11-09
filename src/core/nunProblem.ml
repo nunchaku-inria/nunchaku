@@ -132,22 +132,21 @@ let signature ?(init=Signature.empty) pb =
 let env ?init:(env=Env.create()) pb =
   let module St = Statement in
   try
-    CCVector.iter
-      (fun st ->
+    CCVector.fold
+      (fun env st ->
         let loc = Statement.loc st in
         match St.view st with
         | St.Decl (id,kind,ty) ->
             Env.declare ?loc ~kind ~env id ty
         | St.TyDef (kind,l) ->
             Env.def_data ?loc ~env ~kind l
-        | St.Goal _ -> ()
-        | St.Axiom (St.Axiom_std _) -> ()
+        | St.Goal _ -> env
+        | St.Axiom (St.Axiom_std _) -> env
         | St.Axiom (St.Axiom_spec l) ->
             Env.spec_funs ?loc ~env l
         | St.Axiom (St.Axiom_rec l) ->
             Env.rec_funs ?loc ~env l
-      ) pb.statements;
-    env
+      ) env pb.statements
   with Env.InvalidDef _ as e ->
     ill_formedf_ "invalid env: %a" Env.pp_invalid_def_ e
 

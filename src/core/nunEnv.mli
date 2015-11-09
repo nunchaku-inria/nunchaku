@@ -47,7 +47,7 @@ type ('t, 'ty, 'inv) info = {
 
 (** Maps ID to their type and definitions *)
 type ('t, 'ty, 'inv) t = private {
-  infos: ('t, 'ty, 'inv) info NunID.Tbl.t;
+  infos: ('t, 'ty, 'inv) info NunID.PerTbl.t;
 }
 
 exception InvalidDef of id * string
@@ -65,17 +65,17 @@ val decl_kind: _ info -> NunStatement.decl
 val declare:
   ?loc:loc ->
   kind:NunStatement.decl ->
-  env:('t, 'ty, _) t ->
+  env:('t, 'ty, 'inv) t ->
   id ->
   'ty ->
-  unit
+  ('t, 'ty, 'inv) t
 (** Declare a symbol's type (as undefined, for now) *)
 
 val rec_funs:
   ?loc:loc ->
   env:('t, 'ty, 'inv) t ->
   ('t, 'ty, 'inv) NunStatement.rec_defs ->
-  unit
+  ('t, 'ty, 'inv) t
 (** Add a definition of functions/predicates. They can be already
     defined (or declared). *)
 
@@ -83,7 +83,7 @@ val spec_funs:
   ?loc:loc ->
   env:('t, 'ty, 'inv) t ->
   ('t, 'ty) NunStatement.spec_defs ->
-  unit
+  ('t, 'ty, 'inv) t
 (** Add a definition of functions/predicates. They can be already
     defined (or declared). *)
 
@@ -92,7 +92,7 @@ val def_data:
   env:('t, 'ty, 'inv) t ->
   kind:[`Data | `Codata] ->
   'ty NunStatement.mutual_types ->
-  unit
+  ('t, 'ty, 'inv) t
 (** Define a new set of mutually recursive (co)data types.
     Also defines their constructors.
     @raise InvalidDef if some type/constructor already defined/declared *)

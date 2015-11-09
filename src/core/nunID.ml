@@ -56,4 +56,5 @@ end
 module Map = CCMap.Make(As_key)
 module Set = CCSet.Make(As_key)
 module Tbl = CCHashtbl.Make(As_key)
+module PerTbl = CCPersistentHashtbl.Make(As_key)
 

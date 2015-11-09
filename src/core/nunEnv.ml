@@ -45,7 +45,7 @@ type ('t, 'ty, 'inv) info = {
 
 (** Maps ID to their type and definitions *)
 type ('t, 'ty, 'inv) t = {
-  infos: ('t, 'ty, 'inv) info NunID.Tbl.t;
+  infos: ('t, 'ty, 'inv) info NunID.PerTbl.t;
 }
 
 exception InvalidDef of id * string
@@ -69,22 +69,22 @@ let def t = t.def
 let ty t = t.ty
 let decl_kind t = t.decl_kind
 
-let create() = {infos=ID.Tbl.create 64}
+let create() = {infos=ID.PerTbl.create 64}
 
 let check_not_defined_ t ~id ~fail_msg =
-  if ID.Tbl.mem t.infos id then errorf_ id fail_msg
+  if ID.PerTbl.mem t.infos id then errorf_ id fail_msg
 
 let declare ?loc ~kind ~env:t id ty =
   check_not_defined_ t ~id ~fail_msg:"already declared";
   let info = {loc; decl_kind=kind; ty; def=NoDef} in
-  ID.Tbl.replace t.infos id info
+  {infos=ID.PerTbl.replace t.infos id info}
 
 let rec_funs ?loc ~env:t defs =
-  List.iter
-    (fun def ->
+  List.fold_left
+    (fun t def ->
       let id = def.Stmt.rec_defined.Stmt.defined_head in
       try
-        let info = ID.Tbl.find t.infos id in
+        let info = ID.PerTbl.find t.infos id in
         let l = match info.def with
           | Data _ -> errorf_ id "defined as both function and (co)data"
           | Cstor _ -> errorf_ id "defined as both function and constructor"
@@ -92,17 +92,17 @@ let rec_funs ?loc ~env:t defs =
           | NoDef -> [] (* first def of id *)
         in
         let def = Fun ((Rec(defs, def, loc)) :: l) in
-        ID.Tbl.replace t.infos id {info with def; }
+        {infos=ID.PerTbl.replace t.infos id {info with def; }}
       with Not_found ->
         errorf_ id "defined function, but not declared previously"
-    ) defs
+    ) t defs
 
 let spec_funs ?loc ~env:t spec =
-  List.iter
-    (fun defined ->
+  List.fold_left
+    (fun t defined ->
       let id = defined.Stmt.defined_head in
       try
-        let info = ID.Tbl.find t.infos id in
+        let info = ID.PerTbl.find t.infos id in
         let l = match info.def with
           | Data _ -> errorf_ id "defined as both function and (co)data"
           | Cstor _ -> errorf_ id "defined as both function and constructor"
@@ -110,14 +110,14 @@ let spec_funs ?loc ~env:t spec =
           | NoDef -> [] (* first def of id *)
         in
         let def = Fun ((Spec(spec, loc)) :: l) in
-        ID.Tbl.replace t.infos id {info with def; }
+        {infos=ID.PerTbl.replace t.infos id {info with def; }}
       with Not_found ->
         errorf_ id "defined function, but not declared previously"
-    ) spec.Stmt.spec_defined
+    ) t spec.Stmt.spec_defined
 
 let def_data ?loc ~env:t ~kind tys =
-  List.iter
-    (fun tydef ->
+  List.fold_left
+    (fun t tydef ->
       (* define type *)
       let id = tydef.Stmt.ty_id in
       check_not_defined_ t ~id ~fail_msg:"is (co)data, but already defined";
@@ -127,10 +127,10 @@ let def_data ?loc ~env:t ~kind tys =
         ty=tydef.Stmt.ty_type;
         def=Data (kind, tys, tydef);
       } in
-      ID.Tbl.replace t.infos id info;
+      let t = {infos=ID.PerTbl.replace t.infos id info} in
       (* define constructors *)
-      List.iter
-        (fun cstor ->
+      List.fold_left
+        (fun t cstor ->
           let id = cstor.Stmt.cstor_name in
           check_not_defined_ t ~id ~fail_msg:"is constructor, but already defined";
           let info = {
@@ -139,16 +139,16 @@ let def_data ?loc ~env:t ~kind tys =
             ty=cstor.Stmt.cstor_type;
             def=Cstor (kind,tys,tydef, cstor);
           } in
-          ID.Tbl.replace t.infos id info;
-        ) tydef.Stmt.ty_cstors
-    ) tys
+          {infos=ID.PerTbl.replace t.infos id info}
+        ) t tydef.Stmt.ty_cstors
+    ) t tys
 
-let find_exn ~env:t ~id = ID.Tbl.find t.infos id
+let find_exn ~env:t ~id = ID.PerTbl.find t.infos id
 
 let find ~env:t ~id =
   try Some (find_exn ~env:t ~id)
   with Not_found -> None
 
-let mem ~env ~id = ID.Tbl.mem env.infos id
+let mem ~env ~id = ID.PerTbl.mem env.infos id
 
 let find_ty ~env ~id = (find_exn ~env ~id).ty

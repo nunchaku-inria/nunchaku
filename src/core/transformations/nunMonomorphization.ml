@@ -167,7 +167,7 @@ module Make(T : NunTerm_ho.S) = struct
     type depth = int
 
     type 'inv t = {
-      env: (term1, term1, 'inv) Env.t;
+      mutable env: (term1, term1, 'inv) Env.t;
         (* access definitions/declarations by ID *)
       config: config;
         (* settings *)
@@ -712,7 +712,7 @@ module Make(T : NunTerm_ho.S) = struct
     begin match Stmt.view st with
     | Stmt.Decl (id,k,ty) ->
         (* declare the statement (in case it is needed later) *)
-        Env.declare ?loc ~kind:k ~env:state.St.env id ty
+        state.St.env <- Env.declare ?loc ~kind:k ~env:state.St.env id ty
     | Stmt.Goal g ->
         (* convert goal *)
         let g = mono_term ~state
@@ -725,11 +725,11 @@ module Make(T : NunTerm_ho.S) = struct
         let l = List.map (mono_term ~state ~local_state) l in
         St.push_res ~state (Stmt.axiom ~info l)
     | Stmt.Axiom (Stmt.Axiom_spec l) ->
-        Env.spec_funs ?loc ~env:state.St.env l;
+        state.St.env <- Env.spec_funs ?loc ~env:state.St.env l;
     | Stmt.Axiom (Stmt.Axiom_rec l) ->
-        Env.rec_funs ?loc ~env:state.St.env l;
+        state.St.env <- Env.rec_funs ?loc ~env:state.St.env l;
     | Stmt.TyDef (k, l) ->
-        Env.def_data ?loc ~kind:k ~env:state.St.env l;
+        state.St.env <- Env.def_data ?loc ~kind:k ~env:state.St.env l;
     end
 
   let monomorphize ?(depth_limit=256) pb =
