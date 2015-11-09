@@ -180,9 +180,9 @@ let mk_print
         fpf out "@[<2>if %a@ then %a@ else %a@]"
           print a print b print c
     | AppBuiltin (NunBuiltin.T.DataTest c, [t]) ->
-        fpf out "@[<2>is-%a@ %a@]" ID.print_name c print t
+        fpf out "@[<2>is-%a@ %a@]" ID.print_name c print_in_app t
     | AppBuiltin (NunBuiltin.T.DataSelect (c,n), [t]) ->
-        fpf out "@[<2>select-%a-%d@ %a@]" ID.print_name c n print t
+        fpf out "@[<2>select-%a-%d@ %a@]" ID.print_name c n print_in_app t
     | AppBuiltin (b, []) -> CCFormat.string out (NunBuiltin.T.to_string b)
     | AppBuiltin (f, [a;b]) when NunBuiltin.T.fixity f = `Infix ->
         fpf out "@[<hv>%a@ %s@ %a@]"
