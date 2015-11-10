@@ -13,11 +13,12 @@
 
 type result =
   | Ok
+  | Unknown
   | Error (* should fail *)
 
 let pp_result out e =
   Format.fprintf out "%s"
-    (match e with Ok -> "ok" | Error -> "error")
+    (match e with Ok -> "ok" | Unknown -> "unknown" | Error -> "error")
 
 (* what is expected? *)
 let grep_expect f =
@@ -29,6 +30,7 @@ let grep_expect f =
         |> Gen.filter_map
           (function
             | "# expect: sat" -> Some Ok
+            | "# expect: unknown" -> Some Unknown
             | "# expect: error"
             | "# expect: fail" -> Some Error
             | _ -> None
@@ -45,7 +47,9 @@ let test_file f =
   (* expected result *)
   let expected = grep_expect f in
   let p = CCUnix.call "./nunchaku.native --timeout 5 %s" f in
-  let actual = if p#errcode = 0 then Ok else Error in
+  let actual = if p#errcode <> 0 then Error
+    else if CCString.mem ~sub:"SAT" p#stdout
+    then Ok else Unknown in
   if expected = actual
   then (Format.printf "\x1b[32;1mok\x1b[0m@."; true)
   else (
