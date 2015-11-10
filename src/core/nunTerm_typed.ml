@@ -13,6 +13,8 @@ module ID = NunID
 
 (*$inject
   module Var = NunVar
+  module TyI = NunType_intf
+  module U = Util(Default)
 
 *)
 
@@ -137,9 +139,9 @@ module Util(T : S) = struct
 end
 
 (*$T
-  Default.Ty.returns_Type Default.ty_type
-  Default.Ty.returns_Type Default.(ty_arrow ty_prop ty_type)
-  not (Default.Ty.returns_Type Default.(ty_arrow ty_type ty_prop))
+  TyI.returns_Type ~repr:U.as_ty (U.ty_type())
+  TyI.returns_Type ~repr:U.as_ty U.(ty_arrow (ty_prop()) (ty_type()))
+  not (TyI.returns_Type ~repr:U.as_ty U.(ty_arrow (ty_type()) (ty_prop())))
 *)
 
 module AsHO(T : REPR) : NunTerm_ho.REPR with type 'a t = 'a T.t = struct

@@ -9,7 +9,9 @@
 (*$inject
   let pterm = NunLexer.HO.term_of_str_exn
 
+  module U = Util(Default)
   module Su = SubstUtil(Default)
+  module TyI = NunType_intf
 *)
 
 module ID = NunID
@@ -114,9 +116,9 @@ let as_ty
   | Bind _ -> assert false
 
 (*$T
-  Default.Ty.returns_Type Default.ty_type
-  Default.Ty.returns_Type Default.(ty_arrow ty_prop ty_type)
-  not (Default.Ty.returns_Type Default.(ty_arrow ty_type ty_prop))
+  TyI.returns_Type ~repr:U.as_ty (U.ty_type())
+  TyI.returns_Type ~repr:U.as_ty U.(ty_arrow (ty_prop()) (ty_type()))
+  not (TyI.returns_Type ~repr:U.as_ty U.(ty_arrow (ty_type()) (ty_prop())))
 *)
 
 module Util(T : S) = struct

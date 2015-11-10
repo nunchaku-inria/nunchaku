@@ -161,7 +161,7 @@ let unify_exn
   let a = U.ty_const a' in
   let t1 = U.ty_app f [v] in
   let t2 = U.ty_app f [a] in
-  unify_exn ~repr t1 t2;
+  unify_exn ~repr:U.as_ty t1 t2;
   assert_bool "v is a"
     (match U.as_ty v with
       | NunType_intf.Const id' -> ID.equal a' id'
