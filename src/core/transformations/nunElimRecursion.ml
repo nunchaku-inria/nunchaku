@@ -65,14 +65,13 @@ module Make(T : NunTerm_ho.S) = struct
     | NoPolarity
 
   type local_state = {
-    defining: (ID.t * fun_encoding) option;
-      (* the function we are defining recursively (if any), and its
-          abstract type and projectors *)
     pol: polarity;
       (* local polarity *)
     subst: (term,term) Subst.t;
       (* local substitution *)
   }
+
+  let empty_local_state = {pol=Pos; subst=Subst.empty; }
 
   let inv_pol ls = {ls with
     pol=(match ls.pol with | Pos -> Neg | Neg -> Pos | NoPolarity -> NoPolarity)
@@ -115,6 +114,8 @@ module Make(T : NunTerm_ho.S) = struct
     | [x] -> x
     | l -> U.app_builtin B.Or l
 
+  let mk_imply_ a b = U.app_builtin B.Imply [a; b]
+
   (* combine side-conditions with [t], depending on polarity *)
   let add_conds pol t conds = match pol with
     | Pos -> mk_and_ [t; mk_and_ conds], []
@@ -128,115 +129,118 @@ module Make(T : NunTerm_ho.S) = struct
         - keep same term
   *)
 
+  (* if [f] is a recursively defined function that is being eliminated,
+      then return [Some def_of_f] *)
+  let as_defined_ ~state f = match T.repr f with
+    | TI.Const id ->
+        begin try
+          Some (id, ID.Tbl.find state.fun_encodings id)
+        with Not_found -> None
+        end
+    | _ -> None
+
   (* translate term/formula recursively. Returns new term and a list
     of side-conditions (guards) *)
-  let rec tr_term ~state ~local_state (t:term): term * term list =
+  let rec tr_term_rec_ ~state ~local_state (t:term): term * term list =
     match T.repr t with
     | TI.Const _ -> t, []
     | TI.Var v ->
         (* substitute if needed; no side-condition *)
         let t' = match Subst.find ~subst:local_state.subst v with
-          | None -> SubstUtil.eval ~subst:local_state.subst t
-          | Some t -> t
+          | None -> t
+          | Some t' -> t'
         in t', []
     | TI.App (f,l) ->
-        begin match T.repr f, local_state.defining with
-          | TI.Const f_id, Some (f', fundef) when ID.equal f_id f' ->
-              (* we are defining this particular function *)
+        begin match as_defined_ ~state f with
+          | Some (id, fundef) ->
+              (* [f] is a recursive function we are encoding *)
               if List.length l <> List.length fundef.fun_concretization
                 then fail_tr_ t
-                  "defined function is partially applied (%d arguments, expected %d)"
-                  (List.length l) (List.length fundef.fun_concretization);
-              if List.for_all (is_var_in_subst_ ~local_state) l
-              then
-                (* simply substitute, no side-conditions *)
-                let l' = List.map
-                  (fun t -> match T.repr t with
-                    | TI.Var v -> Subst.find_exn v ~subst:local_state.subst
-                    | _ -> assert false)
-                  l
-                in
-                U.app f l', []
-              else (
-                (* existential variable *)
-                let alpha = Var.make ~name:"alpha" ~ty:fundef.fun_abstract_ty in
-                let conds = ref [] in
-                let eqns = ref [] in
-                let l' = List.map2
-                  (fun arg (proj,_ty_proj) ->
-                    let arg', cond_arg = tr_term ~state ~local_state arg in
-                    let eqn = U.eq arg (U.app (U.const proj) [U.var alpha]) in
-                    eqns := eqn :: !eqns;
-                    conds := cond_arg @ !conds;
-                    arg'
-                  )
-                  l
-                  fundef.fun_concretization
-                in
-                conds := (U.exists alpha (mk_and_ !eqns)) :: !conds;
-                U.app f l', !conds
-              )
-          | TI.Const f_id, _ ->
-              let t = SubstUtil.eval ~subst:local_state.subst t in
-              t, [] (* TODO: iterate on subterms? *)
-          | _ ->
-              fail_tr_ t "could not convert non-FO application"
+                  "defined function %a is partially applied (%d arguments, expected %d)"
+                  ID.print_name id (List.length l) (List.length fundef.fun_concretization);
+              (* existential variable *)
+              let alpha = Var.make ~name:"a" ~ty:fundef.fun_abstract_ty in
+              let conds = ref [] in
+              let eqns = ref [] in
+              let l' = List.map2
+                (fun arg (proj,_ty_proj) ->
+                  let arg', cond_arg = tr_term_rec_ ~state ~local_state arg in
+                  let eqn = U.eq arg' (U.app (U.const proj) [U.var alpha]) in
+                  eqns := eqn :: !eqns;
+                  conds := cond_arg @ !conds;
+                  arg'
+                )
+                l
+                fundef.fun_concretization
+              in
+              conds := (U.exists alpha (mk_and_ !eqns)) :: !conds;
+              U.app f l', !conds
+          | None ->
+              (* combine side conditions from every sub-term *)
+              let conds, l' = NunUtils.fold_map
+                (fun conds t ->
+                  let t', c = tr_term_rec_ ~state ~local_state t in
+                  List.rev_append c conds, t'
+                )
+                [] l
+              in
+              U.app f l', conds
         end
     | TI.AppBuiltin (b,l) ->
         begin match b, l with
         | B.True ,_
         | B.False ,_ -> t, []
         | B.Not, [t] ->
-            let t, cond = tr_term ~state ~local_state:(inv_pol local_state) t in
+            let t, cond = tr_term_rec_ ~state ~local_state:(inv_pol local_state) t in
             add_conds local_state.pol (mk_not_ t) cond
         | B.Or, l
         | B.And, l ->
-            let l_conds = List.map (tr_term ~state ~local_state) l in
+            let l_conds = List.map (tr_term_rec_ ~state ~local_state) l in
             let l, conds = List.split l_conds in
             add_conds local_state.pol (U.app_builtin b l) (List.flatten conds)
         | B.Imply, [a;b] ->
-            let a, cond_a = tr_term ~state ~local_state:(inv_pol local_state) a in
-            let b, cond_b = tr_term ~state ~local_state b in
+            let a, cond_a = tr_term_rec_ ~state ~local_state:(inv_pol local_state) a in
+            let b, cond_b = tr_term_rec_ ~state ~local_state b in
             add_conds local_state.pol (U.app b [a; b]) (List.append cond_a cond_b)
         | B.Equiv, _ -> fail_tr_ t "cannot translate equivalence (polarity)"
         | B.Ite, [a;b;c] ->
-            let a, cond_a = tr_term ~state ~local_state:(no_pol local_state) a in
-            let b, cond_b = tr_term ~state ~local_state b in
-            let c, cond_c = tr_term ~state ~local_state c in
+            let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
+            let b, cond_b = tr_term_rec_ ~state ~local_state b in
+            let c, cond_c = tr_term_rec_ ~state ~local_state c in
             add_conds local_state.pol
               (U.app_builtin B.Ite [a;b;c])
               (List.flatten [cond_a; cond_b; cond_c])
         | B.Eq, [a;b] ->
-            let a, cond_a = tr_term ~state ~local_state a in
-            let b, cond_b = tr_term ~state ~local_state b in
+            let a, cond_a = tr_term_rec_ ~state ~local_state a in
+            let b, cond_b = tr_term_rec_ ~state ~local_state b in
             add_conds local_state.pol
               (U.app_builtin B.Eq [a;b])
               (List.append cond_a cond_b)
-        | B.DataTest _, _
-        | B.DataSelect (_,_), _ ->
-            SubstUtil.eval ~subst:local_state.subst t, []
-        | B.Not,_
-        | B.Imply,_
-        | B.Ite,_
-        | B.Eq,_ -> assert false
+        | B.DataTest _, [t]
+        | B.DataSelect (_,_), [t] ->
+            let t', conds = tr_term_rec_ ~state ~local_state t in
+            U.app_builtin b [t'], conds
+        | B.Not,_ | B.Imply,_ | B.Ite,_
+        | B.Eq,_ | B.DataSelect _,_ | B.DataTest _,_ ->
+            assert false (* wrong arity *)
         end
     | TI.Bind (TI.Forall,v,t) ->
-        let t', conds = tr_term ~state ~local_state t in
-        U.forall v t',  List.map (U.forall v) conds
+        let t', conds = tr_term_rec_ ~state ~local_state t in
+        U.forall v t', List.map (U.forall v) conds
     | TI.Bind (TI.Exists,v,t) ->
-        let t, cond = tr_term ~state ~local_state t in
+        let t, cond = tr_term_rec_ ~state ~local_state t in
         add_conds local_state.pol (U.exists v t) cond
     | TI.Bind (TI.Fun,_,_) -> fail_tr_ t "translation of λ impossible"
     | TI.Let (v,t,u) ->
-        let t, c1 = tr_term ~state ~local_state t in
-        let u, c2 = tr_term ~state ~local_state u in
+        let t, c1 = tr_term_rec_ ~state ~local_state t in
+        let u, c2 = tr_term_rec_ ~state ~local_state u in
         U.let_ v t u, List.append c1 c2
     | TI.Match (t, l) ->
-        let t, ct = tr_term ~state ~local_state t in
+        let t, ct = tr_term_rec_ ~state ~local_state t in
         let conds' = ref [] in
         let l = ID.Map.map
           (fun (vars,rhs) ->
-            let rhs, conds = tr_term ~state ~local_state rhs in
+            let rhs, conds = tr_term_rec_ ~state ~local_state rhs in
             conds' := conds @ !conds';
             vars,rhs
           ) l
@@ -245,45 +249,52 @@ module Make(T : NunTerm_ho.S) = struct
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> t, []
 
-  let tr_term_top ~state ~local_state t =
+  let tr_term ~state ~local_state t =
     NunUtils.debugf ~section 4
       "@[<2>convert toplevel term `@[%a@]`@]" (fun k -> k print_term t);
-    fst (tr_term ~state ~local_state t)
+    tr_term_rec_ ~state ~local_state t
 
-  (* TODO:  separate formula-level translation (with side conditions, etc.)
-      and  traversal of subterm (that substitute variables with (proj alpha)
-      and gathers existential side conditions)
-     TODO: add the existential side conditions for all functions that have
-      an encoding, not just the current one (use the state.encodings) *)
+  (* translate a top-level formula
+   TODO: shall we actually keep the conditions? *)
+  let tr_form ~state t =
+    let t', conds = tr_term ~state ~local_state:empty_local_state t in
+    mk_imply_ (mk_and_ conds) t'
+
+  (* translate equation [eqn], which is defining the function
+     corresponding to [fun_encoding] *)
+  let tr_eqn ~state ~fun_encoding eqn =
+    let Stmt.Eqn_linear (vars,rhs,side) = eqn in
+    (* quantify over abstract variable now *)
+    let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
+    (* replace each [x_i] by [proj_i var] *)
+    assert (List.length vars = List.length fun_encoding.fun_concretization);
+    let args' = List.map
+      (fun (proj,_) -> U.app (U.const proj) [U.var alpha])
+      fun_encoding.fun_concretization
+    in
+    let subst = Subst.add_list ~subst:Subst.empty vars args' in
+    let local_state = { empty_local_state with subst; } in
+    (* convert right-hand side (ignore its side conditions) *)
+    let rhs', conds = tr_term ~state ~local_state rhs in
+    (* need to invert polarity, side conditions are LHS of => *)
+    let conds_side, side' = NunUtils.fold_map
+      (fun conds t ->
+        let t', conds' = tr_term ~state ~local_state:(inv_pol local_state) t in
+        List.rev_append conds' conds, t'
+      ) conds side
+    in
+    Stmt.Eqn_nested ([alpha], args', rhs', conds_side @ side')
 
   (* transform the recursive definition (mostly, its equations) *)
-  let tr_rec_def ~state ~local_state ~fun_encoding def =
+  let tr_rec_def ~state ~fun_encoding def =
     let eqns' = List.map
-      (fun (Stmt.Eqn_linear (vars,rhs,side)) ->
-        (* quantify over abstract variable now *)
-        let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
-        (* replace [x_i] by [proj_i var] *)
-        assert (List.length vars = List.length fun_encoding.fun_concretization);
-        let args' = List.map
-          (fun (proj,_) -> U.app (U.const proj) [U.var alpha])
-          fun_encoding.fun_concretization
-        in
-        let subst' = Subst.add_list ~subst:local_state.subst vars args' in
-        let local_state = { local_state with subst=subst' } in
-        (* convert right-hand side *)
-        let rhs' = tr_term_top ~state ~local_state rhs in
-        (* need to invert polarity, side conditions are LHS of => *)
-        let side' = List.map
-          (tr_term_top ~state ~local_state:(inv_pol local_state))
-          side in
-        Stmt.Eqn_nested ([alpha], args', rhs', side')
-      )
+      (tr_eqn ~state ~fun_encoding)
       def.Stmt.rec_eqns
     in
     (* return new set of equations *)
     {def with Stmt.rec_eqns=eqns'}
 
-  let tr_rec_defs ~info ~state ~local_state l =
+  let tr_rec_defs ~info ~state l =
     (* transform each axiom, considering case_head as rec. defined *)
     let new_stmts = ref [] in
     let add_stmt = CCList.Ref.push new_stmts in
@@ -325,11 +336,7 @@ module Make(T : NunTerm_ho.S) = struct
         try
           let id = def.Stmt.rec_defined.Stmt.defined_head in
           let fun_encoding = ID.Tbl.find state.fun_encodings id in
-          (* put abstract type + projectors in local state *)
-          let local_state = {local_state with
-            defining=Some (id, fun_encoding);
-          } in
-          tr_rec_def ~state ~local_state ~fun_encoding def
+          tr_rec_def ~state ~fun_encoding def
         with TranslationFailed (t, msg) as e ->
           (* could not translate, keep old definition *)
           NunUtils.debugf ~section 1
@@ -347,11 +354,6 @@ module Make(T : NunTerm_ho.S) = struct
 
   (* translate a statement *)
   let tr_statement ~state st =
-    let local_state = {
-      defining=None;
-      pol=Pos;
-      subst=Subst.empty;
-    } in
     (* update signature *)
     state.sigma <- Sig.add_statement ~sigma:state.sigma st;
     let info = Stmt.info st in
@@ -361,20 +363,22 @@ module Make(T : NunTerm_ho.S) = struct
     | Stmt.Axiom l ->
         begin match l with
         | Stmt.Axiom_rec l ->
-            tr_rec_defs ~info ~state ~local_state l
+            tr_rec_defs ~info ~state l
         | Stmt.Axiom_spec spec ->
             let axioms' =
               List.map
-                (tr_term_top ~state ~local_state)
+                (fun t -> tr_form ~state t)
                 spec.Stmt.spec_axioms
             in
             [Stmt.axiom_spec ~info {spec with Stmt.spec_axioms=axioms'}]
         | Stmt.Axiom_std l ->
-            let l = List.map (tr_term_top ~state ~local_state) l in
+            let l = List.map
+              (fun t -> tr_form ~state t)
+              l in
             [Stmt.axiom ~info l]
         end
     | Stmt.Goal g ->
-        [Stmt.goal ~info (tr_term_top ~state ~local_state g)]
+        [Stmt.goal ~info (tr_form ~state g)]
 
   let elim_recursion pb =
     let state = create_state() in

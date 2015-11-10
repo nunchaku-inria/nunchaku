@@ -375,7 +375,7 @@ module Make(T : NunTerm_ho.S) = struct
                 mono_term ~state ~local_state (U.app t l)
             end
         | _ ->
-            failf_ "cannot monomorphize application term `@[%a@]`" print_term t
+            failf_ "@[<2>cannot monomorphize application term@ `@[%a@]`@]" print_term t
         end
     | TI.Bind ((TI.Fun | TI.Forall | TI.Exists) as b, v, t) ->
         U.mk_bind b
