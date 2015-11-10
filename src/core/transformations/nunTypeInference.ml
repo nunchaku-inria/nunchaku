@@ -104,6 +104,7 @@ module Convert(Term : NunTerm_typed.S) = struct
 
   let print_term out t = NunTerm_ho.print ~repr:U.view out t
   let print_ty out t = TyI.print ~repr:U.as_ty out t
+  let print_in_app out t = NunTerm_ho.print_in_app ~repr:U.view out t
 
   (* Environment *)
 
@@ -377,7 +378,8 @@ module Convert(Term : NunTerm_typed.S) = struct
         (* complete with implicit arguments, if needed *)
         let l = match Loc.get f with
           | A.AtVar _ -> l (* all arguments explicit *)
-          | _ -> fill_implicit_ ?loc ty_f l
+          | _ ->
+              fill_implicit_ ?loc ty_f l
         in
         (* now, convert elements of [l] depending on what is
            expected by the type of [f] *)
@@ -473,7 +475,10 @@ module Convert(Term : NunTerm_typed.S) = struct
         unify_in_ctx_ ~stack (U.ty_exn a) prop;
         unify_in_ctx_ ~stack (U.ty_exn b) (U.ty_exn c);
         U.ite ?loc a b c
-    | A.Wildcard -> type_error ~stack "term wildcards cannot be inferred"
+    | A.Wildcard ->
+        (* TODO: generate fresh variable with new type?
+            but then we need to quantify over it! *)
+        type_error ~stack "term wildcards cannot be inferred"
     | A.TyForall _ -> type_error ~stack "terms cannot contain π"
     | A.TyArrow _ -> type_error ~stack "terms cannot contain arrows"
 
@@ -727,8 +732,9 @@ module Convert(Term : NunTerm_typed.S) = struct
 
   (* convert [t as v] into a [Stmt.defined].
      [t] will be applied to fresh type variables if it lacks some type arguments.
-     Also returns type variables of [t] that have been generalized, and the new env.
-    @param pre_check called before generalization of [t] *)
+     @return [(defined, vars, t')] where [vars] are the type variables of [t]
+       that have been generalized, and [t'] is the generalized version of [t].
+     @param pre_check called before generalization of [t] *)
   let convert_defined ?loc ?(pre_check=CCFun.const()) ~env t =
     let t = convert_term_exn ~env t in
     (* ensure [t] is applied to all required type arguments *)
@@ -759,8 +765,9 @@ module Convert(Term : NunTerm_typed.S) = struct
             "`@[%a@]` is not a function application" print_term t
     in
     NunUtils.debugf ~section 4
-      "@[<2>defined term `@[%a@]` has type tuple @[%a@]@]"
+      "@[<hv2>defined term `@[%a@]`@ has type `@[%a@]`@ and type tuple @[%a@]@]"
         (fun k -> k print_term t
+          print_ty (U.ty_exn t)
           (CCFormat.list print_ty) defined_ty_args);
     let defined = {Stmt.
       defined_head; defined_term=t; defined_ty_args;
@@ -847,6 +854,8 @@ module Convert(Term : NunTerm_typed.S) = struct
         let defined, vars, defined1 = convert_defined ?loc ~env untyped_t in
         allowed_vars := vars @ !allowed_vars;
         (* declare [v] in the scope of equations *)
+        NunUtils.debugf ~section 4 "@[<2>locally define %s as `@[%a@]`@]"
+          (fun k -> k v print_term defined1);
         let env' = Env.add_def ~env:env' v ~as_:defined1 in
         env', (defined,vars,l)
       ) env l
@@ -876,7 +885,11 @@ module Convert(Term : NunTerm_typed.S) = struct
                 ill_formedf ?loc
                   "@[<2>expected `@[forall <vars>.@ @[%a@] @[<hv><args>@ =@ <rhs>@]@]`@]"
                     ID.print_name f
-            | Some (vars,args,rhs) -> Stmt.Eqn_nested (vars, args, rhs, [])
+            | Some (vars,args,rhs) ->
+                (* remove type arguments (already present in defined) *)
+                let num_ty_args = List.length defined.Stmt.defined_ty_args in
+                let args = CCList.drop num_ty_args args in
+                Stmt.Eqn_nested (vars, args, rhs, [])
           )
           l
         in
@@ -1015,7 +1028,9 @@ module Convert(Term : NunTerm_typed.S) = struct
         Stmt.goal ~info t, env
     in
     NunUtils.debugf ~section 2 "@[<2>checked statement@ %a@]"
-      (fun k-> k (Stmt.print print_term print_ty) st');
+      (fun k-> k
+        (Stmt.print ~pt_in_app:print_in_app ~pty_in_app:print_in_app
+          print_term print_ty) st');
     st', env
 
   let convert_statement ~env st =

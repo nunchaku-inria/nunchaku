@@ -265,7 +265,7 @@ let print ?pt_in_app ?pty_in_app pt pty out t =
           | Eqn_nested (vars,args,rhs,side) ->
               if vars=[]
               then fpf out "@[<hv>%a@,%a %a =@ %a@]"
-                pt t (pplist ~sep:" " pt_in_app) args pt rhs pp_sides side
+                 pp_sides side pt t (pplist ~sep:" " pt_in_app) args pt rhs
               else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a@,%a %a =@ %a@]@]"
                 (pplist ~sep:" " pp_typed_var) vars pp_sides side pt t
                 (pplist ~sep:" " pt_in_app) args pt rhs
