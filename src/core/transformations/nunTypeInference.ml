@@ -792,8 +792,7 @@ module Convert(Term : NunTerm_typed.S) = struct
                       print_term t' (CCFormat.list Var.print) vars
               in
               let defined', _, defined1' = convert_defined ?loc ~pre_check ~env t' in
-              let var' = Var.make ~name:v' ~ty:(U.ty_exn defined1') in
-              let env' = Env.add_var ~env:env' v' ~var:var' in
+              let env' = Env.add_def ~env:env' v' ~as_:defined1' in
               env', defined'
             )
             env' tail
