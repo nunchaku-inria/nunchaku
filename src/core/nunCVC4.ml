@@ -498,6 +498,8 @@ end = struct
         Sol.Res.Sat m
     | `Ok (`Atom "unknown") ->
         Sol.Res.Timeout
+    | `Ok (`List [`Atom "error"; `Atom s]) ->
+        Sol.Res.Error s
     | `Ok sexp ->
         let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ %a@]"
           CCSexpM.print sexp
