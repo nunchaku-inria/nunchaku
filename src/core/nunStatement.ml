@@ -317,8 +317,9 @@ let print ?pt_in_app ?pty_in_app pt pty out t =
       fpf out ".@]"
   | Goal t -> fpf out "@[<2>goal %a.@]" pt t
 
-let print_list ?pt_in_app ?pty_in_app pt pty out l =
-  fpf out "@[<v>%a@]"
-    (CCFormat.list ~start:"" ~stop:"" ~sep:""
-      (print ?pt_in_app ?pty_in_app pt pty))
-    l
+module Print(P : NunTermInner.PRINT) = struct
+  let print out st = print
+    ~pt_in_app:P.print_in_app
+    ~pty_in_app:P.print_in_app
+    P.print P.print out st
+end

@@ -5,7 +5,7 @@
 
 type id = NunID.t
 
-type 'ty t = private {
+type +'ty t = private {
   id: id;
   ty: 'ty;
 }

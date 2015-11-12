@@ -5,7 +5,7 @@ module ID = NunID
 
 type id = ID.t
 
-type 'ty t = {
+type +'ty t = {
   id: id;
   ty: 'ty;
 }

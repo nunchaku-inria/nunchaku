@@ -13,14 +13,16 @@ type 'a printer = Format.formatter -> 'a -> unit
 
 module TyBuiltin : sig
   type t =
-    | Prop
+    [ `Prop
+    ]
   val equal : t -> t -> bool
   val print : Format.formatter -> t -> unit
 end
 
 module Builtin : sig
   type t =
-    | Int of int (* TODO use zarith *)
+    [ `Int of int (* TODO use zarith *)
+    ]
   val equal : t -> t -> bool
   val print : Format.formatter -> t -> unit
 end

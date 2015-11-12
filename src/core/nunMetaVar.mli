@@ -38,6 +38,9 @@ val rebind : var:'a t -> 'a -> unit
 (** re-bind an already bound reference (for instance, for path compression).
     @raise Invalid_argument if the ref is not bound *)
 
+val update : f:('a -> 'b) -> 'a t -> 'b t
+(** Update the linked content, if any *)
+
 val print : Format.formatter -> _ t -> unit
 val to_string : _ t -> string
 

@@ -186,5 +186,7 @@ val print : ?pt_in_app:'a printer -> ?pty_in_app:'b printer ->
       them if required
 *)
 
-val print_list : ?pt_in_app:'a printer -> ?pty_in_app:'b printer ->
-                 'a printer -> 'b printer -> ('a,'b,_) t list printer
+module Print(P : NunTermInner.PRINT) : sig
+  val print : (P.t, P.t, _) t printer
+end
+

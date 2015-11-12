@@ -20,56 +20,58 @@ type var = string
 
 module Builtin : sig
   type t =
-    | Prop
-    | Type
-    | Not
-    | And
-    | Or
-    | True
-    | False
-    | Eq
-    | Equiv
-    | Imply
+    [ `Prop
+    | `Type
+    | `Not
+    | `And
+    | `Or
+    | `True
+    | `False
+    | `Eq
+    | `Equiv
+    | `Imply
+    ]
 
   include NunIntf.PRINT with type t := t
   val fixity : t -> [`Prefix | `Infix]
   val to_string : t -> string
 end = struct
   type t =
-    | Prop
-    | Type
-    | Not
-    | And
-    | Or
-    | True
-    | False
-    | Eq
-    | Equiv
-    | Imply
+    [ `Prop
+    | `Type
+    | `Not
+    | `And
+    | `Or
+    | `True
+    | `False
+    | `Eq
+    | `Equiv
+    | `Imply
+    ]
 
   let fixity = function
-    | Type
-    | True
-    | False
-    | Prop
-    | Not -> `Prefix
-    | And
-    | Or
-    | Imply
-    | Equiv
-    | Eq -> `Infix
+    | `Type
+    | `True
+    | `False
+    | `Prop
+    | `Not -> `Prefix
+    | `And
+    | `Or
+    | `Imply
+    | `Equiv
+    | `Eq -> `Infix
 
   let to_string = function
-    | Type -> "type"
-    | Prop -> "prop"
-    | Not -> "~"
-    | And -> "&&"
-    | Or -> "||"
-    | True -> "true"
-    | False -> "false"
-    | Eq -> "="
-    | Equiv -> "="
-    | Imply -> "=>"
+    | `Type -> "type"
+    | `Prop -> "prop"
+    | `Not -> "~"
+    | `And -> "&&"
+    | `Or -> "||"
+    | `True -> "true"
+    | `False -> "false"
+    | `Eq -> "="
+    | `Equiv -> "="
+    | `Imply -> "=>"
 
   let print out s = Format.pp_print_string out (to_string s)
 end
@@ -142,16 +144,16 @@ let fun_ ?loc v t = Loc.with_loc ?loc (Fun(v,t))
 let let_ ?loc v t u = Loc.with_loc ?loc (Let (v,t,u))
 let match_with ?loc t l = Loc.with_loc ?loc (Match (t,l))
 let ite ?loc a b c = Loc.with_loc ?loc (Ite (a,b,c))
-let ty_prop = builtin Builtin.Prop
-let ty_type = builtin Builtin.Type
-let true_ = builtin Builtin.True
-let false_ = builtin Builtin.False
-let not_ ?loc f = app ?loc (builtin ?loc Builtin.Not) [f]
-let and_ ?loc l = app ?loc (builtin ?loc Builtin.And) l
-let or_ ?loc l = app ?loc (builtin ?loc Builtin.Or) l
-let imply ?loc a b = app ?loc (builtin ?loc Builtin.Imply) [a;b]
-let equiv ?loc a b = app ?loc (builtin ?loc Builtin.Equiv) [a;b]
-let eq ?loc a b = app ?loc (builtin ?loc Builtin.Eq) [a;b]
+let ty_prop = builtin `Prop
+let ty_type = builtin `Type
+let true_ = builtin `True
+let false_ = builtin `False
+let not_ ?loc f = app ?loc (builtin ?loc `Not) [f]
+let and_ ?loc l = app ?loc (builtin ?loc `And) l
+let or_ ?loc l = app ?loc (builtin ?loc `Or) l
+let imply ?loc a b = app ?loc (builtin ?loc `Imply) [a;b]
+let equiv ?loc a b = app ?loc (builtin ?loc `Equiv) [a;b]
+let eq ?loc a b = app ?loc (builtin ?loc `Eq) [a;b]
 let neq ?loc a b = not_ ?loc (eq ?loc a b)
 let forall ?loc v t = Loc.with_loc ?loc (Forall (v, t))
 let exists ?loc v t = Loc.with_loc ?loc (Exists (v, t))
@@ -201,7 +203,7 @@ let rec print_term out term = match Loc.get term with
   | MetaVar v -> fpf out "?%s" v
   | App (f, [a;b]) ->
       begin match Loc.get f with
-      | Builtin s when Builtin.fixity s = `Infix ->
+      | Builtin s when `fixity s = `Infix ->
           fpf out "@[<2>%a@ %a@ %a@]"
             print_term_inner a Builtin.print s print_term_inner b
       | _ ->

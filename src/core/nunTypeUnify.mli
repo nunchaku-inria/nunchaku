@@ -5,27 +5,19 @@
 
 type 'a sequence = ('a -> unit) -> unit
 
-type ('t,'inv) repr = ('t,'inv) NunType_intf.repr
+module Make(T : NunTypePoly.REPR) : sig
+  exception Fail of (T.t * T.t) list * string
+  (** Raised when unification fails. The list of pairs of types is the
+      unification stack (with the innermost types first) *)
 
-type 'inv_p invariant = <poly: 'inv_p; meta: [`Meta]>
-(** Invariant: must have meta-variables *)
+  val unify_exn : T.t -> T.t -> unit
+  (** Unify the two types, modifying their binding in place.
+      @raise Fail if the types are not unifiable *)
 
-exception Fail of (NunType_intf.packed * NunType_intf.packed) list * string
-(** Raised when unification fails. The list of pairs of types is the
-    unification stack (with the innermost types first) *)
+  type meta_vars_set = T.t NunMetaVar.t NunID.Map.t
+  (* a set of meta-variable with their reference *)
 
-val unify_exn : repr:('t, _ invariant) repr -> 't -> 't -> unit
-(** Unify the two types, modifying their binding in place.
-    @raise Fail if the types are not unifiable *)
-
-type 't meta_vars_set = 't NunMetaVar.t NunID.Map.t
-(* a set of meta-variable with their reference *)
-
-val free_meta_vars :
-  repr:('t, _ invariant) repr ->
-  ?init:'t meta_vars_set ->
-  't ->
-  't meta_vars_set
-(** Compute the set of free meta variables that can be bound,
-    mapped to their meta-variable *)
-
+  val free_meta_vars : T.t -> meta_vars_set
+  (** Compute the set of free meta variables that can be bound,
+      mapped to their meta-variable *)
+end

@@ -12,18 +12,20 @@ type 'a printer = Format.formatter -> 'a -> unit
 
 module TyBuiltin = struct
   type t =
-    | Prop
+    [ `Prop
+    ]
   let equal = (=)
   let print out = function
-    | Prop -> CCFormat.string out "prop"
+    | `Prop -> CCFormat.string out "prop"
 end
 
 module Builtin = struct
   type t =
-    | Int of int
+    [ `Int of int
+    ]
   let equal = (=)
   let print out = function
-    | Int n -> CCFormat.int out n
+    | `Int n -> CCFormat.int out n
 end
 
 (** Term *)

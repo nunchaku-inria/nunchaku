@@ -3,9 +3,7 @@
 
 (** {1 Terms with Types} *)
 
-module TI = NunTerm_intf
-module TyI = NunType_intf
-
+module TI = NunTermInner
 module Loc = NunLocation
 module Var = NunVar
 module MetaVar = NunMetaVar
@@ -18,54 +16,94 @@ module ID = NunID
 
 *)
 
+type 'a view = 'a TI.view
+(** Same view as {!NunTermInner} *)
+
 type loc = Loc.t
 type id = NunID.t
 type 'a var = 'a Var.t
 
-type ('a,'inv) view = ('a,'inv) NunTerm_intf.view
-
-type ('t,'inv) repr = ('t, 'inv) NunTerm_intf.repr
-
-type ('t,'inv) build = ?loc:loc -> ty:'t -> ('t, 'inv) view -> 't
-(** Builder is specific: we also need the type of the term, and an
-    optional location. *)
-
 module type REPR = sig
-  type 'i t
-  val repr : ('i t,'i) repr
-  val ty: 'i t -> 'i t option
-  val loc: _ t -> loc option
+  type t
+  val repr : t -> t view
+  val ty: t -> t option
+  val loc: t -> loc option
 end
 
 module type BUILD = sig
-  type 'i t
-  val build : ('i t, 'i) build
-  val kind : unit -> 'i t (* impossible to build otherwise *)
+  type t
+  val build : ?loc:loc -> ty:t -> t view -> t
+  val kind : t (* impossible to build otherwise *)
 end
 
 module type S = sig
-  type 'i t
-  include REPR with type 'i t := 'i t
-  include BUILD with type 'i t := 'i t
+  type t
+  include REPR with type t := t
+  include BUILD with type t := t
 end
 
-module Util(T : S) = struct
-  type 'i t = 'i T.t
+module LiftRepr(T : REPR) : TI.REPR with type t = T.t = struct
+  type t = T.t
+  let repr = T.repr
+end
 
-  let view = T.repr
-  let loc = T.loc
-  let ty = T.ty
+module Util(T : S)
+: sig
+  type t = T.t
+
+  val ty_exn : t -> t
+  (** @raise Not_found if the term has no type *)
+
+  val const : ?loc:loc -> ty:t -> id -> t
+  val builtin : ?loc:loc -> ty:t -> TI.Builtin.t -> t
+  val app_builtin : ?loc:loc -> ty:t -> TI.TyBuiltin.t -> t list -> t
+  val var : ?loc:loc -> t var -> t
+  val app : ?loc:loc -> ty:t -> t -> t list -> t
+  val fun_ : ?loc:loc -> ty:t -> t var -> t -> t
+  val let_ : ?loc:loc -> t var -> t -> t -> t
+  val match_with : ?loc:loc -> ty:t -> t -> t TI.cases -> t
+  val ite : ?loc:loc -> t -> t -> t -> t
+  val forall : ?loc:loc -> t var -> t -> t
+  val exists : ?loc:loc -> t var -> t -> t
+  val eq : ?loc:loc -> t -> t -> t
+
+  val mk_bind :
+    ?loc:loc ->
+    ty:t ->
+    TI.Binder.t -> t var -> t -> t
+
+  val ty_type : t (** Type of types *)
+  val ty_prop : t (** Propositions *)
+
+  val ty_builtin : ?loc:loc -> TI.TyBuiltin.t -> t
+  val ty_const : ?loc:loc -> id -> t
+  val ty_app : ?loc:loc -> t -> t list -> t
+  val ty_arrow : ?loc:loc -> t -> t -> t
+
+  val ty_var : ?loc:loc -> t var -> t
+  val ty_forall : ?loc:loc -> t var -> t -> t
+
+  val ty_meta_var : ?loc:loc -> t MetaVar.t -> t
+  (** Meta-variable, ready for unif *)
+
+  include TI.UTIL_REPR with type t_ := t
+
+  val is_ty: t -> bool
+  (** [is_ty t] same as [is_Type (type of t)] *)
+end = struct
+  type t = T.t
+
+  let build = T.build
+
   let ty_exn t = match T.ty t with
     | None -> raise Not_found
     | Some t -> t
 
-  let build = T.build
+  let ty_type =
+    build ?loc:None ~ty:T.kind (TI.TyBuiltin `Type)
 
-  let ty_type() =
-    build ?loc:None ~ty:(T.kind ()) (TI.TyBuiltin NunBuiltin.Ty.Type)
-
-  let ty_prop() =
-    build ?loc:None ~ty:(ty_type ()) (TI.TyBuiltin NunBuiltin.Ty.Prop)
+  let ty_prop =
+    build ?loc:None ~ty:ty_type (TI.TyBuiltin `Prop)
 
   let app_builtin ?loc ~ty s l =
     build ?loc ~ty (TI.AppBuiltin (s,l))
@@ -82,7 +120,7 @@ module Util(T : S) = struct
 
   let mk_bind ?loc ~ty b v t = build ?loc ~ty (TI.Bind (b,v,t))
 
-  let fun_ ?loc ~ty v t = build ?loc ~ty (TI.Bind(TI.Fun,v, t))
+  let fun_ ?loc ~ty v t = build ?loc ~ty (TI.Bind(`Fun,v, t))
 
   let let_ ?loc v t u =
     build ?loc ~ty:(ty_exn u) (TI.Let (v, t, u))
@@ -93,55 +131,44 @@ module Util(T : S) = struct
 
   let ite ?loc a b c =
     build?loc ~ty:(ty_exn b)
-      (TI.AppBuiltin (NunBuiltin.T.Ite, [a;b;c]))
+      (TI.AppBuiltin (`Ite, [a;b;c]))
 
   let forall ?loc v t =
-    mk_bind ?loc ~ty:(ty_prop ()) TI.Forall v t
+    mk_bind ?loc ~ty:ty_prop `Forall v t
 
   let exists ?loc v t =
-    mk_bind ?loc ~ty:(ty_prop ()) TI.Exists v t
+    mk_bind ?loc ~ty:ty_prop `Exists v t
 
   let eq ?loc a b =
-    app_builtin ?loc ~ty:(ty_prop ()) NunBuiltin.T.Eq [a;b]
+    app_builtin ?loc ~ty:ty_prop `Eq [a;b]
 
   let ty_builtin ?loc b =
-    build ?loc ~ty:(ty_type()) (TI.TyBuiltin b)
+    build ?loc ~ty:ty_type (TI.TyBuiltin b)
 
   let ty_const ?loc id =
-    const ?loc ~ty:(ty_type()) id
+    const ?loc ~ty:ty_type id
 
-  let ty_var ?loc v = build ?loc ~ty:(Var.ty v) (TI.TyVar v)
+  let ty_var ?loc v = build ?loc ~ty:(Var.ty v) (TI.Var v)
 
-  let ty_meta_var ?loc v = build ?loc ~ty:(ty_type()) (TI.TyMeta v)
+  let ty_meta_var ?loc v = build ?loc ~ty:ty_type (TI.TyMeta v)
 
-  let ty_app ?loc f l = app ?loc ~ty:(ty_type()) f l
+  let ty_app ?loc f l = app ?loc ~ty:ty_type f l
 
   let ty_arrow ?loc a b =
-    build ?loc ~ty:(ty_type()) (TI.TyArrow (a,b))
+    build ?loc ~ty:ty_type (TI.TyArrow (a,b))
 
   let ty_forall ?loc a b =
-    mk_bind ?loc ~ty:(ty_type()) TI.TyForall a b
+    mk_bind ?loc ~ty:ty_type `TyForall a b
 
-  (* representation as a type *)
-  let as_ty : type inv. (inv t,inv) TyI.repr
-  = fun t -> match view t with
-    | TI.TyBuiltin b -> TyI.Builtin b
-    | TI.Const id -> TyI.Const id
-    | TI.TyVar v -> TyI.Var v
-    | TI.App (f,l) -> TyI.App (f,l)
-    | TI.TyArrow (a,b) -> TyI.Arrow (a,b)
-    | TI.Bind(TI.TyForall,v,t) -> TyI.Forall (v,t)
-    | TI.TyMeta v -> TyI.Meta v
-    | TI.AppBuiltin _ | TI.Var _ | TI.Let _ | TI.Match _ -> assert false
-    | TI.Bind _ -> assert false
+  include TI.UtilRepr(LiftRepr(T))
 
-  let is_ty t = TyI.is_Type ~repr:as_ty (ty_exn t)
+  let is_ty t = ty_is_Type (ty_exn t)
 end
 
 (*$T
   TyI.returns_Type ~repr:U.as_ty (U.ty_type())
-  TyI.returns_Type ~repr:U.as_ty U.(ty_arrow (ty_prop()) (ty_type()))
-  not (TyI.returns_Type ~repr:U.as_ty U.(ty_arrow (ty_type()) (ty_prop())))
+  TyI.returns_Type ~repr:U.as_ty U.(ty_arrow (ty_prop()) ty_type)
+  not (TyI.returns_Type ~repr:U.as_ty U.(ty_arrow ty_type (ty_prop())))
 *)
 
 module AsHO(T : REPR) : NunTerm_ho.REPR with type 'a t = 'a T.t = struct

@@ -86,6 +86,13 @@ let print ?pt_in_app ?pty_in_app pt pty out problem =
       (Statement.print ?pt_in_app ?pty_in_app pt pty))
     problem.statements
 
+module Print(P : NunTermInner.PRINT) = struct
+  let print out x = print
+    ~pt_in_app:P.print_in_app
+    ~pty_in_app:P.print_in_app
+    P.print P.print out x
+end
+
 exception IllFormed of string
 (** Ill-formed problem *)
 

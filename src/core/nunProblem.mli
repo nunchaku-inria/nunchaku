@@ -80,6 +80,11 @@ val print : ?pt_in_app:'a printer -> ?pty_in_app:'b printer ->
             'a printer -> 'b printer -> ('a,'b,_) t printer
 (** Printer for a problem *)
 
+(** Functor version of {!print} *)
+module Print(P : NunTermInner.PRINT) : sig
+  val print : (P.t, P.t, _) t printer
+end
+
 exception IllFormed of string
 (** Ill-formed problem *)
 
