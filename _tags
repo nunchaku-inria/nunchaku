@@ -10,4 +10,4 @@ true: safe_string
 <src/**/*.ml>: warn(+a), warn(-4), warn(-44), warn(-50)
 
 # modern OCaml!
-true: bin_annot, no_alias_deps
+true: bin_annot, no_alias_deps, short_paths
