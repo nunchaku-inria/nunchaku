@@ -165,7 +165,6 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
         | `Equiv, [a;b] ->
             FO.Formula.equiv (aux a)(aux b)
         | `Eq, [a;b] ->
-            (* TODO: here use signature! maybe it's an equivalence *)
             FO.Formula.eq (conv_term a)(conv_term b)
         | `DataSelect _, _
         | `DataTest _, _ ->
@@ -197,7 +196,7 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
 
   (* does [ty] return prop? *)
   let returns_prop_ t =
-    match Mono.repr t with
+    match Mono.repr (U.ty_returns t) with
       | TyBuiltin `Prop -> true
       | _ -> false
 
