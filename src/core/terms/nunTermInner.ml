@@ -40,6 +40,8 @@ module TyBuiltin = struct
     | `Type -> "type"
 end
 
+(* TODO: parametrize, make 'a Builtin.t, so arity is enforced *)
+
 module Builtin = struct
   type t =
     [ `True
@@ -239,6 +241,8 @@ module Print(T : REPR)
     | Bind _ -> fpf out "(@[%a@])" print t
     | Let _ | Match _ | TyArrow (_,_) -> fpf out "(@[%a@])" print t
 end
+
+type 'a print = (module PRINT with type t = 'a)
 
 (** {2 Utils} *)
 
@@ -854,6 +858,8 @@ module Default : S
     | _ -> make_raw_ view
 end
 
+let default = (module Default : S)
+
 (** {2 Conversion between two representations} *)
 
 module Convert(T1 : REPR)(T2 : BUILD)
@@ -879,6 +885,4 @@ end = struct
     )
   and aux_var v = Var.update_ty ~f:convert v
   and aux_meta v = MetaVar.update ~f:convert v
-
 end
-

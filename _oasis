@@ -20,7 +20,7 @@ Library "nunchaku_core"
   Modules:          NunID, NunVar, NunMetaVar, NunLocation, NunIntf, NunUtils,
                     NunTransform, NunUntypedAST, NunModel,
                     NunTypeUnify,
-                    NunProblem, NunFO, NunTerm_intf,
+                    NunProblem, NunFO,
                     NunReduce, NunSolver_intf, NunEnv, NunSignature,
                     NunStatement, NunCVC4,
                     terms/NunTermInner,

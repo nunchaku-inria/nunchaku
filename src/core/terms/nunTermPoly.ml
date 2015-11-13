@@ -38,83 +38,31 @@ type 'a view =
   | TyBuiltin of TyBuiltin.t (** Builtin type *)
   | TyArrow of 'a * 'a  (** Arrow type *)
 
-type 't repr = 't -> 't view
-(** A concrete representation of terms by the type [t'] *)
-
-type 't build = 't view -> 't
-(** A builder for a concrete representation with type ['t]. *)
-
-module type REPR = sig
-  type t
-  val repr : t repr
-end
-
-module type BUILD = sig
-  type t
-  val build : t build
-end
-
-(** The main signature already  contains every util, printer, constructors,
-    equality, etc. because after that it would be impossible to use
-    the equality [t = INNER.t]. *)
 module type S = sig
-  module INNER : TI.S
-  type t = private INNER.t
+  module T : TI.REPR
+  type t = T.t
 
-  include REPR with type t := t
-  include BUILD with type t := t
-
-  include TI.UTIL with type t_ := t
-  include TI.PRINT with type t := t
-  val ty_meta : [`Not_available]
-
-  val of_inner_unsafe : INNER.t -> t
-  (** Careful, this is totally unsafe and will result in [assert false] at
-    some point if not properly used *)
+  val repr : T.t -> T.t view
+  (** View that fails on meta variables *)
 end
 
-(** Build a representation and all the associated utilities *)
-module Make(T : TI.S)
-: S with module INNER = T
+module Make(T : TI.REPR)
+: S with module T = T
 = struct
-  module INNER = T
-
+  module T = T
   type t = T.t
 
   let repr t = match T.repr t with
     | TI.Const id -> Const id
     | TI.Var v -> Var v
-    | TI.App (f,l) -> App (f,l)
+    | TI.App (f,l) -> App (f, l)
     | TI.AppBuiltin (b,l) -> AppBuiltin(b,l)
-    | TI.Bind (b,v,t) -> Bind(b,v,t)
+    | TI.Bind (b,v,t) -> Bind(b,v, t)
     | TI.Let (v,t,u) -> Let(v,t,u)
-    | TI.Match (t,l) -> Match (t,l)
+    | TI.Match (t,l) -> Match (t, l)
     | TI.TyBuiltin b -> TyBuiltin b
-    | TI.TyArrow (a,b) -> TyArrow (a,b)
+    | TI.TyArrow (a,b) -> TyArrow (a, b)
     | TI.TyMeta _ -> assert false
-
-  let build v =
-    T.build (match v with
-      | Const id -> TI.Const id
-      | Var v -> TI.Var v
-      | App (f,l) -> TI.App (f,l)
-      | AppBuiltin (b,l) -> TI.AppBuiltin(b,l)
-      | Bind (b,v,t) -> TI.Bind(b,v,t)
-      | Let (v,t,u) -> TI.Let(v,t,u)
-      | Match (t,l) -> TI.Match (t,l)
-      | TyBuiltin b -> TI.TyBuiltin b
-      | TyArrow (a,b) -> TI.TyArrow (a,b)
-    )
-
-  include TI.Util(T)
-
-  include (TI.Print(T) : TI.PRINT with type t := t)
-
-  let of_inner_unsafe t = t
-
-  (* overload this operation: we cannot hide it without copying all the
-     TI.UTIL signature, minus one operation *)
-  let ty_meta = `Not_available
 end
 
 (** {2 Default Representation}
@@ -130,11 +78,13 @@ module Default = Make(TI.Default)
   not (TyI.returns_Type ~repr:U.as_ty U.(ty_arrow (ty_type()) (ty_prop())))
 *)
 
+let default = (module Default : S with type T.t = TI.Default.t)
+
 (** {2 Type Erasure} *)
 
 module Untyped = NunUntypedAST
 
-module Erase(T : REPR)
+module Erase(T : S)
 : sig
   type ctx
 
@@ -251,8 +201,10 @@ end
 
 (** {2 Conversion of UntypedAST to HO, without Type-Checking} *)
 
-module OfUntyped(T : S)
+module OfUntyped(T : TI.S)
 : sig
+  module TPoly : S with type T.t = T.t
+
   exception Error of Untyped.term * string
 
   val convert_term : Untyped.term -> T.t
@@ -261,6 +213,8 @@ module OfUntyped(T : S)
 end = struct
   module A = NunUntypedAST
   module Loc = NunLocation
+  module TPoly = Make(T)
+  module U = TI.Util(T)
 
   exception Error of A.term * string
 
@@ -281,18 +235,18 @@ end = struct
     let env = Hashtbl.create 32 in
     let rec aux t = match Loc.get t with
       | A.App (f, l) ->
-          T.app (aux f) (List.map aux l)
+          U.app (aux f) (List.map aux l)
       | A.Wildcard -> error_ t "wildcard not supported"
       | A.Builtin b ->
           begin match b with
-          | `Prop -> T.ty_prop
-          | `Type -> T.ty_type
-          | `Not -> T.ty_builtin `Prop
-          | `And -> T.builtin `And
-          | `Or -> T.builtin `Or
-          | `True -> T.builtin `True
-          | `False -> T.builtin `False
-          | `Imply -> T.builtin `Imply
+          | `Prop -> U.ty_prop
+          | `Type -> U.ty_type
+          | `Not -> U.ty_builtin `Prop
+          | `And -> U.builtin `And
+          | `Or -> U.builtin `Or
+          | `True -> U.builtin `True
+          | `False -> U.builtin `False
+          | `Imply -> U.builtin `Imply
           | `Eq | `Equiv ->
               error_ t "unapplied equality"
           end
@@ -300,33 +254,33 @@ end = struct
       | A.Var s ->
           begin try
             match Hashtbl.find env s with
-            | ID id -> T.const id
-            | Var v -> T.var v
+            | ID id -> U.const id
+            | Var v -> U.var v
           with Not_found ->
             (* constant, not variable *)
             let id = ID.make ~name:s in
             Hashtbl.add env s (ID id);
-            T.const id
+            U.const id
           end
       | A.MetaVar _ -> error_ t "meta variable"
       | A.Exists ((_, None), _)
       | A.Forall ((_, None), _)
       | A.Fun ((_, None), _) -> error_ t "untyped variable"
       | A.Fun ((v, Some ty),t) ->
-          enter_var_ ~ty v (fun v -> T.fun_ v (aux t))
+          enter_var_ ~ty v (fun v -> U.fun_ v (aux t))
       | A.Let _ ->
           error_ t "`let` unsupported (no way of inferring the type)"
       | A.Match _ ->
           error_ t "`match` unsupported (no way of inferring the type of variables)"
-      | A.Ite (a,b,c) -> T.ite (aux a) (aux b) (aux c)
+      | A.Ite (a,b,c) -> U.ite (aux a) (aux b) (aux c)
       | A.Forall ((v,Some ty),t) ->
-          enter_var_ ~ty v (fun v -> T.forall v (aux t))
+          enter_var_ ~ty v (fun v -> U.forall v (aux t))
       | A.Exists ((v, Some ty),t) ->
-          enter_var_ ~ty v (fun v -> T.exists v (aux t))
-      | A.TyArrow (a,b) -> T.ty_arrow (aux a) (aux b)
+          enter_var_ ~ty v (fun v -> U.exists v (aux t))
+      | A.TyArrow (a,b) -> U.ty_arrow (aux a) (aux b)
       | A.TyForall (v,t) ->
           enter_var_ ~ty:(A.builtin `Type) v
-            (fun v -> T.ty_forall v (aux t))
+            (fun v -> U.ty_forall v (aux t))
 
     (* enter scope of [s] *)
     and enter_var_ s ~ty f =

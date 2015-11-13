@@ -31,11 +31,9 @@ val statement_of_string : string -> statement or_error
 val statement_of_string_exn : string -> statement
 
 module HO : sig
-  type inv = NunTerm_ho.OfUntyped.invariant
+  module T = NunTermInner.Default
 
-  module T = NunTerm_ho.Default
-
-  val term_of_str : string -> inv T.t or_error
-  val term_of_str_exn : string -> inv T.t
+  val term_of_str : string -> T.t or_error
+  val term_of_str_exn : string -> T.t
 end
 

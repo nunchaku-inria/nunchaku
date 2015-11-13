@@ -80,17 +80,13 @@ let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
 
 let map ~term ~ty pb = map_with ~term ~ty pb
 
-let print ?pt_in_app ?pty_in_app pt pty out problem =
-  fpf out "{@,%a@,}"
-    (CCVector.print ~start:"" ~stop:"" ~sep:""
-      (Statement.print ?pt_in_app ?pty_in_app pt pty))
-    problem.statements
+module Print(P1 : NunTermInner.PRINT)(P2 : NunTermInner.PRINT) = struct
+  module PStmt = Statement.Print(P1)(P2)
 
-module Print(P : NunTermInner.PRINT) = struct
-  let print out x = print
-    ~pt_in_app:P.print_in_app
-    ~pty_in_app:P.print_in_app
-    P.print P.print out x
+  let print out pb =
+    fpf out "{@,%a@,}"
+      (CCVector.print ~start:"" ~stop:"" ~sep:"" PStmt.print)
+      pb.statements
 end
 
 exception IllFormed of string

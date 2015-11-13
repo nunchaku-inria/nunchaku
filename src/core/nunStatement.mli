@@ -23,13 +23,13 @@ type ('t, 'ty, 'k) equation =
       'ty var list (* universally quantified vars, also arguments to [f] *)
       * 't (* right-hand side of equation *)
       * 't list (* side conditions *)
-      -> ('t, 'ty, [`Linear]) equation
+      -> ('t, 'ty, <eqn:[`Linear];..>) equation
   | Eqn_nested :
       'ty var list (* universally quantified vars *)
       * 't list (* arguments (patterns) to the defined term *)
       * 't  (* right-hand side of equation *)
       * 't list (* additional conditions *)
-      -> ('t, 'ty, [`Nested]) equation
+      -> ('t, 'ty, <eqn:[`Nested];..>) equation
 
 type ('t,'ty,'kind) rec_def = {
   rec_vars: 'ty var list; (* alpha_1, ..., alpha_n *)
@@ -142,20 +142,20 @@ val map_defined:
 val map_eqn:
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, 'inv) equation ->
-  ('t2, 'ty2, 'inv) equation
+  ('t, 'ty, <eqn:'inv;..>) equation ->
+  ('t2, 'ty2, <eqn:'inv;..>) equation
 
 val map_rec_def :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, 'inv) rec_def ->
-  ('t2, 'ty2, 'inv) rec_def
+  ('t, 'ty, <eqn:'inv;..>) rec_def ->
+  ('t2, 'ty2, <eqn:'inv;..>) rec_def
 
 val map_rec_defs :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, 'inv) rec_defs ->
-  ('t2, 'ty2, 'inv) rec_defs
+  ('t, 'ty, <eqn:'inv;..>) rec_defs ->
+  ('t2, 'ty2, <eqn:'inv;..>) rec_defs
 
 val map_spec_defs :
   term:('t -> 't2) ->
@@ -166,8 +166,8 @@ val map_spec_defs :
 val map :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, 'inv) t ->
-  ('t2, 'ty2, 'inv) t
+  ('t, 'ty, <eqn:'inv;..>) t ->
+  ('t2, 'ty2, <eqn:'inv;..>) t
 
 val fold :
   term:('a -> 't -> 'a) ->
@@ -176,17 +176,13 @@ val fold :
 
 (** {2 Print} *)
 
-val print : ?pt_in_app:'a printer -> ?pty_in_app:'b printer ->
-            'a printer -> 'b printer -> ('a,'b,_) t printer
+val print : 'a NunTermInner.print -> 'b NunTermInner.print ->
+            ('a,'b,_) t printer
 (** [print pt ptr] is a statement printer that relies upon [pt] to print
     terms/formulas and [pty] to print types.
-    @param pt_in_app optional printer to print terms with additional () around
-      them if required
-    @param pty_in_app optional printer to print types with additional () around
-      them if required
 *)
 
-module Print(P : NunTermInner.PRINT) : sig
-  val print : (P.t, P.t, _) t printer
+module Print(Pt : NunTermInner.PRINT)(Pty : NunTermInner.PRINT) : sig
+  val print : (Pt.t, Pty.t, _) t printer
 end
 

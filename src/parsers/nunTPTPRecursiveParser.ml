@@ -172,19 +172,19 @@ let rec declare_missing ~ctx ~state t =
           A.app ?loc f l
       | A.Builtin b ->
           begin match b with
-          | A.Builtin.And
-          | A.Builtin.Not
-          | A.Builtin.Or
-          | A.Builtin.Imply
-          | A.Builtin.Equiv ->
+          | `And
+          | `Not
+          | `Or
+          | `Imply
+          | `Equiv ->
               let l = List.map (declare_missing ~ctx:Ctx_prop ~state) l in
               A.app ?loc f l
-          | A.Builtin.Eq ->
+          | `Eq ->
               A.app ?loc f (List.map (declare_missing ~ctx:Ctx_term ~state) l)
-          | A.Builtin.Prop
-          | A.Builtin.Type
-          | A.Builtin.True
-          | A.Builtin.False -> t
+          | `Prop
+          | `Type
+          | `True
+          | `False -> t
           end
       | _ ->
         let ctx = prop2term ctx in

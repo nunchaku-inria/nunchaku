@@ -2,6 +2,7 @@
 
 module Var = NunVar
 module ID = NunID
+module TI = NunTermInner
 
 type id = ID.t
 type 'a var = 'a NunVar.t
@@ -24,13 +25,13 @@ type ('t, 'ty, 'k) equation =
       'ty var list (* universally quantified vars, also arguments to [f] *)
       * 't (* right-hand side of equation *)
       * 't list (* side conditions *)
-      -> ('t, 'ty, [`Linear]) equation
+      -> ('t, 'ty, <eqn:[`Linear];..>) equation
   | Eqn_nested :
       'ty var list (* universally quantified vars *)
       * 't list (* arguments (patterns) to the defined term *)
       * 't  (* right-hand side of equation *)
       * 't list (* additional conditions *)
-      -> ('t, 'ty, [`Nested]) equation
+      -> ('t, 'ty, <eqn:[`Nested];..>) equation
 
 type ('t,'ty,'kind) rec_def = {
   rec_vars: 'ty var list; (* alpha_1, ..., alpha_n *)
@@ -128,7 +129,8 @@ let map_defined ~term ~ty d = {
 
 let map_eqn
 : type a a1 b b1 inv.
-    term:(a -> a1) -> ty:(b -> b1) -> (a,b,inv) equation -> (a1,b1,inv) equation
+    term:(a -> a1) -> ty:(b -> b1) ->
+    (a,b,<eqn:inv;..>) equation -> (a1,b1,<eqn:inv;..>) equation
 = fun ~term ~ty eqn ->
     match eqn with
     | Eqn_nested (vars,args,rhs,side) ->
@@ -237,38 +239,38 @@ let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
 let fpf = Format.fprintf
 
-let print ?pt_in_app ?pty_in_app pt pty out t =
-  let pt_in_app = CCOpt.get (fun out -> fpf out "(%a)" pt) pt_in_app in
-  let pty_in_app = CCOpt.get (fun out -> fpf out "(%a)" pty) pty_in_app in
+let print (type a)(type b)
+(module Pt : TI.PRINT with type t = a)
+(module Pty : TI.PRINT with type t = b) out t =
   match t.view with
   | Decl (id,_,t) ->
-      fpf out "@[<2>val %a@ : %a.@]" ID.print_name id pty t
+      fpf out "@[<2>val %a@ : %a.@]" ID.print_name id Pty.print t
   | Axiom a ->
-      let pp_defined out d = fpf out "@[<h>%a@]" pt d.defined_term
+      let pp_defined out d = fpf out "@[<h>%a@]" Pt.print d.defined_term
       and pp_typed_var out v =
-        fpf out "@[<2>%a:%a@]" Var.print v pty (Var.ty v)
+        fpf out "@[<2>%a:%a@]" Var.print v Pty.print (Var.ty v)
       in
       let pp_rec_defs out l =
         let pp_sides out l =
           if l=[] then ()
-          else fpf out "@[<hv2>%a => @]" (pplist ~sep:" && " pt_in_app) l
+          else fpf out "@[<hv2>%a => @]" (pplist ~sep:" && " Pt.print_in_app) l
         in
         (* print equation *)
         let pp_eqn (type inv) t out (e:(_,_,inv) equation) =
           match e with
           | Eqn_linear (vars,rhs,side) ->
               if vars=[]
-              then fpf out "@[<hv>%a@,%a =@ %a@]" pp_sides side pt t pt rhs
+              then fpf out "@[<hv>%a@,%a =@ %a@]" pp_sides side Pt.print t Pt.print rhs
               else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a@,%a %a =@ %a@]@]"
-                (pplist ~sep:" " pp_typed_var) vars pp_sides side pt t
-                (pplist ~sep:" " pp_typed_var) vars pt rhs
+                (pplist ~sep:" " pp_typed_var) vars pp_sides side Pt.print t
+                (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
           | Eqn_nested (vars,args,rhs,side) ->
               if vars=[]
               then fpf out "@[<hv>%a@,%a %a =@ %a@]"
-                 pp_sides side pt t (pplist ~sep:" " pt_in_app) args pt rhs
+                 pp_sides side Pt.print t (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
               else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a@,%a %a =@ %a@]@]"
-                (pplist ~sep:" " pp_typed_var) vars pp_sides side pt t
-                (pplist ~sep:" " pt_in_app) args pt rhs
+                (pplist ~sep:" " pp_typed_var) vars pp_sides side Pt.print t
+                (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
         in
         let pp_eqns t = pplist ~sep:";" (pp_eqn t) in
         let pp_def out d =
@@ -284,23 +286,23 @@ let print ?pt_in_app ?pty_in_app pt pty out t =
           ) l;
         fpf out ".@]"
       and pp_spec_defs out d =
-        let ppterms = pplist ~sep:";" pt in
+        let printerms = pplist ~sep:";" Pt.print in
         let pp_defined_list out =
           fpf out "@[<v>%a@]" (pplist ~sep:" and " pp_defined)
         in
         fpf out "@[<hv2>spec @[<hv>%a@] :=@ %a@]"
-          pp_defined_list d.spec_defined ppterms d.spec_axioms
+          pp_defined_list d.spec_defined printerms d.spec_axioms
       in
       begin match a with
       | Axiom_std l ->
-          fpf out "@[<hv2>axiom@ %a.@]" (pplist ~sep:"; " pt) l
+          fpf out "@[<hv2>axiom@ %a.@]" (pplist ~sep:"; " Pt.print) l
       | Axiom_spec t -> pp_spec_defs out t
       | Axiom_rec t -> pp_rec_defs out t
       end
   | TyDef (k, l) ->
       let ppcstors out c =
         fpf out "@[<hv2>%a %a@]"
-          ID.print_name c.cstor_name (pplist ~sep:" " pty_in_app) c.cstor_args in
+          ID.print_name c.cstor_name (pplist ~sep:" " Pty.print_in_app) c.cstor_args in
       let print_def out tydef =
         fpf out "@[<hv2>%a %a :=@ @[<v>%a@]@]"
           ID.print_name tydef.ty_id
@@ -315,11 +317,8 @@ let print ?pt_in_app ?pty_in_app pt pty out t =
           print_def out tydef
         ) l;
       fpf out ".@]"
-  | Goal t -> fpf out "@[<2>goal %a.@]" pt t
+  | Goal t -> fpf out "@[<2>goal %a.@]" Pt.print t
 
-module Print(P : NunTermInner.PRINT) = struct
-  let print out st = print
-    ~pt_in_app:P.print_in_app
-    ~pty_in_app:P.print_in_app
-    P.print P.print out st
+module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
+  let print out st = print (module Pt)(module Pty) out st
 end

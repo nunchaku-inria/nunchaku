@@ -129,7 +129,7 @@ end = struct
     and print_ty out ty = match Ty.view ty with
       | FOI.TyBuiltin b ->
           begin match b with
-          | FOI.TyBuiltin.Prop -> CCFormat.string out "Bool"
+          | `Prop -> CCFormat.string out "Bool"
           end
       | FOI.TyApp (f, []) -> print_id out f
       | FOI.TyApp (f, l) ->
@@ -144,7 +144,7 @@ end = struct
     and print_term out t = match T.view t with
       | FOI.Builtin b ->
           begin match b with
-          | FOI.Builtin.Int n -> CCFormat.int out n
+          | `Int n -> CCFormat.int out n
           end
       | FOI.Var v -> Var.print out v
       | FOI.App (f,[]) -> print_id out f

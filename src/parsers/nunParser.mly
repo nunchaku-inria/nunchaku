@@ -121,22 +121,22 @@ const:
   | TYPE
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.builtin ~loc B.Type
+      A.builtin ~loc `Type
     }
   | PROP
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.builtin ~loc B.Prop
+      A.builtin ~loc `Prop
     }
   | LOGIC_TRUE
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.builtin ~loc B.True
+      A.builtin ~loc `True
     }
   | LOGIC_FALSE
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.builtin ~loc B.False
+      A.builtin ~loc `False
     }
 
 %public case(TERM):
@@ -162,7 +162,7 @@ apply_term:
   | LOGIC_NOT t=atomic_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc B.Not) [t]
+      A.app ~loc (A.builtin ~loc `Not) [t]
     }
 
 eq_term:
@@ -170,7 +170,7 @@ eq_term:
   | t=apply_term LOGIC_EQ u=apply_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc B.Eq) [t; u]
+      A.app ~loc (A.builtin ~loc `Eq) [t; u]
     }
 
 and_term:
@@ -178,7 +178,7 @@ and_term:
   | t=eq_term LOGIC_AND u=and_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc B.And) [t; u]
+      A.app ~loc (A.builtin ~loc `And) [t; u]
     }
 
 or_term:
@@ -186,12 +186,12 @@ or_term:
   | t=and_term LOGIC_OR u=or_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc B.Or) [t; u]
+      A.app ~loc (A.builtin ~loc `Or) [t; u]
     }
   | t=and_term LOGIC_IMPLY u=and_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc B.Imply) [t; u]
+      A.app ~loc (A.builtin ~loc `Imply) [t; u]
     }
 
 term:

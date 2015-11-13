@@ -5,36 +5,38 @@
 
 module ID = NunID
 module Var = NunVar
-module TI = NunTerm_intf
-module TyI = NunType_intf
+module TI = NunTermInner
 module Stmt = NunStatement
 module Env = NunEnv
 module Callback = NunUtils.Callback
+module Subst = Var.Subst
 
 type id = ID.t
 
 let section = NunUtils.Section.make "mono"
 
-type inv1 = <meta:[`NoMeta]; poly:[`Poly]>
-type inv2 = <meta:[`NoMeta]; poly:[`Mono]>
+type 'a inv1 = <ty:[`Poly]; eqn:'a>
+type 'a inv2 = <ty:[`Mono]; eqn:'a>
 
-module Make(T : NunTerm_ho.S) = struct
+module Make(T : TI.S) = struct
   module T = T
+  module U = TI.Util(T)
+  module P = TI.Print(T)
+  module PStmt = NunStatement.Print(P)(P)
 
-  type term1 = inv1 T.t
-  type term2 = inv2 T.t
+  module TyP = NunTypePoly
+  module TyM = NunTypeMono.Make(T)
+  module TyMI = NunTypeMono
 
-  module U = NunTerm_ho.Util(T)
+  type term = T.t
 
   (* substitution *)
-  module Subst = Var.Subst
-  module SubstUtil = NunTerm_ho.SubstUtil(T)
   module Red = NunReduce.Make(T)
 
   exception InvalidProblem of string
 
-  let print_ty out t = NunTerm_ho.print_ty ~repr:T.repr out t
-  let print_term out t = NunTerm_ho.print ~repr:T.repr out t
+  let print_ty = P.print
+  let print_term = P.print
 
   let () = Printexc.register_printer
     (function
@@ -52,8 +54,8 @@ module Make(T : NunTerm_ho.S) = struct
      instantiated with *)
   module ArgTuple = struct
     type t = {
-      args: term1 list; (** Type arguments, before being processed *)
-      m_args: term2 list; (** Type arguments, processed (and possibly mangled) *)
+      args: term list; (** Type arguments, before being processed *)
+      m_args: term list; (** Type arguments, processed (and possibly mangled) *)
       mangled: ID.t option; (* mangled name of [f args] *)
     }
 
@@ -64,23 +66,17 @@ module Make(T : NunTerm_ho.S) = struct
     let mangled t = t.mangled
 
     (* equality for ground atomic types T.t *)
-    let rec ty_ground_eq_
-    : term1 -> term1 -> bool
-    = fun t1 t2 -> match U.as_ty t1, U.as_ty t2 with
-      | TyI.Var _,_
-      | TyI.Forall (_,_),_ -> failf_ "type `@[%a@]` is not ground" print_ty t1
-      | _, TyI.Var _
-      | _, TyI.Forall (_,_) -> failf_ "type `@[%a@]` is not ground" print_ty t2
-      | TyI.Builtin b1, TyI.Builtin b2 -> NunBuiltin.Ty.equal b1 b2
-      | TyI.Const id1, TyI.Const id2 -> ID.equal id1 id2
-      | TyI.App (f1,l1), TyI.App (f2,l2) ->
+    let rec ty_ground_eq_ t1 t2 = match TyM.repr t1, TyM.repr t2 with
+      | TyMI.Builtin b1, TyMI.Builtin b2 -> TI.TyBuiltin.equal b1 b2
+      | TyMI.Const id1, TyMI.Const id2 -> ID.equal id1 id2
+      | TyMI.App (f1,l1), TyMI.App (f2,l2) ->
           ty_ground_eq_ f1 f2 && CCList.equal ty_ground_eq_ l1 l2
-      | TyI.Arrow (a1,b1), TyI.Arrow (a2,b2) ->
+      | TyMI.Arrow (a1,b1), TyMI.Arrow (a2,b2) ->
           ty_ground_eq_ a1 a2 && ty_ground_eq_ b1 b2
-      | TyI.Const _, _
-      | TyI.App _, _
-      | TyI.Builtin _, _
-      | TyI.Arrow _, _ -> false
+      | TyMI.Const _, _
+      | TyMI.App _, _
+      | TyMI.Builtin _, _
+      | TyMI.Arrow _, _ -> false
 
     let equal tup1 tup2 =
       CCList.equal ty_ground_eq_ tup1.args tup2.args
@@ -148,18 +144,18 @@ module Make(T : NunTerm_ho.S) = struct
     max_depth: int;
   }
 
-  type unmangle_state = (ID.t * term2 list) ID.Tbl.t
+  type unmangle_state = (ID.t * term list) ID.Tbl.t
   (* used for unmangling *)
 
   module St = struct
     type depth = int
 
     type 'inv t = {
-      mutable env: (term1, term1, 'inv) Env.t;
+      mutable env: (term, term, 'inv inv1) Env.t;
         (* access definitions/declarations by ID *)
       config: config;
         (* settings *)
-      output: (term2, term2, 'inv) Stmt.t CCVector.vector;
+      output: (term, term, 'inv inv2) Stmt.t CCVector.vector;
         (* statements that have been specialized *)
       mutable depth_reached: bool;
         (* was [max_depth] reached? *)
@@ -249,14 +245,14 @@ module Make(T : NunTerm_ho.S) = struct
      returns ID to use, and [Some mangled] if [args <> []], None otherwise
      (so it can be used in [!ArgTuple.of_list ~mangled]).
      @param args already mangled arguments *)
-  let mangle_ ~state id (args:term2 list) =
+  let mangle_ ~state id (args:term list) =
     let pp_list p = CCFormat.list ~start:"" ~stop:"" ~sep:"_" p in
-    let rec flat_ty_ out (t:term2) = match U.as_ty t with
-      | TyI.Builtin b -> CCFormat.string out (NunBuiltin.Ty.to_string b)
-      | TyI.Const id -> ID.print_name out id
-      | TyI.App (f,l) ->
+    let rec flat_ty_ out (t:term) = match TyM.repr t with
+      | TyMI.Builtin b -> CCFormat.string out (TI.TyBuiltin.to_string b)
+      | TyMI.Const id -> ID.print_name out id
+      | TyMI.App (f,l) ->
           fpf out "%a_%a" flat_ty_ f (pp_list flat_ty_) l
-      | TyI.Arrow (a,b) -> fpf out "%a_to_%a" flat_ty_ a flat_ty_ b
+      | TyMI.Arrow (a,b) -> fpf out "%a_to_%a" flat_ty_ a flat_ty_ b
     in
     match args with
     | [] -> id, None
@@ -281,7 +277,7 @@ module Make(T : NunTerm_ho.S) = struct
     let t = U.app (U.const id) (ArgTuple.args tup) in
     CCOpt.map
       (fun subst -> def, subst)
-      (SubstUtil.match_ ~subst2:subst def.Stmt.rec_defined.Stmt.defined_term t)
+      (U.match_ ~subst2:subst def.Stmt.rec_defined.Stmt.defined_term t)
 
   (* find a definition matching [id tup] in [cases], or None *)
   let find_def ?subst ~defs id tup =
@@ -297,7 +293,7 @@ module Make(T : NunTerm_ho.S) = struct
   let match_spec ?(subst=Subst.empty) ~spec id tup =
     let t = U.app (U.const id) (ArgTuple.args tup) in
     CCList.find
-      (fun defined -> SubstUtil.match_ ~subst2:subst defined.Stmt.defined_term t)
+      (fun defined -> U.match_ ~subst2:subst defined.Stmt.defined_term t)
       spec.Stmt.spec_defined
 
   (* find a (co)inductive type declaration for [id] *)
@@ -309,11 +305,11 @@ module Make(T : NunTerm_ho.S) = struct
   (* local state for monomorphization, used in recursive traversal of terms *)
   type local_state = {
     depth: int;
-    subst: (term1,term1) Subst.t;
+    subst: (term,term) Subst.t;
   }
 
   (* monomorphize term *)
-  let rec mono_term ~state ~local_state (t:term1) : term2 =
+  let rec mono_term ~state ~local_state (t:term) : term =
     match T.repr t with
     | TI.AppBuiltin (b,l) ->
         U.app_builtin b (List.map (mono_term ~state ~local_state) l)
@@ -322,12 +318,6 @@ module Make(T : NunTerm_ho.S) = struct
         let depth = local_state.depth+1 in
         St.specialize ~state ~depth c ArgTuple.empty;
         U.const c
-    | TI.TyVar v ->
-        begin match Subst.find ~subst:local_state.subst v with
-        | Some t' -> mono_term ~state ~local_state t'
-        | None ->
-            failf_ "type variable %a not bound" Var.print v
-        end
     | TI.Var v ->
         assert (not (Subst.mem ~subst:local_state.subst v));
         U.var (mono_var ~state ~local_state v)
@@ -336,7 +326,7 @@ module Make(T : NunTerm_ho.S) = struct
         let f, l, subst = Red.Full.whnf ~subst:local_state.subst f l in
         let local_state = {local_state with subst; } in
         begin match T.repr f with
-        | TI.Bind (TI.Fun, _, _) -> assert false (* beta-reduction failed? *)
+        | TI.Bind (`Fun, _, _) -> assert false (* beta-reduction failed? *)
         | TI.AppBuiltin _ ->
             (* builtins are defined, but examine their args *)
             let f = mono_term ~state ~local_state f in
@@ -345,7 +335,7 @@ module Make(T : NunTerm_ho.S) = struct
         | TI.Const id ->
             (* find type arguments *)
             let ty = find_ty_ ~env:state.St.env id in
-            let n = TyI.num_param ~repr:U.as_ty ty in
+            let n = U.ty_num_param ty in
             (* tuple of arguments for [id], not encoded yet *)
             let unmangled_tup = take_n_ground_atomic_types_ ~state ~local_state n l in
             let mangled_tup = List.map (mono_type ~state ~local_state) unmangled_tup in
@@ -377,7 +367,7 @@ module Make(T : NunTerm_ho.S) = struct
         | _ ->
             failf_ "@[<2>cannot monomorphize application term@ `@[%a@]`@]" print_term t
         end
-    | TI.Bind ((TI.Fun | TI.Forall | TI.Exists) as b, v, t) ->
+    | TI.Bind ((`Fun | `Forall | `Exists) as b, v, t) ->
         U.mk_bind b
           (mono_var ~state ~local_state v)
           (mono_term ~state ~local_state t)
@@ -399,14 +389,15 @@ module Make(T : NunTerm_ho.S) = struct
         U.ty_arrow
           (mono_term ~state ~local_state a)
           (mono_term ~state ~local_state b)
-    | TI.Bind (TI.TyForall,_,_) ->
+    | TI.TyMeta _ -> assert false
+    | TI.Bind (`TyForall,_,_) ->
         failf_ "cannot monomorphize quantified type %a" print_ty t
 
   (* monomorphize a variable (rather, its type) *)
-  and mono_var ~state ~local_state v : term2 Var.t =
+  and mono_var ~state ~local_state v : term Var.t =
     Var.update_ty v ~f:(mono_type ~state ~local_state)
 
-  and mono_type ~state ~local_state t : term2 =
+  and mono_type ~state ~local_state t : term =
     mono_term ~state ~local_state t
 
   (* take [n] ground atomic type arguments in [l], or fail *)
@@ -414,7 +405,7 @@ module Make(T : NunTerm_ho.S) = struct
     | _ when n=0 -> []
     | [] -> failf_ "not enough arguments (%d missing)" n
     | t :: l' ->
-        SubstUtil.eval ~subst:local_state.subst t
+        U.eval ~subst:local_state.subst t
         :: take_n_ground_atomic_types_ ~state ~local_state (n-1) l'
 
   (* declare a symbol that is axiomatized *)
@@ -429,7 +420,7 @@ module Make(T : NunTerm_ho.S) = struct
         | None -> id
         | Some x -> x
       in
-      let ty = SubstUtil.ty_apply env_info.Env.ty (ArgTuple.args tup) in
+      let ty = U.ty_apply env_info.Env.ty (ArgTuple.args tup) in
       let new_ty = mono_type ~state ~local_state:{depth=0; subst=Subst.empty} ty in
       St.push_res ~state
         (Stmt.mk_decl ~info:{Stmt.loc; name=None}
@@ -440,7 +431,7 @@ module Make(T : NunTerm_ho.S) = struct
     let defined_term = mono_term ~state ~local_state d.Stmt.defined_term in
     let defined_ty_args =
       List.map (mono_type ~state ~local_state) d.Stmt.defined_ty_args in
-    let defined_head = TI.head_sym ~repr:T.repr defined_term in
+    let defined_head = U.head_sym defined_term in
     {Stmt. defined_term; defined_head; defined_ty_args; }
 
   (* specialize mutual recursive definitions *)
@@ -527,7 +518,7 @@ module Make(T : NunTerm_ho.S) = struct
       List.iter
         (fun d ->
           let id' = d.Stmt.defined_head in
-          let tup' = List.map (SubstUtil.eval ~subst) d.Stmt.defined_ty_args in
+          let tup' = List.map (U.eval ~subst) d.Stmt.defined_ty_args in
           let mangled_tup' = List.map
             (mono_type ~state ~local_state:{subst;depth}) tup'
           in
@@ -608,7 +599,7 @@ module Make(T : NunTerm_ho.S) = struct
         (* mangle type name. Monomorphized type should be : Type *)
         let id, _ =
           mangle_ ~state tydef.Stmt.ty_id (ArgTuple.m_args tup) in
-        let ty = U.ty_type() in
+        let ty = U.ty_type in
         (* specialize each constructor *)
         let cstors = List.map
           (fun c ->
@@ -616,7 +607,7 @@ module Make(T : NunTerm_ho.S) = struct
             let id', _ = mangle_ ~state c.Stmt.cstor_name (ArgTuple.m_args tup) in
             (* apply, then convert type. Arity should match. *)
             let ty', subst =
-              SubstUtil.ty_apply_full c.Stmt.cstor_type (ArgTuple.args tup)
+              U.ty_apply_full c.Stmt.cstor_type (ArgTuple.args tup)
             in
             (* convert type and substitute in it *)
             let ty' = mono_term
@@ -692,9 +683,11 @@ module Make(T : NunTerm_ho.S) = struct
 
   (* register the statement into the state's [env], so that next statements
     can monomorphize it. Some statements are automatically kept (goal and axiom) *)
-  let mono_statement ~state st =
+  let mono_statement
+  : type i. state:i St.t -> (term, term, i inv1) Stmt.t -> unit
+  = fun ~state st ->
     NunUtils.debugf ~section 2 "@[<2>enter statement@ `%a`@]"
-      (fun k-> k (NunStatement.print print_term print_ty) st);
+      (fun k-> k PStmt.print st);
     (* process statement *)
     let info = Stmt.info st in
     let loc = Stmt.loc st in
@@ -742,8 +735,8 @@ module Make(T : NunTerm_ho.S) = struct
       (fun k-> k SetOfInstances.print state.St.already_specialized);
     pb', state.St.unmangle
 
-  let unmangle_term ~(state:unmangle_state) (t:term2):term1 =
-    let rec aux (t:term2):term1 = match T.repr t with
+  let unmangle_term ~(state:unmangle_state) (t:term):term =
+    let rec aux t = match T.repr t with
       | TI.Var v -> U.var (aux_var v)
       | TI.Const id ->
           begin try
@@ -753,7 +746,7 @@ module Make(T : NunTerm_ho.S) = struct
           end
       | TI.App (f,l) -> U.app (aux f) (List.map aux l)
       | TI.AppBuiltin (b,l) -> U.app_builtin b (List.map aux l)
-      | TI.Bind ((TI.Forall | TI.Exists | TI.Fun) as b,v,t) ->
+      | TI.Bind ((`Forall | `Exists | `Fun) as b,v,t) ->
           U.mk_bind b (aux_var v) (aux t)
       | TI.Let (v,t,u) -> U.let_ (aux_var v) (aux t) (aux u)
       | TI.Match (t,l) ->
@@ -762,6 +755,7 @@ module Make(T : NunTerm_ho.S) = struct
           U.match_with t l
       | TI.TyBuiltin b -> U.ty_builtin b
       | TI.TyArrow (a,b) -> U.ty_arrow (aux a) (aux b)
+      | TI.Bind (`TyForall, _,_) | TI.TyMeta _ -> assert false
     and aux_var = Var.update_ty ~f:aux in
     aux t
 
@@ -772,12 +766,8 @@ module Make(T : NunTerm_ho.S) = struct
   let pipe_with ~decode ~print =
     let on_encoded = if print
       then
-        let module THO = NunTerm_ho in
-        let funs = NunTerm_ho.mk_print ~repr:T.repr in
-        [Format.printf "@[<v2>after mono: %a@]@."
-          (NunProblem.print
-            ~pty_in_app:funs.THO.print_in_app ~pt_in_app:funs.THO.print_in_app
-            funs.THO.print funs.THO.print)]
+        let module PPb = NunProblem.Print(P)(P) in
+        [Format.printf "@[<v2>after mono: %a@]@." PPb.print]
       else []
     in
     NunTransform.make1

@@ -48,29 +48,29 @@ let rec print_term out t = match A.view t with
             print_inner f (pp_list ~sep:", " print_term) l
       | A.Builtin b ->
           begin match b, l with
-          | A.Builtin.True, [] -> fpf out "$true"
-          | A.Builtin.False, [] -> fpf out "$false"
-          | A.Builtin.Prop, [] -> fpf out "$o"
-          | A.Builtin.Type, [] -> fpf out "$tType"
-          | A.Builtin.Not, [f] -> fpf out "~ %a" print_inner f
-          | A.Builtin.And, _ ->
+          | `True, [] -> fpf out "$true"
+          | `False, [] -> fpf out "$false"
+          | `Prop, [] -> fpf out "$o"
+          | `Type, [] -> fpf out "$tType"
+          | `Not, [f] -> fpf out "~ %a" print_inner f
+          | `And, _ ->
               fpf out "@[<hv>%a@]" (pp_list ~sep:" & " print_inner) l
-          | A.Builtin.Or, _ ->
+          | `Or, _ ->
               fpf out "@[<hv>%a@]" (pp_list ~sep:" | " print_inner) l
-          | A.Builtin.Eq, [a;b] ->
+          | `Eq, [a;b] ->
               fpf out "@[<hv>%a =@ %a@]" print_inner a print_inner b
-          | A.Builtin.Imply, [a;b] ->
+          | `Imply, [a;b] ->
               fpf out "@[<hv>%a =>@ %a@]" print_inner a print_inner b
-          | A.Builtin.Equiv, [a;b] ->
+          | `Equiv, [a;b] ->
               fpf out "@[<hv>%a <=>@ %a@]" print_inner a print_inner b
-          | A.Builtin.Prop ,_
-          | A.Builtin.Type ,_
-          | A.Builtin.Not ,_
-          | A.Builtin.True ,_
-          | A.Builtin.False ,_
-          | A.Builtin.Eq ,_
-          | A.Builtin.Equiv ,_
-          | A.Builtin.Imply ,_ -> assert false
+          | `Prop ,_
+          | `Type ,_
+          | `Not ,_
+          | `True ,_
+          | `False ,_
+          | `Eq ,_
+          | `Equiv ,_
+          | `Imply ,_ -> assert false
           end
       | _ ->
           NunUtils.not_implementedf "could not apply %a to arguments" print_term f
@@ -86,11 +86,11 @@ and print_inner out t = match A.view t with
   | A.Let (_,_,_) -> print_term out t
   | A.App (f,_) ->
       begin match A.view f with
-      | A.Builtin A.Builtin.And
-      | A.Builtin A.Builtin.Or
-      | A.Builtin A.Builtin.Imply
-      | A.Builtin A.Builtin.Equiv
-      | A.Builtin A.Builtin.Not ->
+      | A.Builtin `And
+      | A.Builtin `Or
+      | A.Builtin `Imply
+      | A.Builtin `Equiv
+      | A.Builtin `Not ->
           fpf out "(@[<hv>%a@])" print_term t
       | _ -> print_term out t
       end

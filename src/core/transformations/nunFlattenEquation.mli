@@ -31,16 +31,14 @@ type id = NunID.t
 
 exception Error of string
 
-type inv = <poly:[`Mono]; meta:[`NoMeta]>
-
-module Make(T : NunTerm_ho.S) : sig
-  type term = inv T.t
-  type env = (term, term, [`Linear]) NunEnv.t
+module Make(T : NunTermInner.S) : sig
+  type term = T.t
+  type env = (term, term, <ty:[`Mono]; eqn:[`Linear]>) NunEnv.t
 
   val tr_statement :
     env:env ->
-    (term, term, [`Nested]) NunStatement.t ->
-    env * (term, term, [`Linear]) NunStatement.t
+    (term, term, <ty:[`Mono]; eqn:[`Nested]>) NunStatement.t ->
+    env * (term, term, <ty:[`Mono]; eqn:[`Linear]>) NunStatement.t
   (** Flatten a single equation, using inductive selectors/discriminators
       and existential variables for eliminating the left-hand side pattern.
       Preserves other statements identically.
@@ -48,13 +46,13 @@ module Make(T : NunTerm_ho.S) : sig
       @raise Error if the equation LHS is not a proper pattern *)
 
   val tr_problem:
-    (term, term, [`Nested]) NunProblem.t ->
-    (term, term, [`Linear]) NunProblem.t
+    (term, term, <ty:[`Mono]; eqn:[`Nested]>) NunProblem.t ->
+    (term, term, <ty:[`Mono]; eqn:[`Linear]>) NunProblem.t
 
   val pipe :
     print:bool ->
-      ((term, term, [`Nested]) NunProblem.t,
-      (term, term, [`Linear]) NunProblem.t,
+      ((term, term, <ty:[`Mono]; eqn:[`Nested]>) NunProblem.t,
+       (term, term, <ty:[`Mono]; eqn:[`Linear]>) NunProblem.t,
       'b, 'b
     ) NunTransform.t
   (** Pipeline component. Reverse direction is identity. *)

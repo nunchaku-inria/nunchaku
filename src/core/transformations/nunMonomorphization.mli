@@ -21,12 +21,11 @@ type id = NunID.t
 
 (* TODO: if depth limit reached, activate some "spuriousness" flag? *)
 
-type inv1 = <meta:[`NoMeta]; poly:[`Poly]>
-type inv2 = <meta:[`NoMeta]; poly:[`Mono]>
+type 'a inv1 = <ty:[`Poly]; eqn:'a>
+type 'a inv2 = <ty:[`Mono]; eqn:'a>
 
-module Make(T : NunTerm_ho.S) : sig
-  type term1 = inv1 T.t
-  type term2 = inv2 T.t
+module Make(T : NunTermInner.S) : sig
+  type term = T.t
 
   exception InvalidProblem of string
 
@@ -35,8 +34,8 @@ module Make(T : NunTerm_ho.S) : sig
 
   val monomorphize :
     ?depth_limit:int ->
-    (term1, term1, 'inv) NunProblem.t ->
-    (term2, term2, 'inv) NunProblem.t * unmangle_state
+    (term, term, 'a inv1) NunProblem.t ->
+    (term, term, 'a inv2) NunProblem.t * unmangle_state
   (** Filter and specialize definitions of the problem.
 
       First it finds a set of instances for each symbol
@@ -51,28 +50,28 @@ module Make(T : NunTerm_ho.S) : sig
         state obtained after monomorphization
   *)
 
-  val unmangle_term : state:unmangle_state -> term2 -> term1
+  val unmangle_term : state:unmangle_state -> term -> term
   (** Unmangle a single term: replace mangled constants by their definition *)
 
   val unmangle_model :
       state:unmangle_state ->
-      term2 NunModel.t ->
-      term1 NunModel.t
+      term NunModel.t ->
+      term NunModel.t
   (** Unmangles constants that have been collapsed with their type arguments *)
 
   val pipe :
     print:bool ->
-    ((term1, term1, 'inv) NunProblem.t,
-      (term2, term2, 'inv) NunProblem.t,
-      term2 NunModel.t, term1 NunModel.t
+    ((term, term, 'a inv1) NunProblem.t,
+     (term, term, 'a inv2) NunProblem.t,
+      term NunModel.t, term NunModel.t
     ) NunTransform.t
   (** Pipeline component *)
 
   val pipe_with :
-    decode:(decode_term:(term2 -> term1) -> 'c -> 'd) ->
+    decode:(decode_term:(term -> term) -> 'c -> 'd) ->
     print:bool ->
-    ((term1, term1, 'inv) NunProblem.t,
-      (term2, term2, 'inv) NunProblem.t, 'c, 'd
+    ((term, term, 'a inv1) NunProblem.t,
+     (term, term, 'a inv2) NunProblem.t, 'c, 'd
     ) NunTransform.t
   (** Generic Pipe Component
       @param decode the decode function that takes an applied [(module S)]

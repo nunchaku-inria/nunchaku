@@ -3,8 +3,8 @@
 
 module ID = NunID
 module Var = NunVar
-module TyI = NunType_intf
-module TI = NunTerm_intf
+module TI = NunTermInner
+module TyI = NunTypeMono
 module Stmt = NunStatement
 module Sig = NunSignature
 
@@ -12,17 +12,17 @@ type id = ID.t
 
 let section = NunUtils.Section.make "recursion_elim"
 
-type invariant = <poly:[`Mono]; meta:[`NoMeta]>
+type inv1 = <ty:[`Mono]; eqn:[`Linear]>
+type inv2 = <ty:[`Mono]; eqn:[`Nested]>
 
-module Make(T : NunTerm_ho.S) = struct
-  module U = NunTerm_ho.Util(T)
+module Make(T : TI.S) = struct
+  module U = TI.Util(T)
+  module P = TI.Print(T)
+  module PStmt = Stmt.Print(P)(P)
   module Subst = Var.Subst
-  module SubstUtil = NunTerm_ho.SubstUtil(T)
+  module TyM = NunTypeMono.Make(T)
 
-  type term = invariant T.t
-
-  let print_term = NunTerm_ho.print ~repr:T.repr
-  let print_ty = NunTerm_ho.print_ty ~repr:T.repr
+  type term = T.t
 
   (* how to encode a single recursive function/predicate *)
   type fun_encoding = {
@@ -82,16 +82,15 @@ module Make(T : NunTerm_ho.S) = struct
   (* is this symbol a predicate? *)
   let is_bool_ ~state id =
     let ty = Sig.find_exn ~sigma:state.sigma id in
-    let ty_ret = TyI.returns ~repr:U.as_ty ty in
-    let module B = NunBuiltin.Ty in
-    match U.as_ty ty_ret with
-    | TyI.Builtin B.Prop -> true
-    | TyI.Builtin B.Kind
-    | TyI.Builtin B.Type -> false
+    let ty_ret = U.ty_returns ty in
+    match TyM.repr ty_ret with
+    | TyI.Builtin `Prop -> true
+    | TyI.Builtin `Kind
+    | TyI.Builtin `Type -> false
     | TyI.Const _ | TyI.App _ | TyI.Arrow _ -> false
 
   (* list of argument types that (monomorphic) type expects *)
-  let rec ty_args_ (ty:term) = match U.as_ty ty with
+  let rec ty_args_ (ty:term) = match TyM.repr ty with
     | TyI.Builtin _ | TyI.Const _ | TyI.App (_,_) -> []
     | TyI.Arrow (a,ty') -> a :: ty_args_ ty'
 
@@ -100,21 +99,19 @@ module Make(T : NunTerm_ho.S) = struct
     | TI.Var v when Subst.mem ~subst:local_state.subst v -> true
     | _ -> false
 
-  module B = NunBuiltin.T
-
   let mk_and_ = function
-    | [] -> U.app_builtin B.True []
+    | [] -> U.app_builtin `True []
     | [x] -> x
-    | l -> U.app_builtin B.And l
+    | l -> U.app_builtin `And l
 
-  let mk_not_ t = U.app_builtin B.Not [t]
+  let mk_not_ t = U.app_builtin `Not [t]
 
   let mk_or_ = function
-    | [] -> U.app_builtin B.False []
+    | [] -> U.app_builtin `False []
     | [x] -> x
-    | l -> U.app_builtin B.Or l
+    | l -> U.app_builtin `Or l
 
-  let mk_imply_ a b = U.app_builtin B.Imply [a; b]
+  let mk_imply_ a b = U.app_builtin `Imply [a; b]
 
   (* combine side-conditions with [t], depending on polarity *)
   let add_conds pol t conds = match pol with
@@ -188,49 +185,49 @@ module Make(T : NunTerm_ho.S) = struct
         end
     | TI.AppBuiltin (b,l) ->
         begin match b, l with
-        | B.True ,_
-        | B.False ,_ -> t, []
-        | B.Not, [t] ->
+        | `True ,_
+        | `False ,_ -> t, []
+        | `Not, [t] ->
             let t, cond = tr_term_rec_ ~state ~local_state:(inv_pol local_state) t in
             add_conds local_state.pol (mk_not_ t) cond
-        | B.Or, l
-        | B.And, l ->
+        | `Or, l
+        | `And, l ->
             let l_conds = List.map (tr_term_rec_ ~state ~local_state) l in
             let l, conds = List.split l_conds in
             add_conds local_state.pol (U.app_builtin b l) (List.flatten conds)
-        | B.Imply, [a;b] ->
+        | `Imply, [a;b] ->
             let a, cond_a = tr_term_rec_ ~state ~local_state:(inv_pol local_state) a in
             let b, cond_b = tr_term_rec_ ~state ~local_state b in
             add_conds local_state.pol (U.app b [a; b]) (List.append cond_a cond_b)
-        | B.Equiv, _ -> fail_tr_ t "cannot translate equivalence (polarity)"
-        | B.Ite, [a;b;c] ->
+        | `Equiv, _ -> fail_tr_ t "cannot translate equivalence (polarity)"
+        | `Ite, [a;b;c] ->
             let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
             let b, cond_b = tr_term_rec_ ~state ~local_state b in
             let c, cond_c = tr_term_rec_ ~state ~local_state c in
             add_conds local_state.pol
-              (U.app_builtin B.Ite [a;b;c])
+              (U.app_builtin `Ite [a;b;c])
               (List.flatten [cond_a; cond_b; cond_c])
-        | B.Eq, [a;b] ->
+        | `Eq, [a;b] ->
             let a, cond_a = tr_term_rec_ ~state ~local_state a in
             let b, cond_b = tr_term_rec_ ~state ~local_state b in
             add_conds local_state.pol
-              (U.app_builtin B.Eq [a;b])
+              (U.app_builtin `Eq [a;b])
               (List.append cond_a cond_b)
-        | B.DataTest _, [t]
-        | B.DataSelect (_,_), [t] ->
+        | `DataTest _, [t]
+        | `DataSelect (_,_), [t] ->
             let t', conds = tr_term_rec_ ~state ~local_state t in
             U.app_builtin b [t'], conds
-        | B.Not,_ | B.Imply,_ | B.Ite,_
-        | B.Eq,_ | B.DataSelect _,_ | B.DataTest _,_ ->
+        | `Not,_ | `Imply,_ | `Ite,_
+        | `Eq,_ | `DataSelect _,_ | `DataTest _,_ ->
             assert false (* wrong arity *)
         end
-    | TI.Bind (TI.Forall,v,t) ->
+    | TI.Bind (`Forall,v,t) ->
         let t', conds = tr_term_rec_ ~state ~local_state t in
         U.forall v t', List.map (U.forall v) conds
-    | TI.Bind (TI.Exists,v,t) ->
+    | TI.Bind (`Exists,v,t) ->
         let t, cond = tr_term_rec_ ~state ~local_state t in
         add_conds local_state.pol (U.exists v t) cond
-    | TI.Bind (TI.Fun,_,_) -> fail_tr_ t "translation of λ impossible"
+    | TI.Bind (`Fun,_,_) -> fail_tr_ t "translation of λ impossible"
     | TI.Let (v,t,u) ->
         let t, c1 = tr_term_rec_ ~state ~local_state t in
         let u, c2 = tr_term_rec_ ~state ~local_state u in
@@ -248,10 +245,12 @@ module Make(T : NunTerm_ho.S) = struct
         U.match_with t l, ct @ !conds'
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> t, []
+    | TI.Bind (`TyForall, _, _)
+    | TI.TyMeta _ -> assert false
 
   let tr_term ~state ~local_state t =
     NunUtils.debugf ~section 4
-      "@[<2>convert toplevel term `@[%a@]`@]" (fun k -> k print_term t);
+      "@[<2>convert toplevel term `@[%a@]`@]" (fun k -> k P.print t);
     tr_term_rec_ ~state ~local_state t
 
   (* translate a top-level formula
@@ -323,11 +322,12 @@ module Make(T : NunTerm_ho.S) = struct
         } in
         ID.Tbl.add state.fun_encodings id fun_encoding;
         (* declare abstract type + projectors *)
-        add_stmt (Stmt.ty_decl ~info:Stmt.info_default abs_type_id (U.ty_type()));
+        add_stmt (Stmt.ty_decl ~info:Stmt.info_default abs_type_id U.ty_type);
         List.iter
           (fun (proj,ty_proj) ->
             add_stmt (Stmt.decl ~info:Stmt.info_default proj ty_proj);
-          ) fun_encoding.fun_concretization;
+          )
+          fun_encoding.fun_concretization;
       )
       l;
     (* then translate each definition *)
@@ -342,9 +342,7 @@ module Make(T : NunTerm_ho.S) = struct
           NunUtils.debugf ~section 1
             "[<2>recursion elimination in@ @[%a@]@ \
               failed on subterm @[%a@]:@ %s@]"
-              (fun k -> k
-                (Stmt.print print_term print_ty)
-                (Stmt.axiom_rec ~info l) print_term t msg);
+              (fun k -> k PStmt.print (Stmt.axiom_rec ~info l) P.print t msg);
           raise e
       )
       l
@@ -393,11 +391,8 @@ module Make(T : NunTerm_ho.S) = struct
   let pipe_with ~decode ~print =
     let on_encoded = if print
       then
-        let module TH = NunTerm_ho in
-        let funs = TH.mk_print ~repr:T.repr in
-        [Format.printf "@[<v2>after elimination of recursion: %a@]@."
-          (NunProblem.print ~pty_in_app:funs.TH.print_in_app
-            ~pt_in_app:funs.TH.print_in_app funs.TH.print funs.TH.print)]
+        let module PPb = NunProblem.Print(P)(P) in
+        [Format.printf "@[<v2>after elimination of recursion: %a@]@." PPb.print]
       else []
     in
     NunTransform.make1

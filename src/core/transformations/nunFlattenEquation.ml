@@ -6,14 +6,12 @@
 module ID = NunID
 module Var = NunVar
 module Stmt = NunStatement
-module B = NunBuiltin
-module TyI = NunType_intf
-module TI = NunTerm_intf
+module TI = NunTermInner
+module TyI = NunTypeMono
 module Subst = Var.Subst
 module Env = NunEnv
 
 type id = NunID.t
-type inv = <poly:[`Mono]; meta:[`NoMeta]>
 
 exception Error of string
 
@@ -27,13 +25,14 @@ let error_ msg = raise (Error msg)
 let errorf_ fmt = NunUtils.exn_ksprintf fmt ~f:(fun msg -> error_ msg)
 let section = NunUtils.Section.make "flatten_eqn"
 
-module Make(T : NunTerm_ho.S) = struct
-  module U = NunTerm_ho.Util(T)
-  module SubstUtil = NunTerm_ho.SubstUtil(T)
+module Make(T : NunTermInner.S) = struct
+  module U = TI.Util(T)
+  module P = TI.Print(T)
+  module TyMono = NunTypeMono.Make(T)
 
-  type term = inv T.t
+  type term = T.t
   type var = term Var.t
-  type env = (term, term, [`Linear]) NunEnv.t
+  type env = (term, term, <ty:[`Mono]; eqn:[`Linear]>) NunEnv.t
 
   (* a constraint used to flatten pattern match *)
   type constraint_ =
@@ -41,15 +40,14 @@ module Make(T : NunTerm_ho.S) = struct
     | Test of term * ID.t (* [t,cons] --> is_cons t *)
 
   let fpf = Format.fprintf
-  let print_term = NunTerm_ho.print ~repr:T.repr
 
   let pp_constraint out = function
-    | EqTerm (t1,t2) -> fpf out "@[<2>%a =@ %a@]" print_term t1 print_term t2
-    | Test (t, id) -> fpf out "@[is-%a %a@]" ID.print_name id print_term t
+    | EqTerm (t1,t2) -> fpf out "@[<2>%a =@ %a@]" P.print t1 P.print t2
+    | Test (t, id) -> fpf out "@[is-%a %a@]" ID.print_name id P.print t
 
   (* a local context for flattening patterns and equations *)
   type ctx = {
-    env : (term, term, [`Linear]) Env.t;
+    env : env;
     blocked_vars: var list; (* already introduced variables *)
     c_set: constraint_ list; (* constraints *)
     subst: (term, term) Subst.t (* substitution to apply to RHS *)
@@ -63,22 +61,22 @@ module Make(T : NunTerm_ho.S) = struct
 
   let add_subst_ ~ctx v t =
     NunUtils.debugf ~section 4 "add binding %a -> `%a`"
-      (fun k-> k Var.print v print_term t);
+      (fun k-> k Var.print v P.print t);
     {ctx with subst=Subst.add ~subst:ctx.subst v t;}
 
   let add_var_ ~ctx v =
     NunUtils.debugf ~section 4 "block var %a" (fun k-> k Var.print v);
     {ctx with blocked_vars=v::ctx.blocked_vars; }
 
-  let mk_data_select_ a ~id i = U.app_builtin (B.T.DataSelect (id,i)) [a]
-  let mk_data_test_ a ~id = U.app_builtin (B.T.DataTest id) [a]
+  let mk_data_select_ a ~id i = U.app_builtin (`DataSelect (id,i)) [a]
+  let mk_data_test_ a ~id = U.app_builtin (`DataTest id) [a]
 
   let find_ty_ ~env id = match Env.find_ty ~env id with
     | Some t -> t
     | None -> errorf_ "could not find the type of %a" ID.print_name id
 
   (* list of argument types that (monomorphic) type expects *)
-  let rec ty_args_ (ty:term) = match U.as_ty ty with
+  let rec ty_args_ (ty:term) = match TyMono.repr ty with
     | TyI.Builtin _ | TyI.Const _ | TyI.App (_,_) -> []
     | TyI.Arrow (a,ty') -> a :: ty_args_ ty'
 
@@ -88,10 +86,8 @@ module Make(T : NunTerm_ho.S) = struct
   (* add enough constraints for making [t], a sub-pattern, equal to
      the term [to_].
      Returns a context updated with the necessary substitutions and constraints *)
-  let rec mk_eq
-  : ctx:ctx -> to_:term -> term -> ctx
-  = fun ~ctx ~to_ t ->
-    let t = SubstUtil.deref ~subst:ctx.subst t in
+  let rec mk_eq ~ctx ~to_ t =
+    let t = U.deref ~subst:ctx.subst t in
     match T.repr t with
     | TI.Var v ->
         assert (not (Subst.mem ~subst:ctx.subst v));
@@ -103,19 +99,18 @@ module Make(T : NunTerm_ho.S) = struct
         (* we only deal with [constructor l] *)
         begin match T.repr f with
         | TI.Const id -> mk_eq_constr ~ctx ~to_ id l
-        | _ -> errorf_ "expected first-order pattern, got %a" print_term t
+        | _ -> errorf_ "expected first-order pattern, got %a" P.print t
         end
     | TI.AppBuiltin (_,_)
     | TI.Let (_,_,_)
     | TI.Match (_,_) ->
         NunUtils.not_implemented "flatten equation: non inductive pattern"
     | TI.TyBuiltin _
-    | TI.TyArrow (_,_) -> errorf_ "expected pattern, got type %a" print_term t
-    | TI.Bind (_,_,_) -> errorf_ "expected pattern, got %a" print_term t
+    | TI.TyArrow (_,_) -> errorf_ "expected pattern, got type %a" P.print t
+    | TI.Bind (_,_,_) -> errorf_ "expected pattern, got %a" P.print t
+    | TI.TyMeta _ -> assert false
 
-  and mk_eq_constr
-  : ctx:ctx -> to_:term -> id -> term list -> ctx
-  = fun ~ctx ~to_ id l ->
+  and mk_eq_constr ~ctx ~to_ id l =
     (* find the declaration/definition of [id] *)
     let info =
       try Env.find_exn ~env:ctx.env id
@@ -144,7 +139,7 @@ module Make(T : NunTerm_ho.S) = struct
   let flatten_pat_
   : ctx:ctx -> ty:term -> term -> ctx * var
   = fun ~ctx ~ty t ->
-    NunUtils.debugf ~section 3 "@[<2>flatten pattern `@[%a@]`@]" (fun k->k print_term t);
+    NunUtils.debugf ~section 3 "@[<2>flatten pattern `@[%a@]`@]" (fun k->k P.print t);
     match T.repr t with
     | TI.Var v ->
         if blocked_var_ ~ctx v
@@ -158,7 +153,7 @@ module Make(T : NunTerm_ho.S) = struct
     | TI.App _
     | TI.Let _
     | TI.Match _
-    | TI.Bind ((TI.Forall | TI.Exists | TI.Fun),_,_)
+    | TI.Bind ((`Forall | `Exists | `Fun),_,_)
     | TI.AppBuiltin _ ->
         (* replace [t] with a fresh var [v] and add [v = t] as a guard
           to the RHS. *)
@@ -168,7 +163,9 @@ module Make(T : NunTerm_ho.S) = struct
         let ctx = mk_eq ~ctx ~to_:(U.var v) t in
         ctx, v
     | TI.TyBuiltin _
-    | TI.TyArrow (_,_) -> errorf_ "expected pattern, got %a" print_term t
+    | TI.TyArrow (_,_) -> errorf_ "expected pattern, got %a" P.print t
+    | TI.Bind (`TyForall, _, _)
+    | TI.TyMeta _ -> assert false
 
 
   let flatten_eqn ~defined ~env e =
@@ -188,18 +185,18 @@ module Make(T : NunTerm_ho.S) = struct
         ctx', v
       ) (empty_ctx ~env) (List.combine args ty_args)
     in
-    let rhs' = SubstUtil.eval ~subst:ctx.subst rhs in
-    let side = List.map (SubstUtil.eval ~subst:ctx.subst) side in
+    let rhs' = U.eval ~subst:ctx.subst rhs in
+    let side = List.map (U.eval ~subst:ctx.subst) side in
     (* add constraints to [side] *)
     let side' = List.map
       (fun constr -> match constr with
         | EqTerm (t1,t2) ->
             (* t1=t2 => rhs *)
-            let t1 = SubstUtil.eval ~subst:ctx.subst t1 in
-            let t2 = SubstUtil.eval ~subst:ctx.subst t2 in
+            let t1 = U.eval ~subst:ctx.subst t1 in
+            let t2 = U.eval ~subst:ctx.subst t2 in
             U.eq t1 t2
         | Test (t, id) ->
-            let t = SubstUtil.eval ~subst:ctx.subst t in
+            let t = U.eval ~subst:ctx.subst t in
             mk_data_test_ ~id t
       ) ctx.c_set
     in
@@ -244,11 +241,8 @@ module Make(T : NunTerm_ho.S) = struct
     let open NunTransform in
     let on_encoded =
       if print then
-        let module TH = NunTerm_ho in
-        let funs = TH.mk_print ~repr:T.repr in
-        [Format.printf "@[<v2>after flattening of equations: %a@]@."
-          (NunProblem.print ~pty_in_app:funs.TH.print_in_app
-            ~pt_in_app:funs.TH.print_in_app funs.TH.print funs.TH.print)]
+        let module PPb = NunProblem.Print(P)(P) in
+        [Format.printf "@[<v2>after flattening of equations: %a@]@." PPb.print]
       else [] in
     let encode pb = tr_problem pb, () in
     make1 ~name:"flatten_eqn"

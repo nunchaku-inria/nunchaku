@@ -5,7 +5,7 @@
 
 type 'a sequence = ('a -> unit) -> unit
 
-module Make(T : NunTypePoly.REPR) : sig
+module Make(T : NunTermInner.REPR) : sig
   exception Fail of (T.t * T.t) list * string
   (** Raised when unification fails. The list of pairs of types is the
       unification stack (with the innermost types first) *)
@@ -17,7 +17,7 @@ module Make(T : NunTypePoly.REPR) : sig
   type meta_vars_set = T.t NunMetaVar.t NunID.Map.t
   (* a set of meta-variable with their reference *)
 
-  val free_meta_vars : T.t -> meta_vars_set
+  val free_meta_vars : ?init:meta_vars_set -> T.t -> meta_vars_set
   (** Compute the set of free meta variables that can be bound,
       mapped to their meta-variable *)
 end

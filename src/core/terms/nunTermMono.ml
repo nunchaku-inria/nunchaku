@@ -33,60 +33,21 @@ type 'a view =
   | TyBuiltin of TyBuiltin.t (** Builtin type *)
   | TyArrow of 'a * 'a
 
-type 't repr = 't -> 't view
-(** A concrete representation of terms by the type [t'] *)
-
-type 't build = 't view -> 't
-(** A builder for a concrete representation with type ['t]. *)
-
-let lift_repr_ = function
-  | Const id -> TI.Const id
-  | Var v -> TI.Var v
-  | App (f,l) -> TI.App (f,l)
-  | AppBuiltin (b,l) -> TI.AppBuiltin(b,l)
-  | Bind (b,v,t) -> TI.Bind(Binder.lift b,v,t)
-  | Let (v,t,u) -> TI.Let(v,t,u)
-  | Match (t,l) -> TI.Match (t,l)
-  | TyBuiltin b -> TI.TyBuiltin b
-  | TyArrow (a,b) -> TI.TyArrow (a,b)
-
-module type REPR = sig
-  type t
-  val repr : t repr
-end
-
-module type BUILD = sig
-  type t
-  val build : t build
-end
-
 (** The main signature already  contains every util, printer, constructors,
     equality, etc. because after that it would be impossible to use
     the equality [t = INNER.t]. *)
 module type S = sig
-  module INNER : TI.S
-  type t = private INNER.t
+  module T : TI.REPR
+  type t = T.t
 
-  include REPR with type t := t
-  include BUILD with type t := t
-
-  include TI.UTIL with type t_ := t
-  include TI.PRINT with type t := t
-  val ty_meta : [`Not_available]
-  val ty_var : [`Not_available]
-  val ty_forall : [`Not_available]
-
-  val of_inner_unsafe : INNER.t -> t
-  (** Careful, this is totally unsafe and will result in [assert false] at
-    some point if not properly used *)
+  val repr : T.t -> T.t view
 end
 
 (** Build a representation and all the associated utilities *)
-module Make(T : TI.S)
-: S with module INNER = T
+module Make(T : TI.REPR)
+: S with module T = T
 = struct
-  module INNER = T
-
+  module T = T
   type t = T.t
 
   let repr t = match T.repr t with
@@ -101,44 +62,17 @@ module Make(T : TI.S)
     | TI.Match (t,l) -> Match (t,l)
     | TI.TyBuiltin b -> TyBuiltin b
     | TI.TyArrow (a,b) -> TyArrow(a,b)
-
-  let build v = T.build (lift_repr_ v)
-
-  include TI.Util(T)
-
-  include (TI.Print(T) : TI.PRINT with type t := t)
-
-  let of_inner_unsafe t = t
-
-  (* overload those operations: we cannot hide it without copying all the
-     TI.UTIL signature, minus one operation *)
-  let ty_meta = `Not_available
-  let ty_var = `Not_available
-  let ty_forall = `Not_available
 end
 
-(** {2 Default Representation}
-
-  As a private alias to the default {!NunTermInner} representation, basically
-  removing the meta case *)
-
-module Default = Make(TI.Default)
-
-module LiftRepr(T : REPR)
-: TI.REPR with type t = T.t
-= struct
-  type t = T.t
-  let repr t = lift_repr_ (T.repr t)
-end
-
-module ToFO(T : REPR)(FO : NunFO.S) = struct
-  exception NotInFO of string * T.t
-
-
+module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
   module FOI = NunFO
   module Subst = Var.Subst
-  module P = TI.Print(LiftRepr(T))
-  module U = TI.UtilRepr(LiftRepr(T))
+  module P = TI.Print(T)
+  module U = TI.UtilRepr(T)
+  module Mono = Make(T)
+
+  exception NotInFO of string * T.t
+
 
   let () = Printexc.register_printer
     (function
@@ -153,7 +87,7 @@ module ToFO(T : REPR)(FO : NunFO.S) = struct
 
   let fail_ t msg = raise (NotInFO (msg, t))
 
-  let rec conv_ty t = match T.repr t with
+  let rec conv_ty t = match Mono.repr t with
     | Var _ -> fail_ t "variable in type"
     | TyBuiltin b ->
         begin match b with
@@ -163,7 +97,7 @@ module ToFO(T : REPR)(FO : NunFO.S) = struct
         end
     | Const id -> FO.Ty.const id
     | App (f,l) ->
-        begin match T.repr f with
+        begin match Mono.repr f with
         | Const id -> FO.Ty.app id (List.map conv_ty l)
         | _ -> fail_ t "non-constant application"
         end
@@ -176,7 +110,7 @@ module ToFO(T : REPR)(FO : NunFO.S) = struct
   let conv_var v = Var.update_ty ~f:conv_ty v
 
   (* find arguments *)
-  let rec flat_arrow_ t = match T.repr t with
+  let rec flat_arrow_ t = match Mono.repr t with
     | TyArrow (a, b) ->
         let args, ret = flat_arrow_ b in
         a :: args, ret
@@ -189,7 +123,7 @@ module ToFO(T : REPR)(FO : NunFO.S) = struct
     args, ret
 
   let rec conv_term t =
-    let rec aux t = match T.repr t with
+    let rec aux t = match Mono.repr t with
     | AppBuiltin (`Ite, [a;b;c]) ->
         FO.T.ite (conv_form_rec a) (aux b) (aux c)
     | AppBuiltin (`DataTest c, [t]) ->
@@ -200,7 +134,7 @@ module ToFO(T : REPR)(FO : NunFO.S) = struct
     | Const id -> FO.T.const id
     | Var v -> FO.T.var (conv_var v)
     | App (f,l) ->
-        begin match T.repr f with
+        begin match Mono.repr f with
         | Const id -> FO.T.app id (List.map aux l)
         | _ -> fail_ t "application of non-constant term"
         end
@@ -215,7 +149,7 @@ module ToFO(T : REPR)(FO : NunFO.S) = struct
     aux t
 
   and conv_form_rec t =
-    let rec aux t = match T.repr t with
+    let rec aux t = match Mono.repr t with
     | AppBuiltin (b,l) ->
         begin match b, l with
         | `True, [] -> FO.Formula.true_
@@ -263,7 +197,7 @@ module ToFO(T : REPR)(FO : NunFO.S) = struct
 
   (* does [ty] return prop? *)
   let returns_prop_ t =
-    match T.repr t with
+    match Mono.repr t with
       | TyBuiltin `Prop -> true
       | _ -> false
 
@@ -362,17 +296,18 @@ module ToFO(T : REPR)(FO : NunFO.S) = struct
     res |> CCVector.freeze |> FOI.Problem.make
 end
 
-module OfFO(T:S)(FO : NunFO.VIEW) = struct
+module OfFO(T:TI.S)(FO : NunFO.VIEW) = struct
+  module U = TI.Util(T)
   type t = T.t
 
   let rec convert_ty t = match FO.Ty.view t with
     | NunFO.TyBuiltin b ->
         let b = match b with
           | `Prop -> `Prop
-        in T.ty_builtin b
+        in U.ty_builtin b
     | NunFO.TyApp (f,l) ->
         let l = List.map convert_ty l in
-        T.ty_app (T.ty_const f) l
+        U.ty_app (U.ty_const f) l
 
   let rec convert_term t =
     match FO.T.view t with
@@ -380,55 +315,55 @@ module OfFO(T:S)(FO : NunFO.VIEW) = struct
         let b = match b with
           | `Int _ -> NunUtils.not_implemented "conversion from int"
         in
-        T.builtin b
+        U.builtin b
     | NunFO.Var v ->
-        T.var (Var.update_ty v ~f:(convert_ty))
+        U.var (Var.update_ty v ~f:(convert_ty))
     | NunFO.App (f,l) ->
         let l = List.map convert_term l in
-        T.app (T.const f) l
+        U.app (U.const f) l
     | NunFO.Fun (v,t) ->
         let v = Var.update_ty v ~f:(convert_ty) in
-        T.fun_ v (convert_term t)
+        U.fun_ v (convert_term t)
     | NunFO.DataTest (c,t) ->
-        T.app_builtin (`DataTest c) [convert_term t]
+        U.app_builtin (`DataTest c) [convert_term t]
     | NunFO.DataSelect (c,n,t) ->
-        T.app_builtin (`DataSelect (c,n)) [convert_term t]
+        U.app_builtin (`DataSelect (c,n)) [convert_term t]
     | NunFO.Let (v,t,u) ->
         let v = Var.update_ty v ~f:(convert_ty) in
-        T.let_ v (convert_term t) (convert_term u)
+        U.let_ v (convert_term t) (convert_term u)
     | NunFO.Ite (a,b,c) ->
-        T.ite (convert_formula a) (convert_term b) (convert_term c)
+        U.ite (convert_formula a) (convert_term b) (convert_term c)
 
   and convert_formula f =
     match FO.Formula.view f with
     | NunFO.Atom t -> convert_term t
-    | NunFO.True -> T.builtin `True
-    | NunFO.False -> T.builtin `False
-    | NunFO.Eq (a,b) -> T.eq (convert_term a) (convert_term b)
+    | NunFO.True -> U.builtin `True
+    | NunFO.False -> U.builtin `False
+    | NunFO.Eq (a,b) -> U.eq (convert_term a) (convert_term b)
     | NunFO.And l ->
-        T.app (T.builtin `And) (List.map convert_formula l)
+        U.app (U.builtin `And) (List.map convert_formula l)
     | NunFO.Or l ->
-        T.app (T.builtin `Or) (List.map convert_formula l)
+        U.app (U.builtin `Or) (List.map convert_formula l)
     | NunFO.Not f ->
-        T.app (T.builtin `Not) [convert_formula f]
+        U.app (U.builtin `Not) [convert_formula f]
     | NunFO.Imply (a,b) ->
-        T.app (T.builtin `Imply) [convert_formula a; convert_formula b]
+        U.app (U.builtin `Imply) [convert_formula a; convert_formula b]
     | NunFO.Equiv (a,b) ->
-        T.eq (convert_formula a) (convert_formula b)
+        U.eq (convert_formula a) (convert_formula b)
     | NunFO.Forall (v,t) ->
         let v = Var.update_ty v ~f:convert_formula_ty in
-        T.forall v (convert_formula t)
+        U.forall v (convert_formula t)
     | NunFO.Exists (v,t) ->
         let v = Var.update_ty v ~f:convert_formula_ty in
-        T.exists v (convert_formula t)
+        U.exists v (convert_formula t)
     | NunFO.F_let (v,t,u) ->
         let v = Var.update_ty v ~f:convert_formula_ty in
-        T.let_ v (convert_formula t) (convert_formula u)
+        U.let_ v (convert_formula t) (convert_formula u)
     | NunFO.F_ite (a,b,c) ->
-        T.ite (convert_formula a) (convert_formula b) (convert_formula c)
+        U.ite (convert_formula a) (convert_formula b) (convert_formula c)
     | NunFO.F_fun (v,t) ->
         let v = Var.update_ty v ~f:convert_formula_ty in
-        T.fun_ v (convert_formula t)
+        U.fun_ v (convert_formula t)
   and convert_formula_ty = convert_ty
 
   let convert_t_or_f = function
@@ -438,7 +373,7 @@ module OfFO(T:S)(FO : NunFO.VIEW) = struct
   let convert_model m = NunModel.map ~f:(convert_t_or_f) m
 end
 
-module TransFO(T1 : S)(T2 : NunFO.S) = struct
+module TransFO(T1 : TI.S)(T2 : NunFO.S) = struct
   module Conv = ToFO(T1)(T2)
   module ConvBack = OfFO(T1)(T2)
 

@@ -56,7 +56,7 @@ module Util(T : S)
 
   val const : ?loc:loc -> ty:t -> id -> t
   val builtin : ?loc:loc -> ty:t -> TI.Builtin.t -> t
-  val app_builtin : ?loc:loc -> ty:t -> TI.TyBuiltin.t -> t list -> t
+  val app_builtin : ?loc:loc -> ty:t -> TI.Builtin.t -> t list -> t
   val var : ?loc:loc -> t var -> t
   val app : ?loc:loc -> ty:t -> t -> t list -> t
   val fun_ : ?loc:loc -> ty:t -> t var -> t -> t
@@ -166,43 +166,25 @@ end = struct
 end
 
 (*$T
-  TyI.returns_Type ~repr:U.as_ty (U.ty_type())
-  TyI.returns_Type ~repr:U.as_ty U.(ty_arrow (ty_prop()) ty_type)
-  not (TyI.returns_Type ~repr:U.as_ty U.(ty_arrow ty_type (ty_prop())))
+  TyI.returns_Type ~repr:U.as_ty U.ty_type
+  TyI.returns_Type ~repr:U.as_ty U.(ty_arrow ty_prop ty_type)
+  not (TyI.returns_Type ~repr:U.as_ty U.(ty_arrow ty_type ty_prop))
 *)
 
-module AsHO(T : REPR) : NunTerm_ho.REPR with type 'a t = 'a T.t = struct
-  type 'a t = 'a T.t
-
-  let fail_ () = failwith "Term_typed.as_ho: remaining meta"
-
-  let repr : type inv. (inv T.t, inv) NunTerm_ho.repr
-  = fun t -> match T.repr t with
-      | TI.TyMeta _ -> fail_ ()
-      | TI.TyVar v -> TI.TyVar v
-      | TI.Const _
-      | TI.Var _
-      | TI.App (_,_)
-      | TI.AppBuiltin (_,_)
-      | TI.Let (_,_,_)
-      | TI.Match (_,_)
-      | TI.TyBuiltin _
-      | TI.TyArrow (_,_) as v -> v
-      | TI.Bind (_,_,_) as v -> v
-end
+module AsPoly(T : REPR)
+: NunTermPoly.S with type T.t = T.t
+= NunTermPoly.Make(T)
 
 module Default = struct
-  type 'i t = {
-    view : ('i t,'i) view;
+  type t = {
+    view : t view;
     d_loc : Loc.t option;
-    mutable d_ty : 'i t option;
+    mutable d_ty : t option;
   }
 
   (* dereference the term, if it is a variable, until it is not bound;
    also does some simplifications *)
-  let rec deref_rec_
-  : type inv. inv t -> inv t
-  = fun t -> match t.view with
+  let rec deref_rec_ t = match t.view with
     | TI.TyMeta var ->
         begin match MetaVar.deref var with
         | None -> t
@@ -228,15 +210,11 @@ module Default = struct
         make_raw_ ~loc ~ty (TI.AppBuiltin (b, l1@l2))
     | _ -> make_raw_ ~loc ~ty view
 
-  let kind () = {view=TI.TyBuiltin NunBuiltin.Ty.Kind; d_loc=None; d_ty=None; }
+  let kind = {view=TI.TyBuiltin `Kind; d_loc=None; d_ty=None; }
 
-  let print_funs () =
-    let module R = AsHO(struct
-      type 'a t_ = 'a t
-      type 'a t = 'a t_
-      let repr = repr
-      let ty = ty
-      let loc = loc
-    end) in
-    NunTerm_ho.mk_print ~repr:R.repr
+  module Print = TI.Print(struct
+    type t_ = t
+    type t = t_
+    let repr = repr
+  end)
 end

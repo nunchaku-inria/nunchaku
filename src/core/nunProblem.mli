@@ -62,27 +62,23 @@ val flat_map_statements :
 val map :
   term:('a -> 'b) ->
   ty:('tya -> 'tyb) ->
-  ('a, 'tya, 'inv) t ->
-  ('b, 'tyb, 'inv) t
+  ('a, 'tya, <eqn:'inv;..>) t ->
+  ('b, 'tyb, <eqn:'inv;..>) t
 
 val map_with :
-  ?before:(unit -> ('b, 'tyb, 'inv) NunStatement.t list) ->
-  ?after:(unit -> ('b, 'tyb, 'inv) NunStatement.t list) ->
+  ?before:(unit -> ('b, 'tyb, <eqn:'inv;..> as 'inv2) NunStatement.t list) ->
+  ?after:(unit -> ('b, 'tyb, 'inv2) NunStatement.t list) ->
   term:('a -> 'b) ->
   ty:('tya -> 'tyb) ->
-  ('a, 'tya, 'inv) t -> ('b, 'tyb, 'inv) t
+  ('a, 'tya, <eqn:'inv;..>) t -> ('b, 'tyb, 'inv2) t
 (** [map_with ~add ~term ~ty pb] is similar to [map ~term ~ty pb], but after
     processing each statement [st], [after ()] and [before()] are called,
     and the statements they return
     are added respectively before or after the translation of [st]. *)
 
-val print : ?pt_in_app:'a printer -> ?pty_in_app:'b printer ->
-            'a printer -> 'b printer -> ('a,'b,_) t printer
 (** Printer for a problem *)
-
-(** Functor version of {!print} *)
-module Print(P : NunTermInner.PRINT) : sig
-  val print : (P.t, P.t, _) t printer
+module Print(P1 : NunTermInner.PRINT)(P2:NunTermInner.PRINT) : sig
+  val print : (P1.t, P2.t, _) t printer
 end
 
 exception IllFormed of string

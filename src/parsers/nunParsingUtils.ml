@@ -88,14 +88,12 @@ module Make(F : FORMAT) = struct
   let statement_of_string_exn = parse_str_ F.parse_statement
 
   module HO = struct
-    type inv = NunTerm_ho.OfUntyped.invariant
-
-    module T = NunTerm_ho.Default
-    module Conv = NunTerm_ho.OfUntyped
+    module T = NunTermInner.Default
+    module Conv = NunTermPoly.OfUntyped(T)
 
     let term_of_str_exn s =
       let t = term_of_string_exn s in
-      Conv.convert_term ~build:T.build t
+      Conv.convert_term t
 
     let term_of_str s =
       try CCError.return (term_of_str_exn s)
