@@ -30,6 +30,7 @@ let mode_ = ref M_model
 let input_ = ref I_nunchaku
 let output_ = ref O_nunchaku
 let print_ = ref false
+let print_pipeline_ = ref false
 let print_typed_ = ref false
 let print_skolem_ = ref false
 let print_mono_ = ref false
@@ -78,6 +79,7 @@ let options =
   Arg.align ?limit:None @@ List.sort Pervasives.compare @@ (
   options_debug_ @
   [ "--print-input", Arg.Set print_, " print input"
+  ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
   ; "--print-skolem", Arg.Set print_skolem_, " print input after Skolemization"
   ; "--print-mono", Arg.Set print_mono_, " print input after monomorphization"
@@ -256,6 +258,8 @@ open CCError.Infix
 let main_model ~output statements =
   (* run pipeline *)
   let cpipe = make_model_pipeline() in
+  if !print_pipeline_
+    then Format.printf "@[Pipeline: %a@]@." NunTransform.ClosedPipe.print cpipe;
   NunTransform.run_closed ~cpipe statements |> find_model_
   >|= fun m ->
   begin match output with
@@ -271,6 +275,8 @@ let main_model ~output statements =
 let main_proof statements =
   (* run pipeline *)
   let cpipe = make_proof_pipeline () in
+  if !print_pipeline_
+    then Format.printf "@[Pipeline: %a@]@." NunTransform.ClosedPipe.print cpipe;
   let statements = negate_goal statements in
   NunTransform.run_closed ~cpipe statements |> find_proof_
   >|= fun res ->

@@ -3,6 +3,8 @@
 
 (** {1 Pipeline of Transformations} *)
 
+type 'a printer = 'a CCFormat.printer
+
 type 'a lazy_list = unit -> [`Nil | `Cons of 'a * 'a lazy_list]
 (** A lazy list of values of type ['a] *)
 
@@ -77,6 +79,8 @@ module Pipe : sig
   val (@@@) :
     ('a, 'b, 'd1, 'e) transformation ->
     ('b, 'b2, 'c, 'd1) t -> ('a, 'b2, 'c, 'e) t
+
+  val print : _ t printer
 end
 
 val run : pipe:('a, 'b, 'c, 'd) Pipe.t ->
@@ -111,6 +115,8 @@ module ClosedPipe : sig
     f:('b -> 'res) ->
     ('a, 'c, 'd, 'res) t
   (** Same as {!make}, but the function always returns exactly one element *)
+
+  val print : _ t printer
 end
 
 val run_closed :

@@ -3,6 +3,8 @@
 
 (** {1 Pipeline of Transformations} *)
 
+type 'a printer = 'a CCFormat.printer
+
 type 'a lazy_list = unit -> [`Nil | `Cons of 'a * 'a lazy_list]
 (** A lazy list of values of type ['a] *)
 
@@ -58,6 +60,19 @@ module Pipe = struct
   let id = Id
   let compose a p = Comp (a, p)
   let (@@@) = compose
+
+  let fpf = Format.fprintf
+  let print out t =
+    let first = ref true in
+    let rec pp : type a b c d. (a,b,c,d) t printer
+    = fun out t -> match t with
+    | Id -> ()
+    | Comp (Ex tr, t') ->
+        if !first then first:=false else fpf out " -> ";
+        fpf out "%s" tr.name;
+        pp out t'
+    in
+    pp out t
 end
 
 (* run callbacks on [x] *)
@@ -99,6 +114,8 @@ module ClosedPipe = struct
 
   let make1 ~pipe ~f =
     make ~pipe ~f:(fun x -> CCKList.return (f x))
+
+  let print out (ClosedEx t) = Pipe.print out t.pipe
 end
 
 let run_closed ~cpipe:(ClosedPipe.ClosedEx cpipe) a =
