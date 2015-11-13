@@ -319,8 +319,11 @@ module Make(T : TI.S) = struct
         St.specialize ~state ~depth c ArgTuple.empty;
         U.const c
     | TI.Var v ->
-        assert (not (Subst.mem ~subst:local_state.subst v));
-        U.var (mono_var ~state ~local_state v)
+        begin match Subst.find ~subst:local_state.subst v with
+        | Some t' -> mono_term ~state ~local_state t'
+        | None ->
+            U.var (mono_var ~state ~local_state v)
+        end
     | TI.App (f,l) ->
         (* first, beta-reduce locally; can possibly enrich [subst] *)
         let f, l, subst = Red.Full.whnf ~subst:local_state.subst f l in
