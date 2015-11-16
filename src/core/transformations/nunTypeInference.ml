@@ -792,6 +792,13 @@ module Convert(Term : NunTermTyped.S) = struct
     List.iter check_mono_var_ vars;
     {Stmt. spec_axioms=axioms; spec_vars=vars; spec_defined=defined; }
 
+  (* change [fun x1...xn.t] into [[x1;...;xn], t] *)
+  let rec extract_fun_ t = match Term.repr t with
+    | TI.Bind (`Fun, v, t') ->
+        let vars, rhs = extract_fun_ t' in
+        v :: vars, rhs
+    | _ -> [], t
+
   (* extract [forall vars. f args = rhs] from a prop *)
   let rec extract_eqn ~f t = match Term.repr t with
     | TI.Bind (`Forall, v, t') ->
@@ -800,9 +807,14 @@ module Convert(Term : NunTermTyped.S) = struct
           (extract_eqn ~f t')
     | TI.AppBuiltin (`Eq, [l;r]) ->
         begin match Term.repr l with
+        | TI.Const f' when ID.equal f f' ->
+            let vars, rhs = extract_fun_ r in
+            Some (vars, List.map (fun v -> U.var v) vars, rhs)
         | TI.App (f', args) ->
             begin match Term.repr f' with
-            | TI.Const f' when ID.equal f f' -> Some ([], args, r)
+            | TI.Const f' when ID.equal f f' ->
+                let vars, rhs = extract_fun_ r in
+                Some (vars, args @ List.map (fun v ->U.var v) vars, rhs)
             | _ -> None
             end
         | _ -> None
