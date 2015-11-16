@@ -10,6 +10,7 @@ module Var = NunVar
 module MetaVar = NunMetaVar
 module Loc = NunLocation
 module Sig = NunSignature
+module Stmt = NunStatement
 
 module TI = NunTermInner
 module TyI = NunTypePoly
@@ -108,6 +109,8 @@ module Convert(Term : NunTermTyped.S) = struct
       vars: (term, term) term_def MStr.t; (* local vars *)
       signature : term signature;
       cstors: (string, id * term) Hashtbl.t;  (* constructor ID + type *)
+      datatypes: Term.t Stmt.ty_constructor list ID.Tbl.t;
+        (* datatype -> ID + constructors *)
       mutable metas: (string, term MetaVar.t) Hashtbl.t option;
     }
     (* map names to proper identifiers, with their definition *)
@@ -116,6 +119,7 @@ module Convert(Term : NunTermTyped.S) = struct
       vars=MStr.empty;
       signature = Sig.empty;
       cstors=Hashtbl.create 16;
+      datatypes=ID.Tbl.create 16;
       metas=None;
     }
 
@@ -150,6 +154,11 @@ module Convert(Term : NunTermTyped.S) = struct
           "a constructor named %s is already defined" name;
       Hashtbl.add env.cstors name (c,ty)
 
+    let add_datatype ~env id cstors =
+      if ID.Tbl.mem env.datatypes id
+        then ill_formedf ~kind:"datatype" "%a already defined" ID.print_name id;
+      ID.Tbl.add env.datatypes id cstors
+
     let find_var ?loc ~env v =
       try MStr.find v env.vars
       with Not_found -> scoping_error ?loc v "not bound in environment"
@@ -157,6 +166,11 @@ module Convert(Term : NunTermTyped.S) = struct
     let find_cstor ?loc ~env c =
       try Hashtbl.find env.cstors c
       with Not_found -> scoping_error ?loc c "not a known constructor"
+
+    let find_datatype ?loc ~env c =
+      try ID.Tbl.find env.datatypes c
+      with Not_found ->
+        scoping_error ?loc (ID.name c) "not a known (co)inductive type"
 
     (* find a meta-var by its name, create it if non existent *)
     let find_meta_var ~env v =
@@ -328,6 +342,18 @@ module Convert(Term : NunTermTyped.S) = struct
     | A.Builtin `Eq -> true
     | _ -> false
 
+  (* check that the map is exhaustive *)
+  let check_cases_exhaustive_ ?loc ~env ~ty m =
+    (* find the type definition *)
+    let cstors = Env.find_datatype ?loc ~env (U.head_sym ty) in
+    let missing = CCList.filter_map
+      (fun c ->
+        let id = c.Stmt.cstor_name in
+        if ID.Map.mem id m then None else Some id
+      ) cstors
+    in
+    if missing=[] then `Ok else `Missing missing
+
   (* convert a parsed term into a typed/scoped term *)
   let rec convert_term_ ~stack ~env t =
     let loc = get_loc_ ~stack t in
@@ -457,10 +483,18 @@ module Convert(Term : NunTermTyped.S) = struct
         with Not_found ->
           ill_formedf ?loc ~kind:"match" "pattern-match needs at least one case"
         in
-        (* TODO: also check exhaustiveness *)
+        (* check the match is exhaustive and correct *)
         if not (TI.cases_well_formed m)
-          then ill_formedf ?loc ~kind:"match"
-            "ill-formed pattern match (non linear pattern or duplicated constructor)";
+          then ill_formed ?loc ~kind:"match"
+            "ill-formed pattern match (non linear pattern)";
+        begin match check_cases_exhaustive_ ~env ~ty:ty_t m with
+          | `Ok -> ()
+          | `Missing l ->
+              ill_formedf ?loc ~kind:"match"
+                "pattern match is not exhaustive (missing %a)"
+                (CCFormat.list ID.print_name) l
+        end;
+        (* ok, we're done here *)
         U.match_with ~ty t m
     | A.Ite (a,b,c) ->
         let a = convert_term_ ~stack ~env a in
@@ -546,8 +580,6 @@ module Convert(Term : NunTermTyped.S) = struct
   let convert_term ~env t =
     try E.return (convert_term_exn ~env t)
     with e -> E.of_exn e
-
-  module Stmt = NunStatement
 
   type statement = (term, term, stmt_invariant) Stmt.t
 
@@ -945,6 +977,8 @@ module Convert(Term : NunTermTyped.S) = struct
           ) env cstors
         in
         List.iter check_mono_var_ vars';
+        (* remember the list of constructors for this type *)
+        Env.add_datatype ~env id cstors;
         check_ty_is_prenex_ ty_id;
         let tydef = {Stmt.
           ty_id=id; ty_vars=vars'; ty_type=ty_id; ty_cstors=cstors;
