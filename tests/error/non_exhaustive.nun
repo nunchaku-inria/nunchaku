@@ -1,0 +1,17 @@
+
+# non exhaustive pattern match
+# expect: error
+
+data foo :=
+  | A
+  | B
+  | C.
+
+val test_foo : foo -> prop.
+rec test_foo :=
+  forall x. test_foo x = match x with
+    | A -> true
+    | B -> false
+    end.
+
+goal test_foo A.
