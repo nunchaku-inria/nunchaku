@@ -217,8 +217,8 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
       else FO.Formula.eq lhs (conv_term rhs)
     in
     (* add side conditions *)
-    let side = FO.Formula.and_ (List.map (conv_form) side) in
-    let f = FO.Formula.imply side f in
+    let side = List.map (conv_form) side in
+    let f = if side=[] then f else FO.Formula.imply (FO.Formula.and_ side) f in
     List.fold_right FO.Formula.forall vars f
 
   let convert_statement ~sigma st =

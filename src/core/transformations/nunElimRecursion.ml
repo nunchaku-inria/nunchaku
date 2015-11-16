@@ -114,7 +114,9 @@ module Make(T : TI.S) = struct
   let mk_imply_ a b = U.app_builtin `Imply [a; b]
 
   (* combine side-conditions with [t], depending on polarity *)
-  let add_conds pol t conds = match pol with
+  let add_conds pol t conds =
+    if conds=[] then t, []
+    else match pol with
     | Pos -> mk_and_ [t; mk_and_ conds], []
     | Neg -> mk_or_ [t; mk_not_ (mk_and_ conds)], []
     | NoPolarity -> t, conds
@@ -204,9 +206,7 @@ module Make(T : TI.S) = struct
             let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
             let b, cond_b = tr_term_rec_ ~state ~local_state b in
             let c, cond_c = tr_term_rec_ ~state ~local_state c in
-            add_conds local_state.pol
-              (U.app_builtin `Ite [a;b;c])
-              (List.flatten [cond_a; cond_b; cond_c])
+            U.app_builtin `Ite [a;b;c], List.flatten [cond_a; cond_b; cond_c]
         | `Eq, [a;b] ->
             let a, cond_a = tr_term_rec_ ~state ~local_state a in
             let b, cond_b = tr_term_rec_ ~state ~local_state b in
@@ -257,7 +257,8 @@ module Make(T : TI.S) = struct
    TODO: shall we actually keep the conditions? *)
   let tr_form ~state t =
     let t', conds = tr_term ~state ~local_state:empty_local_state t in
-    mk_imply_ (mk_and_ conds) t'
+    if conds=[] then t'
+    else mk_imply_ (mk_and_ conds) t'
 
   (* translate equation [eqn], which is defining the function
      corresponding to [fun_encoding] *)
