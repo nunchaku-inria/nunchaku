@@ -35,7 +35,7 @@ type ('t, 'ty, 'inv) def =
       (** ID is a constructor (of the given type) *)
 
   | NoDef
-      (** Undefined symbol *)
+      (** Undefined symbol (just its type) *)
 
 (** All information on a given symbol *)
 type ('t, 'ty, 'inv) info = {

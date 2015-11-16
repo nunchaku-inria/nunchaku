@@ -13,24 +13,26 @@ module ANF = NunANF
 type id = ID.t
 type 'a var = 'a Var.t
 
-type expr = ANF.expr
-type value = ANF.value
-type computation = ANF.computation
-type v_var = value var
-type ty = ANF.ty
+type subst = (ANF.value, ANF.value) Subst.t
 
-type subst = (value, value) Subst.t
+(* TODO: env is not exactly going to fit:
+  - we need some unification index for Prolog
+  - we need to store the "spec" axioms for Prolog
+  - we need very efficient access to definition of functions
+  - merge LocalEnv and the new env would be nice, or at least pair
+    them in one structure (fixed part=constructors/funs, local part=let/beta)
+*)
 type env = ANF.env
 
-type info = (expr, value, [`Nested]) Env.info
+type info = (ANF.expr, ANF.value, [`Nested]) Env.info
 
-module VVarSet = Var.Set(struct type t = value end)
+module VVarSet = Var.Set(struct type t = ANF.value end)
 
 (** {2 Local Environment} *)
 module LocalEnv = struct
   type entry =
-    | Def of v_var * value * ty
-    | Decl of v_var * ty
+    | Def of ANF.t_var * ANF.value * ANF.ty
+    | Decl of ANF.t_var * ANF.ty
 
   type t = entry ID.PerTbl.t
 
@@ -45,7 +47,7 @@ end
 
 (** A single goal to solve: expression paired with its environment *)
 type goal = {
-  goal_expr: expr;
+  goal_expr: ANF.expr_top;
   goal_env: LocalEnv.t; (* private local environment for the expression *)
 }
 
