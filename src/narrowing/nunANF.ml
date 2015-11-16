@@ -6,6 +6,7 @@
 module ID = NunID
 module Var = NunVar
 module Env = NunEnv
+module Subst = Var.Subst
 
 type id = ID.t
 type 'a var = 'a Var.t
@@ -65,7 +66,11 @@ and computation =
   | C_app_builtin of Builtin.t * value list
   | C_val of value (** Value, in which some variables might be substituted *)
 
-module VVarSet = Var.Set(struct type t = value end)
+(** A type *)
+and ty =
+  | TyApp of id * ty list
+  | TyVar of ty var
+  | TyForall of ty var * ty
 
 (** {2 Utils} *)
 
@@ -99,50 +104,9 @@ end = struct
   and print_computation _ _ = assert false
 end
 
-(** {2 State For Evaluation} *)
-
 (** Environment for evaluation, with definitions of datatypes and
   functions, and other axioms *)
 type env = (expr, value, [`Nested]) Env.t
-
-type info = (expr, value, [`Nested]) Env.info
-
-(** A single goal to solve: expression paired with its environment *)
-type goal = {
-  goal_expr: expr;
-  goal_env: env;  (* private environment for the expression *)
-}
-
-(** Evaluation state, with several expressions to be reduced in parallel *)
-module State : sig
-  type t = private {
-    env: env;
-    goals: goal list; (* conjunction of goals *)
-    metas: VVarSet.t; (* metas blocking evaluation *)
-  }
-
-  val make: goal list -> t
-  val find: t -> id -> info option
-  val find_exn: t -> id -> info
-end = struct
-  type t = {
-    env: env;
-    goals: goal list;
-    metas: VVarSet.t;  (* metas blocking evaluation *)
-  }
-
-  let make goals = {
-    env=Env.create();
-    goals;
-    metas=List.fold_left
-      (fun acc e -> match e.goal_expr.blocked with
-        | None -> acc
-        | Some v -> VVarSet.add v acc)
-      VVarSet.empty goals;
-  }
-  let find t id = Env.find ~env:t.env id
-  let find_exn t id = Env.find_exn ~env:t.env id
-end
 
 (** {2 Conversion from {!NunTermPoly} *)
 
