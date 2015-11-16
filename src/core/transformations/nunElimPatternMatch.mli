@@ -1,7 +1,7 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(** {1 Flatten pattern-matching in Equations}
+(** {1 Eliminate pattern-matching in Equations and Terms}
 
   Transform an equation
   [forall x y. f (x :: y) = rhs]
@@ -18,13 +18,21 @@
   becomes
   [forall l. is_s l && is_0 (select_s_1 l) ==> f l = rhs]
 
+  Also change pattern matching in terms into a (naive) discrimination tree:
+  [match t with A x -> a | B -> b | C y z -> c]
+  becomes
+  [if is-A t then a[x := select-A-0 t]
+   else if is-B t then b
+   else c[y := select-C-0 t, z := select-C-1 t]
+  ]
+
   A non-algebraic type could be encoded using an existential:
 
   [forall x. f (g x) = rhs]
   might become
   [forall y. (exists x. y = g x => f y = rhs[x := ??]
 
-  but we lack some choice operator
+  but we lack some choice operator.
 *)
 
 type id = NunID.t

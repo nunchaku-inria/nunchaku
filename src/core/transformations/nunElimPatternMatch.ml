@@ -1,7 +1,7 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(** {1 Flatten pattern-matching in Equations} *)
+(** {1 Eliminate pattern-matching in Equations and Terms} *)
 
 module ID = NunID
 module Var = NunVar
@@ -17,13 +17,13 @@ exception Error of string
 
 let () = Printexc.register_printer
   (function
-    | Error msg -> Some ("error in flatten_eqn: " ^ msg)
+    | Error msg -> Some ("error in elim_match " ^ msg)
     | _ -> None
   )
 
 let error_ msg = raise (Error msg)
 let errorf_ fmt = NunUtils.exn_ksprintf fmt ~f:(fun msg -> error_ msg)
-let section = NunUtils.Section.make "flatten_eqn"
+let section = NunUtils.Section.make "elim_match"
 
 module Make(T : NunTermInner.S) = struct
   module U = NunTermInner.Util(T)
@@ -304,10 +304,10 @@ module Make(T : NunTermInner.S) = struct
     let on_encoded =
       if print then
         let module PPb = NunProblem.Print(P)(P) in
-        [Format.printf "@[<v2>after flattening of equations: %a@]@." PPb.print]
+        [Format.printf "@[<v2>after elimination of pattern-match: %a@]@." PPb.print]
       else [] in
     let encode pb = tr_problem pb, () in
-    make1 ~name:"flatten_eqn"
+    make1 ~name:"elim_match"
       ~encode
       ~on_encoded
       ~decode:(fun () x -> x)

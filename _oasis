@@ -31,7 +31,7 @@ Library "nunchaku_core"
                     types/NunTypeMono,
                     transformations/NunSkolem,
                     transformations/NunTypeInference,
-                    transformations/NunFlattenEquation,
+                    transformations/NunElimPatternMatch,
                     transformations/NunMonomorphization,
                     transformations/NunElimRecursion
   Install:          true

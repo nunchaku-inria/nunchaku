@@ -34,7 +34,7 @@ let print_pipeline_ = ref false
 let print_typed_ = ref false
 let print_skolem_ = ref false
 let print_mono_ = ref false
-let print_flatten_eqn_ = ref false
+let print_elim_match_ = ref false
 let print_recursion_elim_ = ref false
 let print_fo_ = ref false
 let print_smt_ = ref false
@@ -83,7 +83,8 @@ let options =
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
   ; "--print-skolem", Arg.Set print_skolem_, " print input after Skolemization"
   ; "--print-mono", Arg.Set print_mono_, " print input after monomorphization"
-  ; "--print-flatten-eqn", Arg.Set print_flatten_eqn_, " print input after flattening equations"
+  ; "--print-elim-match", Arg.Set print_elim_match_,
+      " print input after elimination of pattern matching"
   ; "--print-rec-elim", Arg.Set print_recursion_elim_,
       " print input after elimination of recursive functions"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
@@ -146,8 +147,8 @@ let make_model_pipeline () =
   let step_skolem = Step_skolem.pipe ~print:!print_skolem_ in
   let module Step_mono = NunMonomorphization.Make(HO) in
   let step_monomorphization = Step_mono.pipe ~print:!print_mono_ in
-  let module Step_FlattenEqn = NunFlattenEquation.Make(HO) in
-  let step_flatten_eqn = Step_FlattenEqn.pipe ~print:!print_flatten_eqn_ in
+  let module Step_ElimMatch = NunElimPatternMatch.Make(HO) in
+  let step_elim_match = Step_ElimMatch.pipe ~print:!print_elim_match_ in
   let module Step_rec_elim = NunElimRecursion.Make(HO) in
   let step_recursion_elim = Step_rec_elim.pipe ~print:!print_recursion_elim_ in
   (* conversion to FO *)
@@ -158,7 +159,7 @@ let make_model_pipeline () =
     step_ty_infer @@@
     step_skolem @@@
     step_monomorphization @@@
-    step_flatten_eqn @@@
+    step_elim_match @@@
     step_recursion_elim @@@
     step_fo @@@
     id
@@ -182,8 +183,8 @@ let make_proof_pipeline () =
   let module Step_mono = NunMonomorphization.Make(HO) in
   let step_monomorphization = Step_mono.pipe_with
     ~decode:(fun ~decode_term:_ x -> x) ~print:!print_mono_ in
-  let module Step_FlattenEqn = NunFlattenEquation.Make(HO) in
-  let step_flatten_eqn = Step_FlattenEqn.pipe ~print:!print_flatten_eqn_ in
+  let module Step_ElimMatch = NunElimPatternMatch.Make(HO) in
+  let step_elim_match = Step_ElimMatch.pipe ~print:!print_elim_match_ in
   let module Step_rec_elim = NunElimRecursion.Make(HO) in
   let step_recursion_elim = Step_rec_elim.pipe_with
     ~decode:(fun ~decode_term:_ x -> x) ~print:!print_recursion_elim_ in
@@ -195,7 +196,7 @@ let make_proof_pipeline () =
     step_ty_infer @@@
     step_skolem @@@
     step_monomorphization @@@
-    step_flatten_eqn @@@
+    step_elim_match @@@
     step_recursion_elim @@@
     step_fo @@@
     id
