@@ -49,12 +49,20 @@ Library "nunchaku_parsers"
   BuildTools:       menhir
   BuildDepends:     nunchaku
 
+Library "nunchaku_narrowing"
+  Path:             src/narrowing/
+  Modules:          NunANF
+  Install:          true
+  FindlibName:      narrowing
+  FindlibParent:    nunchaku_core
+  BuildDepends:     nunchaku
+
 Executable nunchaku
   Path:             src/main/
   Install:          true
   CompiledObject:   native
   MainIs:           nunchaku.ml
-  BuildDepends:     nunchaku, nunchaku.parsers
+  BuildDepends:     nunchaku, nunchaku.parsers, nunchaku.narrowing
 
 PreBuildCommand:    make qtest-gen
 
