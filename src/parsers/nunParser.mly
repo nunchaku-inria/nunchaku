@@ -143,7 +143,7 @@ const:
   | v=raw_var l=raw_var* ARROW t=TERM { v, l, t }
 
 %public cases(TERM):
-  | l=separated_nonempty_list(VERTICAL_BAR, case(TERM)) { l }
+  | VERTICAL_BAR? l=separated_nonempty_list(VERTICAL_BAR, case(TERM)) { l }
 
 atomic_term:
   | v=var { v }
@@ -151,6 +151,11 @@ atomic_term:
   | v=meta_var { v }
   | t=const { t }
   | LEFT_PAREN t=term RIGHT_PAREN { t }
+  | MATCH t=term WITH l=cases(term) END
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.match_with ~loc t l
+    }
 
 apply_term:
   | t=atomic_term { t }
@@ -205,11 +210,6 @@ term:
     {
       let loc = L.mk_pos $startpos $endpos in
       A.let_ ~loc v t u
-    }
-  | MATCH t=term WITH l=cases(term) END
-    {
-      let loc = L.mk_pos $startpos $endpos in
-      A.match_with ~loc t l
     }
   | IF a=term THEN b=term ELSE c=term
     {
