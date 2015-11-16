@@ -73,6 +73,7 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
 
   exception NotInFO of string * T.t
 
+  let section = NunUtils.Section.make "to_fo"
 
   let () = Printexc.register_printer
     (function
@@ -122,48 +123,44 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
     and ret = conv_ty ret in
     args, ret
 
-  let rec conv_term t =
-    let rec aux t = match Mono.repr t with
+  let rec conv_term t = match Mono.repr t with
     | AppBuiltin (`Ite, [a;b;c]) ->
-        FO.T.ite (conv_form_rec a) (aux b) (aux c)
+        FO.T.ite (conv_form_rec a) (conv_term b) (conv_term c)
     | AppBuiltin (`DataTest c, [t]) ->
-        FO.T.data_test c (aux t)
+        FO.T.data_test c (conv_term t)
     | AppBuiltin (`DataSelect (c,n), [t]) ->
-        FO.T.data_select c n (aux t)
+        FO.T.data_select c n (conv_term t)
     | AppBuiltin _ -> fail_ t "no builtin in terms"
     | Const id -> FO.T.const id
     | Var v -> FO.T.var (conv_var v)
     | App (f,l) ->
         begin match Mono.repr f with
-        | Const id -> FO.T.app id (List.map aux l)
+        | Const id -> FO.T.app id (List.map conv_term l)
         | _ -> fail_ t "application of non-constant term"
         end
-    | Bind (`Fun,v,t) -> FO.T.fun_ (conv_var v) (aux t)
+    | Bind (`Fun,v,t) -> FO.T.fun_ (conv_var v) (conv_term t)
     | Bind ((`Forall | `Exists), _,_) -> fail_ t "no quantifiers in FO terms"
     | Let (v,t,u) ->
-        FO.T.let_ (conv_var v) (aux t) (aux u)
+        FO.T.let_ (conv_var v) (conv_term t) (conv_term u)
     | Match _ -> fail_ t "no case in FO terms"
     | TyBuiltin _
     | TyArrow (_,_) -> fail_ t "no types in FO terms"
-    in
-    aux t
 
-  and conv_form_rec t =
-    let rec aux t = match Mono.repr t with
+  and conv_form_rec t = match Mono.repr t with
     | AppBuiltin (b,l) ->
         begin match b, l with
         | `True, [] -> FO.Formula.true_
         | `False, [] -> FO.Formula.false_
-        | `Not, [f] -> FO.Formula.not_ (aux f)
-        | `Or, l -> FO.Formula.or_ (List.map aux l)
-        | `And, l -> FO.Formula.and_ (List.map aux l)
+        | `Not, [f] -> FO.Formula.not_ (conv_form_rec f)
+        | `Or, l -> FO.Formula.or_ (List.map conv_form_rec l)
+        | `And, l -> FO.Formula.and_ (List.map conv_form_rec l)
         | `Imply, [a;b] ->
-            FO.Formula.imply (aux a) (aux b)
+            FO.Formula.imply (conv_form_rec a) (conv_form_rec b)
         | `Ite, [a;b;c] ->
             FO.Formula.f_ite
-              (aux a)(aux b) (aux c)
+              (conv_form_rec a)(conv_form_rec b) (conv_form_rec c)
         | `Equiv, [a;b] ->
-            FO.Formula.equiv (aux a)(aux b)
+            FO.Formula.equiv (conv_form_rec a)(conv_form_rec b)
         | `Eq, [a;b] ->
             FO.Formula.eq (conv_term a)(conv_term b)
         | `DataSelect _, _
@@ -175,22 +172,20 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
     | Const _ -> FO.Formula.atom (conv_term t)
     | Var _ -> fail_ t "no variable in FO formulas"
     | Bind (`Fun,v,t) ->
-        FO.Formula.f_fun (conv_var v) (aux t)
+        FO.Formula.f_fun (conv_var v) (conv_form_rec t)
     | Bind (`Forall, v,f) ->
-        FO.Formula.forall (conv_var v) (aux f)
+        FO.Formula.forall (conv_var v) (conv_form_rec f)
     | Bind (`Exists, v,f) ->
-        FO.Formula.exists (conv_var v) (aux f)
+        FO.Formula.exists (conv_var v) (conv_form_rec f)
     | Let (v,t,u) ->
         FO.Formula.f_let
-          (conv_var v) (aux t) (aux u)
+          (conv_var v) (conv_form_rec t) (conv_form_rec u)
     | Match _ -> fail_ t "no match in FO formulas"
     | TyArrow (_,_)
     | TyBuiltin _ -> fail_ t "no types in FO formulas"
-    in
-    aux t
 
   let conv_form f =
-    NunUtils.debugf 3
+    NunUtils.debugf 3 ~section
       "@[<2>convert to FO the formula `@[%a@]`@]" (fun k -> k P.print f);
     conv_form_rec f
 

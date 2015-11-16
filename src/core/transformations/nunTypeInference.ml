@@ -694,6 +694,15 @@ module Convert(Term : NunTermTyped.S) = struct
           if VarSet.subset fvars vars then `Ok
           else `Bad VarSet.(diff fvars vars |> to_list)
 
+  (* does [t] contain the given [id]? *)
+  let term_contains_ t ~id =
+    U.to_seq t
+      |> Sequence.exists
+        (fun t -> match Term.repr t with
+          | TI.Const id' when ID.equal id id' -> true
+          | _ -> false
+        )
+
   (* convert [t as v] into a [Stmt.defined].
      [t] will be applied to fresh type variables if it lacks some type arguments.
      @return [(defined, vars, t')] where [vars] are the type variables of [t]
@@ -978,9 +987,12 @@ module Convert(Term : NunTermTyped.S) = struct
         let b = convert_term_exn ~env:env' b in
         check_prenex_types_ ?loc a_defined;
         check_prenex_types_ ?loc b;
+        (* check that [id] does not occur in [b] *)
+        if term_contains_ b ~id
+        then ill_formedf ?loc ~kind:"def"
+          "right-hand side of definition contains defined symbol %a" ID.print id;
         let eqn = Stmt.Eqn_nested ([], [], b, []) in
         unify_in_ctx_ ~stack:[] ty (U.ty_exn b);
-        (* TODO: check that [v] does not occur in [b] *)
         let defined = {Stmt.
           defined_head=id; defined_term=a_defined; defined_ty_args=[];
         } in

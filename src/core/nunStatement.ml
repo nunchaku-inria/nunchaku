@@ -235,9 +235,16 @@ let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
         ) acc l
   | Goal t -> term acc t
 
+let fpf = Format.fprintf
 let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
-let fpf = Format.fprintf
+(* print list with prefix before every item *)
+let pplist_prefix ~first ~pre pp out l =
+  List.iteri
+    (fun i x ->
+      if i=0 then fpf out "%s" first else fpf out "@,%s" pre;
+      pp out x)
+    l
 
 let print (type a)(type b)
 (module Pt : TI.PRINT with type t = a)
@@ -253,22 +260,22 @@ let print (type a)(type b)
       let pp_rec_defs out l =
         let pp_sides out l =
           if l=[] then ()
-          else fpf out "@[<hv2>%a => @]" (pplist ~sep:" && " Pt.print_in_app) l
+          else fpf out "@[<hv2>%a => @]@," (pplist ~sep:" && " Pt.print_in_app) l
         in
         (* print equation *)
         let pp_eqn (type inv) t out (e:(_,_,inv) equation) =
           match e with
           | Eqn_linear (vars,rhs,side) ->
               if vars=[]
-              then fpf out "@[<hv>%a@,%a =@ %a@]" pp_sides side Pt.print t Pt.print rhs
-              else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a@,%a %a =@ %a@]@]"
+              then fpf out "@[<hv>%a%a =@ %a@]" pp_sides side Pt.print t Pt.print rhs
+              else fpf out "@[<hv2>forall @[<h>%a@].@ %a%a %a =@ %a@]"
                 (pplist ~sep:" " pp_typed_var) vars pp_sides side Pt.print t
                 (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
           | Eqn_nested (vars,args,rhs,side) ->
               if vars=[]
-              then fpf out "@[<hv>%a@,%a %a =@ %a@]"
+              then fpf out "@[<hv>%a%a %a =@ %a@]"
                  pp_sides side Pt.print t (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
-              else fpf out "@[<hv2>forall @[<h>%a@].@ @[<hv>%a@,%a %a =@ %a@]@]"
+              else fpf out "@[<hv2>forall @[<h>%a@].@ %a%a %a =@ %a@]"
                 (pplist ~sep:" " pp_typed_var) vars pp_sides side Pt.print t
                 (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
         in
@@ -278,17 +285,11 @@ let print (type a)(type b)
             pp_defined d.rec_defined
             (pp_eqns d.rec_defined.defined_term) d.rec_eqns
         in
-        fpf out "@[<hov>rec ";
-        List.iteri
-          (fun i def ->
-            if i>0 then fpf out "@,and ";
-            pp_def out def
-          ) l;
-        fpf out ".@]"
+        fpf out "@[<hov>rec %a.@]" (pplist_prefix ~first:"" ~pre:" and " pp_def) l
       and pp_spec_defs out d =
         let printerms = pplist ~sep:";" Pt.print in
         let pp_defined_list out =
-          fpf out "@[<v>%a@]" (pplist ~sep:" and " pp_defined)
+          fpf out "@[<v>%a@]" (pplist_prefix ~first:"" ~pre:" and " pp_defined)
         in
         fpf out "@[<hv2>spec @[<hv>%a@] :=@ %a@]"
           pp_defined_list d.spec_defined printerms d.spec_axioms
@@ -304,10 +305,10 @@ let print (type a)(type b)
         fpf out "@[<hv2>%a %a@]"
           ID.print_name c.cstor_name (pplist ~sep:" " Pty.print_in_app) c.cstor_args in
       let print_def out tydef =
-        fpf out "@[<hv2>%a %a :=@ @[<v>%a@]@]"
+        fpf out "@[<hv2>%a %a :=@ @[<hv>%a@]@]"
           ID.print_name tydef.ty_id
           (pplist ~sep:" " Var.print) tydef.ty_vars
-          (pplist ~sep:" | " ppcstors) tydef.ty_cstors
+          (pplist_prefix ~first:"| " ~pre:"| " ppcstors) tydef.ty_cstors
       in
       fpf out "@[<hv2>%s@ "
         (match k with `Data -> "data" | `Codata -> "codata");

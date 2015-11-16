@@ -179,7 +179,15 @@ end = struct
           (fun v' ->
             Untyped.let_ v' t (aux u)
           )
-    | Match _ -> assert false (* TODO *)
+    | Match (t,l) ->
+        let t = aux t in
+        let l = ID.Map.fold
+          (fun c (vars,rhs) acc ->
+            let vars = List.map (fun v -> find_ ~ctx (Var.id v)) vars in
+            (ID.name c, vars, aux rhs) :: acc)
+          l []
+        in
+        Untyped.match_with t l
     | TyBuiltin b ->
         let b = match b with
           | `Prop -> `Prop
