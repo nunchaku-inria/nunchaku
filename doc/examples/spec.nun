@@ -1,6 +1,6 @@
 
 # recursive spec and rec
-# EXPECT: SAT
+# EXPECT: unknown
 
 data nat :=
   | z
