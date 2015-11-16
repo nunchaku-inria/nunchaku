@@ -47,7 +47,9 @@ let test_file f =
   (* expected result *)
   let expected = grep_expect f in
   let p = CCUnix.call "./nunchaku.native --timeout 5 %s" f in
-  let actual = if p#errcode <> 0 then Error
+  let actual =
+    if CCString.mem ~sub:"timeout" p#stderr then Unknown
+    else if p#errcode <> 0 then Error
     else if CCString.mem ~sub:"SAT" p#stdout
     then Ok else Unknown in
   if expected = actual
