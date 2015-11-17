@@ -19,7 +19,7 @@
 
 %token WILDCARD
 %token DOT
-%token COLUMN
+%token COLON
 %token EQDEF
 %token AS
 %token LET
@@ -48,7 +48,7 @@
 %token PROP
 %token TYPE
 
-%token SEMI_COLUMN
+%token SEMI_COLON
 %token AXIOM
 %token REC
 %token SPEC
@@ -84,12 +84,12 @@ raw_var:
 
 typed_var:
   | v=raw_var { v, None }
-  | LEFT_PAREN v=raw_var COLUMN t=term RIGHT_PAREN { v, Some t }
+  | LEFT_PAREN v=raw_var COLON t=term RIGHT_PAREN { v, Some t }
 
 typed_ty_var:
   | v=raw_var { v }
-  | v=raw_var COLUMN TYPE { v }
-  | LEFT_PAREN v=raw_var COLUMN TYPE RIGHT_PAREN { v }
+  | v=raw_var COLON TYPE { v }
+  | LEFT_PAREN v=raw_var COLON TYPE RIGHT_PAREN { v }
 
 var:
   | WILDCARD
@@ -251,7 +251,7 @@ term:
   | t=apply_term AS v=raw_var { t, v }
 
 rec_def:
-  | t=defined_term EQDEF l=separated_nonempty_list(SEMI_COLUMN,term)
+  | t=defined_term EQDEF l=separated_nonempty_list(SEMI_COLON,term)
     { let t,var = t in t, var, l }
 
 rec_defs:
@@ -260,7 +260,7 @@ rec_defs:
 spec_defs:
   | vars=separated_nonempty_list(AND, defined_term)
     EQDEF
-    l=separated_nonempty_list(SEMI_COLUMN,term)
+    l=separated_nonempty_list(SEMI_COLON,term)
     { vars, l }
 
 constructor:
@@ -277,12 +277,12 @@ mutual_types:
   | l=separated_nonempty_list(AND, type_def) { l }
 
 statement:
-  | VAL v=raw_var COLUMN t=term DOT
+  | VAL v=raw_var COLON t=term DOT
     {
       let loc = L.mk_pos $startpos $endpos in
       A.decl ~loc v t
     }
-  | AXIOM l=separated_nonempty_list(SEMI_COLUMN, term) DOT
+  | AXIOM l=separated_nonempty_list(SEMI_COLON, term) DOT
     {
       let loc = L.mk_pos $startpos $endpos in
       A.axiom ~loc l

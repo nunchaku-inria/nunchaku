@@ -51,7 +51,7 @@ Library "nunchaku_parsers"
 
 Library "nunchaku_narrowing"
   Path:             src/narrowing/
-  Modules:          NunANF, NunNarrowing
+  Modules:          NunANF, NunNarrowing, NunANFOfTyped
   Install:          true
   FindlibName:      narrowing
   FindlibParent:    nunchaku_core

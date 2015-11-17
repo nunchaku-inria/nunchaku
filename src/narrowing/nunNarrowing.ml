@@ -13,8 +13,6 @@ module ANF = NunANF
 type id = ID.t
 type 'a var = 'a Var.t
 
-type subst = (ANF.value, ANF.value) Subst.t
-
 (* TODO: env is not exactly going to fit:
   - we need some unification index for Prolog
   - we need to store the "spec" axioms for Prolog
@@ -26,7 +24,7 @@ type env = ANF.env
 
 type info = (ANF.expr, ANF.value, [`Nested]) Env.info
 
-module VVarSet = Var.Set(struct type t = ANF.value end)
+module VVarSet = ANF.VVarSet
 
 (** {2 Local Environment} *)
 module LocalEnv = struct

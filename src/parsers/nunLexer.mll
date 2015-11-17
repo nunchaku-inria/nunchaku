@@ -41,8 +41,8 @@ rule token = parse
   | ')' { RIGHT_PAREN }
   | '.' { DOT }
   | '_' { WILDCARD }
-  | ':' { COLUMN }
-  | ';' { SEMI_COLUMN }
+  | ':' { COLON }
+  | ';' { SEMI_COLON }
   | '?' { META_VAR }
   | "=" { LOGIC_EQ }
   | ":=" { EQDEF }

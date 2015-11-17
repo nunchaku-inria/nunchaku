@@ -7,7 +7,6 @@ module ID = NunID
 module Var = NunVar
 module Env = NunEnv
 module Subst = Var.Subst
-module Stmt = NunStatement
 
 type id = ID.t
 type 'a var = 'a Var.t
@@ -28,11 +27,45 @@ end = struct
     | `Eq -> fpf out "="
 end
 
+(** {2 Meta-Variables} *)
+module Meta : sig
+  type 'a t = private 'a var
+  val make : ty:'a -> name:string -> 'a t
+  val fresh_copy : 'a t -> 'a t
+end = struct
+  type 'a t = 'a var
+  let make = Var.make
+  let fresh_copy = Var.fresh_copy
+end
+
 type 'a case = 'a var list * 'a
 type 'a cases = 'a case ID.Map.t
 
+(** ['a] paired with a type *)
+type 'a typed = {
+  mutable cell: 'a;
+  mutable ty: ty option;
+  closure: subst; (* closure: propagated to sub-terms *)
+}
+
+(** A type *)
+and ty = ty_cell typed
+and ty_cell =
+  | TyApp of id * ty list
+  | TyVar of ty var
+  | TyForall of ty var * ty
+  | TyArrow of ty * ty
+  | TyType
+  | TyKind
+  | TyProp
+
+(** Variable that has a type represented by [ty] *)
+and t_var = ty var
+and t_meta = ty Meta.t
+
 (** A nested program, chaining computations. *)
-type expr =
+and expr = expr_cell typed
+and expr_cell =
   | Val of value
   | Let of t_var * computation * expr (** Shallow let *)
   | Match of t_var * expr cases (** Shallow match *)
@@ -41,36 +74,37 @@ type expr =
   | Exists of t_var * expr (** Introduce a new meta *)
   | And of expr list
   | Or of expr list
+  | Imply of expr * expr
 
 (** A value in WHNF, not evaluable further except by refining metas *)
-and value =
+and value = value_cell typed
+and value_cell =
   | True
   | False
-  | App of id * value list (** Constructor *)
-  | HOApp of t_var * value list (** higher-order application of opaque var *)
-  | Var of t_var (** Typically, opaque constant, like an existential *)
-  | Meta of expr var (** Existential variable *)
-  | Fun of t_var * expr (** Function *)
-
-(** Variable that has a type represented by [ty] *)
-and t_var = ty var
+  | App of id * value list
+      (** Application of constructor or opaque (uninterpreted) constant *)
+  | Var of t_var
+      (** Variable to be substituted, of a non-functional type *)
+  | Fun of fun_
+      (** Function. Never applied, otherwise it would β reduce *)
 
 (** A shallow computation *)
 and computation =
-  | C_app_var of t_var * value list (** [fun_var, args] *)
-  | C_app_id of id * value list (** [fun_name, args] or constructor app *)
-  | C_app_builtin of Builtin.t * value list
   | C_val of value (** Value, in which some variables might be substituted *)
+  | C_app_meta of t_meta * value list (** [fun_var, args] *)
+  | C_app_var of t_var * value list (** [fun_var, args] *)
+  | C_app_id of id * value list (** [fun_name, args]. [id] is {b NOT} a constructor  *)
+  | C_app_fun of fun_ * value (** apply the function *)
+  | C_eq of t_var * t_var (** Unify *)
 
-(** A type *)
-and ty =
-  | TyApp of id * ty list
-  | TyVar of ty var
-  | TyForall of ty var * ty
-  | TyArrow of ty * ty
-  | TyType
-  | TyKind
-  | TyProp
+(** A function is an expression parametrized over a variable *)
+and fun_ = {
+  fun_arg: t_var;
+  fun_body: expr;
+}
+
+(** Substitution *)
+and subst = (ty, value) Subst.t
 
 type expr_top = {
   cell: expr;
@@ -82,24 +116,7 @@ type expr_top = {
 
 let mk_top ~blck e = {cell=e; blocked=blck;}
 
-let mk_val v = Val v
-let mk_let v t u = Let (v,t,u)
-let mk_match v l = Match (v,l)
-let mk_ite a b c = Ite (a,b,c)
-
-let v_true = True
-let v_false = False
-let v_app c l = App (c,l)
-let v_const c = App (c, [])
-let v_ho_app f l = HOApp (f,l)
-let v_var v = Var v
-let v_meta v = Meta v
-let v_fun v t = Fun (v,t)
-
-let c_app_v v l = C_app_var (v,l)
-let c_app_id id l = C_app_id (id,l)
-let c_app_builtin b l = C_app_builtin (b,l)
-let c_val v = C_val v
+(* TODO: hashcons types? *)
 
 let ty_app id l = TyApp (id,l)
 let ty_const id = TyApp (id,[])
@@ -109,6 +126,30 @@ let ty_arrow a b = TyArrow (a,b)
 let ty_type = TyType
 let ty_kind = TyKind
 let ty_prop = TyProp
+
+let e_val v = Val v
+let e_let v t u = Let (v,t,u)
+let e_match v l = Match (v,l)
+let e_ite a b c = Ite (a,b,c)
+let e_and l = And l
+let e_or l = Or l
+let e_imply a b = Imply (a,b)
+
+let v_true = True
+let v_false = False
+let v_var v = Var v
+let v_app c l = App (c,l)
+let v_const c = App (c, [])
+let v_fun f = Fun f
+
+let c_val v = C_val v
+let c_app_var v l = C_app_var (v,l)
+let c_app_meta v l = C_app_meta (v,l)
+let c_app_id id l = C_app_id (id,l)
+let c_app_fun f x = C_app_fun (f, x)
+let c_eq a b = C_eq (a,b)
+
+let fun_ v body = {fun_arg=v; fun_body=body;}
 
 module Print : sig
   val print_expr : expr printer
@@ -122,92 +163,32 @@ end = struct
   and print_ty _ _ = assert false
 end
 
-(** Environment for evaluation, with definitions of datatypes and
-  functions, and other axioms *)
-type env = (expr, value, [`Nested]) Env.t
+module VVarSet = Var.Set(struct type t = ty end)
 
-(** {2 Conversion from {!NunTermPoly} *)
+let ty_apply
 
-exception InvalidProblem of string
-(** Raised when a problem cannot be converted into a narrowing problem *)
-
-let () = Printexc.register_printer
-  (function
-    | InvalidProblem msg -> Some ("invalid problem for narrowing: " ^ msg)
-    | _ -> None
-  )
-
-module OfPoly(T : NunTermInner.REPR) : sig
-  module TPoly : module type of NunTermPoly.Make(T)
-
-  val conv_pb: (TPoly.t, TPoly.t, [`Nested]) NunProblem.t -> env * expr
-  (** [conv_pb pb] returns a pair [env, goal] where [goal] is the goal
-    of [pb] after conversion into ANF, and [env] is an environment suitable
-    for evaluation.
-    @raise InvalidProblem if the translation fails. *)
-end = struct
-  module TI = NunTermPoly
-  module TPoly = TI.Make(T)
-  module P = NunTermInner.Print(T)
-
-  let invalid_pb msg = raise (InvalidProblem msg)
-  let invalid_pbf fmt = NunUtils.exn_ksprintf fmt ~f:invalid_pb
-
-  let rec into_expr t : expr = match TPoly.repr t with
-    | TI.Var v -> mk_val (v_var (trans_var v))
-    | TI.Const id -> mk_val (v_const id)
-    | TI.App (_,_)
-    | TI.AppBuiltin (_,_)
-    | TI.Bind (_,_,_)
-    | TI.Let (_,_,_)
-    | TI.Match (_,_)
-    | TI.TyBuiltin _
-    | TI.TyArrow (_,_) -> assert false
-
-  (* convert type *)
-  and into_ty t : ty = match TPoly.repr t with
-    | TI.Var v -> ty_var (trans_var v)
-    | TI.Const id -> ty_const id
-    | TI.App (f, l) ->
-        (* convert head *)
-        begin match into_ty f with
-        | TyApp (id, l1) -> ty_app id (l1 @ List.map into_ty l)
-        | _ -> invalid_pbf "term `@[%a@]` is not a type" P.print t
-        end
-    | TI.TyArrow (a,b) ->  ty_arrow (into_ty a) (into_ty b)
-    | TI.Bind (`TyForall, v, t) ->
-        let v = trans_var v in
-        ty_forall v (into_ty t)
-    | TI.TyBuiltin `Type -> ty_type
-    | TI.TyBuiltin `Kind -> ty_kind
-    | TI.TyBuiltin `Prop -> ty_prop
-    | TI.Let _
-    | TI.AppBuiltin _
-    | TI.Bind _
-    | TI.Match _ -> invalid_pbf "term `@[%a@]` is not a type" P.print t
-
-  and trans_var v = Var.update_ty v ~f:into_ty
-
-  (* convert statement and add it to [env] if it makes sense *)
-  let convert_statement (env,maybe_goal) st = match Stmt.view st with
-    | Stmt.Goal g ->
-        begin match maybe_goal with
-        | Some _ -> invalid_pb "several goals in the input"
-        | None ->
-            let g' = into_expr g in
-            env, Some g'
-        end
-    | _ -> assert false (* TODO *)
-
-  let conv_pb pb =
-    let env = Env.create() in
-    let env, maybe_goal =
-      NunProblem.statements pb
-      |> CCVector.fold convert_statement (env, None)
-    in
-    match maybe_goal with
-    | None -> invalid_pb "no goal in the input"
-    | Some g -> env, g
-end
-
+let rec apply_v_v
+: value -> value list -> (value -> expr) -> expr
+= fun f l k ->
+  match f with
+  | ANF.App (id, l1) ->
+      (* non-reducing application *)
+      k (ANF.v_app id (l1 @ l))
+  | ANF.Var v ->
+      (* variable of functional type:
+         transform  [k (v l)] into
+        [let v' = c_app_var v l in k v' *)
+      let v' = Var.make ~name:"v" ~ty:(ty_ t) in
+      ANF.e_let v' (ANF.c_app_var v l) (k (ANF.v_var v'))
+  | ANF.Fun f ->
+      (* actual function:
+        transform  [k (f (a :: l'))] into
+        [let v' = c_app_fun f a in k (v' l') *)
+      let a, l' = match l with [] -> assert false | x::y->x,y in
+      let v1 = Var.make ~name:"v1" ~ty:(ty_ t) in
+      ANF.e_let v' (ANF.c_app_fun f a)
+        (
+        (k (ANF.v_var v'))
+  | ANF.True
+  | ANF.False -> assert false (* type error *)
 
