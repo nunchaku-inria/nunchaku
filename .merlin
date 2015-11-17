@@ -3,12 +3,14 @@ S src/core/terms
 S src/core/types
 S src/core/transformations/
 S src/main/
+S src/narrowing/
 S src/parsers/
 B _build/src/core
 B _build/src/core/terms
 B _build/src/core/types
 B _build/src/core/transformations/
 B _build/src/main/
+B _build/src/narrowing/
 B _build/src/parsers
 PKG containers
 PKG containers.iter

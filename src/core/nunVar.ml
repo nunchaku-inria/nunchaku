@@ -26,6 +26,7 @@ let of_id ~ty id = {id;ty}
 
 let ty t = t.ty
 let id t = t.id
+let name t = ID.name t.id
 
 let fresh_update_ty v ~f =
   let ty = f v.ty in
