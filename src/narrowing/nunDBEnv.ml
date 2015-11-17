@@ -25,7 +25,12 @@ let make_unsafe ~len lst = {len;lst}
 
 let map f {len;lst} = {len; lst=List.map f lst}
 let append_l {len;lst} l = {len=len+List.length l; lst=lst@l}
-
+let fold_left f acc l = List.fold_left f acc l.lst
+let fold_right f l acc = List.fold_right f l.lst acc
+let for_all f l = List.for_all f l.lst
+let for_all2 f l1 l2 =
+  if l1.len <> l2.len then invalid_arg "for_all2";
+  List.for_all2 f l1.lst l2.lst
 let nth l i = assert (i<l.len); List.nth l.lst i
 
 let remove i {len;lst} =

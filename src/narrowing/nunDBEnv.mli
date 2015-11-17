@@ -22,5 +22,9 @@ val make_unsafe : len:int -> 'a list -> 'a t
 
 val map : ('a -> 'b) -> 'a t -> 'b t
 val append_l : 'a t -> 'a list -> 'a t
+val for_all : ('a -> bool) -> 'a t -> bool
+val for_all2 : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool
 val remove : int -> 'a t -> 'a t
+val fold_left : ('b -> 'a -> 'b) -> 'b -> 'a t -> 'b
+val fold_right : ('a -> 'b -> 'b) -> 'a t -> 'b -> 'b
 val nth : 'a t -> int -> 'a

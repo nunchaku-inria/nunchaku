@@ -32,6 +32,8 @@ let fresh_update_ty v ~f =
   let ty = f v.ty in
   make ~ty ~name:(ID.name v.id)
 
+let set_ty v ~ty = {id=v.id; ty;}
+
 let update_ty v ~f =
   let ty = f v.ty in
   { id=v.id; ty }

@@ -10,6 +10,7 @@ module Subst = Var.Subst
 module T = NunTermEval
 module DBEnv = NunDBEnv
 module VarSet = T.VarSet
+module U = NunEvalUtils
 
 type id = ID.t
 type 'a var = 'a Var.t
@@ -19,18 +20,10 @@ type 'a var = 'a Var.t
   - we need to store the "spec" axioms for Prolog
 *)
 
-type def_or_decl =
-  | Local_def of T.term (* x := t *)
-  | Local_decl of T.ty (* x : ty *)
-
 (** {2 State For Evaluation} *)
 
-(** A single goal to solve: expression paired with its environment *)
-type goal = {
-  goal_expr: T.term_top;
-  goal_context: def_or_decl DBEnv.t;
-  goal_env: Env.t; (* environment *)
-}
+(** A single goal to solve: a toplevel term, with its environment *)
+type goal = U.term_top
 
 type goals = {
   goals: goal list;
@@ -47,7 +40,7 @@ let estimate_cost_ l = List.length l (* TODO *)
     @param l the list of sub-goals to solve *)
 let goals_make ~cost l =
   let goals_metas = List.fold_left
-    (fun acc e -> VarSet.union e.goal_expr.T.blocked acc)
+    (fun acc e -> VarSet.union e.T.blocked acc)
     VarSet.empty l
   in
   let goals_heuristic = estimate_cost_ l in
@@ -94,7 +87,6 @@ end = struct
     | Some (h', x) -> Some ({st with branches=h'}, x)
 end
 
-(* TODO: evaluation function, type goal -> goal list * cost *)
 (* TODO: refinement function, type goals -> goals list
   - pick a meta-variable to refine
   - for each constructor, introduce new metas, substitute, and evaluate

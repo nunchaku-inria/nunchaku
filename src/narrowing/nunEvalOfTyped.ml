@@ -90,13 +90,13 @@ end = struct
         let lev = DBEnv.length ctx.bound in
         let ty = into_term ~ctx (Var.ty v) in
         let ctx' = push_var ~ctx v ty lev in
-        T.bind b (into_term ~ctx:ctx' t)
+        T.bind b ~ty (into_term ~ctx:ctx' t)
     | TI.Let (v,t,u) ->
         let t' = into_term ~ctx t in
         let lev = DBEnv.length ctx.bound in
         let ty = into_term ~ctx (Var.ty v) in
         let ctx' = push_var ~ctx v ty lev in
-        T.let_ t' (into_term ~ctx:ctx' u)
+        T.let_ ~ty t' (into_term ~ctx:ctx' u)
     | TI.Match (t,l) ->
         let lev = DBEnv.length ctx.bound in
         let t' = into_term ~ctx t in

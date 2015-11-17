@@ -37,6 +37,9 @@ val id : _ t -> id
 
 val name : _ t -> string
 
+val set_ty : 'a t -> ty:'b -> 'b t
+(** Change the type, making a new variable with the same ID! Careful. *)
+
 val update_ty : 'a t -> f:('a -> 'b) -> 'b t
 (** Update the type, and make a new variable with it with {b THE SAME ID}.
     Careful not to break invariants. *)
