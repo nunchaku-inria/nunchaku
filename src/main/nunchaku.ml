@@ -210,14 +210,14 @@ let rec find_model_ l =
   let module Res = NunProblem.Res in
   try
   match l() with
-    | `Nil -> E.fail "exhausted possibilities"
+    | `Nil -> E.return `Unsat
     | `Cons ((res, conv_back), tail) ->
         match res with
-        | Res.Timeout -> E.fail "timeout"
+        | Res.Timeout -> E.return `Timeout
         | Res.Unsat -> find_model_ tail
         | Res.Sat m ->
             let m = conv_back m in
-            E.return m
+            E.return (`Sat m)
   with e -> NunUtils.err_of_exn e
 
 (* negate the goal *)
@@ -262,13 +262,21 @@ let main_model ~output statements =
   if !print_pipeline_
     then Format.printf "@[Pipeline: %a@]@." NunTransform.ClosedPipe.print cpipe;
   NunTransform.run_closed ~cpipe statements |> find_model_
-  >|= fun m ->
-  begin match output with
-  | O_nunchaku ->
+  >|= fun res ->
+  begin match res, output with
+  | `Sat m, O_nunchaku ->
       Format.printf "@[<v2>SAT: model {@,%a@]@,}@."
         (NunModel.print NunUntypedAST.print_term) m;
-  | O_tptp ->
+  | `Sat m, O_tptp ->
       Format.printf "@[<v2>%a@]@,@." NunPrintTPTP.print_model m
+  | `Unsat, O_nunchaku ->
+      (* TODO: check whether we have a "spurious" flag *)
+      Format.printf "@[UNSAT@]"
+  | `Unsat, O_tptp ->
+      (* TODO: check whether we have a "spurious" flag *)
+      Format.printf "@[SZS Status: Unsatisfiable@]@."
+  | `Timeout, _ ->
+      Format.printf "@[TIMEOUT@]@."
   end;
   ()
 
