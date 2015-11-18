@@ -45,7 +45,7 @@ module Make(T : TI.REPR) = struct
     (function
       | Fail (stack, msg) ->
           let pp2 out (ty1,ty2) =
-            fpf out "@[<hv2>trying to unify@ `%a`@ and `%a`@]"
+            fpf out "@[<hv2>trying to unify@ `@[%a@]`@ and `@[%a@]`@]"
               pp_ty ty1 pp_ty ty2
           in
           Some (spf "@[<hv2>unification error: %s:@ %a"

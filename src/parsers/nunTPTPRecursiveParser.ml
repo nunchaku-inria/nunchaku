@@ -92,7 +92,9 @@ let enter_var_ ~state v f =
 
 let rec enter_vars_ ~state l f = match l with
   | [] -> f ()
-  | v :: l' -> enter_var_ ~state v (fun () -> enter_vars_ ~state l' f)
+  | `Wildcard :: l' -> enter_vars_ ~state l' f
+  | `Var v :: l' ->
+      enter_var_ ~state v (fun () -> enter_vars_ ~state l' f)
 
 let is_tptp_var_ v = match v.[0] with
   | 'A' .. 'Z' -> true
@@ -106,10 +108,10 @@ let close_forall t =
   let bvars = StrTbl.create 16 in
   (* recursively compute set of free vars *)
   let rec compute_fvars t = match Loc.get t with
-    | A.Var v ->
+    | A.Var (`Var v) ->
         if is_tptp_var_ v && not (StrTbl.mem bvars v)
           then StrTbl.replace fvars v ()
-    | A.Wildcard
+    | A.Var `Wildcard
     | A.Builtin _
     | A.AtVar _
     | A.MetaVar _ -> ()
@@ -131,7 +133,8 @@ let close_forall t =
     StrTbl.add bvars v (); let x = f () in StrTbl.remove bvars v; x
   and enter_bvars l f = match l with
     | [] -> f ()
-    | v :: l' -> enter_bvar v (fun () -> enter_bvars l' f)
+    | `Wildcard :: l' -> enter_bvars l' f
+    | `Var v :: l' -> enter_bvar v (fun () -> enter_bvars l' f)
   and enter_ty_bvar (v, tyopt) f =
     CCOpt.iter compute_fvars tyopt;
     enter_bvar v f
@@ -153,10 +156,10 @@ let prop2term = function
 let rec declare_missing ~ctx ~state t =
   let loc = Loc.get_loc t in
   match Loc.get t with
-  | A.Wildcard
+  | A.Var `Wildcard
   | A.MetaVar _
   | A.Builtin _ -> t
-  | A.Var v
+  | A.Var (`Var v)
   | A.AtVar v ->
       if not (is_tptp_var_ v) && not (is_declared ~state v)
         then declare_sym_default ~ctx ~state v 0;
@@ -164,7 +167,7 @@ let rec declare_missing ~ctx ~state t =
   | A.App (f,l) ->
       begin match Loc.get f with
       | A.AtVar v
-      | A.Var v ->
+      | A.Var (`Var v) ->
           if not (is_declared ~state v)
             then declare_sym_default ~state ~ctx v (List.length l);
           let ctx = prop2term ctx in
@@ -269,7 +272,6 @@ and process_statement_ ~basedir ~state token st =
       let l = List.map (process_form ~state) ax_l in
       add_stmt ~state {st with A.stmt_value=A.Axiom l}
   | A.Def (a,b) ->
-      let a = declare_missing ~ctx:Ctx_prop ~state a in
       let b = declare_missing ~ctx:Ctx_prop ~state b in
       add_stmt ~state {st with A.stmt_value=A.Def (a,b)}
   | A.Decl (v,t) ->

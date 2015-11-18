@@ -61,6 +61,7 @@ module Make(T : TI.S) = struct
 
     let empty = {args=[]; m_args=[]; mangled=None;}
     let make ~mangled ~args ~m_args = {mangled; args; m_args; }
+    let length t = List.length t.args
     let args t = t.args
     let m_args t = t.m_args
     let mangled t = t.mangled
@@ -265,36 +266,28 @@ module Make(T : TI.S) = struct
      uninterpreted type. *)
   let should_be_mangled_ ~state id =
     match Env.find_exn ~env:state.St.env id with
-    | {Env.def=(Env.Fun _ | Env.Cstor _ | Env.Data _); _} ->
+    | {Env.def=(Env.Fun_def _ | Env.Fun_spec _ | Env.Cstor _ | Env.Data _); _} ->
         true (* defined objects: mangle *)
     | {Env.def=Env.NoDef; decl_kind=(Stmt.Decl_fun | Stmt.Decl_prop); _} ->
         true (* functions and prop: mangle *)
     | {Env.def=Env.NoDef; decl_kind=Stmt.Decl_type; _} ->
         false (* uninterpreted poly types: do not mangle *)
 
-  (* does this rec_def match [id tup]? If yes, return [def, subst] *)
-  let match_rec ?(subst=Subst.empty) ~def id tup =
-    let t = U.app (U.const id) (ArgTuple.args tup) in
-    CCOpt.map
-      (fun subst -> def, subst)
-      (U.match_ ~subst2:subst def.Stmt.rec_defined.Stmt.defined_term t)
-
-  (* find a definition matching [id tup] in [cases], or None *)
-  let find_def ?subst ~defs id tup =
-    CCList.find_map
-      (fun def ->
-        CCOpt.map
-          (fun (def,subst) -> defs, def, subst)
-          (match_rec ?subst ~def id tup)
-      )
+  (* find a definition for [id] in [cases], or None *)
+  let find_def ~defs id =
+    CCList.find_pred
+      (fun def -> ID.equal (def.Stmt.rec_defined.Stmt.defined_head) id)
       defs
 
-  (* does this spec match [id tup]? If yes, return [spec, subst] *)
-  let match_spec ?(subst=Subst.empty) ~spec id tup =
-    let t = U.app (U.const id) (ArgTuple.args tup) in
-    CCList.find
-      (fun defined -> U.match_ ~subst2:subst defined.Stmt.defined_term t)
-      spec.Stmt.spec_defined
+  (* bind the type variables of [def] to [tup]. *)
+  let match_rec ?(subst=Subst.empty) ~def tup =
+    assert (ArgTuple.length tup = List.length def.Stmt.rec_vars);
+    Subst.add_list ~subst def.Stmt.rec_vars (ArgTuple.m_args tup)
+
+  (* bind the type variables of [spec] to [tup]. *)
+  let match_spec ?(subst=Subst.empty) ~spec tup =
+    assert (ArgTuple.length tup = List.length spec.Stmt.spec_vars);
+    Subst.add_list ~subst spec.Stmt.spec_vars (ArgTuple.m_args tup)
 
   (* find a (co)inductive type declaration for [id] *)
   let find_tydef_ ~defs id =
@@ -430,12 +423,28 @@ module Make(T : TI.S) = struct
           new_id env_info.Env.decl_kind new_ty);
     )
 
-  let mono_defined ~state ~local_state d =
-    let defined_term = mono_term ~state ~local_state d.Stmt.defined_term in
-    let defined_ty_args =
-      List.map (mono_type ~state ~local_state) d.Stmt.defined_ty_args in
-    let defined_head = U.head_sym defined_term in
-    {Stmt. defined_term; defined_head; defined_ty_args; }
+  let mono_defined ~state ~local_state d tup =
+    let ty = U.ty_apply d.Stmt.defined_ty (ArgTuple.m_args tup) in
+    let defined_ty = mono_type ~state ~local_state ty in
+    let defined_head, _ = mangle_ ~state d.Stmt.defined_head (ArgTuple.m_args tup) in
+    {Stmt.defined_head; defined_ty; }
+
+  (* monomorphize an equation properly
+     n: number of type arguments *)
+  let mono_eqn
+  : type a.
+      state:'t St.t -> local_state:local_state -> int ->
+      (_,_,a inv1) Stmt.equation -> (_,_,a inv2) Stmt.equation
+  = fun ~state ~local_state n eqn ->
+    let f e = Stmt.map_eqn e
+      ~term:(mono_term ~state ~local_state)
+      ~ty:(mono_type ~state ~local_state)
+    in
+    match eqn with
+      | Stmt.Eqn_linear (vars, rhs, side) ->
+          f (Stmt.Eqn_linear (CCList.drop n vars, rhs, side))
+      | Stmt.Eqn_nested (vars, args, rhs, side) ->
+          f (Stmt.Eqn_nested (vars, CCList.drop n args, rhs, side))
 
   (* specialize mutual recursive definitions *)
   let mono_rec_defs ~state ~depth (defs, def, loc) tup =
@@ -448,21 +457,17 @@ module Make(T : TI.S) = struct
     let specialize' = St.current_specialize ~state in
     St.push_specialize ~state
       (fun ~state ~depth id tup ->
-        match find_def ~defs id tup with
+        match find_def ~defs id with
         | None ->
             (* delegate to previous specialization function *)
             specialize' ~state ~depth id tup
-        | Some (_cases, def, subst) ->
+        | Some def ->
             (* same mutual block, process in fixpoint. *)
-            Queue.push (tup, depth, def, subst) q
+            Queue.push (tup, depth, def, match_rec ~def tup) q
       );
     (* push first tuple in queue *)
-    begin match match_rec ~def def.Stmt.rec_defined.Stmt.defined_head tup with
-      | None -> ()  (* definition does not match, do nothing *)
-      | Some (def, subst) ->
-            (* same mutual block, process in fixpoint. *)
-            Queue.push (tup, depth, def, subst) q
-    end;
+    let subst = match_rec ~def tup in
+    Queue.push (tup, depth, def, subst) q;
     (* fixpoint *)
     while not (Queue.is_empty q) do
       let tup, depth, def, subst = Queue.take q in
@@ -475,28 +480,23 @@ module Make(T : TI.S) = struct
       else (
         NunUtils.debugf ~section 3
           "@[<2>process case `%a` for@ (%a %a)@ at depth %d@]"
-          (fun k -> k print_term def.Stmt.rec_defined.Stmt.defined_term
+          (fun k -> k ID.print_name def.Stmt.rec_defined.Stmt.defined_head
             ID.print_no_id id ArgTuple.print tup depth);
         St.specialization_is_done ~state id tup;
         (* we know [subst case.defined = (id args)], now
             specialize the axioms and other fields *)
         let local_state = {subst; depth=depth+1; } in
-        let eqns = List.map
-          (Stmt.map_eqn
-            ~term:(mono_term ~state ~local_state)
-            ~ty:(mono_type ~state ~local_state)
-          )
-          def.Stmt.rec_eqns
+        let n = List.length def.Stmt.rec_vars in
+        let eqns = List.map (mono_eqn ~state ~local_state n) def.Stmt.rec_eqns
         in
         (* new (specialized) case *)
-        let rec_defined = mono_defined ~state ~local_state def.Stmt.rec_defined in
+        let rec_defined = mono_defined ~state ~local_state def.Stmt.rec_defined tup in
         let def' = {Stmt.
-          rec_vars=[]; (* should be monomorphic now *)
+          rec_kind=def.Stmt.rec_kind;
+          rec_vars=[];
           rec_defined;
           rec_eqns=eqns;
         } in
-        (* declare the symbol *)
-        decl_sym ~state id tup;
         (* push new case to the list *)
         CCList.Ref.push res def';
       )
@@ -512,30 +512,26 @@ module Make(T : TI.S) = struct
 
   (* specialize specification *)
   let mono_spec ~state ~depth (spec,loc) id tup =
-    (* compute subst for the defined term that matches [id tup]... if any *)
-    match match_spec ~spec id tup with
-    | Some subst when not (St.is_already_specialized ~state id tup) ->
-      (* flag every symbol as specialized. Careful, tup changes from term
-        to term (e.g. [@f (list a)] and [@g (array a)]), even though
-        the set of type variables involved is always the same by invariant. *)
+    assert (ArgTuple.length tup = List.length spec.Stmt.spec_vars);
+    if not (St.is_already_declared ~state id tup) then (
+      (* flag every symbol as specialized. We can use [tup] for every
+         specified symbol, as they all share the same set of type variables. *)
+      let subst = match_spec ~spec tup in
       List.iter
         (fun d ->
           let id' = d.Stmt.defined_head in
-          let tup' = List.map (U.eval ~subst) d.Stmt.defined_ty_args in
-          let mangled_tup' = List.map
-            (mono_type ~state ~local_state:{subst;depth}) tup'
-          in
-          let _, mangled = mangle_ ~state id' mangled_tup' in
-          let tup' = ArgTuple.make ~mangled ~args:tup' ~m_args:mangled_tup' in
+          let _, mangled = mangle_ ~state id' (ArgTuple.m_args tup) in
+          let tup' = ArgTuple.make ~mangled
+            ~args:(ArgTuple.args tup) ~m_args:(ArgTuple.m_args tup) in
           decl_sym ~state id' tup';
-          NunUtils.debugf ~section 4 "specialization of %a %a is done"
+          NunUtils.debugf ~section 4 "@[<2>specialization of `@[<2>%a@ %a@]` is done@]"
             (fun k -> k ID.print_name id' ArgTuple.print tup');
           St.specialization_is_done ~state id' tup'
         )
         spec.Stmt.spec_defined;
       (* convert axioms and defined terms *)
       let defined = List.map
-        (fun d -> mono_defined ~state ~local_state:{depth; subst;} d)
+        (fun d -> mono_defined ~state ~local_state:{depth; subst;} d tup)
         spec.Stmt.spec_defined
       and axioms = List.map
         (fun ax -> mono_term ~state ~local_state:{depth; subst; } ax)
@@ -545,9 +541,8 @@ module Make(T : TI.S) = struct
         {Stmt.spec_axioms=axioms; spec_defined=defined; spec_vars=[]; }
       in
       St.push_res ~state st';
-      ()
-    | Some _
-    | None -> ()
+    );
+    ()
 
   (* specialize (co)inductive types *)
   let mono_mutual_types ~state ~depth ~kind tydefs tydef tup loc =
@@ -644,19 +639,16 @@ module Make(T : TI.S) = struct
     in
     let loc = Env.loc env_info in
     match Env.def env_info with
-    | Env.Fun defs ->
+    | Env.Fun_spec l ->
         (* specialize each definition *)
         List.iter
-          (function
-            | Env.Rec (defs, def, loc) ->
-                mono_rec_defs ~state ~depth (defs, def, loc) tup
-            | Env.Spec (spec, loc) ->
-                mono_spec ~state ~depth (spec,loc) id tup
-          )
-          defs;
-        (* if not definition matched, still need to declare [id_tup] *)
-        if not (St.is_already_specialized ~state id tup)
-          then decl_sym ~state id tup;
+          (fun (spec,loc) -> mono_spec ~state ~depth (spec,loc) id tup)
+          l;
+        assert (St.is_already_specialized ~state id tup);
+        St.specialization_is_done ~state id tup
+    | Env.Fun_def (defs, def, loc) ->
+        mono_rec_defs ~state ~depth (defs, def, loc) tup;
+        assert (St.is_already_specialized ~state id tup);
         St.specialization_is_done ~state id tup
     | Env.Data (k,tydefs,tydef) ->
         mono_mutual_types ~state ~depth ~kind:k tydefs tydef tup loc

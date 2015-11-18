@@ -7,8 +7,7 @@ data foo :=
   | B
   | C.
 
-val test_foo : foo -> prop.
-rec test_foo :=
+rec test_foo : foo -> prop :=
   forall x. test_foo x =
     match x with
     | A -> true
@@ -16,14 +15,13 @@ rec test_foo :=
     | C -> true
     end.
 
-val swap_foo : foo -> foo.
-rec swap_foo :=
-  swap_foo = (fun x.
+rec swap_foo : foo -> foo :=
+  swap_foo = fun x.
     match x with
     | A -> B
     | B -> C
     | C -> A
-    end).
+    end.
 
 
 goal (exists x. test_foo x) && (exists x. swap_foo x = C).

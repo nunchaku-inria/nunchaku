@@ -246,14 +246,25 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
               (fun ax -> ax |> conv_form |> mk_ax)
               s.St.spec_axioms
         | St.Axiom_rec s ->
-            CCList.flat_map
-              (fun def ->
-                let head = def.St.rec_defined.St.defined_head in
-                List.map
-                  (fun e -> mk_ax (convert_eqn ~head ~sigma e))
-                  def.St.rec_eqns
-              )
-              s
+            (* first declare all types; then push axioms *)
+            List.rev_append
+              (List.rev_map
+                (fun def ->
+                  (* first, declare symbol *)
+                  let d = def.St.rec_defined in
+                  let ty = conv_top_ty d.St.defined_ty in
+                  let head = d.St.defined_head in
+                  let st1 = FOI.Decl (head, ty) in
+                  st1)
+                s)
+              (CCList.flat_map
+                (fun def ->
+                  (* transform equations *)
+                  let head = def.St.rec_defined.St.defined_head in
+                  List.map
+                    (fun e -> mk_ax (convert_eqn ~head ~sigma e))
+                    def.St.rec_eqns)
+                s)
         end
     | St.Goal f ->
         [ FOI.Goal (conv_form f) ]

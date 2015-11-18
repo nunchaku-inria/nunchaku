@@ -116,45 +116,16 @@ let goal pb =
   aux None 0
 
 let signature ?(init=Signature.empty) pb =
-  let module St = Statement in
-  let declare_ ~sigma id ty =
-    if Signature.mem ~sigma id
-      then ill_formedf_ "symbol %a declared twice" ID.print id;
-    Signature.declare ~sigma id ty
-  in
   CCVector.fold
-    (fun sigma st -> match St.view st with
-      | St.Decl (id,_,ty) -> declare_ ~sigma id ty
-      | St.TyDef (_,l) ->
-          List.fold_left
-            (fun sigma tydef ->
-              let sigma = declare_ ~sigma tydef.St.ty_id tydef.St.ty_type in
-              List.fold_left
-                (fun sigma c -> declare_ ~sigma c.St.cstor_name c.St.cstor_type)
-                sigma tydef.St.ty_cstors
-            ) sigma l
-      | St.Goal _
-      | St.Axiom _ -> sigma
-    ) init pb.statements
+    (fun sigma st -> Signature.add_statement ~sigma st)
+    init pb.statements
 
 let env ?init:(env=Env.create()) pb =
   let module St = Statement in
   try
     CCVector.fold
-      (fun env st ->
-        let loc = Statement.loc st in
-        match St.view st with
-        | St.Decl (id,kind,ty) ->
-            Env.declare ?loc ~kind ~env id ty
-        | St.TyDef (kind,l) ->
-            Env.def_data ?loc ~env ~kind l
-        | St.Goal _ -> env
-        | St.Axiom (St.Axiom_std _) -> env
-        | St.Axiom (St.Axiom_spec l) ->
-            Env.spec_funs ?loc ~env l
-        | St.Axiom (St.Axiom_rec l) ->
-            Env.rec_funs ?loc ~env l
-      ) env pb.statements
+      (fun env st -> Env.add_statement ~env st)
+      env pb.statements
   with Env.InvalidDef _ as e ->
     ill_formedf_ "invalid env: %a" Env.pp_invalid_def_ e
 

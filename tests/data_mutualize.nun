@@ -8,8 +8,7 @@ data nat :=
   | zero
   | succ nat.
 
-val plus : nat -> nat -> nat.
-rec plus :=
+rec plus : nat -> nat -> nat :=
   forall x. plus zero x = x;
   forall x y. plus (succ x) y = succ (plus x y).
 
@@ -24,12 +23,9 @@ val one : unit.
 data tree :=
   | node unit (list tree).  # need to specialize list_tree here
 
-val size : tree -> nat.
-val size_list : list tree -> nat.
-
-rec size :=
+rec size : tree -> nat :=
   forall x l. size (node x l) = succ (size_list l)
-and size_list :=
+and size_list : list tree -> nat :=
   size_list nil = zero;
   forall t l. size_list (cons t l) = plus (size t) (size_list l).
 

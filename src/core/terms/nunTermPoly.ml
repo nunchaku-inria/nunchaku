@@ -183,7 +183,9 @@ end = struct
         let t = aux t in
         let l = ID.Map.fold
           (fun c (vars,rhs) acc ->
-            let vars = List.map (fun v -> find_ ~ctx (Var.id v)) vars in
+            let vars = List.map
+              (fun v -> `Var (find_ ~ctx (Var.id v)))
+              vars in
             (ID.name c, vars, aux rhs) :: acc)
           l []
         in
@@ -244,7 +246,7 @@ end = struct
     let rec aux t = match Loc.get t with
       | A.App (f, l) ->
           U.app (aux f) (List.map aux l)
-      | A.Wildcard -> error_ t "wildcard not supported"
+      | A.Var `Wildcard -> error_ t "wildcard not supported"
       | A.Builtin b ->
           begin match b with
           | `Prop -> U.ty_prop
@@ -259,7 +261,7 @@ end = struct
               error_ t "unapplied equality"
           end
       | A.AtVar s
-      | A.Var s ->
+      | A.Var (`Var s) ->
           begin try
             match Hashtbl.find env s with
             | ID id -> U.const id

@@ -12,11 +12,15 @@ type decl =
   | Decl_fun
   | Decl_prop
 
-type ('t,'ty) defined = {
-  defined_term: 't;  (* term being defined/specified *)
-  defined_head: id; (* head symbol of [defined_term] *)
-  defined_ty_args: 'ty list; (* type arguments. *)
+type 'ty defined = {
+  defined_head: id; (* symbol being defined *)
+  defined_ty: 'ty; (* type of the head symbol *)
 }
+
+(* TODO: add Eqn_unique? it would be nice to have
+    a special case for   rec f : a -> b := fun x -> ....
+    (exactly one non-refutable equation)
+*)
 
 type ('t, 'ty, 'k) equation =
   | Eqn_linear :
@@ -32,8 +36,9 @@ type ('t, 'ty, 'k) equation =
       -> ('t, 'ty, <eqn:[`Nested];..>) equation
 
 type ('t,'ty,'kind) rec_def = {
-  rec_vars: 'ty var list; (* alpha_1, ..., alpha_n *)
-  rec_defined: ('t, 'ty) defined;
+  rec_defined: 'ty defined;
+  rec_kind: decl;
+  rec_vars: 'ty var list; (* type variables in definitions *)
   rec_eqns: ('t, 'ty,'kind) equation list; (* list of equations defining the term *)
 }
 
@@ -41,7 +46,7 @@ type ('t, 'ty,'kind) rec_defs = ('t, 'ty,'kind) rec_def list
 
 type ('t, 'ty) spec_defs = {
   spec_vars: 'ty var list; (* type variables used by defined terms *)
-  spec_defined: ('t, 'ty) defined list;  (* terms being specified together *)
+  spec_defined: 'ty defined list;  (* terms being specified together *)
   spec_axioms: 't list;  (* free-form axioms *)
 }
 
@@ -134,10 +139,9 @@ val goal : info:info -> 'a -> ('a,_,_) t
 (** The goal of the problem *)
 
 val map_defined:
-  term:('t -> 't2) ->
-  ty:('ty -> 'ty2) ->
-  ('t, 'ty) defined ->
-  ('t2, 'ty2) defined
+  f:('ty -> 'ty2) ->
+  'ty defined ->
+  'ty2 defined
 
 val map_eqn:
   term:('t -> 't2) ->

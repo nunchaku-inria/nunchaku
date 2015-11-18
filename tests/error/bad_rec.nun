@@ -1,0 +1,13 @@
+
+# EXPECT: FAIL
+
+val foo : type -> type.
+val bar : type.
+
+val g : pi a b. foo a -> foo b -> bar.
+
+# wrong! [y] is of type [foo b] which is not bound by [f]
+rec f : pi a. foo a -> bar :=
+    forall x y. f x = g x y.
+    
+

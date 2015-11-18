@@ -9,20 +9,20 @@ type loc = Loc.t
 type 'a printer = Format.formatter -> 'a -> unit
 
 
-type ('t, 'ty, 'inv) fun_def =
-  | Rec of
+type ('t, 'ty, 'inv) def =
+  | Fun_def of
       ('t, 'ty, 'inv) NunStatement.rec_defs *
       ('t, 'ty, 'inv) NunStatement.rec_def *
       loc option
-  | Spec of
-      ('t, 'ty) NunStatement.spec_defs *
-      loc option
+      (** ID is a defined fun/predicate. *)
 
-type ('t, 'ty, 'inv) def =
-  | Fun of ('t, 'ty, 'inv) fun_def list
-      (** ID is a defined fun/predicate. Can be defined in several places *)
+  | Fun_spec of
+      (('t, 'ty) NunStatement.spec_defs * loc option) list
 
-  | Data of [`Codata | `Data] * 'ty NunStatement.mutual_types * 'ty NunStatement.tydef
+  | Data of
+      [`Codata | `Data] *
+      'ty NunStatement.mutual_types *
+      'ty NunStatement.tydef
       (** ID is a (co)data *)
 
   | Cstor of
@@ -83,19 +83,25 @@ let rec_funs ?loc ~env:t defs =
   List.fold_left
     (fun t def ->
       let id = def.Stmt.rec_defined.Stmt.defined_head in
-      try
-        let info = ID.PerTbl.find t.infos id in
-        let l = match info.def with
-          | Data _ -> errorf_ id "defined as both function and (co)data"
-          | Cstor _ -> errorf_ id "defined as both function and constructor"
-          | Fun l -> l
-          | NoDef -> [] (* first def of id *)
-        in
-        let def = Fun ((Rec(defs, def, loc)) :: l) in
-        {infos=ID.PerTbl.replace t.infos id {info with def; }}
-      with Not_found ->
-        errorf_ id "function is defined but was never declared"
+      if ID.PerTbl.mem t.infos id
+        then errorf_ id "already declared or defined";
+      let info = {
+        loc;
+        ty=def.Stmt.rec_defined.Stmt.defined_ty;
+        decl_kind=def.Stmt.rec_kind;
+        def=Fun_def (defs, def, loc);
+      } in
+      {infos=ID.PerTbl.replace t.infos id info}
     ) t defs
+
+let declare_rec_funs ?loc ~env defs =
+  List.fold_left
+    (fun env def ->
+      let d = def.Stmt.rec_defined in
+      let id = d.Stmt.defined_head in
+      declare ~kind:def.Stmt.rec_kind ?loc ~env id d.Stmt.defined_ty
+    )
+    env defs
 
 let spec_funs ?loc ~env:t spec =
   List.fold_left
@@ -106,10 +112,11 @@ let spec_funs ?loc ~env:t spec =
         let l = match info.def with
           | Data _ -> errorf_ id "defined as both function and (co)data"
           | Cstor _ -> errorf_ id "defined as both function and constructor"
-          | Fun l -> l
+          | Fun_def _ -> errorf_ id "already defined, cannot be specified"
+          | Fun_spec l -> l
           | NoDef -> [] (* first def of id *)
         in
-        let def = Fun ((Spec(spec, loc)) :: l) in
+        let def = Fun_spec ((spec, loc) :: l) in
         {infos=ID.PerTbl.replace t.infos id {info with def; }}
       with Not_found ->
         errorf_ id "function is defined but was never declared"
@@ -142,6 +149,20 @@ let def_data ?loc ~env:t ~kind tys =
           {infos=ID.PerTbl.replace t.infos id info}
         ) t tydef.Stmt.ty_cstors
     ) t tys
+
+let add_statement ~env st =
+  let loc = Stmt.loc st in
+  match Stmt.view st with
+  | Stmt.Decl (id,kind,ty) ->
+      declare ?loc ~kind ~env id ty
+  | Stmt.TyDef (kind,l) ->
+      def_data ?loc ~env ~kind l
+  | Stmt.Goal _ -> env
+  | Stmt.Axiom (Stmt.Axiom_std _) -> env
+  | Stmt.Axiom (Stmt.Axiom_spec l) ->
+      spec_funs ?loc ~env l
+  | Stmt.Axiom (Stmt.Axiom_rec l) ->
+      rec_funs ?loc ~env l
 
 let find_exn ~env:t id = ID.PerTbl.find t.infos id
 

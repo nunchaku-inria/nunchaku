@@ -17,7 +17,7 @@ exception Error of string
 
 let () = Printexc.register_printer
   (function
-    | Error msg -> Some ("error in elim_match " ^ msg)
+    | Error msg -> Some ("error in elim_match: " ^ msg)
     | _ -> None
   )
 
@@ -265,11 +265,13 @@ module Make(T : NunTermInner.S) = struct
     let info = Stmt.info st in
     match Stmt.view st with
     | Stmt.Axiom (Stmt.Axiom_rec l) ->
+        (* FIXME: declare the symbols of [l] before processing *)
+        let env' = Env.declare_rec_funs ~env l in
         let l' = List.map
           (fun def ->
             let defined = def.Stmt.rec_defined in
             {def with
-              Stmt.rec_eqns=List.map (flatten_eqn ~defined ~env) def.Stmt.rec_eqns
+              Stmt.rec_eqns=List.map (flatten_eqn ~defined ~env:env') def.Stmt.rec_eqns
             })
           l
         in

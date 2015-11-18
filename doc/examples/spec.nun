@@ -6,14 +6,11 @@ data nat :=
   | z
   | s nat.
 
-val even : nat -> prop.
-val odd : nat -> prop.
-
-rec even :=
+rec even : nat -> prop :=
   even z = true ;
   even (s z) = false;
   forall n. (even (s n) = odd n)
-and odd :=
+and odd : nat -> prop :=
   odd (s z) = true;
   odd z = false;
   forall n. (odd (s n) = even n).
@@ -27,20 +24,9 @@ val head : pi a. list a -> a.
 val tail : pi a. list a -> list a.
 
 # specification for lists of polymorphic lists
-spec @head (list ?a) as head :=
-    head nil = nil;
-    forall x l. head (cons x l) = x.
-
-# why not specify two symbols at the same time?
-spec @tail (list ?a) as tail and @head (list ?a) as hd :=
-    tail nil = nil;
-    hd nil = nil;
+spec head and tail :=
+    forall x l. head (cons x l) = x;
     forall x l. tail (cons x l) = l.
-
-# specification for lists of nat
-spec @head nat as h :=
-    h nil = z;
-    forall x l. h (cons x l) = x.
 
 # odd number that is >= 4
 goal exists l. (odd (head l) && (exists m. head l = s (s (s (s m))))).

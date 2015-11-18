@@ -319,19 +319,23 @@ module UtilRepr(T : REPR)
     let rec aux ~bound t = match T.repr t with
       | Const _ -> ()
       | Var v ->
-          if VarSet.mem v bound then () else yield v
+          if VarSet.mem v bound then () else yield v;
+          aux ~bound (Var.ty v)
       | App (f,l) ->
           aux ~bound f; List.iter (aux ~bound) l
       | Match (t,l) ->
           aux ~bound t;
           ID.Map.iter
             (fun _ (vars,rhs) ->
+              List.iter (fun v -> aux ~bound (Var.ty v)) vars;
               let bound = List.fold_right VarSet.add vars bound in
               aux ~bound rhs
             ) l
       | AppBuiltin (_,l) -> List.iter (aux ~bound) l
-      | Bind (_,v,t) -> aux ~bound:(VarSet.add v bound) t
-      | Let (v,t,u) -> aux ~bound t; aux ~bound:(VarSet.add v bound) u
+      | Bind (_,v,t) ->
+          aux ~bound (Var.ty v); aux ~bound:(VarSet.add v bound) t
+      | Let (v,t,u) ->
+          aux ~bound (Var.ty v); aux ~bound t; aux ~bound:(VarSet.add v bound) u
       | TyBuiltin _ -> ()
       | TyArrow (a,b) -> aux ~bound a; aux ~bound b
       | TyMeta _ -> ()

@@ -17,6 +17,7 @@ let () = Printexc.register_printer
   )
 
 type var = string
+type var_or_wildcard = [`Var of string | `Wildcard]
 
 module Builtin : sig
   type t =
@@ -79,15 +80,14 @@ end
 
 type term = term_node Loc.with_loc
 and term_node =
-  | Wildcard
   | Builtin of Builtin.t
-  | Var of var
+  | Var of var_or_wildcard
   | AtVar of var  (* variable without implicit arguments *)
   | MetaVar of var (* unification variable *)
   | App of term * term list
   | Fun of typed_var * term
   | Let of var * term * term
-  | Match of term * (var * var list * term) list
+  | Match of term * (var * var_or_wildcard list * term) list
   | Ite of term * term * term
   | Forall of typed_var * term
   | Exists of typed_var * term
@@ -104,12 +104,11 @@ and typed_var = var * ty option
 
 let view = Loc.get
 
-(* mutual definitions of terms, with their alias (a variable),
-   and a list of axioms *)
-type rec_defs = (term * string * term list) list
+(* mutual definitions of symbols, with a type and a list of axioms for each one *)
+type rec_defs = (string * term * term list) list
 
-(* specification of terms (with their alias), as a list of axioms *)
-type spec_defs = (term * string) list * term list
+(* specification of specified symbols, as a list of axioms *)
+type spec_defs = string list * term list
 
 (* list of mutual type definitions (the type name, its argument variables,
    and its constructors that are (id args) *)
@@ -122,7 +121,7 @@ type statement_node =
   | Spec of spec_defs (* spec *)
   | Rec of rec_defs (* mutual rec *)
   | Data of mutual_types (* inductive type *)
-  | Def of term * term  (* a=b, simple def *)
+  | Def of string * term  (* a=b, simple def *)
   | Codata of mutual_types
   | Goal of term (* goal *)
 
@@ -132,9 +131,9 @@ type statement = {
   stmt_value: statement_node;
 }
 
-let wildcard ?loc () = Loc.with_loc ?loc Wildcard
+let wildcard ?loc () = Loc.with_loc ?loc (Var `Wildcard)
 let builtin ?loc s = Loc.with_loc ?loc (Builtin s)
-let var ?loc v = Loc.with_loc ?loc (Var v)
+let var ?loc v = Loc.with_loc ?loc (Var (`Var v))
 let at_var ?loc v = Loc.with_loc ?loc (AtVar v)
 let meta_var ?loc v = Loc.with_loc ?loc (MetaVar v)
 let rec app ?loc t l = match Loc.get t with
@@ -184,9 +183,9 @@ let codata ?name ?loc l = mk_stmt_ ?name ?loc (Codata l)
 let goal ?name ?loc t = mk_stmt_ ?name ?loc (Goal t)
 
 let rec head t = match Loc.get t with
-  | Var v | AtVar v | MetaVar v -> v
+  | Var (`Var v) | AtVar v | MetaVar v -> v
   | App (f,_) -> head f
-  | Wildcard | Builtin _ | TyArrow (_,_)
+  | Var `Wildcard | Builtin _ | TyArrow (_,_)
   | Fun (_,_) | Let _ | Match _ | Ite (_,_,_)
   | Forall (_,_) | Exists (_,_) | TyForall (_,_) ->
       invalid_arg "untypedAST.head"
@@ -195,15 +194,18 @@ let fpf = Format.fprintf
 
 let pp_list_ ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
+let pp_var_or_wildcard out = function
+  | `Var v -> CCFormat.string out v
+  | `Wildcard -> CCFormat.string out "_"
+
 let rec print_term out term = match Loc.get term with
-  | Wildcard -> CCFormat.string out "_"
   | Builtin s -> Builtin.print out s
-  | Var v -> CCFormat.string out v
+  | Var v -> pp_var_or_wildcard out v
   | AtVar v -> fpf out "@@%s" v
   | MetaVar v -> fpf out "?%s" v
   | App (f, [a;b]) ->
       begin match Loc.get f with
-      | Builtin s when `fixity s = `Infix ->
+      | Builtin s when Builtin.fixity s = `Infix ->
           fpf out "@[<2>%a@ %a@ %a@]"
             print_term_inner a Builtin.print s print_term_inner b
       | _ ->
@@ -220,7 +222,7 @@ let rec print_term out term = match Loc.get term with
   | Match (t,l) ->
       let pp_case out (id,vars,t) =
         fpf out "@[<hv2>| %s %a ->@ %a@]"
-          id (pp_list_ ~sep:" " CCFormat.string) vars print_term t
+          id (pp_list_ ~sep:" " pp_var_or_wildcard) vars print_term t
       in
       fpf out "@[<hv2>match @[%a@] with@ %a end@]"
         print_term t (pp_list_ ~sep:"" pp_case) l
@@ -240,9 +242,8 @@ and print_term_inner out term = match Loc.get term with
   | App _ | Fun _ | Let _ | Ite _ | Match _
   | Forall _ | Exists _ | TyForall _ | TyArrow _ ->
       fpf out "(%a)" print_term term
-  | Builtin _ | AtVar _ | Var _ | MetaVar _ | Wildcard -> print_term out term
+  | Builtin _ | AtVar _ | Var _ | MetaVar _ -> print_term out term
 and print_term_in_arrow out t = match Loc.get t with
-  | Wildcard
   | Builtin _
   | Var _ | AtVar _ | MetaVar _
   | App (_,_) -> print_term out t
@@ -262,19 +263,14 @@ let pp_list_ ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
 
 let pp_rec_defs out l =
   let ppterms = pp_list_ ~sep:";" print_term in
-  let pp_case out (t,v,l) = match Loc.get t with
-  | Var v' when v=v' ->
-      fpf out "@[<hv>%a :=@ %a@]" print_term t ppterms l
-  | _ ->
-      fpf out "@[<hv2>%a as %s :=@ %a@]" print_term t v ppterms l
-  in
+  let pp_case out (v,ty,l) =
+    fpf out "@[<hv2>%s : %a :=@ %a@]" v print_term ty ppterms l in
   fpf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_case) l
 
 let pp_spec_defs out (defined_l,l) =
   let ppterms = pp_list_ ~sep:";" print_term in
-  let pp_defined out (t,var) = fpf out "@[<h>%a as %s@]" print_term t var in
   let pp_defined_list out =
-    fpf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_defined)
+    fpf out "@[<hv>%a@]" (pp_list_ ~sep:" and " CCFormat.string)
   in
   fpf out "@[<v>%a :=@ %a@]" pp_defined_list defined_l ppterms l
 
@@ -297,8 +293,7 @@ let print_statement out st = match st.stmt_value with
   | Spec l -> fpf out "@[spec %a.@]" pp_spec_defs l
   | Rec l -> fpf out "@[rec %a.@]" pp_rec_defs l
   | Def (a,b) ->
-      fpf out "@[<2>axiom[def]@ @[%a@]@ = @[%a@].@]"
-        print_term_in_arrow a print_term b
+      fpf out "@[<2>axiom[def]@ %s@ = @[%a@].@]" a print_term b
   | Data l -> fpf out "@[data %a.@]" pp_ty_defs l
   | Codata l -> fpf out "@[codata %a.@]" pp_ty_defs l
   | Goal t -> fpf out "@[goal %a.@]" print_term t

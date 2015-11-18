@@ -21,7 +21,6 @@
 %token DOT
 %token COLON
 %token EQDEF
-%token AS
 %token LET
 %token IN
 %token IF
@@ -91,6 +90,10 @@ typed_ty_var:
   | v=raw_var COLON TYPE { v }
   | LEFT_PAREN v=raw_var COLON TYPE RIGHT_PAREN { v }
 
+var_or_wildcard:
+  | WILDCARD { `Wildcard }
+  | name=raw_var { `Var name }
+
 var:
   | WILDCARD
     {
@@ -140,7 +143,7 @@ const:
     }
 
 %public case(TERM):
-  | v=raw_var l=raw_var* ARROW t=TERM { v, l, t }
+  | v=raw_var l=var_or_wildcard* ARROW t=TERM { v, l, t }
 
 %public cases(TERM):
   | VERTICAL_BAR? l=separated_nonempty_list(VERTICAL_BAR, case(TERM)) { l }
@@ -242,23 +245,34 @@ term:
       raise (A.ParseError loc)
     }
 
-%inline defined_term:
-  | v=raw_var
+defined_constant:
+  | v=var { v }
+  | v=at_var { v}
+
+def_equation:
+  | LOGIC_FORALL vars=typed_var+ DOT e=def_equation
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.var ~loc v, v
+      A.forall_list ~loc vars e
     }
-  | t=apply_term AS v=raw_var { t, v }
+  | LEFT_PAREN e=def_equation RIGHT_PAREN { e }
+  | v=defined_constant args=atomic_term* LOGIC_EQ rhs=term
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.eq (A.app ~loc v args) rhs
+    }
 
 rec_def:
-  | t=defined_term EQDEF l=separated_nonempty_list(SEMI_COLON,term)
-    { let t,var = t in t, var, l }
+  | t=raw_var
+    COLON ty=term
+    EQDEF l=separated_nonempty_list(SEMI_COLON,def_equation) SEMI_COLON?
+    { t, ty, l }
 
 rec_defs:
   | l=separated_nonempty_list(AND, rec_def) { l }
 
 spec_defs:
-  | vars=separated_nonempty_list(AND, defined_term)
+  | vars=separated_nonempty_list(AND, raw_var)
     EQDEF
     l=separated_nonempty_list(SEMI_COLON,term)
     { vars, l }

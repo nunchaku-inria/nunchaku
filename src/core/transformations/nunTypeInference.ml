@@ -47,7 +47,7 @@ let () = Printexc.register_printer
         Some (spf "@[scoping error for var %s:@ %s@ at %a@]"
           v msg Loc.print_opt loc)
     | IllFormed(what, msg, loc) ->
-        Some (spf "@[ill-formed %s:@ %s@ at %a@]"
+        Some (spf "@[<2>ill-formed %s:@ %s@ at %a@]"
           what msg Loc.print_opt loc)
     | TypeError (msg, stack) ->
         Some (spf "@[<2>type error:@ %s@ %a@]" msg print_stack stack)
@@ -70,6 +70,7 @@ module Convert(Term : NunTermTyped.S) = struct
   module TyPoly = NunTypePoly.Make(Term)
   module U = NunTermTyped.Util(Term)
   module Unif = NunTypeUnify.Make(Term)
+  module VarSet = Var.Set(struct type t = Term.t end)
 
   type term = Term.t
 
@@ -123,6 +124,8 @@ module Convert(Term : NunTermTyped.S) = struct
       metas=None;
     }
 
+    let remove ~env v = {env with vars=MStr.remove v env.vars; }
+
     let add_decl ~env v ~id ty = {
       env with vars=MStr.add v (Decl (id, ty)) env.vars;
     }
@@ -140,7 +143,12 @@ module Convert(Term : NunTermTyped.S) = struct
 
     let add_vars ~env v l =
       assert (List.length v = List.length l);
-      List.fold_left2 (fun env v v' -> add_var ~env v ~var:v') env v l
+      List.fold_left2
+        (fun env v v' ->
+          match v with
+          | `Wildcard -> env
+          | `Var v -> add_var ~env v ~var:v')
+        env v l
 
     let add_def ~env v ~as_ = {
       env with vars=MStr.add v (Def as_) env.vars;
@@ -214,9 +222,9 @@ module Convert(Term : NunTermTyped.S) = struct
           U.ty_app ?loc
             (convert_ty_ ~stack ~env f)
             (List.map (convert_ty_ ~stack ~env) l)
-      | A.Wildcard ->
+      | A.Var `Wildcard ->
           U.ty_meta_var ?loc (MetaVar.make ~name:"_")
-      | A.Var v ->
+      | A.Var (`Var v) ->
           begin match Env.find_var ?loc ~env v with
             | Decl (id, t) ->
                 (* var: _ ... _ -> Type mandatory *)
@@ -407,7 +415,7 @@ module Convert(Term : NunTermTyped.S) = struct
         let ty, l' = convert_arguments_following_ty
           ~stack ~env ~subst:Subst.empty ty_f l in
         U.app ?loc ~ty f' l'
-    | A.Var v ->
+    | A.Var (`Var v) ->
         (* a variable might be applied, too *)
         let head, ty_head = match Env.find_var ?loc ~env v with
           | Decl (id, ty) ->
@@ -461,14 +469,19 @@ module Convert(Term : NunTermTyped.S) = struct
                 ID.print_name c;
             (* make scoped variables and infer their type from [t] *)
             let vars' = List.map
-              (fun name -> Var.make ~name ~ty:(fresh_ty_var_ ~name)) vars in
+              (fun v ->
+                let name = match v with `Wildcard -> "_" | `Var s -> s in
+                Var.make ~name:"_" ~ty:(fresh_ty_var_ ~name))
+              vars
+            in
             let ty' = ty_apply ty_c (List.map Var.ty vars') in
             unify_in_ctx_ ~stack:[] ty_t ty';
             (* now infer the type of [rhs] *)
             let env = Env.add_vars ~env vars vars' in
             let rhs = convert_term_ ~stack ~env rhs in
             ID.Map.add c (vars', rhs) m
-          ) ID.Map.empty l
+          )
+          ID.Map.empty l
         in
         (* force all right-hand sides to have the same type *)
         let ty = try
@@ -504,7 +517,7 @@ module Convert(Term : NunTermTyped.S) = struct
         unify_in_ctx_ ~stack (U.ty_exn a) prop;
         unify_in_ctx_ ~stack (U.ty_exn b) (U.ty_exn c);
         U.ite ?loc a b c
-    | A.Wildcard ->
+    | A.Var `Wildcard ->
         (* TODO: generate fresh variable with new type?
             but then we need to quantify over it! *)
         type_error ~stack "term wildcards cannot be inferred"
@@ -651,16 +664,16 @@ module Convert(Term : NunTermTyped.S) = struct
   let check_prenex_types_ ?loc t =
     if not (is_prenex_ t)
     then ill_formedf ?loc
-        "@[<2>term `@[%a@]` contains non-prenex types@]" P.print t
+        "term `@[%a@]`@ contains non-prenex types" P.print t
 
   let check_ty_is_mono_ ?loc t =
     if not (is_mono_ t)
     then ill_formedf ?loc
-        "@[<2>type `@[%a@]` is not monomorphic@]" P.print t
+        "type `@[%a@]`@ is not monomorphic" P.print t
 
   let check_mono_var_ v =
     if not (is_mono_var_ v)
-    then ill_formedf "@[variable %a has a non-monomorphic type" Var.print v
+    then ill_formedf "variable %a has a non-monomorphic type" Var.print v
 
   let generalize ~close t =
     NunUtils.debugf ~section 5 "@[<2>generalize `@[%a@]`, by %s@]"
@@ -688,9 +701,16 @@ module Convert(Term : NunTermTyped.S) = struct
       ) vars (t, [])
     in
     if new_vars <> [] then
-      NunUtils.debugf ~section 3 "@[generalized `%a`@ w.r.t @[%a@]@]"
+      NunUtils.debugf ~section 3 "@[generalized `@[%a@]`@ w.r.t @[%a@]@]"
         (fun k-> k P.print t (CCFormat.list Var.print) new_vars);
     t, new_vars
+
+
+  let kind_of_ty_ ty =
+    let ret = U.ty_returns ty in
+    if U.ty_is_Type ret then Stmt.Decl_type
+    else if U.ty_is_Prop ret then Stmt.Decl_prop
+    else Stmt.Decl_fun
 
   (* convert [t] into a prop, call [f], generalize [t] *)
   let convert_prop_ ?(before_generalize=CCFun.const ()) ~env t =
@@ -701,6 +721,11 @@ module Convert(Term : NunTermTyped.S) = struct
     check_prenex_types_ t;
     t
 
+  let free_ty_vars t =
+    U.to_seq_free_vars t
+    |> Sequence.filter
+      (fun v -> U.ty_returns_Type (Var.ty v))
+
   (* checks that [t] only contains free variables from [vars].
     behavior depends on [rel]:
       {ul
@@ -709,22 +734,26 @@ module Convert(Term : NunTermTyped.S) = struct
       }
   *)
   let check_vars ~vars ~rel t =
-    let module VarSet = Var.Set(struct type t = term end) in
-    let vars = VarSet.of_list vars in
-    let fvars = U.to_seq_free_vars t
-      |> Sequence.filter
-        (fun v -> U.ty_returns_Type (Var.ty v))
-      |> VarSet.of_seq
-    in
+    let fvars = free_ty_vars t |> VarSet.of_seq in
     match rel with
       | `Equal ->
           if VarSet.equal fvars vars then `Ok
           else
-            let symdiff = VarSet.(union (diff fvars vars) (diff vars fvars) |> to_list) in
+            let symdiff =
+              VarSet.(union (diff fvars vars) (diff vars fvars) |> to_list) in
             `Bad symdiff
       | `Subset ->
           if VarSet.subset fvars vars then `Ok
           else `Bad VarSet.(diff fvars vars |> to_list)
+
+  (* check that no meta-variable remains in [t]
+      @return [`Ok] in this case, [`Bad vars] otherwise *)
+  let check_no_meta t =
+    let metas = U.free_meta_vars t
+      |> ID.Map.to_list
+      |> List.map snd
+    in
+    if metas=[] then `Ok else `Bad metas
 
   (* does [t] contain the given [id]? *)
   let term_contains_ t ~id =
@@ -735,103 +764,72 @@ module Convert(Term : NunTermTyped.S) = struct
           | _ -> false
         )
 
-  (* convert [t as v] into a [Stmt.defined].
-     [t] will be applied to fresh type variables if it lacks some type arguments.
-     @return [(defined, vars, t')] where [vars] are the type variables of [t]
-       that have been generalized, and [t'] is the generalized version of [t].
-     @param pre_check called before generalization of [t] *)
-  let convert_defined ?loc ?(pre_check=CCFun.const()) ~env t =
-    let t = convert_term_exn ~env t in
-    (* ensure [t] is applied to all required type arguments *)
-    let num_missing_args = num_implicit_ (U.ty_exn t) in
-    let l = CCList.init num_missing_args (fun _ -> fresh_ty_var_ ~name:"_") in
-    let t = U.app ~ty:(ty_apply (U.ty_exn t) l) t l in
-    pre_check t;
-    (* replace meta-variables in [t] by real variables, and return those *)
-    let t, vars = generalize ~close:`NoClose t in
-    check_prenex_types_ ?loc t;
-    (* head symbol and type arguments *)
-    let defined_head, defined_ty_args =
-      let id_ t =
-        try U.head_sym t
-        with Not_found ->
-          ill_formedf ?loc ~kind:"defined_term" "does not have a head symbol"
-      in
-      match Term.repr t with
-      | TI.Const id -> id, []
-      | TI.App (f, l) ->
-          let f = id_ f in
-          let ty_f = Sig.find_exn ~sigma:env.Env.signature f in
-          let n = num_implicit_ ty_f in
-          assert (List.length l >= n);  (* we called [fill_implicit_] above *)
-          f, CCList.take n l
-      | _ ->
-          ill_formedf ?loc ~kind:"defined_term"
-            "`@[%a@]` is not a function application" P.print t
-    in
-    NunUtils.debugf ~section 4
-      "@[<hv2>defined term `@[%a@]`@ has type `@[%a@]`@ and type tuple @[%a@]@]"
-        (fun k -> k P.print t P.print (U.ty_exn t)
-          (CCFormat.list P.print) defined_ty_args);
-    List.iter (check_ty_is_mono_ ?loc) defined_ty_args;
-    let defined = {Stmt.
-      defined_head; defined_term=t; defined_ty_args;
-    } in
-    defined, vars, t
-
   (* convert a specification *)
   let convert_spec_defs ?loc ~env (untyped_defined_l, ax_l) =
-    (* what are we specifying? a list of [Stmt.defined] terms *)
-    let defined, env', vars = match untyped_defined_l with
-      | [] -> assert false (* parser error *)
-      | (t,v) :: tail ->
-          let defined, vars, defined1 = convert_defined ?loc ~env t in
-          (* locally, ensure that [v] refers to the defined term *)
-          let env' = Env.add_def ~env v ~as_:defined1 in
-          let env', l = NunUtils.fold_map
-            (fun env' (t',v') ->
-              let pre_check t' =
-              (* check that [free_vars t = vars] *)
-                match check_vars ~vars ~rel:`Equal t' with
-                | `Ok -> ()
-                | `Bad vars ->
-                    ill_formedf ?loc ~kind:"spec"
-                      "@[<2>the set of free type variables in two terms `@[%a@]` \
-                      and `@[%a@]` of the same \
-                      specification are not equal:@ @[%a@] occur in only \
-                      one of them@]"
-                      P.print defined.Stmt.defined_term
-                      P.print t' (CCFormat.list Var.print) vars
-              in
-              let defined', _, defined1' = convert_defined ?loc ~pre_check ~env t' in
-              let env' = Env.add_def ~env:env' v' ~as_:defined1' in
-              env', defined'
-            )
-            env' tail
-          in
-          defined::l, env', vars
+    (* obtain id and type for declared variable [v] *)
+    let get_id_ty v = match Env.find_var ?loc ~env v with
+      | Decl (id, ty) -> id, ty
+      | Def _ -> ill_formedf ?loc "%s is defined, cannot specify" v
+      | TyVar _ -> ill_formedf ?loc "cannot specify a type variable (%s)" v
+      | Var _ -> ill_formedf ?loc "cannot specify a variable (%s)" v
     in
-    (* convert axioms. Use [env'] so that defined terms are represented
-      by their aliases; then, dereference aliases to make them disappear *)
+    (* what are we specifying? a list of [Stmt.defined] terms *)
+    let defined_l, env', spec_vars = match untyped_defined_l with
+      | [] -> assert false (* parser error *)
+      | v :: tail ->
+          let id, ty = get_id_ty v in
+          (* generate fresh type variables *)
+          let n = num_implicit_ ty in
+          let vars = CCList.init n
+            (fun i -> Var.make ~ty:U.ty_type ~name:(spf "a_%d" i)) in
+          let t_vars = List.map (U.ty_var ?loc:None) vars in
+          let defined = {Stmt.defined_head=id; defined_ty=ty;} in
+          (* locally, ensure that [v] refers to the defined term *)
+          let t = U.app ~ty:(ty_apply ty t_vars) (U.const ~ty id) t_vars in
+          let env' = Env.add_def ~env v ~as_:t in
+          let env', l = NunUtils.fold_map
+            (fun env' v' ->
+              let id', ty' = get_id_ty v' in
+              let n' = num_implicit_ ty' in
+              (* every specified symbol must have the same number of type args *)
+              if n<>n'
+                then ill_formedf ?loc ~kind:"spec"
+                  "specified terms %s and %s respectively require %d and %d \
+                   type arguments" v v' n n';
+              let t' = U.app ~ty:(ty_apply ty' t_vars) (U.const id' ~ty:ty') t_vars in
+              let env' = Env.add_def ~env:env' v' ~as_:t' in
+              env', {Stmt.defined_head=id'; defined_ty=ty';}
+            ) env' tail
+          in
+          defined :: l, env', vars
+    in
+    (* convert axioms. Use [env'] so that the specified terms are actually
+        expansed into their version applied to [spec_vars] *)
     let axioms = List.map
       (fun ax ->
-        (* check that all the free type variables in [ax] occur in
-            the defined term(s) *)
+        (* check that all the free type variables in [ax] are among [spec_vars] *)
         let before_generalize t =
-          match check_vars ~vars ~rel:`Subset t with
+          begin match check_no_meta t with
+          | `Ok -> ()
+          | `Bad vars' ->
+            ill_formedf ?loc ~kind:"rec"
+              "term `@[%a@]`@ contains non-generalized variables @[%a@]"
+              P.print t (CCFormat.list MetaVar.print) vars'
+          end;
+          match check_vars ~vars:(VarSet.of_list spec_vars) ~rel:`Subset t with
           | `Ok -> ()
           | `Bad bad_vars ->
               ill_formedf ?loc ~kind:"spec"
-                "@[<2>axiom contains type variables @[`%a`@]@ \
-                  that do not occur in defined term@ @[`%a`@]@]"
+                "axiom contains type variables @[`%a`@]@ \
+                  that do not occur in defined term@ @[`%a`@]"
                 (CCFormat.list Var.print) bad_vars P.print t
         in
         convert_prop_ ~before_generalize ~env:env' ax
       ) ax_l
     in
     (* check that no meta remains *)
-    List.iter check_mono_var_ vars;
-    {Stmt. spec_axioms=axioms; spec_vars=vars; spec_defined=defined; }
+    List.iter check_mono_var_ spec_vars;
+    {Stmt. spec_axioms=axioms; spec_vars; spec_defined=defined_l; }
 
   (* change [fun x1...xn.t] into [[x1;...;xn], t] *)
   let rec extract_fun_ t = match Term.repr t with
@@ -863,61 +861,80 @@ module Convert(Term : NunTermTyped.S) = struct
     | _ -> None
 
   let convert_rec_defs ?loc ~env l =
-    let allowed_vars = ref [] in (* type variables that can occur in axioms *)
-    (* first, build new variables for the defined terms, and build [env']
-        in which the variables are in scope *)
+    (* first, build new variables for the defined terms,
+        and build [env'] in which the defined identifiers are bound to constants *)
     let env', l' = NunUtils.fold_map
-      (fun env' (untyped_t,v,l) ->
-        let defined, vars, defined1 = convert_defined ?loc ~env untyped_t in
-        allowed_vars := vars @ !allowed_vars;
-        (* declare [v] in the scope of equations *)
+      (fun env' (v,ty,l) ->
+        (* convert the type *)
+        let ty = convert_ty_exn ~env ty in
+        let id = ID.make ~name:v in
+        let v_as_t = U.const ~ty id in
+        (* set of allowed type variables in the definitions of [v] *)
+        let n  = num_implicit_ ty in
+        let vars = CCList.init n
+          (fun i -> Var.make ~ty:U.ty_type ~name:(spf "a_%d" i)) in
         NunUtils.debugf ~section 4 "@[<2>locally define %s as `@[%a@]`@]"
-          (fun k -> k v P.print defined1);
-        let env' = Env.add_def ~env:env' v ~as_:defined1 in
-        env', (defined,vars,l)
+          (fun k -> k v P.print v_as_t);
+        (* declare [v] in the scope of equations *)
+        let env' = Env.add_def ~env:env' v ~as_:v_as_t in
+        env', (id,ty,vars,l)
       ) env l
     in
     (* convert the equations *)
-    List.map
-      (fun (defined,vars,l) ->
+    let l' = List.map
+      (fun (id,ty,ty_vars,l) ->
+        let defined = {Stmt.defined_head=id; defined_ty=ty; } in
+        (* in the definitions of [id], actually ensure that [id.name]
+           is bound to [id ty_vars]. This way we can be sure that all definitions
+           will share the same set of type variables. *)
+        let env'' = Env.remove ~env:env' (ID.name id) in
+        let env'' = Env.add_def ~env:env'' (ID.name id)
+          ~as_:(
+            let ty_vars' = List.map (U.ty_var ?loc:None) ty_vars in
+            U.app (U.const ~ty id) ty_vars' ~ty:(ty_apply ty ty_vars'))
+        in
         let rec_eqns = List.map
-          (fun ax ->
-            (* sanity check: equation must not contain other type variables *)
+          (fun untyped_ax ->
+            (* sanity check: equation must not contain other type variables,
+              and all type variables must be bound *)
             let before_generalize t =
-              match check_vars ~vars:!allowed_vars ~rel:`Subset t with
+              begin match check_no_meta t with
               | `Ok -> ()
-              | `Bad vars ->
+              | `Bad vars' ->
+                ill_formedf ?loc ~kind:"rec"
+                  "@[<2>term `@[%a@]`@ contains non-generalized variables @[%a@]@]"
+                  P.print t (CCFormat.list MetaVar.print) vars'
+              end;
+              match check_vars ~vars:(VarSet.of_list ty_vars) ~rel:`Subset t with
+              | `Ok -> ()
+              | `Bad vars' ->
                   ill_formedf ?loc ~kind:"rec def"
                     "@[<2>equation `@[%a@]`,@ in definition of `@[%a@]`,@ \
                       contains type variables `@[%a@]` that do not occur \
                     in defined term@]"
-                    A.print_term ax P.print defined.Stmt.defined_term
-                    (CCFormat.list Var.print) vars
+                    A.print_term untyped_ax ID.print_name id
+                    (CCFormat.list Var.print) vars'
             in
-            let ax = convert_prop_ ~before_generalize ~env:env' ax in
+            let ax = convert_prop_ ~before_generalize ~env:env'' untyped_ax in
             (* decompose into a proper equation *)
-            let f = defined.Stmt.defined_head in
-            match extract_eqn ~f ax with
+            match extract_eqn ~f:id ax with
             | None ->
                 ill_formedf ?loc
                   "@[<2>expected `@[forall <vars>.@ @[%a@] @[<hv><args>@ =@ <rhs>@]@]`@]"
-                    ID.print_name f
+                    ID.print_name id
             | Some (vars,args,rhs) ->
-                (* remove type arguments (already present in defined) *)
-                let num_ty_args = List.length defined.Stmt.defined_ty_args in
-                let args = CCList.drop num_ty_args args in
-                List.iter (check_prenex_types_ ?loc:None) args;
+                List.iter (check_prenex_types_ ?loc) args;
                 Stmt.Eqn_nested (vars, args, rhs, [])
           )
           l
         in
-        List.iter check_mono_var_ vars;
         (* return case *)
-        {Stmt.
-          rec_defined=defined; rec_vars=vars; rec_eqns;
-        }
+        let kind = kind_of_ty_ ty in
+        {Stmt.rec_defined=defined; rec_kind=kind; rec_vars=ty_vars; rec_eqns; }
       )
       l'
+    in
+    env', l'
 
   let ty_forall_l_ = List.fold_right (fun v t -> U.ty_forall v t)
 
@@ -1005,39 +1022,33 @@ module Convert(Term : NunTermTyped.S) = struct
         let env = Env.add_decl ~env v ~id ty in
         check_ty_is_prenex_ ?loc ty;
         let env = Env.add_sig ~env ~id ty in
-        if U.ty_returns_Type ty
-          then Stmt.ty_decl ~info id ty, env (* id is a type *)
-          else Stmt.decl ~info id ty, env
+        let kind = kind_of_ty_ ty in
+        Stmt.mk_decl ~info id kind ty, env
     | A.Axiom l ->
         (* convert terms, and force them to be propositions *)
         let l = List.map (convert_prop_ ?before_generalize:None ~env) l in
         Stmt.axiom ~info l, env (* default *)
-    | A.Def (a,b) ->
-        let a_defined = convert_term_exn ~env a in
-        let ty = U.ty_exn a_defined in
-        (* we are defining the head of [a], so declare it *)
-        let id = U.head_sym a_defined in
-        let env' = Env.add_def  ~env (ID.name id) ~as_:a_defined in
-        let b = convert_term_exn ~env:env' b in
-        check_prenex_types_ ?loc a_defined;
-        check_prenex_types_ ?loc b;
-        (* check that [id] does not occur in [b] *)
-        if term_contains_ b ~id
-        then ill_formedf ?loc ~kind:"def"
-          "right-hand side of definition contains defined symbol %a" ID.print id;
-        let eqn = Stmt.Eqn_nested ([], [], b, []) in
-        unify_in_ctx_ ~stack:[] ty (U.ty_exn b);
-        let defined = {Stmt.
-          defined_head=id; defined_term=a_defined; defined_ty_args=[];
-        } in
-        Stmt.axiom_rec ~info
-          [{Stmt.rec_defined=defined; rec_vars=[]; rec_eqns=[eqn]; }]
-        , env
     | A.Spec s ->
         let s = convert_spec_defs ?loc ~env s in
         Stmt.axiom_spec ~info s, env
     | A.Rec s ->
-        let s = convert_rec_defs ?loc ~env s in
+        let env, s = convert_rec_defs ?loc ~env s in
+        Stmt.axiom_rec ~info s, env
+    | A.Def (a,b) ->
+        (* simpler version of [A.Rec] *)
+        let env, s = convert_rec_defs ?loc ~env
+          [(a, A.wildcard ?loc (), [A.eq (A.var a) b])] in
+        (* check that the definition is nonrecursive *)
+        List.iter
+          (fun def ->
+            let id1 = def.Stmt.rec_defined.Stmt.defined_head in
+            if List.exists
+              (fun (Stmt.Eqn_nested (_,_,rhs,_)) -> term_contains_ ~id:id1 rhs)
+              def.Stmt.rec_eqns
+            then ill_formedf ?loc ~kind:"def"
+              "right-hand side of definition contains defined symbol %a"
+              ID.print id1;
+          ) s;
         Stmt.axiom_rec ~info s, env
     | A.Data l ->
         let env, l = convert_tydef ?loc ~env l in

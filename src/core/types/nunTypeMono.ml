@@ -7,6 +7,7 @@ module ID = NunID
 module Var = NunVar
 module MetaVar = NunMetaVar
 module TI = NunTermInner
+module Subst = Var.Subst
 
 module Builtin = TI.TyBuiltin
 
@@ -27,6 +28,10 @@ module type S = sig
   val is_ty : T.t -> bool
 
   val repr : T.t -> T.t view
+
+  val repr_with : subst:(T.t,T.t) Subst.t -> T.t -> T.t view
+  (** representation that follows the substitution. Will
+      fail on a variable, except if it is bound *)
 end
 
 module Make(T : TI.REPR)
@@ -52,6 +57,22 @@ module Make(T : TI.REPR)
     | TI.App (f,l) -> App (f, l)
     | TI.TyArrow (a, b) -> Arrow (a, b)
     | TI.Var _
+    | TI.TyMeta _
+    | TI.AppBuiltin _
+    | TI.Match _
+    | TI.Let _
+    | TI.Bind _ -> assert false
+
+  let rec repr_with ~subst t = match T.repr t with
+    | TI.TyBuiltin b -> Builtin b
+    | TI.Const id -> Const id
+    | TI.App (f,l) -> App (f, l)
+    | TI.TyArrow (a, b) -> Arrow (a, b)
+    | TI.Var v ->
+        begin match Subst.find ~subst v with
+        | None -> assert false
+        | Some t' -> repr_with ~subst t'
+        end
     | TI.TyMeta _
     | TI.AppBuiltin _
     | TI.Match _

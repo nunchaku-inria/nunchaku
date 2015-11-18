@@ -11,20 +11,20 @@ type id = NunID.t
 type loc = NunLocation.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-type ('t, 'ty, 'inv) fun_def =
-  | Rec of
+type ('t, 'ty, 'inv) def =
+  | Fun_def of
       ('t, 'ty, 'inv) NunStatement.rec_defs *
       ('t, 'ty, 'inv) NunStatement.rec_def *
       loc option
-  | Spec of
-      ('t, 'ty) NunStatement.spec_defs *
-      loc option
+      (** ID is a defined fun/predicate. *)
 
-type ('t, 'ty, 'inv) def =
-  | Fun of ('t, 'ty, 'inv) fun_def list
-      (** ID is a defined fun/predicate. Can be defined in several places *)
+  | Fun_spec of
+      (('t, 'ty) NunStatement.spec_defs * loc option) list
 
-  | Data of [`Codata | `Data] * 'ty NunStatement.mutual_types * 'ty NunStatement.tydef
+  | Data of
+      [`Codata | `Data] *
+      'ty NunStatement.mutual_types *
+      'ty NunStatement.tydef
       (** ID is a (co)data *)
 
   | Cstor of
@@ -76,8 +76,15 @@ val rec_funs:
   env:('t, 'ty, 'inv) t ->
   ('t, 'ty, 'inv) NunStatement.rec_defs ->
   ('t, 'ty, 'inv) t
-(** Add a definition of functions/predicates. They can be already
-    defined (or declared). *)
+(** Add a definition of functions/predicates. They must not be declared yet. *)
+
+val declare_rec_funs:
+  ?loc:loc ->
+  env:('t, 'ty, <ty:'i;..> as 'inv) t ->
+  ('t, 'ty, <ty:'i;..>) NunStatement.rec_defs ->
+  ('t, 'ty, 'inv) t
+(** Similar to {!rec_funs}, but only declares the functions, without adding
+    their definition *)
 
 val spec_funs:
   ?loc:loc ->
@@ -96,6 +103,12 @@ val def_data:
 (** Define a new set of mutually recursive (co)data types.
     Also defines their constructors.
     @raise InvalidDef if some type/constructor already defined/declared *)
+
+val add_statement :
+  env:('t,'ty,'inv) t ->
+  ('t,'ty,'inv) NunStatement.t ->
+  ('t,'ty,'inv) t
+(** Add any statement *)
 
 val find : env:('t, 'ty, 'inv) t -> id -> ('t, 'ty, 'inv) info option
 

@@ -20,10 +20,10 @@ let section = NunUtils.Section.make "print_tptp"
 let pp_list ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
 
 let rec print_term out t = match A.view t with
-  | A.Wildcard  -> fpf out "$_"
+  | A.Var `Wildcard  -> fpf out "$_"
   | A.Builtin b -> A.Builtin.print out b
   | A.AtVar v
-  | A.Var v -> print_var out v
+  | A.Var (`Var v) -> print_var out v
   | A.Fun (v,t) ->
       fpf out "@[<2>^[%a]:@ %a@]" print_tyvar v print_inner t
   | A.Let _ -> NunUtils.not_implemented "print let in TPTP"
@@ -81,7 +81,7 @@ and print_ty out t = print_term out t
 and print_form out t = print_term out t
 
 and print_inner out t = match A.view t with
-  | A.Wildcard | A.Builtin _ | A.Var _ | A.AtVar _ | A.MetaVar _
+  | A.Builtin _ | A.Var _ | A.AtVar _ | A.MetaVar _
   | A.Ite (_,_,_)
   | A.Let (_,_,_) -> print_term out t
   | A.App (f,_) ->
@@ -140,7 +140,7 @@ let preprocess_model m =
   (* find and replace constants by distinct constants.
     Also replace lower case (bound) variables by capitalized variables *)
   let rec find_cst_term ~state t = match A.view t with
-    | A.Var v | A.MetaVar v | A.AtVar v ->
+    | A.Var (`Var v) | A.MetaVar v | A.AtVar v ->
         if StrSet.mem v state.pre_bound then A.var (mk_var v)
         else if state.pre_in_ty || Hashtbl.mem state.pre_types v then (
           Hashtbl.replace state.pre_types v (); (* remember this is a type *)
@@ -152,7 +152,7 @@ let preprocess_model m =
             Hashtbl.add state.pre_constants v (A.var v');
             A.var v'
         )
-    | A.Wildcard
+    | A.Var `Wildcard
     | A.Builtin _ -> t
     | A.App (f,l) ->
         let f = find_cst_term ~state f in
@@ -204,7 +204,7 @@ let preprocess_model m =
   and (>>=) l f = CCList.flat_map f l in
   let rec preprocess_pair ~state t u =
     match A.view u with
-      | A.Wildcard | A.Builtin _ | A.Var _ | A.AtVar _ | A.MetaVar _
+      | A.Builtin _ | A.Var _ | A.AtVar _ | A.MetaVar _
       | A.TyArrow (_,_) | A.TyForall (_,_)
       | A.App _ ->
           return (A.eq t u)

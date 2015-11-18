@@ -19,7 +19,13 @@ let declare ~sigma id ty = ID.Map.add id ty sigma
 
 let add_statement ~sigma st = match Stmt.view st with
   | Stmt.Decl (id,_,ty) -> declare ~sigma id ty
-  | Stmt.Axiom _
+  | Stmt.Axiom (Stmt.Axiom_rec l) ->
+      List.fold_left
+        (fun sigma def ->
+          let d = def.Stmt.rec_defined in
+          declare ~sigma d.Stmt.defined_head d.Stmt.defined_ty)
+        sigma l
+  | Stmt.Axiom (Stmt.Axiom_spec _ | Stmt.Axiom_std _)
   | Stmt.Goal _ -> sigma
   | Stmt.TyDef (_,l) ->
       List.fold_left

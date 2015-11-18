@@ -193,7 +193,7 @@ statement:
   | s=DOLLAR_WORD COLUMN ty=quantified_type(TY) { s, ty }
 
 thf_def:
-  | a=thf_const EQUAL b=thf_formula {a,b}
+  | a=atomic_word EQUAL b=thf_formula {a,b}
   | LEFT_PAREN d=thf_def RIGHT_PAREN { d }
 
 thf_formula:
