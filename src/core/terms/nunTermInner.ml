@@ -277,6 +277,9 @@ module type UTIL_REPR = sig
   val ty_is_Kind : t_ -> bool
   (** type == Kind? *)
 
+  val ty_is_Prop : t_ -> bool
+  (** t == Prop? *)
+
   val ty_num_param : t_ -> int
 end
 
@@ -297,15 +300,15 @@ module UtilRepr(T : REPR)
       match T.repr t with
       | TyMeta _ -> ()
       | TyBuiltin _
-      | AppBuiltin _
       | Const _ -> ()
       | Var v -> aux_var v
       | Match (t,l) ->
           aux t;
           ID.Map.iter (fun _ (vars,rhs) -> List.iter aux_var vars; aux rhs) l
+      | AppBuiltin (_, l) -> List.iter aux l
       | App (f,l) -> aux f; List.iter aux l
-      | Bind (_,v,t) -> aux (Var.ty v); aux t
-      | Let (v,t,u) -> aux (Var.ty v); aux t; aux u
+      | Bind (_,v,t) -> aux_var v; aux t
+      | Let (v,t,u) -> aux_var v; aux t; aux u
       | TyArrow (a,b) -> aux a; aux b
     and aux_var v = aux (Var.ty v)
     in
@@ -381,6 +384,10 @@ module UtilRepr(T : REPR)
 
   let ty_is_Kind t = match T.repr t with
     | TyBuiltin `Kind -> true
+    | _ -> false
+
+  let ty_is_Prop t = match T.repr t with
+    | TyBuiltin `Prop -> true
     | _ -> false
 
   let rec ty_returns t = match T.repr t with
