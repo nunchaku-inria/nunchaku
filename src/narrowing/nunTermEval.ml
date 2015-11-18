@@ -158,6 +158,76 @@ let db_closed t =
   in
   aux 0 t
 
+(* TODO: cache some [info] in each term, containing:
+    - the number of binders needed for the term to be closed
+      (allows for constant-time checking of closedness -> db_lift is id if closed)
+*)
+
+(* lift free DB indices in [t] by [n] ranks. *)
+let db_lift n t =
+  (* k: current depth *)
+  let rec aux k old = match old with
+    | App (f,l) ->
+        let f' = aux k f in
+        let l' = aux_l k l in
+        if f==f' && l==l'  then old else app f' l'
+    | DB v ->
+        if v.DB.index < k
+        then
+          let ty' = aux k v.DB.ty in
+          if v.DB.ty==ty' then old else db {v with DB.ty=ty'}
+        else
+          (* shift [v.index] *)
+          let ty' = aux k v.DB.ty in
+          db {v with DB.ty=ty'; index=v.DB.index + n; }
+    | Meta v ->
+        let ty' = aux k (Var.ty v) in
+        if Var.ty v==ty' then old
+        else meta (Var.update_ty v ~f:(fun _ -> ty'))
+    | Const c ->
+        let ty' = aux k c.const_ty in
+        if c.const_ty==ty' then old else const {c with const_ty=ty'}
+    | Builtin _ -> old
+    | Let (ty,t,u) ->
+        (* expand [let]! *)
+        let ty' = aux k ty in
+        let t' = aux k t in
+        let u' = aux (k+1) u in
+        if ty==ty' && t==ty' && u==u' then old else let_ ~ty:ty' t' u'
+    | Bind (b,ty,t) ->
+        let ty' = aux k ty in
+        let t' = aux (k+1) t in
+        if ty==ty' && t==t' then old else bind b ~ty:ty' t'
+    | Match (t,l) as old ->
+        let t' = aux k t in
+        let same = ref (t==t') in
+        let l' = ID.Map.map
+          (fun (tys, rhs) ->
+            let tys' = DBEnv.map (aux k) tys in
+            let rhs' = aux (k+ DBEnv.length tys) rhs in
+            same := !same && DBEnv.for_all2 (==) tys tys' && rhs==rhs';
+            tys', rhs')
+          l
+        in
+        if !same then old else match_ t' l'
+    | Ite (a,b,c) as old ->
+        let a' = aux k a in
+        let b' = aux k b in
+        let c' = aux k c in
+        if a==a' && b==b' && c==c' then old else ite a' b' c'
+    | TyArrow (a,b) ->
+        let a' = aux k a in
+        let b' = aux k b in
+        if a==a' && b==b' then old else ty_arrow a' b'
+  and aux_l k l = match l with
+    | [] -> []
+    | t :: ts ->
+        let t' = aux k t in
+        let ts' = aux_l k ts in
+        if t==t' && ts==ts' then l else t'::ts'
+  in
+  if n=0 then t else aux 0 t
+
 (** [db_eval ~env t] evaluates [t] in the De Bruijn environment [env],
     that is, it expands variables that are bound with [Local_def]. *)
 let rec db_eval
@@ -170,7 +240,12 @@ let rec db_eval
   | DB v ->
       begin match DBEnv.nth env v.DB.index with
       | Local_decl _ -> old
-      | Local_def (_,t') -> Lazy.force t'
+      | Local_def (_,t') ->
+          (* t' was defined in the environment where [v = 0]; here, [v.index]
+              is the number of binders traversed since, so free variables
+              of [t'] must be lifted by [v.index] too *)
+          let t' = Lazy.force t' in
+          db_lift v.DB.index t'
       end
   | Meta v ->
       let ty' = db_eval ~env (Var.ty v) in
@@ -222,138 +297,98 @@ and db_eval_l ~env l = match l with
       let ts' = db_eval_l ~env ts in
       if t==t' && ts==ts' then l else t'::ts'
 
-(* lift free DB indices in [t] by [n] ranks. *)
-let db_lift n t =
-  (* k: current depth *)
-  let rec aux k old = match old with
-    | App (f,l) ->
-        let f' = aux k f in
-        let l' = aux_l k l in
-        if f==f' && l==l'  then old else app f' l'
-    | DB v ->
-        if v.DB.index < k
-        then
-          let ty' = aux k v.DB.ty in
-          if v.DB.ty==ty' then old else db {v with DB.ty=ty'}
-        else
-          (* shift [v.index] *)
-          let ty' = aux k v.DB.ty in
-          db {v with DB.ty=ty'; index=v.DB.index + n; }
-    | Meta v ->
-        let ty' = aux k (Var.ty v) in
-        if Var.ty v==ty' then old
-        else meta (Var.update_ty v ~f:(fun _ -> ty'))
-    | Const c ->
-        let ty' = aux k c.const_ty in
-        if c.const_ty==ty' then old else const {c with const_ty=ty'}
-    | Builtin _ -> old
-    | Let (ty,t,u) ->
-        (* expand [let]! *)
-        let ty' = aux k ty in
-        let t' = aux k t in
-        let env = push_decl ty' env in
-        let u' = aux k u in
-        if ty==ty' && t==ty' && u==u' then old else let_ ~ty:ty' t' u'
-    | Bind (b,ty,t) ->
-        let ty' = aux k ty in
-        let env = DBEnv.cons (Local_decl ty) env in
-        let t' = aux k t in
-        if ty==ty' && t==t' then old else bind b ~ty:ty' t'
-    | Match (t,l) as old ->
-        let t' = aux k t in
-        let same = ref (t==t') in
-        let l' = ID.Map.map
-          (fun (tys, rhs) ->
-            let tys' = DBEnv.map (aux k) tys in
-            let env = DBEnv.fold_right push_decl tys env in
-            let rhs' = aux k rhs in
-            same := !same && DBEnv.for_all2 (==) tys tys' && rhs==rhs';
-            tys', rhs')
-          l
-        in
-        if !same then old else match_ t' l'
-    | Ite (a,b,c) as old ->
-        let a' = aux k a in
-        let b' = aux k b in
-        let c' = aux k c in
-        if a==a' && b==b' && c==c' then old else ite a' b' c'
-    | TyArrow (a,b) ->
-        let a' = aux k a in
-        let b' = aux k b in
-        if a==a' && b==b' then old else ty_arrow a' b'
-  and aux_l k l = match l with
-    | [] -> []
-    | t :: ts ->
-        let t' = aux k t in
-        let ts' = aux_l k ts in
-        if t==t' && ts==ts' then l else t'::ts'
-  in
-  aux 0 t
-
 (** [subst_eval ~subst t] replaces meta-variables bound in [subst].
     It also lifts [t] if [(v -> t) in subst] *)
-let rec subst_eval
+let subst_eval
 : subst:subst -> term -> term
+= fun ~subst:_ _ -> assert false (* TODO if needed *)
 
 (** {2 Toplevel Term}
 
-  Term designed for evaluation *)
+  Term designed for WHNF evaluation. It focuses on the head because that
+  is where evaluation takes place. The head is actually a subterm
+  found under a number of "ifthenelse" and "match". *)
 
-(* a "toplevel" term, where [head] is not an application *)
+(* TODO: add a subst for meta-variables in the term *)
+
 module TermTop : sig
   type t = private {
-    head: head;
+    cont: continuation;
+    head: term;
     args: t list;
     env: def_or_decl DBEnv.t; (* variables declared or defined *)
-    blocked: VarSet.t;
-      (* the meta-variable to refine if we want to continue evaluating *)
   }
-  and head =
-    | Head_apply of term
-    | Head_nested of t
-  val make: env:def_or_decl DBEnv.t -> term -> t
-  val make0 : term -> t (** empty env *)
+  and continuation =
+    | K_apply
+    | K_ite of term * term * continuation
+    | K_match of term cases * continuation
+  val of_term: env:def_or_decl DBEnv.t -> term -> t
+  val of_term0 : term -> t (** empty env *)
+  val make: ?cont:continuation -> env:def_or_decl DBEnv.t -> term -> t list -> t
+  val set_head : ?cont:continuation -> t -> hd:term -> t
   val to_term: t -> term
+  val env: t -> def_or_decl DBEnv.t
+  val blocked: t -> t_meta option
+    (** If the reduction is blocked by a meta [v], this returns [Some v] *)
 end = struct
   type t = {
-    head: head;
+    cont: continuation;
+    head: term;
     args: t list;
     env: def_or_decl DBEnv.t; (* variables declared or defined *)
-    blocked: VarSet.t;
-      (* the meta-variable to refine if we want to continue evaluating *)
   }
-  and head =
-    | Head_apply of term
-    | Head_nested of t
+  (* encoding:
+    - [K_ite (a,b,cont) head args] is [(cont (if head then a else b)) args]
+    - [K_match (l,cont) head args] is [(cont (match head with ...l...)) args]
+    - [K_apply head args] is [head args]
+  *)
 
-  let rec make ~env t = match t with
-    | App (Meta v as f, l) ->
-        { head=Head_apply f; args=List.map (make ~env) l; env;
-          blocked=VarSet.singleton v}
-    | App ((Ite _ | Match _ | Bind _) as f, l) ->
-        let f' = make ~env f in
-        {head=Head_nested f'; args=List.map (make ~env) l; env;
-          blocked=f'.blocked; }
-    | App (Builtin _ as f, l) ->
-        (* TODO finer grained construction *)
-        (* evaluate all the subterms simultaneously: "parallel" evaluation *)
-        let args = List.map (make ~env) l in
-        let blocked = List.fold_left
-          (fun acc a -> VarSet.union a.blocked acc) VarSet.empty args
-        in
-        {head=Head_apply f; args; env; blocked;}
+  and continuation =
+    | K_apply
+    | K_ite of term * term * continuation
+    | K_match of term cases * continuation
+
+  (* build recursively.
+      @param the continuation *)
+  let rec mk_ ~cont ~env ~args t = match t with
+    | Ite (a,b,c) ->
+        mk_ a ~cont:(K_ite (b,c,cont)) ~env ~args
+    | Match (t,l) ->
+        mk_ t ~cont:(K_match (l,cont)) ~env ~args
+    | App (f, l) ->
+        let args' = List.map (of_term ~env) l in
+        let args = if args=[] then args' else args' @ args in
+        mk_ f ~cont ~env ~args
     | _ ->
-        {head=Head_apply t; args=[]; env; blocked=VarSet.empty; }
+        {head=t; args; cont; env; }
 
-  let make0 t = make ~env:DBEnv.nil t
+  and of_term ~env t = mk_ t ~cont:K_apply ~env ~args:[]
 
-  let rec to_term t =
-    app (head_to_term ~env:t.env t.head) (List.map to_term t.args)
-  and head_to_term ~env = function
-    | Head_apply t -> db_eval ~env t
-    | Head_nested t' -> to_term t'
+  let of_term0 t = mk_ t ~cont:K_apply ~env:DBEnv.nil ~args:[]
+
+  let make ?(cont=K_apply) ~env t args = mk_ ~cont ~env ~args t
+
+  let env t = t.env
+
+  let blocked t = match t.head with
+    | Meta v -> Some v
+    | _ -> None
+
+  let set_head ?cont t ~hd =
+    let cont = match cont with None -> t.cont | Some x -> x in
+    mk_ hd ~env:t.env ~args:t.args ~cont
+
+  (* convert back to a regular term *)
+  let rec to_term t = app_rec_ t.cont t.head t.args
+  and app_rec_ cont head args = match cont with
+    | K_apply -> app head (List.map to_term args)
+    | K_ite (a,b,cont') ->
+        let head' = ite head a b in
+        app_rec_ cont' head' args
+    | K_match (l,cont') ->
+        let head' = match_ head l in
+        app_rec_ cont' head' args
 end
-
 
 (** {2 Utils} *)
 

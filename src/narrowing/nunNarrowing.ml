@@ -23,7 +23,7 @@ type 'a var = 'a Var.t
 (** {2 State For Evaluation} *)
 
 (** A single goal to solve: a toplevel term, with its environment *)
-type goal = U.term_top
+type goal = T.TermTop.t
 
 type goals = {
   goals: goal list;
@@ -40,7 +40,10 @@ let estimate_cost_ l = List.length l (* TODO *)
     @param l the list of sub-goals to solve *)
 let goals_make ~cost l =
   let goals_metas = List.fold_left
-    (fun acc e -> VarSet.union e.T.blocked acc)
+    (fun acc e ->
+      match T.TermTop.blocked e with
+        | None -> acc
+        | Some v -> VarSet.add v acc)
     VarSet.empty l
   in
   let goals_heuristic = estimate_cost_ l in

@@ -24,8 +24,8 @@ let () = Printexc.register_printer
   )
 
 module Convert(T1 : NunTermTyped.REPR) : sig
-  val conv_pb: (T1.t, T1.t, [`Nested]) NunProblem.t -> Env.t * T.term
-  (** [conv_pb pb] returns a pair [env, goal] where [goal] is the goal
+  val convert_pb: (T1.t, T1.t, <eqn:[`Nested];..>) NunProblem.t -> Env.t * T.term
+  (** [convert_pb pb] returns a pair [env, goal] where [goal] is the goal
     of [pb] after conversion into ANF, and [env] is an environment suitable
     for evaluation.
     @raise InvalidProblem if the translation fails. *)
@@ -130,7 +130,7 @@ end = struct
         end
     | _ -> assert false (* TODO: convert, and add to environment *)
 
-  let conv_pb pb =
+  let convert_pb pb =
     let env = Env.create() in
     let env, maybe_goal =
       NunProblem.statements pb
