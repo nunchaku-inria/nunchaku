@@ -58,18 +58,6 @@ type 'a case = 'a DBEnv.t * 'a
 
 type 'a cases = 'a case ID.Map.t
 
-type const = {
-  const_id: id; (* symbol *)
-  const_ty: ty; (* type of symbol *)
-  const_def: def; (* definition/declaration for the symbol *)
-}
-and def =
-  | Cstor of ty * const list (* datatype it belongs to + list of all constructors *)
-  | Def of term (* id == this term *)
-  | Datatype of const list (* list of constructors *)
-  | Opaque
-  (* TODO: DefNode of term * node, for memoization *)
-
 (** A term, using De Bruijn indices *)
 and term =
   | App of term * term list
@@ -302,6 +290,26 @@ and db_eval_l ~env l = match l with
 let subst_eval
 : subst:subst -> term -> term
 = fun ~subst:_ _ -> assert false (* TODO if needed *)
+
+(** {2 Comparison} *)
+
+let equal
+: ?subst:subst -> env:def_or_decl DBEnv.t -> term -> term -> bool
+= fun ?(subst=Subst.empty) ~env t1 t2 ->
+  (* recursive comparison *)
+  let rec eq env t1 t2 =
+    t1 == t2 || match t1, t2 with
+    | Meta v, _ when Subst.mem ~subst v -> eq env (Subst.find_exn ~subst v) t2
+    | _, Meta v when Subst.mem ~subst v -> eq env t1 (Subst.find_exn ~subst v)
+    | Meta v1, Meta v2 -> Var.equal v1 v2
+    | App (f1,l1), App(f2,l2) ->
+        List.length l1 = List.length l2 &&
+        eq env f1 f2 &&
+        List.for_all2 (eq env) l1 l2
+    | _, _ -> assert false (* TODO *)
+    | _ -> false
+  in
+  eq env t1 t2
 
 (** {2 Toplevel Term}
 

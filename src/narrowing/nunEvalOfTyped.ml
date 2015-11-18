@@ -2,7 +2,7 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Conversion from {!NunTermTyped} to {!NunANF}
-  
+
   Types are useful for introducing intermediate variables
   that will stand for sub-expressions. *)
 
@@ -128,7 +128,13 @@ end = struct
             let g' = into_term ~ctx g in
             env, Some g'
         end
-    | _ -> assert false (* TODO: convert, and add to environment *)
+    | Stmt.Decl (id,_,ty) ->
+        let ty = into_term ~ctx ty in
+        let c = {T.const_id=id; const_def=T.Opaque; const_ty=ty; } in
+        Env.declare ~env c, maybe_goal
+    | Stmt.Axiom _
+    | Stmt.TyDef (_,_)
+    | Stmt.Goal _ -> assert false (* TODO: convert, and add to environment *)
 
   let convert_pb pb =
     let env = Env.create() in
