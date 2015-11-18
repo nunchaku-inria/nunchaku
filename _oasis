@@ -67,6 +67,14 @@ Executable nunchaku
   MainIs:           nunchaku.ml
   BuildDepends:     nunchaku, nunchaku.parsers, nunchaku.narrowing
 
+Executable nunchaku_eval
+  Path:             src/main/
+  Install:          false
+  CompiledObject:   native
+  MainIs:           nunchaku_eval.ml
+  BuildDepends:     nunchaku, nunchaku.parsers, nunchaku.narrowing
+  Build$:           flag(tests)
+
 PreBuildCommand:    make qtest-gen
 
 Executable run_qtest

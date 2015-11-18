@@ -122,4 +122,10 @@ and push_top_defs_ ~subst tys l env = match tys, l with
       let t' = lazy (T.TermTop.to_term (whnf ~subst t)) in
       DBEnv.cons (T.Local_def (ty, t')) env
 
+let whnf_term
+: ?subst:T.subst -> T.term -> T.term
+= fun ?(subst=Subst.empty) t ->
+  let top = T.TermTop.of_term0 t in
+  let top' = whnf ~subst top in
+  T.TermTop.to_term top'
 
