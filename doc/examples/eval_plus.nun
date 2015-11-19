@@ -1,0 +1,19 @@
+
+data nat := Z | S nat.
+
+rec plus : nat -> nat -> nat :=
+    forall m n. plus m n =
+        match m with
+        | Z -> n
+        | S m2 -> S (plus m2 n)
+        end.
+
+rec eq : nat -> nat -> prop :=
+    forall m n. eq m n =
+        match m with
+        | Z -> match n with Z -> true | S _ -> false end
+        | S m2 -> match n with Z -> false | S n2 -> eq m2 n2 end
+        end.
+
+goal eq (plus (S (S Z)) (S (S Z))) (S (S (S (S Z)))) .
+
