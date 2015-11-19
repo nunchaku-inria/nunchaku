@@ -89,7 +89,9 @@ module Make(T : TI.S) = struct
           | BFalse -> BTrue
           | BPartial t -> BPartial (U.app_builtin `Not [t])
           end
-      | TI.AppBuiltin ((`Imply | `Equiv | `Eq | `Not), _) ->
+      | TI.AppBuiltin (`Undefined _, [_]) ->
+          BPartial t (* undefined term doesn't evaluate *)
+      | TI.AppBuiltin ((`Imply | `Equiv | `Eq | `Not | `Undefined _), _) ->
           assert false (* wrong arity *)
       | TI.AppBuiltin ((`Ite | `DataSelect _ | `DataTest _), _) ->
           invalid_arg "not boolean operators"
@@ -120,7 +122,7 @@ module Make(T : TI.S) = struct
           | BPartial _ -> BPartial default
 
     (* evaluate [b l] using [eval] *)
-    let eval_app_builtin ~eval b l ~st =
+    let eval_app_builtin ~eval (b:TI.Builtin.t) l ~st =
       (* auxiliary function *)
       let eval_term ~subst t =
         term_of_state (eval {args=[]; head=t; subst}) in
@@ -144,7 +146,8 @@ module Make(T : TI.S) = struct
           NunUtils.not_implemented "evaluation of DataTest"
       | `DataSelect (_,_), [_] ->
           NunUtils.not_implemented "evaluation of DataSelect"
-      | (`Ite | `DataSelect _ | `DataTest _),_ -> assert false
+      | `Undefined _, [_] -> st (* no evaluation *)
+      | (`Ite | `DataSelect _ | `DataTest _ | `Undefined _),_ -> assert false
 
     (* see whether [st] matches a case in [m] *)
     let lookup_case_ st m = match T.repr st.head with

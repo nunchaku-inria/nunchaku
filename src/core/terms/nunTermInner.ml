@@ -55,6 +55,7 @@ module Builtin = struct
     | `Eq
     | `DataTest of id (** Test whether [t : tau] starts with given constructor *)
     | `DataSelect of id * int (** Select n-th argument of given constructor *)
+    | `Undefined of id (** Undefined case. 1 argument (the undefined term) *)
     ]
 
   let fixity = function
@@ -63,7 +64,8 @@ module Builtin = struct
     | `Ite
     | `Not
     | `DataSelect _
-    | `DataTest _ -> `Prefix
+    | `DataTest _
+    | `Undefined _ -> `Prefix
     | `Eq
     | `Or
     | `And
@@ -81,6 +83,7 @@ module Builtin = struct
     | `Eq -> "="
     | `DataTest id -> "is-" ^ ID.name id
     | `DataSelect (id, n) -> CCFormat.sprintf "select-%s-%d" (ID.name id) n
+    | `Undefined id -> CCFormat.sprintf "undefined_%s" (ID.name id)
     | `Ite -> assert false
 
   let equal a b = match a, b with
@@ -95,6 +98,7 @@ module Builtin = struct
     | `Eq, `Eq -> true
     | `DataTest id, `DataTest id' -> ID.equal id id'
     | `DataSelect (id, n), `DataSelect (id', n') -> n=n' && ID.equal id id'
+    | `Undefined a, `Undefined b -> ID.equal a b
     | `True, _
     | `False, _
     | `Ite, _
@@ -105,7 +109,8 @@ module Builtin = struct
     | `Equiv, _
     | `Imply, _
     | `DataSelect _, _
-    | `DataTest _, _ -> false
+    | `DataTest _, _
+    | `Undefined _, _ -> false
 end
 
 type 'a case = 'a var list * 'a
@@ -731,7 +736,7 @@ module Util(T : S)
 
   let rec ty_exn ~sigma t = match T.repr t with
     | Const id -> find_ty_ ~sigma id
-    | AppBuiltin (b,_) ->
+    | AppBuiltin (b,l) ->
         let prop = ty_prop in
         let prop1 = ty_arrow prop prop in
         let prop2 = ty_arrow prop (ty_arrow prop prop) in
@@ -757,6 +762,11 @@ module Util(T : S)
                   failwith "cannot infer type, wrong argument to DataSelect"
               | Some ty_arg ->
                   ty_arrow (ty_returns ty) ty_arg
+              end
+          | `Undefined _ ->
+              begin match l with
+                | [a] -> ty_exn ~sigma a
+                | _ -> assert false
               end
         end
     | Var v -> Var.ty v
