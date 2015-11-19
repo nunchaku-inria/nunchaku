@@ -17,11 +17,6 @@ and 'term def =
 
   | Def of 'term (* id == this term *)
 
-  | Overload of
-      ('term * 'term def) list
-      (* decision tree based on the first (type) argument:
-        each [arg,def'] in the list means that [id arg = def'] *)
-
   | Datatype of
       [`Data | `Codata]
       * 'term t list (* list of constructors *)
@@ -29,15 +24,11 @@ and 'term def =
   | Opaque
   (* TODO: DefNode of term * node, for memoization *)
 
+(* FIXME: how to compile multiple equations to Def? *)
+
 val is_cstor : _ t -> bool
 val is_def : _ t -> bool
 
 val make : def:'term def -> ty:'term -> id -> 'term t
-
-exception Invalid of string
-
-val add_def : 'term t -> args:'term list -> 'term -> unit
-(** [add_def const ~args t] assumes that [const.def] is [Opaque] or [Overload],
-    and adds [args -> t] as an overloaded definition *)
-
+val set_ty : 'term t -> ty:'term -> 'term t
 

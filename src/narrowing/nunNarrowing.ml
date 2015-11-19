@@ -11,6 +11,7 @@ module T = NunTermEval
 module DBEnv = NunDBEnv
 module VarSet = T.VarSet
 module U = NunEvalUtils
+module Const = NunEvalConst
 
 type id = ID.t
 type 'a var = 'a Var.t
@@ -64,8 +65,8 @@ module State : sig
   }
 
   val make: unit -> t
-  val find: t -> id -> T.const option
-  val find_exn: t -> id -> T.const
+  val find: t -> id -> T.ty Const.t option
+  val find_exn: t -> id -> T.ty Const.t
 
   val add_branch: t -> goals -> t
   (** Add a new branch to explore *)

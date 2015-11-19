@@ -8,6 +8,7 @@ module Var = NunVar
 module Env = NunEnv
 module Subst = Var.Subst
 module DBEnv = NunDBEnv
+module Const = NunEvalConst
 
 type id = ID.t
 type 'a var = 'a Var.t
@@ -63,7 +64,7 @@ and term =
   | App of term * term list
   | DB of ty DB.t
   | Meta of t_meta
-  | Const of const
+  | Const of term Const.t
   | Builtin of Builtin.t
   | Let of ty * term * term
   | Bind of Binder.t * ty * term
@@ -129,7 +130,7 @@ let db_closed t =
   | DB m -> m.DB.index < n
   | Meta v -> aux n (Var.ty v)
   | Const c ->
-      assert (aux 0 c.const_ty); true (* constant should have closed types *)
+      assert (aux 0 c.Const.ty); true (* constant should have closed types *)
   | Builtin _ -> true
   | Let (ty,t,u) ->
       aux n ty  && aux n t && aux (n+1) u
@@ -173,8 +174,8 @@ let db_lift n t =
         if Var.ty v==ty' then old
         else meta (Var.update_ty v ~f:(fun _ -> ty'))
     | Const c ->
-        let ty' = aux k c.const_ty in
-        if c.const_ty==ty' then old else const {c with const_ty=ty'}
+        let ty' = aux k c.Const.ty in
+        if c.Const.ty==ty' then old else const (Const.set_ty c ~ty:ty')
     | Builtin _ -> old
     | Let (ty,t,u) ->
         (* expand [let]! *)
@@ -240,8 +241,8 @@ let rec db_eval
       if Var.ty v==ty' then old
       else meta (Var.set_ty ~ty:ty' v)
   | Const c ->
-      let ty' = db_eval ~env c.const_ty in
-      if c.const_ty==ty' then old else const {c with const_ty=ty'}
+      let ty' = db_eval ~env c.Const.ty in
+      if c.Const.ty==ty' then old else const (Const.set_ty c ~ty:ty')
   | Builtin _ -> old
   | Let (ty,t,u) ->
       (* expand [let]! *)

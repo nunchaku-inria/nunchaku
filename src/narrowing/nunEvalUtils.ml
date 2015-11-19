@@ -8,6 +8,7 @@ module Var = NunVar
 module Env = NunEnv
 module Subst = Var.Subst
 module DBEnv = NunDBEnv
+module Const = NunEvalConst
 module T = NunTermEval
 module VarSet = T.VarSet
 
@@ -75,16 +76,16 @@ let rec whnf
   | K_ite _, _ ->
       top (* blocked, for now *)
   | K_match (l, cont), T.Const c ->
-      begin match c.T.const_def with
-      | T.Opaque
-      | T.Datatype _ -> top
-      | T.Def t' ->
+      begin match c.Const.def with
+      | Const.Opaque
+      | Const.Datatype _ -> top
+      | Const.Def t' ->
           whnf ~subst (T.TermTop.set_head top ~hd:t')
-      | T.Cstor _ ->
+      | Const.Cstor _ ->
           (* constructor applied to arguments; if enough arguments, we can
              reduce to the proper branch (after pushing arguments in the env) *)
           begin try
-            let tys, rhs = ID.Map.find c.T.const_id l in
+            let tys, rhs = ID.Map.find c.Const.id l in
             (*
                - push [c_args], the arguments of the constructor
                  into the environment
@@ -101,11 +102,11 @@ let rec whnf
       end
   | K_match _, _ -> top
   | _, T.Const c ->
-      begin match c.T.const_def with
-      | T.Datatype _
-      | T.Opaque
-      | T.Cstor _ -> top  (* normal form *)
-      | T.Def t' ->
+      begin match c.Const.def with
+      | Const.Datatype _
+      | Const.Opaque
+      | Const.Cstor _ -> top  (* normal form *)
+      | Const.Def t' ->
           whnf ~subst (T.TermTop.set_head top ~hd:t')
       end
   | _, (T.DB _ | T.Bind _ | T.Builtin _ | T.TyArrow _) -> top

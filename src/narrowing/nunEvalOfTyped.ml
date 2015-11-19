@@ -13,6 +13,7 @@ module Stmt = NunStatement
 module T = NunTermEval
 module DBEnv = NunDBEnv
 module Env = NunEvalEnv
+module Const = NunEvalConst
 
 exception InvalidProblem of string
 (** Raised when a problem cannot be converted into a narrowing problem *)
@@ -130,11 +131,10 @@ end = struct
         end
     | Stmt.Decl (id,_,ty) ->
         let ty = into_term ~ctx ty in
-        let c = {T.const_id=id; const_def=T.Opaque; const_ty=ty; } in
+        let c = Const.make ~def:Const.Opaque ~ty id in
         Env.declare ~env c, maybe_goal
     | Stmt.Axiom _
-    | Stmt.TyDef (_,_)
-    | Stmt.Goal _ -> assert false (* TODO: convert, and add to environment *)
+    | Stmt.TyDef (_,_) -> assert false (* TODO: convert, and add to environment *)
 
   let convert_pb pb =
     let env = Env.create() in
