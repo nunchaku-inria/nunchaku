@@ -33,7 +33,8 @@ Library "nunchaku_core"
                     transformations/NunTypeInference,
                     transformations/NunElimPatternMatch,
                     transformations/NunMonomorphization,
-                    transformations/NunElimRecursion
+                    transformations/NunElimRecursion,
+                    transformations/NunElimMultipleEqns
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.sexp, containers.iter,
