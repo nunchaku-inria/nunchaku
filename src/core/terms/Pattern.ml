@@ -6,12 +6,10 @@
   A pattern is found on the left of a (nested) pattern match. It is built
   from constructors and variables only. *)
 
-module ID = NunID
-module Var = NunVar
-module TI = NunTermInner
+module TI = TermInner
 
-type id = NunID.t
-type 'a var = 'a NunVar.t
+type id = ID.t
+type 'a var = 'a Var.t
 
 type 'a view =
   | App of id * 'a list (* constructor application *)
