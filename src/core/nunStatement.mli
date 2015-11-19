@@ -17,29 +17,30 @@ type 'ty defined = {
   defined_ty: 'ty; (* type of the head symbol *)
 }
 
-(* TODO: add Eqn_unique? it would be nice to have
-    a special case for   rec f : a -> b := fun x -> ....
-    (exactly one non-refutable equation)
-*)
-
-type ('t, 'ty, 'k) equation =
+type ('t, 'ty, 'kind) equations =
   | Eqn_linear :
-      'ty var list (* universally quantified vars, also arguments to [f] *)
+      ('ty var list (* universally quantified vars, also arguments to [f] *)
       * 't (* right-hand side of equation *)
       * 't list (* side conditions *)
-      -> ('t, 'ty, <eqn:[`Linear];..>) equation
+      ) list
+      -> ('t, 'ty, <eqn:[`Linear];..>) equations
   | Eqn_nested :
-      'ty var list (* universally quantified vars *)
+      ('ty var list (* universally quantified vars *)
       * 't list (* arguments (patterns) to the defined term *)
       * 't  (* right-hand side of equation *)
       * 't list (* additional conditions *)
-      -> ('t, 'ty, <eqn:[`Nested];..>) equation
+      ) list
+      -> ('t, 'ty, <eqn:[`Nested];..>) equations
+  | Eqn_single :
+      'ty var list (* function arguments *)
+      *  't (* RHS *)
+      -> ('t, 'ty, <eqn:[`Single];..>) equations
 
 type ('t,'ty,'kind) rec_def = {
   rec_defined: 'ty defined;
   rec_kind: decl;
   rec_vars: 'ty var list; (* type variables in definitions *)
-  rec_eqns: ('t, 'ty,'kind) equation list; (* list of equations defining the term *)
+  rec_eqns: ('t, 'ty,'kind) equations; (* list of equations defining the term *)
 }
 
 type ('t, 'ty,'kind) rec_defs = ('t, 'ty,'kind) rec_def list
@@ -143,11 +144,11 @@ val map_defined:
   'ty defined ->
   'ty2 defined
 
-val map_eqn:
+val map_eqns:
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, <eqn:'inv;..>) equation ->
-  ('t2, 'ty2, <eqn:'inv;..>) equation
+  ('t, 'ty, <eqn:'inv;..>) equations ->
+  ('t2, 'ty2, <eqn:'inv;..>) equations
 
 val map_rec_def :
   term:('t -> 't2) ->

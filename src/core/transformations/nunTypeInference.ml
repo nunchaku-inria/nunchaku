@@ -924,13 +924,15 @@ module Convert(Term : NunTermTyped.S) = struct
                     ID.print_name id
             | Some (vars,args,rhs) ->
                 List.iter (check_prenex_types_ ?loc) args;
-                Stmt.Eqn_nested (vars, args, rhs, [])
+                vars, args, rhs, []
           )
           l
         in
         (* return case *)
         let kind = kind_of_ty_ ty in
-        {Stmt.rec_defined=defined; rec_kind=kind; rec_vars=ty_vars; rec_eqns; }
+        {Stmt.
+          rec_defined=defined; rec_kind=kind; rec_vars=ty_vars;
+          rec_eqns=Stmt.Eqn_nested rec_eqns; }
       )
       l'
     in
@@ -1042,9 +1044,10 @@ module Convert(Term : NunTermTyped.S) = struct
         List.iter
           (fun def ->
             let id1 = def.Stmt.rec_defined.Stmt.defined_head in
+            let Stmt.Eqn_nested l = def.Stmt.rec_eqns in
             if List.exists
-              (fun (Stmt.Eqn_nested (_,_,rhs,_)) -> term_contains_ ~id:id1 rhs)
-              def.Stmt.rec_eqns
+              (fun (_,_,rhs,_) -> term_contains_ ~id:id1 rhs)
+              l
             then ill_formedf ?loc ~kind:"def"
               "right-hand side of definition contains defined symbol %a"
               ID.print id1;

@@ -429,22 +429,31 @@ module Make(T : TI.S) = struct
     let defined_head, _ = mangle_ ~state d.Stmt.defined_head (ArgTuple.m_args tup) in
     {Stmt.defined_head; defined_ty; }
 
-  (* monomorphize an equation properly
+  (* monomorphize equations properly
      n: number of type arguments *)
-  let mono_eqn
+  let mono_eqns
   : type a.
       state:'t St.t -> local_state:local_state -> int ->
-      (_,_,a inv1) Stmt.equation -> (_,_,a inv2) Stmt.equation
+      (_,_,a inv1) Stmt.equations -> (_,_,a inv2) Stmt.equations
   = fun ~state ~local_state n eqn ->
-    let f e = Stmt.map_eqn e
+    let f e = Stmt.map_eqns e
       ~term:(mono_term ~state ~local_state)
       ~ty:(mono_type ~state ~local_state)
     in
     match eqn with
-      | Stmt.Eqn_linear (vars, rhs, side) ->
-          f (Stmt.Eqn_linear (CCList.drop n vars, rhs, side))
-      | Stmt.Eqn_nested (vars, args, rhs, side) ->
-          f (Stmt.Eqn_nested (vars, CCList.drop n args, rhs, side))
+      | Stmt.Eqn_linear l ->
+          f (Stmt.Eqn_linear
+            (List.map
+              (fun (vars, rhs, side) -> CCList.drop n vars, rhs, side)
+              l))
+      | Stmt.Eqn_nested l ->
+          f (Stmt.Eqn_nested
+            (List.map
+              (fun (vars, args, rhs, side) -> vars, CCList.drop n args, rhs, side)
+              l))
+      | Stmt.Eqn_single (vars, rhs) ->
+          let vars = CCList.drop n vars in
+          Stmt.Eqn_single (vars, mono_term ~state ~local_state rhs)
 
   (* specialize mutual recursive definitions *)
   let mono_rec_defs ~state ~depth (defs, def, loc) tup =
@@ -487,7 +496,7 @@ module Make(T : TI.S) = struct
             specialize the axioms and other fields *)
         let local_state = {subst; depth=depth+1; } in
         let n = List.length def.Stmt.rec_vars in
-        let eqns = List.map (mono_eqn ~state ~local_state n) def.Stmt.rec_eqns
+        let eqns = mono_eqns ~state ~local_state n def.Stmt.rec_eqns
         in
         (* new (specialized) case *)
         let rec_defined = mono_defined ~state ~local_state def.Stmt.rec_defined tup in

@@ -19,24 +19,30 @@ type 'ty defined = {
   defined_ty: 'ty; (* type of the head symbol *)
 }
 
-type ('t, 'ty, 'k) equation =
+type ('t, 'ty, 'kind) equations =
   | Eqn_linear :
-      'ty var list (* universally quantified vars, also arguments to [f] *)
+      ('ty var list (* universally quantified vars, also arguments to [f] *)
       * 't (* right-hand side of equation *)
       * 't list (* side conditions *)
-      -> ('t, 'ty, <eqn:[`Linear];..>) equation
+      ) list
+      -> ('t, 'ty, <eqn:[`Linear];..>) equations
   | Eqn_nested :
-      'ty var list (* universally quantified vars *)
+      ('ty var list (* universally quantified vars *)
       * 't list (* arguments (patterns) to the defined term *)
       * 't  (* right-hand side of equation *)
       * 't list (* additional conditions *)
-      -> ('t, 'ty, <eqn:[`Nested];..>) equation
+      ) list
+      -> ('t, 'ty, <eqn:[`Nested];..>) equations
+  | Eqn_single :
+      'ty var list (* function arguments *)
+      *  't (* RHS *)
+      -> ('t, 'ty, <eqn:[`Single];..>) equations
 
 type ('t,'ty,'kind) rec_def = {
   rec_defined: 'ty defined;
   rec_kind: decl;
   rec_vars: 'ty var list; (* type variables in definitions *)
-  rec_eqns: ('t, 'ty,'kind) equation list; (* list of equations defining the term *)
+  rec_eqns: ('t, 'ty,'kind) equations; (* list of equations defining the term *)
 }
 
 type ('t, 'ty,'kind) rec_defs = ('t, 'ty,'kind) rec_def list
@@ -126,29 +132,37 @@ let map_defined ~f d = {
   defined_ty=f d.defined_ty;
 }
 
-let map_eqn
+let map_eqns
 : type a a1 b b1 inv.
     term:(a -> a1) -> ty:(b -> b1) ->
-    (a,b,<eqn:inv;..>) equation -> (a1,b1,<eqn:inv;..>) equation
+    (a,b,<eqn:inv;..>) equations -> (a1,b1,<eqn:inv;..>) equations
 = fun ~term ~ty eqn ->
     match eqn with
-    | Eqn_nested (vars,args,rhs,side) ->
+    | Eqn_nested l ->
         Eqn_nested
-          ( List.map (Var.update_ty ~f:ty) vars,
-            List.map term args,
-            term rhs,
-            List.map term side)
-    | Eqn_linear (vars,rhs,side) ->
+          (List.map
+            (fun (vars,args,rhs,side) ->
+              List.map (Var.update_ty ~f:ty) vars,
+              List.map term args,
+              term rhs,
+              List.map term side)
+            l)
+    | Eqn_linear l ->
         Eqn_linear
-          ( List.map (Var.update_ty ~f:ty) vars,
-            term rhs,
-            List.map term side)
+          (List.map
+            (fun (vars,rhs,side) ->
+              List.map (Var.update_ty ~f:ty) vars,
+              term rhs,
+              List.map term side)
+            l)
+    | Eqn_single (vars,rhs) ->
+        Eqn_single (List.map (Var.update_ty ~f:ty) vars, term rhs)
 
 let map_rec_def ~term ~ty t = {
   rec_kind=t.rec_kind;
   rec_defined=map_defined ~f:ty t.rec_defined;
   rec_vars=List.map (Var.update_ty ~f:ty) t.rec_vars;
-  rec_eqns=List.map (map_eqn ~term ~ty) t.rec_eqns;
+  rec_eqns=map_eqns ~term ~ty t.rec_eqns;
 }
 
 let map_rec_defs ~term ~ty t = List.map (map_rec_def ~term ~ty) t
@@ -192,18 +206,27 @@ let map ~term:ft ~ty:fty st =
 
 let fold_defined ~ty acc d = ty acc d.defined_ty
 
-let fold_eqn_ (type inv) ~term ~ty acc (e:(_,_,inv) equation) =
+let fold_eqns_ (type inv) ~term ~ty acc (e:(_,_,inv) equations) =
   let fold_vars acc l = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc l in
   match e with
-  | Eqn_nested (vars,args,rhs,side) ->
-      let acc = fold_vars acc vars in
-      let acc = List.fold_left term acc args in
-      let acc = term acc rhs in
-      List.fold_left term acc side
-  | Eqn_linear (vars,rhs,side) ->
-      let acc = fold_vars acc vars in
-      let acc = term acc rhs in
-      List.fold_left term acc side
+  | Eqn_nested l ->
+      List.fold_left
+        (fun acc (vars,args,rhs,side) ->
+          let acc = fold_vars acc vars in
+          let acc = List.fold_left term acc args in
+          let acc = term acc rhs in
+          List.fold_left term acc side)
+        acc l
+  | Eqn_linear l ->
+      List.fold_left
+        (fun acc (vars,rhs,side) ->
+          let acc = fold_vars acc vars in
+          let acc = term acc rhs in
+          List.fold_left term acc side)
+        acc l
+  | Eqn_single (vars,t) ->
+      let acc = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc vars in
+      term acc t
 
 let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
   match st.view with
@@ -218,7 +241,7 @@ let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
           List.fold_left
             (fun acc def ->
               let acc = fold_defined ~ty acc def.rec_defined in
-              List.fold_left (fold_eqn_ ~term ~ty) acc def.rec_eqns
+              fold_eqns_ ~term ~ty acc def.rec_eqns
             )
             acc t
       end
@@ -257,25 +280,33 @@ let print (type a)(type b)
           if l=[] then ()
           else fpf out "@[<hv2>%a => @]@," (pplist ~sep:" && " Pt.print_in_app) l
         in
-        (* print equation *)
-        let pp_eqn (type inv) id out (e:(_,_,inv) equation) =
+        (* print equations *)
+        let pp_eqns (type inv) id out (e:(_,_,inv) equations) =
           match e with
-          | Eqn_linear (vars,rhs,side) ->
-              if vars=[]
-              then fpf out "@[<hv>%a%a =@ %a@]" pp_sides side ID.print_name id Pt.print rhs
-              else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
-                (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print_name id
+          | Eqn_linear l  ->
+              pplist ~sep:";"
+                (fun out (vars,rhs,side) ->
+                  if vars=[]
+                  then fpf out "@[<hv>%a%a =@ %a@]" pp_sides side ID.print_name id Pt.print rhs
+                  else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
+                    (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print_name id
+                    (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
+                ) out l
+          | Eqn_nested l ->
+              pplist ~sep:";"
+                (fun out  (vars,args,rhs,side) ->
+                  if vars=[]
+                  then fpf out "@[<hv>%a@[<2>%a@ %a@] =@ %a@]"
+                    pp_sides side ID.print_name id
+                    (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
+                  else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
+                    (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print_name id
+                    (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
+                ) out l
+          | Eqn_single (vars,rhs) ->
+              fpf out "@[<2>%a %a =@ %a@]" ID.print_name id
                 (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
-          | Eqn_nested (vars,args,rhs,side) ->
-              if vars=[]
-              then fpf out "@[<hv>%a@[<2>%a@ %a@] =@ %a@]"
-                pp_sides side ID.print_name id
-                (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
-              else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
-                (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print_name id
-                (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
         in
-        let pp_eqns id = pplist ~sep:";" (pp_eqn id) in
         let pp_def out d =
           fpf out "@[<hv2>%a : @[%a@] :=@ %a@]"
             pp_defined d.rec_defined

@@ -195,31 +195,45 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
       | TyBuiltin `Prop -> true
       | _ -> false
 
-  let convert_eqn
+  let convert_eqns
   : type inv.
-    head:id -> sigma:T.t Sig.t -> (T.t,T.t,inv) NunStatement.equation -> FO.formula
-  = fun ~head ~sigma eqn ->
+    head:id -> sigma:T.t Sig.t -> (T.t,T.t,inv) NunStatement.equations -> FO.formula list
+  = fun ~head ~sigma eqns ->
     let module St = NunStatement in
-    let vars, args, rhs, side = match eqn with
-      | St.Eqn_linear (vars,rhs,side) ->
-          vars, List.map (fun v -> FO.T.var (conv_var v)) vars, rhs, side
-      | St.Eqn_nested (vars,args,rhs,side) ->
-          vars, List.map (conv_term) args, rhs, side
+    let conv_eqn (vars, args, rhs, side) =
+      let vars = List.map (conv_var) vars in
+      let lhs = FO.T.app head args in
+      let f =
+        if returns_prop_ (Sig.find_exn ~sigma head)
+        then
+          FO.Formula.equiv
+            (FO.Formula.atom lhs)
+            (conv_form rhs)
+        else FO.Formula.eq lhs (conv_term rhs)
+      in
+      (* add side conditions *)
+      let side = List.map (conv_form) side in
+      let f = if side=[] then f else FO.Formula.imply (FO.Formula.and_ side) f in
+      List.fold_right FO.Formula.forall vars f
     in
-    let vars = List.map (conv_var) vars in
-    let lhs = FO.T.app head args in
-    let f =
-      if returns_prop_ (Sig.find_exn ~sigma head)
-      then
-        FO.Formula.equiv
-          (FO.Formula.atom lhs)
-          (conv_form rhs)
-      else FO.Formula.eq lhs (conv_term rhs)
-    in
-    (* add side conditions *)
-    let side = List.map (conv_form) side in
-    let f = if side=[] then f else FO.Formula.imply (FO.Formula.and_ side) f in
-    List.fold_right FO.Formula.forall vars f
+    match eqns with
+    | St.Eqn_single (vars,rhs) ->
+        (* [id = fun vars. rhs] *)
+        let vars = List.map (conv_var) vars in
+        [ FO.Formula.eq
+            (FO.T.const head)
+            (List.fold_right FO.T.fun_ vars (conv_term rhs)) ]
+    | St.Eqn_linear l ->
+        List.map
+          (fun
+            (vars,rhs,side) ->
+              conv_eqn (vars, List.map (fun v -> FO.T.var (conv_var v)) vars, rhs, side)
+          ) l
+    | St.Eqn_nested l ->
+        List.map
+          (fun (vars,args,rhs,side) ->
+            conv_eqn (vars, List.map (conv_term) args, rhs, side))
+          l
 
   let convert_statement ~sigma st =
     let module St = NunStatement in
@@ -261,9 +275,8 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
                 (fun def ->
                   (* transform equations *)
                   let head = def.St.rec_defined.St.defined_head in
-                  List.map
-                    (fun e -> mk_ax (convert_eqn ~head ~sigma e))
-                    def.St.rec_eqns)
+                  let l = convert_eqns ~head ~sigma def.St.rec_eqns in
+                  List.map mk_ax l)
                 s)
         end
     | St.Goal f ->

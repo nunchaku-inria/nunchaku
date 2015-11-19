@@ -262,35 +262,37 @@ module Make(T : TI.S) = struct
 
   (* translate equation [eqn], which is defining the function
      corresponding to [fun_encoding] *)
-  let tr_eqn ~state ~fun_encoding eqn =
-    let Stmt.Eqn_linear (vars,rhs,side) = eqn in
-    (* quantify over abstract variable now *)
-    let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
-    (* replace each [x_i] by [proj_i var] *)
-    assert (List.length vars = List.length fun_encoding.fun_concretization);
-    let args' = List.map
-      (fun (proj,_) -> U.app (U.const proj) [U.var alpha])
-      fun_encoding.fun_concretization
+  let tr_eqns ~state ~fun_encoding eqn =
+    let Stmt.Eqn_linear l = eqn in
+    let l = List.map
+      (fun (vars,rhs,side) ->
+        (* quantify over abstract variable now *)
+        let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
+        (* replace each [x_i] by [proj_i var] *)
+        assert (List.length vars = List.length fun_encoding.fun_concretization);
+        let args' = List.map
+          (fun (proj,_) -> U.app (U.const proj) [U.var alpha])
+          fun_encoding.fun_concretization
+        in
+        let subst = Subst.add_list ~subst:Subst.empty vars args' in
+        let local_state = { empty_local_state with subst; } in
+        (* convert right-hand side (ignore its side conditions) *)
+        let rhs', conds = tr_term ~state ~local_state rhs in
+        (* need to invert polarity, side conditions are LHS of => *)
+        let conds_side, side' = NunUtils.fold_map
+          (fun conds t ->
+            let t', conds' = tr_term ~state ~local_state:(inv_pol local_state) t in
+            List.rev_append conds' conds, t'
+          ) conds side
+        in
+        [alpha], args', rhs', conds_side @ side'
+      ) l
     in
-    let subst = Subst.add_list ~subst:Subst.empty vars args' in
-    let local_state = { empty_local_state with subst; } in
-    (* convert right-hand side (ignore its side conditions) *)
-    let rhs', conds = tr_term ~state ~local_state rhs in
-    (* need to invert polarity, side conditions are LHS of => *)
-    let conds_side, side' = NunUtils.fold_map
-      (fun conds t ->
-        let t', conds' = tr_term ~state ~local_state:(inv_pol local_state) t in
-        List.rev_append conds' conds, t'
-      ) conds side
-    in
-    Stmt.Eqn_nested ([alpha], args', rhs', conds_side @ side')
+    Stmt.Eqn_nested l
 
   (* transform the recursive definition (mostly, its equations) *)
   let tr_rec_def ~state ~fun_encoding def =
-    let eqns' = List.map
-      (tr_eqn ~state ~fun_encoding)
-      def.Stmt.rec_eqns
-    in
+    let eqns' = tr_eqns ~state ~fun_encoding def.Stmt.rec_eqns in
     (* return new set of equations *)
     {def with Stmt.rec_eqns=eqns'}
 

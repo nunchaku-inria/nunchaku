@@ -221,41 +221,46 @@ module Make(T : NunTermInner.S) = struct
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> errorf_ "expected pattern, got %a" P.print t
 
-  let flatten_eqn ~defined ~env e =
-    let Stmt.Eqn_nested (_vars,args,rhs,side) = e in
-    (* type of the defined term *)
-    let ty_head = find_ty_ ~env defined.Stmt.defined_head in
-    let ty_args = ty_args_ ty_head in
-    NunUtils.debugf ~section 5 "type arguments: %a, term arguments: %a"
-      (fun k->k(CCFormat.list P.print) ty_args (CCFormat.list P.print) args);
-    assert (List.length ty_args = List.length args);
-    (* map every argument to a variable, accumulating constraints and
-       bindings along the way *)
-    let ctx, vars = NunUtils.fold_map
-      (fun ctx (arg,ty_arg) ->
-        let ctx, v = flatten_pat_ ~ctx ~ty:ty_arg arg in
-        (* forbid [v] from being used as a pattern in next arguments, for
-          that would break linearity *)
-        let ctx' = add_var_ ~ctx v in
-        ctx', v
-      ) (empty_ctx ~env) (List.combine args ty_args)
+  let flatten_eqns ~defined ~env e =
+    let Stmt.Eqn_nested l = e in
+    let l = List.map
+      (fun (_vars,args,rhs,side)  ->
+        (* type of the defined term *)
+        let ty_head = find_ty_ ~env defined.Stmt.defined_head in
+        let ty_args = ty_args_ ty_head in
+        NunUtils.debugf ~section 5 "type arguments: %a, term arguments: %a"
+          (fun k->k(CCFormat.list P.print) ty_args (CCFormat.list P.print) args);
+        assert (List.length ty_args = List.length args);
+        (* map every argument to a variable, accumulating constraints and
+           bindings along the way *)
+        let ctx, vars = NunUtils.fold_map
+          (fun ctx (arg,ty_arg) ->
+            let ctx, v = flatten_pat_ ~ctx ~ty:ty_arg arg in
+            (* forbid [v] from being used as a pattern in next arguments, for
+              that would break linearity *)
+            let ctx' = add_var_ ~ctx v in
+            ctx', v
+          ) (empty_ctx ~env) (List.combine args ty_args)
+        in
+        let rhs' = elim_match_ ~subst:ctx.subst rhs in
+        let side = elim_match_l_ ~subst:ctx.subst side in
+        (* add constraints to [side] *)
+        let side' = List.map
+          (fun constr -> match constr with
+            | EqTerm (t1,t2) ->
+                (* t1=t2 => rhs *)
+                let t1 = elim_match_ ~subst:ctx.subst t1 in
+                let t2 = elim_match_ ~subst:ctx.subst t2 in
+                U.eq t1 t2
+            | Test (t, id) ->
+                let t = elim_match_ ~subst:ctx.subst t in
+                mk_data_test_ ~id t
+          ) ctx.c_set
+        in
+        vars, rhs', List.rev_append side' side
+      ) l
     in
-    let rhs' = elim_match_ ~subst:ctx.subst rhs in
-    let side = elim_match_l_ ~subst:ctx.subst side in
-    (* add constraints to [side] *)
-    let side' = List.map
-      (fun constr -> match constr with
-        | EqTerm (t1,t2) ->
-            (* t1=t2 => rhs *)
-            let t1 = elim_match_ ~subst:ctx.subst t1 in
-            let t2 = elim_match_ ~subst:ctx.subst t2 in
-            U.eq t1 t2
-        | Test (t, id) ->
-            let t = elim_match_ ~subst:ctx.subst t in
-            mk_data_test_ ~id t
-      ) ctx.c_set
-    in
-    Stmt.Eqn_linear (vars, rhs', List.rev_append side' side)
+    Stmt.Eqn_linear l
 
   let elim_match_top_ t = elim_match_ ~subst:Subst.empty t
   let id_ x = x
@@ -271,7 +276,7 @@ module Make(T : NunTermInner.S) = struct
           (fun def ->
             let defined = def.Stmt.rec_defined in
             {def with
-              Stmt.rec_eqns=List.map (flatten_eqn ~defined ~env:env') def.Stmt.rec_eqns
+              Stmt.rec_eqns=flatten_eqns ~defined ~env:env' def.Stmt.rec_eqns;
             })
           l
         in
