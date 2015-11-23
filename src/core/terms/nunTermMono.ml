@@ -78,11 +78,10 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
   let () = Printexc.register_printer
     (function
       | NotInFO (msg, t) ->
-          let msg = CCFormat.sprintf
+          Some(CCFormat.sprintf
             "@[<2>term `@[%a@]` is not in the first-order fragment:@ %s@]"
               P.print t msg
-          in
-          Some msg
+          )
       | _ -> None
     )
 
@@ -261,8 +260,8 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
               s.St.spec_axioms
         | St.Axiom_rec s ->
             (* first declare all types; then push axioms *)
-            List.rev_append
-              (List.rev_map
+            let decls =
+              List.rev_map
                 (fun def ->
                   (* first, declare symbol *)
                   let d = def.St.rec_defined in
@@ -270,14 +269,17 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
                   let head = d.St.defined_head in
                   let st1 = FOI.Decl (head, ty) in
                   st1)
-                s)
-              (CCList.flat_map
+                s
+            and axioms =
+              CCList.flat_map
                 (fun def ->
                   (* transform equations *)
                   let head = def.St.rec_defined.St.defined_head in
                   let l = convert_eqns ~head ~sigma def.St.rec_eqns in
                   List.map mk_ax l)
-                s)
+                s
+            in
+            List.rev_append decls axioms
         end
     | St.Goal f ->
         [ FOI.Goal (conv_form f) ]
