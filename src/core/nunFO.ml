@@ -35,6 +35,7 @@ type ('f, 't, 'ty) view =
   | App of id * 't list
   | DataTest of id * 't
   | DataSelect of id * int * 't
+  | Undefined of id * 't (** ['t] is not defined here *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
   | Ite of 'f * 't * 't
@@ -145,6 +146,7 @@ module type S = sig
     val app : id -> t list -> t
     val data_test : id -> t -> t
     val data_select : id -> int -> t -> t
+    val undefined : id -> t -> t
     val var : Ty.t var -> t
     val let_ : Ty.t var -> t -> t -> t
     val fun_ : Ty.t var -> t -> t
@@ -216,6 +218,7 @@ module Default : S = struct
     let var v = make_ (Var v)
     let data_test c t = make_ (DataTest (c,t))
     let data_select c n t = make_ (DataSelect (c,n,t))
+    let undefined c t = make_ (Undefined (c,t))
     let let_ v t u = make_ (Let(v,t,u))
     let fun_ v t = make_ (Fun (v,t))
     let ite f t u = make_ (Ite (f,t,u))
@@ -338,6 +341,8 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
         fpf out "(@[<2>is-%a@ %a@])" ID.print_name c print_term t
     | DataSelect (c,n,t) ->
         fpf out "(@[<2>select-%a-%d@ %a@])" ID.print_name c n print_term t
+    | Undefined (c,t) ->
+        fpf out "(@[<2>undefined-%a@ %a@])" ID.print_name c print_term t
     | Let (v,t,u) ->
         fpf out "(@[<2>let@ %a =@ %a in@ %a@])"
           Var.print v print_term t print_term u

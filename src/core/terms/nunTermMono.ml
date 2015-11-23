@@ -129,6 +129,8 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
         FO.T.data_test c (conv_term t)
     | AppBuiltin (`DataSelect (c,n), [t]) ->
         FO.T.data_select c n (conv_term t)
+    | AppBuiltin (`Undefined c, [t]) ->
+        FO.T.undefined c (conv_term t)
     | AppBuiltin _ -> fail_ t "no builtin in terms"
     | Const id -> FO.T.const id
     | Var v -> FO.T.var (conv_var v)
@@ -162,8 +164,7 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
             FO.Formula.equiv (conv_form_rec a)(conv_form_rec b)
         | `Eq, [a;b] ->
             FO.Formula.eq (conv_term a)(conv_term b)
-        | `DataSelect _, _
-        | `DataTest _, _ ->
+        | (`DataSelect _ | `DataTest _ | `Undefined _), _ ->
             FO.Formula.atom (conv_term t)
         | _ -> assert false
         end
@@ -338,6 +339,8 @@ module OfFO(T:TI.S)(FO : NunFO.VIEW) = struct
         U.builtin b
     | NunFO.Var v ->
         U.var (Var.update_ty v ~f:(convert_ty))
+    | NunFO.Undefined (c,t) ->
+        U.app_builtin (`Undefined c) [convert_term t]
     | NunFO.App (f,l) ->
         let l = List.map convert_term l in
         U.app (U.const f) l

@@ -34,6 +34,7 @@ type ('f, 't, 'ty) view =
   | App of id * 't list
   | DataTest of id * 't
   | DataSelect of id * int * 't
+  | Undefined of id * 't (** ['t] is not defined here *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
   | Ite of 'f * 't * 't
@@ -146,6 +147,7 @@ module type S = sig
     val app : id -> t list -> t
     val data_test : id -> t -> t
     val data_select : id -> int -> t -> t
+    val undefined : id -> t -> t
     val var : Ty.t var -> t
     val let_ : Ty.t var -> t -> t -> t
     val fun_ : Ty.t var -> t -> t
