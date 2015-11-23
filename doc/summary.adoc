@@ -18,7 +18,7 @@ conversion to FO::
     to a specialized format
 elim multiple equations::
     (*wip*) convert Haskell-like definitions, with multiple definitions for
-    a single functions, into a single-equation + pattern matching (à la Coq).
+    a single function, into a single-equation + pattern matching (à la Coq).
 specialization::
     (*todo*) specialize higher-order functions (e.g., `map` or `fold`) to their
     functional arguments, to obtain a first-order function. For instance,
