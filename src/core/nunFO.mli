@@ -70,7 +70,7 @@ type 'ty constructor = {
 
 type 'ty tydef = {
   ty_name: id;
-  ty_cstors: 'ty constructor list;
+  ty_cstors: 'ty constructor NunID.Map.t;
 }
 
 type 'ty mutual_types = {

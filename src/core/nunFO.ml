@@ -71,7 +71,7 @@ type 'ty constructor = {
 
 type 'ty tydef = {
   ty_name: id;
-  ty_cstors: 'ty constructor list;
+  ty_cstors: 'ty constructor ID.Map.t;
 }
 
 type 'ty mutual_types = {
@@ -395,7 +395,8 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
         let print_tydef out tydef =
           fpf out "@[<hv2>%a :=@ %a@]"
             ID.print_name tydef.ty_name
-            (pp_list_ ~sep:" | " pp_cstor) tydef.ty_cstors
+            (pp_list_ ~sep:" | " pp_cstor)
+            (ID.Map.to_list tydef.ty_cstors |> List.map snd)
         in
         fpf out "@[<hv2>%s %a@,%a.@]"
           (match k with `Data -> "data" | `Codata -> "codata")

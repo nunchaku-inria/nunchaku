@@ -136,8 +136,8 @@ let def_data ?loc ~env:t ~kind tys =
       } in
       let t = {infos=ID.PerTbl.replace t.infos id info} in
       (* define constructors *)
-      List.fold_left
-        (fun t cstor ->
+      ID.Map.fold
+        (fun _ cstor t ->
           let id = cstor.Stmt.cstor_name in
           check_not_defined_ t ~id ~fail_msg:"is constructor, but already defined";
           let info = {
@@ -147,7 +147,7 @@ let def_data ?loc ~env:t ~kind tys =
             def=Cstor (kind,tys,tydef, cstor);
           } in
           {infos=ID.PerTbl.replace t.infos id info}
-        ) t tydef.Stmt.ty_cstors
+        ) tydef.Stmt.ty_cstors t
     ) t tys
 
 let add_statement ~env st =

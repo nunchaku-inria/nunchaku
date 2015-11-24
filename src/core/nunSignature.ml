@@ -31,8 +31,8 @@ let add_statement ~sigma st = match Stmt.view st with
       List.fold_left
         (fun sigma tydef ->
           let sigma = declare ~sigma tydef.Stmt.ty_id tydef.Stmt.ty_type in
-          List.fold_left
-            (fun sigma cstor ->
+          ID.Map.fold
+            (fun _ cstor sigma ->
               declare ~sigma cstor.Stmt.cstor_name cstor.Stmt.cstor_type
-            ) sigma tydef.Stmt.ty_cstors
+            ) tydef.Stmt.ty_cstors sigma
         ) sigma l

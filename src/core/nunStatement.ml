@@ -66,7 +66,7 @@ type 'ty tydef = {
   ty_id : id;
   ty_vars : 'ty NunVar.t list;
   ty_type : 'ty; (** shortcut for [type -> type -> ... -> type] *)
-  ty_cstors : 'ty ty_constructor list;
+  ty_cstors : 'ty ty_constructor NunID.Map.t;
 }
 
 (** Mutual definitions of several types *)
@@ -193,7 +193,7 @@ let map ~term:ft ~ty:fty st =
             ty_type=fty tydef.ty_type;
             ty_vars=List.map (Var.update_ty ~f:fty) tydef.ty_vars;
             ty_cstors=
-              List.map
+              ID.Map.map
                 (fun c -> {c with
                   cstor_args=List.map fty c.cstor_args;
                   cstor_type=fty c.cstor_type
@@ -249,7 +249,7 @@ let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
       List.fold_left
         (fun acc tydef ->
           let acc = ty acc tydef.ty_type in
-          List.fold_left (fun acc c -> ty acc c.cstor_type) acc tydef.ty_cstors
+          ID.Map.fold (fun _ c acc -> ty acc c.cstor_type) tydef.ty_cstors acc
         ) acc l
   | Goal t -> term acc t
 
@@ -337,7 +337,8 @@ let print (type a)(type b)
         fpf out "@[<hv2>%a %a :=@ @[<hv>%a@]@]"
           ID.print_name tydef.ty_id
           (pplist ~sep:" " Var.print) tydef.ty_vars
-          (pplist_prefix ~first:"| " ~pre:"| " ppcstors) tydef.ty_cstors
+          (pplist_prefix ~first:"| " ~pre:"| " ppcstors)
+            (ID.Map.to_list tydef.ty_cstors |> List.map snd)
       in
       fpf out "@[<hv2>%s@ "
         (match k with `Data -> "data" | `Codata -> "codata");

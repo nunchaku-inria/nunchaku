@@ -64,7 +64,7 @@ type 'ty tydef = {
   ty_id : id;
   ty_vars : 'ty NunVar.t list;
   ty_type : 'ty; (** shortcut for [type -> type -> ... -> type] *)
-  ty_cstors : 'ty ty_constructor list;
+  ty_cstors : 'ty ty_constructor NunID.Map.t;
 }
 
 (** Mutual definitions of several types *)
@@ -99,7 +99,7 @@ type ('term, 'ty, 'inv) t = private {
 val tydef_vars : 'ty tydef -> 'ty NunVar.t list
 val tydef_id : _ tydef -> id
 val tydef_type : 'ty tydef -> 'ty
-val tydef_cstors : 'ty tydef -> 'ty ty_constructor list
+val tydef_cstors : 'ty tydef -> 'ty ty_constructor NunID.Map.t
 
 val info_default : info
 

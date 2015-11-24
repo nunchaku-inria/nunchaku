@@ -214,11 +214,12 @@ module Make(T : TI.S) = struct
               (U.app_builtin `Eq [a;b])
               (List.append cond_a cond_b)
         | `DataTest _, [t]
-        | `DataSelect (_,_), [t] ->
+        | `DataSelect (_,_), [t]
+        | `Undefined _, [t] ->
             let t', conds = tr_term_rec_ ~state ~local_state t in
             U.app_builtin b [t'], conds
         | `Not,_ | `Imply,_ | `Ite,_
-        | `Eq,_ | `DataSelect _,_ | `DataTest _,_ ->
+        | `Eq,_ | `DataSelect _,_ | `DataTest _,_ | `Undefined _, _ ->
             assert false (* wrong arity *)
         end
     | TI.Bind (`Forall,v,t) ->

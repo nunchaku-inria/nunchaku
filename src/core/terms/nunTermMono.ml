@@ -297,7 +297,7 @@ module ToFO(T : TI.REPR)(FO : NunFO.S) = struct
         and tys_defs = List.map
           (fun tydef ->
             let id = tydef.St.ty_id in
-            let cstors = List.map convert_cstor tydef.St.ty_cstors in
+            let cstors = ID.Map.map convert_cstor tydef.St.ty_cstors in
             {FOI.ty_name=id; ty_cstors=cstors; }
           ) l
         in

@@ -155,6 +155,7 @@ end = struct
           fpf out "(@[%a@ %a@])" print_tester c print_term t
       | FOI.DataSelect (c,n,t) ->
           fpf out "(@[%a@ %a@])" print_select (c,n) print_term t
+      | FOI.Undefined (_,t) -> print_term out t
       | FOI.Fun (v,t) ->
           fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
             Var.print v print_ty (Var.ty v) print_term t
@@ -222,7 +223,7 @@ end = struct
         let print_tydef out tydef =
           fpf out "(@[<2>%a@ %a@])"
             ID.print_name tydef.FOI.ty_name
-            (pp_list pp_cstor) tydef.FOI.ty_cstors
+            (pp_list pp_cstor) (ID.Map.to_list tydef.FOI.ty_cstors |> List.map snd)
         in
         fpf out "(@[<2>%s (%a) (%a)@])"
           (match k with `Data -> "declare-datatypes"

@@ -608,7 +608,7 @@ module Make(T : TI.S) = struct
           mangle_ ~state tydef.Stmt.ty_id (ArgTuple.m_args tup) in
         let ty = U.ty_type in
         (* specialize each constructor *)
-        let cstors = List.map
+        let cstors = ID.Map.map
           (fun c ->
             (* mangle ID *)
             let id', _ = mangle_ ~state c.Stmt.cstor_name (ArgTuple.m_args tup) in

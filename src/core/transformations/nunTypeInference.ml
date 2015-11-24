@@ -110,7 +110,7 @@ module Convert(Term : NunTermTyped.S) = struct
       vars: (term, term) term_def MStr.t; (* local vars *)
       signature : term signature;
       cstors: (string, id * term) Hashtbl.t;  (* constructor ID + type *)
-      datatypes: Term.t Stmt.ty_constructor list ID.Tbl.t;
+      datatypes: Term.t Stmt.ty_constructor ID.Map.t ID.Tbl.t;
         (* datatype -> ID + constructors *)
       mutable metas: (string, term MetaVar.t) Hashtbl.t option;
     }
@@ -354,11 +354,10 @@ module Convert(Term : NunTermTyped.S) = struct
   let check_cases_exhaustive_ ?loc ~env ~ty m =
     (* find the type definition *)
     let cstors = Env.find_datatype ?loc ~env (U.head_sym ty) in
-    let missing = CCList.filter_map
-      (fun c ->
-        let id = c.Stmt.cstor_name in
-        if ID.Map.mem id m then None else Some id
-      ) cstors
+    let missing = ID.Map.fold
+      (fun id _ acc ->
+        if ID.Map.mem id m then acc else id::acc
+      ) cstors []
     in
     if missing=[] then `Ok else `Missing missing
 
@@ -977,8 +976,8 @@ module Convert(Term : NunTermTyped.S) = struct
             (List.map (fun v->U.ty_var v) vars')
         in
         (* for each constructor, find its type and declare it *)
-        let env, cstors = NunUtils.fold_map
-          (fun env (name,ty_args) ->
+        let env, cstors = List.fold_left
+          (fun (env,cstors) (name,ty_args) ->
             let ty_args = List.map (convert_ty_exn ~env:env') ty_args in
             let ty' = ty_forall_l_ vars' (arrow_list ty_args ty_being_declared) in
             let id' = ID.make_full ~needs_at:(vars<>[]) ~name in
@@ -992,8 +991,8 @@ module Convert(Term : NunTermTyped.S) = struct
             let c = {Stmt.
               cstor_name=id'; cstor_type=ty'; cstor_args=ty_args;
             } in
-            env, c
-          ) env cstors
+            env, ID.Map.add c.Stmt.cstor_name c cstors
+          ) (env, ID.Map.empty) cstors 
         in
         List.iter check_mono_var_ vars';
         (* remember the list of constructors for this type *)
