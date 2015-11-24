@@ -30,7 +30,7 @@
 
   [forall x. f (g x) = rhs]
   might become
-  [forall y. (exists x. y = g x => f y = rhs[x := ??]
+  [forall y. (exists x. y = g x => f y = rhs[x := ??])]
 
   but we lack some choice operator.
 *)
