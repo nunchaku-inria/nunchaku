@@ -6,6 +6,7 @@
 module E = CCError
 module A = NunUntypedAST
 module T = NunTermTyped.Default
+module HO = NunTermInner.Default
 
 open E.Infix
 
@@ -26,14 +27,26 @@ let parse_file ~file () =
   E.map_err
     (fun msg -> CCFormat.sprintf "@[<2>could not parse `%s`:@ %s@]" file msg) res
 
+let pipe =
+  let open NunTransform.Pipe in
+  let module TyInfer = NunTypeInference.Make(T)(HO) in
+  let module Conv = NunProblem.Convert(T)(HO) in
+  let module Uniq = NunElimMultipleEqns.Make(HO) in
+  let step_ty_infer = TyInfer.pipe_with ~decode:(fun ~signature:_ x -> x) ~print:false in
+  let step_conv = Conv.pipe () in
+  let step_uniq_eqn = Uniq.pipe ~decode:(fun ()->()) ~print:false in
+  (* encodings *)
+  step_ty_infer @@@
+  step_conv @@@
+  step_uniq_eqn @@@
+  id
+
 let main ~file =
-  let module TyInfer = NunTypeInference.Convert(T) in
-  let module ToEval = NunEvalOfTyped.Convert(T) in
   let module P = NunTermEval.Print in
+  let module ToEval = NunEvalOfPoly.Convert(HO) in
   parse_file ~file ()
-  >>=
-  TyInfer.convert_problem ~env:TyInfer.empty_env
-  >>= fun (pb, _) ->
+  >>= fun pb ->
+  let pb, _ = CCKList.head_exn (NunTransform.run ~pipe pb) in
   E.guard_str_trace (fun () -> ToEval.convert_pb pb)
   >>= fun (_env,goal) ->
   Format.printf "@[<2>evaluate `@[%a@]`@]@." P.print goal;
@@ -44,7 +57,8 @@ let main ~file =
 (** {2 Main} *)
 
 let file_ = ref ""
-let options = Arg.align []
+let options = Arg.align
+  [ "--debug", Arg.Int NunUtils.set_debug, " debug level" ]
 
 let () =
   Arg.parse options (fun s -> file_ := s) "usage: nunchaku_eval <file>";

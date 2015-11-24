@@ -150,3 +150,14 @@ module Res = struct
     | Sat m ->
         fpf out "@[<2>sat {@,%a}@]" (Model.print pt) m
 end
+
+module Convert(T1 : NunTermInner.REPR)(T2 : NunTermInner.BUILD) = struct
+  module C = NunTermInner.Convert(T1)(T2)
+
+  let convert pb = map ~term:C.convert ~ty:C.convert pb
+
+  let pipe () =
+    let encode pb = convert pb, ()
+    and decode () x = x in
+    NunTransform.make1 ~encode ~decode ()
+end

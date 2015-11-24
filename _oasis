@@ -53,7 +53,7 @@ Library "nunchaku_parsers"
 
 Library "nunchaku_narrowing"
   Path:             src/narrowing/
-  Modules:          NunDBEnv, NunTermEval, NunNarrowing, NunEvalOfTyped,
+  Modules:          NunDBEnv, NunTermEval, NunNarrowing, NunEvalOfPoly,
                     NunEvalEnv, NunEvalUtils, NunEvalConst
   Install:          true
   FindlibName:      narrowing

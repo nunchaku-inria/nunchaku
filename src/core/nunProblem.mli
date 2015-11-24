@@ -111,3 +111,17 @@ module Res : sig
 
   val print : 't printer -> 't t printer
 end
+
+(** {2 Conversion} *)
+
+module Convert(T1 : NunTermInner.REPR)(T2 : NunTermInner.BUILD) : sig
+  val convert :
+    (T1.t, T1.t, <eqn:'a; ..> as 'inv) t ->
+    (T2.t, T2.t, 'inv) t
+
+  val pipe : unit ->
+    ( (T1.t, T1.t, <eqn:'a; ..> as 'inv) t,
+      (T2.t, T2.t, 'inv) t,
+      'b, 'b
+    ) NunTransform.transformation
+end

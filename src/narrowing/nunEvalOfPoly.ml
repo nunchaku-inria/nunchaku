@@ -24,8 +24,8 @@ let () = Printexc.register_printer
     | _ -> None
   )
 
-module Convert(T1 : NunTermTyped.REPR) : sig
-  val convert_pb: (T1.t, T1.t, <eqn:[`Nested];..>) NunProblem.t -> Env.t * T.term
+module Convert(T1 : NunTermInner.REPR) : sig
+  val convert_pb: (T1.t, T1.t, <eqn:[`Single];..>) NunProblem.t -> Env.t * T.term
   (** [convert_pb pb] returns a pair [env, goal] where [goal] is the goal
     of [pb] after conversion into ANF, and [env] is an environment suitable
     for evaluation.
@@ -133,8 +133,14 @@ end = struct
         let ty = into_term ~ctx ty in
         let c = Const.make ~def:Const.Opaque ~ty id in
         Env.declare ~env c, maybe_goal
-    | Stmt.Axiom _
-    | Stmt.TyDef (_,_) -> assert false (* TODO: convert, and add to environment *)
+    | Stmt.Axiom (Stmt.Axiom_rec l) ->
+        (* symbols defined by single equations: add to definition *)
+        assert false
+    | Stmt.Axiom (Stmt.Axiom_std _)
+    | Stmt.Axiom (Stmt.Axiom_spec _) ->
+        assert false (* TODO: nothing? prolog defs? *)
+    | Stmt.TyDef (_,_) ->
+        assert false (* TODO: convert, and add to environment *)
 
   let convert_pb pb =
     let env = Env.create() in
