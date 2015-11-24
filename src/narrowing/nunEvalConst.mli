@@ -36,5 +36,8 @@ val is_def : _ t -> bool
 val make : def:'term def -> ty:'term -> id -> 'term t
 val set_ty : 'term t -> ty:'term -> 'term t
 
+val force_def : _ t -> unit
+(** Force evaluation of lazy thunks in the def *)
+
 val print : 'a t printer
 val print_full : 'a printer -> 'a t printer

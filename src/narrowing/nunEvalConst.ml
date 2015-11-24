@@ -37,6 +37,12 @@ let is_def c = match c.def with Def _ -> true | _ -> false
 let make ~def ~ty id = {def; ty; id}
 let set_ty t ~ty = {t with ty; }
 
+let force_def c = match c.def with
+  | Opaque
+  | Cstor (lazy _)
+  | Datatype (lazy _)
+  | Def (lazy _) -> ()
+
 let print out c = ID.print_name out c.id
 
 let print_full ppt out c =
