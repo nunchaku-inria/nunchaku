@@ -15,6 +15,8 @@ type id = NunID.t
 type 'a inv1 = <ty:'a; eqn:[`Nested]>
 type 'a inv2 = <ty:'a; eqn:[`Single]>
 
+let section = NunUtils.Section.make "elim_multiple_eqns"
+
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
@@ -159,40 +161,47 @@ module Make(T : TI.S) = struct
      the default cases;
      then compile the subtrees *)
   and compile_dnode ~local_state next_vars dn : term =
-    let l = ID.Map.map
-      (fun cstor ->
-        let id = cstor.Stmt.cstor_name in
-        (* fresh vars for the constructor's arguments *)
-        let vars = List.mapi
-          (fun i ty -> Var.make ~ty ~name:(spf "v_%d" i))
-          cstor.Stmt.cstor_args
-        in
-        (* the cases that always match *)
-        let wildcard_cases = List.map
-          (fun (pats,rhs,side,subst) ->
-            List.map (fun _ -> P_any) vars @ pats, rhs, side, subst)
-          dn.dn_wildcard
-        in
-        (* does this constructor also have some explicit branches? *)
-        let cases =
-          try
-            let l = ID.Map.find id dn.dn_by_cstor in
-            assert (l <> []);
-            List.map
-              (fun (new_pats,pats,rhs,side,subst) ->
-                assert (List.length new_pats=List.length vars);
-                new_pats @ pats, rhs, side, subst)
-              l
-          with Not_found -> []
-        in
-        let rhs' =compile_equations ~local_state
-          (vars @ next_vars) (cases @ wildcard_cases)
-        in
-        vars, rhs'
-      )
-      dn.dn_tydef.Stmt.ty_cstors
-    in
-    U.match_with dn.dn_matched l
+    if ID.Map.is_empty dn.dn_by_cstor
+    then (* no need to match, use next variables *)
+      compile_equations ~local_state next_vars dn.dn_wildcard
+    else
+      (* one level of matching *)
+      let l = ID.Map.map
+        (fun cstor ->
+          let id = cstor.Stmt.cstor_name in
+          NunUtils.debugf ~section 5 "compile_dnode for %a on cstor %a"
+            (fun k -> k P.print dn.dn_matched ID.print_name id);
+          (* fresh vars for the constructor's arguments *)
+          let vars = List.mapi
+            (fun i ty -> Var.make ~ty ~name:(spf "v_%d" i))
+            cstor.Stmt.cstor_args
+          in
+          (* the cases that always match *)
+          let wildcard_cases = List.map
+            (fun (pats,rhs,side,subst) ->
+              List.map (fun _ -> P_any) vars @ pats, rhs, side, subst)
+            dn.dn_wildcard
+          in
+          (* does this constructor also have some explicit branches? *)
+          let cases =
+            try
+              let l = ID.Map.find id dn.dn_by_cstor in
+              assert (l <> []);
+              List.map
+                (fun (new_pats,pats,rhs,side,subst) ->
+                  assert (List.length new_pats=List.length vars);
+                  new_pats @ pats, rhs, side, subst)
+                l
+            with Not_found -> []
+          in
+          let rhs' =compile_equations ~local_state
+            (vars @ next_vars) (cases @ wildcard_cases)
+          in
+          vars, rhs'
+        )
+        dn.dn_tydef.Stmt.ty_cstors
+      in
+      U.match_with dn.dn_matched l
 
   (* @param env the environment for types and constructors
      @param id the symbol being defined
