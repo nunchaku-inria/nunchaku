@@ -79,6 +79,10 @@ val def: ('t,'ty,'inv) info -> ('t,'ty,'inv) def
 val ty: (_,'ty,_) info -> 'ty
 val decl_kind: _ info -> Statement.decl
 
+val is_fun : _ info -> bool
+val is_data : _ info -> bool
+val is_cstor : _ info -> bool
+
 val declare:
   ?loc:loc ->
   kind:Statement.decl ->
