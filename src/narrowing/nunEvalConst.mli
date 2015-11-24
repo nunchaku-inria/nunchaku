@@ -16,7 +16,7 @@ type 'term t = private {
 and 'term def =
   | Cstor of 'term datatype Lazy.t (* map of all other constructors *)
 
-  | Def of 'term (* id == rhs *)
+  | Def of 'term Lazy.t (* id == fun vars -> rhs *)
 
   | Datatype of 'term datatype Lazy.t
 

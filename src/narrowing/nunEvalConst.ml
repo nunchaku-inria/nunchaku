@@ -18,7 +18,7 @@ type 'term t = {
 and 'term def =
   | Cstor of 'term datatype Lazy.t (* map of all other constructors *)
 
-  | Def of 'term (* id == fun vars -> rhs *)
+  | Def of 'term Lazy.t (* id == fun vars -> rhs *)
 
   | Datatype of 'term datatype Lazy.t
 
@@ -47,7 +47,7 @@ let print_full ppt out c =
     | Opaque -> ()
     | Cstor (lazy d) -> fpf out " := cstor %a" ppcstors d
     | Datatype (lazy d) -> fpf out " := datatype %a" ppcstors d
-    | Def t -> fpf out " := `@[%a@]`" ppt t
+    | Def (lazy t) -> fpf out " := `@[%a@]`" ppt t
   in
   fpf out "@[<2>%a:%a@,%a@]" ID.print_name c.id ppt c.ty ppdef c.def
 

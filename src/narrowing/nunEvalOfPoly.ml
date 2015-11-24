@@ -18,6 +18,8 @@ module Const = NunEvalConst
 exception InvalidProblem of string
 (** Raised when a problem cannot be converted into a narrowing problem *)
 
+let section = NunUtils.Section.make "eval_of_poly"
+
 let () = Printexc.register_printer
   (function
     | InvalidProblem msg -> Some ("invalid problem for narrowing: " ^ msg)
@@ -46,10 +48,15 @@ end = struct
     vars: (T1.t, int) Subst.t; (* variable -> de Bruijn level *)
   }
 
+  (* ty: the type of [v] after translation *)
   let push_var ~ctx v ty level = {ctx with
     bound=DBEnv.cons ty ctx.bound;
     vars=Subst.add ~subst:ctx.vars v level;
   }
+
+  let debug_declare_ c =
+    NunUtils.debugf ~section 5 "@[declare %a@]"
+      (fun k -> k (Const.print_full T.Print.print) c)
 
   let rec push_vars ~ctx vars tys level = match vars, tys with
     | [], [] -> ctx, level
@@ -71,7 +78,10 @@ end = struct
     | TI.Var v ->
         let lev = find_var_ ~ctx v in
         let cur_lev = DBEnv.length ctx.bound in
-        let n = cur_lev - lev in
+        let n = cur_lev - lev - 1 in
+        (* FIXME: if not bound, make it a meta? *)
+        NunUtils.debugf ~section 5 "variable %a / %d with env of size %d"
+          (fun k ->k Var.print v n cur_lev);
         let ty = DBEnv.nth ctx.bound n in
         T.db (T.DB.make ~name:(Var.name v) ~ty n)
     | TI.Const id -> T.const (find_id_ ~ctx id)
@@ -84,9 +94,12 @@ end = struct
         T.ite (into_term ~ctx a)(into_term ~ctx b)(into_term ~ctx c)
     | TI.AppBuiltin ((`DataSelect _ | `DataTest _), _) ->
         NunUtils.not_implemented "builtins dataselect/test" (* TODO *)
-    | TI.AppBuiltin ((`And | `Or | `Eq | `Not | `Imply) as b,l) ->
+    | TI.AppBuiltin (`Undefined _, _) ->
+        NunUtils.not_implemented "builtins undefined" (* TODO *)
+    | TI.AppBuiltin
+      ((`And | `Or | `Eq | `Not | `Imply | `Equiv | `False | `True) as b,l) ->
         T.app_builtin b (into_term_l ~ctx l)
-    | TI.AppBuiltin _ -> assert false
+    | TI.AppBuiltin (_,_) -> assert false
     | TI.Bind (b,v,t) ->
         let lev = DBEnv.length ctx.bound in
         let ty = into_term ~ctx (Var.ty v) in
@@ -118,6 +131,13 @@ end = struct
 
   and into_term_l ~ctx l = List.map (into_term ~ctx) l
 
+  let fun_into_term ~ctx vars rhs =
+    let lev = DBEnv.length ctx.bound in
+    (* push variables on the stack *)
+    let tys = List.map (fun v-> into_term ~ctx (Var.ty v)) vars in
+    let ctx', _ = push_vars ~ctx vars tys lev in
+    T.fun_l tys (into_term ~ctx:ctx' rhs)
+
   (* convert statement and add it to [env] if it makes sense *)
   let convert_statement (env,maybe_goal) st =
     let ctx = {env; bound=DBEnv.nil; vars=Subst.empty; } in
@@ -132,15 +152,83 @@ end = struct
     | Stmt.Decl (id,_,ty) ->
         let ty = into_term ~ctx ty in
         let c = Const.make ~def:Const.Opaque ~ty id in
+        debug_declare_ c;
         Env.declare ~env c, maybe_goal
     | Stmt.Axiom (Stmt.Axiom_rec l) ->
-        (* symbols defined by single equations: add to definition *)
-        assert false
+        (* symbols defined by single equations: add to definition.
+         The definitions are mutually recursive, which forces us to delay
+         evaluation  *)
+        let rec env' = lazy (
+          List.fold_left
+            (fun env def ->
+              let Stmt.Eqn_single (vars,rhs) = def.Stmt.rec_eqns in
+              let d = def.Stmt.rec_defined in
+              let ty = into_term ~ctx d.Stmt.defined_ty in
+              let term = lazy (fun_into_term ~ctx:{ctx with env=Lazy.force env'} vars rhs) in
+              let c = Const.make d.Stmt.defined_head ~ty ~def:(Const.Def term) in
+              Env.declare ~env c
+            )
+            env l
+          )
+        in
+        let env' = Lazy.force env' in
+        env', maybe_goal
     | Stmt.Axiom (Stmt.Axiom_std _)
     | Stmt.Axiom (Stmt.Axiom_spec _) ->
-        assert false (* TODO: nothing? prolog defs? *)
-    | Stmt.TyDef (_,_) ->
-        assert false (* TODO: convert, and add to environment *)
+        (* TODO: nothing? prolog defs? *)
+        NunUtils.not_implemented "narrowing: cannot deal with axiom/spec"
+    | Stmt.TyDef (k,l) ->
+        (* declare the (co)datatypes and their constructors *)
+        let env = List.fold_left
+          (fun env tydef ->
+            let ty_datatype = into_term ~ctx tydef.Stmt.ty_type in
+            (* DB environment for types of the constructor *)
+            let lev = DBEnv.length ctx.bound in
+            let tys = List.map
+              (fun v -> into_term ~ctx(Var.ty v)) tydef.Stmt.ty_vars in
+            let ctx, _ = push_vars ~ctx tydef.Stmt.ty_vars tys lev in
+            (* number of type variable *)
+            let ty_n_vars = List.length tydef.Stmt.ty_vars in
+            (* tie the knot: every constructor refers to every other constructor *)
+            let rec datatype = lazy {Const.
+              ty_kind=k;
+              ty_id=tydef.Stmt.ty_id;
+              ty_n_vars;
+              ty_cstors=
+                ID.Map.map
+                  (fun c ->
+                    let ty = into_term c.Stmt.cstor_type
+                      ~ctx:{ctx with env=Lazy.force env'; } in
+                    Const.make
+                      c.Stmt.cstor_name
+                      ~ty
+                      ~def:(Const.Cstor datatype)
+                  )
+                  tydef.Stmt.ty_cstors;
+            }
+            (* environment in which the type is defined *)
+            and env' = lazy (
+              (* declare the type itself *)
+              let c = Const.make
+                tydef.Stmt.ty_id
+                ~ty:ty_datatype
+                ~def:(Const.Datatype datatype)
+              in
+              Env.declare ~env c
+            ) in
+            let datatype = Lazy.force datatype in
+            let env' = Lazy.force env' in
+            (* declare every constructor *)
+            ID.Map.fold
+              (fun _ c env ->
+                debug_declare_ c;
+                Env.declare ~env c)
+              datatype.Const.ty_cstors
+              env'
+          )
+          env l
+        in
+        env, maybe_goal
 
   let convert_pb pb =
     let env = Env.create() in

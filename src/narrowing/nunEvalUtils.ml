@@ -79,7 +79,7 @@ let rec whnf
       begin match c.Const.def with
       | Const.Opaque
       | Const.Datatype _ -> top
-      | Const.Def t' ->
+      | Const.Def (lazy t') ->
           whnf ~subst (T.TermTop.set_head top ~hd:t')
       | Const.Cstor _ ->
           (* constructor applied to arguments; if enough arguments, we can
@@ -106,7 +106,7 @@ let rec whnf
       | Const.Datatype _
       | Const.Opaque
       | Const.Cstor _ -> top  (* normal form *)
-      | Const.Def t' ->
+      | Const.Def (lazy t') ->
           whnf ~subst (T.TermTop.set_head top ~hd:t')
       end
   | _, (T.DB _ | T.Bind _ | T.Builtin _ | T.TyArrow _) -> top

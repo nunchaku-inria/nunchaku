@@ -427,6 +427,7 @@ end
 module Print : sig
   val print : term printer
   val print_ty : ty printer
+  val print_top : TermTop.t printer
 end = struct
   let pp_list_ ?(start="") ?(stop="") ~sep pp =
     CCFormat.list ~start ~stop ~sep pp
@@ -466,6 +467,8 @@ end = struct
     | Bind _ | Let _ | Match _ | Ite _ | TyArrow (_,_) -> fpf out "(@[%a@])" print t
 
   and print_ty o t = print o t
+
+  let print_top o t = print o (TermTop.to_term t)
 end
 
 (*
