@@ -25,6 +25,8 @@ module DB = struct
   }
 
   let make ~name ~ty n = {name; ty; index=n; }
+  let print out t = fpf out "%s/%d" t.name t.index
+  let print_with pty out t = fpf out "%s/%d:%a" t.name t.index pty t.ty
 end
 
 (** {2 Terms} *)
@@ -43,6 +45,18 @@ module Builtin = struct
     | `Kind
     | `Prop
     ]
+  let to_string (t:t) = match t with
+      | `Eq -> "="
+      | `Imply -> "=>"
+      | `Equiv -> "<=>"
+      | `And -> "∧"
+      | `Or -> "∨"
+      | `Not -> "¬"
+      | `True -> "true"
+      | `False -> "false"
+      | `Type -> "type"
+      | `Kind -> "kind"
+      | `Prop -> "prop"
 end
 
 module Binder = struct
@@ -52,12 +66,20 @@ module Binder = struct
     | `Fun
     | `TyForall
     ]
+  let to_string (t:t) = match t with
+    | `Forall -> "∀"
+    | `Exists -> "∃"
+    | `Fun -> "λ"
+    | `TyForall -> "Π"
 end
 
 (** List of types for each bound De Bruijn *)
 type 'a case = 'a DBEnv.t * 'a
 
 type 'a cases = 'a case ID.Map.t
+
+(* TODO: [info] argument in each case, with additional da)ta such as
+   number of required binders for the term to be closed *)
 
 (** A term, using De Bruijn indices *)
 and term =
@@ -96,9 +118,10 @@ let bind b ~ty t = Bind (b,ty,t)
 let match_ t l = Match (t,l)
 let ite a b c = Ite(a,b,c)
 
-let forall t = bind `Forall t
-let exists t = bind `Exists t
-let fun_ t = bind `Fun t
+let forall ~ty t = bind ~ty `Forall t
+let exists ~ty t = bind ~ty `Exists t
+let fun_ ~ty t = bind ~ty `Fun t
+let fun_l tys t = List.fold_right (fun ty t -> fun_ ~ty t) tys t
 let ty_forall t = bind `TyForall t
 
 let ty_arrow a b = TyArrow (a,b)
@@ -405,8 +428,44 @@ module Print : sig
   val print : term printer
   val print_ty : ty printer
 end = struct
-  let print _ _ = assert false
-  and print_ty _ _ = assert false
+  let pp_list_ ?(start="") ?(stop="") ~sep pp =
+    CCFormat.list ~start ~stop ~sep pp
+
+  let rec print out t = match t with
+    | Const c -> Const.print out c
+    | Meta v -> Var.print out v
+    | DB v -> DB.print out v
+    | Builtin b -> CCFormat.string out (Builtin.to_string b)
+    | App (_,[]) -> assert false
+    | App (f,l) ->
+        fpf out "@[<2>%a@ %a@]" print_in_app f
+          (pp_list_ ~sep:" " print_in_app) l
+    | Let (ty,t,u) ->
+        fpf out "@[<2>let %a :=@ %a in@ %a@]" print_ty ty print t print u
+    | Ite (a,b,c) ->
+        fpf out "@[<2>if %a@ then %a@ else %a@]"
+          print a print_in_app b print c
+    | Match (t,l) ->
+        let pp_case out (id,(tys,t)) =
+          fpf out "@[<hv2>| %a %a ->@ %a@]"
+            ID.print_name id (pp_list_ ~sep:" " print_ty) (DBEnv.to_list tys) print t
+        in
+        fpf out "@[<hv2>match @[%a@] with@ %a end@]"
+          print t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
+    | Bind (b, ty, t) ->
+        let s = Binder.to_string b in
+        fpf out "@[<2>%s %a.@ %a@]" s print_ty ty print t
+    | TyArrow (a,b) ->
+        fpf out "@[<2>%a ->@ %a@]" print_in_binder a print b
+  and print_in_app out t = match t with
+    | Builtin _ | Const _ | Meta _ | DB _ -> print out t
+    | App (_,_) | Let _ | Match _
+    | Bind _ | Ite _ | TyArrow (_,_) -> fpf out "(@[%a@])" print t
+  and print_in_binder out t = match t with
+    | Builtin _ | Const _ | App (_,_) | DB _ | Meta _ -> print out t
+    | Bind _ | Let _ | Match _ | Ite _ | TyArrow (_,_) -> fpf out "(@[%a@])" print t
+
+  and print_ty o t = print o t
 end
 
 (*
