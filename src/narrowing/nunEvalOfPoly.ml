@@ -55,15 +55,21 @@ end = struct
   }
 
   let debug_declare_ c =
+    Const.force_def c;
     NunUtils.debugf ~section 5 "@[declare %a@]"
       (fun k -> k (Const.print_full T.Print.print) c)
 
-  let rec push_vars ~ctx vars tys level = match vars, tys with
+  let rec push_vars ~ctx way vars tys level = match vars, tys with
     | [], [] -> ctx, level
     | [], _ | _, [] -> assert false
     | v :: vars', ty::tys' ->
-        let ctx, level' = push_vars ~ctx vars' tys' level in
-        push_var ~ctx v ty level', level' + 1
+        match way with
+        | `LeftToRight ->
+            let ctx = push_var ~ctx v ty level in
+            push_vars ~ctx way vars' tys' (level+1)
+        | `RightToLeft ->
+            let ctx, level' = push_vars ~ctx way vars' tys' level in
+            push_var ~ctx v ty level', level' + 1
 
   let find_var_ ~ctx v =
     match Subst.find ~subst:ctx.vars v with
@@ -118,7 +124,7 @@ end = struct
           (fun (vars,rhs) ->
             (* push variables on the stack *)
             let tys = List.map (fun v-> into_term ~ctx (Var.ty v)) vars in
-            let ctx', _ = push_vars ~ctx vars tys lev in
+            let ctx', _ = push_vars ~ctx `RightToLeft vars tys lev in
             DBEnv.of_list tys, into_term ~ctx:ctx' rhs)
           l
         in
@@ -131,11 +137,13 @@ end = struct
 
   and into_term_l ~ctx l = List.map (into_term ~ctx) l
 
+  (* careful: push variables from left to right, in the same order
+     as applications *)
   let fun_into_term ~ctx vars rhs =
     let lev = DBEnv.length ctx.bound in
     (* push variables on the stack *)
     let tys = List.map (fun v-> into_term ~ctx (Var.ty v)) vars in
-    let ctx', _ = push_vars ~ctx vars tys lev in
+    let ctx', _ = push_vars ~ctx `LeftToRight vars tys lev in
     T.fun_l tys (into_term ~ctx:ctx' rhs)
 
   (* convert statement and add it to [env] if it makes sense *)
@@ -171,7 +179,13 @@ end = struct
             env l
           )
         in
+        (* debug *)
         let env' = Lazy.force env' in
+        List.iter
+          (fun def ->
+            let c = Env.find_exn ~env:env' def.Stmt.rec_defined.Stmt.defined_head in
+            debug_declare_ c)
+          l;
         env', maybe_goal
     | Stmt.Axiom (Stmt.Axiom_std _)
     | Stmt.Axiom (Stmt.Axiom_spec _) ->
@@ -186,7 +200,7 @@ end = struct
             let lev = DBEnv.length ctx.bound in
             let tys = List.map
               (fun v -> into_term ~ctx(Var.ty v)) tydef.Stmt.ty_vars in
-            let ctx, _ = push_vars ~ctx tydef.Stmt.ty_vars tys lev in
+            let ctx, _ = push_vars ~ctx `RightToLeft tydef.Stmt.ty_vars tys lev in
             (* number of type variable *)
             let ty_n_vars = List.length tydef.Stmt.ty_vars in
             (* tie the knot: every constructor refers to every other constructor *)
