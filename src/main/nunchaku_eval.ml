@@ -32,9 +32,9 @@ let pipe =
   let module TyInfer = NunTypeInference.Make(T)(HO) in
   let module Conv = NunProblem.Convert(T)(HO) in
   let module Uniq = NunElimMultipleEqns.Make(HO) in
-  let step_ty_infer = TyInfer.pipe_with ~decode:(fun ~signature:_ x -> x) ~print:false in
+  let step_ty_infer = TyInfer.pipe_with ~decode:(fun ~signature:_ x -> x) ~print:true in
   let step_conv = Conv.pipe () in
-  let step_uniq_eqn = Uniq.pipe ~decode:(fun ()->()) ~print:false in
+  let step_uniq_eqn = Uniq.pipe ~decode:(fun ()->()) ~print:true in
   (* encodings *)
   step_ty_infer @@@
   step_conv @@@
@@ -43,7 +43,7 @@ let pipe =
 
 let main ~file =
   let module P = NunTermEval.Print in
-  let module ToEval = NunEvalOfPoly.Convert(HO) in
+  let module ToEval = NunEvalOfPoly.Convert(HO) in (* TODO: move it to pipe *)
   parse_file ~file ()
   >>= fun pb ->
   let pb, _ = CCKList.head_exn (NunTransform.run ~pipe pb) in
@@ -58,7 +58,10 @@ let main ~file =
 
 let file_ = ref ""
 let options = Arg.align
-  [ "--debug", Arg.Int NunUtils.set_debug, " debug level" ]
+  [ "--debug", Arg.Int NunUtils.set_debug, " debug level"
+  ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true),
+      " enable stack traces"
+  ]
 
 let () =
   Arg.parse options (fun s -> file_ := s) "usage: nunchaku_eval <file>";
