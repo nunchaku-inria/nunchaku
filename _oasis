@@ -25,6 +25,7 @@ Library "nunchaku_core"
                     terms/TermTyped,
                     terms/TermPoly,
                     terms/TermMono,
+                    terms/Pattern,
                     types/TypePoly,
                     types/TypeMono,
                     transformations/Skolem,
