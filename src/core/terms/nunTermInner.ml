@@ -458,6 +458,7 @@ module type UTIL = sig
   val ty_const : id -> t_
   val ty_app : t_ -> t_ list -> t_
   val ty_arrow : t_ -> t_ -> t_
+  val ty_arrow_l : t_ list -> t_ -> t_
   val ty_var : t_ var -> t_
   val ty_meta : t_ MetaVar.t -> t_
   val ty_forall : t_ var -> t_ -> t_
@@ -548,6 +549,7 @@ module Util(T : S)
   let ty_const id = const id
   let ty_app f l = if l=[] then f else app f l
   let ty_arrow a b = T.build (TyArrow (a,b))
+  let ty_arrow_l args ret = List.fold_right ty_arrow args ret
   let ty_forall v t = T.build (Bind (`TyForall,v,t))
   let ty_var v = T.build (Var v)
   let ty_meta v = T.build (TyMeta v)
