@@ -79,25 +79,10 @@ module Make(T : TI.S) = struct
 
   let no_pol ls = {ls with pol=NoPolarity}
 
-  (* is this symbol a predicate? *)
-  let is_bool_ ~state id =
-    let ty = Sig.find_exn ~sigma:state.sigma id in
-    let ty_ret = U.ty_returns ty in
-    match TyM.repr ty_ret with
-    | TyI.Builtin `Prop -> true
-    | TyI.Builtin `Kind
-    | TyI.Builtin `Type -> false
-    | TyI.Const _ | TyI.App _ | TyI.Arrow _ -> false
-
   (* list of argument types that (monomorphic) type expects *)
   let rec ty_args_ (ty:term) = match TyM.repr ty with
     | TyI.Builtin _ | TyI.Const _ | TyI.App (_,_) -> []
     | TyI.Arrow (a,ty') -> a :: ty_args_ ty'
-
-  (* is [t] a variable bound in [local_state.subst]? *)
-  let is_var_in_subst_ ~local_state t = match T.repr t with
-    | TI.Var v when Subst.mem ~subst:local_state.subst v -> true
-    | _ -> false
 
   let mk_and_ = function
     | [] -> U.app_builtin `True []
@@ -121,7 +106,7 @@ module Make(T : TI.S) = struct
     | Neg -> mk_or_ [t; mk_not_ (mk_and_ conds)], []
     | NoPolarity -> t, conds
 
-  (* TODO:
+  (*
     - apply substitution eagerly (build it when we enter `forall_f x. f x = t`)
     - when we meet `f t1...tn`:
         - add 1 constraint `exists alpha. And_i (proj_i alpha = t_i)`;

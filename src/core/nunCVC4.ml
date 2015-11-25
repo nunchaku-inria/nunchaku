@@ -458,6 +458,7 @@ end = struct
           end
       | NunFO.DataTest(c,t) -> FOBack.T.data_test c (rewrite_term_ ~rules t)
       | NunFO.DataSelect(c,n,t) -> FOBack.T.data_select c n (rewrite_term_ ~rules t)
+      | NunFO.Undefined _ -> assert false
       | NunFO.App (id, l) -> FOBack.T.app id (List.map (rewrite_term_ ~rules) l)
       | NunFO.Fun (v,t) ->
           (* no capture, rules rewrite to closed terms *)
