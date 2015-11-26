@@ -145,6 +145,7 @@ end = struct
     let rec aux t = match T.repr t with
     | AppBuiltin (`Ite, [a;b;c]) ->
         Untyped.ite (aux a)(aux b)(aux c)
+    | AppBuiltin (`Undefined id, [_]) -> Untyped.builtin (`Undefined (ID.name id))
     | AppBuiltin (b,l) ->
         let b = match b with
           | `True  -> `True
@@ -155,9 +156,9 @@ end = struct
           | `Imply -> `Imply
           | `Equiv -> `Equiv
           | `Eq  -> `Eq
+          | `Undefined _
           | `DataSelect _
           | `DataTest _
-          | `Undefined _
           | `Ite -> assert false
         in
         Untyped.app (Untyped.builtin b) (List.map aux l)
@@ -258,6 +259,7 @@ end = struct
           | `True -> U.builtin `True
           | `False -> U.builtin `False
           | `Imply -> U.builtin `Imply
+          | `Undefined s -> U.builtin (`Undefined (ID.make ~name:s))
           | `Eq | `Equiv ->
               error_ t "unapplied equality"
           end

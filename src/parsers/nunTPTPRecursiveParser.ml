@@ -187,7 +187,8 @@ let rec declare_missing ~ctx ~state t =
           | `Prop
           | `Type
           | `True
-          | `False -> t
+          | `False
+          | `Undefined _ -> t
           end
       | _ ->
         let ctx = prop2term ctx in

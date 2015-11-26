@@ -31,6 +31,7 @@ module Builtin : sig
     | `Eq
     | `Equiv
     | `Imply
+    | `Undefined of string
     ]
 
   include NunIntf.PRINT with type t := t
@@ -48,6 +49,7 @@ end = struct
     | `Eq
     | `Equiv
     | `Imply
+    | `Undefined of string
     ]
 
   let fixity = function
@@ -60,7 +62,8 @@ end = struct
     | `Or
     | `Imply
     | `Equiv
-    | `Eq -> `Infix
+    | `Eq
+    | `Undefined _ -> `Infix
 
   let to_string = function
     | `Type -> "type"
@@ -73,6 +76,7 @@ end = struct
     | `Eq -> "="
     | `Equiv -> "="
     | `Imply -> "=>"
+    | `Undefined s -> "?_" ^ s
 
   let print out s = Format.pp_print_string out (to_string s)
 end
