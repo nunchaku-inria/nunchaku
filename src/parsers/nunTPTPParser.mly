@@ -88,15 +88,6 @@
 %token <string> RATIONAL
 %token <string> INTEGER
 
-%left VLINE
-%left AND
-%nonassoc EQUIV
-%nonassoc XOR
-%nonassoc IMPLY
-%nonassoc LEFT_IMPLY
-%nonassoc NOTVLINE
-%nonassoc NOTAND
-
 %start <NunUntypedAST.statement> parse_statement
 %start <NunUntypedAST.statement list> parse_statement_list
 %start <NunUntypedAST.term> parse_term
@@ -233,7 +224,7 @@ thf_unitary_formula:
       q ?loc:(Some loc) vars f
     }
 
-%inline thf_quantifier:
+thf_quantifier:
   | FORALL { A.forall_list }
   | EXISTS { A.exists_list }
   | LAMBDA { A.fun_list }
@@ -335,7 +326,7 @@ fof_tuple:
 
 fof_logic_formula:
   | f=fof_unitary_formula { f }
-  | l=fof_logic_formula o=binary_connective r=fof_logic_formula
+  | l=fof_logic_formula o=binary_connective r=fof_unitary_formula
     {
       let loc = L.mk_pos $startpos $endpos in
       o ?loc:(Some loc) l r
@@ -366,7 +357,7 @@ fof_unary_formula:
      o ~loc f
     }
 
-%inline binary_connective:
+binary_connective:
   | EQUIV { A.equiv }
   | IMPLY { A.imply }
   | LEFT_IMPLY { fun ?loc l r -> A.imply ?loc r l }
@@ -375,10 +366,10 @@ fof_unary_formula:
   | NOTAND { fun ?loc x y -> A.not_ ?loc (A.and_ ?loc [x; y]) }
   | AND { fun ?loc x y -> A.and_ ?loc [x;y] }
   | VLINE { fun ?loc x y -> A.or_ ?loc [x;y] }
-%inline fol_quantifier:
+fol_quantifier:
   | FORALL { A.forall_list }
   | EXISTS { A.exists_list }
-%inline unary_connective:
+unary_connective:
   | NOT { A.not_ }
 
 atomic_formula:
