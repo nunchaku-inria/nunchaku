@@ -15,6 +15,7 @@ end
 
 module type HASH = sig
   type t
+  val hash_fun : t CCHash.hash_fun
   val hash : t -> int
 end
 

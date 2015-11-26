@@ -463,11 +463,17 @@ module type UTIL = sig
   val ty_meta : t_ MetaVar.t -> t_
   val ty_forall : t_ var -> t_ -> t_
 
+  val hash : t_ -> int
+  (** Hash into a positive integer *)
+
+  val equal : t_ -> t_ -> bool
+  (** Syntactic equality *)
+
   (** {6 Substitution Utils} *)
 
   type subst = (t_, t_) Var.Subst.t
 
-  val equal : subst:subst -> t_ -> t_ -> bool
+  val equal_with : subst:subst -> t_ -> t_ -> bool
   (** Equality modulo substitution *)
 
   val deref : subst:subst -> t_ -> t_
@@ -554,43 +560,67 @@ module Util(T : S)
   let ty_var v = T.build (Var v)
   let ty_meta v = T.build (TyMeta v)
 
+  let hash t =
+    let d = ref 30 in (* number of nodes to explore *)
+    let rec hash_ t h =
+      if !d = 0 then h
+      else match T.repr t with
+        | Const id -> decr d; ID.hash_fun id h
+        | Var v -> decr d; hash_var_ v h
+        | App (f,l) -> hash_ f h |> CCHash.list hash_ l
+        | AppBuiltin (_,l) -> CCHash.list hash_ l h
+        | Let (v,t,u) -> decr d; hash_var_ v h |> hash_ t |> hash_ u
+        | Bind (_,v,t) -> decr d; hash_var_ v h |> hash_ t
+        | Match (t,l) ->
+            decr d;
+            hash_ t h
+              |> CCHash.seq
+                (fun (vars,rhs) h -> CCHash.list hash_var_ vars h |> hash_ rhs)
+                (ID.Map.to_seq l |> Sequence.map snd)
+        | TyArrow (a,b) -> decr d; hash_ a h |> hash_ b
+        | TyBuiltin _
+        | TyMeta _ -> h
+      and hash_var_ v h = ID.hash_fun (Var.id v) h
+    in
+    CCHash.finish (hash_ t CCHash.init)
+
   module Subst = Var.Subst
 
   type subst = (T.t, T.t) Subst.t
 
-  let rec equal ~subst ty1 ty2 =
+  let rec equal_with ~subst ty1 ty2 =
     match T.repr ty1, T.repr ty2 with
     | Const id1, Const id2 -> ID.equal id1 id2
     | Var v1, _ when Subst.mem ~subst v1 ->
-        equal ~subst (Subst.find_exn ~subst v1) ty2
+        equal_with ~subst (Subst.find_exn ~subst v1) ty2
     | _, Var v2 when Subst.mem ~subst v2 ->
-        equal ~subst ty1 (Subst.find_exn ~subst v2)
+        equal_with ~subst ty1 (Subst.find_exn ~subst v2)
     | Var v1, Var v2 -> Var.equal v1 v2
     | AppBuiltin (b1,l1), AppBuiltin (b2,l2) ->
         Builtin.equal b1 b2 &&
         List.length l1 = List.length l2 &&
-        List.for_all2 (equal ~subst) l1 l2
+        List.for_all2 (equal_with ~subst) l1 l2
     | TyBuiltin b1, TyBuiltin b2 -> TyBuiltin.equal b1 b2
     | TyMeta v1, TyMeta v2 -> MetaVar.equal v1 v2
     | App (f1,l1), App (f2, l2) ->
-        equal ~subst f1 f2
+        equal_with ~subst f1 f2
           && List.length l1 = List.length l2
-          && List.for_all2 (equal ~subst) l1 l2
+          && List.for_all2 (equal_with ~subst) l1 l2
     | TyArrow (a1,b1), TyArrow (a2,b2) ->
-        equal ~subst a1 a2 && equal ~subst b1 b2
+        equal_with ~subst a1 a2 && equal_with ~subst b1 b2
     | Bind (b1, v1, t1), Bind (b2, v2, t2) ->
         b1 = b2 &&
         ( let v = Var.fresh_copy v1 in
           let subst = Subst.add ~subst v1 (var v) in
           let subst = Subst.add ~subst v2 (var v) in
-          equal ~subst t1 t2)
+          equal_with ~subst t1 t2)
     | Let (v1,t1,u1), Let (v2,t2,u2) ->
         let subst = Subst.add ~subst v1 t1 in
         let subst = Subst.add ~subst v2 t2 in
-        equal ~subst u1 u2
+        equal_with ~subst u1 u2
     | Match (t1,l1), Match (t2,l2) ->
         ID.Map.cardinal l1 = ID.Map.cardinal l2 &&
-        equal ~subst t1 t2 &&
+        equal_with ~subst t1 t2 &&
         List.for_all2
           (fun (id1,(vars1,rhs1)) (id2,(vars2,rhs2)) ->
             assert (List.length vars1=List.length vars2);
@@ -604,7 +634,7 @@ module Util(T : S)
                 subst
               ) vars1 vars2 subst
             in
-            equal ~subst rhs1 rhs2
+            equal_with ~subst rhs1 rhs2
           )
           (cases_to_list l1) (* list, sorted by ID *)
           (cases_to_list l2)
@@ -618,6 +648,8 @@ module Util(T : S)
     | TyArrow (_,_),_
     | Bind _, _
     | TyMeta _,_ -> false
+
+  let equal a b = equal_with ~subst:Subst.empty a b
 
   let rec deref ~subst t = match T.repr t with
     | Var v ->
@@ -704,7 +736,7 @@ module Util(T : S)
           end
       | TyMeta _,_ -> assert false
       | TyArrow (a, t'), b :: l' ->
-          if equal ~subst a b
+          if equal_with ~subst a b
           then app_ ~subst t' l'
           else error_apply_
             "type mismatch on first argument" ~hd:t ~l
@@ -847,7 +879,7 @@ module Util(T : S)
           (* NOTE: no occur check, we assume t1 and t2 share no variables *)
           Subst.add ~subst v t2
       | Some t1' ->
-          if equal ~subst t1' t2
+          if equal_with ~subst t1' t2
             then subst
             else error_unif_ "incompatible variable binding" t1 t2
     in

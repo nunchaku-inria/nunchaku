@@ -187,7 +187,7 @@ let make_proof_pipeline () =
   let step_elim_match = Step_ElimMatch.pipe ~print:!print_elim_match_ in
   let module Step_rec_elim = NunElimRecursion.Make(HO) in
   let step_recursion_elim = Step_rec_elim.pipe_with
-    ~decode:(fun ~decode_term:_ x -> x) ~print:!print_recursion_elim_ in
+    ~decode:(fun _ x -> x) ~print:!print_recursion_elim_ in
   (* conversion to FO *)
   let module Step_tofo = NunTermMono.TransFO(HO)(NunFO.Default) in
   let step_fo = Step_tofo.pipe_with ~decode:(fun x->x) in

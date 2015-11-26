@@ -78,7 +78,7 @@ module Make(T : TI.S) = struct
           let a = eval ~subst a in
           let b = eval ~subst b in
           (* TODO: if [a] and [b] fully evaluated, return False? *)
-          if U.equal ~subst a b
+          if U.equal_with ~subst a b
           then BTrue
           else BPartial (U.eq a b)
       | TI.AppBuiltin (`Not, [f]) ->

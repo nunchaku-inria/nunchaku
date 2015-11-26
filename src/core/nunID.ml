@@ -27,6 +27,7 @@ let needs_at v = v.needs_at
 
 let equal v1 v2 = v1.id = v2.id
 let compare v1 v2 = Pervasives.compare v1.id v2.id
+let hash_fun v h = CCHash.int v.id h
 let hash v = v.id land max_int (* >= 0 *)
 
 let print out v =

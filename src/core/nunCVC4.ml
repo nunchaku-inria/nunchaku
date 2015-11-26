@@ -420,6 +420,9 @@ end = struct
       in
       m
 
+  (* NOTE: use `fmf.card.val(t)` to get the set of values in the finite domain
+      of the type of `t` *)
+
   (* read model from CVC4 instance [s]
      symbols: set of symbols to get values for
      tbl: string -> ID *)
@@ -434,7 +437,7 @@ end = struct
     | `End -> error_ "unexpected end of input from CVC4: expected model"
     | `Ok sexp ->
         if !Sol.print_model_
-          then Format.eprintf "@[raw model:@ @[<hov>%a@]@]@." CCSexpM.print sexp;
+          then Format.eprintf "@[raw model:@ @[<hv>%a@]@]@." CCSexpM.print sexp;
         let m = parse_model_ ~state sexp in
         (* check all symbols are defined *)
         let ok = ID.Set.to_seq symbols

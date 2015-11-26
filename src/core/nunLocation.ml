@@ -25,6 +25,7 @@ let mk_pos start stop =
 
 let equal = (=)
 let hash = Hashtbl.hash
+let hash_fun x h = CCHash.int (hash x) h
 
 let _min_pos (l1,c1) (l2,c2) =
   if l1 = l2

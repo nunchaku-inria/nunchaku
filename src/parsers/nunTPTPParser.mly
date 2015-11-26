@@ -192,11 +192,11 @@ thf_formula:
   | l=thf_formula o=infix_connective r=thf_unitary_formula
     {
       let loc = L.mk_pos $startpos $endpos in
-      o ?loc:(Some loc) l r }
+      o loc l r }
   | l=thf_formula o=binary_connective r=thf_unitary_formula
     {
       let loc = L.mk_pos $startpos $endpos in
-      o ?loc:(Some loc) l r
+      o loc l r
     }
   | error
     {
@@ -329,7 +329,7 @@ fof_logic_formula:
   | l=fof_logic_formula o=binary_connective r=fof_unitary_formula
     {
       let loc = L.mk_pos $startpos $endpos in
-      o ?loc:(Some loc) l r
+      o loc l r
     }
 
 fof_unitary_formula:
@@ -358,14 +358,14 @@ fof_unary_formula:
     }
 
 binary_connective:
-  | EQUIV { A.equiv }
-  | IMPLY { A.imply }
-  | LEFT_IMPLY { fun ?loc l r -> A.imply ?loc r l }
-  | XOR { fun ?loc l r -> A.not_ ?loc (A.equiv ?loc l r) }
-  | NOTVLINE { fun ?loc x y -> A.not_ ?loc (A.or_ ?loc [x; y]) }
-  | NOTAND { fun ?loc x y -> A.not_ ?loc (A.and_ ?loc [x; y]) }
-  | AND { fun ?loc x y -> A.and_ ?loc [x;y] }
-  | VLINE { fun ?loc x y -> A.or_ ?loc [x;y] }
+  | EQUIV { fun loc a b -> A.equiv ~loc a b }
+  | IMPLY { fun loc a b -> A.imply ~loc a b }
+  | LEFT_IMPLY { fun loc l r -> A.imply ~loc r l }
+  | XOR { fun loc l r -> A.not_ ~loc (A.equiv ~loc l r) }
+  | NOTVLINE { fun loc x y -> A.not_ ~loc (A.or_ ~loc [x; y]) }
+  | NOTAND { fun loc x y -> A.not_ ~loc (A.and_ ~loc [x; y]) }
+  | AND { fun loc x y -> A.and_ ~loc [x;y] }
+  | VLINE { fun loc x y -> A.or_ ~loc [x;y] }
 fol_quantifier:
   | FORALL { A.forall_list }
   | EXISTS { A.exists_list }
@@ -378,13 +378,13 @@ atomic_formula:
   | l=term o=infix_connective r=term
     {
       let loc = L.mk_pos $startpos $endpos in
-      o ?loc:(Some loc) l r
+      o loc l r
     }
   | t=function_term { t }
 
 %inline infix_connective:
-  | EQUAL { A.eq }
-  | NOT_EQUAL { A.neq }
+  | EQUAL { fun loc a b -> A.eq ~loc a b }
+  | NOT_EQUAL { fun loc a b -> A.neq ~loc a b }
 
 /* Terms */
 
