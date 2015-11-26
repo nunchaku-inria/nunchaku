@@ -108,6 +108,9 @@ module Make(T : TI.S) = struct
     | l -> U.app_builtin `Or l
 
   let mk_imply_ a b = U.app_builtin `Imply [a; b]
+  let mk_undefined_ t =
+    let id = ID.make ~name:"_" in
+    U.app_builtin (`Undefined id) [t]
 
   (* combine side-conditions with [t], depending on polarity *)
   let add_conds pol t conds =
@@ -525,8 +528,9 @@ module Make(T : TI.S) = struct
      decision tree to branches for which values are in the proper domain
      @param domains the table of codomains for abstracted types *)
   let decode_rec_fun ~state ~domains t =
+    let top = t in
     let rec aux t = match T.repr t with
-      | TI.Const _ -> U.unde
+      | TI.Const _ -> mk_undefined_ top  (* FIXME: apply to function arguments *)
       | TI.AppBuiltin (`Ite, [a;b;c]) ->
           assert false
       | _ -> assert false (* TODO *)
