@@ -16,8 +16,6 @@ module Make(T : TermInner.S) : sig
     (term, term, inv1) Problem.t ->
     (term, term, inv2) Problem.t * decode_state
 
-  val decode_term : state:decode_state -> term -> term
-
   val decode_model : state:decode_state -> term Model.t -> term Model.t
 
   (** Pipeline component *)
@@ -31,7 +29,7 @@ module Make(T : TermInner.S) : sig
       @param decode the decode function that takes an applied [(module S)]
         in addition to the state *)
   val pipe_with :
-    decode:(decode_term:(term -> term) -> 'c -> 'd) ->
+    decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
     ((term, term, inv1) Problem.t,
       (term, term, inv2) Problem.t,

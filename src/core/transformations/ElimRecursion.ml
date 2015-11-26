@@ -23,33 +23,44 @@ module Make(T : TI.S) = struct
   module TyM = TypeMono.Make(T)
 
   type term = T.t
+  type ty = T.t
+
+  let fpf = Format.fprintf
 
   (* how to encode a single recursive function/predicate *)
   type fun_encoding = {
-    fun_abstract_ty: term;
+    fun_encoded_fun: id;
+      (* name of function encoded this way *)
+    fun_abstract_ty: ty;
       (* type of abstract values for the function *)
-    fun_concretization: (id * term) list;
+    fun_abstract_ty_id: id;
+      (* symbol corresponding to [fun_abstract_ty] *)
+    fun_concretization: (id * ty) list;
       (* for each parameter, concretization function *)
   }
 
   type decode_state = {
     approx_fun : fun_encoding ID.Tbl.t;
       (* concretization_fun -> function it is used to encode *)
+    encoded_fun: fun_encoding ID.Tbl.t;
+      (* recursive function -> its encoding *)
   }
+
+  (** {6 Encoding} *)
 
   (* state used for the translation *)
   type state = {
     decode: decode_state;
       (* for decoding purpose *)
-    fun_encodings: fun_encoding ID.Tbl.t;
-      (* function -> encoding for that function *)
-    mutable sigma: term Sig.t;
+    mutable sigma: ty Sig.t;
       (* signature *)
   }
 
   let create_state() = {
-    decode={approx_fun=ID.Tbl.create 16;};
-    fun_encodings=ID.Tbl.create 16;
+    decode={
+      approx_fun=ID.Tbl.create 16;
+      encoded_fun=ID.Tbl.create 16;
+    };
     sigma=Sig.empty;
   }
 
@@ -118,7 +129,7 @@ module Make(T : TI.S) = struct
   let as_defined_ ~state f = match T.repr f with
     | TI.Const id ->
         begin try
-          Some (id, ID.Tbl.find state.fun_encodings id)
+          Some (id, ID.Tbl.find state.decode.encoded_fun id)
         with Not_found -> None
         end
     | _ -> None
@@ -240,7 +251,7 @@ module Make(T : TI.S) = struct
     tr_term_rec_ ~state ~local_state t
 
   (* translate a top-level formula
-   TODO: shall we actually keep the conditions? *)
+    NOTE: shall we actually keep the conditions? *)
   let tr_form ~state t =
     let t', conds = tr_term ~state ~local_state:empty_local_state t in
     if conds=[] then t'
@@ -301,20 +312,24 @@ module Make(T : TI.S) = struct
           List.mapi
             (fun i ty_arg ->
               let id' = ID.make ~name:(Printf.sprintf "proj_%s_%d" name i) in
-              id', U.ty_arrow abs_type ty_arg
+              let ty' = U.ty_arrow abs_type ty_arg in
+              id', ty'
             )
             (ty_args_ ty)
         in
         let fun_encoding = {
+          fun_encoded_fun=id;
+          fun_abstract_ty_id=abs_type_id;
           fun_abstract_ty=abs_type;
           fun_concretization=projectors;
         } in
-        ID.Tbl.add state.fun_encodings id fun_encoding;
+        ID.Tbl.add state.decode.encoded_fun id fun_encoding;
         (* declare abstract type + projectors *)
         add_stmt (Stmt.ty_decl ~info:Stmt.info_default abs_type_id U.ty_type);
         List.iter
           (fun (proj,ty_proj) ->
             add_stmt (Stmt.decl ~info:Stmt.info_default proj ty_proj);
+            ID.Tbl.add state.decode.approx_fun proj fun_encoding;
           )
           fun_encoding.fun_concretization;
       )
@@ -324,7 +339,7 @@ module Make(T : TI.S) = struct
       (fun def ->
         try
           let id = def.Stmt.rec_defined.Stmt.defined_head in
-          let fun_encoding = ID.Tbl.find state.fun_encodings id in
+          let fun_encoding = ID.Tbl.find state.decode.encoded_fun id in
           tr_rec_def ~state ~fun_encoding def
         with TranslationFailed (t, msg) as e ->
           (* could not translate, keep old definition *)
@@ -372,10 +387,169 @@ module Make(T : TI.S) = struct
     let pb' = Problem.flat_map_statements ~f:(tr_statement ~state) pb in
     pb', state.decode
 
-  let decode_term ~state:_ (t:term) = t (* TODO *)
+  (** {6 Decoding}
+
+    We expect to get back a model where the encoded functions (and their
+    projections) are decision trees over finite domains.
+
+    To make things more readable for the user, we drop the projections
+    from the model, and limit the encoded functions to the
+    domain where their projections were defined (the domain on which it
+    is not garbage) *)
+
+  module TermTbl = CCHashtbl.Make(struct
+    type t = term
+    let equal = U.equal
+    let hash = U.hash
+  end)
+
+  type finite_domain = {
+    dom_fun: fun_encoding;
+      (* function *)
+    dom_args: unit TermTbl.t list;
+      (* for each argument position, a list of elements.
+         Each element is an atomic term that is part of a finite domain
+         (an atomic term because we're not sure it will always be a single symbol).
+      *)
+  }
+
+  type finite_domains = finite_domain ID.Tbl.t
+  (* map abstracted function -> its domain *)
+
+  let pp_domain out d =
+    let pp_tbl out tbl =
+      fpf out "@[%a@]" (CCFormat.seq ~start:"{" ~stop:"}" P.print) (TermTbl.keys tbl)
+    in
+    fpf out "[@[<hv2>`%a`:@ %a@]]"
+      ID.print_name d.dom_fun.fun_encoded_fun
+      (CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_tbl) d.dom_args
+
+  let get_dom ~state ~domains id =
+    try ID.Tbl.find domains id
+    with Not_found ->
+      (* create and return empty list of domains *)
+      let fun_ = ID.Tbl.find state.encoded_fun id in
+      let args = List.map (fun _ -> TermTbl.create 8) fun_.fun_concretization in
+      let dom = {
+        dom_fun=fun_;
+        dom_args=args;
+      } in
+      ID.Tbl.replace domains id dom;
+      dom
+
+  let is_const_ t = match T.repr t with
+    | TI.Const _ -> true
+    | TI.App (_,[]) -> assert false
+    | _ -> false
+
+  let rec is_atomic_ t = match T.repr t with
+    | TI.Const _ -> true
+    | TI.App (f, l) -> is_const_ f && List.for_all is_atomic_ l
+    | _ -> false
+
+  (* see whether [t] is of the form [var = const] with [var:ty_id]
+     where [ty_id] is an abstract type *)
+  let as_eqn_sym_ ~ty_id t =
+    match T.repr t with
+    | TI.AppBuiltin (`Eq, [a;b]) ->
+        begin match T.repr a, T.repr b with
+        | TI.Var v, TI.Const c
+        | TI.Const c, TI.Var v ->
+            begin match T.repr (Var.ty v) with
+              | TI.Const ty_id' when ID.equal ty_id ty_id' -> Some c
+              | _ -> None
+            end
+        | _ -> None
+        end
+    | _ -> None
+
+  (* explore a if/then/else function to gather constants in the codomain
+    of projections from ty_id *)
+  let gather_values_ set t =
+    let rec aux t =
+      match T.repr t with
+      | TI.TyArrow (_,_)
+      | TI.TyBuiltin _
+      | TI.Var _ -> ()
+      | TI.Const _ ->
+          (* atomic term -> domain *)
+          TermTbl.replace set t ()
+      | TI.App _ ->
+          (* atomic term -> domain *)
+          if is_atomic_ t then TermTbl.replace set t ()
+      | TI.AppBuiltin (_,l) -> List.iter aux l
+      | TI.Bind (_,_,t') -> aux t'
+      | TI.Let _ ->
+          (* NOTE: problem is that [let x = a in f(x)] doesn't look atomic
+             unless we substitute it.
+             Possible solution: carry a substitution and check for {!is_atomic_}
+             modulo this substitution *)
+          NunUtils.not_implemented "let-binding in projection's domain"
+      | TI.Match (_,l) ->
+          (* ignore [t], it's not part of the codomain *)
+          ID.Map.iter (fun _ (_,rhs) -> aux rhs) l
+      | TI.TyMeta _ -> assert false
+    in
+    aux t
+
+  (* compute the domain of all abstract type
+    by exploring the value of each concretization function *)
+  let compute_doms ~state m =
+    let domains = ID.Tbl.create 32 in
+    List.iter
+      (fun (t,u) ->
+        match T.repr t with
+        | TI.Const id ->
+            begin try
+              (* is [id] a concretization function? *)
+              let fun_encoding = ID.Tbl.find state.approx_fun id in
+              (* enrich set of values for the abstract type *)
+              let dom = get_dom ~state ~domains fun_encoding.fun_encoded_fun in
+              match CCList.find_idx
+                (fun (id',_) -> ID.equal id id')
+                fun_encoding.fun_concretization
+              with
+                | None -> assert false (* not a concretization fun?! *)
+                | Some (i, _) ->
+                    (* add codomain of the i-th concretization function to
+                        the domain of the i-th argument of the function *)
+                    let set = List.nth dom.dom_args i in
+                    gather_values_ set u
+            with Not_found -> ()
+            end
+        | _ -> ())
+      m;
+    domains
+
+  (* assuming [t] is a function with a decision tree inside, restrict the
+     decision tree to branches for which values are in the proper domain
+     @param domains the table of codomains for abstracted types *)
+  let decode_rec_fun ~state ~domains t =
+    let rec aux t = match T.repr t with
+      | TI.Const _ -> U.unde
+      | TI.AppBuiltin (`Ite, [a;b;c]) ->
+          assert false
+      | _ -> assert false (* TODO *)
+    in
+    aux t
 
   let decode_model ~state m =
-    Model.map ~f:(decode_term ~state) m
+    let domains = compute_doms ~state m in
+    Utils.debugf ~section 2 "@[<2>domains:@ @[%a@]@]"
+      (fun k->k (CCFormat.seq ~start:"" ~stop:"" pp_domain) (ID.Tbl.values domains));
+    (* now remove projections and filter recursion functions's values *)
+    CCList.filter_map
+      (fun (t,u) -> match T.repr t with
+        | TI.Const id when ID.Tbl.mem state.approx_fun id ->
+            None (* drop approximation functions *)
+        | TI.Const id when ID.Tbl.mem state.encoded_fun id ->
+            (* remove junk from the definition of [t] *)
+            let u' = decode_rec_fun ~state ~domains u in
+            Some (t, u')
+        | _ -> Some (t,u))
+      m
+
+  (** {6 Pipe} *)
 
   let pipe_with ~decode ~print =
     let on_encoded = if print
@@ -391,13 +565,10 @@ module Make(T : TI.S) = struct
         let p, state = elim_recursion p in
         p, state
       )
-      ~decode:(fun state x ->
-        let decode_term = decode_term ~state in
-        decode ~decode_term x
-      )
+      ~decode
       ()
 
   let pipe ~print =
-    let decode ~decode_term = Model.map ~f:decode_term in
+    let decode state m = decode_model ~state m in
     pipe_with ~print ~decode
 end
