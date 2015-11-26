@@ -38,8 +38,6 @@ module Make(T : TI.S) = struct
       | BFalse
       | BPartial of T.t
 
-    type eval = subst:subst -> T.t -> T.t
-
     (* evaluate boolean operators. Subterms are evaluated with [eval] *)
     let rec eval_bool ~eval ~subst t =
       (* base case *)

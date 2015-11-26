@@ -157,7 +157,8 @@ end = struct
           | `Eq  -> `Eq
           | `DataSelect _
           | `DataTest _
-          | `Ite -> assert false (* wrong arity: those are not terms *)
+          | `Undefined _
+          | `Ite -> assert false
         in
         Untyped.app (Untyped.builtin b) (List.map aux l)
     | Const id -> Untyped.var (find_ ~ctx id)
