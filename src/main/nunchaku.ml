@@ -2,9 +2,9 @@
 (** {1 Main program} *)
 
 module E = CCError
-module A = NunUntypedAST
-module Utils = NunUtils
-module TI = NunTermInner
+module A = UntypedAST
+module Utils = Utils
+module TI = TermInner
 
 type input =
   | I_nunchaku
@@ -89,7 +89,7 @@ let options =
       " print input after elimination of recursive functions"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
-  ; "--print-raw-model", Arg.Set NunSolver_intf.print_model_, " print raw model"
+  ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
   ; "--output", Arg.String set_output_, " set output format " ^ list_outputs_ ()
@@ -114,7 +114,7 @@ let parse_file ~input () =
   let res = with_in
     (fun ic ->
       let lexbuf = Lexing.from_channel ic in
-      NunLocation.set_file lexbuf (if !file="" then "<stdin>" else !file);
+      Location.set_file lexbuf (if !file="" then "<stdin>" else !file);
       try
         let res = match input with
           | I_nunchaku -> NunParser.parse_statement_list NunLexer.token lexbuf
@@ -136,23 +136,23 @@ let print_input_if_needed statements =
 
 (* build a pipeline, depending on options *)
 let make_model_pipeline () =
-  let open NunTransform.Pipe in
+  let open Transform.Pipe in
   let module HO = TI.Default in
-  let module Typed = NunTermTyped.Default in
+  let module Typed = TermTyped.Default in
   (* type inference *)
-  let module Step_tyinfer = NunTypeInference.Make(Typed)(HO) in
+  let module Step_tyinfer = TypeInference.Make(Typed)(HO) in
   let step_ty_infer = Step_tyinfer.pipe ~print:!print_typed_ in
   (* encodings *)
-  let module Step_skolem = NunSkolem.Make(Typed)(HO) in
+  let module Step_skolem = Skolem.Make(Typed)(HO) in
   let step_skolem = Step_skolem.pipe ~print:!print_skolem_ in
-  let module Step_mono = NunMonomorphization.Make(HO) in
+  let module Step_mono = Monomorphization.Make(HO) in
   let step_monomorphization = Step_mono.pipe ~print:!print_mono_ in
-  let module Step_ElimMatch = NunElimPatternMatch.Make(HO) in
+  let module Step_ElimMatch = ElimPatternMatch.Make(HO) in
   let step_elim_match = Step_ElimMatch.pipe ~print:!print_elim_match_ in
-  let module Step_rec_elim = NunElimRecursion.Make(HO) in
+  let module Step_rec_elim = ElimRecursion.Make(HO) in
   let step_recursion_elim = Step_rec_elim.pipe ~print:!print_recursion_elim_ in
   (* conversion to FO *)
-  let module Step_tofo = NunTermMono.TransFO(HO)(NunFO.Default) in
+  let module Step_tofo = TermMono.TransFO(HO)(FO.Default) in
   let step_fo = Step_tofo.pipe () in
   (* setup pipeline *)
   let pipe =
@@ -165,31 +165,31 @@ let make_model_pipeline () =
     id
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  NunCVC4.close_pipe NunFO.default_repr
+  CVC4.close_pipe FO.default_repr
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 let make_proof_pipeline () =
-  let open NunTransform.Pipe in
+  let open Transform.Pipe in
   let module HO = TI.Default in
-  let module Typed = NunTermTyped.Default in
+  let module Typed = TermTyped.Default in
   (* type inference *)
-  let module Step_tyinfer = NunTypeInference.Make(Typed)(HO) in
+  let module Step_tyinfer = TypeInference.Make(Typed)(HO) in
   let step_ty_infer = Step_tyinfer.pipe_with
     ~decode:(fun ~signature:_ x->x) ~print:!print_typed_ in
   (* encodings *)
-  let module Step_skolem = NunSkolem.Make(Typed)(HO) in
+  let module Step_skolem = Skolem.Make(Typed)(HO) in
   let step_skolem = Step_skolem.pipe_with
      ~decode:(fun ~find_id_def:_ x->x) ~print:!print_skolem_ in
-  let module Step_mono = NunMonomorphization.Make(HO) in
+  let module Step_mono = Monomorphization.Make(HO) in
   let step_monomorphization = Step_mono.pipe_with
     ~decode:(fun ~decode_term:_ x -> x) ~print:!print_mono_ in
-  let module Step_ElimMatch = NunElimPatternMatch.Make(HO) in
+  let module Step_ElimMatch = ElimPatternMatch.Make(HO) in
   let step_elim_match = Step_ElimMatch.pipe ~print:!print_elim_match_ in
-  let module Step_rec_elim = NunElimRecursion.Make(HO) in
+  let module Step_rec_elim = ElimRecursion.Make(HO) in
   let step_recursion_elim = Step_rec_elim.pipe_with
-    ~decode:(fun _ x -> x) ~print:!print_recursion_elim_ in
+    ~decode:(fun ~decode_term:_ x -> x) ~print:!print_recursion_elim_ in
   (* conversion to FO *)
-  let module Step_tofo = NunTermMono.TransFO(HO)(NunFO.Default) in
+  let module Step_tofo = TermMono.TransFO(HO)(FO.Default) in
   let step_fo = Step_tofo.pipe_with ~decode:(fun x->x) in
   (* setup pipeline *)
   let pipe =
@@ -202,12 +202,12 @@ let make_proof_pipeline () =
     id
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  NunCVC4.close_pipe NunFO.default_repr
+  CVC4.close_pipe FO.default_repr
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 (* search for results *)
 let rec find_model_ l =
-  let module Res = NunProblem.Res in
+  let module Res = Problem.Res in
   try
   match l() with
     | `Nil -> E.return `Unsat
@@ -218,11 +218,11 @@ let rec find_model_ l =
         | Res.Sat m ->
             let m = conv_back m in
             E.return (`Sat m)
-  with e -> NunUtils.err_of_exn e
+  with e -> Utils.err_of_exn e
 
 (* negate the goal *)
 let negate_goal stmts =
-  let module A = NunUntypedAST in
+  let module A = UntypedAST in
   CCList.map
     (fun st -> match st.A.stmt_value with
       | A.Goal f -> {st with A.stmt_value=A.Goal (A.not_ f); }
@@ -235,7 +235,7 @@ type proof_output =
 
 (* look at the first result *)
 let find_proof_ l =
-  let module Res = NunProblem.Res in
+  let module Res = Problem.Res in
   try
   match l() with
     | `Nil -> E.fail "exhausted possibilities"
@@ -244,7 +244,7 @@ let find_proof_ l =
         | Res.Timeout -> E.fail "timeout"
         | Res.Unsat -> E.return Unsat
         | Res.Sat _ -> E.return Sat
-  with e -> NunUtils.err_of_exn e
+  with e -> Utils.err_of_exn e
 
 (* additional printers *)
 let () = Printexc.register_printer
@@ -260,13 +260,13 @@ let main_model ~output statements =
   (* run pipeline *)
   let cpipe = make_model_pipeline() in
   if !print_pipeline_
-    then Format.printf "@[Pipeline: %a@]@." NunTransform.ClosedPipe.print cpipe;
-  NunTransform.run_closed ~cpipe statements |> find_model_
+    then Format.printf "@[Pipeline: %a@]@." Transform.ClosedPipe.print cpipe;
+  Transform.run_closed ~cpipe statements |> find_model_
   >|= fun res ->
   begin match res, output with
   | `Sat m, O_nunchaku ->
       Format.printf "@[<v2>SAT: model {@,%a@]@,}@."
-        (NunModel.print NunUntypedAST.print_term) m;
+        (Model.print UntypedAST.print_term) m;
   | `Sat m, O_tptp ->
       Format.printf "@[<v2>%a@]@,@." NunPrintTPTP.print_model m
   | `Unsat, O_nunchaku ->
@@ -285,9 +285,9 @@ let main_proof statements =
   (* run pipeline *)
   let cpipe = make_proof_pipeline () in
   if !print_pipeline_
-    then Format.printf "@[Pipeline: %a@]@." NunTransform.ClosedPipe.print cpipe;
+    then Format.printf "@[Pipeline: %a@]@." Transform.ClosedPipe.print cpipe;
   let statements = negate_goal statements in
-  NunTransform.run_closed ~cpipe statements |> find_proof_
+  Transform.run_closed ~cpipe statements |> find_proof_
   >|= fun res ->
   begin match res with
     | Unsat -> Format.printf "unsat@."

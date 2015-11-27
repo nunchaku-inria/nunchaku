@@ -122,7 +122,7 @@ rule token = parse
 
 
 {
-  type form = NunUntypedAST.term
+  type form = UntypedAST.term
 
   let parse_str_ p s = p token (Lexing.from_string s)
 

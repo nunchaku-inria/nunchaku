@@ -5,8 +5,8 @@
 
 %{
 
-  module L = NunLocation
-  module A = NunUntypedAST
+  module L = Location
+  module A = UntypedAST
   module B = A.Builtin
 
 %}
@@ -64,10 +64,10 @@
 %token <string> LOWER_WORD
 %token <string> UPPER_WORD
 
-%start <NunUntypedAST.statement> parse_statement
-%start <NunUntypedAST.statement list> parse_statement_list
-%start <NunUntypedAST.term> parse_term
-%start <NunUntypedAST.ty> parse_ty
+%start <UntypedAST.statement> parse_statement
+%start <UntypedAST.statement list> parse_statement_list
+%start <UntypedAST.term> parse_term
+%start <UntypedAST.ty> parse_ty
 
 %%
 

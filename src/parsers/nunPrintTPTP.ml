@@ -3,19 +3,17 @@
 
 (* {1 TPTP Printer} *)
 
-module A = NunUntypedAST
-module M = NunModel
-module Var = NunVar
-module ID = NunID
+module A = UntypedAST
+module M = Model
 
 type 'a printer = Format.formatter -> 'a -> unit
 
-type term = NunUntypedAST.term
-type form= NunUntypedAST.term
+type term = UntypedAST.term
+type form= UntypedAST.term
 type model = term M.t
 
 let fpf = Format.fprintf
-let section = NunUtils.Section.make "print_tptp"
+let section = Utils.Section.make "print_tptp"
 
 let pp_list ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
 
@@ -26,8 +24,8 @@ let rec print_term out t = match A.view t with
   | A.Var (`Var v) -> print_var out v
   | A.Fun (v,t) ->
       fpf out "@[<2>^[%a]:@ %a@]" print_tyvar v print_inner t
-  | A.Let _ -> NunUtils.not_implemented "print let in TPTP"
-  | A.Match _ -> NunUtils.not_implemented "print match in TPTP"
+  | A.Let _ -> Utils.not_implemented "print let in TPTP"
+  | A.Match _ -> Utils.not_implemented "print match in TPTP"
   | A.Ite (a,b,c) ->
       fpf out "$ite_t(@[<hv>%a,@ %a,@ %a@])"
         print_term a print_term b print_term c
@@ -73,7 +71,7 @@ let rec print_term out t = match A.view t with
           | `Imply ,_ -> assert false
           end
       | _ ->
-          NunUtils.not_implementedf "could not apply %a to arguments" print_term f
+          Utils.not_implementedf "could not apply %a to arguments" print_term f
       end
   | A.MetaVar _ -> assert false
 
@@ -165,7 +163,7 @@ let preprocess_model m =
         let t = find_cst_term ~state t in
         let u = find_cst_term ~state:(pre_state_bind ~state v) u in
         A.let_ (mk_var v) t u
-    | A.Match _ -> NunUtils.not_implemented "replace in match"
+    | A.Match _ -> Utils.not_implemented "replace in match"
     | A.Ite (a,b,c) ->
         let a = find_cst_term ~state a in
         let b = find_cst_term ~state b in
@@ -224,7 +222,7 @@ let preprocess_model m =
           preprocess_pair ~state t u2 >>= fun u2 ->
           preprocess_pair ~state t u3 >|= fun u3 ->
           A.ite u1 u2 u3
-      | A.Match _ -> NunUtils.not_implemented "printTPTP: match"
+      | A.Match _ -> Utils.not_implemented "printTPTP: match"
   in
   let state = pre_state_create() in
   let m' = m
@@ -255,7 +253,7 @@ let print_model out m =
   in
   let header = "% --------------- begin TPTP model ------------"
   and footer = "% --------------- end TPTP model --------------" in
-  NunUtils.debugf ~section 3 "preprocess model..." (fun k -> k);
+  Utils.debugf ~section 3 "preprocess model..." (fun _->());
   let m = preprocess_model m in
   fpf out "@[<v>%s@,%a@,%s@]"
     header (pp_list ~sep:"" pp_form) m footer

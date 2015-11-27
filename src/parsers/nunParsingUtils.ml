@@ -4,8 +4,8 @@
 (** {1 Various Utils for Parsing} *)
 
 module E = CCError
-module A = NunUntypedAST
-module Loc = NunLocation
+module A = UntypedAST
+module Loc = Location
 
 type 'a or_error = [`Ok of 'a | `Error of string ]
 
@@ -23,9 +23,9 @@ let () = Printexc.register_printer
   )
 
 let lex_error_ fmt =
-  NunUtils.exn_ksprintf fmt ~f:(fun msg -> raise (LexError msg))
+  Utils.exn_ksprintf fmt ~f:(fun msg -> raise (LexError msg))
 let parse_error_ ?loc fmt =
-  NunUtils.exn_ksprintf fmt ~f:(fun msg -> raise (ParseError (loc,msg)))
+  Utils.exn_ksprintf fmt ~f:(fun msg -> raise (ParseError (loc,msg)))
 
 type statement = A.statement
 type term = A.term
@@ -88,8 +88,8 @@ module Make(F : FORMAT) = struct
   let statement_of_string_exn = parse_str_ F.parse_statement
 
   module HO = struct
-    module T = NunTermInner.Default
-    module Conv = NunTermPoly.OfUntyped(T)
+    module T = TermInner.Default
+    module Conv = TermPoly.OfUntyped(T)
 
     let term_of_str_exn s =
       let t = term_of_string_exn s in
@@ -97,6 +97,6 @@ module Make(F : FORMAT) = struct
 
     let term_of_str s =
       try CCError.return (term_of_str_exn s)
-      with e -> NunUtils.err_of_exn e
+      with e -> Utils.err_of_exn e
   end
 end

@@ -13,15 +13,15 @@
   }
 *)
 
-module A = NunUntypedAST
+module A = UntypedAST
 module P = NunTPTPParser
-module Loc = NunLocation
+module Loc = Location
 
 let parse_ty = P.parse_ty
 let parse_term = P.parse_term
 let parse_statement = P.parse_statement
 
-let section = NunUtils.Section.make "TPTPRecursiveParser"
+let section = Utils.Section.make "TPTPRecursiveParser"
 
 (* where to find TPTP files *)
 let tptp_dir () =
@@ -72,7 +72,7 @@ let declare_sym_default ~state ~ctx s arity =
         let args = CCList.init arity (fun _ -> ty_term) in
         A.ty_arrow_list args ty_prop
   in
-  NunUtils.debugf ~section 1 "declare `%s` with (default) type `%a`"
+  Utils.debugf ~section 1 "declare `%s` with (default) type `%a`"
     (fun k-> k s A.print_term ty);
   (* declare [s : ty] *)
   StrTbl.replace state.declared s ();
@@ -316,7 +316,7 @@ let parse_statement_list token lexbuf =
   CCVector.to_list state.into
 
 (*$inject
-  module A = NunUntypedAST
+  module A = UntypedAST
   let parses_ok p t = match p t with `Ok _ -> true | _ -> false
   let ho_parses_ok = parses_ok NunTPTPLexer.ho_form_of_string
   let fo_parses_ok = parses_ok NunTPTPLexer.ho_form_of_string

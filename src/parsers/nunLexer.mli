@@ -10,9 +10,9 @@ val token : Lexing.lexbuf -> NunParser.token
 
 type 'a or_error = [`Ok of 'a | `Error of string ]
 
-type statement = NunUntypedAST.statement
-type term = NunUntypedAST.term
-type ty = NunUntypedAST.ty
+type statement = UntypedAST.statement
+type term = UntypedAST.term
+type ty = UntypedAST.ty
 
 val parse_file : string -> statement list or_error
 
@@ -31,7 +31,7 @@ val statement_of_string : string -> statement or_error
 val statement_of_string_exn : string -> statement
 
 module HO : sig
-  module T = NunTermInner.Default
+  module T = TermInner.Default
 
   val term_of_str : string -> T.t or_error
   val term_of_str_exn : string -> T.t

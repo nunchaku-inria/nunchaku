@@ -9,8 +9,8 @@
 
 %{
 
-  module L = NunLocation
-  module A = NunUntypedAST
+  module L = Location
+  module A = UntypedAST
   module B = A.Builtin
 
   (* remove quote from some symbols *)
@@ -88,14 +88,14 @@
 %token <string> RATIONAL
 %token <string> INTEGER
 
-%start <NunUntypedAST.statement> parse_statement
-%start <NunUntypedAST.statement list> parse_statement_list
-%start <NunUntypedAST.term> parse_term
-%start <NunUntypedAST.term> parse_fo_form
-%start <NunUntypedAST.term> parse_ho_form
-%start <NunUntypedAST.ty> parse_ty
+%start <UntypedAST.statement> parse_statement
+%start <UntypedAST.statement list> parse_statement_list
+%start <UntypedAST.term> parse_term
+%start <UntypedAST.term> parse_fo_form
+%start <UntypedAST.term> parse_ho_form
+%start <UntypedAST.ty> parse_ty
 
-%start <NunUntypedAST.term list list> parse_answer_tuples
+%start <UntypedAST.term list list> parse_answer_tuples
 
 
 %%
@@ -450,8 +450,8 @@ defined_term:
   | t=defined_atomic_term { t }
 
 defined_atom:
-  | _=INTEGER { NunUtils.not_implemented "TPTP: cannot handle integer" }
-  | _=RATIONAL { NunUtils.not_implemented "TPTP: cannot handle rational" }
+  | _=INTEGER { Utils.not_implemented "TPTP: cannot handle integer" }
+  | _=RATIONAL { Utils.not_implemented "TPTP: cannot handle rational" }
   | REAL {
       let loc = L.mk_pos $startpos $endpos in
       NunParsingUtils.parse_error_ ~loc "TPTP: cannot handle real numbers"
