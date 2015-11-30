@@ -68,7 +68,7 @@ module Make(T : TermInner.S) : sig
   (** Pipeline component *)
 
   val pipe_with :
-    decode:(decode_term:(term -> term) -> 'c -> 'd) ->
+    decode:(unmangle_state -> 'c -> 'd) ->
     print:bool ->
     ((term, term, 'a inv1) Problem.t,
      (term, term, 'a inv2) Problem.t, 'c, 'd

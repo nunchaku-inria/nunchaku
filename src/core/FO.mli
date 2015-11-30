@@ -189,7 +189,7 @@ type ('f, 't, 'ty) build =
 module Default : S
 
 val default_repr: (Default.formula, Default.T.t, Default.Ty.t) repr
-val default_build: (Default.formula, Default.T.t, Default.Ty.t) build
+val default: (Default.formula, Default.T.t, Default.Ty.t) build
 
 (** {2 Problem} *)
 module Problem : sig
@@ -202,6 +202,11 @@ module Problem : sig
   val make : ('f, 't, 'ty) statement vec_ro -> ('f, 't, 'ty) t
   val of_list : ('f, 't, 'ty) statement list -> ('f, 't, 'ty) t
   val statements : ('f, 't, 'ty) t -> ('f, 't, 'ty) statement vec_ro
+  val fold_flat_map :
+    ('acc -> ('f, 't, 'ty) statement -> 'acc * ('f2, 't2, 'ty2) statement list) ->
+    'acc ->
+    ('f, 't, 'ty) t ->
+    'acc * ('f2, 't2, 'ty2) t
 end
 
 (** {2 IO} *)

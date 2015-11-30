@@ -487,7 +487,7 @@ module Make(T : TI.S) = struct
              unless we substitute it.
              Possible solution: carry a substitution and check for {!is_atomic_}
              modulo this substitution *)
-          NunUtils.not_implemented "let-binding in projection's domain"
+          Utils.not_implemented "let-binding in projection's domain"
       | TI.Match (_,l) ->
           (* ignore [t], it's not part of the codomain *)
           ID.Map.iter (fun _ (_,rhs) -> aux rhs) l
@@ -538,12 +538,13 @@ module Make(T : TI.S) = struct
     aux t
 
   let decode_model ~state m =
-    let domains = compute_doms ~state m in
+    (* FIXME: remove this, directly provided by [m.Model.finite_types] *)
+    let domains = compute_doms ~state m.Model.terms in
     Utils.debugf ~section 2 "@[<2>domains:@ @[%a@]@]"
       (fun k->k (CCFormat.seq ~start:"" ~stop:"" pp_domain) (ID.Tbl.values domains));
     (* now remove projections and filter recursion functions's values *)
-    CCList.filter_map
-      (fun (t,u) -> match T.repr t with
+    Model.filter_map m
+      ~terms:(fun (t,u) -> match T.repr t with
         | TI.Const id when ID.Tbl.mem state.approx_fun id ->
             None (* drop approximation functions *)
         | TI.Const id when ID.Tbl.mem state.encoded_fun id ->
@@ -551,7 +552,7 @@ module Make(T : TI.S) = struct
             let u' = decode_rec_fun ~state ~domains u in
             Some (t, u')
         | _ -> Some (t,u))
-      m
+      ~finite_types:(fun pair -> Some pair)
 
   (** {6 Pipe} *)
 

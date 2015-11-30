@@ -165,7 +165,7 @@ let make_model_pipeline () =
     id
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  CVC4.close_pipe FO.default_repr
+  CVC4.close_pipe FO.default
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 let make_proof_pipeline () =
@@ -179,15 +179,15 @@ let make_proof_pipeline () =
   (* encodings *)
   let module Step_skolem = Skolem.Make(Typed)(HO) in
   let step_skolem = Step_skolem.pipe_with
-     ~decode:(fun ~find_id_def:_ x->x) ~print:!print_skolem_ in
+     ~decode:(fun _ x->x) ~print:!print_skolem_ in
   let module Step_mono = Monomorphization.Make(HO) in
   let step_monomorphization = Step_mono.pipe_with
-    ~decode:(fun ~decode_term:_ x -> x) ~print:!print_mono_ in
+    ~decode:(fun _ x -> x) ~print:!print_mono_ in
   let module Step_ElimMatch = ElimPatternMatch.Make(HO) in
   let step_elim_match = Step_ElimMatch.pipe ~print:!print_elim_match_ in
   let module Step_rec_elim = ElimRecursion.Make(HO) in
   let step_recursion_elim = Step_rec_elim.pipe_with
-    ~decode:(fun ~decode_term:_ x -> x) ~print:!print_recursion_elim_ in
+    ~decode:(fun _ x -> x) ~print:!print_recursion_elim_ in
   (* conversion to FO *)
   let module Step_tofo = TermMono.TransFO(HO)(FO.Default) in
   let step_fo = Step_tofo.pipe_with ~decode:(fun x->x) in
@@ -202,7 +202,7 @@ let make_proof_pipeline () =
     id
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  CVC4.close_pipe FO.default_repr
+  CVC4.close_pipe FO.default
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 (* search for results *)

@@ -9,11 +9,6 @@ module Var = Var
 type id = ID.t
 type 'a var = 'a Var.t
 
-(** {2 A Ground Model} *)
-module Model = struct
-  type 't t = ('t * 't) list
-end
-
 module Res = struct
   type 't t =
     | Sat of 't Model.t

@@ -21,7 +21,7 @@ end)
 
 type model_elt = FO.Default.term_or_form
 
-module Make(FO_T : FO.VIEW) : sig
+module Make(FO_T : FO.S) : sig
   include Solver_intf.S
   with module FO_T = FO_T
   and module FOBack = FO.Default
@@ -43,13 +43,23 @@ end = struct
     | DataTest of id
     | DataSelect of id * int
 
+  type model_query =
+    | Q_const
+        (* we want to know the value of this constant *)
+    | Q_type of ID.t
+        (* [id -> ty] means that [id : ty] is a dummy value, and we  want
+           to know the finite domain of [ty] by asking [(fmf.card.val id)] *)
+
   type decode_state = {
     decode_tbl: (string, decoded_sym) Hashtbl.t;
       (* map (stringof ID) -> ID, and other builtins *)
+    symbols : model_query ID.Map.t;
+      (* set of symbols to ask values for in the model *)
   }
 
-  let create_decode_state() = {
+  let create_decode_state ~symbols = {
     decode_tbl=Hashtbl.create 32;
+    symbols;
   }
 
   (* the solver is dealt with through stdin/stdout *)
@@ -57,7 +67,6 @@ end = struct
     oc : out_channel;
     fmt : Format.formatter; (* prints on [oc] *)
     ic : in_channel;
-    symbols : ID.Set.t; (* set of symbols to ask values for in the model *)
     decode: decode_state;
     mutable sexp : DSexp.t;
     mutable closed : bool;
@@ -90,8 +99,7 @@ end = struct
       oc;
       fmt=Format.formatter_of_out_channel oc;
       ic;
-      symbols;
-      decode=create_decode_state();
+      decode=create_decode_state ~symbols;
       closed=false;
       sexp=DSexp.make ~bufsize:4_000 (input ic);
       res=None;
@@ -253,7 +261,7 @@ end = struct
 
   let print_problem = print_problem_ ~on_id:(fun _ _ -> ())
 
-  (* local error *)
+  (* local error, should never escape *)
   exception Error of string
 
   let error_ e = raise (Error e)
@@ -403,6 +411,19 @@ end = struct
     | None -> FO.Form f
     | Some t -> FO.Term t
 
+  let parse_terms_ ~state = function
+    | `List l ->
+        List.map (fun s -> FO.Term (parse_term_ ~state s)) l
+    | `Atom _ -> error_ "expected list of terms, got Atom"
+
+  let sym_get_const_ ~state id = match ID.Map.find id state.symbols with
+    | Q_const -> ()
+    | Q_type _ -> assert false
+
+  let sym_get_ty_ ~state id = match ID.Map.find id state.symbols with
+    | Q_const -> assert false
+    | Q_type ty -> ty
+
   (* state: decode_state *)
   let parse_model_ ~state = function
     | `Atom _ -> error_ "expected model, got atom"
@@ -411,27 +432,40 @@ end = struct
       let m = List.fold_left
         (fun m -> function
           | `List [`Atom _ as s; term] ->
+              (* regular constant, whose value we are interested in *)
               let id = parse_id_ ~state s in
+              sym_get_const_ ~state id;  (* check it's a constant *)
               let t = parse_term_or_formula_ ~state term in
-              ID.Map.add id t m
-          | _ -> error_ "expected pair key/value in the model"
-        )
-        ID.Map.empty assoc
+              Model.add m (FO.Term (FOBack.T.const id), t)
+          | `List [`List [`Atom "fmf.card.val"; (`Atom _ as s)]; l] ->
+              (* finite domain *)
+              let id = parse_id_ ~state s in
+              (* which type? *)
+              let ty_id = sym_get_ty_ ~state id in
+              let ty = FO.Term (FOBack.T.const ty_id) in
+              let terms = parse_terms_ ~state l in
+              Model.add_finite_type m ty terms
+          | _ -> error_ "expected pair key/value in the model")
+        Model.empty
+        assoc
       in
       m
 
-  (* NOTE: use `fmf.card.val(t)` to get the set of values in the finite domain
-      of the type of `t` *)
-
-  (* read model from CVC4 instance [s]
-     symbols: set of symbols to get values for
-     tbl: string -> ID *)
-  let get_model_ ~symbols ~state s =
+  (* read model from CVC4 instance [s] *)
+  let get_model_ ~state s : _ Model.t =
     Utils.debugf ~section 3 "@[<2>ask for values of@ %a@]"
-      (fun k -> k (ID.Set.print ~start:"(" ~sep:" " ~stop:")" ID.print_name) symbols);
+      (fun k -> k
+        (CCFormat.seq ~start:"(" ~sep:" " ~stop:")" ID.print_name)
+        (ID.Map.to_seq state.symbols |> Sequence.map fst));
+    (* print a single symbol *)
+    let pp_mquery out (id, q) = match q with
+      | Q_const -> ID.print_name out id
+      | Q_type _ -> fpf out "(fmf.card.val %a)" ID.print_name id
+    in
     fpf s.fmt "(@[<hv2>get-value@ %a@])@."
-      (ID.Set.print ~start:"(" ~sep:" " ~stop:")" ID.print_name)
-      symbols;
+      (CCFormat.seq ~start:"(" ~sep:" " ~stop:")" pp_mquery)
+      (ID.Map.to_seq state.symbols);
+    (* read result back *)
     match DSexp.next s.sexp with
     | `Error e -> error_ e
     | `End -> error_ "unexpected end of input from CVC4: expected model"
@@ -440,16 +474,17 @@ end = struct
           then Format.eprintf "@[raw model:@ @[<hv>%a@]@]@." CCSexpM.print sexp;
         let m = parse_model_ ~state sexp in
         (* check all symbols are defined *)
-        let ok = ID.Set.to_seq symbols
-          |> Sequence.for_all (fun s -> ID.Map.mem s m)
+        let ok =
+          List.length m.Model.terms + List.length m.Model.finite_types
+          =
+          ID.Map.cardinal state.symbols
         in
         if not ok then error_ "some symbols are not defined in the model";
-        ID.Map.to_seq m
-          |> Sequence.map
-              (fun (id,t) -> FO.Term (FOBack.T.const id), t)
-          |> Sequence.to_rev_list
+        m
 
-  (* rewrite model to be nicer *)
+  (* rewrite model to be nicer
+   TODO: CLI flag to opt-out?
+   TODO: put this into Model? *)
   let rewrite_model_ m =
     (* rewrite [t] using the set of rewrite rules *)
     let rec rewrite_term_ ~rules t = match FOBack.T.view t with
@@ -478,7 +513,7 @@ end = struct
       | FO.Form f -> FO.Form (rewrite_form_ ~rules f)
     in
     (* compute a basic set of rules *)
-    let rules = m
+    let rules = m.Model.terms
       |> CCList.filter_map
         (function
           | FO.Term t, FO.Term u ->
@@ -491,15 +526,15 @@ end = struct
       |> ID.Map.of_list
     in
     (* rewrite every term *)
-    List.map (fun (t,u) -> rewrite_ ~rules t, rewrite_ ~rules u) m
+    Model.map m ~f:(rewrite_ ~rules)
 
   (* read the result *)
-  let read_res_ ~symbols ~state s =
+  let read_res_ ~state s =
     match DSexp.next s.sexp with
     | `Ok (`Atom "unsat") ->
         Sol.Res.Unsat
     | `Ok (`Atom "sat") ->
-        let m = get_model_ ~symbols ~state s |> rewrite_model_ in
+        let m = get_model_ ~state s |> rewrite_model_ in
         Sol.Res.Sat m
     | `Ok (`Atom "unknown") ->
         Sol.Res.Timeout
@@ -517,34 +552,47 @@ end = struct
     | Some r -> r
     | None ->
         let r =
-          try read_res_ ~symbols:t.symbols ~state:t.decode t
+          try read_res_ ~state:t.decode t
           with Error e -> Sol.Res.Error e
         in
         t.res <- Some r;
         r
 
-  (* set of symbols to find a value for in the model *)
-  let compute_symbols_ pb =
-    FOI.Problem.statements pb
-    |> CCVector.fold
-      (fun acc s -> match s with
-        | FOI.Decl (id,_) -> ID.Set.add id acc
-        | FOI.TyDecl (_,_)
+  (* does two things:
+      - add some dummy constants for non-parametrized types (for asking for
+          the type's domain later)
+      - compute the set of symbols for which we want the model's value *)
+  let preprocess_pb_ pb =
+    let n = ref 0 in
+    FOI.Problem.fold_flat_map
+      (fun acc stmt -> match stmt with
+        | FOI.Decl (id,_) ->
+            ID.Map.add id Q_const acc, [stmt]
+        | FOI.TyDecl (id,0) ->
+            (* add a dummy constant *)
+            let c = ID.make ~name:(CCFormat.sprintf "__nun_card_witness_%d" !n) in
+            incr n;
+            let ty_c = [], FO_T.Ty.const id in
+            let acc' = ID.Map.add c (Q_type id) acc in
+            (* declare [c] *)
+            acc', [stmt; FOI.Decl (c, ty_c)]
+        | FOI.TyDecl _
         | FOI.Axiom _
-        | FOI.Goal _ -> acc
-        | FOI.MutualTypes (_,_) -> acc
-      ) ID.Set.empty
+        | FOI.Goal _
+        | FOI.MutualTypes (_,_) -> acc, [stmt])
+      ID.Map.empty
+      pb
 
   let solve ?(timeout=30.) problem =
-    let symbols = compute_symbols_ problem in
+    let symbols, problem' = preprocess_pb_ problem in
     let s = create_ ~timeout ~symbols () in
-    send_ s problem;
+    send_ s problem';
     s
 end
 
 (* solve problem using CVC4 before [deadline] *)
 let call (type f)(type t)(type ty)
-(module F : FO.VIEW with type T.t=t and type formula=f and type Ty.t=ty)
+(module F : FO.S with type T.t=t and type formula=f and type Ty.t=ty)
 ~print ~print_smt ~deadline problem =
   let module FOBack = FO.Default in
   let module P = FO.Print(F) in
@@ -570,7 +618,7 @@ let call (type f)(type t)(type ty)
 
 (* close a pipeline with CVC4 *)
 let close_pipe (type f)(type t)(type ty)
-(module F : FO.VIEW with type T.t=t and type formula=f and type Ty.t=ty)
+(module F : FO.S with type T.t=t and type formula=f and type Ty.t=ty)
 ~pipe ~print ~print_smt ~deadline
 =
   let module FOBack = FO.Default in

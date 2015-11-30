@@ -279,7 +279,7 @@ let default_repr
      and type T.t = Default.T.t
      and type Ty.t = Default.Ty.t)
 
-let default_build
+let default
 : (Default.formula, Default.T.t, Default.Ty.t) build
 = (module Default : S with type formula = Default.formula
      and type T.t = Default.T.t
@@ -296,6 +296,18 @@ module Problem = struct
   let make l = {statements=l}
   let of_list l = make (CCVector.of_list l)
   let statements t = t.statements
+
+  let fold_flat_map f acc pb =
+    let res = CCVector.create () in
+    let acc' = CCVector.fold
+      (fun acc st ->
+        let acc, stmts = f acc st in
+        CCVector.append_list res stmts;
+        acc)
+      acc pb.statements
+    in
+    let pb' = make (CCVector.freeze res) in
+    acc', pb'
 end
 
 module type PRINT = sig

@@ -782,13 +782,10 @@ module Make(T : TI.S) = struct
         p, state
         (* TODO mangling of types, as an option *)
       )
-      ~decode:(fun state x ->
-        let decode_term = unmangle_term ~state in
-        decode ~decode_term x
-      )
+      ~decode
       ()
 
   let pipe ~print =
-    let decode ~decode_term = Model.map ~f:decode_term in
+    let decode state = Model.map ~f:(unmangle_term ~state) in
     pipe_with ~print ~decode
 end

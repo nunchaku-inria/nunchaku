@@ -52,7 +52,7 @@ module type S = sig
       @param decode is given [find_id_def], which maps Skolemized
         constants to the formula they define *)
   val pipe_with :
-    decode:(find_id_def:(id -> T2.t option) -> 'c -> 'd) ->
+    decode:(state -> 'c -> 'd) ->
     print:bool ->
     ((T1.t,T1.t, <eqn:_;..> as 'inv) Problem.t,
       (T2.t,T2.t,'inv) Problem.t, 'c, 'd
@@ -301,14 +301,16 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
     with Not_found -> None
 
   let decode_model ~state m =
-    m |> List.map
-        (fun (t,u) -> match T2.repr t with
+    Model.filter_map m
+      ~finite_types:(fun (ty,dom) -> Some (ty,dom))
+      ~terms:(fun (t,u) ->
+          match T2.repr t with
           | TI.Const id ->
               begin match find_id_def ~state id with
-                | None -> t, u
-                | Some t' -> t', u
+                | None -> Some (t, u)
+                | Some t' -> Some (t', u)
               end
-          | _ -> t, u
+          | _ -> Some (t, u)
         )
 
   let pipe_with ~decode ~print =
@@ -327,22 +329,9 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
         let pb = convert_problem ~state pb in
         pb, state
       )
-      ~decode:(fun state x ->
-        decode ~find_id_def:(find_id_def ~state) x
-      )
+      ~decode
       ()
 
   let pipe ~print =
-    let decode ~find_id_def m =
-      m |> List.map
-          (fun (t,u) -> match T2.repr t with
-            | TI.Const id ->
-                begin match find_id_def id with
-                  | None -> t, u
-                  | Some t' -> t', u
-                end
-            | _ -> t, u
-          )
-    in
-    pipe_with ~decode ~print
+    pipe_with ~decode:(fun state m -> decode_model ~state m) ~print
 end

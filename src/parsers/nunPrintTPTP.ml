@@ -68,6 +68,7 @@ let rec print_term out t = match A.view t with
           | `False ,_
           | `Eq ,_
           | `Equiv ,_
+          | `Undefined _, _
           | `Imply ,_ -> assert false
           end
       | _ ->
@@ -225,7 +226,7 @@ let preprocess_model m =
       | A.Match _ -> Utils.not_implemented "printTPTP: match"
   in
   let state = pre_state_create() in
-  let m' = m
+  let m' = m.Model.terms
     >>= fun (t,u) ->
     let u = find_cst_term ~state u in
     preprocess_pair ~state t u
