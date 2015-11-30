@@ -39,9 +39,9 @@ let print pt out m =
   let pp_types out m = match m with
     | [] -> ()
     | _::_ ->
-      Format.fprintf out "types:@[<v>%a@]"
+      Format.fprintf out "@[<hv2>types {@,%a@,}@]"
         (CCFormat.list ~start:"" ~stop:"" ~sep:"" pp_dom) m
   in
-  Format.fprintf out "{@[<hv>term=@,@[<v>%a@],@,%a@]}"
+  Format.fprintf out "@[<hv2>model {@,terms {@,@[<hv2>%a@]@,}@,%a@]@,}@]"
     (CCFormat.list ~start:"" ~stop:"" ~sep:"" pp_pair) m.terms
     pp_types m.finite_types

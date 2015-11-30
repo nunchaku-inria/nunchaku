@@ -301,6 +301,10 @@ end = struct
         Var.of_id ~ty id
     | _ -> error_ "expected typed variable"
 
+  let parse_int_ = function
+    | `Atom n -> (try int_of_string n with _ -> error_ "expected int")
+    | `List _ -> error_ "expected int"
+
   (* is this formula actually just a term? if yes, convert *)
   let rec as_term_ f = match FOBack.Formula.view f with
     | FO.Atom t -> Some t
@@ -411,11 +415,6 @@ end = struct
     | None -> FO.Form f
     | Some t -> FO.Term t
 
-  let parse_terms_ ~state = function
-    | `List l ->
-        List.map (fun s -> FO.Term (parse_term_ ~state s)) l
-    | `Atom _ -> error_ "expected list of terms, got Atom"
-
   let sym_get_const_ ~state id = match ID.Map.find id state.symbols with
     | Q_const -> ()
     | Q_type _ -> assert false
@@ -437,13 +436,21 @@ end = struct
               sym_get_const_ ~state id;  (* check it's a constant *)
               let t = parse_term_or_formula_ ~state term in
               Model.add m (FO.Term (FOBack.T.const id), t)
-          | `List [`List [`Atom "fmf.card.val"; (`Atom _ as s)]; l] ->
+          | `List [`List [`Atom "fmf.card.val"; (`Atom _ as s)]; n] ->
               (* finite domain *)
               let id = parse_id_ ~state s in
               (* which type? *)
               let ty_id = sym_get_ty_ ~state id in
               let ty = FO.Term (FOBack.T.const ty_id) in
-              let terms = parse_terms_ ~state l in
+              (* read cardinal *)
+              let n = parse_int_ n in
+              let terms = Sequence.(0 -- (n-1)
+                |> map
+                  (fun i ->
+                    let name = CCFormat.sprintf "@uc_%a_%d" ID.print_name ty_id i in
+                    FO.Term (FOBack.T.const (ID.make ~name)))
+                |> to_rev_list
+              ) in
               Model.add_finite_type m ty terms
           | _ -> error_ "expected pair key/value in the model")
         Model.empty
@@ -583,8 +590,10 @@ end = struct
       ID.Map.empty
       pb
 
-  let solve ?(timeout=30.) problem =
+  let solve ?(timeout=30.) ?(print=false) problem =
     let symbols, problem' = preprocess_pb_ problem in
+    if print
+      then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem problem';
     let s = create_ ~timeout ~symbols () in
     send_ s problem';
     s
@@ -605,9 +614,7 @@ let call (type f)(type t)(type ty)
   else (
     if print
       then Format.printf "@[<v2>FO problem:@ %a@]@." P.print_problem problem;
-    if print_smt
-      then Format.printf "@[<v2>SMT problem:@ %a@]@." CVC4.print_problem problem;
-    let solver = CVC4.solve ~timeout problem in
+    let solver = CVC4.solve ~timeout ~print:print_smt problem in
     match CVC4.res solver with
     | Sol.Res.Sat m -> Res.Sat m
     | Sol.Res.Unsat -> Res.Unsat
