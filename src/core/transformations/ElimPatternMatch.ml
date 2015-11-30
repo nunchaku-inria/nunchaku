@@ -270,7 +270,6 @@ module Make(T : TermInner.S) = struct
     let info = Stmt.info st in
     match Stmt.view st with
     | Stmt.Axiom (Stmt.Axiom_rec l) ->
-        (* FIXME: declare the symbols of [l] before processing *)
         let env' = Env.declare_rec_funs ~env l in
         let l' = List.map
           (fun def ->
