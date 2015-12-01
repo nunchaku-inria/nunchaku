@@ -26,6 +26,7 @@ module Make(T : TI.S) = struct
   type ty = T.t
 
   let fpf = Format.fprintf
+  let spf = CCFormat.sprintf
 
   (* how to encode a single recursive function/predicate *)
   type fun_encoding = {
@@ -42,8 +43,10 @@ module Make(T : TI.S) = struct
   type decode_state = {
     approx_fun : fun_encoding ID.Tbl.t;
       (* concretization_fun -> function it is used to encode *)
-    encoded_fun: fun_encoding ID.Tbl.t;
+    encoded_fun : fun_encoding ID.Tbl.t;
       (* recursive function -> its encoding *)
+    abstract_ty : fun_encoding ID.Tbl.t;
+      (* set of abstraction types *)
   }
 
   (** {6 Encoding} *)
@@ -60,6 +63,7 @@ module Make(T : TI.S) = struct
     decode={
       approx_fun=ID.Tbl.create 16;
       encoded_fun=ID.Tbl.create 16;
+      abstract_ty=ID.Tbl.create 16;
     };
     sigma=Sig.empty;
   }
@@ -67,8 +71,23 @@ module Make(T : TI.S) = struct
   exception TranslationFailed of term * string
   (* not supposed to escape *)
 
+  exception DecodingFailed of T.t option * string
+
   let fail_tr_ t msg =
     Utils.exn_ksprintf msg ~f:(fun msg -> raise (TranslationFailed (t,msg)))
+
+  let fail_decode_ ?term:t msg =
+    Utils.exn_ksprintf msg ~f:(fun msg -> raise (DecodingFailed (t,msg)))
+
+  let () = Printexc.register_printer
+    (function
+      | TranslationFailed (t,msg) ->
+          Some (spf "@[<2>translation of `@[%a@]` failed:@ %s@]" P.print t msg)
+      | DecodingFailed (None, msg) ->
+          Some (spf "@[<2>decoding failed:@ %s@]" msg)
+      | DecodingFailed (Some t, msg) ->
+          Some (spf "@[<2>decoding of `@[%a@]` failed:@ %s@]" P.print t msg)
+      | _ -> None)
 
   type polarity =
     | Pos
@@ -327,6 +346,7 @@ module Make(T : TI.S) = struct
           fun_concretization=projectors;
         } in
         ID.Tbl.add state.decode.encoded_fun id fun_encoding;
+        ID.Tbl.add state.decode.abstract_ty fun_encoding.fun_abstract_ty_id fun_encoding;
         (* declare abstract type + projectors *)
         add_stmt (Stmt.ty_decl ~info:Stmt.info_default abs_type_id U.ty_type);
         List.iter
@@ -400,45 +420,27 @@ module Make(T : TI.S) = struct
     domain where their projections were defined (the domain on which it
     is not garbage) *)
 
-  module TermTbl = CCHashtbl.Make(struct
-    type t = term
-    let equal = U.equal
-    let hash = U.hash
-  end)
-
   type finite_domain = {
     dom_fun: fun_encoding;
       (* function *)
-    dom_args: unit TermTbl.t list;
-      (* for each argument position, a list of elements.
-         Each element is an atomic term that is part of a finite domain
-         (an atomic term because we're not sure it will always be a single symbol).
-      *)
+    dom_dom: ID.t list;
+      (* abstract domain *)
+    dom_args: term list ID.Tbl.t;
+      (* for each abstract value in the approximation type, the list of
+         concrete arguments it  corresponds to *)
   }
 
   type finite_domains = finite_domain ID.Tbl.t
   (* map abstracted function -> its domain *)
 
   let pp_domain out d =
-    let pp_tbl out tbl =
-      fpf out "@[%a@]" (CCFormat.seq ~start:"{" ~stop:"}" P.print) (TermTbl.keys tbl)
+    let pp_tuple out (id,l) =
+      fpf out "%a → (@[%a@])" ID.print_name id
+        (CCFormat.list ~start:"" ~stop:"" P.print) l
     in
     fpf out "[@[<hv2>`%a`:@ %a@]]"
       ID.print_name d.dom_fun.fun_encoded_fun
-      (CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_tbl) d.dom_args
-
-  let get_dom ~state ~domains id =
-    try ID.Tbl.find domains id
-    with Not_found ->
-      (* create and return empty list of domains *)
-      let fun_ = ID.Tbl.find state.encoded_fun id in
-      let args = List.map (fun _ -> TermTbl.create 8) fun_.fun_concretization in
-      let dom = {
-        dom_fun=fun_;
-        dom_args=args;
-      } in
-      ID.Tbl.replace domains id dom;
-      dom
+      (CCFormat.seq ~start:"" ~stop:"" ~sep:" " pp_tuple) (ID.Tbl.to_seq d.dom_args)
 
   let is_const_ t = match T.repr t with
     | TI.Const _ -> true
@@ -450,109 +452,184 @@ module Make(T : TI.S) = struct
     | TI.App (f, l) -> is_const_ f && List.for_all is_atomic_ l
     | _ -> false
 
-  (* see whether [t] is of the form [var = const] with [var:ty_id]
-     where [ty_id] is an abstract type *)
-  let as_eqn_sym_ ~ty_id t =
+  (* see whether [t] is of the form [var = const] *)
+  let as_eqn_sym_ ~var:v t =
     match T.repr t with
     | TI.AppBuiltin (`Eq, [a;b]) ->
         begin match T.repr a, T.repr b with
-        | TI.Var v, TI.Const c
-        | TI.Const c, TI.Var v ->
-            begin match T.repr (Var.ty v) with
-              | TI.Const ty_id' when ID.equal ty_id ty_id' -> Some c
-              | _ -> None
-            end
+        | TI.Var v', TI.Const c
+        | TI.Const c, TI.Var v' ->
+            if Var.equal v v' then Some c else None
         | _ -> None
         end
     | _ -> None
 
-  (* explore a if/then/else function to gather constants in the codomain
-    of projections from ty_id *)
-  let gather_values_ set t =
-    let rec aux t =
-      match T.repr t with
-      | TI.TyArrow (_,_)
-      | TI.TyBuiltin _
-      | TI.Var _ -> ()
-      | TI.Const _ ->
-          (* atomic term -> domain *)
-          TermTbl.replace set t ()
-      | TI.App _ ->
-          (* atomic term -> domain *)
-          if is_atomic_ t then TermTbl.replace set t ()
-      | TI.AppBuiltin (_,l) -> List.iter aux l
-      | TI.Bind (_,_,t') -> aux t'
-      | TI.Let _ ->
-          (* NOTE: problem is that [let x = a in f(x)] doesn't look atomic
-             unless we substitute it.
-             Possible solution: carry a substitution and check for {!is_atomic_}
-             modulo this substitution *)
-          Utils.not_implemented "let-binding in projection's domain"
-      | TI.Match (_,l) ->
-          (* ignore [t], it's not part of the codomain *)
-          ID.Map.iter (fun _ (_,rhs) -> aux rhs) l
-      | TI.TyMeta _ -> assert false
-    in
-    aux t
+  (* see [t] as [fun args -> body] *)
+  let rec as_fun_ t = match T.repr t with
+    | TI.Bind (`Fun, v, t') ->
+        let args, body = as_fun_ t' in
+        v :: args, body
+    | _ -> [], t
 
-  (* compute the domain of all abstract type
-    by exploring the value of each concretization function *)
-  let compute_doms ~state m =
-    let domains = ID.Tbl.create 32 in
-    List.iter
-      (fun (t,u) ->
-        match T.repr t with
+  type proj_decision_tree =
+    | Proj_E of T.t (* last case *)
+    | Proj_If of ID.t * T.t * proj_decision_tree (* if x=id then term else tree *)
+
+  type proj_fun = {
+    proj_var: T.t Var.t;  (* argument to the projection function *)
+    proj_tree: proj_decision_tree;
+  }
+
+  let rec extract_proj_tree_ v t = match T.repr t with
+    | TI.AppBuiltin (`Ite, [a;b;c]) ->
+        begin match as_eqn_sym_ ~var:v a with
+          | Some id -> Proj_If (id, b, extract_proj_tree_ v c)
+          | None -> Proj_E t
+        end
+    | _ -> Proj_E t
+
+  let extract_proj_ t = match T.repr t with
+    | TI.Bind (`Fun, v, body) ->
+        { proj_var=v; proj_tree=extract_proj_tree_ v body; }
+    | _ -> fail_decode_ ~term:t "expected a function"
+
+  (*
+     - gather definitions of projections
+     - gather domains of abstract types
+  *)
+  let pass1_ ~state m =
+    let projs = ID.Tbl.create 16 in
+    let doms = ID.Tbl.create 16 in
+    Model.iter m
+      ~terms:(fun (t,u) -> match T.repr t with
+        | TI.Const id ->
+            if ID.Tbl.mem state.approx_fun id
+            then ID.Tbl.add projs id (extract_proj_ u)
+        | _ -> ())
+      ~finite_types:(fun (ty,dom) -> match T.repr ty with
         | TI.Const id ->
             begin try
-              (* is [id] a concretization function? *)
-              let fun_encoding = ID.Tbl.find state.approx_fun id in
-              (* enrich set of values for the abstract type *)
-              let dom = get_dom ~state ~domains fun_encoding.fun_encoded_fun in
-              match CCList.find_idx
-                (fun (id',_) -> ID.equal id id')
-                fun_encoding.fun_concretization
-              with
-                | None -> assert false (* not a concretization fun?! *)
-                | Some (i, _) ->
-                    (* add codomain of the i-th concretization function to
-                        the domain of the i-th argument of the function *)
-                    let set = List.nth dom.dom_args i in
-                    gather_values_ set u
+              let dom_fun = ID.Tbl.find state.abstract_ty id in
+              let dom_dom = List.map
+                (fun t -> match T.repr t with
+                  | TI.Const id' -> id'
+                  | _ ->
+                    fail_decode_ ~term:t
+                      "expected finite domains elements to be constants, got `@[%a@]`"
+                      P.print t)
+                dom
+              in
+              let dom = {dom_fun; dom_dom; dom_args=ID.Tbl.create 16; } in
+              ID.Tbl.add doms dom_fun.fun_encoded_fun dom
             with Not_found -> ()
             end
-        | _ -> ())
-      m;
-    domains
+        | _ -> ());
+      projs, doms
 
-  (* assuming [t] is a function with a decision tree inside, restrict the
-     decision tree to branches for which values are in the proper domain
-     @param domains the table of codomains for abstracted types *)
-  let decode_rec_fun ~state ~domains t =
-    let top = t in
-    let rec aux t = match T.repr t with
-      | TI.Const _ -> mk_undefined_ top  (* FIXME: apply to function arguments *)
-      | TI.AppBuiltin (`Ite, [a;b;c]) ->
-          assert false
-      | _ -> assert false (* TODO *)
+  (* compute map `abstract type -> set of tuples by projection` *)
+  let pass2_ projs (doms:finite_domains) =
+    (* evaluate projection function on [id] *)
+    let rec eval_proj_ dt id = match dt with
+      | Proj_E t -> t
+      | Proj_If (id', a, dt') ->
+          if ID.equal id id' then a else eval_proj_ dt' id
     in
-    aux t
+    ID.Tbl.iter
+      (fun _ fdom ->
+        List.iter
+          (fun val_id ->
+            let args = List.map
+              (fun (f_id,_) ->
+                let proj =
+                  try ID.Tbl.find projs f_id
+                  with Not_found ->
+                    fail_decode_ "could not find value of projection function %a on %a"
+                      ID.print_name f_id ID.print_name val_id
+                in
+                eval_proj_ proj.proj_tree val_id)
+              fdom.dom_fun.fun_concretization
+            in
+            ID.Tbl.add fdom.dom_args val_id args)
+          fdom.dom_dom
+      )
+      doms;
+    ()
 
-  let decode_model ~state m =
-    (* FIXME: remove this, directly provided by [m.Model.finite_types] *)
-    let domains = compute_doms ~state m.Model.terms in
-    Utils.debugf ~section 2 "@[<2>domains:@ @[%a@]@]"
-      (fun k->k (CCFormat.seq ~start:"" ~stop:"" pp_domain) (ID.Tbl.values domains));
+  (* translate definitions of rec. functions based on
+      the map (only keep in the domain, tuples that are obtained by
+      projections, the rest is junk)
+  *)
+  let pass3_ ~state doms m =
+    (* evaluate a boolean condition *)
+    let rec eval_cond_ ~subst t =
+      let t = U.deref ~subst t in
+      match T.repr t with
+      | TI.AppBuiltin (`And, l) -> List.for_all (eval_cond_ ~subst) l
+      | TI.AppBuiltin (`Eq, [a;b]) -> U.equal_with ~subst a b
+      | _ -> fail_decode_ ~term:t "expected a boolean condition"
+    in
+    (* evaluate the body of a function with the given substitution *)
+    let rec eval_body subst t =
+      let t = U.deref ~subst t in
+      match T.repr t with
+      | TI.AppBuiltin (`Ite, [a; b; c]) ->
+          if eval_cond_ ~subst a then b
+          else eval_body subst c
+      | TI.Let (v, t, u) ->
+          let subst = Subst.add ~subst v (U.eval ~subst t) in
+          eval_body subst u
+      | _ -> U.eval ~subst t  (* yield *)
+    in
+    (* decode a function *)
+    let decode_fun_ f_id dom t =
+      let arity = List.length dom.dom_fun.fun_concretization in
+      let args, body = as_fun_ t in
+      if List.length args <> arity
+        then fail_decode_ ~term:t "expected a function of %d arguments" arity;
+      (* compute value of the function applied to [tup] *)
+      let apply_to tup =
+        let subst = Subst.add_list ~subst:Subst.empty args tup in
+        eval_body subst body
+      in
+      (* set of tuples on which the function is defined *)
+      let dom_tuples = ID.Tbl.to_list dom.dom_args |> List.map snd in
+        (* default case: undefined
+          TODO: if initial domain was finite, this might be unecessary,
+            because CVC4 could model the whole domain? *)
+        let default = mk_undefined_ (U.app (U.const f_id) (List.map U.var args)) in
+        let new_body = List.fold_left
+          (fun else_ tup ->
+            U.ite
+              (mk_and_ (List.map2 (fun v t -> U.eq (U.var v) t) args tup))
+              (apply_to tup)
+              else_)
+          default dom_tuples
+        in
+        List.fold_right U.fun_ args new_body
+    in
     (* now remove projections and filter recursion functions's values *)
     Model.filter_map m
       ~terms:(fun (t,u) -> match T.repr t with
         | TI.Const id when ID.Tbl.mem state.approx_fun id ->
             None (* drop approximation functions *)
-        | TI.Const id when ID.Tbl.mem state.encoded_fun id ->
+        | TI.Const f_id when ID.Tbl.mem state.encoded_fun f_id ->
             (* remove junk from the definition of [t] *)
-            let u' = decode_rec_fun ~state ~domains u in
+            let u' = decode_fun_ f_id (ID.Tbl.find doms f_id) u in
+            Utils.debugf ~section 3 "@[<2>decoding of recursive fun@ %a := `@[%a@]`@ is `@[%a@]`@]"
+              (fun k->k ID.print_name f_id P.print u P.print u');
             Some (t, u')
         | _ -> Some (t,u))
-      ~finite_types:(fun pair -> Some pair)
+      ~finite_types:(fun ((ty,_) as pair) -> match T.repr ty with
+        | TI.Const id when ID.Tbl.mem state.abstract_ty id ->
+            None (* remove abstraction types *)
+        | _ -> Some pair)
+
+  let decode_model ~state m =
+    let projs, domains = pass1_ ~state m in
+    Utils.debugf ~section 2 "@[<2>domains:@ @[%a@]@]"
+      (fun k->k (CCFormat.seq ~start:"" ~stop:"" pp_domain) (ID.Tbl.values domains));
+    pass2_ projs domains;
+    pass3_ ~state domains m
 
   (** {6 Pipe} *)
 
