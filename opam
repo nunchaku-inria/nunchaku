@@ -25,6 +25,7 @@ depends: [
     "sequence"
     "base-unix"
     "oasis" {build}
+    "ocamlbuild" {build}
 ]
 homepage: "https://github.com/nunchaku-inria/nunchaku/"
 available: [ocaml-version >= "4.00.0"]
