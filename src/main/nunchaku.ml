@@ -36,6 +36,7 @@ let print_skolem_ = ref false
 let print_mono_ = ref false
 let print_elim_match_ = ref false
 let print_recursion_elim_ = ref false
+let print_elim_multi_eqns = ref false
 let print_fo_ = ref false
 let print_smt_ = ref false
 let timeout_ = ref 30
@@ -87,6 +88,8 @@ let options =
       " print input after elimination of pattern matching"
   ; "--print-rec-elim", Arg.Set print_recursion_elim_,
       " print input after elimination of recursive functions"
+  ; "--print-elim-multi-eqns", Arg.Set print_elim_multi_eqns,
+      " print input after elimination of multiple equations"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
@@ -147,6 +150,9 @@ let make_model_pipeline () =
   let step_skolem = Step_skolem.pipe ~print:!print_skolem_ in
   let module Step_mono = Monomorphization.Make(HO) in
   let step_monomorphization = Step_mono.pipe ~print:!print_mono_ in
+  let module Step_ElimMultipleEqns = ElimMultipleEqns.Make(HO) in
+  let step_elim_multi_eqns = Step_ElimMultipleEqns.pipe
+    ~decode:(fun x->x) ~print:!print_elim_multi_eqns in
   let module Step_ElimMatch = ElimPatternMatch.Make(HO) in
   let step_elim_match = Step_ElimMatch.pipe ~print:!print_elim_match_ in
   let module Step_rec_elim = ElimRecursion.Make(HO) in
@@ -159,8 +165,9 @@ let make_model_pipeline () =
     step_ty_infer @@@
     step_skolem @@@
     step_monomorphization @@@
-    step_elim_match @@@
+    step_elim_multi_eqns @@@
     step_recursion_elim @@@
+    step_elim_match @@@
     step_fo @@@
     id
   in
@@ -183,6 +190,9 @@ let make_proof_pipeline () =
   let module Step_mono = Monomorphization.Make(HO) in
   let step_monomorphization = Step_mono.pipe_with
     ~decode:(fun _ x -> x) ~print:!print_mono_ in
+  let module Step_ElimMultipleEqns = ElimMultipleEqns.Make(HO) in
+  let step_elim_multi_eqns = Step_ElimMultipleEqns.pipe
+    ~decode:(fun x->x) ~print:!print_elim_multi_eqns in
   let module Step_ElimMatch = ElimPatternMatch.Make(HO) in
   let step_elim_match = Step_ElimMatch.pipe ~print:!print_elim_match_ in
   let module Step_rec_elim = ElimRecursion.Make(HO) in
@@ -196,8 +206,9 @@ let make_proof_pipeline () =
     step_ty_infer @@@
     step_skolem @@@
     step_monomorphization @@@
-    step_elim_match @@@
+    step_elim_multi_eqns @@@
     step_recursion_elim @@@
+    step_elim_match @@@
     step_fo @@@
     id
   in

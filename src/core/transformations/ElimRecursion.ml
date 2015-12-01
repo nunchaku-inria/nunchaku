@@ -12,8 +12,7 @@ type id = ID.t
 
 let section = Utils.Section.make "recursion_elim"
 
-type inv1 = <ty:[`Mono]; eqn:[`Linear]>
-type inv2 = <ty:[`Mono]; eqn:[`Nested]>
+type inv = <ty:[`Mono]; eqn:[`Single]>
 
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
@@ -280,40 +279,27 @@ module Make(T : TI.S) = struct
     else mk_imply_ (mk_and_ conds) t'
 
   (* translate equation [eqn], which is defining the function
-     corresponding to [fun_encoding] *)
+     corresponding to [fun_encoding].
+     It returns an axiom instead. *)
   let tr_eqns ~state ~fun_encoding eqn =
-    let Stmt.Eqn_linear l = eqn in
-    let l = List.map
-      (fun (vars,rhs,side) ->
-        (* quantify over abstract variable now *)
-        let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
-        (* replace each [x_i] by [proj_i var] *)
-        assert (List.length vars = List.length fun_encoding.fun_concretization);
-        let args' = List.map
-          (fun (proj,_) -> U.app (U.const proj) [U.var alpha])
-          fun_encoding.fun_concretization
-        in
-        let subst = Subst.add_list ~subst:Subst.empty vars args' in
-        let local_state = { empty_local_state with subst; } in
-        (* convert right-hand side (ignore its side conditions) *)
-        let rhs', conds = tr_term ~state ~local_state rhs in
-        (* need to invert polarity, side conditions are LHS of => *)
-        let conds_side, side' = Utils.fold_map
-          (fun conds t ->
-            let t', conds' = tr_term ~state ~local_state:(inv_pol local_state) t in
-            List.rev_append conds' conds, t'
-          ) conds side
-        in
-        [alpha], args', rhs', conds_side @ side'
-      ) l
+    let Stmt.Eqn_single (vars,rhs) = eqn in
+    (* quantify over abstract variable now *)
+    let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
+    (* replace each [x_i] by [proj_i var] *)
+    assert (List.length vars = List.length fun_encoding.fun_concretization);
+    let args' = List.map
+      (fun (proj,_) -> U.app (U.const proj) [U.var alpha])
+      fun_encoding.fun_concretization
     in
-    Stmt.Eqn_nested l
+    let subst = Subst.add_list ~subst:Subst.empty vars args' in
+    let local_state = { empty_local_state with subst; } in
+    (* convert right-hand side (ignore its side conditions) *)
+    let rhs', conds = tr_term ~state ~local_state rhs in
+    U.forall alpha (mk_imply_ (mk_and_ conds) rhs')
 
   (* transform the recursive definition (mostly, its equations) *)
   let tr_rec_def ~state ~fun_encoding def =
-    let eqns' = tr_eqns ~state ~fun_encoding def.Stmt.rec_eqns in
-    (* return new set of equations *)
-    {def with Stmt.rec_eqns=eqns'}
+    tr_eqns ~state ~fun_encoding def.Stmt.rec_eqns
 
   let tr_rec_defs ~info ~state l =
     (* transform each axiom, considering case_head as rec. defined *)
@@ -375,7 +361,7 @@ module Make(T : TI.S) = struct
       l
     in
     (* add new statements (type declarations) before l' *)
-    List.rev_append !new_stmts [Stmt.axiom_rec ~info l']
+    List.rev_append !new_stmts [Stmt.axiom ~info l']
 
   (* translate a statement *)
   let tr_statement ~state st =
@@ -445,11 +431,6 @@ module Make(T : TI.S) = struct
   let is_const_ t = match T.repr t with
     | TI.Const _ -> true
     | TI.App (_,[]) -> assert false
-    | _ -> false
-
-  let rec is_atomic_ t = match T.repr t with
-    | TI.Const _ -> true
-    | TI.App (f, l) -> is_const_ f && List.for_all is_atomic_ l
     | _ -> false
 
   (* see whether [t] is of the form [var = const] *)
