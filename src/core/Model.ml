@@ -29,12 +29,17 @@ let filter_map ~terms ~finite_types m = {
   finite_types = CCList.filter_map finite_types m.finite_types;
 }
 
+let iter ~terms ~finite_types m =
+  List.iter terms m.terms;
+  List.iter finite_types m.finite_types;
+  ()
+
 let print pt out m =
   let fpf = Format.fprintf in
   let pp_pair out (t,u) = fpf out "@[<hv2>@[%a@]@ ->@ @[%a@]@]" pt t pt u in
   let pp_dom out (ty, dom) =
     fpf out "@[<h>@[%a@] -> {@[<hv>%a@]}@]"
-      pt ty (CCFormat.list ~start:"" ~stop:"" ~sep:"," pt) dom
+      pt ty (CCFormat.list ~start:"" ~stop:"" ~sep:", " pt) dom
   in
   let pp_types out m = match m with
     | [] -> ()
