@@ -266,16 +266,17 @@ end = struct
 
   let error_ e = raise (Error e)
 
+  let find_atom_ ~state s =
+    try Hashtbl.find state.decode_tbl s
+    with Not_found ->
+      (* introduced by CVC4 in the model; make a new ID *)
+      let id = ID.make ~name:s in
+      Hashtbl.replace state.decode_tbl s (ID id);
+      ID id
+
   (* parse an identifier *)
   let parse_atom_ ~state = function
-    | `Atom s ->
-        begin try Hashtbl.find state.decode_tbl s
-        with Not_found ->
-          (* introduced by CVC4 in the model; make a new ID *)
-          let id = ID.make ~name:s in
-          Hashtbl.replace state.decode_tbl s (ID id);
-          ID id
-        end
+    | `Atom s -> find_atom_ ~state s
     | _ -> error_ "expected ID, got a list"
 
   let parse_id_ ~state s = match parse_atom_ ~state s with
@@ -448,7 +449,11 @@ end = struct
                 |> map
                   (fun i ->
                     let name = CCFormat.sprintf "@uc_%a_%d" ID.print_name ty_id i in
-                    FO.Term (FOBack.T.const (ID.make ~name)))
+                    let id = match find_atom_ ~state name with
+                      | ID id -> id
+                      | _ -> assert false
+                    in
+                    FO.Term (FOBack.T.const id))
                 |> to_rev_list
               ) in
               Model.add_finite_type m ty terms
@@ -533,6 +538,12 @@ end = struct
       |> ID.Map.of_list
     in
     (* rewrite every term *)
+    let pp_rule out (l,r) =
+      let module P = FO.Print(FOBack) in
+      fpf out "%a → @[%a@]" ID.print_name l P.print_term r
+    in
+    Utils.debugf 5 ~section "@[<2>apply rewrite rules@ @[<hv>%a@]@]"
+      (fun k->k (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_rule) (ID.Map.to_seq rules));
     Model.map m ~f:(rewrite_ ~rules)
 
   (* read the result *)
