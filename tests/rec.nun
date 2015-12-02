@@ -8,10 +8,8 @@ data nat :=
 
 rec even : nat -> prop :=
   even z = true ;
-  even (s z) = false;
   forall n. (even (s n) = odd n)
 and odd : nat -> prop :=
-  odd (s z) = true;
   odd z = false;
   forall n. (odd (s n) = even n).
 
