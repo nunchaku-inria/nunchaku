@@ -51,6 +51,8 @@ end = struct
            to know the finite domain of [ty] by asking [(fmf.card.val id)] *)
 
   type decode_state = {
+    id_to_name: string ID.Tbl.t;
+      (* maps ID to unique names *)
     decode_tbl: (string, decoded_sym) Hashtbl.t;
       (* map (stringof ID) -> ID, and other builtins *)
     symbols : model_query ID.Map.t;
@@ -58,6 +60,7 @@ end = struct
   }
 
   let create_decode_state ~symbols = {
+    id_to_name=ID.Tbl.create 32;
     decode_tbl=Hashtbl.create 32;
     symbols;
   }
@@ -108,29 +111,52 @@ end = struct
     s
 
   let fpf = Format.fprintf
+  let spf = CCFormat.sprintf
 
   let pp_list ?(start="") ?(stop="") pp =
     CCFormat.list ~sep:" " ~start ~stop pp
 
-  (* print problems. [on_id (to_string id) id] is called every time
-      an id is printed.  *)
-  let print_problem_ ~on_id =
+  (* injection from ID to string *)
+  let id_to_name_ ~state id =
+    try ID.Tbl.find state.id_to_name id
+    with Not_found ->
+      let name0 = match ID.name id with
+        | "distinct" -> "distinct_"
+        | s -> s
+      in
+      (* add numeric suffix until it sticks *)
+      let name =
+        if not (Hashtbl.mem state.decode_tbl name0) then name0
+        else (
+          let n = ref 0 in
+          while Hashtbl.mem state.decode_tbl (spf "%s_%d" name0 !n) do incr n done;
+          spf "%s_%d" name0 !n
+        )
+      in
+      Hashtbl.add state.decode_tbl name (ID id);
+      ID.Tbl.add state.id_to_name id name;
+      name
+
+  (* print problems.
+    @param state decode_state used for disambiguating symbols, and to
+      be populated for later *)
+  let print_problem_ ~state =
     (* print ID and remember its name for parsing model afterward *)
     let rec print_id out id =
-      let name = ID.name id in
-      on_id name (ID id);
+      (* find a unique name for this ID *)
+      let name = id_to_name_ ~state id in
       CCFormat.string out name
 
     (* print [is-c] for a constructor [c] *)
     and print_tester out c =
       let name = Printf.sprintf "is-%s" (ID.name c) in
-      on_id name (DataTest c);
+      Hashtbl.replace state.decode_tbl name (DataTest c);
       CCFormat.string out name
 
     (* print [select-c-n] to select the n-th argument of [c] *)
     and print_select out (c,n) =
       let name = Printf.sprintf "_select_%s_%d" (ID.name c) n in
-      on_id name (DataSelect (c,n));
+      Hashtbl.replace state.decode_tbl name (DataSelect (c,n));
       CCFormat.string out name
 
     (* print type (a monomorphic type) in SMT *)
@@ -253,13 +279,12 @@ end = struct
       ()
 
   let send_ s problem =
-    let on_id name def =
-      Hashtbl.replace s.decode.decode_tbl name def
-    in
-    fpf s.fmt "%a@." (print_problem_ ~on_id) problem;
+    fpf s.fmt "%a@." (print_problem_ ~state:s.decode) problem;
     ()
 
-  let print_problem = print_problem_ ~on_id:(fun _ _ -> ())
+  let print_problem out pb =
+    let state = create_decode_state ~symbols:ID.Map.empty in
+    print_problem_ ~state out pb
 
   (* local error, should never escape *)
   exception Error of string
@@ -463,20 +488,22 @@ end = struct
       in
       m
 
+  let send_get_model_ ~state out syms =
+    (* print a single symbol *)
+    let pp_id out i = CCFormat.string out (ID.Tbl.find state.id_to_name i) in
+    let pp_mquery out (id, q) = match q with
+      | Q_const -> pp_id out id
+      | Q_type _ -> fpf out "(fmf.card.val %a)" pp_id id
+    in
+    fpf out "(@[<hv2>get-value@ (@[<hv>%a@])@])"
+      (CCFormat.seq ~start:"" ~sep:" " ~stop:"" pp_mquery)
+      (ID.Map.to_seq syms)
+
   (* read model from CVC4 instance [s] *)
   let get_model_ ~state s : _ Model.t =
-    Utils.debugf ~section 3 "@[<2>ask for values of@ %a@]"
-      (fun k -> k
-        (CCFormat.seq ~start:"(" ~sep:" " ~stop:")" ID.print_name)
-        (ID.Map.to_seq state.symbols |> Sequence.map fst));
-    (* print a single symbol *)
-    let pp_mquery out (id, q) = match q with
-      | Q_const -> ID.print_name out id
-      | Q_type _ -> fpf out "(fmf.card.val %a)" ID.print_name id
-    in
-    fpf s.fmt "(@[<hv2>get-value@ %a@])@."
-      (CCFormat.seq ~start:"(" ~sep:" " ~stop:")" pp_mquery)
-      (ID.Map.to_seq state.symbols);
+    Utils.debugf ~section 3 "@[<2>ask for model with@ %a@]"
+      (fun k -> k (send_get_model_ ~state) state.symbols);
+    fpf s.fmt "%a@." (send_get_model_ ~state) state.symbols;
     (* read result back *)
     match DSexp.next s.sexp with
     | `Error e -> error_ e
