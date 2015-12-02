@@ -207,8 +207,9 @@ module Make(T : TI.S) = struct
             let b, cond_b = tr_term_rec_ ~state ~local_state b in
             let c, cond_c = tr_term_rec_ ~state ~local_state c in
             let conds = (U.app_builtin `Ite [a; U.and_ cond_b; U.and_ cond_c]) :: cond_a in
-            U.app_builtin `Ite [a;b;c], conds
+            add_conds local_state.pol (U.app_builtin `Ite [a;b;c]) conds
         | `Eq, [a;b] ->
+            (* FIXME: no polarity *)
             let a, cond_a = tr_term_rec_ ~state ~local_state a in
             let b, cond_b = tr_term_rec_ ~state ~local_state b in
             add_conds local_state.pol
@@ -231,9 +232,10 @@ module Make(T : TI.S) = struct
         add_conds local_state.pol (U.exists v t) cond
     | TI.Bind (`Fun,_,_) -> fail_tr_ t "translation of λ impossible"
     | TI.Let (v,t,u) ->
-        let t, c1 = tr_term_rec_ ~state ~local_state t in
-        let u, c2 = tr_term_rec_ ~state ~local_state u in
-        U.let_ v t u, List.append c1 c2
+        (* FIXME: polarity? no polarity? *)
+        let t, c_t = tr_term_rec_ ~state ~local_state t in
+        let u, c_u = tr_term_rec_ ~state ~local_state u in
+        U.let_ v t u, (U.let_ v t (U.and_ c_t)) :: c_u
     | TI.Match (t, l) ->
         let t, ct = tr_term_rec_ ~state ~local_state t in
         let conds' = ref ID.Map.empty in
