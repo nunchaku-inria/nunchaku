@@ -252,15 +252,15 @@ module Make(T : TI.S) = struct
         U.let_ v t u, List.append c1 c2
     | TI.Match (t, l) ->
         let t, ct = tr_term_rec_ ~state ~local_state t in
-        let conds' = ref [] in
-        let l = ID.Map.map
-          (fun (vars,rhs) ->
+        let conds' = ref ID.Map.empty in
+        let l = ID.Map.mapi
+          (fun c (vars,rhs) ->
             let rhs, conds = tr_term_rec_ ~state ~local_state rhs in
-            conds' := conds @ !conds';
+            conds' := ID.Map.add c (vars, mk_and_ conds) !conds';
             vars,rhs
           ) l
         in
-        U.match_with t l, ct @ !conds'
+        U.match_with t l, (U.match_with t !conds') :: ct
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> t, []
     | TI.Bind (`TyForall, _, _)
@@ -294,8 +294,9 @@ module Make(T : TI.S) = struct
     let subst = Subst.add_list ~subst:Subst.empty vars args' in
     let local_state = { empty_local_state with subst; } in
     (* convert right-hand side (ignore its side conditions) *)
+    let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
     let rhs', conds = tr_term ~state ~local_state rhs in
-    U.forall alpha (mk_imply_ (mk_and_ conds) rhs')
+    U.forall alpha (mk_imply_ (mk_and_ conds) (U.eq lhs rhs'))
 
   (* transform the recursive definition (mostly, its equations) *)
   let tr_rec_def ~state ~fun_encoding def =
@@ -333,8 +334,12 @@ module Make(T : TI.S) = struct
         } in
         ID.Tbl.add state.decode.encoded_fun id fun_encoding;
         ID.Tbl.add state.decode.abstract_ty fun_encoding.fun_abstract_ty_id fun_encoding;
-        (* declare abstract type + projectors *)
+        (* declare abstract type + projectors + the function
+           NOTE: we need to declare the function because it is no longer
+            defined, only axiomatized *)
         add_stmt (Stmt.ty_decl ~info:Stmt.info_default abs_type_id U.ty_type);
+        add_stmt (Stmt.decl ~info:Stmt.info_default
+                  id def.Stmt.rec_defined.Stmt.defined_ty);
         List.iter
           (fun (proj,ty_proj) ->
             add_stmt (Stmt.decl ~info:Stmt.info_default proj ty_proj);
