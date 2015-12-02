@@ -69,6 +69,7 @@ type ('t, 'ty) term_def =
 module Convert(Term : TermTyped.S) = struct
   module TyPoly = TypePoly.Make(Term)
   module U = TermTyped.Util(Term)
+  module IU = TermInner.UtilRepr(Term)
   module Unif = TypeUnify.Make(Term)
   module VarSet = Var.Set(struct type t = Term.t end)
 
@@ -382,6 +383,7 @@ module Convert(Term : TermTyped.S) = struct
           | `True -> `True, prop
           | `False -> `False, prop
           | `Equiv -> `Equiv, prop2
+          | `Undefined _
           | `Eq -> assert false (* deal with earlier *)
         in
         U.builtin ?loc ~ty b
@@ -704,7 +706,6 @@ module Convert(Term : TermTyped.S) = struct
         (fun k-> k P.print t (CCFormat.list Var.print) new_vars);
     t, new_vars
 
-
   let kind_of_ty_ ty =
     let ret = U.ty_returns ty in
     if U.ty_is_Type ret then Stmt.Decl_type
@@ -859,6 +860,27 @@ module Convert(Term : TermTyped.S) = struct
         end
     | _ -> None
 
+  (* [f args = rhs], where [f : ty]. Maybe [f] is actually
+    partially applied, in which case we create new variables [vars']
+    and return them (along with the new atomic type) *)
+  let complete_args_ args ty =
+    let rec aux subst args ty = match args, Term.repr ty with
+      | [], TI.Bind (`TyForall, v, ty') ->
+          assert (IU.ty_returns_Type (Var.ty v));
+          let v' = Var.make ~name:"v" ~ty:(Var.ty v) in
+          let l, ty = aux (Subst.add ~subst v (U.var v')) [] ty' in
+          v' :: l, ty
+      | [], TI.TyArrow (ty_arg, ty') ->
+          let v = Var.make ~name:"v" ~ty:ty_arg in
+          let l, ty = aux subst [] ty' in
+          v :: l, ty
+      | a::args', TI.Bind (`TyForall, v', ty') ->
+          aux (Subst.add ~subst v' a) args' ty'
+      | _::args', TI.TyArrow (_, ty') -> aux subst args' ty'
+      | _ -> [], Subst.eval ~subst ty
+    in
+    aux Subst.empty args ty
+
   let convert_rec_defs ?loc ~env l =
     (* first, build new variables for the defined terms,
         and build [env'] in which the defined identifiers are bound to constants *)
@@ -923,7 +945,13 @@ module Convert(Term : TermTyped.S) = struct
                     ID.print_name id
             | Some (vars,args,rhs) ->
                 List.iter (check_prenex_types_ ?loc) args;
-                vars, args, rhs, []
+                (* make sure that functions are totally applied *)
+                let vars', ty' = complete_args_ args ty in
+                let vars'_as_t = List.map (U.var ?loc:None) vars' in
+                vars @ vars',
+                args @ vars'_as_t,
+                U.app ~ty:ty' rhs vars'_as_t,
+                []
           )
           l
         in
@@ -992,7 +1020,7 @@ module Convert(Term : TermTyped.S) = struct
               cstor_name=id'; cstor_type=ty'; cstor_args=ty_args;
             } in
             env, ID.Map.add c.Stmt.cstor_name c cstors
-          ) (env, ID.Map.empty) cstors 
+          ) (env, ID.Map.empty) cstors
         in
         List.iter check_mono_var_ vars';
         (* remember the list of constructors for this type *)
