@@ -29,7 +29,7 @@ module Make(T : TI.S) = struct
   let () = Printexc.register_printer
     (function
       | Error msg ->
-          Some ("elimination of multiple equations: " ^ msg)
+          Some (spf "@[<2>elimination of multiple equations:@ %s@]" msg)
       | _ -> None)
 
   let error_ msg = raise (Error msg)
@@ -68,9 +68,11 @@ module Make(T : TI.S) = struct
 
   let dnode_add_cstor d c x = match d with
     | DN_match d ->
-        if not (ID.Map.mem c d.dn_tydef.Stmt.ty_cstors)
-          then errorf_ "%a is not a constructor of %a"
-            ID.print_name c ID.print_name d.dn_tydef.Stmt.ty_id;
+        let allowed_cstors = d.dn_tydef.Stmt.ty_cstors in
+        if not (ID.Map.mem c allowed_cstors)
+        then errorf_ "@[<2>%a is not a constructor of %a@ (these are @[%a@])@]"
+          ID.print_name c ID.print_name d.dn_tydef.Stmt.ty_id
+          (CCFormat.seq ID.print_name) (ID.Map.to_seq allowed_cstors |> Sequence.map fst);
         let l = try ID.Map.find c d.dn_by_cstor with Not_found -> [] in
         DN_match { d with dn_by_cstor = ID.Map.add c (x::l) d.dn_by_cstor }
     | DN_bind _ ->

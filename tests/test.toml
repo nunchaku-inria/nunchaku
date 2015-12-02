@@ -7,6 +7,6 @@ problems = ".*.nun"
 
 cmd = "./nunchaku.native --timeout $timeout $file"
 unsat = "UNSAT"
-sat = "SAT: "
+sat = "SAT:"
 unknown = "timeout"
 
