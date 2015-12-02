@@ -231,7 +231,7 @@ let rec print_term out term = match Loc.get term with
       fpf out "@[<hv2>match @[%a@] with@ %a end@]"
         print_term t (pp_list_ ~sep:"" pp_case) l
   | Ite (a,b,c) ->
-      fpf out "@[<hv>if %a@ @[<2>then@ %a@]@ @[<2>else@ %a@]@]"
+      fpf out "@[<hv>@[<2>if@ %a@]@ @[<2>then@ %a@]@ @[<2>else@ %a@]@]"
         print_term_inner a print_term b print_term c
   | Forall (v, t) ->
       fpf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
