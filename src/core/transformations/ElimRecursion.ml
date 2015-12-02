@@ -232,7 +232,8 @@ module Make(T : TI.S) = struct
             let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
             let b, cond_b = tr_term_rec_ ~state ~local_state b in
             let c, cond_c = tr_term_rec_ ~state ~local_state c in
-            U.app_builtin `Ite [a;b;c], List.flatten [cond_a; cond_b; cond_c]
+            let conds = (U.app_builtin `Ite [a; mk_and_ cond_b; mk_and_ cond_c]) :: cond_a in
+            U.app_builtin `Ite [a;b;c], conds
         | `Eq, [a;b] ->
             let a, cond_a = tr_term_rec_ ~state ~local_state a in
             let b, cond_b = tr_term_rec_ ~state ~local_state b in
@@ -280,8 +281,7 @@ module Make(T : TI.S) = struct
       "@[<2>convert toplevel term `@[%a@]`@]" (fun k -> k P.print t);
     tr_term_rec_ ~state ~local_state t
 
-  (* translate a top-level formula
-    NOTE: shall we actually keep the conditions? *)
+  (* translate a top-level formula *)
   let tr_form ~state t =
     let t', conds = tr_term ~state ~local_state:empty_local_state t in
     if conds=[] then t'
@@ -301,11 +301,11 @@ module Make(T : TI.S) = struct
       fun_encoding.fun_concretization
     in
     let subst = Subst.add_list ~subst:Subst.empty vars args' in
-    let local_state = { empty_local_state with subst; } in
-    (* convert right-hand side (ignore its side conditions) *)
+    let local_state = { subst; pol=Pos; } in
+    (* convert right-hand side and add its side conditions *)
     let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
     let rhs', conds = tr_term ~state ~local_state rhs in
-    U.forall alpha (mk_imply_ (mk_and_ conds) (U.eq lhs rhs'))
+    U.forall alpha (mk_and_ (U.eq lhs rhs' :: conds))
 
   (* transform the recursive definition (mostly, its equations) *)
   let tr_rec_def ~state ~fun_encoding def =
