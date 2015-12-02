@@ -209,9 +209,8 @@ module Make(T : TI.S) = struct
             let conds = (U.app_builtin `Ite [a; U.and_ cond_b; U.and_ cond_c]) :: cond_a in
             add_conds local_state.pol (U.app_builtin `Ite [a;b;c]) conds
         | `Eq, [a;b] ->
-            (* FIXME: no polarity *)
-            let a, cond_a = tr_term_rec_ ~state ~local_state a in
-            let b, cond_b = tr_term_rec_ ~state ~local_state b in
+            let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
+            let b, cond_b = tr_term_rec_ ~state ~local_state:(no_pol local_state) b in
             add_conds local_state.pol
               (U.app_builtin `Eq [a;b])
               (List.append cond_a cond_b)
@@ -232,10 +231,12 @@ module Make(T : TI.S) = struct
         add_conds local_state.pol (U.exists v t) cond
     | TI.Bind (`Fun,_,_) -> fail_tr_ t "translation of λ impossible"
     | TI.Let (v,t,u) ->
-        (* FIXME: polarity? no polarity? *)
-        let t, c_t = tr_term_rec_ ~state ~local_state t in
-        let u, c_u = tr_term_rec_ ~state ~local_state u in
-        U.let_ v t u, (U.let_ v t (U.and_ c_t)) :: c_u
+        (* rename [v] *)
+        let v' = Var.fresh_copy v in
+        let subst = Subst.add ~subst:local_state.subst v (U.var v') in
+        let t, c_t = tr_term_rec_ t ~state ~local_state:{subst; pol=NoPolarity;} in
+        let u, c_u = tr_term_rec_ u ~state ~local_state:{local_state with subst;} in
+        U.let_ v' t u, (U.let_ v' t (U.and_ c_u)) :: c_t
     | TI.Match (t, l) ->
         let t, ct = tr_term_rec_ ~state ~local_state t in
         let conds' = ref ID.Map.empty in
