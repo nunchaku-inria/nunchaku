@@ -610,8 +610,8 @@ module Make(T : TI.S) = struct
           mangle_ ~state tydef.Stmt.ty_id (ArgTuple.m_args tup) in
         let ty = U.ty_type in
         (* specialize each constructor *)
-        let cstors = ID.Map.map
-          (fun c ->
+        let cstors = ID.Map.fold
+          (fun _ c acc ->
             (* mangle ID *)
             let id', _ = mangle_ ~state c.Stmt.cstor_name (ArgTuple.m_args tup) in
             (* apply, then convert type. Arity should match. *)
@@ -623,9 +623,11 @@ module Make(T : TI.S) = struct
               ~state ~local_state:{depth=0; subst;} ty' in
             let local_state = {depth=depth+1; subst} in
             let args' = List.map (mono_term ~state ~local_state) c.Stmt.cstor_args in
-            { Stmt.cstor_name=id'; cstor_type=ty'; cstor_args=args';  }
+            let c' = { Stmt.cstor_name=id'; cstor_type=ty'; cstor_args=args'; } in
+            ID.Map.add id' c' acc
           )
           tydef.Stmt.ty_cstors
+          ID.Map.empty
         in
         (* add monomorphized type to [res] *)
         let tydef' = {Stmt.
