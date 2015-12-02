@@ -113,14 +113,23 @@ module Make(T : TI.S) = struct
     | TyI.Builtin _ | TyI.Const _ | TyI.App (_,_) -> []
     | TyI.Arrow (a,ty') -> a :: ty_args_ ty'
 
-  let mk_and_ = function
+  let rec mk_not_ t = match T.repr t with
+    | TI.AppBuiltin (`And, l) ->
+        mk_or_ (List.map mk_not_ l)
+    | TI.AppBuiltin (`Or, l) ->
+        mk_and_ (List.map mk_not_ l)
+    | TI.AppBuiltin (`True, []) -> U.builtin `False
+    | TI.AppBuiltin (`False, []) -> U.builtin `True
+    | TI.AppBuiltin (`Not, [t]) -> t
+    | _ ->
+        U.app_builtin `Not [t]
+
+  and mk_and_ = function
     | [] -> U.app_builtin `True []
     | [x] -> x
     | l -> U.app_builtin `And l
 
-  let mk_not_ t = U.app_builtin `Not [t]
-
-  let mk_or_ = function
+  and mk_or_ = function
     | [] -> U.app_builtin `False []
     | [x] -> x
     | l -> U.app_builtin `Or l
