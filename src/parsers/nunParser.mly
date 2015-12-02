@@ -250,6 +250,7 @@ defined_constant:
   | v=at_var { v}
 
 eqn_lhs:
+  | LEFT_PAREN t=eqn_lhs RIGHT_PAREN { t }
   | v=defined_constant args=atomic_term*
     {
       let loc = L.mk_pos $startpos $endpos in
