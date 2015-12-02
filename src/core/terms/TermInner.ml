@@ -207,9 +207,8 @@ module Print(T : REPR)
     | AppBuiltin (`DataSelect (c,n), [t]) ->
         fpf out "@[<2>select-%a-%d@ %a@]" ID.print_name c n print_in_app t
     | AppBuiltin (b, []) -> CCFormat.string out (Builtin.to_string b)
-    | AppBuiltin (f, [a;b]) when Builtin.fixity f = `Infix ->
-        fpf out "@[<hv>%a@ %s@ %a@]"
-          print_in_app a (Builtin.to_string f) print_in_app b
+    | AppBuiltin (f, l) when Builtin.fixity f = `Infix ->
+        fpf out "@[<hv>%a@]" print_infix (f, l)
     | AppBuiltin (b,l) ->
         fpf out "@[<2>%s@ %a@]" (Builtin.to_string b)
           (pp_list_ ~sep:" " print_in_app) l
@@ -230,6 +229,12 @@ module Print(T : REPR)
         fpf out "@[<2>%s %a:%a.@ %a@]" s Var.print v print_in_app (Var.ty v) print t
     | TyArrow (a,b) ->
         fpf out "@[<2>%a ->@ %a@]" print_in_binder a print b
+  and print_infix out (f, l) = match l with
+    | [] -> assert false
+    | [t] -> print out t
+    | a :: l' ->
+        fpf out "@[<hv>%a@ @[<hv>%s@ %a@]@]"
+          print_in_app a (Builtin.to_string f) print_infix (f, l')
   and print_in_app out t = match T.repr t with
     | AppBuiltin (_,[]) | TyBuiltin _ | Const _ -> print out t
     | TyMeta _ -> print out t

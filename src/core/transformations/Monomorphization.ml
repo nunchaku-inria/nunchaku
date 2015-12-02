@@ -38,13 +38,15 @@ module Make(T : TI.S) = struct
   let print_ty = P.print
   let print_term = P.print
 
+  let fpf = Format.fprintf
+  let spf = CCFormat.sprintf
+
   let () = Printexc.register_printer
     (function
-      | InvalidProblem msg -> Some ("monomorphization: invalid problem: " ^ msg)
+      | InvalidProblem msg ->
+          Some (spf "@[<2>monomorphization:@ invalid problem:@ %s@]" msg)
       | _ -> None
     )
-
-  let fpf = Format.fprintf
 
   let fail_ msg = raise (InvalidProblem msg)
   let failf_ msg =

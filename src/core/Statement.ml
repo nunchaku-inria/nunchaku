@@ -334,10 +334,10 @@ let print (type a)(type b)
         fpf out "@[<hv2>%a %a@]"
           ID.print_name c.cstor_name (pplist ~sep:" " Pty.print_in_app) c.cstor_args in
       let print_def out tydef =
-        fpf out "@[<hv2>%a %a :=@ @[<hv>%a@]@]"
+        fpf out "@[<hv2>@[%a %a@] :=@ @[<hv>%a@]@]"
           ID.print_name tydef.ty_id
           (pplist ~sep:" " Var.print) tydef.ty_vars
-          (pplist_prefix ~first:"| " ~pre:"| " ppcstors)
+          (pplist_prefix ~first:" | " ~pre:" | " ppcstors)
             (ID.Map.to_list tydef.ty_cstors |> List.map snd)
       in
       fpf out "@[<hv2>%s@ "
