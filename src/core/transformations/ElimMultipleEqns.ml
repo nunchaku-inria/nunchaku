@@ -52,21 +52,29 @@ module Make(T : TI.S) = struct
     | P_term of term  (* should be a pattern, we will see *)
     | P_any (* no pattern, always succeeds *)
 
-  type ('a,'b) decision_node = {
-    dn_matched: term; (* term being matched *)
+  and ('a, 'b) decision_node =
+    | DN_match of ('a, 'b) decision_node_match
+    | DN_bind of 'b list (* only accepts variables *)
+
+  and ('a, 'b) decision_node_match = {
     dn_tydef: term Stmt.tydef; (* all constructors required *)
     dn_by_cstor: 'a list ID.Map.t;
     dn_wildcard: 'b list; (* matching anything *)
   }
 
-  let dnode_add_wildcard d x = { d with dn_wildcard=x :: d.dn_wildcard }
+  let dnode_add_wildcard d x = match d with
+    | DN_match d -> DN_match { d with dn_wildcard=x :: d.dn_wildcard }
+    | DN_bind d -> DN_bind (x::d)
 
-  let dnode_add_cstor d c x =
-    if not (ID.Map.mem c d.dn_tydef.Stmt.ty_cstors)
-      then errorf_ "%a is not a constructor of %a"
-        ID.print_name c ID.print_name d.dn_tydef.Stmt.ty_id;
-    let l = try ID.Map.find c d.dn_by_cstor with Not_found -> [] in
-    { d with dn_by_cstor = ID.Map.add c (x::l) d.dn_by_cstor }
+  let dnode_add_cstor d c x = match d with
+    | DN_match d ->
+        if not (ID.Map.mem c d.dn_tydef.Stmt.ty_cstors)
+          then errorf_ "%a is not a constructor of %a"
+            ID.print_name c ID.print_name d.dn_tydef.Stmt.ty_id;
+        let l = try ID.Map.find c d.dn_by_cstor with Not_found -> [] in
+        DN_match { d with dn_by_cstor = ID.Map.add c (x::l) d.dn_by_cstor }
+    | DN_bind _ ->
+        errorf_ "cannot match against %a, variable binding only" ID.print_name c
 
   (* returns a pair [l1, l2] where [l1] contains RHS terms with no side
      conditions, and [l2] contains RHS terms with their condition *)
@@ -111,28 +119,27 @@ module Make(T : TI.S) = struct
               U.eval ~subst rhs
           | [t,_], _::_ ->
               errorf_
-                "@[ambiguity: term `@[%a@]`@ has no side conditions,@ but other terms do@]"
+                "@[ambiguity: term `@[%a@]`@ has no side conditions,@ but other terms do.@]"
                 P.print t
         end
     | v::vars', _ ->
         (* obtain the relevant type definition *)
-        let tydef =
+        (* build one node of the decision tree *)
+        let dnode =
           let ty_id = U.head_sym (Var.ty v) in
           match Env.def (Env.find_exn ~env:local_state.env ty_id) with
-          | Env.Data (_, _, tydef) -> tydef
+          | Env.Data (_, _, tydef) ->
+              DN_match {
+                dn_tydef=tydef;
+                dn_by_cstor=ID.Map.empty;
+                dn_wildcard=[];
+              }
           | Env.Fun_def (_,_,_)
           | Env.Fun_spec _
-          | Env.Cstor (_,_,_,_)
-          | Env.NoDef -> errorf_ "%a is not a datatype" ID.print_name ty_id
-
+          | Env.Cstor (_,_,_,_) ->
+              errorf_ "@[%a is not a type.@]" ID.print_name ty_id
+          | Env.NoDef -> DN_bind []
         in
-        (* build one node of the decision tree *)
-        let dnode = {
-          dn_matched=U.var v;
-          dn_tydef=tydef;
-          dn_by_cstor=ID.Map.empty;
-          dn_wildcard=[];
-        } in
         let dnode = List.fold_left
           (fun dnode (pats, rhs, side, subst) ->
             let pat, pats = match pats with [] -> assert false | x::y -> x,y in
@@ -151,23 +158,24 @@ module Make(T : TI.S) = struct
           )
           dnode l
         in
-        compile_dnode ~local_state vars' dnode
+        compile_dnode ~local_state v vars' dnode
 
   (* add missing constructors (not explicitely matched upon) to the set
      of cases, complemented with a list of fresh vars, leading to
      the default cases;
      then compile the subtrees *)
-  and compile_dnode ~local_state next_vars dn : term =
-    if ID.Map.is_empty dn.dn_by_cstor
-    then (* no need to match, use next variables *)
+  and compile_dnode ~local_state v next_vars dn : term = match dn with
+  | DN_bind l -> compile_equations ~local_state next_vars l
+  | DN_match dn when ID.Map.is_empty dn.dn_by_cstor ->
+      (* no need to match, use next variables *)
       compile_equations ~local_state next_vars dn.dn_wildcard
-    else
+  | DN_match dn ->
       (* one level of matching *)
       let l = ID.Map.map
         (fun cstor ->
           let id = cstor.Stmt.cstor_name in
           Utils.debugf ~section 5 "compile_dnode for %a on cstor %a"
-            (fun k -> k P.print dn.dn_matched ID.print_name id);
+            (fun k -> k Var.print v ID.print_name id);
           (* fresh vars for the constructor's arguments *)
           let vars = List.mapi
             (fun i ty -> Var.make ~ty ~name:(spf "v_%d" i))
@@ -198,7 +206,7 @@ module Make(T : TI.S) = struct
         )
         dn.dn_tydef.Stmt.ty_cstors
       in
-      U.match_with dn.dn_matched l
+      U.match_with (U.var v) l
 
   (* @param env the environment for types and constructors
      @param id the symbol being defined
