@@ -236,7 +236,11 @@ module Make(T : TI.S) = struct
         let subst = Subst.add ~subst:local_state.subst v (U.var v') in
         let t, c_t = tr_term_rec_ t ~state ~local_state:{subst; pol=NoPolarity;} in
         let u, c_u = tr_term_rec_ u ~state ~local_state:{local_state with subst;} in
-        U.let_ v' t u, (U.let_ v' t (U.and_ c_u)) :: c_t
+        let conds = match c_u with
+          | [] -> c_t
+          | _::_ -> U.let_ v' t (U.and_ c_u) :: c_t
+        in
+        add_conds local_state.pol (U.let_ v' t u) conds
     | TI.Match (t, l) ->
         let t, ct = tr_term_rec_ ~state ~local_state t in
         let conds' = ref ID.Map.empty in
