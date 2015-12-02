@@ -196,7 +196,7 @@ module Print(T : REPR)
 
   let rec print out t = match T.repr t with
     | TyBuiltin b -> CCFormat.string out (TyBuiltin.to_string b)
-    | Const id -> ID.print_no_id out id
+    | Const id -> ID.print_name out id
     | TyMeta v -> MetaVar.print out v
     | Var v -> Var.print out v
     | AppBuiltin (`Ite, [a;b;c]) ->
@@ -220,10 +220,10 @@ module Print(T : REPR)
         fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
     | Match (t,l) ->
         let pp_case out (id,(vars,t)) =
-          fpf out "@[<hv2>| %a %a ->@ %a@]"
+          fpf out "@[<hv2>| @[<hv2>%a %a@] ->@ %a@]"
             ID.print_name id (pp_list_ ~sep:" " Var.print) vars print t
         in
-        fpf out "@[<hv2>match @[%a@] with@ %a end@]"
+        fpf out "@[<hv>@[<hv2>match @[%a@] with@ %a@]@ end@]"
           print t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
     | Bind (b, v, t) ->
         let s = Binder.to_string b in

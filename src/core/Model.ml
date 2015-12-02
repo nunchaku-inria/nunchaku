@@ -36,7 +36,7 @@ let iter ~terms ~finite_types m =
 
 let print pt out m =
   let fpf = Format.fprintf in
-  let pp_pair out (t,u) = fpf out "@[<hv2>`@[%a@]`@ ->@ `@[%a@]`@]" pt t pt u in
+  let pp_pair out (t,u) = fpf out "@[<hv2>@[%a@]@ ->@ @[%a@]@]" pt t pt u in
   let pp_dom out (ty, dom) =
     fpf out "@[<h>@[%a@] -> {@[<hv>%a@]}@]"
       pt ty (CCFormat.list ~start:"" ~stop:"" ~sep:", " pt) dom
