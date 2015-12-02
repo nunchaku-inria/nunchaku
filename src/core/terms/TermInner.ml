@@ -200,7 +200,7 @@ module Print(T : REPR)
     | TyMeta v -> MetaVar.print out v
     | Var v -> Var.print out v
     | AppBuiltin (`Ite, [a;b;c]) ->
-        fpf out "@[<2>if %a@ then %a@ else %a@]"
+        fpf out "@[<hv>if@ %a@ @[<hv2>then@ %a@]@ @[<hv2>else@ %a@]@]"
           print a print b print c
     | AppBuiltin (`DataTest c, [t]) ->
         fpf out "@[<2>is-%a@ %a@]" ID.print_name c print_in_app t

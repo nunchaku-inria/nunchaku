@@ -210,7 +210,7 @@ let rec print_term out term = match Loc.get term with
   | App (f, [a;b]) ->
       begin match Loc.get f with
       | Builtin s when Builtin.fixity s = `Infix ->
-          fpf out "@[<2>%a@ %a@ %a@]"
+          fpf out "@[<hv>%a@ @[<hv>%a@ %a@]@]"
             print_term_inner a Builtin.print s print_term_inner b
       | _ ->
           fpf out "@[<2>%a@ %a@ %a@]" print_term_inner f
@@ -231,7 +231,7 @@ let rec print_term out term = match Loc.get term with
       fpf out "@[<hv2>match @[%a@] with@ %a end@]"
         print_term t (pp_list_ ~sep:"" pp_case) l
   | Ite (a,b,c) ->
-      fpf out "@[<hv2>if %a@ then %a@ else %a@]"
+      fpf out "@[<hv>if %a@ @[<2>then@ %a@]@ @[<2>else@ %a@]@]"
         print_term_inner a print_term b print_term c
   | Forall (v, t) ->
       fpf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
