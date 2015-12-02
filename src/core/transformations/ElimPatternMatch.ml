@@ -3,16 +3,10 @@
 
 (** {1 Eliminate pattern-matching in Equations and Terms} *)
 
-module ID = ID
-module Var = Var
 module Stmt = Statement
 module TI = TermMono
 module TyI = TypeMono
 module Subst = Var.Subst
-module Env = Env
-
-type id = ID.t
-let section = Utils.Section.make "elim_match"
 
 module Make(T : TermInner.S) = struct
   module U = TermInner.Util(T)
@@ -21,9 +15,6 @@ module Make(T : TermInner.S) = struct
   module TyMono = TypeMono.Make(T)
 
   type term = T.t
-  type var = term Var.t
-
-  let fpf = Format.fprintf
 
   let mk_select_ c i t = U.app_builtin (`DataSelect(c,i)) [t]
   let mk_test_ c t = U.app_builtin (`DataTest c) [t]
@@ -82,7 +73,6 @@ module Make(T : TermInner.S) = struct
     List.map (elim_match_ ~subst) l
 
   let elim_match t = elim_match_ ~subst:Subst.empty t
-  let id_ x = x
 
   let tr_problem pb =
     Problem.map pb

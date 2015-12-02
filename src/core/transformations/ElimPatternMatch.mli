@@ -14,8 +14,6 @@
   which is a decision tree understandable by CVC4
 *)
 
-type id = ID.t
-
 module Make(T : TermInner.S) : sig
   type term = T.t
 
