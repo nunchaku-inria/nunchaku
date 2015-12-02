@@ -282,7 +282,7 @@ let main_model ~output statements =
       Format.printf "@[<v2>%a@]@,@." NunPrintTPTP.print_model m
   | `Unsat, O_nunchaku ->
       (* TODO: check whether we have a "spurious" flag *)
-      Format.printf "@[UNSAT@]"
+      Format.printf "@[UNSAT@]@."
   | `Unsat, O_tptp ->
       (* TODO: check whether we have a "spurious" flag *)
       Format.printf "@[SZS Status: Unsatisfiable@]@."
