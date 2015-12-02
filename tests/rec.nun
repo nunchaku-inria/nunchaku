@@ -20,7 +20,7 @@ data list a :=
 # take n first elements of the list
 rec take : pi a. nat -> list a -> list a :=
   forall l. take z l = nil;
-  forall n. take n nil = nil;
+  forall n. take (s n) nil = nil;
   forall n x l. take (s n) (cons x l) = take n l.
 
 # create an inhabited type
