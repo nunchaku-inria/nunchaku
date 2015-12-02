@@ -190,12 +190,6 @@ module ToFO(T : TI.REPR)(F : FO.S) = struct
       "@[<2>convert to FO the formula `@[%a@]`@]" (fun k -> k P.print f);
     conv_form_rec f
 
-  (* does [ty] return prop? *)
-  let returns_prop_ t =
-    match Mono.repr (U.ty_returns t) with
-      | TyBuiltin `Prop -> true
-      | _ -> false
-
   let convert_eqns
   : type inv.
     head:id -> sigma:T.t Sig.t -> (T.t,T.t,inv) Statement.equations -> FO.formula list
@@ -205,7 +199,7 @@ module ToFO(T : TI.REPR)(F : FO.S) = struct
       let vars = List.map (conv_var) vars in
       let lhs = FO.T.app head args in
       let f =
-        if returns_prop_ (Sig.find_exn ~sigma head)
+        if U.ty_returns_Prop (Sig.find_exn ~sigma head)
         then
           FO.Formula.equiv
             (FO.Formula.atom lhs)

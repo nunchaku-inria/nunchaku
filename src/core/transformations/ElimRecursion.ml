@@ -113,38 +113,12 @@ module Make(T : TI.S) = struct
     | TyI.Builtin _ | TyI.Const _ | TyI.App (_,_) -> []
     | TyI.Arrow (a,ty') -> a :: ty_args_ ty'
 
-  let rec mk_not_ t = match T.repr t with
-    | TI.AppBuiltin (`And, l) ->
-        mk_or_ (List.map mk_not_ l)
-    | TI.AppBuiltin (`Or, l) ->
-        mk_and_ (List.map mk_not_ l)
-    | TI.AppBuiltin (`True, []) -> U.builtin `False
-    | TI.AppBuiltin (`False, []) -> U.builtin `True
-    | TI.AppBuiltin (`Not, [t]) -> t
-    | _ ->
-        U.app_builtin `Not [t]
-
-  and mk_and_ = function
-    | [] -> U.app_builtin `True []
-    | [x] -> x
-    | l -> U.app_builtin `And l
-
-  and mk_or_ = function
-    | [] -> U.app_builtin `False []
-    | [x] -> x
-    | l -> U.app_builtin `Or l
-
-  let mk_imply_ a b = U.app_builtin `Imply [a; b]
-  let mk_undefined_ t =
-    let id = ID.make ~name:"_" in
-    U.app_builtin (`Undefined id) [t]
-
   (* combine side-conditions with [t], depending on polarity *)
   let add_conds pol t conds =
     if conds=[] then t, []
     else match pol with
-    | Pos -> mk_and_ [t; mk_and_ conds], []
-    | Neg -> mk_or_ [t; mk_not_ (mk_and_ conds)], []
+    | Pos -> U.and_ [t; U.and_ conds], []
+    | Neg -> U.or_ [t; U.not_ (U.and_ conds)], []
     | NoPolarity -> t, conds
 
   (*
@@ -198,7 +172,7 @@ module Make(T : TI.S) = struct
                 l
                 fundef.fun_concretization
               in
-              conds := (U.exists alpha (mk_and_ !eqns)) :: !conds;
+              conds := (U.exists alpha (U.and_ !eqns)) :: !conds;
               U.app f l', !conds
           | None ->
               (* combine side conditions from every sub-term *)
@@ -217,7 +191,7 @@ module Make(T : TI.S) = struct
         | `False ,_ -> t, []
         | `Not, [t] ->
             let t, cond = tr_term_rec_ ~state ~local_state:(inv_pol local_state) t in
-            add_conds local_state.pol (mk_not_ t) cond
+            add_conds local_state.pol (U.not_ t) cond
         | `Or, l
         | `And, l ->
             let l_conds = List.map (tr_term_rec_ ~state ~local_state) l in
@@ -232,7 +206,7 @@ module Make(T : TI.S) = struct
             let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
             let b, cond_b = tr_term_rec_ ~state ~local_state b in
             let c, cond_c = tr_term_rec_ ~state ~local_state c in
-            let conds = (U.app_builtin `Ite [a; mk_and_ cond_b; mk_and_ cond_c]) :: cond_a in
+            let conds = (U.app_builtin `Ite [a; U.and_ cond_b; U.and_ cond_c]) :: cond_a in
             U.app_builtin `Ite [a;b;c], conds
         | `Eq, [a;b] ->
             let a, cond_a = tr_term_rec_ ~state ~local_state a in
@@ -266,7 +240,7 @@ module Make(T : TI.S) = struct
         let l = ID.Map.mapi
           (fun c (vars,rhs) ->
             let rhs, conds = tr_term_rec_ ~state ~local_state rhs in
-            conds' := ID.Map.add c (vars, mk_and_ conds) !conds';
+            conds' := ID.Map.add c (vars, U.and_ conds) !conds';
             vars,rhs
           ) l
         in
@@ -285,12 +259,12 @@ module Make(T : TI.S) = struct
   let tr_form ~state t =
     let t', conds = tr_term ~state ~local_state:empty_local_state t in
     if conds=[] then t'
-    else mk_imply_ (mk_and_ conds) t'
+    else U.imply (U.and_ conds) t'
 
   (* translate equation [eqn], which is defining the function
      corresponding to [fun_encoding].
      It returns an axiom instead. *)
-  let tr_eqns ~state ~fun_encoding eqn =
+  let tr_eqns ~state ~fun_encoding ty eqn =
     let Stmt.Eqn_single (vars,rhs) = eqn in
     (* quantify over abstract variable now *)
     let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
@@ -305,11 +279,12 @@ module Make(T : TI.S) = struct
     (* convert right-hand side and add its side conditions *)
     let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
     let rhs', conds = tr_term ~state ~local_state rhs in
-    U.forall alpha (mk_and_ (U.eq lhs rhs' :: conds))
+    let mk_eq = if U.ty_returns_Prop ty then U.equiv else U.eq in
+    U.forall alpha (U.and_ (mk_eq lhs rhs' :: conds))
 
   (* transform the recursive definition (mostly, its equations) *)
   let tr_rec_def ~state ~fun_encoding def =
-    tr_eqns ~state ~fun_encoding def.Stmt.rec_eqns
+    tr_eqns ~state ~fun_encoding def.Stmt.rec_defined.Stmt.defined_ty def.Stmt.rec_eqns
 
   let tr_rec_defs ~info ~state l =
     (* transform each axiom, considering case_head as rec. defined *)
@@ -591,11 +566,11 @@ module Make(T : TI.S) = struct
         (* default case: undefined
           TODO: if initial domain was finite, this might be unecessary,
             because CVC4 could model the whole domain? *)
-        let default = mk_undefined_ (U.app (U.const f_id) (List.map U.var args)) in
+        let default = U.undefined_ (U.app (U.const f_id) (List.map U.var args)) in
         let new_body = List.fold_left
           (fun else_ tup ->
             U.ite
-              (mk_and_ (List.map2 (fun v t -> U.eq (U.var v) t) args tup))
+              (U.and_ (List.map2 (fun v t -> U.eq (U.var v) t) args tup))
               (apply_to tup)
               else_)
           default dom_tuples

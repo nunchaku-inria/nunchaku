@@ -276,6 +276,8 @@ module type UTIL_REPR = sig
   val ty_returns_Type : t_ -> bool
   (** t == forall ... -> ... -> ... -> Type? *)
 
+  val ty_returns_Prop : t_ -> bool
+
   val ty_returns : t_ -> t_
   (** follow forall/arrows to get return type.  *)
 
@@ -408,6 +410,10 @@ module UtilRepr(T : REPR)
     | TyBuiltin `Type -> true
     | _ -> false
 
+  let ty_returns_Prop t = match T.repr (ty_returns t) with
+    | TyBuiltin `Prop -> true
+    | _ -> false
+
   (* number of parameters of this (polymorphic?) T.t type *)
   let rec ty_num_param ty = match T.repr ty with
     | TyMeta _ -> 0
@@ -446,7 +452,16 @@ module type UTIL = sig
   val ite : t_ -> t_ -> t_ -> t_
   val forall : t_ var -> t_ -> t_
   val exists : t_ var -> t_ -> t_
+
   val eq : t_ -> t_ -> t_
+  val equiv : t_ -> t_ -> t_
+  val imply : t_ -> t_ -> t_
+  val true_ : t_
+  val false_ : t_
+  val and_ : t_ list -> t_
+  val or_ : t_ list -> t_
+  val not_ : t_ -> t_
+  val undefined_ : t_ -> t_ (** fresh undefined term *)
 
   val mk_bind : Binder.t -> t_ var -> t_ -> t_
 
@@ -549,7 +564,37 @@ module Util(T : S)
     app (builtin `Ite) [a;b;c]
   let forall v t = T.build (Bind(`Forall,v, t))
   let exists v t = T.build (Bind(`Exists,v, t))
-  let eq a b = app (builtin `Eq) [a;b]
+
+  let eq a b = app_builtin `Eq [a;b]
+  let equiv a b = app_builtin `Equiv [a;b]
+  let true_ = builtin `True
+  let false_ = builtin `False
+
+  let rec not_ t = match T.repr t with
+    | AppBuiltin (`And, l) ->
+        or_ (List.map not_ l)
+    | AppBuiltin (`Or, l) ->
+        and_ (List.map not_ l)
+    | AppBuiltin (`True, []) -> false_
+    | AppBuiltin (`False, []) -> true_
+    | AppBuiltin (`Not, [t]) -> t
+    | _ ->
+        app_builtin `Not [t]
+
+  and and_ = function
+    | [] -> app_builtin `True []
+    | [x] -> x
+    | l -> app_builtin `And l
+
+  and or_ = function
+    | [] -> app_builtin `False []
+    | [x] -> x
+    | l -> app_builtin `Or l
+
+  let imply a b = app_builtin `Imply [a; b]
+  let undefined_ t =
+    let id = ID.make ~name:"_" in
+    app_builtin (`Undefined id) [t]
 
   let ty_builtin b = T.build (TyBuiltin b)
   let ty_const id = const id
