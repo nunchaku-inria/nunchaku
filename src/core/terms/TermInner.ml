@@ -822,36 +822,38 @@ module Util(T : S)
     | Const id -> find_ty_ ~sigma id
     | AppBuiltin (b,l) ->
         let prop = ty_prop in
-        let prop1 = ty_arrow prop prop in
-        let prop2 = ty_arrow prop (ty_arrow prop prop) in
-        begin match b with
-          | `Equiv
-          | `Imply
-          | `Or
-          | `And -> prop2
-          | `Not -> prop1
-          | `True
-          | `False
-          | `Ite
-          | `Eq -> prop
-          | `DataTest id ->
+        begin match b, l with
+          | `Equiv, [_;_]
+          | `Imply, [_;_]
+          | `Or, _
+          | `And, _
+          | `Not, [_]
+          | `True,[]
+          | `False,[] -> prop
+          | `Ite, [_;b;_] -> ty_exn ~sigma b
+          | `Eq, [_;_] -> prop
+          | `DataTest _, [_] -> prop
+          | `DataTest id, [] ->
               (* id: a->b->tau, where tau inductive; is-id: tau->prop *)
               let ty = find_ty_ ~sigma id in
               ty_arrow (ty_returns ty) prop
-          | `DataSelect (id,n) ->
+          | `DataSelect (id,n), _ ->
               (* id: a_1->a_2->tau, where tau inductive; select-id-i: tau->a_i*)
               let ty = find_ty_ ~sigma id in
-              begin match get_ty_arg_ ty n with
-              | None ->
-                  failwith "cannot infer type, wrong argument to DataSelect"
-              | Some ty_arg ->
+              begin match get_ty_arg_ ty n, l with
+              | Some ty_arg, [_] -> ty_arg
+              | Some ty_arg, [] ->
                   ty_arrow (ty_returns ty) ty_arg
+              | _ ->
+                  failwith "cannot infer type, wrong argument to DataSelect"
               end
-          | `Undefined _ ->
+          | `Undefined _, _ ->
               begin match l with
                 | [a] -> ty_exn ~sigma a
                 | _ -> assert false
               end
+          | (`Equiv | `Imply | `Not | `True | `False
+            | `Ite | `Eq | `DataTest _), _ -> assert false
         end
     | Var v -> Var.ty v
     | App (f,l) ->
