@@ -206,7 +206,7 @@ module Make(T : TI.S) = struct
             let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
             let b, cond_b = tr_term_rec_ ~state ~local_state b in
             let c, cond_c = tr_term_rec_ ~state ~local_state c in
-            let conds = (U.app_builtin `Ite [a; U.and_ cond_b; U.and_ cond_c]) :: cond_a in
+            let conds = (U.ite a (U.and_ cond_b) (U.and_ cond_c)) :: cond_a in
             add_conds local_state.pol (U.app_builtin `Ite [a;b;c]) conds
         | `Eq, [a;b] ->
             let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in

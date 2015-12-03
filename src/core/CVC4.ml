@@ -581,7 +581,10 @@ end = struct
     | `Ok (`Atom "unsat") ->
         Sol.Res.Unsat
     | `Ok (`Atom "sat") ->
-        let m = get_model_ ~state s |> rewrite_model_ in
+        let m = if ID.Map.is_empty state.symbols
+          then Model.empty
+          else get_model_ ~state s |> rewrite_model_
+        in
         Sol.Res.Sat m
     | `Ok (`Atom "unknown") ->
         Sol.Res.Timeout
