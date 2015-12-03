@@ -349,7 +349,7 @@ module Make(T : TI.S) = struct
         with TranslationFailed (t, msg) as e ->
           (* could not translate, keep old definition *)
           Utils.debugf ~section 1
-            "[<2>recursion elimination in@ @[%a@]@ \
+            "@[<2>recursion elimination in@ @[%a@]@ \
               failed on subterm @[%a@]:@ %s@]"
               (fun k -> k PStmt.print (Stmt.axiom_rec ~info l) P.print t msg);
           raise e
