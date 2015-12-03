@@ -163,7 +163,9 @@ module Make(T : TI.S) = struct
               let eqns = ref [] in
               let l' = List.map2
                 (fun arg (proj,_ty_proj) ->
-                  let arg', cond_arg = tr_term_rec_ ~state ~local_state arg in
+                  (* under a function: no polarity *)
+                  let arg', cond_arg = tr_term_rec_ arg
+                    ~state ~local_state:(no_pol local_state) in
                   let eqn = U.eq arg' (U.app (U.const proj) [U.var alpha]) in
                   eqns := eqn :: !eqns;
                   conds := cond_arg @ !conds;
@@ -178,9 +180,9 @@ module Make(T : TI.S) = struct
               (* combine side conditions from every sub-term *)
               let conds, l' = Utils.fold_map
                 (fun conds t ->
-                  let t', c = tr_term_rec_ ~state ~local_state t in
-                  List.rev_append c conds, t'
-                )
+                  let t', c = tr_term_rec_ t
+                    ~state ~local_state:(no_pol local_state) in
+                  List.rev_append c conds, t')
                 [] l
               in
               U.app f l', conds
