@@ -83,7 +83,7 @@ module Builtin = struct
     | `Eq -> "="
     | `DataTest id -> "is-" ^ ID.name id
     | `DataSelect (id, n) -> CCFormat.sprintf "select-%s-%d" (ID.name id) n
-    | `Undefined id -> CCFormat.sprintf "undefined_%s" (ID.name id)
+    | `Undefined id -> CCFormat.sprintf "undefined_%d" (ID.id id)
     | `Ite -> assert false
 
   let equal a b = match a, b with

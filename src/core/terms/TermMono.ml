@@ -64,12 +64,12 @@ module Make(T : TI.REPR)
     | TI.TyArrow (a,b) -> TyArrow(a,b)
 end
 
-module ToFO(T : TI.REPR)(F : FO.S) = struct
+module ToFO(T : TI.S)(F : FO.S) = struct
   module FOI = FO
   module FO = F
   module Subst = Var.Subst
   module P = TI.Print(T)
-  module U = TI.UtilRepr(T)
+  module U = TI.Util(T)
   module Mono = Make(T)
 
   exception NotInFO of string * T.t
@@ -123,72 +123,79 @@ module ToFO(T : TI.REPR)(F : FO.S) = struct
     and ret = conv_ty ret in
     args, ret
 
-  let rec conv_term t = match Mono.repr t with
+  let rec conv_term ~sigma t = match Mono.repr t with
     | AppBuiltin (`Ite, [a;b;c]) ->
-        FO.T.ite (conv_form_rec a) (conv_term b) (conv_term c)
+        FO.T.ite (conv_form_rec ~sigma a) (conv_term ~sigma b) (conv_term ~sigma c)
     | AppBuiltin (`DataTest c, [t]) ->
-        FO.T.data_test c (conv_term t)
+        FO.T.data_test c (conv_term ~sigma t)
     | AppBuiltin (`DataSelect (c,n), [t]) ->
-        FO.T.data_select c n (conv_term t)
+        FO.T.data_select c n (conv_term ~sigma t)
     | AppBuiltin (`Undefined c, [t]) ->
-        FO.T.undefined c (conv_term t)
+        FO.T.undefined c (conv_term ~sigma t)
     | AppBuiltin _ -> fail_ t "no builtin in terms"
     | Const id -> FO.T.const id
     | Var v -> FO.T.var (conv_var v)
     | App (f,l) ->
         begin match Mono.repr f with
-        | Const id -> FO.T.app id (List.map conv_term l)
+        | Const id -> FO.T.app id (List.map (conv_term ~sigma) l)
         | _ -> fail_ t "application of non-constant term"
         end
-    | Bind (`Fun,v,t) -> FO.T.fun_ (conv_var v) (conv_term t)
+    | Bind (`Fun,v,t) -> FO.T.fun_ (conv_var v) (conv_term ~sigma t)
     | Bind ((`Forall | `Exists), _,_) -> fail_ t "no quantifiers in FO terms"
     | Let (v,t,u) ->
-        FO.T.let_ (conv_var v) (conv_term t) (conv_term u)
+        FO.T.let_ (conv_var v) (conv_term ~sigma t) (conv_term ~sigma u)
     | Match _ -> fail_ t "no case in FO terms"
     | TyBuiltin _
     | TyArrow (_,_) -> fail_ t "no types in FO terms"
 
-  and conv_form_rec t = match Mono.repr t with
+  and conv_form_rec ~sigma t = match Mono.repr t with
     | AppBuiltin (b,l) ->
         begin match b, l with
         | `True, [] -> FO.Formula.true_
         | `False, [] -> FO.Formula.false_
-        | `Not, [f] -> FO.Formula.not_ (conv_form_rec f)
-        | `Or, l -> FO.Formula.or_ (List.map conv_form_rec l)
-        | `And, l -> FO.Formula.and_ (List.map conv_form_rec l)
+        | `Not, [f] -> FO.Formula.not_ (conv_form_rec ~sigma f)
+        | `Or, l -> FO.Formula.or_ (List.map (conv_form_rec ~sigma) l)
+        | `And, l -> FO.Formula.and_ (List.map (conv_form_rec ~sigma) l)
         | `Imply, [a;b] ->
-            FO.Formula.imply (conv_form_rec a) (conv_form_rec b)
+            FO.Formula.imply (conv_form_rec ~sigma a) (conv_form_rec ~sigma b)
         | `Ite, [a;b;c] ->
             FO.Formula.f_ite
-              (conv_form_rec a)(conv_form_rec b) (conv_form_rec c)
+              (conv_form_rec ~sigma a)(conv_form_rec ~sigma b) (conv_form_rec ~sigma c)
         | `Equiv, [a;b] ->
-            FO.Formula.equiv (conv_form_rec a)(conv_form_rec b)
+            FO.Formula.equiv (conv_form_rec ~sigma a)(conv_form_rec ~sigma b)
         | `Eq, [a;b] ->
-            FO.Formula.eq (conv_term a)(conv_term b)
+            (* forbid equality between functions *)
+            let ty = U.ty_exn ~sigma:(Sig.find ~sigma) a in
+            begin match T.repr ty with
+              | TI.TyArrow _
+              | TI.Bind (`TyForall, _, _) -> fail_ t "equality between functions";
+              | _ -> ()
+            end;
+            FO.Formula.eq (conv_term ~sigma a)(conv_term ~sigma b)
         | (`DataSelect _ | `DataTest _ | `Undefined _), _ ->
-            FO.Formula.atom (conv_term t)
+            FO.Formula.atom (conv_term ~sigma t)
         | _ -> assert false
         end
     | App _
-    | Const _ -> FO.Formula.atom (conv_term t)
+    | Const _ -> FO.Formula.atom (conv_term ~sigma t)
     | Var _ -> fail_ t "no variable in FO formulas"
     | Bind (`Fun,v,t) ->
-        FO.Formula.f_fun (conv_var v) (conv_form_rec t)
+        FO.Formula.f_fun (conv_var v) (conv_form_rec ~sigma t)
     | Bind (`Forall, v,f) ->
-        FO.Formula.forall (conv_var v) (conv_form_rec f)
+        FO.Formula.forall (conv_var v) (conv_form_rec ~sigma f)
     | Bind (`Exists, v,f) ->
-        FO.Formula.exists (conv_var v) (conv_form_rec f)
+        FO.Formula.exists (conv_var v) (conv_form_rec ~sigma f)
     | Let (v,t,u) ->
         FO.Formula.f_let
-          (conv_var v) (conv_form_rec t) (conv_form_rec u)
+          (conv_var v) (conv_form_rec ~sigma t) (conv_form_rec ~sigma u)
     | Match _ -> fail_ t "no match in FO formulas"
     | TyArrow (_,_)
     | TyBuiltin _ -> fail_ t "no types in FO formulas"
 
-  let conv_form f =
+  let conv_form ~sigma f =
     Utils.debugf 3 ~section
-      "@[<2>convert to FO the formula `@[%a@]`@]" (fun k -> k P.print f);
-    conv_form_rec f
+      "@[<2>convert to FO the formula@ `@[%a@]`@]" (fun k -> k P.print f);
+    conv_form_rec ~sigma f
 
   let convert_eqns
   : type inv.
@@ -196,28 +203,28 @@ module ToFO(T : TI.REPR)(F : FO.S) = struct
   = fun ~head ~sigma eqns ->
     let module St = Statement in
     let conv_eqn (vars, args, rhs, side) =
-      let vars = List.map (conv_var) vars in
+      let vars = List.map conv_var vars in
       let lhs = FO.T.app head args in
       let f =
         if U.ty_returns_Prop (Sig.find_exn ~sigma head)
         then
           FO.Formula.equiv
             (FO.Formula.atom lhs)
-            (conv_form rhs)
-        else FO.Formula.eq lhs (conv_term rhs)
+            (conv_form ~sigma rhs)
+        else FO.Formula.eq lhs (conv_term ~sigma rhs)
       in
       (* add side conditions *)
-      let side = List.map (conv_form) side in
+      let side = List.map (conv_form ~sigma) side in
       let f = if side=[] then f else FO.Formula.imply (FO.Formula.and_ side) f in
       List.fold_right FO.Formula.forall vars f
     in
     match eqns with
     | St.Eqn_single (vars,rhs) ->
         (* [id = fun vars. rhs] *)
-        let vars = List.map (conv_var) vars in
+        let vars = List.map conv_var vars in
         [ FO.Formula.eq
             (FO.T.const head)
-            (List.fold_right FO.T.fun_ vars (conv_term rhs)) ]
+            (List.fold_right FO.T.fun_ vars (conv_term ~sigma rhs)) ]
     | St.Eqn_linear l ->
         List.map
           (fun
@@ -227,7 +234,7 @@ module ToFO(T : TI.REPR)(F : FO.S) = struct
     | St.Eqn_nested l ->
         List.map
           (fun (vars,args,rhs,side) ->
-            conv_eqn (vars, List.map (conv_term) args, rhs, side))
+            conv_eqn (vars, List.map (conv_term ~sigma) args, rhs, side))
           l
 
   let convert_statement ~sigma st =
@@ -249,10 +256,10 @@ module ToFO(T : TI.REPR)(F : FO.S) = struct
         let mk_ax x = FOI.Axiom x in
         begin match a with
         | St.Axiom_std l ->
-            List.map (fun ax -> conv_form ax |> mk_ax) l
+            List.map (fun ax -> conv_form  ~sigma ax |> mk_ax) l
         | St.Axiom_spec s ->
             List.map
-              (fun ax -> ax |> conv_form |> mk_ax)
+              (fun ax -> ax |> conv_form ~sigma |> mk_ax)
               s.St.spec_axioms
         | St.Axiom_rec s ->
             (* first declare all types; then push axioms *)
@@ -278,12 +285,12 @@ module ToFO(T : TI.REPR)(F : FO.S) = struct
             List.rev_append decls axioms
         end
     | St.Goal f ->
-        [ FOI.Goal (conv_form f) ]
+        [ FOI.Goal (conv_form ~sigma f) ]
     | St.TyDef (k, l) ->
         let convert_cstor c =
           {FOI.
             cstor_name=c.St.cstor_name;
-            cstor_args=List.map (conv_ty) c.St.cstor_args;
+            cstor_args=List.map conv_ty c.St.cstor_args;
           }
         in
         (* gather all variables *)
