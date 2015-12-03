@@ -44,27 +44,18 @@ module Make(T : TI.S) = struct
       let basic ~subst t =
         let t' = eval ~subst t in
         match T.repr t' with
-        | TI.AppBuiltin (`True, _) -> BTrue
-        | TI.AppBuiltin (`False, _) -> BFalse
+        | TI.Builtin `True -> BTrue
+        | TI.Builtin `False -> BFalse
         | _ -> BPartial t'
       in
       match T.repr t with
-      | TI.AppBuiltin (`True, _) -> BTrue
-      | TI.AppBuiltin (`False, _) -> BFalse
-      | TI.AppBuiltin (`And, l) ->
-          eval_and_l ~eval ~default:t ~subst l
-      | TI.AppBuiltin (`Or, l) ->
-          eval_or_l ~eval ~default:t ~subst l
-      | TI.AppBuiltin (`Imply, [a;b]) ->
-          (* truth table *)
-          begin match eval_bool ~eval ~subst a, eval_bool ~eval ~subst b with
-          | _, BTrue
-          | BFalse, _ -> BTrue
-          | BTrue, BFalse -> BFalse
-          | BPartial _, _
-          | _, BPartial _ -> BPartial t
-          end
-      | TI.AppBuiltin (`Equiv, [a;b]) ->
+      | TI.Builtin `True -> BTrue
+      | TI.Builtin `False -> BFalse
+      | TI.Builtin (`Undefined _) ->
+          BPartial t (* undefined term doesn't evaluate *)
+      | TI.Builtin (`Ite (_,_,_) | `DataSelect _ | `DataTest _) ->
+          invalid_arg "not boolean operators"
+      | TI.Builtin (`Equiv (a,b)) ->
           (* truth table *)
           begin match eval_bool ~eval ~subst a, eval_bool ~eval ~subst b with
           | BTrue, BTrue
@@ -74,29 +65,42 @@ module Make(T : TI.S) = struct
           | BPartial _, _
           | _, BPartial _ -> BPartial t
           end
-      | TI.AppBuiltin (`Eq, [a;b]) ->
+      | TI.Builtin (`Eq (a,b)) ->
           let a = eval ~subst a in
           let b = eval ~subst b in
           (* TODO: if [a] and [b] fully evaluated, return False? *)
           if U.equal_with ~subst a b
           then BTrue
           else BPartial (U.eq a b)
-      | TI.AppBuiltin (`Not, [f]) ->
-          begin match eval_bool ~eval ~subst f with
-          | BTrue -> BFalse
-          | BFalse -> BTrue
-          | BPartial t -> BPartial (U.app_builtin `Not [t])
+      | TI.App (f, l) ->
+          begin match T.repr f, l with
+          | TI.Builtin `And, l ->
+              eval_and_l ~eval ~default:t ~subst l
+          | TI.Builtin `Or, l ->
+              eval_or_l ~eval ~default:t ~subst l
+          | TI.Builtin `Imply, [a;b] ->
+              (* truth table *)
+              begin match eval_bool ~eval ~subst a, eval_bool ~eval ~subst b with
+              | _, BTrue
+              | BFalse, _ -> BTrue
+              | BTrue, BFalse -> BFalse
+              | BPartial _, _
+              | _, BPartial _ -> BPartial t
+              end
+          | TI.Builtin `Not, [f] ->
+              begin match eval_bool ~eval ~subst f with
+              | BTrue -> BFalse
+              | BFalse -> BTrue
+              | BPartial t -> BPartial (U.app_builtin `Not [t])
+              end
+          | TI.Builtin _, _ -> BPartial t
+          | _ -> BPartial t
           end
-      | TI.AppBuiltin (`Undefined _, [_]) ->
-          BPartial t (* undefined term doesn't evaluate *)
-      | TI.AppBuiltin ((`Imply | `Equiv | `Eq | `Not | `Undefined _), _) ->
-          assert false (* wrong arity *)
-      | TI.AppBuiltin ((`Ite | `DataSelect _ | `DataTest _), _) ->
-          invalid_arg "not boolean operators"
+      | TI.Builtin (`Imply | `Not | `And | `Or) ->
+          BPartial t (* partially applied *)
       | TI.Bind _ -> basic ~subst t
       | TI.Const _
       | TI.Var _
-      | TI.App _
       | TI.Let _
       | TI.Match _
       | TI.TyBuiltin _
@@ -119,20 +123,20 @@ module Make(T : TI.S) = struct
           | BFalse -> eval_or_l ~eval ~default ~subst l'
           | BPartial _ -> BPartial default
 
-    (* evaluate [b l] using [eval] *)
-    let eval_app_builtin ~eval (b:TI.Builtin.t) l ~st =
+    (* evaluate [b] using [eval] *)
+    let eval_app_builtin ~eval (b:T.t TI.Builtin.t) ~st =
       (* auxiliary function *)
       let eval_term ~subst t =
         term_of_state (eval {args=[]; head=t; subst}) in
-      match b, l with
-      | (`True | `False), _ -> st (* normal form *)
-      | (`And | `Eq | `Imply | `Equiv | `Not | `Or), _ ->
+      match b with
+      | `True | `False -> st (* normal form *)
+      | `And | `Imply | `Not | `Or | `Eq _ | `Equiv _ ->
           begin match eval_bool ~eval:eval_term ~subst:st.subst st.head with
           | BTrue -> {st with head=U.builtin `True}
           | BFalse -> {st with head=U.builtin `False}
           | BPartial t -> {st with head=t}
           end
-      | `Ite, [a;b;c] ->
+      | `Ite (a,b,c) ->
           (* special case: ite can reduce further if [a] reduces to
             a boolean, because then branches can be functions *)
           begin match eval_bool ~eval:eval_term ~subst:st.subst a with
@@ -140,12 +144,11 @@ module Make(T : TI.S) = struct
           | BFalse -> eval {st with head=c}
           | BPartial a' -> {st with head=U.ite a' b c}
           end
-      | `DataTest _, [_] ->
+      | `DataTest _ ->
           Utils.not_implemented "evaluation of DataTest"
-      | `DataSelect (_,_), [_] ->
+      | `DataSelect (_,_) ->
           Utils.not_implemented "evaluation of DataSelect"
-      | `Undefined _, [_] -> st (* no evaluation *)
-      | (`Ite | `DataSelect _ | `DataTest _ | `Undefined _),_ -> assert false
+      | `Undefined _ -> st (* no evaluation *)
 
     (* see whether [st] matches a case in [m] *)
     let lookup_case_ st m = match T.repr st.head with
@@ -164,9 +167,9 @@ module Make(T : TI.S) = struct
     (* reduce until the head is not a function *)
     let rec whnf_ st = match T.repr st.head with
       | TI.Const _ -> st
-      | TI.AppBuiltin ((`False | `True), _) -> st
-      | TI.AppBuiltin (b, l) ->
-          eval_app_builtin ~eval:whnf_ ~st b l
+      | TI.Builtin (`False | `True) -> st
+      | TI.Builtin b ->
+          eval_app_builtin ~eval:whnf_ ~st b
       | TI.Var v ->
           (* dereference, if any *)
           begin match Subst.find ~subst:st.subst v with
@@ -214,11 +217,9 @@ module Make(T : TI.S) = struct
       (* then, reduce subterms *)
       match T.repr st.head with
       | TI.TyBuiltin _
-      | TI.Const _
-      | TI.AppBuiltin (_,[]) -> st
-      | TI.AppBuiltin (b,l) ->
-          let l = List.map (snf_term ~subst:st.subst) l in
-          eval_app_builtin ~eval:snf_ ~st b l
+      | TI.Const _ -> st
+      | TI.Builtin b ->
+          eval_app_builtin ~eval:snf_ ~st b
       | TI.Bind (`TyForall,_,_) -> st
       | TI.TyArrow (_,_) ->
           st (* NOTE: depend types might require beta-reduction in types *)

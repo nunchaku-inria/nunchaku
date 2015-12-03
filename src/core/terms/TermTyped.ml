@@ -55,8 +55,7 @@ module Util(T : S)
   (** @raise Not_found if the term has no type *)
 
   val const : ?loc:loc -> ty:t -> id -> t
-  val builtin : ?loc:loc -> ty:t -> TI.Builtin.t -> t
-  val app_builtin : ?loc:loc -> ty:t -> TI.Builtin.t -> t list -> t
+  val builtin : ?loc:loc -> ty:t -> t TI.Builtin.t -> t
   val var : ?loc:loc -> t var -> t
   val app : ?loc:loc -> ty:t -> t -> t list -> t
   val fun_ : ?loc:loc -> ty:t -> t var -> t -> t
@@ -105,10 +104,8 @@ end = struct
   let ty_prop =
     build ?loc:None ~ty:ty_type (TI.TyBuiltin `Prop)
 
-  let app_builtin ?loc ~ty s l =
-    build ?loc ~ty (TI.AppBuiltin (s,l))
-
-  let builtin ?loc ~ty s = app_builtin ?loc ~ty s []
+  let builtin ?loc ~ty b =
+    build ?loc ~ty (TI.Builtin b)
 
   let const ?loc ~ty id =
     build ?loc ~ty (TI.Const id)
@@ -130,8 +127,7 @@ end = struct
     build ?loc ~ty (TI.Match (t, l))
 
   let ite ?loc a b c =
-    build?loc ~ty:(ty_exn b)
-      (TI.AppBuiltin (`Ite, [a;b;c]))
+    builtin ?loc ~ty:(ty_exn b) (`Ite (a,b,c))
 
   let forall ?loc v t =
     mk_bind ?loc ~ty:ty_prop `Forall v t
@@ -140,7 +136,7 @@ end = struct
     mk_bind ?loc ~ty:ty_prop `Exists v t
 
   let eq ?loc a b =
-    app_builtin ?loc ~ty:ty_prop `Eq [a;b]
+    builtin ?loc ~ty:ty_prop (`Eq (a,b))
 
   let ty_builtin ?loc b =
     build ?loc ~ty:ty_type (TI.TyBuiltin b)
@@ -206,8 +202,6 @@ module Default = struct
     | TI.App (f, []) -> f
     | TI.App ({view=TI.App (f, l1); d_loc=loc; _}, l2) ->
         make_raw_ ~loc ~ty (TI.App (f, l1 @ l2))
-    | TI.App ({view=TI.AppBuiltin (b, l1); d_loc=loc; _}, l2) ->
-        make_raw_ ~loc ~ty (TI.AppBuiltin (b, l1@l2))
     | _ -> make_raw_ ~loc ~ty view
 
   let kind = {view=TI.TyBuiltin `Kind; d_loc=None; d_ty=None; }

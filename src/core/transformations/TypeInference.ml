@@ -348,7 +348,7 @@ module Convert(Term : TermTyped.S) = struct
     app_ ~subst:Subst.empty t l
 
   let is_eq_ t = match Loc.get t with
-    | A.Builtin `Eq -> true
+    | A.Builtin (`Eq | `Equiv) -> true
     | _ -> false
 
   (* check that the map is exhaustive *)
@@ -367,7 +367,7 @@ module Convert(Term : TermTyped.S) = struct
     let loc = get_loc_ ~stack t in
     let stack = push_ t stack in
     match Loc.get t with
-    | A.Builtin `Eq ->
+    | A.Builtin (`Eq | `Equiv) ->
         ill_formed ~kind:"term" ?loc "equality must be fully applied"
     | A.Builtin s ->
         (* only some symbols correspond to terms *)
@@ -382,9 +382,7 @@ module Convert(Term : TermTyped.S) = struct
           | `Not -> `Not, prop1
           | `True -> `True, prop
           | `False -> `False, prop
-          | `Equiv -> `Equiv, prop2
-          | `Undefined _
-          | `Eq -> assert false (* deal with earlier *)
+          | `Undefined _ | `Eq | `Equiv -> assert false (* dealt with earlier *)
         in
         U.builtin ?loc ~ty b
     | A.AtVar v ->
@@ -623,7 +621,7 @@ module Convert(Term : TermTyped.S) = struct
     | TI.Const _ ->  true
     | TI.Var v -> is_mono_var_ v
     | TI.App (f,l) -> is_mono_ f && List.for_all is_mono_ l
-    | TI.AppBuiltin (_,l) -> List.for_all is_mono_ l
+    | TI.Builtin b -> TI.Builtin.to_seq b |> Sequence.for_all is_mono_
     | TI.Let (v,t,u) ->
         is_mono_var_ v && is_mono_ t && is_mono_ u
     | TI.Match (t,l) ->
@@ -644,7 +642,7 @@ module Convert(Term : TermTyped.S) = struct
     | TI.Const _ -> true
     | TI.Var v -> is_mono_var_ v
     | TI.App (f,l) -> is_prenex_ f && List.for_all is_mono_ l
-    | TI.AppBuiltin (_,l) -> List.for_all is_mono_ l
+    | TI.Builtin b -> TI.Builtin.to_seq b |> Sequence.for_all is_mono_
     | TI.Bind (`TyForall, v, t) ->
         (* pi v:_. t is prenex if t is *)
         is_mono_var_ v && is_prenex_ t
@@ -844,7 +842,7 @@ module Convert(Term : TermTyped.S) = struct
         CCOpt.map
           (fun (vars,args,rhs) -> v::vars,args,rhs)
           (extract_eqn ~f t')
-    | TI.AppBuiltin (`Eq, [l;r]) ->
+    | TI.Builtin (`Eq (l,r)) ->
         begin match Term.repr l with
         | TI.Const f' when ID.equal f f' ->
             let vars, rhs = extract_fun_ r in

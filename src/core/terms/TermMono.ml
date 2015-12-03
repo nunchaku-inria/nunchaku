@@ -26,7 +26,7 @@ type 'a view =
   | Const of id (** top-level symbol *)
   | Var of 'a var (** bound variable *)
   | App of 'a * 'a list
-  | AppBuiltin of Builtin.t * 'a list (** built-in operation *)
+  | Builtin of 'a Builtin.t (** built-in operation *)
   | Bind of Binder.t * 'a var * 'a
   | Let of 'a var * 'a * 'a
   | Match of 'a * 'a TI.cases (** shallow pattern-match *)
@@ -54,7 +54,7 @@ module Make(T : TI.REPR)
     | TI.Const id -> Const id
     | TI.Var v -> Var v
     | TI.App (f,l) -> App (f,l)
-    | TI.AppBuiltin (b,l) -> AppBuiltin(b,l)
+    | TI.Builtin b -> Builtin b
     | TI.Bind (`TyForall,_,_)
     | TI.TyMeta _ -> assert false
     | TI.Bind ((`Forall | `Exists | `Fun) as b,v,t) -> Bind(b,v,t)
@@ -105,7 +105,7 @@ module ToFO(T : TI.S)(F : FO.S) = struct
     | TyArrow _ -> fail_ t "arrow in atomic type"
     | Let _
     | Match _
-    | AppBuiltin _
+    | Builtin _
     | Bind _ -> fail_ t "not a type"
 
   let conv_var v = Var.update_ty ~f:conv_ty v
@@ -124,20 +124,21 @@ module ToFO(T : TI.S)(F : FO.S) = struct
     args, ret
 
   let rec conv_term ~sigma t = match Mono.repr t with
-    | AppBuiltin (`Ite, [a;b;c]) ->
-        FO.T.ite (conv_form_rec ~sigma a) (conv_term ~sigma b) (conv_term ~sigma c)
-    | AppBuiltin (`DataTest c, [t]) ->
-        FO.T.data_test c (conv_term ~sigma t)
-    | AppBuiltin (`DataSelect (c,n), [t]) ->
-        FO.T.data_select c n (conv_term ~sigma t)
-    | AppBuiltin (`Undefined c, [t]) ->
+    | Builtin (`Ite (a,b,c)) ->
+        FO.T.ite
+          (conv_form_rec ~sigma a) (conv_term ~sigma b) (conv_term ~sigma c)
+    | Builtin (`Undefined (c,t)) ->
         FO.T.undefined c (conv_term ~sigma t)
-    | AppBuiltin _ -> fail_ t "no builtin in terms"
+    | Builtin _ -> fail_ t "no builtin in terms"
     | Const id -> FO.T.const id
     | Var v -> FO.T.var (conv_var v)
     | App (f,l) ->
-        begin match Mono.repr f with
-        | Const id -> FO.T.app id (List.map (conv_term ~sigma) l)
+        begin match Mono.repr f, l with
+        | Const id, _ -> FO.T.app id (List.map (conv_term ~sigma) l)
+        | Builtin (`DataTest c), [t] ->
+            FO.T.data_test c (conv_term ~sigma t)
+        | Builtin (`DataSelect (c,n)), [t] ->
+            FO.T.data_select c n (conv_term ~sigma t)
         | _ -> fail_ t "application of non-constant term"
         end
     | Bind (`Fun,v,t) -> FO.T.fun_ (conv_var v) (conv_term ~sigma t)
@@ -149,34 +150,35 @@ module ToFO(T : TI.S)(F : FO.S) = struct
     | TyArrow (_,_) -> fail_ t "no types in FO terms"
 
   and conv_form_rec ~sigma t = match Mono.repr t with
-    | AppBuiltin (b,l) ->
-        begin match b, l with
-        | `True, [] -> FO.Formula.true_
-        | `False, [] -> FO.Formula.false_
-        | `Not, [f] -> FO.Formula.not_ (conv_form_rec ~sigma f)
-        | `Or, l -> FO.Formula.or_ (List.map (conv_form_rec ~sigma) l)
-        | `And, l -> FO.Formula.and_ (List.map (conv_form_rec ~sigma) l)
-        | `Imply, [a;b] ->
+    | Builtin `True -> FO.Formula.true_
+    | Builtin `False -> FO.Formula.false_
+    | Builtin (`Ite (a,b,c))  ->
+        FO.Formula.f_ite
+          (conv_form_rec ~sigma a)(conv_form_rec ~sigma b) (conv_form_rec ~sigma c)
+    | Builtin (`Equiv (a,b)) ->
+        FO.Formula.equiv (conv_form_rec ~sigma a)(conv_form_rec ~sigma b)
+    | Builtin (`Eq (a,b)) ->
+        (* forbid equality between functions *)
+        let ty = U.ty_exn ~sigma:(Sig.find ~sigma) a in
+        begin match T.repr ty with
+          | TI.TyArrow _
+          | TI.Bind (`TyForall, _, _) -> fail_ t "equality between functions";
+          | _ -> ()
+        end;
+        FO.Formula.eq (conv_term ~sigma a)(conv_term ~sigma b)
+    | Builtin (`DataSelect _ | `DataTest _ | `Undefined _) ->
+        FO.Formula.atom (conv_term ~sigma t)
+    | Builtin (`And | `Or | `Not | `Imply) ->
+        fail_ t "partially applied connectives"
+    | App (f, l) ->
+        begin match Mono.repr f, l with
+        | Builtin `Not, [t] -> FO.Formula.not_ (conv_form_rec ~sigma t)
+        | Builtin `And, l -> FO.Formula.and_ (List.map (conv_form_rec ~sigma) l)
+        | Builtin `Or, l -> FO.Formula.or_ (List.map (conv_form_rec ~sigma) l)
+        | Builtin `Imply, [a;b] ->
             FO.Formula.imply (conv_form_rec ~sigma a) (conv_form_rec ~sigma b)
-        | `Ite, [a;b;c] ->
-            FO.Formula.f_ite
-              (conv_form_rec ~sigma a)(conv_form_rec ~sigma b) (conv_form_rec ~sigma c)
-        | `Equiv, [a;b] ->
-            FO.Formula.equiv (conv_form_rec ~sigma a)(conv_form_rec ~sigma b)
-        | `Eq, [a;b] ->
-            (* forbid equality between functions *)
-            let ty = U.ty_exn ~sigma:(Sig.find ~sigma) a in
-            begin match T.repr ty with
-              | TI.TyArrow _
-              | TI.Bind (`TyForall, _, _) -> fail_ t "equality between functions";
-              | _ -> ()
-            end;
-            FO.Formula.eq (conv_term ~sigma a)(conv_term ~sigma b)
-        | (`DataSelect _ | `DataTest _ | `Undefined _), _ ->
-            FO.Formula.atom (conv_term ~sigma t)
-        | _ -> assert false
+        | _, _ -> FO.Formula.atom (conv_term ~sigma t)
         end
-    | App _
     | Const _ -> FO.Formula.atom (conv_term ~sigma t)
     | Var _ -> fail_ t "no variable in FO formulas"
     | Bind (`Fun,v,t) ->
@@ -342,7 +344,7 @@ module OfFO(T:TI.S)(F : FO.VIEW) = struct
     | FO.Var v ->
         U.var (Var.update_ty v ~f:(convert_ty))
     | FO.Undefined (c,t) ->
-        U.app_builtin (`Undefined c) [convert_term t]
+        U.builtin (`Undefined (c,convert_term t))
     | FO.App (f,l) ->
         let l = List.map convert_term l in
         U.app (U.const f) l

@@ -18,7 +18,6 @@ module Make(T : TermInner.S) = struct
 
   let mk_select_ c i t = U.app_builtin (`DataSelect(c,i)) [t]
   let mk_test_ c t = U.app_builtin (`DataTest c) [t]
-  let mk_ite_ a b c = U.app_builtin `Ite [a;b;c]
 
   (* apply substitution [ctx.subst] in [t], and also replace pattern matching
      with [`DataSelect] and [`DataTest] *)
@@ -27,7 +26,7 @@ module Make(T : TermInner.S) = struct
         CCOpt.get t (Subst.find ~subst v)
     | TI.Const _ -> t
     | TI.App (f,l) -> U.app (elim_match_ ~subst f) (elim_match_l_ ~subst l)
-    | TI.AppBuiltin (b,l) -> U.app_builtin b (elim_match_l_ ~subst l)
+    | TI.Builtin b -> U.builtin (TI.Builtin.map b ~f:(elim_match_ ~subst))
     | TI.Bind ((`Forall | `Exists | `Fun) as b,v,t) ->
         let v' = Var.fresh_copy v in
         let subst = Subst.add ~subst v (U.var v') in
@@ -64,7 +63,7 @@ module Make(T : TermInner.S) = struct
               subst vars
             in
             let rhs' = elim_match_ ~subst:subst' rhs in
-            mk_ite_ (mk_test_ c t') rhs' acc
+            U.ite (mk_test_ c t') rhs' acc
           )
           l
           default_case

@@ -48,7 +48,7 @@ module Make(T : TI.REPR)
     | TI.Var v -> is_ty_var v
     | TI.Bind (`TyForall, v, t) -> is_ty_var v && is_ty t
     | TI.TyMeta _ -> true
-    | TI.AppBuiltin _
+    | TI.Builtin _
     | TI.Match _
     | TI.Let _
     | TI.Bind _ -> false
@@ -64,7 +64,7 @@ module Make(T : TI.REPR)
     | TI.Var v -> Var v
     | TI.Bind (`TyForall, v, t) -> Forall (v, t)
     | TI.TyMeta v -> Meta v
-    | TI.AppBuiltin _
+    | TI.Builtin _
     | TI.Match _
     | TI.Let _
     | TI.Bind _ -> assert false

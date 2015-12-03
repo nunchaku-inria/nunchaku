@@ -150,8 +150,8 @@ module Make(T : TI.S) = struct
           | Some t' -> t'
         in t', []
     | TI.App (f,l) ->
-        begin match as_defined_ ~state f with
-          | Some (id, fundef) ->
+        begin match as_defined_ ~state f, T.repr f, l with
+          | Some (id, fundef), _, _ ->
               (* [f] is a recursive function we are encoding *)
               if List.length l <> List.length fundef.fun_concretization
                 then fail_tr_ t
@@ -176,7 +176,21 @@ module Make(T : TI.S) = struct
               in
               conds := (U.exists alpha (U.and_ !eqns)) :: !conds;
               U.app f l', !conds
-          | None ->
+          | None, TI.Builtin `Not, [t] ->
+              let t, cond = tr_term_rec_ ~state ~local_state:(inv_pol local_state) t in
+              add_conds local_state.pol (U.not_ t) cond
+          | None, TI.Builtin ((`Or | `And) as b), l ->
+              let l_conds = List.map (tr_term_rec_ ~state ~local_state) l in
+              let l, conds = List.split l_conds in
+              add_conds local_state.pol (U.app_builtin b l) (List.flatten conds)
+          | None, TI.Builtin `Imply, [a;b] ->
+              let a, cond_a = tr_term_rec_ ~state ~local_state:(inv_pol local_state) a in
+              let b, cond_b = tr_term_rec_ ~state ~local_state b in
+              add_conds local_state.pol (U.app b [a; b]) (List.append cond_a cond_b)
+          | None, TI.Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
+              let t', conds = tr_term_rec_ ~state ~local_state t in
+              U.app_builtin b [t'], conds
+          | None, _, _ ->
               (* combine side conditions from every sub-term *)
               let conds, l' = Utils.fold_map
                 (fun conds t ->
@@ -187,44 +201,22 @@ module Make(T : TI.S) = struct
               in
               U.app f l', conds
         end
-    | TI.AppBuiltin (b,l) ->
-        begin match b, l with
-        | `True ,_
-        | `False ,_ -> t, []
-        | `Not, [t] ->
-            let t, cond = tr_term_rec_ ~state ~local_state:(inv_pol local_state) t in
-            add_conds local_state.pol (U.not_ t) cond
-        | `Or, l
-        | `And, l ->
-            let l_conds = List.map (tr_term_rec_ ~state ~local_state) l in
-            let l, conds = List.split l_conds in
-            add_conds local_state.pol (U.app_builtin b l) (List.flatten conds)
-        | `Imply, [a;b] ->
-            let a, cond_a = tr_term_rec_ ~state ~local_state:(inv_pol local_state) a in
-            let b, cond_b = tr_term_rec_ ~state ~local_state b in
-            add_conds local_state.pol (U.app b [a; b]) (List.append cond_a cond_b)
-        | `Equiv, _ -> fail_tr_ t "cannot translate equivalence (polarity)"
-        | `Ite, [a;b;c] ->
-            let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
-            let b, cond_b = tr_term_rec_ ~state ~local_state b in
-            let c, cond_c = tr_term_rec_ ~state ~local_state c in
-            let conds = (U.ite a (U.and_ cond_b) (U.and_ cond_c)) :: cond_a in
-            add_conds local_state.pol (U.app_builtin `Ite [a;b;c]) conds
-        | `Eq, [a;b] ->
-            let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
-            let b, cond_b = tr_term_rec_ ~state ~local_state:(no_pol local_state) b in
-            add_conds local_state.pol
-              (U.app_builtin `Eq [a;b])
-              (List.append cond_a cond_b)
-        | `DataTest _, [t]
-        | `DataSelect (_,_), [t]
-        | `Undefined _, [t] ->
-            let t', conds = tr_term_rec_ ~state ~local_state t in
-            U.app_builtin b [t'], conds
-        | `Not,_ | `Imply,_ | `Ite,_
-        | `Eq,_ | `DataSelect _,_ | `DataTest _,_ | `Undefined _, _ ->
-            assert false (* wrong arity *)
-        end
+    | TI.Builtin (`True | `False | `Undefined _
+      | `And | `Or | `Not | `Imply | `DataSelect _ | `DataTest _) ->
+          t, [] (* partially applied, or constant *)
+    | TI.Builtin (`Equiv _) -> fail_tr_ t "cannot translate equivalence (polarity)"
+    | TI.Builtin (`Eq (a,b)) ->
+        let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
+        let b, cond_b = tr_term_rec_ ~state ~local_state:(no_pol local_state) b in
+        add_conds local_state.pol
+          (U.eq a b)
+          (List.rev_append cond_a cond_b)
+    | TI.Builtin (`Ite (a,b,c)) ->
+        let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
+        let b, cond_b = tr_term_rec_ ~state ~local_state b in
+        let c, cond_c = tr_term_rec_ ~state ~local_state c in
+        let conds = (U.ite a (U.and_ cond_b) (U.and_ cond_c)) :: cond_a in
+        add_conds local_state.pol (U.ite a b c) conds
     | TI.Bind (`Forall,v,t) ->
         let t', conds = tr_term_rec_ ~state ~local_state t in
         U.forall v t', List.map (U.forall v) conds
@@ -434,7 +426,7 @@ module Make(T : TI.S) = struct
   (* see whether [t] is of the form [var = const] *)
   let as_eqn_sym_ ~var:v t =
     match T.repr t with
-    | TI.AppBuiltin (`Eq, [a;b]) ->
+    | TI.Builtin (`Eq (a,b)) ->
         begin match T.repr a, T.repr b with
         | TI.Var v', TI.Const c
         | TI.Const c, TI.Var v' ->
@@ -460,7 +452,7 @@ module Make(T : TI.S) = struct
   }
 
   let rec extract_proj_tree_ v t = match T.repr t with
-    | TI.AppBuiltin (`Ite, [a;b;c]) ->
+    | TI.Builtin (`Ite (a,b,c)) ->
         begin match as_eqn_sym_ ~var:v a with
           | Some id -> Proj_If (id, b, extract_proj_tree_ v c)
           | None -> Proj_E t
@@ -539,19 +531,20 @@ module Make(T : TI.S) = struct
       projections, the rest is junk)
   *)
   let pass3_ ~state doms m =
+    let is_and_ t = match T.repr t with TI.Builtin `And -> true | _ -> false in
     (* evaluate a boolean condition *)
     let rec eval_cond_ ~subst t =
       let t = U.deref ~subst t in
       match T.repr t with
-      | TI.AppBuiltin (`And, l) -> List.for_all (eval_cond_ ~subst) l
-      | TI.AppBuiltin (`Eq, [a;b]) -> U.equal_with ~subst a b
+      | TI.App(b, l) when is_and_ b -> List.for_all (eval_cond_ ~subst) l
+      | TI.Builtin (`Eq (a,b)) -> U.equal_with ~subst a b
       | _ -> fail_decode_ ~term:t "expected a boolean condition"
     in
     (* evaluate the body of a function with the given substitution *)
     let rec eval_body subst t =
       let t = U.deref ~subst t in
       match T.repr t with
-      | TI.AppBuiltin (`Ite, [a; b; c]) ->
+      | TI.Builtin (`Ite (a,b,c)) ->
           if eval_cond_ ~subst a then b
           else eval_body subst c
       | TI.Let (v, t, u) ->

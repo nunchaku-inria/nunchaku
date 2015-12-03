@@ -105,30 +105,25 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
     state.name <- n+1;
     ID.make ~name:(state.prefix ^ string_of_int n)
 
-  let mk_not a = U.app_builtin `Not [a]
-  let mk_and a b = U.app_builtin `And [a;b]
-  let mk_or a b = U.app_builtin `Or [a;b]
-  let mk_ite a b c = U.app_builtin `Ite [a;b;c]
+  let mk_and a b = U.and_ [a;b]
+  let mk_or a b = U.or_ [a;b]
 
   (* first, negation normal form *)
   let rec nnf t = match T1.repr t with
     | TI.Const id -> U.const id
     | TI.Var v -> U.var (nnf_var_ v)
-    | TI.App (f,l) -> U.app (nnf f) (List.map nnf l)
-    | TI.AppBuiltin (b,l) ->
-        begin match b, l with
-        | `True, _ -> U.builtin `True
-        | `False, _ -> U.builtin `False
-        | `Or, _
-        | `And, _
-        | `Ite, _
-        | `Eq, _ -> U.app_builtin b (List.map nnf l)
-        | `Imply, [a;b] -> mk_or (nnf_neg a) (nnf b)
-        | `Equiv, [a;b] -> (* a => b & b => a *)
-            mk_and (mk_or (nnf_neg a) (nnf b)) (mk_or (nnf_neg b) (nnf a))
-        | `Not, [f] -> nnf_neg f
-        | _ -> assert false
+    | TI.App (f,l) ->
+        begin match T1.repr f, l with
+        | TI.Builtin (
+          (`True | `False | `Or | `And | `Ite _ | `Eq _ | `Equiv _) as b), _ ->
+            U.app_builtin (TI.Builtin.map ~f:nnf b) (List.map nnf l)
+        | TI.Builtin `Imply, [a;b] -> mk_or (nnf_neg a) (nnf b)
+        | TI.Builtin `Not, [f] -> nnf_neg f
+        | _ -> U.app (nnf f) (List.map nnf l)
         end
+    | TI.Builtin (`Equiv (a,b)) -> (* a => b & b => a *)
+        mk_and (mk_or (nnf_neg a) (nnf b)) (mk_or (nnf_neg b) (nnf a))
+    | TI.Builtin b -> U.builtin (TI.Builtin.map b ~f:nnf)
     | TI.Bind (k,v,t) -> U.mk_bind k (nnf_var_ v) (nnf t)
     | TI.Let (v,t,u) ->
         U.let_ (nnf_var_ v) (nnf t) (nnf u)
@@ -141,25 +136,24 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
 
   (* negation + negation normal form *)
   and nnf_neg t = match T1.repr t with
-    | TI.Const id -> mk_not (U.const id)
-    | TI.Var v -> mk_not (U.var (nnf_var_ v))
-    | TI.App (f,l) -> mk_not (U.app (nnf f) (List.map nnf l))
-    | TI.AppBuiltin (b,l) ->
-        begin match b, l with
-        | `True, _ -> U.builtin `False
-        | `False, _ -> U.builtin `True
-        | `Or, l -> U.app_builtin `And (List.map nnf_neg l)
-        | `And, l -> U.app_builtin `Or (List.map nnf_neg l)
-        | `Ite, [a;b;c] ->
-            mk_ite (nnf a) (nnf_neg b) (nnf_neg c)
-        | `Eq, _ -> mk_not (U.app_builtin b (List.map nnf l))
-        | `Imply, [a;b] ->
+    | TI.Const id -> U.not_ (U.const id)
+    | TI.Var v -> U.not_ (U.var (nnf_var_ v))
+    | TI.App (f,l) ->
+        begin match T1.repr f, l with
+        | TI.Builtin `Or, l -> U.app_builtin `And (List.map nnf_neg l)
+        | TI.Builtin `And, l -> U.app_builtin `Or (List.map nnf_neg l)
+        | TI.Builtin `Imply, [a;b] ->
             mk_and (nnf a) (nnf_neg b)  (* a & not b *)
-        | `Equiv, [a;b] -> (* not a & b | not b & a *)
-            mk_or (mk_and (nnf_neg a) (nnf b)) (mk_and (nnf_neg b) (nnf a))
-        | `Not, [f] -> nnf f (* not not f -> f *)
-        | _ -> assert false
+        | TI.Builtin `Not, [f] -> nnf f (* not not f -> f *)
+        | _ -> U.not_ (U.app (nnf f) (List.map nnf l))
         end
+    | TI.Builtin `True -> U.builtin `False
+    | TI.Builtin `False -> U.builtin `True
+    | TI.Builtin (`Ite (a,b,c)) ->
+        U.ite (nnf a) (nnf_neg b) (nnf_neg c)
+    | TI.Builtin (`Equiv (a,b)) -> (* not a & b | not b & a *)
+        mk_or (mk_and (nnf_neg a) (nnf b)) (mk_and (nnf_neg b) (nnf a))
+    | TI.Builtin b -> U.not_ (U.builtin (TI.Builtin.map ~f:nnf b))
     | TI.Bind (`Forall, v,t) -> U.exists (nnf_var_ v) (nnf_neg t)
     | TI.Bind (`Exists, v,t) -> U.forall (nnf_var_ v) (nnf_neg t)
     | TI.Bind (`Fun,_,_) -> failwith "cannot skolemize function"
@@ -167,7 +161,7 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
     | TI.Let (v,t,u) ->
         U.let_ (nnf_var_ v) (nnf t) (nnf u)
     | TI.Match _ ->
-        mk_not (nnf t)
+        U.not_ (nnf t)
     | TI.TyBuiltin b -> U.ty_builtin b
     | TI.TyArrow (a,b) -> U.ty_arrow (nnf a) (nnf b)
     | TI.TyMeta _ -> assert false
@@ -183,22 +177,19 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
             | None -> U.var (aux_var ~env v)
             | Some t -> t
           end
-      | TI.AppBuiltin (b,l) ->
-          begin match b, l with
-          | `True, _
-          | `False, _ -> t
-          | `Not, [f] -> mk_not (aux ~env f)
-          | `Or, _
-          | `And, _
-          | `Ite, _
-          | `Eq, _ ->
-              U.app_builtin b (List.map (aux ~env) l)
-          | `Imply, _
-          | `Equiv, _ -> assert false
-          | _ -> assert false
-          end
+      | TI.Builtin (`True | `False) -> t
+      | TI.Builtin (`Equiv _) -> assert false
+      | TI.Builtin
+        ((`Eq _ | `Ite _ | `Imply | `DataSelect _
+           | `DataTest _ | `Undefined _ | `And | `Or | `Not) as b) ->
+          U.builtin (TI.Builtin.map b ~f:(aux ~env))
       | TI.App (f,l) ->
-          U.app (aux ~env f) (List.map (aux ~env) l)
+          begin match T2.repr f, l with
+          | TI.Builtin `Not, [f] -> U.not_ (aux ~env f)
+          | TI.Builtin ((`Or | `And | `Imply) as b), _ ->
+              U.app_builtin b (List.map (aux ~env) l)
+          | _ -> U.app (aux ~env f) (List.map (aux ~env) l)
+          end
       | TI.Bind (`TyForall, v, t) ->
           (* FIXME: here we know U.invariant_poly = T1.invariant_poly = polymorph
              but the typechecker isn't aware. *)

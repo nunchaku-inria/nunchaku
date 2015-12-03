@@ -37,7 +37,7 @@ module Make(T : TI.REPR)
         | TI.Const id -> App (id, l)
         | _ -> assert false
         end
-    | TI.AppBuiltin _
+    | TI.Builtin _
     | TI.Bind _
     | TI.Let _
     | TI.Match _

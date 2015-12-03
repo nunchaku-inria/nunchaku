@@ -35,14 +35,6 @@ module Make(T : TI.S) = struct
   let error_ msg = raise (Error msg)
   let errorf_ msg = Utils.exn_ksprintf msg ~f:error_
 
-  (* new [`Undefined] instance of [t] *)
-  let mk_undefined t =
-    let id = ID.make ~name:"u" in
-    U.app_builtin (`Undefined id) [t]
-
-  let mk_ite a b c = U.app_builtin `Ite [a;b;c]
-  let mk_and l = U.app_builtin `And l
-
   type 'a local_state = {
     root: term; (* term being pattern matched on (for undefined) *)
     env: 'a env;
@@ -85,14 +77,14 @@ module Make(T : TI.S) = struct
       | [] -> noside_acc, side_acc
       | (rhs, [], subst) :: l' -> aux ((rhs,subst) :: noside_acc) side_acc l'
       | (rhs, ((_::_) as sides), subst) :: l' ->
-          aux noside_acc ((mk_and sides, rhs, subst) :: side_acc) l'
+          aux noside_acc ((U.and_ sides, rhs, subst) :: side_acc) l'
     in
     aux [] [] l
 
   (* transform flat equations into a match tree. *)
   let rec compile_equations ~local_state vars l : term =
     match vars, l with
-    | _, [] -> mk_undefined local_state.root (* undefined case *)
+    | _, [] -> U.undefined_ local_state.root (* undefined case *)
     | [], [([], rhs, [], subst)] ->
         (* simple case: no side conditions, one RHS *)
         U.eval ~subst rhs
@@ -111,11 +103,11 @@ module Make(T : TI.S) = struct
                 P.print t1 P.print t2
           | [], l ->
               (* try conditions one by one, fail otherwise *)
-              let default = mk_undefined local_state.root in
+              let default = U.undefined_ local_state.root in
               List.fold_left
                 (fun acc (cond,rhs,subst) ->
                   let rhs = U.eval ~subst rhs in
-                  mk_ite cond rhs acc)
+                  U.ite cond rhs acc)
                 default l
           | [rhs,subst], [] ->
               U.eval ~subst rhs

@@ -31,7 +31,7 @@ type 'a view =
   | Const of id (** top-level symbol *)
   | Var of 'a var (** bound variable *)
   | App of 'a * 'a list
-  | AppBuiltin of Builtin.t * 'a list (** built-in operation *)
+  | Builtin of 'a Builtin.t (** built-in operation *)
   | Bind of TI.Binder.t * 'a var * 'a
   | Let of 'a var * 'a * 'a
   | Match of 'a * 'a TI.cases (** shallow pattern-match *)
@@ -56,7 +56,7 @@ module Make(T : TI.REPR)
     | TI.Const id -> Const id
     | TI.Var v -> Var v
     | TI.App (f,l) -> App (f, l)
-    | TI.AppBuiltin (b,l) -> AppBuiltin(b,l)
+    | TI.Builtin b -> Builtin b
     | TI.Bind (b,v,t) -> Bind(b,v, t)
     | TI.Let (v,t,u) -> Let(v,t,u)
     | TI.Match (t,l) -> Match (t, l)
@@ -143,23 +143,23 @@ end = struct
 
   let erase ~ctx t =
     let rec aux t = match T.repr t with
-    | AppBuiltin (`Ite, [a;b;c]) ->
-        Untyped.ite (aux a)(aux b)(aux c)
-    | AppBuiltin (`Undefined id, [_]) -> Untyped.builtin (`Undefined (ID.name id))
-    | AppBuiltin (b,l) ->
-        let b = match b with
-          | `True  -> `True
-          | `False -> `False
-          | `Not -> `Not
-          | `Or -> `Or
-          | `And -> `And
-          | `Imply -> `Imply
-          | `Equiv -> `Equiv
-          | `Eq  -> `Eq
+    | Builtin (`Ite (a,b,c)) -> Untyped.ite (aux a)(aux b)(aux c)
+    | Builtin (`Undefined (id, _)) ->
+        Untyped.builtin (`Undefined (ID.name id))
+    | Builtin b ->
+        let b, l = match b with
+          | `True  -> `True, []
+          | `False -> `False, []
+          | `Not -> `Not, []
+          | `Or -> `Or, []
+          | `And -> `And, []
+          | `Imply -> `Imply, []
+          | `Equiv (a,b) -> `Equiv, [a;b]
+          | `Eq (a,b) -> `Eq, [a;b]
           | `Undefined _
           | `DataSelect _
           | `DataTest _
-          | `Ite -> assert false
+          | `Ite _ -> assert false
         in
         Untyped.app (Untyped.builtin b) (List.map aux l)
     | Const id -> Untyped.var (find_ ~ctx id)
@@ -259,7 +259,7 @@ end = struct
           | `True -> U.builtin `True
           | `False -> U.builtin `False
           | `Imply -> U.builtin `Imply
-          | `Undefined s -> U.builtin (`Undefined (ID.make ~name:s))
+          | `Undefined _ -> error_ t "cannot convert `undefined`"
           | `Eq | `Equiv ->
               error_ t "unapplied equality"
           end

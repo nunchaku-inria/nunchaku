@@ -46,7 +46,7 @@ module Make(T : TI.REPR)
     | TI.TyArrow (a,b) -> is_ty a && is_ty b
     | TI.TyMeta _
     | TI.Var _
-    | TI.AppBuiltin _
+    | TI.Builtin _
     | TI.Match _
     | TI.Let _
     | TI.Bind _ -> false
@@ -58,7 +58,7 @@ module Make(T : TI.REPR)
     | TI.TyArrow (a, b) -> Arrow (a, b)
     | TI.Var _
     | TI.TyMeta _
-    | TI.AppBuiltin _
+    | TI.Builtin _
     | TI.Match _
     | TI.Let _
     | TI.Bind _ -> assert false
@@ -74,7 +74,7 @@ module Make(T : TI.REPR)
         | Some t' -> repr_with ~subst t'
         end
     | TI.TyMeta _
-    | TI.AppBuiltin _
+    | TI.Builtin _
     | TI.Match _
     | TI.Let _
     | TI.Bind _ -> assert false

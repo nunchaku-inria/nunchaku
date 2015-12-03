@@ -306,8 +306,8 @@ module Make(T : TI.S) = struct
   (* monomorphize term *)
   let rec mono_term ~state ~local_state (t:term) : term =
     match T.repr t with
-    | TI.AppBuiltin (b,l) ->
-        U.app_builtin b (List.map (mono_term ~state ~local_state) l)
+    | TI.Builtin b ->
+        U.builtin (TI.Builtin.map b ~f:(mono_term ~state ~local_state))
     | TI.Const c ->
         (* no args, but we require [c, ()] in the output *)
         let depth = local_state.depth+1 in
@@ -325,7 +325,7 @@ module Make(T : TI.S) = struct
         let local_state = {local_state with subst; } in
         begin match T.repr f with
         | TI.Bind (`Fun, _, _) -> assert false (* beta-reduction failed? *)
-        | TI.AppBuiltin _ ->
+        | TI.Builtin _ ->
             (* builtins are defined, but examine their args *)
             let f = mono_term ~state ~local_state f in
             let l = List.map (mono_term ~state ~local_state) l in
@@ -753,7 +753,7 @@ module Make(T : TI.S) = struct
           with Not_found -> U.const id
           end
       | TI.App (f,l) -> U.app (aux f) (List.map aux l)
-      | TI.AppBuiltin (b,l) -> U.app_builtin b (List.map aux l)
+      | TI.Builtin b -> U.builtin (TI.Builtin.map b ~f:aux)
       | TI.Bind ((`Forall | `Exists | `Fun) as b,v,t) ->
           U.mk_bind b (aux_var v) (aux t)
       | TI.Let (v,t,u) -> U.let_ (aux_var v) (aux t) (aux u)
