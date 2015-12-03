@@ -12,6 +12,8 @@ type 'a var = 'a Var.t
 type 'a or_error = [`Ok of 'a | `Error of string]
 type 'a printer = Format.formatter -> 'a -> unit
 
+let fpf = Format.fprintf
+
 module Binder = struct
   type t =
     [ `Forall
@@ -40,77 +42,136 @@ module TyBuiltin = struct
     | `Type -> "type"
 end
 
-(* TODO: parametrize, make 'a Builtin.t, so arity is enforced *)
-
 module Builtin = struct
-  type t =
+  type 'a t =
     [ `True
     | `False
     | `Not
     | `Or
     | `And
     | `Imply
-    | `Equiv
-    | `Ite
-    | `Eq
+    | `Equiv of 'a * 'a
+    | `Ite of 'a * 'a * 'a
+    | `Eq of 'a * 'a
     | `DataTest of id (** Test whether [t : tau] starts with given constructor *)
     | `DataSelect of id * int (** Select n-th argument of given constructor *)
-    | `Undefined of id (** Undefined case. 1 argument (the undefined term) *)
+    | `Undefined of id * 'a (** Undefined case. argument=the undefined term *)
     ]
 
-  let fixity = function
-    | `True
-    | `False
-    | `Ite
-    | `Not
-    | `DataSelect _
-    | `DataTest _
-    | `Undefined _ -> `Prefix
-    | `Eq
-    | `Or
-    | `And
-    | `Equiv
-    | `Imply -> `Infix
+  let is_infix = function
+    | `Eq _ | `Or | `And | `Equiv _ | `Imply -> true
+    | _ -> false
 
-  let to_string = function
-    | `True -> "true"
-    | `False -> "false"
-    | `Not -> "~"
-    | `Or -> "||"
-    | `And -> "&&"
-    | `Imply -> "=>"
-    | `Equiv
-    | `Eq -> "="
-    | `DataTest id -> "is-" ^ ID.name id
-    | `DataSelect (id, n) -> CCFormat.sprintf "select-%s-%d" (ID.name id) n
-    | `Undefined id -> CCFormat.sprintf "undefined_%d" (ID.id id)
-    | `Ite -> assert false
+  let pp pterm out = function
+    | `True -> CCFormat.string out "true"
+    | `False -> CCFormat.string out "false"
+    | `Not -> CCFormat.string out "~"
+    | `Or -> CCFormat.string out "||"
+    | `And -> CCFormat.string out "&&"
+    | `Imply -> CCFormat.string out "=>"
+    | `Equiv (a,b) | `Eq (a,b) ->
+        fpf out "@[<hv>%a@ @[<hv>=@ %a@]@]" pterm a pterm b
+    | `Ite (a,b,c) ->
+        fpf out "@[<hv>@[<2>if@ %a@]@ @[<2>then@ %a@]@ @[<2>else@ %a@]@]"
+          pterm a pterm b pterm c
+    | `DataTest id -> fpf out "is-%s" (ID.name id)
+    | `DataSelect (id, n) ->
+        fpf out "select-%s-%d" (ID.name id) n
+    | `Undefined (id,_) -> fpf out "undefined_%d" (ID.id id)
 
-  let equal a b = match a, b with
+  let equal
+  : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+  = fun eqterm a b -> match a, b with
     | `True, `True
     | `False, `False
     | `Not, `Not
     | `Or, `Or
     | `And, `And
-    | `Imply, `Imply
-    | `Equiv, `Equiv
-    | `Ite, `Ite
-    | `Eq, `Eq -> true
+    | `Imply, `Imply -> true
+    | `Ite(a1,b1,c1), `Ite(a2,b2,c2) ->
+        eqterm a1 a2 && eqterm b1 b2 && eqterm c1 c2
+    | `Equiv (a1,b1), `Equiv(a2,b2)
+    | `Eq(a1,b1), `Eq (a2,b2) -> eqterm a1 a2 && eqterm b1 b2
     | `DataTest id, `DataTest id' -> ID.equal id id'
     | `DataSelect (id, n), `DataSelect (id', n') -> n=n' && ID.equal id id'
-    | `Undefined a, `Undefined b -> ID.equal a b
-    | `True, _
-    | `False, _
-    | `Ite, _
-    | `Not, _
-    | `Eq, _
-    | `Or, _
-    | `And, _
-    | `Equiv, _
-    | `Imply, _
-    | `DataSelect _, _
-    | `DataTest _, _
-    | `Undefined _, _ -> false
+    | `Undefined (a,t1), `Undefined (b,t2) -> ID.equal a b && eqterm t1 t2
+    | `True, _ | `False, _ | `Ite _, _ | `Not, _
+    | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
+    | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> false
+
+  let map : f:('a -> 'b) -> 'a t -> 'b t
+  = fun ~f b -> match b with
+    | `True -> `True
+    | `False -> `False
+    | `And -> `And
+    | `Imply -> `Imply
+    | `Ite (a,b,c) -> `Ite (f a, f b, f c)
+    | `Eq (a,b) -> `Eq (f a, f b)
+    | `Equiv (a,b) -> `Equiv (f a, f b)
+    | `DataTest id -> `DataTest id
+    | `Or -> `Or
+    | `Not -> `Not
+    | `DataSelect (c,n) -> `DataSelect (c,n)
+    | `Undefined (id, t) -> `Undefined (id, f t)
+
+  let fold : f:('acc -> 'a -> 'acc) -> x:'acc -> 'a t -> 'acc
+  = fun ~f ~x:acc b -> match b with
+    | `True
+    | `And
+    | `Imply
+    | `False
+    | `Or
+    | `DataTest _
+    | `DataSelect _
+    | `Not -> acc
+    | `Ite (a,b,c) -> f (f (f acc a) b) c
+    | `Eq (a,b)
+    | `Equiv (a,b) -> f (f acc a) b
+    | `Undefined (_,t) -> f acc t
+
+  let fold2 :
+      f:('acc -> 'a -> 'b -> 'acc) -> fail:(unit -> 'acc) ->
+        x:'acc -> 'a t -> 'b t -> 'acc
+  = fun ~f ~fail ~x:acc b1 b2 -> match b1, b2 with
+    | `True, `True
+    | `And, `And
+    | `Imply, `Imply
+    | `False, `False
+    | `Not, `Not
+    | `Or, `Or -> acc
+    | `DataTest i1, `DataTest i2 -> if ID.equal i1 i2 then acc else fail()
+    | `DataSelect (i1,n1), `DataSelect (i2,n2) ->
+        if n1=n2 && ID.equal i1 i2 then acc else fail()
+    | `Ite (a1,b1,c1), `Ite(a2,b2,c2) ->
+        let acc = f acc a1 a2 in
+        let acc = f acc b1 b2 in
+        f acc c1 c2
+    | `Eq (a1,b1), `Eq (a2,b2)
+    | `Equiv (a1,b1), `Equiv (a2,b2) -> let acc = f acc a1 a2 in f acc b1 b2
+    | `Undefined (i1,t1), `Undefined (i2,t2) ->
+        if ID.equal i1 i2 then f acc t1 t2 else fail()
+    | `True, _ | `False, _ | `Ite _, _ | `Not, _
+    | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
+    | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> fail()
+
+
+
+  let iter : ('a -> unit) -> 'a t -> unit
+  = fun f b -> match b with
+    | `True
+    | `And
+    | `Imply
+    | `False
+    | `Or
+    | `DataTest _
+    | `DataSelect _
+    | `Not -> ()
+    | `Ite (a,b,c) -> f a; f b; f c
+    | `Eq (a,b)
+    | `Equiv (a,b) -> f a; f b
+    | `Undefined (_,t) -> f t
+
+  let to_seq b f = iter f b
 end
 
 type 'a case = 'a var list * 'a
@@ -137,7 +198,7 @@ type 'a view =
   | Const of id (** top-level symbol *)
   | Var of 'a var (** bound variable *)
   | App of 'a * 'a list
-  | AppBuiltin of Builtin.t * 'a list (** built-in operation *)
+  | Builtin of 'a Builtin.t (** built-in operation *)
   | Bind of Binder.t * 'a var * 'a
   | Let of 'a var * 'a * 'a
   | Match of 'a * 'a cases (** shallow pattern-match *)
@@ -190,7 +251,6 @@ module Print(T : REPR)
 = struct
   type t = T.t
 
-  let fpf = Format.fprintf
   let pp_list_ ?(start="") ?(stop="") ~sep pp =
     CCFormat.list ~start ~stop ~sep pp
 
@@ -199,19 +259,7 @@ module Print(T : REPR)
     | Const id -> ID.print_name out id
     | TyMeta v -> MetaVar.print out v
     | Var v -> Var.print out v
-    | AppBuiltin (`Ite, [a;b;c]) ->
-        fpf out "@[<hv>@[<2>if@ %a@]@ @[<hv2>then@ %a@]@ @[<hv2>else@ %a@]@]"
-          print a print b print c
-    | AppBuiltin (`DataTest c, [t]) ->
-        fpf out "@[<2>is-%a@ %a@]" ID.print_name c print_in_app t
-    | AppBuiltin (`DataSelect (c,n), [t]) ->
-        fpf out "@[<2>select-%a-%d@ %a@]" ID.print_name c n print_in_app t
-    | AppBuiltin (b, []) -> CCFormat.string out (Builtin.to_string b)
-    | AppBuiltin (f, l) when Builtin.fixity f = `Infix ->
-        fpf out "@[<hv>%a@]" print_infix (f, l)
-    | AppBuiltin (b,l) ->
-        fpf out "@[<2>%s@ %a@]" (Builtin.to_string b)
-          (pp_list_ ~sep:" " print_in_app) l
+    | Builtin b -> Builtin.pp print_in_app out b
     | App (f,l) ->
         fpf out "@[<2>%a@ %a@]" print_in_app f
           (pp_list_ ~sep:" " print_in_app) l
@@ -229,22 +277,17 @@ module Print(T : REPR)
         fpf out "@[<2>%s %a:%a.@ %a@]" s Var.print v print_in_app (Var.ty v) print t
     | TyArrow (a,b) ->
         fpf out "@[<2>%a ->@ %a@]" print_in_binder a print b
-  and print_infix out (f, l) = match l with
-    | [] -> assert false
-    | [t] -> print out t
-    | a :: l' ->
-        fpf out "@[<hv>%a@ @[<hv>%s@ %a@]@]"
-          print_in_app a (Builtin.to_string f) print_infix (f, l')
   and print_in_app out t = match T.repr t with
-    | AppBuiltin (_,[]) | TyBuiltin _ | Const _ -> print out t
+    | Builtin b when not (Builtin.is_infix b) -> print out t
+    | TyBuiltin _ | Const _ -> print out t
     | TyMeta _ -> print out t
     | Var _ -> print out t
-    | App (_,_) | AppBuiltin (_,_::_)
+    | App (_,_) | Builtin _
     | Let _ | Match _ -> fpf out "(@[%a@])" print t
     | Bind _ -> fpf out "(@[%a@])" print t
     | TyArrow (_,_) -> fpf out "(@[%a@])" print t
   and print_in_binder out t = match T.repr t with
-    | TyBuiltin _ | Const _ | App (_,_) | AppBuiltin _ ->
+    | TyBuiltin _ | Const _ | App (_,_) | Builtin _ ->
         print out t
     | Var _ -> print out t
     | TyMeta _ -> print out t
@@ -317,7 +360,7 @@ module UtilRepr(T : REPR)
       | Match (t,l) ->
           aux t;
           ID.Map.iter (fun _ (vars,rhs) -> List.iter aux_var vars; aux rhs) l
-      | AppBuiltin (_, l) -> List.iter aux l
+      | Builtin b -> Builtin.iter aux b
       | App (f,l) -> aux f; List.iter aux l
       | Bind (_,v,t) -> aux_var v; aux t
       | Let (v,t,u) -> aux_var v; aux t; aux u
@@ -343,7 +386,7 @@ module UtilRepr(T : REPR)
               let bound = List.fold_right VarSet.add vars bound in
               aux ~bound rhs
             ) l
-      | AppBuiltin (_,l) -> List.iter (aux ~bound) l
+      | Builtin b -> Builtin.iter (aux ~bound) b
       | Bind (_,v,t) ->
           aux ~bound (Var.ty v); aux ~bound:(VarSet.add v bound) t
       | Let (v,t,u) ->
@@ -364,7 +407,7 @@ module UtilRepr(T : REPR)
           | Match (_,l) ->
               let open Sequence.Infix in
               ID.Map.to_seq l >>= fun (_,(vars,_)) -> Sequence.of_list vars
-          | AppBuiltin _
+          | Builtin _
           | Const _
           | App _
           | TyBuiltin _
@@ -379,7 +422,7 @@ module UtilRepr(T : REPR)
           | TyMeta v -> Some v
           | Var _
           | Bind _
-          | AppBuiltin _
+          | Builtin _
           | Const _
           | Let _
           | Match _
@@ -447,8 +490,8 @@ module type UTIL = sig
   include UTIL_REPR
 
   val const : id -> t_
-  val builtin : Builtin.t -> t_
-  val app_builtin : Builtin.t -> t_ list -> t_
+  val builtin : t_ Builtin.t -> t_
+  val app_builtin : t_ Builtin.t -> t_ list -> t_
   val var : t_ var -> t_
   val app : t_ -> t_ list -> t_
   val fun_ : t_ var -> t_ -> t_
@@ -554,37 +597,37 @@ module Util(T : S)
   let ty_kind = T.build (TyBuiltin `Kind)
   let ty_prop = T.build (TyBuiltin `Prop)
 
-  let app_builtin s l = T.build (AppBuiltin (s,l))
-  let builtin s = app_builtin s []
+  let builtin s = T.build (Builtin s)
   let const id = T.build (Const id)
   let var v = T.build (Var v)
   let app t l = T.build (App(t,l))
+  let app_builtin b l = T.build (App (builtin b, l))
   let mk_bind b v t = T.build (Bind (b,v,t))
   let fun_ v t = T.build (Bind (`Fun,v, t))
   let let_ v t u = T.build (Let (v, t, u))
   let match_with t l =
     if ID.Map.is_empty l then invalid_arg "Term.case: empty list of cases";
     T.build (Match (t,l))
-  let ite a b c =
-    app (builtin `Ite) [a;b;c]
+  let ite a b c = builtin (`Ite (a,b,c))
   let forall v t = T.build (Bind(`Forall,v, t))
   let exists v t = T.build (Bind(`Exists,v, t))
 
-  let eq a b = app_builtin `Eq [a;b]
-  let equiv a b = app_builtin `Equiv [a;b]
+  let eq a b = builtin (`Eq (a,b))
+  let equiv a b = builtin (`Equiv (a,b))
   let true_ = builtin `True
   let false_ = builtin `False
 
   let rec not_ t = match T.repr t with
-    | AppBuiltin (`And, l) ->
-        or_ (List.map not_ l)
-    | AppBuiltin (`Or, l) ->
-        and_ (List.map not_ l)
-    | AppBuiltin (`True, []) -> false_
-    | AppBuiltin (`False, []) -> true_
-    | AppBuiltin (`Not, [t]) -> t
-    | _ ->
-        app_builtin `Not [t]
+    | Builtin `True -> false_
+    | Builtin `False -> true_
+    | App (f, l) ->
+        begin match T.repr f, l with
+        | Builtin `And, _ -> or_ (List.map not_ l)
+        | Builtin `Or, _ -> and_ (List.map not_ l)
+        | Builtin `Not, [t] -> t
+        | _ -> app_builtin `Not [t]
+        end
+    | _ -> app_builtin `Not [t]
 
   and and_ = function
     | [] -> app_builtin `True []
@@ -599,7 +642,7 @@ module Util(T : S)
   let imply a b = app_builtin `Imply [a; b]
   let undefined_ t =
     let id = ID.make ~name:"_" in
-    app_builtin (`Undefined id) [t]
+    builtin (`Undefined (id,t))
 
   let ty_builtin b = T.build (TyBuiltin b)
   let ty_const id = const id
@@ -618,7 +661,7 @@ module Util(T : S)
         | Const id -> decr d; ID.hash_fun id h
         | Var v -> decr d; hash_var_ v h
         | App (f,l) -> hash_ f h |> CCHash.list hash_ l
-        | AppBuiltin (_,l) -> CCHash.list hash_ l h
+        | Builtin b -> CCHash.seq hash_ (Builtin.to_seq b) h
         | Let (v,t,u) -> decr d; hash_var_ v h |> hash_ t |> hash_ u
         | Bind (_,v,t) -> decr d; hash_var_ v h |> hash_ t
         | Match (t,l) ->
@@ -646,10 +689,7 @@ module Util(T : S)
     | _, Var v2 when Subst.mem ~subst v2 ->
         equal_with ~subst ty1 (Subst.find_exn ~subst v2)
     | Var v1, Var v2 -> Var.equal v1 v2
-    | AppBuiltin (b1,l1), AppBuiltin (b2,l2) ->
-        Builtin.equal b1 b2 &&
-        List.length l1 = List.length l2 &&
-        List.for_all2 (equal_with ~subst) l1 l2
+    | Builtin b1, Builtin b2 -> Builtin.equal (equal_with ~subst) b1 b2
     | TyBuiltin b1, TyBuiltin b2 -> TyBuiltin.equal b1 b2
     | TyMeta v1, TyMeta v2 -> MetaVar.equal v1 v2
     | App (f1,l1), App (f2, l2) ->
@@ -691,7 +731,7 @@ module Util(T : S)
     | Var _, _
     | Match _, _
     | TyBuiltin _,_
-    | AppBuiltin _,_
+    | Builtin _,_
     | Const _,_
     | App (_,_),_
     | Let (_,_,_),_
@@ -715,9 +755,8 @@ module Util(T : S)
     | TyMeta _ -> t
     | Const _
     | TyBuiltin _ -> t
-    | AppBuiltin (_,[]) -> t
-    | AppBuiltin (b,l) ->
-        app_builtin b (List.map (eval ~subst) l)
+    | Builtin b ->
+        builtin (Builtin.map b ~f:(eval ~subst))
     | Bind (b, v, t) ->
         let v' = Var.fresh_copy v in
         let subst = Subst.add ~subst v (var v') in
@@ -820,40 +859,34 @@ module Util(T : S)
 
   let rec ty_exn ~sigma t = match T.repr t with
     | Const id -> find_ty_ ~sigma id
-    | AppBuiltin (b,l) ->
+    | Builtin b->
         let prop = ty_prop in
-        begin match b, l with
-          | `Equiv, [_;_]
-          | `Imply, [_;_]
-          | `Or, _
-          | `And, _
-          | `Not, [_]
-          | `True,[]
-          | `False,[] -> prop
-          | `Ite, [_;b;_] -> ty_exn ~sigma b
-          | `Eq, [_;_] -> prop
-          | `DataTest _, [_] -> prop
-          | `DataTest id, [] ->
+        let prop1 = ty_arrow prop prop in
+        let prop2 = ty_arrow prop (ty_arrow prop prop) in
+        begin match b with
+          | `Imply
+          | `Or
+          | `And -> prop2
+          | `Not -> prop1
+          | `True
+          | `False -> prop
+          | `Ite (_,b,_) -> ty_exn ~sigma b
+          | `Equiv (_,_)
+          | `Eq (_,_) -> prop
+          | `DataTest id ->
               (* id: a->b->tau, where tau inductive; is-id: tau->prop *)
               let ty = find_ty_ ~sigma id in
               ty_arrow (ty_returns ty) prop
-          | `DataSelect (id,n), _ ->
+          | `DataSelect (id,n) ->
               (* id: a_1->a_2->tau, where tau inductive; select-id-i: tau->a_i*)
               let ty = find_ty_ ~sigma id in
-              begin match get_ty_arg_ ty n, l with
-              | Some ty_arg, [_] -> ty_arg
-              | Some ty_arg, [] ->
+              begin match get_ty_arg_ ty n with
+              | Some ty_arg ->
                   ty_arrow (ty_returns ty) ty_arg
               | _ ->
                   failwith "cannot infer type, wrong argument to DataSelect"
               end
-          | `Undefined _, _ ->
-              begin match l with
-                | [a] -> ty_exn ~sigma a
-                | _ -> assert false
-              end
-          | (`Equiv | `Imply | `Not | `True | `False
-            | `Ite | `Eq | `DataTest _), _ -> assert false
+          | `Undefined (_,t) -> ty_exn ~sigma t
         end
     | Var v -> Var.ty v
     | App (f,l) ->
@@ -903,9 +936,10 @@ module Util(T : S)
     let rec match_ subst t1 t2 =
       let t2 = deref ~subst:subst2 t2 in
       match T.repr t1, T.repr t2 with
-      | AppBuiltin (b1,l1), AppBuiltin (b2,l2)
-          when Builtin.equal b1 b2 && List.length l1 = List.length l2 ->
-            List.fold_left2 match_ subst l1 l2
+      | Builtin b1, Builtin b2 ->
+          Builtin.fold2 b1 b2 ~x:subst
+            ~fail:(fun () -> error_unif_ "do not match" t1 t2)
+            ~f:match_
       | Const id1, Const id2 when ID.equal id1 id2 -> subst
       | Var v1, _ -> match_var subst v1 t1 t2
       | App (f1, l1), App (f2, l2) ->
@@ -920,7 +954,7 @@ module Util(T : S)
       | Match _, _ -> invalid_arg "pattern is not first-order"
       | TyBuiltin b1, TyBuiltin b2 when TyBuiltin.equal b1 b2 -> subst
       | TyMeta _, _ -> assert false
-      | AppBuiltin _, _
+      | Builtin _, _
       | Const _, _
       | App (_, _), _
       | TyArrow _, _
@@ -960,8 +994,6 @@ module Default : S
     | App (t, []) -> t
     | App ({view=App (f, l1); _}, l2) ->
         make_raw_ (App (f, l1 @ l2))
-    | App ({view=AppBuiltin (b, l1); _}, l2) ->
-        make_raw_ (AppBuiltin (b, l1 @ l2))
     | _ -> make_raw_ view
 end
 
@@ -977,7 +1009,7 @@ end = struct
     ( match T1.repr t with
       | TyBuiltin b -> TyBuiltin b
       | Const id -> Const id
-      | AppBuiltin (b,l) -> AppBuiltin (b, List.map convert l)
+      | Builtin b -> Builtin (Builtin.map ~f:convert b)
       | Var v -> Var (aux_var v)
       | App (f,l) -> App (convert f, List.map convert l)
       | Bind (b,v,t) -> Bind (b, aux_var v, convert t)
