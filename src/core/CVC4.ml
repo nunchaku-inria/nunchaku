@@ -116,23 +116,24 @@ end = struct
   let pp_list ?(start="") ?(stop="") pp =
     CCFormat.list ~sep:" " ~start ~stop pp
 
+  (* add numeric suffix to [name] until it is an unused name *)
+  let find_unique_name_ ~state name0 =
+    if not (Hashtbl.mem state.decode_tbl name0) then name0
+    else (
+      let n = ref 0 in
+      while Hashtbl.mem state.decode_tbl (spf "%s_%d" name0 !n) do incr n done;
+      spf "%s_%d" name0 !n
+    )
+
   (* injection from ID to string *)
-  let id_to_name_ ~state id =
+  let id_to_name ~state id =
     try ID.Tbl.find state.id_to_name id
     with Not_found ->
       let name0 = match ID.name id with
         | "distinct" -> "distinct_"
         | s -> s
       in
-      (* add numeric suffix until it sticks *)
-      let name =
-        if not (Hashtbl.mem state.decode_tbl name0) then name0
-        else (
-          let n = ref 0 in
-          while Hashtbl.mem state.decode_tbl (spf "%s_%d" name0 !n) do incr n done;
-          spf "%s_%d" name0 !n
-        )
-      in
+      let name = find_unique_name_ ~state name0 in
       Hashtbl.add state.decode_tbl name (ID id);
       ID.Tbl.add state.id_to_name id name;
       name
@@ -144,18 +145,18 @@ end = struct
     (* print ID and remember its name for parsing model afterward *)
     let rec print_id out id =
       (* find a unique name for this ID *)
-      let name = id_to_name_ ~state id in
+      let name = id_to_name ~state id in
       CCFormat.string out name
 
     (* print [is-c] for a constructor [c] *)
     and print_tester out c =
-      let name = Printf.sprintf "is-%s" (ID.name c) in
+      let name = Printf.sprintf "is-%s" (id_to_name ~state c) in
       Hashtbl.replace state.decode_tbl name (DataTest c);
       CCFormat.string out name
 
     (* print [select-c-n] to select the n-th argument of [c] *)
     and print_select out (c,n) =
-      let name = Printf.sprintf "_select_%s_%d" (ID.name c) n in
+      let name = Printf.sprintf "_select_%s_%d" (id_to_name ~state c) n in
       Hashtbl.replace state.decode_tbl name (DataSelect (c,n));
       CCFormat.string out name
 
