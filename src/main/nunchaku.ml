@@ -114,20 +114,19 @@ let parse_file ~input () =
     if !file="" then f stdin
     else CCIO.with_in !file f
   in
-  let res = with_in
-    (fun ic ->
-      let lexbuf = Lexing.from_channel ic in
-      Location.set_file lexbuf (if !file="" then "<stdin>" else !file);
-      try
-        let res = match input with
-          | I_nunchaku -> NunParser.parse_statement_list NunLexer.token lexbuf
-          | I_tptp ->
-              NunTPTPRecursiveParser.parse_statement_list NunTPTPLexer.token lexbuf
-        in
-        E.return res
-      with e ->
-        E.fail (Printexc.to_string e)
-    )
+  let res =
+    try with_in
+      (fun ic ->
+        let lexbuf = Lexing.from_channel ic in
+        Location.set_file lexbuf (if !file="" then "<stdin>" else !file);
+          let res = match input with
+            | I_nunchaku -> NunParser.parse_statement_list NunLexer.token lexbuf
+            | I_tptp ->
+                NunTPTPRecursiveParser.parse_statement_list NunTPTPLexer.token lexbuf
+          in
+          E.return res
+      )
+    with e -> Utils.err_of_exn e
   in
   E.map_err
     (fun msg -> CCFormat.sprintf "@[<2>could not parse `%s`:@ %s@]" !file msg) res
