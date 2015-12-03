@@ -128,19 +128,24 @@ module Make(T : TI.S) = struct
         (* obtain the relevant type definition *)
         (* build one node of the decision tree *)
         let dnode =
-          let ty_id = U.head_sym (Var.ty v) in
-          match Env.def (Env.find_exn ~env:local_state.env ty_id) with
-          | Env.Data (_, _, tydef) ->
-              DN_match {
-                dn_tydef=tydef;
-                dn_by_cstor=ID.Map.empty;
-                dn_wildcard=[];
-              }
-          | Env.Fun_def (_,_,_)
-          | Env.Fun_spec _
-          | Env.Cstor (_,_,_,_) ->
-              errorf_ "@[%a is not a type.@]" ID.print_name ty_id
-          | Env.NoDef -> DN_bind []
+          Utils.debugf ~section 5 "build decision node for %a:%a"
+            (fun k->k Var.print v P.print (Var.ty v));
+          try
+            let ty_id = U.head_sym (Var.ty v) in
+            match Env.def (Env.find_exn ~env:local_state.env ty_id) with
+            | Env.Data (_, _, tydef) ->
+                DN_match {
+                  dn_tydef=tydef;
+                  dn_by_cstor=ID.Map.empty;
+                  dn_wildcard=[];
+                }
+            | Env.Fun_def (_,_,_)
+            | Env.Fun_spec _
+            | Env.Cstor (_,_,_,_) ->
+                errorf_ "@[%a is not a type.@]" ID.print_name ty_id
+            | Env.NoDef -> DN_bind []
+          with Not_found ->
+            DN_bind [] (* not an atomic type *)
         in
         let dnode = List.fold_left
           (fun dnode (pats, rhs, side, subst) ->
