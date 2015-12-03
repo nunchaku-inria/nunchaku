@@ -558,7 +558,8 @@ end = struct
         (function
           | FO.Term t, FO.Term u ->
               begin match FOBack.T.view u with
-              | FO.App (id, []) -> Some (id, t) (* id --> t *)
+              | FO.App (id, []) when CCString.prefix ~pre:"@uc_" (ID.name id) ->
+                  Some (id, t) (* id --> t *)
               | _ -> None
               end
           | _ -> None
