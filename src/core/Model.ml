@@ -36,17 +36,17 @@ let iter ~terms ~finite_types m =
 
 let print pt out m =
   let fpf = Format.fprintf in
-  let pp_pair out (t,u) = fpf out "@[<hv2>@[%a@]@ ->@ @[%a@]@]" pt t pt u in
+  let pp_pair out (t,u) = fpf out "(@[<hv2>@[%a@]@ @[%a@]@])" pt t pt u in
   let pp_dom out (ty, dom) =
-    fpf out "@[<h>@[%a@] -> {@[<hv>%a@]}@]"
+    fpf out "(@[<h>@[%a@] {@[<hv>%a@]}@])"
       pt ty (CCFormat.list ~start:"" ~stop:"" ~sep:", " pt) dom
   in
   let pp_types out m = match m with
     | [] -> ()
     | _::_ ->
-      Format.fprintf out "@[<hv2>types {@,%a@,}@]"
-        (CCFormat.list ~start:"" ~stop:"" ~sep:"" pp_dom) m
+      Format.fprintf out "(@[<hv2>types (@,%a@,)@])"
+        (CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_dom) m
   in
-  Format.fprintf out "@[<hv2>model {@,@[<hv2>terms {@,%a@]@,}@,%a@]@,}@]"
-    (CCFormat.list ~start:"" ~stop:"" ~sep:"" pp_pair) m.terms
+  Format.fprintf out "(@[<hv2>model@ (@[<hv2>terms@ (@[<hv>%a@])@]@,%a@]@,)@])"
+    (CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_pair) m.terms
     pp_types m.finite_types
