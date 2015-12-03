@@ -196,7 +196,7 @@ or_term:
       let loc = L.mk_pos $startpos $endpos in
       A.app ~loc (A.builtin ~loc `Or) [t; u]
     }
-  | t=and_term LOGIC_IMPLY u=and_term
+  | t=and_term LOGIC_IMPLY u=or_term
     {
       let loc = L.mk_pos $startpos $endpos in
       A.app ~loc (A.builtin ~loc `Imply) [t; u]
@@ -273,7 +273,7 @@ def_equation:
 rec_def:
   | t=raw_var
     COLON ty=term
-    EQDEF l=separated_nonempty_list(SEMI_COLON,def_equation) SEMI_COLON?
+    EQDEF l=separated_nonempty_list(SEMI_COLON,def_equation)
     { t, ty, l }
 
 rec_defs:
