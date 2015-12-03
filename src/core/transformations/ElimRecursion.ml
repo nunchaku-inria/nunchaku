@@ -201,9 +201,12 @@ module Make(T : TI.S) = struct
               in
               U.app f l', conds
         end
-    | TI.Builtin (`True | `False | `Undefined _
-      | `And | `Or | `Not | `Imply | `DataSelect _ | `DataTest _) ->
+    | TI.Builtin (`True | `False
+        | `And | `Or | `Not | `Imply | `DataSelect _ | `DataTest _) ->
           t, [] (* partially applied, or constant *)
+    | TI.Builtin (`Undefined _ as b) ->
+        U.builtin (TI.Builtin.map b
+          ~f:(fun t-> fst(tr_term_rec_ ~state ~local_state t))), []
     | TI.Builtin (`Equiv _) -> fail_tr_ t "cannot translate equivalence (polarity)"
     | TI.Builtin (`Eq (a,b)) ->
         let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
