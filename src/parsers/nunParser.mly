@@ -249,14 +249,6 @@ defined_constant:
   | v=var { v }
   | v=at_var { v}
 
-eqn_lhs:
-  | LEFT_PAREN t=eqn_lhs RIGHT_PAREN { t }
-  | v=defined_constant args=atomic_term*
-    {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc v args
-    }
-
 def_equation:
   | LOGIC_FORALL vars=typed_var+ DOT e=def_equation
     {
@@ -264,7 +256,7 @@ def_equation:
       A.forall_list ~loc vars e
     }
   | LEFT_PAREN e=def_equation RIGHT_PAREN { e }
-  | lhs=eqn_lhs LOGIC_EQ rhs=term
+  | lhs=apply_term LOGIC_EQ rhs=term
     {
       let loc = L.mk_pos $startpos $endpos in
       A.eq ~loc lhs rhs
