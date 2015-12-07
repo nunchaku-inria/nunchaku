@@ -92,10 +92,12 @@ end = struct
       s.sexp <- DSexp.make ~bufsize:5 (fun _ _ _ -> assert false);
     )
 
-  let create_ ~timeout ~symbols () =
+  let create_ ~options ~timeout ~symbols () =
     if timeout < 0. then invalid_arg "CVC4.create: wrong timeout";
-    let cmd = Printf.sprintf "cvc4 --tlimit-per=%d --lang smt --finite-model-find"
-      (int_of_float (timeout *. 1000.)) in
+    let cmd = Printf.sprintf
+      "cvc4 --tlimit-per=%d --lang smt --finite-model-find %s"
+      (int_of_float (timeout *. 1000.)) options in
+    Utils.debugf ~section 2 "@[<2>run command@ `%s`@]" (fun k->k cmd);
     let ic, oc = Unix.open_process cmd in
     (* the [t] instance *)
     let s = {
@@ -633,46 +635,68 @@ end = struct
       ID.Map.empty
       pb
 
-  let solve ?(timeout=30.) ?(print=false) problem =
+  let solve ?(options="") ?(timeout=30.) ?(print=false) problem =
     let symbols, problem' = preprocess_pb_ problem in
     if print
       then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem problem';
-    let s = create_ ~timeout ~symbols () in
+    let s = create_ ~options ~timeout ~symbols () in
     send_ s problem';
     s
 end
 
+let options_l =
+  [ ""
+  ; "--fmf-inst-engine"
+  ; "--uf-ss=no-minimal"
+  ; "--uf-ss=none"
+  ; "--mbqi=none"
+  ; "--mbqi=gen-ev"
+  ; "--uf-ss-totality"
+  ]
+
 (* solve problem using CVC4 before [deadline] *)
 let call (type f)(type t)(type ty)
 (module F : FO.S with type T.t=t and type formula=f and type Ty.t=ty)
-~print ~print_smt ~deadline problem =
+?(options=[""]) ~print ~print_smt ~deadline problem =
+  if options=[] then invalid_arg "CVC4.call: empty list of options";
   let module FOBack = FO.Default in
   let module P = FO.Print(F) in
   let module Sol = Solver_intf in
   let module Res = Problem.Res in
   let module CVC4 = Make(F) in
-  (* how much time remains *)
-  let timeout = deadline -. Unix.gettimeofday() in
-  if timeout < 0.1 then Problem.Res.Timeout
-  else (
-    if print
-      then Format.printf "@[<v2>FO problem:@ %a@]@." P.print_problem problem;
-    let solver = CVC4.solve ~timeout ~print:print_smt problem in
-    match CVC4.res solver with
-    | Sol.Res.Sat m -> Res.Sat m
-    | Sol.Res.Unsat -> Res.Unsat
-    | Sol.Res.Timeout -> Res.Timeout
-    | Sol.Res.Error e ->
-        failwith e
-  )
+  if print
+    then Format.printf "@[<v2>FO problem:@ %a@]@." P.print_problem problem;
+  (* try each set of options successively *)
+  let rec solve_rec_ options =
+    match options with
+    | [] -> assert false
+    | o :: tail ->
+        let timeout = deadline -. Unix.gettimeofday() in
+        if timeout < 0.1 then Problem.Res.Timeout
+        else (
+          let solver = CVC4.solve ~options:o ~timeout ~print:print_smt problem in
+          match CVC4.res solver with
+          | Sol.Res.Sat m -> Res.Sat m
+          | Sol.Res.Unsat -> Res.Unsat
+          | Sol.Res.Timeout ->
+              (* try next set of options, if any *)
+              begin match tail with
+                | [] -> Res.Timeout
+                | _::_ -> solve_rec_ tail
+              end
+          | Sol.Res.Error e ->
+              failwith e
+        )
+  in
+  solve_rec_ options
 
 (* close a pipeline with CVC4 *)
 let close_pipe (type f)(type t)(type ty)
 (module F : FO.S with type T.t=t and type formula=f and type Ty.t=ty)
-~pipe ~print ~print_smt ~deadline
+?options ~pipe ~print ~print_smt ~deadline
 =
   let module FOBack = FO.Default in
   let module P = FO.Print(FOBack) in
   Transform.ClosedPipe.make1
     ~pipe
-    ~f:(call (module F) ~deadline ~print ~print_smt)
+    ~f:(call (module F) ?options ~deadline ~print ~print_smt)

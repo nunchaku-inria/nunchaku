@@ -171,7 +171,7 @@ let make_model_pipeline () =
     id
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  CVC4.close_pipe FO.default
+  CVC4.close_pipe FO.default ~options:CVC4.options_l
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 let make_proof_pipeline () =
@@ -213,7 +213,7 @@ let make_proof_pipeline () =
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   CVC4.close_pipe FO.default
-    ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
+    ?options:None ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 (* search for results *)
 let rec find_model_ l =

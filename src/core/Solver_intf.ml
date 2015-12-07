@@ -40,7 +40,7 @@ module type S = sig
   val peek_res : t -> FOBack.term_or_form Res.t option
   (** [peek_res s] checks whether the result of [s] is already available *)
 
-  val solve : ?timeout:float -> ?print:bool -> problem -> t
+  val solve : ?options:string -> ?timeout:float -> ?print:bool -> problem -> t
   (** [solve problem] creates a new solver and sends it the given problem.
       This function should return immediately, without waiting for the solver
       to return with an answer.
@@ -48,6 +48,7 @@ module type S = sig
       The answer can be peeked at using {!peek_res}, or obtained through a
       blocking call to {!res}.
 
+      @param options additional options to pass the solver
       @param print if true, the solver should print its input on stdout
       @param timeout the number of seconds given, at most, to the solver.
         There is a default timeout, so if you want the solver to run forever
