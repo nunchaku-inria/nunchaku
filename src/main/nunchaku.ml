@@ -110,22 +110,17 @@ let print_version_if_needed () =
   ()
 
 let parse_file ~input () =
-  let with_in f =
-    if !file="" then f stdin
-    else CCIO.with_in !file f
-  in
+  let open CCError.Infix in
+  let src = if !file = "" then `Stdin else `File !file in
   let res =
-    try with_in
-      (fun ic ->
-        let lexbuf = Lexing.from_channel ic in
-        Location.set_file lexbuf (if !file="" then "<stdin>" else !file);
-          let res = match input with
-            | I_nunchaku -> NunParser.parse_statement_list NunLexer.token lexbuf
-            | I_tptp ->
-                NunTPTPRecursiveParser.parse_statement_list NunTPTPLexer.token lexbuf
-          in
-          E.return res
-      )
+    try
+      match input with
+      | I_nunchaku ->
+          NunLexer.parse src
+      | I_tptp ->
+          NunTPTPLexer.parse ~mode:(`Env "TPTP") src
+          >|= CCVector.to_seq
+          >>= NunTPTPPreprocess.preprocess
     with e -> Utils.err_of_exn e
   in
   E.map_err
@@ -133,7 +128,9 @@ let parse_file ~input () =
 
 let print_input_if_needed statements =
   if !print_ then
-    Format.printf "@[<v2>input: {@,%a@]@,}@." A.print_statement_list statements;
+    Format.printf "@[<v2>input: {@,@[<v>%a@]@]@,}@."
+      (CCVector.print ~start:"" ~stop:"" ~sep:"" A.print_statement)
+      statements;
   ()
 
 (* build a pipeline, depending on options *)
@@ -233,7 +230,7 @@ let rec find_model_ l =
 (* negate the goal *)
 let negate_goal stmts =
   let module A = UntypedAST in
-  CCList.map
+  CCVector.map
     (fun st -> match st.A.stmt_value with
       | A.Goal f -> {st with A.stmt_value=A.Goal (A.not_ f); }
       | _ -> st

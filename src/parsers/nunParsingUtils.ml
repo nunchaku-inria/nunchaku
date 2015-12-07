@@ -48,9 +48,10 @@ module type PARSER = sig
 end
 
 type include_mode =
-  | Include_none
-  | Include_relative
-  | Include_env of string (** Look in the given env variable for include path *)
+  [ `None
+  | `Relative
+  | `Env of string (** Look in the given env variable for include path *)
+  ]
 
 module type S = sig
   val parse :
@@ -100,10 +101,10 @@ module Make(P : PARSER) : S = struct
             (* TODO: handle partial includes *)
             (* include file *)
             let files = match mode with
-            | Include_none -> [f]
-            | Include_relative ->
+            | `None -> [f]
+            | `Relative ->
                 [f; rel_include f]
-            | Include_env envvar ->
+            | `Env envvar ->
                 try
                   let dir = Sys.getenv envvar in
                   [f; rel_include f; Filename.concat dir f]
@@ -134,7 +135,7 @@ module Make(P : PARSER) : S = struct
             Loc.set_file lexbuf f;
             parse_buf_rec ?loc ~mode ~basedir ~res lexbuf)
 
-  let parse ?(mode=Include_relative) src =
+  let parse ?(mode=`Relative) src =
     let res = CCVector.create () in
     let basedir = match src with
       | `File f -> Filename.dirname f
