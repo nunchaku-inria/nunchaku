@@ -26,7 +26,7 @@ module type S = sig
   module FO_T : FO.VIEW (* input terms *)
   module FOBack : FO.S (* output terms (in the model) *)
 
-  type problem = (FO_T.Formula.t, FO_T.T.t, FO_T.Ty.t) FO.Problem.t
+  type problem = (FO_T.T.t, FO_T.Ty.t) FO.Problem.t
 
   type t
   (** An instance of the solver *)
@@ -34,10 +34,10 @@ module type S = sig
   val name : string
   (** Name of the solver *)
 
-  val res : t -> FOBack.term_or_form Res.t
+  val res : t -> FOBack.T.t Res.t
   (** [res s] blocks until the result of [s] is available, then return it *)
 
-  val peek_res : t -> FOBack.term_or_form Res.t option
+  val peek_res : t -> FOBack.T.t Res.t option
   (** [peek_res s] checks whether the result of [s] is already available *)
 
   val solve : ?options:string -> ?timeout:float -> ?print:bool -> problem -> t

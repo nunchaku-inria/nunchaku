@@ -11,7 +11,7 @@ module Make(F : FO.S) : sig
   val print_problem : Format.formatter -> problem -> unit
 end
 
-type model_elt = FO.Default.term_or_form
+type model_elt = FO.Default.T.t
 
 (** list of different available options *)
 val options_l : string list
@@ -23,12 +23,12 @@ val options_l : string list
   @raise Invalid_argument if options=[]
 *)
 val call :
-  (module FO.S with type formula = 'a and type T.t = 'b and type Ty.t = 'c) ->
+  (module FO.S with type T.t = 't and type Ty.t = 'ty) ->
   ?options:string list ->
   print:bool ->
   print_smt:bool ->
   deadline:float ->
-  ('a, 'b, 'c) FO.Problem.t ->
+  ('t, 'ty) FO.Problem.t ->
   model_elt Problem.Res.t
 
 (** Close a pipeline by calling CVC4
@@ -39,9 +39,9 @@ val call :
     the deadline will still be respected.
 *)
 val close_pipe :
-  (module FO.S with type formula = 'a and type T.t = 'b and type Ty.t = 'c) ->
+  (module FO.S with type T.t = 't and type Ty.t = 'ty) ->
   ?options:string list ->
-  pipe:('d, ('a, 'b, 'c) FO.Problem.t, 'e, 'f) Transform.Pipe.t ->
+  pipe:('d, ('t, 'ty) FO.Problem.t, 'e, 'f) Transform.Pipe.t ->
   print:bool ->
   print_smt:bool ->
   deadline:float ->

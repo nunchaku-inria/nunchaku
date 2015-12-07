@@ -28,7 +28,7 @@ module Builtin : sig
 end
 
 (** Term *)
-type ('f, 't, 'ty) view =
+type ('t, 'ty) view =
   | Builtin of Builtin.t
   | Var of 'ty var
   | App of id * 't list
@@ -37,24 +37,17 @@ type ('f, 't, 'ty) view =
   | Undefined of id * 't (** ['t] is not defined here *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
-  | Ite of 'f * 't * 't
-
-(** Formula *)
-type ('f, 't, 'ty) form_view =
-  | Atom of 't
+  | Ite of 't * 't * 't
   | True
   | False
   | Eq of 't * 't
-  | And of 'f list
-  | Or of 'f list
-  | Not of 'f
-  | Imply of 'f * 'f
-  | Equiv of 'f * 'f
-  | Forall of 'ty var * 'f
-  | Exists of 'ty var * 'f
-  | F_let of 'ty var * 'f * 'f
-  | F_ite of 'f * 'f * 'f  (* if then else *)
-  | F_fun of 'ty var * 'f (* function *)
+  | And of 't list
+  | Or of 't list
+  | Not of 't
+  | Imply of 't * 't
+  | Equiv of 't * 't
+  | Forall of 'ty var * 't
+  | Exists of 'ty var * 't
 
 (** Type *)
 type 'ty ty_view =
@@ -79,28 +72,16 @@ type 'ty mutual_types = {
   tys_defs : 'ty tydef list;
 }
 
-(* TODO: try to merge back with Problem? *)
-
-(** Problem *)
-type ('f, 't, 'ty) statement =
+(** Statement *)
+type ('t, 'ty) statement =
   | TyDecl of id * int  (** number of arguments *)
   | Decl of id * 'ty toplevel_ty
-  | Axiom of 'f
+  | Axiom of 't
   | MutualTypes of [`Data | `Codata] * 'ty mutual_types
-  | Goal of 'f
-
-(** models, for instance, might contain both formulas and terms *)
-type ('t, 'f) term_or_form =
-  | Term of 't
-  | Form of 'f
-
-type ('t, 'f) term_or_form_ = ('t, 'f) term_or_form
-(** Alias for avoiding recursive defs *)
+  | Goal of 't
 
 (** {2 Read-Only View} *)
 module type VIEW = sig
-  type formula
-
   module Ty : sig
     type t
     type toplevel_ty = t list * t
@@ -109,22 +90,13 @@ module type VIEW = sig
 
   module T : sig
     type t
-    val view : t -> (formula, t, Ty.t) view
+    val view : t -> (t, Ty.t) view
     (** Observe the structure of the term *)
   end
-
-  module Formula : sig
-    type t = formula
-    val view : t -> (t, T.t, Ty.t) form_view
-  end
-
-  type term_or_form = (T.t, Formula.t) term_or_form_
 end
 
 (** {2 View and Build Formulas, Terms, Types} *)
 module type S = sig
-  type formula
-
   module Ty : sig
     type t
     type toplevel_ty = t list * t
@@ -139,7 +111,7 @@ module type S = sig
 
   module T : sig
     type t
-    val view : t -> (formula, t, Ty.t) view
+    val view : t -> (t, Ty.t) view
     (** Observe the structure of the term *)
 
     val builtin : Builtin.t -> t
@@ -151,18 +123,10 @@ module type S = sig
     val var : Ty.t var -> t
     val let_ : Ty.t var -> t -> t -> t
     val fun_ : Ty.t var -> t -> t
-    val ite : formula -> t -> t -> t
-  end
-
-  module Formula : sig
-    type t = formula
-
-    val view : t -> (t, T.t, Ty.t) form_view
-
-    val atom : T.t -> t
+    val ite : t -> t -> t -> t
     val true_ : t
     val false_ : t
-    val eq : T.t -> T.t -> t
+    val eq : t -> t -> t
     val and_ : t list -> t
     val or_ : t list -> t
     val not_ : t -> t
@@ -170,43 +134,36 @@ module type S = sig
     val equiv : t -> t -> t
     val forall : Ty.t var -> t -> t
     val exists : Ty.t var -> t -> t
-    val f_let : Ty.t var -> t -> t -> t
-    val f_ite : t -> t -> t -> t
-    val f_fun : Ty.t var -> t -> t
-
-    val map : (T.t -> T.t) -> t -> t
   end
-
-  type term_or_form = (T.t, Formula.t) term_or_form_
 end
 
-type ('f, 't, 'ty) repr =
-  (module VIEW with type formula = 'f and type T.t = 't and type Ty.t = 'ty)
+type ('t, 'ty) repr =
+  (module VIEW with type T.t = 't and type Ty.t = 'ty)
 
-type ('f, 't, 'ty) build =
-  (module S with type formula = 'f and type T.t = 't and type Ty.t = 'ty)
+type ('t, 'ty) build =
+  (module S with type T.t = 't and type Ty.t = 'ty)
 
 module Default : S
 
-val default_repr: (Default.formula, Default.T.t, Default.Ty.t) repr
-val default: (Default.formula, Default.T.t, Default.Ty.t) build
+val default_repr: (Default.T.t, Default.Ty.t) repr
+val default: (Default.T.t, Default.Ty.t) build
 
 (** {2 Problem} *)
 module Problem : sig
   type 'a vec_ro = ('a, CCVector.ro) CCVector.t
 
-  type ('f, 't, 'ty) t = {
-    statements: ('f, 't, 'ty) statement vec_ro;
+  type ('t, 'ty) t = {
+    statements: ('t, 'ty) statement vec_ro;
   }
 
-  val make : ('f, 't, 'ty) statement vec_ro -> ('f, 't, 'ty) t
-  val of_list : ('f, 't, 'ty) statement list -> ('f, 't, 'ty) t
-  val statements : ('f, 't, 'ty) t -> ('f, 't, 'ty) statement vec_ro
+  val make : ('t, 'ty) statement vec_ro -> ('t, 'ty) t
+  val of_list : ('t, 'ty) statement list -> ('t, 'ty) t
+  val statements : ('t, 'ty) t -> ('t, 'ty) statement vec_ro
   val fold_flat_map :
-    ('acc -> ('f, 't, 'ty) statement -> 'acc * ('f2, 't2, 'ty2) statement list) ->
+    ('acc -> ('t, 'ty) statement -> 'acc * ('t2, 'ty2) statement list) ->
     'acc ->
-    ('f, 't, 'ty) t ->
-    'acc * ('f2, 't2, 'ty2) t
+    ('t, 'ty) t ->
+    'acc * ('t2, 'ty2) t
 end
 
 (** {2 IO} *)
@@ -217,10 +174,9 @@ module type PRINT = sig
   val print_ty : FO.Ty.t printer
   val print_toplevel_ty : FO.Ty.toplevel_ty printer
   val print_term : FO.T.t printer
-  val print_formula : FO.Formula.t printer
-  val print_statement : (FO.Formula.t, FO.T.t, FO.Ty.t) statement printer
+  val print_statement : (FO.T.t, FO.Ty.t) statement printer
   val print_model : (FO.T.t * FO.T.t) list printer
-  val print_problem : (FO.Formula.t, FO.T.t, FO.Ty.t) Problem.t printer
+  val print_problem : (FO.T.t, FO.Ty.t) Problem.t printer
 end
 
 module Print(FO : VIEW) : PRINT with module FO = FO

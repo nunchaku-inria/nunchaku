@@ -19,7 +19,7 @@ module DSexp = CCSexpM.MakeDecode(struct
   let (>>=) x f = f x
 end)
 
-type model_elt = FO.Default.term_or_form
+type model_elt = FO.Default.T.t
 
 module Make(FO_T : FO.S) : sig
   include Solver_intf.S
@@ -31,12 +31,11 @@ end = struct
   module FO_T = FO_T
   module T = FO_T.T
   module Ty = FO_T.Ty
-  module F = FO_T.Formula
 
   (* for the model *)
   module FOBack = FO.Default
 
-  type problem = (FO_T.Formula.t, FO_T.T.t, FO_T.Ty.t) FO.Problem.t
+  type problem = (FO_T.T.t, FO_T.Ty.t) FO.Problem.t
 
   type decoded_sym =
     | ID of id (* regular fun *)
@@ -201,42 +200,30 @@ end = struct
             Var.print v print_term t print_term u
       | FOI.Ite (a,b,c) ->
           fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
-            print_form a print_term b print_term c
-
-    and print_form out t = match F.view t with
-      | FOI.Atom t -> print_term out t
+            print_term a print_term b print_term c
       | FOI.True -> CCFormat.string out "true"
       | FOI.False -> CCFormat.string out "false"
       | FOI.Eq (a,b) -> fpf out "(@[=@ %a@ %a@])" print_term a print_term b
       | FOI.And [] -> CCFormat.string out "true"
-      | FOI.And [f] -> print_form out f
+      | FOI.And [f] -> print_term out f
       | FOI.And l ->
-          fpf out "(@[and@ %a@])" (pp_list print_form) l
+          fpf out "(@[and@ %a@])" (pp_list print_term) l
       | FOI.Or [] -> CCFormat.string out "false"
-      | FOI.Or [f] -> print_form out f
+      | FOI.Or [f] -> print_term out f
       | FOI.Or l ->
-          fpf out "(@[or@ %a@])" (pp_list print_form) l
+          fpf out "(@[or@ %a@])" (pp_list print_term) l
       | FOI.Not f ->
-          fpf out "(@[not@ %a@])" print_form f
+          fpf out "(@[not@ %a@])" print_term f
       | FOI.Imply (a,b) ->
-          fpf out "(@[=>@ %a@ %a@])" print_form a print_form b
+          fpf out "(@[=>@ %a@ %a@])" print_term a print_term b
       | FOI.Equiv (a,b) ->
-          fpf out "(@[=@ %a@ %a@])" print_form a print_form b
+          fpf out "(@[=@ %a@ %a@])" print_term a print_term b
       | FOI.Forall (v,f) ->
           fpf out "(@[<2>forall@ ((%a %a))@ %a@])"
-            Var.print v print_ty (Var.ty v) print_form f
+            Var.print v print_ty (Var.ty v) print_term f
       | FOI.Exists (v,f) ->
           fpf out "(@[<2>exists@ ((%a %a))@ %a@])"
-            Var.print v print_ty (Var.ty v) print_form f
-      | FOI.F_let (v,t,u) ->
-          fpf out "@[<3>(let@ ((%a %a))@ %a@])"
-            Var.print v print_form t print_form u
-      | FOI.F_ite (a,b,c) ->
-          fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
-            print_form a print_form b print_form c
-      | FOI.F_fun (v,t) ->
-          fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
-            Var.print v print_ty (Var.ty v) print_form t
+            Var.print v print_ty (Var.ty v) print_term f
 
     and print_statement out = function
       | FOI.TyDecl (id,arity) ->
@@ -245,9 +232,9 @@ end = struct
           fpf out "(@[<2>declare-fun@ %a@ %a@])"
             print_id v print_ty_decl ty
       | FOI.Axiom t ->
-          fpf out "(@[assert@ %a@])" print_form t
+          fpf out "(@[assert@ %a@])" print_term t
       | FOI.Goal t ->
-          fpf out "(@[assert@ %a@])" print_form t
+          fpf out "(@[assert@ %a@])" print_term t
       | FOI.MutualTypes (k, l) ->
         let pp_arg out (c,i,ty) =
           fpf out "(@[<h>%a %a@])" print_select (c,i) print_ty ty in
@@ -334,27 +321,10 @@ end = struct
     | `Atom n -> (try int_of_string n with _ -> error_ "expected int")
     | `List _ -> error_ "expected int"
 
-  (* is this formula actually just a term? if yes, convert *)
-  let rec as_term_ f = match FOBack.Formula.view f with
-    | FO.Atom t -> Some t
-    | FO.F_fun (v,f) ->
-        CCOpt.map (FOBack.T.fun_ v) (as_term_ f)
-    | FO.F_let (v,t,u) ->
-        CCOpt.map2 (FOBack.T.let_ v) (as_term_ t) (as_term_ u)
-    | FO.True
-    | FO.False
-    | FO.Eq (_,_)
-    | FO.And _
-    | FO.Or _
-    | FO.Not _
-    | FO.Imply (_,_)
-    | FO.Equiv (_,_)
-    | FO.Forall (_,_)
-    | FO.Exists (_,_)
-    | FO.F_ite (_,_,_) -> None
-
   (* parse a ground term *)
   let rec parse_term_ ~state = function
+    | `Atom "true" -> FOBack.T.true_
+    | `Atom "false" -> FOBack.T.false_
     | `Atom _ as t -> FOBack.T.const (parse_id_ ~state t)
     | `List [`Atom "LAMBDA"; `List bindings; body] ->
         (* lambda term *)
@@ -362,10 +332,33 @@ end = struct
         let body = parse_term_ ~state body in
         List.fold_right FOBack.T.fun_ bindings body
     | `List [`Atom "ite"; a; b; c] ->
-        let a = parse_formula_ ~state a in
+        let a = parse_term_ ~state a in
         let b = parse_term_ ~state b in
         let c = parse_term_ ~state c in
         FOBack.T.ite a b c
+    | `List [`Atom "="; a; b] ->
+        let a = parse_term_ ~state a in
+        let b = parse_term_ ~state b in
+        FOBack.T.eq a b
+    | `List [`Atom "not"; f] ->
+        let f = parse_term_ ~state f in
+        FOBack.T.not_ f
+    | `List (`Atom "and" :: l) ->
+        FOBack.T.and_ (List.map (parse_term_ ~state) l)
+    | `List (`Atom "or" :: l) ->
+        FOBack.T.or_ (List.map (parse_term_ ~state) l)
+    | `List [`Atom "forall"; `List bindings; f] ->
+        let bindings = List.map (parse_var_ ~state) bindings in
+        let f = parse_term_ ~state f in
+        List.fold_right FOBack.T.forall bindings f
+    | `List [`Atom "exists"; `List bindings; f] ->
+        let bindings = List.map (parse_var_ ~state) bindings in
+        let f = parse_term_ ~state f in
+        List.fold_right FOBack.T.exists bindings f
+    | `List [`Atom "=>"; a; b] ->
+        let a = parse_term_ ~state a in
+        let b = parse_term_ ~state b in
+        FOBack.T.imply a b
     | `List (`Atom _ as f :: l) ->
         begin match parse_atom_ ~state f, l with
           | ID f, _ ->
@@ -383,66 +376,6 @@ end = struct
         end
     | `List (`List _ :: _) -> error_ "non first-order list"
     | `List [] -> error_ "expected term, got empty list"
-
-  and parse_formula_ ~state s =
-    let module F = FOBack.Formula in
-    match s with
-    | `Atom "true" -> F.true_
-    | `Atom "false" -> F.false_
-    | `List [`Atom "="; a; b] ->
-        let a = parse_term_or_formula_ ~state a in
-        let b = parse_term_or_formula_ ~state b in
-        begin match a, b with
-        | FO.Term a,FO.Term b -> F.eq a b
-        | FO.Form a,FO.Form b -> F.equiv a b
-        | FO.Form a,FO.Term b -> F.equiv a (F.atom b)
-        | FO.Term a,FO.Form b -> F.equiv (F.atom a) b
-        end
-    | `List [`Atom "not"; f] ->
-        let f = parse_formula_ ~state f in
-        F.not_ f
-    | `List (`Atom "and" :: l) ->
-        F.and_ (List.map (parse_formula_ ~state) l)
-    | `List (`Atom "or" :: l) ->
-        F.or_ (List.map (parse_formula_ ~state) l)
-    | `List [`Atom "forall"; `List bindings; f] ->
-        let bindings = List.map (parse_var_ ~state) bindings in
-        let f = parse_formula_ ~state f in
-        List.fold_right F.forall bindings f
-    | `List [`Atom "exists"; `List bindings; f] ->
-        let bindings = List.map (parse_var_ ~state) bindings in
-        let f = parse_formula_ ~state f in
-        List.fold_right F.exists bindings f
-    | `List [`Atom "LAMBDA"; `List bindings; body] ->
-        (* lambda term *)
-        let bindings = List.map (parse_var_ ~state) bindings in
-        let body = parse_formula_ ~state body in
-        List.fold_right FOBack.Formula.f_fun bindings body
-    | `List [`Atom "=>"; a; b] ->
-        let a = parse_formula_ ~state a in
-        let b = parse_formula_ ~state b in
-        F.imply a b
-    | `List [`Atom "ite"; a; b; c] ->
-        let a = parse_formula_ ~state a in
-        let b = parse_term_or_formula_ ~state b in
-        let c = parse_term_or_formula_ ~state c in
-        begin match b, c with
-          | FO.Term b, FO.Term c ->
-              F.atom (FOBack.T.ite a b c)
-          | FO.Form b, FO.Form c -> F.f_ite a b c
-          | FO.Form b, FO.Term c -> F.f_ite a b (F.atom c)
-          | FO.Term b, FO.Form c -> F.f_ite a (F.atom b) c
-        end
-    | _ ->
-        let t = parse_term_ ~state s in
-        F.atom t
-
-  and parse_term_or_formula_ ~state t =
-    let f = parse_formula_ ~state t in
-    (* [f] might be a term *)
-    match as_term_ f with
-    | None -> FO.Form f
-    | Some t -> FO.Term t
 
   let sym_get_const_ ~state id = match ID.Map.find id state.symbols with
     | Q_const -> ()
@@ -463,14 +396,14 @@ end = struct
               (* regular constant, whose value we are interested in *)
               let id = parse_id_ ~state s in
               sym_get_const_ ~state id;  (* check it's a constant *)
-              let t = parse_term_or_formula_ ~state term in
-              Model.add m (FO.Term (FOBack.T.const id), t)
+              let t = parse_term_ ~state term in
+              Model.add m (FOBack.T.const id, t)
           | `List [`List [`Atom "fmf.card.val"; (`Atom _ as s)]; n] ->
               (* finite domain *)
               let id = parse_id_ ~state s in
               (* which type? *)
               let ty_id = sym_get_ty_ ~state id in
-              let ty = FO.Term (FOBack.T.const ty_id) in
+              let ty = FOBack.T.const ty_id in
               (* read cardinal *)
               let n = parse_int_ n in
               let terms = Sequence.(0 -- (n-1)
@@ -481,7 +414,7 @@ end = struct
                       | ID id -> id
                       | _ -> assert false
                     in
-                    FO.Term (FOBack.T.const id))
+                    FOBack.T.const id)
                 |> to_rev_list
               ) in
               Model.add_finite_type m ty terms
@@ -528,54 +461,54 @@ end = struct
    TODO: CLI flag to opt-out?
    TODO: put this into Model? *)
   let rewrite_model_ m =
-    (* rewrite [t] using the set of rewrite rules *)
-    let rec rewrite_term_ ~rules t = match FOBack.T.view t with
-      | FO.Builtin _
-      | FO.Var _ -> t
-      | FO.App (id,[]) ->
-          begin try ID.Map.find id rules (* apply rule *)
-          with Not_found -> t
-          end
-      | FO.DataTest(c,t) -> FOBack.T.data_test c (rewrite_term_ ~rules t)
-      | FO.DataSelect(c,n,t) -> FOBack.T.data_select c n (rewrite_term_ ~rules t)
-      | FO.Undefined _ -> assert false
-      | FO.App (id, l) -> FOBack.T.app id (List.map (rewrite_term_ ~rules) l)
-      | FO.Fun (v,t) ->
-          (* no capture, rules rewrite to closed terms *)
-          FOBack.T.fun_ v (rewrite_term_ ~rules t)
-      | FO.Let (v,t,u) ->
-          FOBack.T.let_ v (rewrite_term_ ~rules t) (rewrite_term_ ~rules u)
-      | FO.Ite (a,b,c) ->
-          FOBack.T.ite (rewrite_form_ ~rules a) (rewrite_term_ ~rules b) (rewrite_term_ ~rules c)
-    and rewrite_form_ ~rules f =
-      FOBack.Formula.map (rewrite_term_ ~rules) f
-    in
-    let rewrite_ ~rules = function
-      | FO.Term t -> FO.Term (rewrite_term_ ~rules t)
-      | FO.Form f -> FO.Form (rewrite_form_ ~rules f)
-    in
     (* compute a basic set of rules *)
     let rules = m.Model.terms
       |> CCList.filter_map
-        (function
-          | FO.Term t, FO.Term u ->
-              begin match FOBack.T.view u with
-              | FO.App (id, []) when CCString.prefix ~pre:"@uc_" (ID.name id) ->
-                  Some (id, t) (* id --> t *)
-              | _ -> None
-              end
-          | _ -> None
-        )
+        (fun (t, u) ->
+            match FOBack.T.view u with
+            | FO.App (id, []) when CCString.prefix ~pre:"@uc_" (ID.name id) ->
+                Some (id, t) (* id --> t *)
+            | _ -> None)
       |> ID.Map.of_list
     in
-    (* rewrite every term *)
     let pp_rule out (l,r) =
       let module P = FO.Print(FOBack) in
       fpf out "%a → @[%a@]" ID.print_name l P.print_term r
     in
     Utils.debugf 5 ~section "@[<2>apply rewrite rules@ @[<hv>%a@]@]"
       (fun k->k (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_rule) (ID.Map.to_seq rules));
-    Model.map m ~f:(rewrite_ ~rules)
+    (* rewrite [t] using the set of rewrite rules *)
+    let rec rewrite_term_ t = match FOBack.T.view t with
+      | FO.Builtin _
+      | FO.Var _ -> t
+      | FO.App (id,[]) ->
+          begin try ID.Map.find id rules (* apply rule *)
+          with Not_found -> t
+          end
+      | FO.DataTest(c,t) -> FOBack.T.data_test c (rewrite_term_ t)
+      | FO.DataSelect(c,n,t) -> FOBack.T.data_select c n (rewrite_term_ t)
+      | FO.Undefined _ -> assert false
+      | FO.App (id, l) -> FOBack.T.app id (List.map rewrite_term_ l)
+      | FO.Fun (v,t) ->
+          (* no capture, rules rewrite to closed terms *)
+          FOBack.T.fun_ v (rewrite_term_ t)
+      | FO.Let (v,t,u) ->
+          FOBack.T.let_ v (rewrite_term_ t) (rewrite_term_ u)
+      | FO.Ite (a,b,c) ->
+          FOBack.T.ite (rewrite_term_ a) (rewrite_term_ b) (rewrite_term_ c)
+      | FO.True
+      | FO.False -> t
+      | FO.Eq (a,b) -> FOBack.T.eq (rewrite_term_ a) (rewrite_term_ b)
+      | FO.And l -> FOBack.T.and_ (List.map (rewrite_term_) l)
+      | FO.Or l -> FOBack.T.or_ (List.map (rewrite_term_) l)
+      | FO.Not form -> FOBack.T.not_ (rewrite_term_ form)
+      | FO.Imply (a,b) -> FOBack.T.imply (rewrite_term_ a)(rewrite_term_ b)
+      | FO.Equiv (a,b) -> FOBack.T.equiv (rewrite_term_ a)(rewrite_term_ b)
+      | FO.Forall (v,form) -> FOBack.T.forall v (rewrite_term_ form)
+      | FO.Exists (v,form) -> FOBack.T.exists v (rewrite_term_ form)
+    in
+    (* rewrite every term *)
+    Model.map m ~f:rewrite_term_
 
   (* read the result *)
   let read_res_ ~state s =
@@ -658,8 +591,8 @@ let options_l =
   or give each try less time than [deadline]? *)
 
 (* solve problem using CVC4 before [deadline] *)
-let call (type f)(type t)(type ty)
-(module F : FO.S with type T.t=t and type formula=f and type Ty.t=ty)
+let call (type t)(type ty)
+(module F : FO.S with type T.t=t and type Ty.t=ty)
 ?(options=[""]) ~print ~print_smt ~deadline problem =
   if options=[] then invalid_arg "CVC4.call: empty list of options";
   let module FOBack = FO.Default in
@@ -694,8 +627,8 @@ let call (type f)(type t)(type ty)
   solve_rec_ options
 
 (* close a pipeline with CVC4 *)
-let close_pipe (type f)(type t)(type ty)
-(module F : FO.S with type T.t=t and type formula=f and type Ty.t=ty)
+let close_pipe (type t)(type ty)
+(module F : FO.S with type T.t=t and type Ty.t=ty)
 ?options ~pipe ~print ~print_smt ~deadline
 =
   let module FOBack = FO.Default in
