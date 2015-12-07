@@ -1104,15 +1104,17 @@ module Convert(Term : TermTyped.S) = struct
   type problem = (term, term, stmt_invariant) Problem.t
 
   let convert_problem_exn ~env l =
-    let rec aux acc ~env l = match l with
-      | [] -> List.rev acc, env
-      | st :: l' ->
-          let st, env = convert_statement_exn ~env st in
-          Env.reset_metas ~env;
-          aux (st :: acc) ~env l'
+    let res = CCVector.create() in
+    let env = CCVector.fold
+      (fun env st ->
+        let st, env = convert_statement_exn ~env st in
+        Env.reset_metas ~env;
+        CCVector.push res st;
+        env)
+      env l
     in
-    let l, env = aux [] ~env l in
-    Problem.of_list ~meta:Problem.Metadata.default l, env
+    let res = CCVector.freeze res in
+    Problem.make ~meta:Problem.Metadata.default res, env
 
   let convert_problem ~env st =
     try E.return (convert_problem_exn ~env st)
