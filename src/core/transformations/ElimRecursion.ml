@@ -256,7 +256,7 @@ module Make(T : TI.S) = struct
 
   let tr_term ~state ~local_state t =
     Utils.debugf ~section 4
-      "@[<2>convert toplevel term `@[%a@]`@]" (fun k -> k P.print t);
+      "@[<2>convert toplevel term@ `@[%a@]`@]" (fun k -> k P.print t);
     tr_term_rec_ ~state ~local_state t
 
   (* translate a top-level formula *)

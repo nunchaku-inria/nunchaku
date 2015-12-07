@@ -261,8 +261,13 @@ module Print(T : REPR)
     | Var v -> Var.print out v
     | Builtin b -> Builtin.pp print_in_app out b
     | App (f,l) ->
-        fpf out "@[<2>%a@ %a@]" print_in_app f
-          (pp_list_ ~sep:" " print_in_app) l
+        begin match T.repr f with
+        | Builtin b when Builtin.is_infix b ->
+            print_infix_list b out l
+        | _ ->
+            fpf out "@[<2>%a@ %a@]" print_in_app f
+              (pp_list_ ~sep:" " print_in_app) l
+        end
     | Let (v,t,u) ->
         fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
     | Match (t,l) ->
@@ -293,6 +298,12 @@ module Print(T : REPR)
     | TyMeta _ -> print out t
     | Bind _ -> fpf out "(@[%a@])" print t
     | Let _ | Match _ | TyArrow (_,_) -> fpf out "(@[%a@])" print t
+  and print_infix_list b out l = match l with
+    | [] -> assert false
+    | [t] -> print_in_app out t
+    | t :: l' ->
+        fpf out "@[<hv>%a@ @[<hv>%a@ %a@]@]"
+          print_in_app t (Builtin.pp print_in_app) b (print_infix_list b) l'
 end
 
 type 'a print = (module PRINT with type t = 'a)

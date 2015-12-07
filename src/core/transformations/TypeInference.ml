@@ -570,7 +570,7 @@ module Convert(Term : TermTyped.S) = struct
   and convert_quantifier ?loc ~stack ~env ~which v ty_opt t =
     (* fresh variable *)
     let ty_var = fresh_ty_var_ ~name:v in
-    Utils.debugf ~section 3 "new variable %a for %s within %a"
+    Utils.debugf ~section 3 "@[<2>new variable %a@ for %s@ within `@[%a@]`"
       (fun k-> k P.print ty_var v A.print_term t);
     (* unify with expected type *)
     CCOpt.iter
@@ -675,7 +675,7 @@ module Convert(Term : TermTyped.S) = struct
     then ill_formedf "variable %a has a non-monomorphic type" Var.print v
 
   let generalize ~close t =
-    Utils.debugf ~section 5 "@[<2>generalize `@[%a@]`, by %s@]"
+    Utils.debugf ~section 5 "@[<2>generalize@ `@[%a@]`,@ by %s@]"
       (fun k->k P.print t
       (match close with `Fun -> "fun" | `Forall -> "forall" | `NoClose -> "no_close"));
     (* type meta-variables *)
