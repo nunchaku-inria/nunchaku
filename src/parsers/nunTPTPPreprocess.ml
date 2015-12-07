@@ -1,34 +1,14 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(** {1 TPTP Parser that removes "include" statements}
-
-  This parser preprocesses TPTP problems to adapt them for Nunchaku:
-
-  {ul
-  {- recursively parse "include"-d files}
-  {- declare TPTP primitives}
-  {- declare symbols that are not normally declared}
-  {- add "$i" to variables that have no type}
-  }
-*)
+(** {1 TPTP Preprocessor} *)
 
 module A = UntypedAST
-module P = NunTPTPParser
 module Loc = Location
 
-let parse_ty = P.parse_ty
-let parse_term = P.parse_term
-let parse_statement = P.parse_statement
+type 'a or_error = [`Ok of 'a | `Error of string]
 
 let section = Utils.Section.make "TPTPRecursiveParser"
-
-(* where to find TPTP files *)
-let tptp_dir () =
-  try Some (Sys.getenv "TPTP") with Not_found -> None
-
-let error_include_ ?loc f =
-  NunParsingUtils.parse_error_ ?loc "include not found: `%s`" f
 
 module StrTbl = CCHashtbl.Make(struct
   type t = string
@@ -242,33 +222,11 @@ let process_form ~state t =
   let t = declare_missing ~ctx:Ctx_prop ~state t in
   close_forall t
 
-(* parse the lexbuf, and parse its includes recursively *)
-let rec parse_rec_ ~basedir ~state token lexbuf =
-  let l = P.parse_statement_list token lexbuf in
-  List.iter (process_statement_ ~basedir ~state token) l
-
 (* process a single statement *)
-and process_statement_ ~basedir ~state token st =
-  (* try the list of files, parse the first existing one *)
-  let rec try_files ?loc ~state token f l = match l with
-    | [] -> error_include_ ?loc f
-    | f' :: _ when Sys.file_exists f' -> parse_file_ ~state token f'
-    | _ :: l' -> try_files ?loc ~state token f l'
-  in
-  let loc = st.A.stmt_loc in
+let process_statement_ ~state st =
   match st.A.stmt_value with
-  | A.Include (f, _which) ->
-      (* TODO: handle partial includes *)
-      (* include file *)
-      let files =
-        f
-        :: (Filename.concat basedir (Filename.basename f))
-        :: (match tptp_dir () with
-            | None -> []
-            | Some dir -> [Filename.concat dir f] (* $TPTP/f *)
-           )
-      in
-      try_files ?loc ~state token f files
+  | A.Include (f, _) ->
+      failwith (Printf.sprintf "include of `%s` has not been resolved" f)
   | A.Axiom ax_l ->
       let l = List.map (process_form ~state) ax_l in
       add_stmt ~state {st with A.stmt_value=A.Axiom l}
@@ -287,33 +245,26 @@ and process_statement_ ~basedir ~state token st =
   | A.Data _
   | A.Codata _ -> add_stmt ~state st (* NOTE: should not happen *)
 
-(* parse the given file *)
-and parse_file_ ~state token f =
-  CCIO.with_in f
-    (fun ic ->
-      let lexbuf = Lexing.from_channel ic in
-      Loc.set_file lexbuf f;
-      let basedir = Filename.dirname f in
-      parse_rec_ ~basedir ~state token lexbuf
-    )
-
 (* create a state, and push prelude in it *)
-let create_state ~token () =
+let create_state () =
   let state = {
     into = CCVector.create ();
     declared = StrTbl.create 64;
   } in
   (* the prelude of TPTP: defined types *)
   List.iter
-    (process_statement_ ~basedir:Filename.current_dir_name ~state token)
+    (process_statement_ ~state)
     A.TPTP.prelude;
   state
 
-let parse_statement_list token lexbuf =
-  let state = create_state ~token () in
-  let basedir = Filename.dirname (Loc.get_file lexbuf) in
-  parse_rec_ ~basedir ~state token lexbuf;
-  CCVector.to_list state.into
+let preprocess_exn seq =
+  let state = create_state () in
+  Sequence.iter (process_statement_ ~state) seq;
+  CCVector.freeze state.into
+
+let preprocess seq =
+  try CCError.return (preprocess_exn seq)
+  with e -> Utils.err_of_exn e
 
 (*$inject
   module A = UntypedAST

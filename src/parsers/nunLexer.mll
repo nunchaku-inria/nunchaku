@@ -20,7 +20,7 @@ let alpha_numeric = lower_alpha | upper_alpha | numeric | '_'
 let upper_word = upper_alpha alpha_numeric*
 let lower_word = lower_alpha alpha_numeric*
 
-let filepath = '"' ([^ '"'] | "\\\"")* '"'
+let filepath = '"' ([^ '"'] | '\\' '"')* '"'
 
 let zero_numeric = '0'
 let non_zero_numeric = ['1' - '9']
