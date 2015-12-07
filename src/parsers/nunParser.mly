@@ -56,6 +56,9 @@
 %token VAL
 %token GOAL
 
+%token INCLUDE
+%token<string> FILEPATH
+
 %token ARROW
 %token FUN
 %token PI
@@ -325,6 +328,11 @@ statement:
     {
       let loc = L.mk_pos $startpos $endpos in
       A.goal ~loc t
+    }
+  | INCLUDE f=FILEPATH DOT
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.include_ ~loc f
     }
   | error
     {

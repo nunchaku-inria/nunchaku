@@ -20,6 +20,8 @@ let alpha_numeric = lower_alpha | upper_alpha | numeric | '_'
 let upper_word = upper_alpha alpha_numeric*
 let lower_word = lower_alpha alpha_numeric*
 
+let filepath = '"' ([^ '"'] | "\\\"")* '"'
+
 let zero_numeric = '0'
 let non_zero_numeric = ['1' - '9']
 let numeric = ['0' - '9']
@@ -69,6 +71,7 @@ rule token = parse
   | "pi" { PI }
   | "data" { DATA }
   | "codata" { CODATA }
+  | "include" { INCLUDE }
   | "&&" { LOGIC_AND }
   | "||" { LOGIC_OR }
   | "|" { VERTICAL_BAR }
@@ -79,6 +82,10 @@ rule token = parse
   | '@' { AT }
   | lower_word { LOWER_WORD(Lexing.lexeme lexbuf) }
   | upper_word { UPPER_WORD(Lexing.lexeme lexbuf) }
+  | filepath {
+      let s = Lexing.lexeme lexbuf in
+      let s = String.sub s 1 (String.length s -2) in (* remove " " *)
+      FILEPATH s }
   | _ as c
     {
       NunParsingUtils.lex_error_ "lexer fails on char '%c'" c
