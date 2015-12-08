@@ -279,7 +279,7 @@ module Make(T : TI.S) = struct
       fun_encoding.fun_concretization
     in
     let subst = Subst.add_list ~subst:Subst.empty vars args' in
-    let local_state = { subst; pol=Pos; } in
+    let local_state = { subst; pol=NoPolarity; } in
     (* convert right-hand side and add its side conditions *)
     let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
     let rhs', conds = tr_term ~state ~local_state rhs in
