@@ -3,6 +3,8 @@
 
 (** {1 Scheduling of sub-processes} *)
 
+let section = Utils.Section.make "scheduling"
+
 type ('a, 'b) result =
   | Return of 'a
   | Return_shortcut of 'b  (** returns value, stop other processes *)
@@ -25,33 +27,43 @@ type ('a, 'b, 'c) pool = {
   cond: Condition.t;
 }
 
+let cleanup_ (lazy ap) =
+  Unix.kill ap.pid 15;
+  close_out ap.stdin;
+  close_in ap.stdout;
+  ()
+
+let run_process pool cmd ~f ~stdout ~stdin ap =
+  let res =
+    try
+      let x = f cmd (stdout, stdin) in
+      cleanup_ ap;
+      x
+    with e ->
+      cleanup_ ap;
+      Fail e
+  in
+  let ap = Lazy.force ap in
+  Utils.debugf ~section 3 "@[<2>sub-process %d done:@ `@[%s@]`@]" (fun k->k ap.pid cmd);
+  (* update pool and active process *)
+  Mutex.lock pool.lock;
+  ap.state <- `Done res;
+  pool.active <-
+    List.filter
+      (fun ap' -> Thread.id ap.thread <> Thread.id ap'.thread)
+      pool.active;
+  begin match res, pool.pool_state with
+    | Return x, Return l -> pool.pool_state <- Return (x::l)
+    | Return_shortcut x, Return _ -> pool.pool_state <- Return_shortcut x;
+    | Fail e, Return _ -> pool.pool_state <- Fail e
+    | _, (Return_shortcut _ | Fail _) -> ()
+  end;
+  Condition.broadcast pool.cond; (* awake the main thread, if required *)
+  Mutex.unlock pool.lock
+
 (* create a new active process by running [cmd] and applying [f] on it *)
 let start_task ~f pool cmd =
-  Utils.debugf 3 "@[<2>start sub-process@ `@[%s@]`@]" (fun k->k cmd);
-  let run ~stdout ~stdin ap =
-    (* block until we get a result *)
-    let res =
-      try f cmd (stdout, stdin)
-      with e -> Fail e
-    in
-    Utils.debugf 3 "@[<2>sub-process done:@ `@[%s@]`@]" (fun k->k cmd);
-    (* update pool and active process *)
-    Mutex.lock pool.lock;
-    let ap = Lazy.force ap in
-    ap.state <- `Done res;
-    pool.active <-
-      List.filter
-        (fun ap' -> Thread.id ap.thread <> Thread.id ap'.thread)
-        pool.active;
-    begin match res, pool.pool_state with
-      | Return x, Return l -> pool.pool_state <- Return (x::l)
-      | Return_shortcut x, Return _ -> pool.pool_state <- Return_shortcut x;
-      | Fail e, Return _ -> pool.pool_state <- Fail e
-      | _, (Return_shortcut _ | Fail _) -> ()
-    end;
-    Condition.broadcast pool.cond; (* awake the main thread, if required *)
-    Mutex.unlock pool.lock
-  in
+  Utils.debugf ~section 3 "@[<2>start sub-process@ `@[%s@]`@]" (fun k->k cmd);
   (* spawn subprocess *)
   let stdout, p_stdout = Unix.pipe () in
   let p_stdin, stdin = Unix.pipe () in
@@ -59,22 +71,29 @@ let start_task ~f pool cmd =
   let stdin = Unix.out_channel_of_descr stdin in
   let pid = Unix.create_process
     "/bin/sh" [| "/bin/sh"; "-c"; cmd |] p_stdin p_stdout Unix.stderr in
+  Utils.debugf ~section 3 "@[<2>pid %d -->@ sub-process `@[%s@]`@]" (fun k -> k pid cmd);
   let rec ap = lazy {
     pid;
     stdin;
     stdout;
-    thread = Thread.create (run ~stdout ~stdin) ap;
+    thread = Thread.create (run_process pool cmd ~f ~stdout ~stdin) ap;
     state = `Running;
   } in
   Lazy.force ap
 
+(* kill remaining processes
+   assumes pool.lock is acquired *)
 let kill_proc ap = match ap.state with
   | `Running ->
-      Utils.ignore_catch Unix.close_process (ap.stdout, ap.stdin);
+      Utils.debugf ~section 3 "kill subprocess %d" (fun k->k ap.pid);
+      Unix.kill ap.pid 15;
+      close_in_noerr ap.stdout;
+      close_out_noerr ap.stdin;
       Unix.kill ap.pid 9;
       (* Thread.kill ap.thread; (* not implemented? *) *)
       ap.state <- `Stopped
-  | _ -> ()
+  | `Done _
+  | `Stopped -> ()
 
 (* main function for running threads *)
 let rec run_pool ~f ~cmd pool =

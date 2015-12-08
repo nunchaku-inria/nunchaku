@@ -79,12 +79,15 @@ module Make(FO_T : FO.S) = struct
     if not s.closed then (
       s.closed <- true;
       (* quite cvc4 and stop process *)
-      Format.pp_print_flush s.fmt ();
-      output_string s.oc "(exit)\n";
-      flush s.oc;
-      Utils.ignore_catch Unix.close_process (s.ic, s.oc);
-      (* release buffer *)
-      s.sexp <- DSexp.make ~bufsize:5 (fun _ _ _ -> assert false);
+      try
+        Format.pp_print_flush s.fmt ();
+        output_string s.oc "(exit)\n";
+        flush s.oc;
+        close_in_noerr s.ic;
+        close_out_noerr s.oc;
+        (* release buffer *)
+        s.sexp <- DSexp.make ~bufsize:5 (fun _ _ _ -> assert false);
+      with _ -> ()
     )
 
   (* TODO: use Scheduling instead *)
@@ -591,14 +594,17 @@ module Make(FO_T : FO.S) = struct
     let res = Scheduling.run options ~j ~cmd
       ~f:(fun cmd (ic,oc) ->
           (* the [t] instance *)
-          Utils.debugf ~section 2 "@[<2>run command@ `%s`@]" (fun k->k cmd);
           let solver = create_ ~symbols (ic,oc) in
           send_ solver problem';
           match res solver with
           | Sol.Res.Sat m -> Scheduling.Return_shortcut (Sol.Res.Sat m)
           | Sol.Res.Unsat -> Scheduling.Return Sol.Res.Unsat
           | Sol.Res.Timeout -> Scheduling.Fail Timeout
-          | Sol.Res.Error e -> raise e
+          | Sol.Res.Error e ->
+              Utils.debugf ~section 1
+                "@[<2>error while running CVC4@ with `%s`:@ @[%s@]@]"
+                (fun k->k cmd (Printexc.to_string e));
+              raise e
         )
     in
     match res with
