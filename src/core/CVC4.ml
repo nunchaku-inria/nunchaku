@@ -21,13 +21,9 @@ end)
 
 type model_elt = FO.Default.T.t
 
-module Make(FO_T : FO.S) : sig
-  include Solver_intf.S
-  with module FO_T = FO_T
-  and module FOBack = FO.Default
+exception CVC4_error of string
 
-  val print_problem : Format.formatter -> problem -> unit
-end = struct
+module Make(FO_T : FO.S) = struct
   module FO_T = FO_T
   module T = FO_T.T
   module Ty = FO_T.Ty
@@ -86,18 +82,14 @@ end = struct
       Format.pp_print_flush s.fmt ();
       output_string s.oc "(exit)\n";
       flush s.oc;
-      let _ = Unix.close_process (s.ic, s.oc) in
+      Utils.ignore_catch Unix.close_process (s.ic, s.oc);
       (* release buffer *)
       s.sexp <- DSexp.make ~bufsize:5 (fun _ _ _ -> assert false);
     )
 
-  let create_ ~options ~timeout ~symbols () =
-    if timeout < 0. then invalid_arg "CVC4.create: wrong timeout";
-    let cmd = Printf.sprintf
-      "cvc4 --tlimit-per=%d --lang smt --finite-model-find %s"
-      (int_of_float (timeout *. 1000.)) options in
-    Utils.debugf ~section 2 "@[<2>run command@ `%s`@]" (fun k->k cmd);
-    let ic, oc = Unix.open_process cmd in
+  (* TODO: use Scheduling instead *)
+
+  let create_ ~symbols (ic,oc) =
     (* the [t] instance *)
     let s = {
       oc;
@@ -276,10 +268,7 @@ end = struct
     let state = create_decode_state ~symbols:ID.Map.empty in
     print_problem_ ~state out pb
 
-  (* local error, should never escape *)
-  exception Error of string
-
-  let error_ e = raise (Error e)
+  let error_ e = raise (CVC4_error e)
 
   let find_atom_ ~state s =
     try Hashtbl.find state.decode_tbl s
@@ -524,21 +513,21 @@ end = struct
     | `Ok (`Atom "unknown") ->
         Sol.Res.Timeout
     | `Ok (`List [`Atom "error"; `Atom s]) ->
-        Sol.Res.Error s
+        Sol.Res.Error (CVC4_error s)
     | `Ok sexp ->
         let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ %a@]"
           CCSexpM.print sexp
         in
-        Sol.Res.Error msg
-    | `Error e -> Sol.Res.Error e
-    | `End -> Sol.Res.Error "no answer from the solver"
+        Sol.Res.Error (CVC4_error msg)
+    | `Error e -> Sol.Res.Error (CVC4_error e)
+    | `End -> Sol.Res.Error (CVC4_error "no answer from the solver")
 
   let res t = match t.res with
     | Some r -> r
     | None ->
         let r =
           try read_res_ ~state:t.decode t
-          with Error e -> Sol.Res.Error e
+          with e -> Sol.Res.Error e
         in
         t.res <- Some r;
         r
@@ -572,9 +561,52 @@ end = struct
     let symbols, problem' = preprocess_pb_ problem in
     if print
       then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem problem';
-    let s = create_ ~options ~timeout ~symbols () in
+    if timeout < 0. then invalid_arg "CVC4.create: wrong timeout";
+    let cmd = Printf.sprintf
+      "cvc4 --tlimit-per=%d --lang smt --finite-model-find %s"
+      (int_of_float (timeout *. 1000.)) options in
+    Utils.debugf ~section 2 "@[<2>run command@ `%s`@]" (fun k->k cmd);
+    let ic, oc = Unix.open_process cmd in
+    let s = create_ ~symbols (ic,oc) in
     send_ s problem';
     s
+
+  (* TODO some global parameter for [j] (default 3) *)
+
+  exception Timeout
+
+  let solve_par ?(j=3) ?(options=[""]) ?(timeout=30.) ?(print=false) problem =
+    let symbols, problem' = preprocess_pb_ problem in
+    if print
+      then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem problem';
+    (* deadline: the instant we run out of time and must return *)
+    let deadline = Unix.gettimeofday() +. timeout in
+    let cmd options =
+      let timeout = deadline -. Unix.gettimeofday() in
+      if timeout < 0.1 then raise Timeout;
+      Printf.sprintf
+        "cvc4 --tlimit-per=%d --lang smt --finite-model-find %s"
+        (int_of_float (timeout *. 1000.)) options
+    in
+    let res = Scheduling.run options ~j ~cmd
+      ~f:(fun cmd (ic,oc) ->
+          (* the [t] instance *)
+          Utils.debugf ~section 2 "@[<2>run command@ `%s`@]" (fun k->k cmd);
+          let solver = create_ ~symbols (ic,oc) in
+          send_ solver problem';
+          match res solver with
+          | Sol.Res.Sat m -> Scheduling.Return_shortcut (Sol.Res.Sat m)
+          | Sol.Res.Unsat -> Scheduling.Return Sol.Res.Unsat
+          | Sol.Res.Timeout -> Scheduling.Fail Timeout
+          | Sol.Res.Error e -> raise e
+        )
+    in
+    match res with
+      | Scheduling.Return_shortcut x -> x
+      | Scheduling.Return l ->
+          assert (List.for_all ((=) Sol.Res.Unsat) l);
+          Sol.Res.Unsat
+      | Scheduling.Fail e -> Sol.Res.Error e
 end
 
 let options_l =
@@ -602,29 +634,13 @@ let call (type t)(type ty)
   let module CVC4 = Make(F) in
   if print
     then Format.printf "@[<v2>FO problem:@ %a@]@." P.print_problem problem;
-  (* try each set of options successively *)
-  let rec solve_rec_ options =
-    match options with
-    | [] -> assert false
-    | o :: tail ->
-        let timeout = deadline -. Unix.gettimeofday() in
-        if timeout < 0.1 then Problem.Res.Timeout
-        else (
-          let solver = CVC4.solve ~options:o ~timeout ~print:print_smt problem in
-          match CVC4.res solver with
-          | Sol.Res.Sat m -> Res.Sat m
-          | Sol.Res.Unsat -> Res.Unsat
-          | Sol.Res.Timeout ->
-              (* try next set of options, if any *)
-              begin match tail with
-                | [] -> Res.Timeout
-                | _::_ -> solve_rec_ tail
-              end
-          | Sol.Res.Error e ->
-              failwith e
-        )
-  in
-  solve_rec_ options
+  let timeout = deadline -. Unix.gettimeofday() in
+  let res = CVC4.solve_par ~options ~timeout ~print:print_smt problem in
+  match res with
+    | Sol.Res.Sat m -> Res.Sat m
+    | Sol.Res.Unsat -> Res.Unsat
+    | Sol.Res.Timeout -> Res.Timeout
+    | Sol.Res.Error e -> raise e
 
 (* close a pipeline with CVC4 *)
 let close_pipe (type t)(type ty)

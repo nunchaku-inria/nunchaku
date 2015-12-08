@@ -113,3 +113,8 @@ val exn_ksprintf :
   'a
 (** A sprintf implementation for formatters, that calls an exception
     raising function [f] *)
+
+
+val ignore_catch : ('a -> 'b) -> 'a -> unit
+(** [ignore_catch f x] computes [f x], ignores the result, and also
+    ignores any exception raised by [f x]. *)

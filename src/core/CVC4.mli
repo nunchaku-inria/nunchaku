@@ -9,9 +9,16 @@ module Make(F : FO.S) : sig
   and module FOBack = FO.Default
 
   val print_problem : Format.formatter -> problem -> unit
+
+  val solve_par :
+    ?j:int -> ?options:string list -> ?timeout:float -> ?print:bool ->
+    problem -> FOBack.T.t Solver_intf.Res.t
+  (** Version of {!solve} that tries different sets of options in parallel *)
 end
 
 type model_elt = FO.Default.T.t
+
+exception CVC4_error of string
 
 (** list of different available options *)
 val options_l : string list
@@ -21,6 +28,7 @@ val options_l : string list
     they are tried one by one until the deadline is reached or the solver
     returns "SAT"
   @raise Invalid_argument if options=[]
+  @raise CVC4_error if the solver failed with an error
 *)
 val call :
   (module FO.S with type T.t = 't and type Ty.t = 'ty) ->
@@ -37,6 +45,7 @@ val call :
   @param deadline absolute time at which the solver should stop (even without an answer)
   @param options list of options to try. IF several options are provided,
     the deadline will still be respected.
+  @raise CVC4_error if the solver failed with an error
 *)
 val close_pipe :
   (module FO.S with type T.t = 't and type Ty.t = 'ty) ->

@@ -14,7 +14,7 @@ module Res = struct
     | Sat of 't Model.t
     | Unsat
     | Timeout
-    | Error of string
+    | Error of exn
 end
 
 exception SolverClosed
@@ -48,7 +48,7 @@ module type S = sig
       The answer can be peeked at using {!peek_res}, or obtained through a
       blocking call to {!res}.
 
-      @param options additional options to pass the solver
+      @param options additional sets of options to give to the solver
       @param print if true, the solver should print its input on stdout
       @param timeout the number of seconds given, at most, to the solver.
         There is a default timeout, so if you want the solver to run forever
