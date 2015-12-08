@@ -612,6 +612,7 @@ module Make(FO_T : FO.S) = struct
       | Scheduling.Return l ->
           assert (List.for_all ((=) Sol.Res.Unsat) l);
           Sol.Res.Unsat
+      | Scheduling.Fail Timeout -> Sol.Res.Timeout
       | Scheduling.Fail e -> Sol.Res.Error e
 end
 
