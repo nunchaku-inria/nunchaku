@@ -71,7 +71,7 @@ let start_task ~f pool cmd =
 let kill_proc ap = match ap.state with
   | `Running ->
       Utils.ignore_catch Unix.close_process (ap.stdout, ap.stdin);
-      Unix.kill ap.pid 15;
+      Unix.kill ap.pid 9;
       (* Thread.kill ap.thread; (* not implemented? *) *)
       ap.state <- `Stopped
   | _ -> ()
