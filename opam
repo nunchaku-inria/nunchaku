@@ -24,6 +24,7 @@ depends: [
     "menhir" {build}
     "sequence"
     "base-unix"
+    "base-threads"
     "oasis" {build}
     "ocamlbuild" {build}
 ]
