@@ -99,6 +99,7 @@ module Make(T : TI.S) = struct
       | TI.Builtin (`Imply | `Not | `And | `Or) ->
           BPartial t (* partially applied *)
       | TI.Bind _ -> basic ~subst t
+      | TI.Builtin (`Polarized _)
       | TI.Const _
       | TI.Var _
       | TI.Let _
@@ -148,6 +149,7 @@ module Make(T : TI.S) = struct
           Utils.not_implemented "evaluation of DataTest"
       | `DataSelect (_,_) ->
           Utils.not_implemented "evaluation of DataSelect"
+      | `Polarized _
       | `Undefined _ -> st (* no evaluation *)
 
     (* see whether [st] matches a case in [m] *)
