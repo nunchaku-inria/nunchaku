@@ -9,6 +9,10 @@ include Intf.EQ with type t := t
 include Intf.ORD with type t := t
 include Intf.HASH with type t := t
 
+(* TODO: field "polarity" (+ / - / none) *)
+(* TODO: make `print` the default, which prints name+polarity;
+    `print_full` for also printing ID *)
+
 val make : name:string -> t
 
 val make_full : needs_at:bool -> name:string -> t
