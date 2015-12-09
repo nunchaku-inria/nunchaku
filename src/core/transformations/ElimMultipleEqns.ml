@@ -20,7 +20,7 @@ module Make(T : TI.S) = struct
   module Pat = Pattern.Make(T)
 
   type term = T.t
-  type 'a env = (term,term,<eqn:[`Whatever];ty:'a>) Env.t
+  type ('a,'b) env = (term,term,<eqn:[`Single];ind_preds:'b;ty:'a>) Env.t
 
   exception Error of string
 
@@ -35,9 +35,9 @@ module Make(T : TI.S) = struct
   let error_ msg = raise (Error msg)
   let errorf_ msg = Utils.exn_ksprintf msg ~f:error_
 
-  type 'a local_state = {
+  type ('a,'b) local_state = {
     root: term; (* term being pattern matched on (for undefined) *)
-    env: 'a env;
+    env: ('a,'b) env;
   }
 
   type pattern =
@@ -133,6 +133,7 @@ module Make(T : TI.S) = struct
                 }
             | Env.Fun_def (_,_,_)
             | Env.Fun_spec _
+            | Env.Pred _
             | Env.Cstor (_,_,_,_) ->
                 errorf_ "@[%a is not a type.@]" ID.print_name ty_id
             | Env.NoDef -> DN_bind []
@@ -212,7 +213,7 @@ module Make(T : TI.S) = struct
   *)
   let uniq_eqns
   : type a b.
-    env:a env ->
+    env:(a,b) env ->
     id:id ->
     (term, term, (a,b) inv1) Statement.equations ->
     (term, term, (a,b) inv2) Statement.equations
@@ -240,7 +241,14 @@ module Make(T : TI.S) = struct
       let new_rhs = compile_equations ~local_state vars cases in
       Stmt.Eqn_single (vars,new_rhs)
 
+  let conv_preds
+  : type a b.
+    ('t, 'ty, (a,b) inv1) Stmt.mutual_preds ->
+    ('t, 'ty, (a,b) inv2) Stmt.mutual_preds
+  = fun (Stmt.Some_preds l) -> Stmt.Some_preds l
+
   let uniq_eqn_st env st =
+    let loc = Stmt.loc st in
     let info = Stmt.info st in
     match Stmt.view st with
     | Stmt.Axiom (Stmt.Axiom_rec l) ->
@@ -248,23 +256,26 @@ module Make(T : TI.S) = struct
           (fun def ->
             let id = def.Stmt.rec_defined.Stmt.defined_head in
             let rec_eqns = uniq_eqns ~id ~env def.Stmt.rec_eqns in
-            {def with Stmt.rec_eqns; }
-          )
+            {def with Stmt.rec_eqns; })
           l
         in
-        let env = Env.declare_rec_funs ~env l' in
+        let env = Env.declare_rec_funs ?loc ~env l' in
         env, Stmt.axiom_rec ~info l'
     | Stmt.Axiom (Stmt.Axiom_spec l) ->
         env, Stmt.axiom_spec ~info l
     | Stmt.Axiom (Stmt.Axiom_std l) ->
         env, Stmt.axiom ~info l
     | Stmt.Decl (id,kind,ty) ->
-        let env = Env.declare ~env ~kind id ty in
+        let env = Env.declare ?loc ~env ~kind id ty in
         env, Stmt.mk_decl ~info id kind ty
     | Stmt.TyDef (k,ty) ->
         (* declare (co)data, so it can be used in encoding *)
-        let env = Env.def_data ~env ~kind:k ty in
+        let env = Env.def_data ?loc ~env ~kind:k ty in
         env, Stmt.mk_ty_def ~info k ty
+    | Stmt.Pred (wf, k, l) ->
+        let l = conv_preds l in
+        let env = Env.def_preds ?loc ~env ~wf ~kind:k l in
+        env, Stmt.mk_pred ~info ~wf k l
     | Stmt.Goal g ->
         env, Stmt.goal ~info g
 
