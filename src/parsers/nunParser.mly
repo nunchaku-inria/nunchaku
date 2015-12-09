@@ -16,6 +16,8 @@
 
 %token LEFT_PAREN
 %token RIGHT_PAREN
+%token LEFT_BRACKET
+%token RIGHT_BRACKET
 
 %token WILDCARD
 %token DOT
@@ -53,6 +55,9 @@
 %token SPEC
 %token DATA
 %token CODATA
+%token PRED
+%token COPRED
+%token WF_ATTRIBUTE
 %token VAL
 %token GOAL
 
@@ -276,6 +281,19 @@ type_def:
 mutual_types:
   | l=separated_nonempty_list(AND, type_def) { l }
 
+pred_def:
+  | id=raw_var
+    COLON ty=term
+    EQDEF l=separated_nonempty_list(SEMI_COLON, term)
+    { id, ty, l }
+
+mutual_preds:
+  | l=separated_nonempty_list(AND, pred_def) { l }
+
+wf_attribute:
+  | LEFT_BRACKET WF_ATTRIBUTE RIGHT_BRACKET { `Wf }
+  | { `Not_wf }
+
 statement:
   | VAL v=raw_var COLON t=term DOT
     {
@@ -306,6 +324,16 @@ statement:
     {
       let loc = L.mk_pos $startpos $endpos in
       A.codata ~loc l
+    }
+  | PRED a=wf_attribute l=mutual_preds DOT
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.pred ~loc ~wf:a l
+    }
+  | COPRED a=wf_attribute l=mutual_preds DOT
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.copred ~loc ~wf:a l
     }
   | GOAL t=term DOT
     {

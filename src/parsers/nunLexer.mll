@@ -41,6 +41,8 @@ rule token = parse
   | comment_line { token lexbuf }
   | '(' { LEFT_PAREN }
   | ')' { RIGHT_PAREN }
+  | '[' { LEFT_BRACKET }
+  | ']' { RIGHT_BRACKET }
   | '.' { DOT }
   | '_' { WILDCARD }
   | ':' { COLON }
@@ -71,6 +73,8 @@ rule token = parse
   | "pi" { PI }
   | "data" { DATA }
   | "codata" { CODATA }
+  | "pred" { PRED }
+  | "copred" { COPRED }
   | "include" { INCLUDE }
   | "&&" { LOGIC_AND }
   | "||" { LOGIC_OR }
