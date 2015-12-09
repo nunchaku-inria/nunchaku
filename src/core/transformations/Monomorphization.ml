@@ -268,7 +268,8 @@ module Make(T : TI.S) = struct
      uninterpreted type. *)
   let should_be_mangled_ ~state id =
     match Env.find_exn ~env:state.St.env id with
-    | {Env.def=(Env.Fun_def _ | Env.Fun_spec _ | Env.Cstor _ | Env.Data _); _} ->
+    | {Env.def=(Env.Fun_def _ | Env.Fun_spec _ |
+                Env.Cstor _ | Env.Data _ | Env.Pred _); _} ->
         true (* defined objects: mangle *)
     | {Env.def=Env.NoDef; decl_kind=(Stmt.Decl_fun | Stmt.Decl_prop); _} ->
         true (* functions and prop: mangle *)
@@ -276,7 +277,7 @@ module Make(T : TI.S) = struct
         false (* uninterpreted poly types: do not mangle *)
 
   (* find a definition for [id] in [cases], or None *)
-  let find_def ~defs id =
+  let find_rec_def ~defs id =
     CCList.find_pred
       (fun def -> ID.equal (def.Stmt.rec_defined.Stmt.defined_head) id)
       defs
@@ -296,6 +297,17 @@ module Make(T : TI.S) = struct
     CCList.find_pred
       (fun tydef -> ID.equal id tydef.Stmt.ty_id)
       defs
+
+  (* find a definition for [id] in [cases], or None *)
+  let find_pred ~defs id =
+    CCList.find_pred
+      (fun def -> ID.equal (def.Stmt.pred_defined.Stmt.defined_head) id)
+      defs
+
+  (* bind the type variables of [def] to [tup]. *)
+  let match_pred ?(subst=Subst.empty) ~def tup =
+    assert (ArgTuple.length tup = List.length def.Stmt.pred_tyvars);
+    Subst.add_list ~subst def.Stmt.pred_tyvars (ArgTuple.m_args tup)
 
   (* local state for monomorphization, used in recursive traversal of terms *)
   type local_state = {
@@ -468,7 +480,7 @@ module Make(T : TI.S) = struct
     let specialize' = St.current_specialize ~state in
     St.push_specialize ~state
       (fun ~state ~depth id tup ->
-        match find_def ~defs id with
+        match find_rec_def ~defs id with
         | None ->
             (* delegate to previous specialization function *)
             specialize' ~state ~depth id tup
@@ -518,6 +530,86 @@ module Make(T : TI.S) = struct
     if !res <> []
     then
       let stmt = Stmt.axiom_rec ~info:{Stmt.name=None; loc;} !res in
+      St.push_res ~state stmt;
+    ()
+
+  let mono_clauses ~state ~local_state clauses =
+    List.map
+      (fun c ->
+        let open Stmt in
+        {
+          clause_concl=mono_term ~state ~local_state c.clause_concl;
+          clause_guard=CCOpt.map (mono_term ~state ~local_state) c.clause_guard;
+          clause_vars=List.map (mono_var ~state ~local_state) c.clause_vars;
+        })
+    clauses
+
+  let mono_pred
+  : type a b.
+      state:(a,b) St.t -> depth:int ->
+      [`Wf | `Not_wf] * [`Pred | `Copred] *
+      (term, term) Stmt.pred_def *
+      (term, term, (a, b) inv1) Stmt.mutual_preds * Stmt.loc option ->
+      ArgTuple.t -> unit
+  = fun ~state ~depth (wf, kind, def, defs, loc) tup ->
+    let Stmt.Some_preds defs = defs in
+    let q = Queue.create () in (* task list, for the fixpoint *)
+    let res = ref [] in (* resulting axioms *)
+    (* if we required monomorphization of [id tup], and some case in [l]
+       matches [id tup], then push into the queue so that it will be
+       processed in the fixpoint. Otherwise, [id] must be declared/defined
+       earlier and must be processed before we are done with [defs] *)
+    let specialize' = St.current_specialize ~state in
+    St.push_specialize ~state
+      (fun ~state ~depth id tup ->
+        match find_pred ~defs id with
+        | None ->
+            (* delegate to previous specialization function *)
+            specialize' ~state ~depth id tup
+        | Some def ->
+            (* same mutual block, process in fixpoint. *)
+            Queue.push (tup, depth, def, match_pred ~def tup) q
+      );
+    (* push first tuple in queue *)
+    let subst = match_pred ~def tup in
+    Queue.push (tup, depth, def, subst) q;
+    (* fixpoint *)
+    while not (Queue.is_empty q) do
+      let tup, depth, def, subst = Queue.take q in
+      let id = def.Stmt.pred_defined.Stmt.defined_head in
+      (* check for depth limit *)
+      St.check_depth ~state depth;
+      if depth > St.depth_limit ~state
+      || St.is_already_specialized ~state id tup
+      then ()
+      else (
+        Utils.debugf ~section 3
+          "@[<2>process pred `%a` for@ (%a %a)@ at depth %d@]"
+          (fun k -> k ID.print_name def.Stmt.pred_defined.Stmt.defined_head
+            ID.print_no_id id ArgTuple.print tup depth);
+        St.specialization_is_done ~state id tup;
+        (* we know [subst case.defined = (id args)], now
+            specialize the axioms and other fields *)
+        let local_state = {subst; depth=depth+1; } in
+        let clauses = mono_clauses ~state ~local_state def.Stmt.pred_clauses in
+        (* new (specialized) case *)
+        let pred_defined = mono_defined ~state ~local_state def.Stmt.pred_defined tup in
+        let def' = {Stmt.
+          pred_tyvars=[];
+          pred_defined;
+          pred_clauses=clauses;
+        } in
+        (* push new case to the list *)
+        CCList.Ref.push res def';
+      )
+    done;
+    (* remove callback *)
+    St.pop_specialize ~state;
+    (* push result, if any *)
+    if !res <> []
+    then
+      let stmt = Stmt.mk_pred ~info:{Stmt.name=None; loc;} ~wf
+        kind (Stmt.Some_preds !res) in
       St.push_res ~state stmt;
     ()
 
@@ -663,6 +755,10 @@ module Make(T : TI.S) = struct
         mono_rec_defs ~state ~depth (defs, def, loc) tup;
         assert (St.is_already_specialized ~state id tup);
         St.specialization_is_done ~state id tup
+    | Env.Pred (wf, k, def, defs, loc) ->
+        mono_pred ~state ~depth (wf, k, def, defs, loc) tup;
+        assert (St.is_already_specialized ~state id tup);
+        St.specialization_is_done ~state id tup
     | Env.Data (k,tydefs,tydef) ->
         mono_mutual_types ~state ~depth ~kind:k tydefs tydef tup loc
     | Env.Cstor (k,tydefs,tydef,_cstor) ->
@@ -714,6 +810,8 @@ module Make(T : TI.S) = struct
         let local_state={depth=0; subst=Subst.empty} in
         let l = List.map (mono_term ~state ~local_state) l in
         St.push_res ~state (Stmt.axiom ~info l)
+    | Stmt.Pred (wf, k, preds) ->
+        state.St.env <- Env.def_preds ?loc ~env:state.St.env ~wf ~kind:k preds;
     | Stmt.Axiom (Stmt.Axiom_spec l) ->
         state.St.env <- Env.spec_funs ?loc ~env:state.St.env l;
     | Stmt.Axiom (Stmt.Axiom_rec l) ->
