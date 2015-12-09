@@ -38,7 +38,8 @@ type ('t, 'ty, 'inv) def =
       [`Wf | `Not_wf] *
       [`Pred | `Copred] *
       ('t, 'ty) Statement.pred_def *
-      ('t, 'ty, 'inv) Statement.mutual_preds
+      ('t, 'ty, 'inv) Statement.mutual_preds *
+      loc option
 
   | NoDef
       (** Undefined symbol *)

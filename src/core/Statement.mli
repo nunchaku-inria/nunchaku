@@ -79,10 +79,16 @@ type ('t,'ty,'kind) axiom =
   | Axiom_rec of ('t,'ty,'kind) rec_defs
     (** Axioms are part of an admissible (partial) definition *)
 
+type ('t, 'ty) pred_clause = {
+  clause_vars: 'ty var list; (* universally quantified vars *)
+  clause_guard: 't option;
+  clause_concl: 't;
+}
+
 type ('t, 'ty) pred_def = {
-  pred_name: id;
-  pred_ty: 'ty;
-  pred_clauses: ('t option * 't) list;  (* each clause has an optional guard *)
+  pred_defined: 'ty defined;
+  pred_tyvars: 'ty var list;
+  pred_clauses: ('t, 'ty) pred_clause list;  (* each clause has an optional guard *)
 }
 
 (** Mutually defined (co)inductive predicates *)
@@ -150,10 +156,10 @@ val data : info:info -> 'ty mutual_types -> (_, 'ty, _) t
 val codata : info:info -> 'ty mutual_types -> (_, 'ty, _) t
 
 val pred : info:info -> wf:[`Wf | `Not_wf] ->
-  ('t, 'ty, 'inv) mutual_preds -> ('t, 'ty, 'inv) t
+  ('t, 'ty) pred_def list -> ('t, 'ty, <ind_preds:[`Present]; ..>) t
 
 val copred : info:info -> wf:[`Wf | `Not_wf] ->
-  ('t, 'ty, 'inv) mutual_preds -> ('t, 'ty, 'inv) t
+  ('t, 'ty) pred_def list -> ('t, 'ty, <ind_preds:[`Present]; ..>) t
 
 val mk_pred : info:info -> wf:[`Wf | `Not_wf] -> [`Pred | `Copred] ->
   ('t, 'ty, 'inv) mutual_preds -> ('t, 'ty, 'inv) t

@@ -858,6 +858,25 @@ module Convert(Term : TermTyped.S) = struct
         end
     | _ -> None
 
+  (* extract [forall vars. guard => f args] from a prop *)
+  let rec extract_clause ~f t =
+    let is_imply_ i = match Term.repr i with TI.Builtin `Imply -> true | _ -> false in
+    match Term.repr t with
+    | TI.Bind (`Forall, v, t') ->
+        CCOpt.map
+          (fun (vars, g, t) -> v::vars,g,t)
+          (extract_clause ~f t')
+    | TI.App (i, [a;b]) when is_imply_ i ->
+        begin try
+          if ID.equal (U.head_sym b) f then Some ([], Some a, b) else None
+        with Not_found -> None
+        end
+    | _ ->
+        begin try
+          if ID.equal (U.head_sym t) f then Some ([], None, t) else None
+        with Not_found -> None
+        end
+
   (* [f args = rhs], where [f : ty]. Maybe [f] is actually
     partially applied, in which case we create new variables [vars']
     and return them (along with the new atomic type) *)
@@ -879,10 +898,28 @@ module Convert(Term : TermTyped.S) = struct
     in
     aux Subst.empty args ty
 
-  let convert_rec_defs ?loc ~env l =
-    (* first, build new variables for the defined terms,
-        and build [env'] in which the defined identifiers are bound to constants *)
-    let env', l' = Utils.fold_map
+  (* check that [t], the converted version of [ax], contains only
+     the type variables among [ty_vars]. [id] is the symbol being defined. *)
+  let check_contains_only_ ?loc ~kind ~ty_vars id untyped_ax t =
+    begin match check_no_meta t with
+    | `Ok -> ()
+    | `Bad vars' ->
+      ill_formedf ?loc ~kind
+        "@[<2>term `@[%a@]`@ contains non-generalized variables @[%a@]@]"
+        P.print t (CCFormat.list MetaVar.print) vars'
+    end;
+    match check_vars ~vars:(VarSet.of_list ty_vars) ~rel:`Subset t with
+    | `Ok -> ()
+    | `Bad vars' ->
+        ill_formedf ?loc ~kind:"rec def"
+          "@[<2>equation `@[%a@]`,@ in definition of `@[%a@]`,@ \
+            contains type variables `@[%a@]` that do not occur \
+          in defined term@]"
+          A.print_term untyped_ax ID.print_name id
+          (CCFormat.list Var.print) vars'
+
+  let prepare_defs ~env l =
+    Utils.fold_map
       (fun env' (v,ty,l) ->
         (* convert the type *)
         let ty = convert_ty_exn ~env ty in
@@ -897,8 +934,13 @@ module Convert(Term : TermTyped.S) = struct
         (* declare [v] in the scope of equations *)
         let env' = Env.add_def ~env:env' v ~as_:v_as_t in
         env', (id,ty,vars,l)
-      ) env l
-    in
+      )
+      env l
+
+  let convert_rec_defs?loc ~env l =
+    (* first, build new variables for the defined terms,
+        and build [env'] in which the defined identifiers are bound to constants *)
+    let env', l' = prepare_defs ~env l in
     (* convert the equations *)
     let l' = List.map
       (fun (id,ty,ty_vars,l) ->
@@ -917,22 +959,7 @@ module Convert(Term : TermTyped.S) = struct
             (* sanity check: equation must not contain other type variables,
               and all type variables must be bound *)
             let before_generalize t =
-              begin match check_no_meta t with
-              | `Ok -> ()
-              | `Bad vars' ->
-                ill_formedf ?loc ~kind:"rec"
-                  "@[<2>term `@[%a@]`@ contains non-generalized variables @[%a@]@]"
-                  P.print t (CCFormat.list MetaVar.print) vars'
-              end;
-              match check_vars ~vars:(VarSet.of_list ty_vars) ~rel:`Subset t with
-              | `Ok -> ()
-              | `Bad vars' ->
-                  ill_formedf ?loc ~kind:"rec def"
-                    "@[<2>equation `@[%a@]`,@ in definition of `@[%a@]`,@ \
-                      contains type variables `@[%a@]` that do not occur \
-                    in defined term@]"
-                    A.print_term untyped_ax ID.print_name id
-                    (CCFormat.list Var.print) vars'
+              check_contains_only_ ?loc ~kind:"rec" ~ty_vars:ty_vars id untyped_ax t
             in
             let ax = convert_prop_ ~before_generalize ~env:env'' untyped_ax in
             (* decompose into a proper equation *)
@@ -958,6 +985,53 @@ module Convert(Term : TermTyped.S) = struct
         {Stmt.
           rec_defined=defined; rec_kind=kind; rec_vars=ty_vars;
           rec_eqns=Stmt.Eqn_nested rec_eqns; }
+      )
+      l'
+    in
+    env', l'
+
+  let convert_preds ?loc ~env l =
+    (* first, build new variables for the defined terms,
+        and build [env'] in which the defined identifiers are bound to constants *)
+    let env', l' = prepare_defs ~env l in
+    (* convert the equations *)
+    let l' = List.map
+      (fun (id,ty,ty_vars,l) ->
+        let defined = {Stmt.defined_head=id; defined_ty=ty; } in
+        (* in the definitions of [id], actually ensure that [id.name]
+           is bound to [id ty_vars]. This way we can be sure that all definitions
+           will share the same set of type variables. *)
+        let env'' = Env.remove ~env:env' (ID.name id) in
+        let env'' = Env.add_def ~env:env'' (ID.name id)
+          ~as_:(
+            let ty_vars' = List.map (U.ty_var ?loc:None) ty_vars in
+            U.app (U.const ~ty id) ty_vars' ~ty:(ty_apply ty ty_vars'))
+        in
+        let pred_clauses = List.map
+        (* return case *)
+          (fun untyped_ax ->
+            (* sanity check: equation must not contain other type variables,
+              and all type variables must be bound *)
+            let before_generalize t =
+              check_contains_only_ ?loc ~kind:"pred" ~ty_vars:ty_vars id untyped_ax t
+            in
+            let ax = convert_prop_ ~before_generalize ~env:env'' untyped_ax in
+            (* decompose into a proper clause *)
+            match extract_clause ~f:id ax with
+            | None ->
+                ill_formedf ?loc
+                  "@[<2>expected `@[forall <vars>.@ <optional guard> => %a <args>@]`@]"
+                    ID.print_name id
+            | Some (vars,g,rhs) ->
+                CCOpt.iter (check_prenex_types_ ?loc) g;
+                {Stmt.clause_concl=rhs; clause_guard=g; clause_vars=vars; }
+          )
+          l
+        in
+        {Stmt.
+          pred_defined=defined; pred_tyvars=ty_vars;
+          pred_clauses;
+        }
       )
       l'
     in
@@ -1084,6 +1158,12 @@ module Convert(Term : TermTyped.S) = struct
     | A.Codata l ->
         let env, l = convert_tydef ?loc ~env l in
         Stmt.codata ~info l, env
+    | A.Pred (wf, l) ->
+        let env, l = convert_preds ?loc ~env l in
+        Stmt.pred ~info ~wf l, env
+    | A.Copred (wf, l) ->
+        let env, l = convert_preds ?loc ~env l in
+        Stmt.copred ~info ~wf l, env
     | A.Goal t ->
         (* infer type for t *)
         let t = convert_term_exn ~env t in

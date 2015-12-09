@@ -35,7 +35,8 @@ type ('t, 'ty, 'inv) def =
       [`Wf | `Not_wf] *
       [`Pred | `Copred] *
       ('t, 'ty) Statement.pred_def *
-      ('t, 'ty, 'inv) Statement.mutual_preds
+      ('t, 'ty, 'inv) Statement.mutual_preds *
+      loc option
 
   | NoDef
       (** Undefined symbol *)
@@ -127,9 +128,10 @@ let spec_funs
       try
         let info = ID.PerTbl.find t.infos id in
         let l = match info.def with
-          | Data _ -> errorf_ id "defined as both function and (co)data"
-          | Cstor _ -> errorf_ id "defined as both function and constructor"
-          | Fun_def _ -> errorf_ id "already defined, cannot be specified"
+          | Data _
+          | Cstor _
+          | Fun_def _
+          | Pred _ -> errorf_ id "already defined"
           | Fun_spec l -> l
           | NoDef -> [] (* first def of id *)
         in
@@ -168,8 +170,28 @@ let def_data ?loc ~env:t ~kind tys =
         ) tydef.Stmt.ty_cstors t
     ) t tys
 
-let def_preds ?loc ~env ~wf ~kind l =
-  assert false (* TODO *)
+let def_preds
+: type inv.
+  ?loc:loc ->
+  env:('t, 'ty, inv) t ->
+  wf:[`Wf | `Not_wf] ->
+  kind:[`Pred | `Copred] ->
+  ('t, 'ty, inv) Statement.mutual_preds ->
+  ('t, 'ty, inv) t
+= fun ?loc ~env ~wf ~kind ((Stmt.Some_preds l) as preds) ->
+  List.fold_left
+    (fun env def ->
+      let id = def.Stmt.pred_defined.Stmt.defined_head in
+      check_not_defined_ env ~id
+        ~fail_msg:"is (co)inductive pred, but already defined";
+      let info = {
+        loc;
+        decl_kind=Stmt.Decl_prop;
+        ty=def.Stmt.pred_defined.Stmt.defined_ty;
+        def=Pred(wf,kind,def,preds,loc);
+      } in
+      {infos=ID.PerTbl.replace env.infos id info})
+    env l
 
 let add_statement
 : type inv.
@@ -189,6 +211,8 @@ let add_statement
       spec_funs ?loc ~env l
   | Stmt.Axiom (Stmt.Axiom_rec l) ->
       rec_funs ?loc ~env l
+  | Stmt.Pred (wf, kind, preds) ->
+      def_preds ?loc ~env ~wf ~kind preds
 
 let mem ~env ~id = ID.PerTbl.mem env.infos id
 
