@@ -14,7 +14,8 @@ module Make(T : TI.S) = struct
   type term = T.t
   type decode_state = unit
 
-  let elim_ind_preds
+  (* TODO *)
+  let polarize
   : (term, term, ('a,'b) inv) Problem.t ->
     (term, term, ('a,'b) inv) Problem.t * decode_state
   = fun pb ->
@@ -24,14 +25,16 @@ module Make(T : TI.S) = struct
           match Stmt.view st with
           | Stmt.Pred _ -> assert false
           | Stmt.Decl (id,k,d) -> Stmt.mk_decl ~info id k d
-          | Stmt.Axiom l ->
-              assert false (* TODO: find how to cast! *)
-              (* Stmt.mk_axiom ~info l *)
+          | Stmt.Axiom (Stmt.Axiom_std l) -> Stmt.axiom ~info l
+          | Stmt.Axiom (Stmt.Axiom_spec l) -> Stmt.axiom_spec ~info l
+          | Stmt.Axiom (Stmt.Axiom_rec l) ->
+              Stmt.axiom_rec ~info (Stmt.cast_rec_defs l)
           | Stmt.TyDef (k,l) -> Stmt.mk_ty_def ~info k l
           | Stmt.Goal g -> Stmt.goal ~info g)
     in
     pb', ()
 
+  (* TODO: something? do we have to merge both functions? *)
   let decode_model ~state:_ m = m
 
   let pipe_with ~decode ~print =
@@ -44,7 +47,7 @@ module Make(T : TI.S) = struct
     Transform.make1
       ~name:"polarize"
       ~on_encoded
-      ~encode:(fun pb -> elim_ind_preds pb)
+      ~encode:(fun pb -> polarize pb)
       ~decode
       ()
 

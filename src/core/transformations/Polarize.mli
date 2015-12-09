@@ -13,7 +13,7 @@ module Make(T : TermInner.S) : sig
   type term = T.t
   type decode_state
 
-  val elim_ind_preds :
+  val polarize :
     (term, term, ('a,'b) inv) Problem.t ->
     (term, term, ('a,'b) inv) Problem.t * decode_state
 
