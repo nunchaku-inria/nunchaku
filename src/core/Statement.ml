@@ -81,10 +81,23 @@ type ('t,'ty,'kind) axiom =
   | Axiom_rec of ('t,'ty,'kind) rec_defs
     (** Axioms are part of an admissible (partial) definition *)
 
+type ('t, 'ty) pred_def = {
+  pred_name: id;
+  pred_ty: 'ty;
+  pred_clauses: ('t option * 't) list;  (* each clause has an optional guard *)
+}
+
+(** Mutually defined (co)inductive predicates *)
+type ('t, 'ty, 'kind) mutual_preds =
+  | Some_preds :
+    ('t, 'ty) pred_def list
+    -> ('t, 'ty, <ind_preds: [`Present]; ..>) mutual_preds
+
 type ('term, 'ty, 'inv) view =
   | Decl of id * decl * 'ty
   | Axiom of ('term, 'ty, 'inv) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
+  | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty, 'inv) mutual_preds
   | Goal of 'term
 
 (** Additional informations on the statement *)
@@ -123,6 +136,9 @@ let axiom ~info l = mk_axiom ~info (Axiom_std l)
 let axiom1 ~info t = axiom ~info [t]
 let axiom_spec ~info t = mk_axiom ~info (Axiom_spec t)
 let axiom_rec ~info t = mk_axiom ~info (Axiom_rec t)
+let mk_pred ~info ~wf k l = make_ ~info (Pred (wf, k, l))
+let pred ~info ~wf l = mk_pred ~info ~wf `Pred l
+let copred ~info ~wf l = mk_pred ~info ~wf `Copred l
 let data ~info l = mk_ty_def ~info `Data l
 let codata ~info l = mk_ty_def ~info `Codata l
 let goal ~info t = make_ ~info (Goal t)
@@ -173,6 +189,23 @@ let map_spec_defs ~term ~ty t = {
   spec_axioms=List.map term t.spec_axioms;
 }
 
+let map_preds
+: type a a1 b b1 inv.
+    term:(a -> a1) -> ty:(b -> b1) ->
+    (a,b,<ind_preds:inv;..>) mutual_preds ->
+    (a1,b1,<ind_preds:inv;..>) mutual_preds
+= fun ~term ~ty -> function
+  | Some_preds l ->
+      let l = List.map
+        (fun def ->
+          {def with
+            pred_ty=ty def.pred_ty;
+            pred_clauses=
+              List.map (fun (g,concl) -> CCOpt.map term g, term concl) def.pred_clauses;
+          })
+        l
+      in Some_preds l
+
 let map ~term:ft ~ty:fty st =
   let info = st.info in
   match st.view with
@@ -202,6 +235,9 @@ let map ~term:ft ~ty:fty st =
           }) l
       in
       mk_ty_def ~info k l
+  | Pred (wf, k, preds) ->
+      let preds = map_preds ~term:ft ~ty:fty preds in
+      mk_pred ~info ~wf k preds
   | Goal t -> goal ~info (ft t)
 
 let fold_defined ~ty acc d = ty acc d.defined_ty
@@ -228,6 +264,19 @@ let fold_eqns_ (type inv) ~term ~ty acc (e:(_,_,inv) equations) =
       let acc = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc vars in
       term acc t
 
+let fold_preds (type inv) ~term ~ty acc (e:(_,_,inv) mutual_preds) =
+  match e with
+  | Some_preds l ->
+      List.fold_left
+        (fun acc def ->
+          let acc = ty acc def.pred_ty in
+          List.fold_left
+            (fun acc (g,t) ->
+              let acc = term acc t in
+              CCOpt.fold term acc g)
+            acc def.pred_clauses)
+        acc l
+
 let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
   match st.view with
   | Decl (_, _, t) -> ty acc t
@@ -245,6 +294,7 @@ let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
             )
             acc t
       end
+  | Pred (_, _, preds) -> fold_preds ~term ~ty acc preds
   | TyDef (_, l) ->
       List.fold_left
         (fun acc tydef ->
@@ -329,6 +379,25 @@ let print (type a)(type b)
       | Axiom_spec t -> pp_spec_defs out t
       | Axiom_rec t -> pp_rec_defs out t
       end
+  | Pred (wf, k, l) ->
+      let pp_wf out = function `Wf -> fpf out "[wf]" | `Not_wf -> () in
+      let pp_k out = function `Pred -> fpf out "pred" | `Copred -> fpf out "copred" in
+      let pp_clause out (g,t) = match g with
+        | None -> Pt.print out t
+        | Some g -> fpf out "@[<2>@[%a@]@ => @[%a@]@]" Pt.print g Pt.print t
+      in
+      let pp_pred out pred =
+        fpf out "@[<2>%a@ : %a@ := @[<hv>%a@]@]"
+          ID.print_name pred.pred_name
+          Pty.print pred.pred_ty
+          (pplist ~sep:";" pp_clause) pred.pred_clauses
+      in
+      let pp_preds (type inv) out (preds:(_,_,inv) mutual_preds) =
+        match preds with
+        | Some_preds l ->
+            fpf out "@[<hv>%a@]" (pplist ~sep:" and " pp_pred) l
+      in
+      fpf out "@[<hv>%a%a@ %a.@]" pp_wf wf pp_k k pp_preds l
   | TyDef (k, l) ->
       let ppcstors out c =
         fpf out "@[<hv2>%a %a@]"
