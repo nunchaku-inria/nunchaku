@@ -76,6 +76,7 @@ rule token = parse
   | "pred" { PRED }
   | "copred" { COPRED }
   | "include" { INCLUDE }
+  | "wf" { WF_ATTRIBUTE }
   | "&&" { LOGIC_AND }
   | "||" { LOGIC_OR }
   | "|" { VERTICAL_BAR }
