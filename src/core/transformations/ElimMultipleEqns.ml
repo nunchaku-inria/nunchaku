@@ -293,7 +293,7 @@ module Make(T : TI.S) = struct
     and decode _ x = decode x in
     Transform.make1
       ~on_encoded
-      ~name:"recursion_elim"
+      ~name:"elim_multi_eqns"
       ~encode:(fun p ->
         let p = uniq_eqns_pb p in
         p, ()

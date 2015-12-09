@@ -38,6 +38,7 @@ let print_elim_match_ = ref false
 let print_elim_preds_ = ref false
 let print_recursion_elim_ = ref false
 let print_elim_multi_eqns = ref false
+let print_polarize_ = ref false
 let print_fo_ = ref false
 let print_smt_ = ref false
 let timeout_ = ref 30
@@ -93,6 +94,7 @@ let options =
       " print input after elimination of recursive functions"
   ; "--print-elim-multi-eqns", Arg.Set print_elim_multi_eqns,
       " print input after elimination of multiple equations"
+  ; "--print-polarize", Arg.Set print_polarize_, " print input after polarization"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
@@ -136,41 +138,39 @@ let print_input_if_needed statements =
       statements;
   ()
 
+module Pipes = struct
+  module HO = TI.Default
+  module Typed = TermTyped.Default
+  (* typeference *)
+  module Step_tyinfer = TypeInference.Make(Typed)(HO)
+  (* encodings *)
+  module Step_skolem = Skolem.Make(Typed)(HO)
+  module Step_mono = Monomorphization.Make(HO)
+  module Step_ElimMultipleEqns = ElimMultipleEqns.Make(HO)
+  module Step_ElimMatch = ElimPatternMatch.Make(HO)
+  module Step_elim_preds = ElimIndPreds.Make(HO)
+  module Step_rec_elim = ElimRecursion.Make(HO)
+  module Step_polarize = Polarize.Make(HO)
+  (* conversion to FO *)
+  module Step_tofo = TermMono.TransFO(HO)(FO.Default)
+end
+
 (* build a pipeline, depending on options *)
 let make_model_pipeline () =
   let open Transform.Pipe in
-  let module HO = TI.Default in
-  let module Typed = TermTyped.Default in
-  (* type inference *)
-  let module Step_tyinfer = TypeInference.Make(Typed)(HO) in
-  let step_ty_infer = Step_tyinfer.pipe ~print:!print_typed_ in
-  (* encodings *)
-  let module Step_skolem = Skolem.Make(Typed)(HO) in
-  let step_skolem = Step_skolem.pipe ~print:!print_skolem_ in
-  let module Step_mono = Monomorphization.Make(HO) in
-  let step_monomorphization = Step_mono.pipe ~print:!print_mono_ in
-  let module Step_ElimMultipleEqns = ElimMultipleEqns.Make(HO) in
-  let step_elim_multi_eqns = Step_ElimMultipleEqns.pipe
-    ~decode:(fun x->x) ~print:!print_elim_multi_eqns in
-  let module Step_ElimMatch = ElimPatternMatch.Make(HO) in
-  let step_elim_match = Step_ElimMatch.pipe ~print:!print_elim_match_ in
-  let module Step_elim_preds = ElimIndPreds.Make(HO) in
-  let step_elim_preds = Step_elim_preds.pipe ~print:!print_elim_preds_ in
-  let module Step_rec_elim = ElimRecursion.Make(HO) in
-  let step_recursion_elim = Step_rec_elim.pipe ~print:!print_recursion_elim_ in
-  (* conversion to FO *)
-  let module Step_tofo = TermMono.TransFO(HO)(FO.Default) in
-  let step_fo = Step_tofo.pipe () in
+  let open Pipes in
   (* setup pipeline *)
   let pipe =
-    step_ty_infer @@@
-    step_skolem @@@
-    step_monomorphization @@@
-    step_elim_multi_eqns @@@
-    step_elim_preds @@@
-    step_recursion_elim @@@
-    step_elim_match @@@
-    step_fo @@@
+    Step_tyinfer.pipe ~print:!print_typed_  @@@
+    Step_skolem.pipe ~print:!print_skolem_ @@@
+    Step_mono.pipe ~print:!print_mono_ @@@
+    Step_ElimMultipleEqns.pipe
+      ~decode:(fun x->x) ~print:!print_elim_multi_eqns @@@
+    Step_elim_preds.pipe ~print:!print_elim_preds_ @@@
+    Step_polarize.pipe ~print:!print_polarize_ @@@
+    Step_rec_elim.pipe ~print:!print_recursion_elim_ @@@
+    Step_ElimMatch.pipe ~print:!print_elim_match_ @@@
+    Step_tofo.pipe () @@@
     id
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
@@ -179,32 +179,23 @@ let make_model_pipeline () =
 
 let make_proof_pipeline () =
   let open Transform.Pipe in
-  let module HO = TI.Default in
-  let module Typed = TermTyped.Default in
+  let open Pipes in
   (* type inference *)
-  let module Step_tyinfer = TypeInference.Make(Typed)(HO) in
   let step_ty_infer = Step_tyinfer.pipe_with
     ~decode:(fun ~signature:_ x->x) ~print:!print_typed_ in
   (* encodings *)
-  let module Step_skolem = Skolem.Make(Typed)(HO) in
   let step_skolem = Step_skolem.pipe_with
      ~decode:(fun _ x->x) ~print:!print_skolem_ in
-  let module Step_mono = Monomorphization.Make(HO) in
   let step_monomorphization = Step_mono.pipe_with
     ~decode:(fun _ x -> x) ~print:!print_mono_ in
-  let module Step_ElimMultipleEqns = ElimMultipleEqns.Make(HO) in
   let step_elim_multi_eqns = Step_ElimMultipleEqns.pipe
     ~decode:(fun x->x) ~print:!print_elim_multi_eqns in
-  let module Step_elim_preds = ElimIndPreds.Make(HO) in
   let step_elim_preds = Step_elim_preds.pipe_with
     ~decode:(fun _ x ->x) ~print:!print_elim_preds_ in
-  let module Step_ElimMatch = ElimPatternMatch.Make(HO) in
   let step_elim_match = Step_ElimMatch.pipe ~print:!print_elim_match_ in
-  let module Step_rec_elim = ElimRecursion.Make(HO) in
   let step_recursion_elim = Step_rec_elim.pipe_with
     ~decode:(fun _ x -> x) ~print:!print_recursion_elim_ in
   (* conversion to FO *)
-  let module Step_tofo = TermMono.TransFO(HO)(FO.Default) in
   let step_fo = Step_tofo.pipe_with ~decode:(fun x->x) in
   (* setup pipeline *)
   let pipe =

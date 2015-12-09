@@ -178,17 +178,30 @@ val map_eqns:
   ('t, 'ty, <eqn:'inv;..>) equations ->
   ('t2, 'ty2, <eqn:'inv;..>) equations
 
+val cast_eqns:
+  ('t, 'ty, <eqn:'inv;..>) equations ->
+  ('t, 'ty, <eqn:'inv;..>) equations
+(** Useful to change the invariants that are not related to equations *)
+
 val map_rec_def :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
   ('t, 'ty, <eqn:'inv;..>) rec_def ->
   ('t2, 'ty2, <eqn:'inv;..>) rec_def
 
+val cast_rec_def:
+  ('t, 'ty, <eqn:'inv;..>) rec_def ->
+  ('t, 'ty, <eqn:'inv;..>) rec_def
+
 val map_rec_defs :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
   ('t, 'ty, <eqn:'inv;..>) rec_defs ->
   ('t2, 'ty2, <eqn:'inv;..>) rec_defs
+
+val cast_rec_defs:
+  ('t, 'ty, <eqn:'inv;..>) rec_defs ->
+  ('t, 'ty, <eqn:'inv;..>) rec_defs
 
 val map_spec_defs :
   term:('t -> 't2) ->

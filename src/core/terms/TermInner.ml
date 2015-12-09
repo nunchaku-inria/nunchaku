@@ -639,6 +639,18 @@ module Util(T : S)
   let true_ = builtin `True
   let false_ = builtin `False
 
+  let flatten (b:[<`And | `Or]) l =
+    CCList.flat_map
+      (fun t -> match T.repr t with
+        | App (f, l') ->
+            begin match T.repr f with
+            | Builtin `Or when b=`Or -> l'
+            | Builtin `And when b=`And -> l'
+            | _ -> [t]
+            end
+        | _ -> [t])
+      l
+
   let rec not_ t = match T.repr t with
     | Builtin `True -> false_
     | Builtin `False -> true_
@@ -654,12 +666,12 @@ module Util(T : S)
   and and_ = function
     | [] -> app_builtin `True []
     | [x] -> x
-    | l -> app_builtin `And l
+    | l -> app_builtin `And (flatten `And l)
 
   and or_ = function
     | [] -> app_builtin `False []
     | [x] -> x
-    | l -> app_builtin `Or l
+    | l -> app_builtin `Or (flatten `Or l)
 
   let imply a b = app_builtin `Imply [a; b]
   let undefined_ t =

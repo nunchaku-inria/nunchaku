@@ -180,6 +180,15 @@ let map_eqns
     | Eqn_single (vars,rhs) ->
         Eqn_single (List.map (Var.update_ty ~f:ty) vars, term rhs)
 
+let cast_eqns
+: type inv.
+  ('t, 'ty, <eqn:inv;..>) equations ->
+  ('t, 'ty, <eqn:inv;..>) equations
+= function
+  | Eqn_nested l -> Eqn_nested l
+  | Eqn_linear l -> Eqn_linear l
+  | Eqn_single (vars,rhs) -> Eqn_single (vars,rhs)
+
 let map_rec_def ~term ~ty t = {
   rec_kind=t.rec_kind;
   rec_defined=map_defined ~f:ty t.rec_defined;
@@ -187,7 +196,19 @@ let map_rec_def ~term ~ty t = {
   rec_eqns=map_eqns ~term ~ty t.rec_eqns;
 }
 
+let cast_rec_def
+: type inv.
+  ('t, 'ty, <eqn:inv;..>) rec_def ->
+  ('t, 'ty, <eqn:inv;..>) rec_def
+= fun def -> Obj.magic def
+
 let map_rec_defs ~term ~ty t = List.map (map_rec_def ~term ~ty) t
+
+let cast_rec_defs
+: type inv.
+  ('t, 'ty, <eqn:inv;..>) rec_defs ->
+  ('t, 'ty, <eqn:inv;..>) rec_defs
+= fun t -> (Obj.magic t)
 
 let map_spec_defs ~term ~ty t = {
   spec_vars=List.map (Var.update_ty ~f:ty) t.spec_vars;

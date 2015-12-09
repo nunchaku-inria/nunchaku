@@ -365,6 +365,7 @@ module Make(T : TI.S) = struct
     match Stmt.view st with
     | Stmt.Decl (id,k,l) -> [Stmt.mk_decl ~info id k l] (* no type declaration changes *)
     | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l] (* no (co) data changes *)
+    | Stmt.Pred (wf, k, l) -> [Stmt.mk_pred ~info ~wf k l]
     | Stmt.Axiom l ->
         begin match l with
         | Stmt.Axiom_rec l ->

@@ -1,13 +1,12 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(** {1 Eliminate Inductive Predicates} *)
+(** {1 Polarize} *)
 
 module TI = TermInner
 module Stmt = Statement
 
-type 'a inv1 = <eqn:'a; ty:[`Mono]; ind_preds:[`Present]>
-type 'a inv2 = <eqn:'a; ty:[`Mono]; ind_preds:[`Absent]>
+type ('a,'b) inv = <ty:[`Mono]; eqn:'a; ind_preds:'b>
 
 module Make(T : TI.S) = struct
   module P = TI.Print(T)
@@ -15,9 +14,10 @@ module Make(T : TI.S) = struct
   type term = T.t
   type decode_state = unit
 
-  let elim_ind_preds
-  : (term, term, 'a inv1) Problem.t ->
-    (term, term, 'a inv2) Problem.t * decode_state
+  (* TODO *)
+  let polarize
+  : (term, term, ('a,'b) inv) Problem.t ->
+    (term, term, ('a,'b) inv) Problem.t * decode_state
   = fun pb ->
     let pb' = Problem.map_statements pb
       ~f:(fun st ->
@@ -34,22 +34,24 @@ module Make(T : TI.S) = struct
     in
     pb', ()
 
+  (* TODO: something? do we have to merge both functions? *)
   let decode_model ~state:_ m = m
 
   let pipe_with ~decode ~print =
     let on_encoded = if print
       then
         let module Ppb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after elimination of inductive predicates:@ %a@]@." Ppb.print]
+        [Format.printf "@[<v2>after polarization:@ %a@]@." Ppb.print]
       else []
     in
     Transform.make1
-      ~name:"elim_ind_pred"
+      ~name:"polarize"
       ~on_encoded
-      ~encode:(fun pb -> elim_ind_preds pb)
+      ~encode:(fun pb -> polarize pb)
       ~decode
       ()
 
   let pipe ~print =
     pipe_with ~decode:(fun state m -> decode_model ~state m) ~print
 end
+

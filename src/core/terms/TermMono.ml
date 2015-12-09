@@ -265,6 +265,7 @@ module ToFO(T : TI.S)(F : FO.S) = struct
         end
     | St.Goal f ->
         [ FOI.Goal (conv_form ~sigma f) ]
+    | St.Pred _ -> assert false
     | St.TyDef (k, l) ->
         let convert_cstor c =
           {FOI.
