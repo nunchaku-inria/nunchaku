@@ -35,7 +35,8 @@ Library "nunchaku_core"
                     transformations/Monomorphization,
                     transformations/ElimRecursion,
                     transformations/ElimMultipleEqns,
-                    transformations/ElimIndPreds
+                    transformations/ElimIndPreds,
+                    transformations/Polarize
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.sexp, containers.iter,
