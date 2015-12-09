@@ -25,9 +25,10 @@ module Make(T : TI.S) = struct
           match Stmt.view st with
           | Stmt.Pred _ -> assert false
           | Stmt.Decl (id,k,d) -> Stmt.mk_decl ~info id k d
-          | Stmt.Axiom l ->
-              assert false (* TODO: find how to cast! *)
-              (* Stmt.mk_axiom ~info l *)
+          | Stmt.Axiom (Stmt.Axiom_std l) -> Stmt.axiom ~info l
+          | Stmt.Axiom (Stmt.Axiom_spec l) -> Stmt.axiom_spec ~info l
+          | Stmt.Axiom (Stmt.Axiom_rec l) ->
+              Stmt.axiom_rec ~info (Stmt.cast_rec_defs l)
           | Stmt.TyDef (k,l) -> Stmt.mk_ty_def ~info k l
           | Stmt.Goal g -> Stmt.goal ~info g)
     in
