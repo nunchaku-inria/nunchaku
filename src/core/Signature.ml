@@ -17,6 +17,14 @@ let find ~sigma id =
 
 let declare ~sigma id ty = ID.Map.add id ty sigma
 
+let add_preds (type inv) ~sigma (preds:(_,_,inv) Stmt.mutual_preds) =
+  let (Stmt.Some_preds l) = preds in
+  List.fold_left
+    (fun sigma def ->
+      let d = def.Stmt.pred_defined in
+      declare ~sigma d.Stmt.defined_head d.Stmt.defined_ty)
+    sigma l
+
 let add_statement ~sigma st = match Stmt.view st with
   | Stmt.Decl (id,_,ty) -> declare ~sigma id ty
   | Stmt.Axiom (Stmt.Axiom_rec l) ->
@@ -27,6 +35,7 @@ let add_statement ~sigma st = match Stmt.view st with
         sigma l
   | Stmt.Axiom (Stmt.Axiom_spec _ | Stmt.Axiom_std _)
   | Stmt.Goal _ -> sigma
+  | Stmt.Pred (_, _, preds) -> add_preds ~sigma preds
   | Stmt.TyDef (_,l) ->
       List.fold_left
         (fun sigma tydef ->
