@@ -248,27 +248,10 @@ term:
       raise (A.ParseError loc)
     }
 
-defined_constant:
-  | v=var { v }
-  | v=at_var { v}
-
-def_equation:
-  | LOGIC_FORALL vars=typed_var+ DOT e=def_equation
-    {
-      let loc = L.mk_pos $startpos $endpos in
-      A.forall_list ~loc vars e
-    }
-  | LEFT_PAREN e=def_equation RIGHT_PAREN { e }
-  | lhs=apply_term LOGIC_EQ rhs=term
-    {
-      let loc = L.mk_pos $startpos $endpos in
-      A.eq ~loc lhs rhs
-    }
-
 rec_def:
   | t=raw_var
     COLON ty=term
-    EQDEF l=separated_nonempty_list(SEMI_COLON,def_equation)
+    EQDEF l=separated_nonempty_list(SEMI_COLON,term)
     { t, ty, l }
 
 rec_defs:
