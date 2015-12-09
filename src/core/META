@@ -1,8 +1,9 @@
 # OASIS_START
-# DO NOT EDIT (digest: e17c294755de267395b931363c0376e8)
+# DO NOT EDIT (digest: 58f1ac9453978f48bf2d2e37802e7716)
 version = "0.1"
 description = "A counter-example finder for higher-order logic"
-requires = "containers containers.sexp containers.iter sequence unix"
+requires =
+"containers containers.sexp containers.iter containers.data sequence unix threads"
 archive(byte) = "nunchaku_core.cma"
 archive(byte, plugin) = "nunchaku_core.cma"
 archive(native) = "nunchaku_core.cmxa"
