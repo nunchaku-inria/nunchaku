@@ -15,8 +15,8 @@ type id = ID.t
 
 let section = Utils.Section.make "mono"
 
-type 'a inv1 = <ty:[`Poly]; eqn:'a>
-type 'a inv2 = <ty:[`Mono]; eqn:'a>
+type ('a,'b) inv1 = <ty:[`Poly]; eqn:'a; ind_preds:'b>
+type ('a,'b) inv2 = <ty:[`Mono]; eqn:'a; ind_preds:'b>
 
 module Make(T : TI.S) = struct
   module T = T
@@ -153,12 +153,12 @@ module Make(T : TI.S) = struct
   module St = struct
     type depth = int
 
-    type 'inv t = {
-      mutable env: (term, term, 'inv inv1) Env.t;
+    type ('inv1,'inv2) t = {
+      mutable env: (term, term, ('inv1,'inv2) inv1) Env.t;
         (* access definitions/declarations by ID *)
       config: config;
         (* settings *)
-      output: (term, term, 'inv inv2) Stmt.t CCVector.vector;
+      output: (term, term, ('inv1,'inv2) inv2) Stmt.t CCVector.vector;
         (* statements that have been specialized *)
       mutable depth_reached: bool;
         (* was [max_depth] reached? *)
@@ -170,7 +170,7 @@ module Make(T : TI.S) = struct
         (* tuples already instantiated *)
       already_declared: SetOfInstances.t;
         (* symbols already declared *)
-      specialize: (state:'inv t -> depth:depth -> ID.t -> ArgTuple.t -> unit) Stack.t;
+      specialize: (state:('inv1,'inv2) t -> depth:depth -> ID.t -> ArgTuple.t -> unit) Stack.t;
         (* stack of functions used to specialize a [id, tup] *)
     }
 
@@ -434,9 +434,9 @@ module Make(T : TI.S) = struct
   (* monomorphize equations properly
      n: number of type arguments *)
   let mono_eqns
-  : type a.
-      state:'t St.t -> local_state:local_state -> int ->
-      (_,_,a inv1) Stmt.equations -> (_,_,a inv2) Stmt.equations
+  : type a b.
+      state:_ St.t -> local_state:local_state -> int ->
+      (_,_,(a,b) inv1) Stmt.equations -> (_,_,(a,b) inv2) Stmt.equations
   = fun ~state ~local_state n eqn ->
     let f e = Stmt.map_eqns e
       ~term:(mono_term ~state ~local_state)
@@ -692,7 +692,7 @@ module Make(T : TI.S) = struct
   (* register the statement into the state's [env], so that next statements
     can monomorphize it. Some statements are automatically kept (goal and axiom) *)
   let mono_statement
-  : type i. state:i St.t -> (term, term, i inv1) Stmt.t -> unit
+  : type i j. state:(i,j) St.t -> (term, term, (i,j) inv1) Stmt.t -> unit
   = fun ~state st ->
     Utils.debugf ~section 2 "@[<2>enter statement@ `%a`@]"
       (fun k-> k PStmt.print st);

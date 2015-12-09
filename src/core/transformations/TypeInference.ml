@@ -27,7 +27,7 @@ let section = Utils.Section.make "type_infer"
 
 type attempt_stack = UntypedAST.term list
 
-type stmt_invariant = <ty:[`Poly]; eqn:[`Nested]>
+type stmt_invariant = <ty:[`Poly]; eqn:[`Nested]; ind_preds:[`Present]>
 
 exception ScopingError of string * string * loc option
 exception IllFormed of string * string * loc option (* what, msg, loc *)

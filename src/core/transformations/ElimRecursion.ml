@@ -12,7 +12,7 @@ type id = ID.t
 
 let section = Utils.Section.make "recursion_elim"
 
-type inv = <ty:[`Mono]; eqn:[`Single]>
+type inv = <ty:[`Mono]; eqn:[`Single]; ind_preds:[`Absent]>
 
 module Make(T : TI.S) = struct
   module U = TI.Util(T)

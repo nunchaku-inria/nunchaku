@@ -34,6 +34,12 @@ type ('t, 'ty, 'inv) def =
       'ty Statement.ty_constructor
       (** ID is a constructor (of the given type) *)
 
+  | Pred of
+      [`Wf | `Not_wf] *
+      [`Pred | `Copred] *
+      ('t, 'ty) Statement.pred_def *
+      ('t, 'ty, 'inv) Statement.mutual_preds
+
   | NoDef
       (** Undefined symbol *)
 
@@ -103,6 +109,14 @@ val def_data:
 (** Define a new set of mutually recursive (co)data types.
     Also defines their constructors.
     @raise InvalidDef if some type/constructor already defined/declared *)
+
+val def_preds :
+  ?loc:loc ->
+  env:('t, 'ty, 'inv) t ->
+  wf:[`Wf | `Not_wf] ->
+  kind:[`Pred | `Copred] ->
+  ('t, 'ty, 'inv) Statement.mutual_preds ->
+  ('t, 'ty, 'inv) t
 
 val add_statement :
   env:('t,'ty,'inv) t ->

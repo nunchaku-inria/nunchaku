@@ -387,10 +387,10 @@ let print (type a)(type b)
         | Some g -> fpf out "@[<2>@[%a@]@ => @[%a@]@]" Pt.print g Pt.print t
       in
       let pp_pred out pred =
-        fpf out "@[<2>%a@ : %a@ := @[<hv>%a@]@]"
+        fpf out "@[<hv2>@[%a@ : %a@] :=@ %a@]"
           ID.print_name pred.pred_name
           Pty.print pred.pred_ty
-          (pplist ~sep:";" pp_clause) pred.pred_clauses
+          (pplist ~sep:"; " pp_clause) pred.pred_clauses
       in
       let pp_preds (type inv) out (preds:(_,_,inv) mutual_preds) =
         match preds with

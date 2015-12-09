@@ -32,7 +32,7 @@ module type S = sig
 
   val convert_problem :
     state:state ->
-    (T1.t, T1.t, <eqn:_;..> as 'inv) Problem.t ->
+    (T1.t, T1.t, <eqn:_;ind_preds:_;..> as 'inv) Problem.t ->
     (T2.t, T2.t, 'inv) Problem.t
 
   val find_id_def : state:state -> id -> T2.t option
@@ -43,7 +43,7 @@ module type S = sig
 
   val pipe :
     print:bool ->
-    ((T1.t,T1.t,<eqn:_;..> as 'inv) Problem.t,
+    ((T1.t,T1.t,<eqn:_;ind_preds:_;..> as 'inv) Problem.t,
       (T2.t,T2.t,'inv) Problem.t,
       T2.t Model.t, T2.t Model.t
     ) Transform.t
@@ -54,7 +54,7 @@ module type S = sig
   val pipe_with :
     decode:(state -> 'c -> 'd) ->
     print:bool ->
-    ((T1.t,T1.t, <eqn:_;..> as 'inv) Problem.t,
+    ((T1.t,T1.t, <eqn:_;ind_preds:_;..> as 'inv) Problem.t,
       (T2.t,T2.t,'inv) Problem.t, 'c, 'd
     ) Transform.t
 end

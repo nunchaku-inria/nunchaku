@@ -7,7 +7,7 @@
     It encodes recursive functions as axioms, with a quantification over
     an uninterpreted abstraction type. *)
 
-type inv = <ty:[`Mono]; eqn:[`Single]>
+type inv = <ty:[`Mono]; eqn:[`Single]; ind_preds:[`Absent]>
 
 module Make(T : TermInner.S) : sig
   type term = T.t

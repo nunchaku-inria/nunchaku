@@ -5,8 +5,8 @@
 
 type id = ID.t
 
-type 'a inv1 = <ty:'a; eqn:[`Nested]>
-type 'a inv2 = <ty:'a; eqn:[`Single]>
+type ('a,'b) inv1 = <ty:'a; ind_preds:'b; eqn:[`Nested]>
+type ('a,'b) inv2 = <ty:'a; ind_preds:'b; eqn:[`Single]>
 
 module Make(T : TermInner.S) : sig
   type term = T.t
@@ -14,16 +14,16 @@ module Make(T : TermInner.S) : sig
   exception Error of string
 
   val uniq_eqns_pb :
-    (term, term, 'a inv1) Problem.t ->
-    (term, term, 'a inv2) Problem.t
+    (term, term, ('a,'b) inv1) Problem.t ->
+    (term, term, ('a,'b) inv2) Problem.t
 
   (** Pipeline component *)
   val pipe :
-    decode:('b -> 'c) ->
+    decode:('c -> 'd) ->
     print:bool ->
-    ((term, term, 'a inv1) Problem.t,
-      (term, term, 'a inv2) Problem.t,
-      'b, 'c) Transform.t
+    ((term, term, ('a,'b) inv1) Problem.t,
+      (term, term, ('a,'b) inv2) Problem.t,
+      'c, 'd) Transform.t
 end
 
 

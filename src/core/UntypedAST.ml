@@ -302,8 +302,8 @@ let pp_wf out = function
 
 let pp_mutual_preds out l =
   let pp_def out (p, ty, clauses) =
-    fpf out "@[<2>%s@ : @[%a@] :=@ @[<hv>%a@]@]" p print_term ty
-      (pp_list_ ~sep:";" print_term) clauses
+    fpf out "@[<hv2>@[%s@ : %a@] :=@ %a@]" p print_term ty
+      (pp_list_ ~sep:"; " print_term) clauses
   in
   pp_list_ ~sep:" and " pp_def out l
 

@@ -8,7 +8,6 @@ type id = ID.t
 type loc = Loc.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-
 type ('t, 'ty, 'inv) def =
   | Fun_def of
       ('t, 'ty, 'inv) Statement.rec_defs *
@@ -31,6 +30,12 @@ type ('t, 'ty, 'inv) def =
       'ty Statement.tydef *
       'ty Statement.ty_constructor
       (** ID is a constructor (of the given type) *)
+
+  | Pred of
+      [`Wf | `Not_wf] *
+      [`Pred | `Copred] *
+      ('t, 'ty) Statement.pred_def *
+      ('t, 'ty, 'inv) Statement.mutual_preds
 
   | NoDef
       (** Undefined symbol *)
@@ -103,7 +108,19 @@ let declare_rec_funs ?loc ~env defs =
     )
     env defs
 
-let spec_funs ?loc ~env:t spec =
+let find_exn ~env:t id = ID.PerTbl.find t.infos id
+
+let find ~env:t id =
+  try Some (find_exn ~env:t id)
+  with Not_found -> None
+
+let spec_funs
+: type inv.
+  ?loc:loc ->
+  env:('t, 'ty, inv) t ->
+  ('t, 'ty) Statement.spec_defs ->
+  ('t, 'ty, inv) t
+= fun ?loc ~env:t spec ->
   List.fold_left
     (fun t defined ->
       let id = defined.Stmt.defined_head in
@@ -120,7 +137,8 @@ let spec_funs ?loc ~env:t spec =
         {infos=ID.PerTbl.replace t.infos id {info with def; }}
       with Not_found ->
         errorf_ id "function is defined but was never declared"
-    ) t spec.Stmt.spec_defined
+    )
+    t spec.Stmt.spec_defined
 
 let def_data ?loc ~env:t ~kind tys =
   List.fold_left
@@ -150,7 +168,15 @@ let def_data ?loc ~env:t ~kind tys =
         ) tydef.Stmt.ty_cstors t
     ) t tys
 
-let add_statement ~env st =
+let def_preds ?loc ~env ~wf ~kind l =
+  assert false (* TODO *)
+
+let add_statement
+: type inv.
+  env:('t,'ty,inv) t ->
+  ('t,'ty,inv) Statement.t ->
+  ('t,'ty,inv) t
+= fun ~env st ->
   let loc = Stmt.loc st in
   match Stmt.view st with
   | Stmt.Decl (id,kind,ty) ->
@@ -163,12 +189,6 @@ let add_statement ~env st =
       spec_funs ?loc ~env l
   | Stmt.Axiom (Stmt.Axiom_rec l) ->
       rec_funs ?loc ~env l
-
-let find_exn ~env:t id = ID.PerTbl.find t.infos id
-
-let find ~env:t id =
-  try Some (find_exn ~env:t id)
-  with Not_found -> None
 
 let mem ~env ~id = ID.PerTbl.mem env.infos id
 

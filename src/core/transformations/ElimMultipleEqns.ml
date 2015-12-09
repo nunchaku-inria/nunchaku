@@ -9,8 +9,8 @@ module Subst = Var.Subst
 
 type id = ID.t
 
-type 'a inv1 = <ty:'a; eqn:[`Nested]>
-type 'a inv2 = <ty:'a; eqn:[`Single]>
+type ('a,'b) inv1 = <ty:'a; ind_preds:'b; eqn:[`Nested]>
+type ('a,'b) inv2 = <ty:'a; ind_preds:'b; eqn:[`Single]>
 
 let section = Utils.Section.make "elim_multiple_eqns"
 
@@ -211,11 +211,11 @@ module Make(T : TI.S) = struct
      @param id the symbol being defined
   *)
   let uniq_eqns
-  : type a.
+  : type a b.
     env:a env ->
     id:id ->
-    (term, term, a inv1) Statement.equations ->
-    (term, term, a inv2) Statement.equations
+    (term, term, (a,b) inv1) Statement.equations ->
+    (term, term, (a,b) inv2) Statement.equations
   = fun ~env ~id (Stmt.Eqn_nested l) ->
       (* create fresh vars *)
       let vars = match l with
