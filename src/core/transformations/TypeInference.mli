@@ -9,7 +9,7 @@ type 'a var = 'a Var.t
 type 'a signature = 'a Signature.t
 type loc = Location.t
 
-type stmt_invariant = <ty:[`Poly]; eqn:[`Nested]>
+type stmt_invariant = <ty:[`Poly]; eqn:[`Nested]; ind_preds:[`Present]>
 
 exception ScopingError of string * string * loc option
 (** Scoping error for the given variable *)
@@ -66,7 +66,7 @@ module Convert(T : TermTyped.S) : sig
       @return a pair [(t', vars)] such that, roughly, [app t' vars = t],
         or [t'] is [forall vars t], or [t'] contains [vars] *)
 
-  type statement = (term, term, <ty:[`Poly]; eqn:[`Nested]>) Statement.t
+  type statement = (term, term, stmt_invariant) Statement.t
 
   val convert_statement :
     env:env ->

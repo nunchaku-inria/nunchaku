@@ -626,9 +626,6 @@ let options_l =
   ; "--uf-ss-totality"
   ]
 
-(* TODO: run 2 or 3 solvers in parallel?
-  or give each try less time than [deadline]? *)
-
 (* solve problem using CVC4 before [deadline] *)
 let call (type t)(type ty)
 (module F : FO.S with type T.t=t and type Ty.t=ty)

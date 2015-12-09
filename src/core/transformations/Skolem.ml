@@ -32,7 +32,7 @@ module type S = sig
 
   val convert_problem :
     state:state ->
-    (T1.t, T1.t, <eqn:_;..> as 'inv) Problem.t ->
+    (T1.t, T1.t, <eqn:_;ind_preds:_;..> as 'inv) Problem.t ->
     (T2.t, T2.t, 'inv) Problem.t
 
   val find_id_def : state:state -> id -> T2.t option
@@ -43,7 +43,7 @@ module type S = sig
 
   val pipe :
     print:bool ->
-    ((T1.t,T1.t,<eqn:_;..> as 'inv) Problem.t,
+    ((T1.t,T1.t,<eqn:_;ind_preds:_;..> as 'inv) Problem.t,
       (T2.t,T2.t,'inv) Problem.t,
       T2.t Model.t, T2.t Model.t
     ) Transform.t
@@ -54,7 +54,7 @@ module type S = sig
   val pipe_with :
     decode:(state -> 'c -> 'd) ->
     print:bool ->
-    ((T1.t,T1.t, <eqn:_;..> as 'inv) Problem.t,
+    ((T1.t,T1.t, <eqn:_;ind_preds:_;..> as 'inv) Problem.t,
       (T2.t,T2.t,'inv) Problem.t, 'c, 'd
     ) Transform.t
 end
@@ -181,7 +181,7 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
       | TI.Builtin (`Equiv _) -> assert false
       | TI.Builtin
         ((`Eq _ | `Ite _ | `Imply | `DataSelect _
-           | `DataTest _ | `Undefined _ | `And | `Or | `Not) as b) ->
+           | `DataTest _ | `Undefined _ | `Polarized _ | `And | `Or | `Not) as b) ->
           U.builtin (TI.Builtin.map b ~f:(aux ~env))
       | TI.App (f,l) ->
           begin match T2.repr f, l with

@@ -21,8 +21,8 @@ type id = ID.t
 
 (* TODO: if depth limit reached, activate some "spuriousness" flag? *)
 
-type 'a inv1 = <ty:[`Poly]; eqn:'a>
-type 'a inv2 = <ty:[`Mono]; eqn:'a>
+type ('a,'b) inv1 = <ty:[`Poly]; eqn:'a; ind_preds:'b>
+type ('a,'b) inv2 = <ty:[`Mono]; eqn:'a; ind_preds:'b>
 
 module Make(T : TermInner.S) : sig
   type term = T.t
@@ -34,8 +34,8 @@ module Make(T : TermInner.S) : sig
 
   val monomorphize :
     ?depth_limit:int ->
-    (term, term, 'a inv1) Problem.t ->
-    (term, term, 'a inv2) Problem.t * unmangle_state
+    (term, term, ('a,'b) inv1) Problem.t ->
+    (term, term, ('a,'b) inv2) Problem.t * unmangle_state
   (** Filter and specialize definitions of the problem.
 
       First it finds a set of instances for each symbol
@@ -61,8 +61,8 @@ module Make(T : TermInner.S) : sig
 
   val pipe :
     print:bool ->
-    ((term, term, 'a inv1) Problem.t,
-     (term, term, 'a inv2) Problem.t,
+    ((term, term, ('a,'b) inv1) Problem.t,
+     (term, term, ('a,'b) inv2) Problem.t,
       term Model.t, term Model.t
     ) Transform.t
   (** Pipeline component *)
@@ -70,8 +70,8 @@ module Make(T : TermInner.S) : sig
   val pipe_with :
     decode:(unmangle_state -> 'c -> 'd) ->
     print:bool ->
-    ((term, term, 'a inv1) Problem.t,
-     (term, term, 'a inv2) Problem.t, 'c, 'd
+    ((term, term, ('a,'b) inv1) Problem.t,
+     (term, term, ('a,'b) inv2) Problem.t, 'c, 'd
     ) Transform.t
   (** Generic Pipe Component
       @param decode the decode function that takes an applied [(module S)]

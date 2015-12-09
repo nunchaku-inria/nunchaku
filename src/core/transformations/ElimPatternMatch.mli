@@ -20,14 +20,14 @@ module Make(T : TermInner.S) : sig
   val elim_match : T.t -> T.t
 
   val tr_problem:
-    (term, term, <ty:[`Mono]; eqn:'a>) Problem.t ->
-    (term, term, <ty:[`Mono]; eqn:'a>) Problem.t
+    (term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t ->
+    (term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t
 
   val pipe :
     print:bool ->
-      ((term, term, <ty:[`Mono]; eqn:'a>) Problem.t,
-       (term, term, <ty:[`Mono]; eqn:'a>) Problem.t,
-      'b, 'b
+      ((term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t,
+       (term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t,
+      'c, 'c
     ) Transform.t
   (** Pipeline component. Reverse direction is identity. *)
 end

@@ -118,6 +118,10 @@ type spec_defs = string list * term list
    and its constructors that are (id args) *)
 type mutual_types = (var * var list * (var * ty list) list) list
 
+(* list of mutual (co) inductive predicates definitions. Each definition
+    is the predicate, its type, and a list of clauses defining it *)
+type mutual_preds = (var * ty * term list) list
+
 type statement_node =
   | Include of string * (string list) option (* file, list of symbols *)
   | Decl of var * ty (* declaration of uninterpreted symbol *)
@@ -125,8 +129,10 @@ type statement_node =
   | Spec of spec_defs (* spec *)
   | Rec of rec_defs (* mutual rec *)
   | Data of mutual_types (* inductive type *)
-  | Def of string * term  (* a=b, simple def *)
   | Codata of mutual_types
+  | Def of string * term  (* a=b, simple def *)
+  | Pred of [`Wf | `Not_wf] * mutual_preds
+  | Copred of [`Wf | `Not_wf] * mutual_preds
   | Goal of term (* goal *)
 
 type statement = {
@@ -184,6 +190,8 @@ let rec_ ?name ?loc l = mk_stmt_ ?name ?loc (Rec l)
 let def ?name ?loc a b = mk_stmt_ ?name ?loc (Def (a,b))
 let data ?name ?loc l = mk_stmt_ ?name ?loc (Data l)
 let codata ?name ?loc l = mk_stmt_ ?name ?loc (Codata l)
+let pred ?name ?loc ~wf l = mk_stmt_ ?name ?loc (Pred (wf, l))
+let copred ?name ?loc ~wf l = mk_stmt_ ?name ?loc (Copred (wf, l))
 let goal ?name ?loc t = mk_stmt_ ?name ?loc (Goal t)
 
 let rec head t = match Loc.get t with
@@ -288,6 +296,17 @@ let pp_ty_defs out l =
   in
   fpf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_case) l
 
+let pp_wf out = function
+  | `Wf -> fpf out "[wf]"
+  | `Not_wf -> ()
+
+let pp_mutual_preds out l =
+  let pp_def out (p, ty, clauses) =
+    fpf out "@[<hv2>@[%s@ : %a@] :=@ %a@]" p print_term ty
+      (pp_list_ ~sep:"; " print_term) clauses
+  in
+  pp_list_ ~sep:" and " pp_def out l
+
 let print_statement out st = match st.stmt_value with
   | Include (f, None) -> fpf out "@[include %s.@]" f
   | Include (f, Some l) -> fpf out "@[include (%a) from %s.@]"
@@ -301,6 +320,8 @@ let print_statement out st = match st.stmt_value with
   | Data l -> fpf out "@[data %a.@]" pp_ty_defs l
   | Codata l -> fpf out "@[codata %a.@]" pp_ty_defs l
   | Goal t -> fpf out "@[goal %a.@]" print_term t
+  | Pred (k, preds) -> fpf out "@[pred%a %a.@]" pp_wf k pp_mutual_preds preds
+  | Copred (k, preds) -> fpf out "@[copred%a %a.@]" pp_wf k pp_mutual_preds preds
 
 let print_statement_list out l =
   Format.fprintf out "@[<v>%a@]"

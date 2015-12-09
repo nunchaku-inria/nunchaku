@@ -12,7 +12,7 @@ type id = ID.t
 
 let section = Utils.Section.make "recursion_elim"
 
-type inv = <ty:[`Mono]; eqn:[`Single]>
+type inv = <ty:[`Mono]; eqn:[`Single]; ind_preds:[`Absent]>
 
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
@@ -187,7 +187,7 @@ module Make(T : TI.S) = struct
               let a, cond_a = tr_term_rec_ ~state ~local_state:(inv_pol local_state) a in
               let b, cond_b = tr_term_rec_ ~state ~local_state b in
               add_conds local_state.pol (U.app b [a; b]) (List.append cond_a cond_b)
-          | None, TI.Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
+          | None, TI.Builtin ((`DataTest _ | `DataSelect _ | `Polarized _) as b), [t] ->
               let t', conds = tr_term_rec_ ~state ~local_state t in
               U.app_builtin b [t'], conds
           | None, _, _ ->
@@ -202,7 +202,8 @@ module Make(T : TI.S) = struct
               U.app f l', conds
         end
     | TI.Builtin (`True | `False
-        | `And | `Or | `Not | `Imply | `DataSelect _ | `DataTest _) ->
+        | `And | `Or | `Not | `Imply | `DataSelect _
+        | `DataTest _ | `Polarized _) ->
           t, [] (* partially applied, or constant *)
     | TI.Builtin (`Undefined _ as b) ->
         U.builtin (TI.Builtin.map b
@@ -279,7 +280,7 @@ module Make(T : TI.S) = struct
       fun_encoding.fun_concretization
     in
     let subst = Subst.add_list ~subst:Subst.empty vars args' in
-    let local_state = { subst; pol=Pos; } in
+    let local_state = { subst; pol=NoPolarity; } in
     (* convert right-hand side and add its side conditions *)
     let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
     let rhs', conds = tr_term ~state ~local_state rhs in
@@ -420,11 +421,6 @@ module Make(T : TI.S) = struct
     fpf out "[@[<hv2>`%a`:@ %a@]]"
       ID.print_name d.dom_fun.fun_encoded_fun
       (CCFormat.seq ~start:"" ~stop:"" ~sep:" " pp_tuple) (ID.Tbl.to_seq d.dom_args)
-
-  let is_const_ t = match T.repr t with
-    | TI.Const _ -> true
-    | TI.App (_,[]) -> assert false
-    | _ -> false
 
   (* see whether [t] is of the form [var = const] *)
   let as_eqn_sym_ ~var:v t =
