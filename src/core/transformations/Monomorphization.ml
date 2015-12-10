@@ -333,8 +333,14 @@ module Make(T : TI.S) = struct
           let vars = CCList.drop n vars in
           Stmt.Eqn_single (vars, mono_term ~state ~local_state rhs)
 
+  let conf = {Traversal.
+    direct_tydef=false;
+    direct_spec=false;
+    direct_mutual_types=false;
+  }
+
   class ['inv1, 'inv2, 'c] mono_traverse ?size ?depth_limit () = object (self)
-    inherit ['inv1, 'inv2, 'c] Trav.traverse ?size ?depth_limit ()
+    inherit ['inv1, 'inv2, 'c] Trav.traverse ~conf ?size ?depth_limit ()
 
     val st : (_, _) St.t = St.create ()
 

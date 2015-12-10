@@ -16,6 +16,12 @@ module type ARG = sig
   val fail : ('a, Format.formatter, unit, 'b) format4 -> 'a
 end
 
+type conf = {
+  direct_tydef: bool;
+  direct_spec: bool;
+  direct_mutual_types: bool;
+}
+
 (* union-find list *)
 module UF_list = struct
   type 'a t = {
@@ -75,7 +81,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     mutable sf_is_root: bool;
   }
 
-  class virtual ['inv1, 'inv2, 'c] traverse ?(size=64) ?(depth_limit=256) () = object (self)
+  class virtual ['inv1, 'inv2, 'c] traverse ~conf ?(size=64) ?(depth_limit=256) () = object (self)
     (* access definitions/declarations by ID *)
     val mutable env : (term, term, 'inv1) Env.t = Env.create()
 
@@ -125,7 +131,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     (* processing of (id,arg) is finished *)
     method done_processing : ID.t -> Arg.t -> unit
       = fun id arg ->
-        Utils.debugf ~section 4 "done processing %a %a" (fun k->k ID.print id Arg.print arg);
+        Utils.debugf ~section 4 "done processing `%a` (%a)" (fun k->k ID.print id Arg.print arg);
         IDArgTbl.replace processed (id, arg) `Done
 
     (* signal we are currently processing this (id,arg) in the given frame *)
@@ -174,9 +180,8 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     = fun ~depth ~loc _defs def arg ->
       let id = def.Stmt.rec_defined.Stmt.defined_head in
       Utils.debugf ~section 3
-        "@[<2>process case `%a` for@ (%a %a)@ at depth %d@]"
-        (fun k -> k ID.print def.Stmt.rec_defined.Stmt.defined_head
-          ID.print id Arg.print arg depth);
+        "@[<2>process case `%a` for@ (%a)@ at depth %d@]"
+        (fun k -> k ID.print id Arg.print arg depth);
       let l = UF_list.make [] in
       let frame = {
         sf_id=id;
@@ -334,6 +339,8 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       : depth:int -> ID.t -> Arg.t -> unit
       = fun ~depth id arg ->
         (* check for depth limit *)
+        Utils.debugf ~section 5 "@[<2>traverse statement for@ %a (%a)@]"
+          (fun k->k ID.print id Arg.print arg);
         self#check_depth depth;
         if depth > depth_limit
         then assert false (* TODO: only declare type *)
@@ -357,6 +364,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
         in
         let loc = Env.loc env_info in
         match Env.def env_info with
+        | Env.Fun_spec _ when conf.direct_spec -> ()
         | Env.Fun_spec (spec,loc) ->
             self#do_spec ~depth ~loc id spec arg;
             assert (self#has_processed id arg);
@@ -366,6 +374,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
         | Env.Pred (wf, k, def, defs, loc) ->
             self#do_pred_rec ~depth ~loc wf k defs def arg;
             assert (self#has_processed id arg);
+        | (Env.Cstor _ | Env.Data _) when conf.direct_mutual_types -> ()
         | Env.Cstor (_,_,tydef,_) ->
             (* instead of processing the constructor, we should always
                process the type it belongs to. *)
@@ -374,6 +383,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
             assert (ID.equal tydef.Stmt.ty_id id);
             self#do_mutual_types_rec ~depth ~loc k tydefs tydef arg;
             assert (self#has_processed id arg);
+        | Env.NoDef when conf.direct_tydef -> ()
         | Env.NoDef ->
             let ty = env_info.Env.ty in
             let decl = env_info.Env.decl_kind in
@@ -393,7 +403,8 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       begin match Stmt.view st with
       | Stmt.Decl (id,k,ty) ->
           (* declare the statement (in case it is needed later) *)
-          env <- Env.declare ?loc ~kind:k ~env id ty
+          env <- Env.declare ?loc ~kind:k ~env id ty;
+          if conf.direct_tydef then self#push_res (Stmt.mk_decl ~info id k ty)
       | Stmt.Goal g ->
           (* convert goal *)
           let g = self#do_term ~depth:0 g in
@@ -406,10 +417,12 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
           env <- Env.def_preds ?loc ~env ~wf ~kind:k preds;
       | Stmt.Axiom (Stmt.Axiom_spec l) ->
           env <- Env.spec_funs ?loc ~env l;
+          if conf.direct_spec then self#push_res (Stmt.axiom_spec ~info l)
       | Stmt.Axiom (Stmt.Axiom_rec l) ->
           env <- Env.rec_funs ?loc ~env l;
       | Stmt.TyDef (k, l) ->
           env <- Env.def_data ?loc ~kind:k ~env l;
+          if conf.direct_tydef then self#push_res (Stmt.mk_ty_def ~info k l)
       end
   end
 

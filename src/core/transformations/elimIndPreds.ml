@@ -23,7 +23,8 @@ module Make(T : TI.S) = struct
       ~f:(fun st ->
           let info = Stmt.info st in
           match Stmt.view st with
-          | Stmt.Pred _ -> assert false
+          | Stmt.Pred (wf, k, l) ->
+              assert false (* TODO: each predicate should be polarized, encode it *) 
           | Stmt.Decl (id,k,d) -> Stmt.mk_decl ~info id k d
           | Stmt.Axiom (Stmt.Axiom_std l) -> Stmt.axiom ~info l
           | Stmt.Axiom (Stmt.Axiom_spec l) -> Stmt.axiom_spec ~info l
