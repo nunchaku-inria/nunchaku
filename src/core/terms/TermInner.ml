@@ -55,7 +55,6 @@ module Builtin = struct
     | `Eq of 'a * 'a
     | `DataTest of id (** Test whether [t : tau] starts with given constructor *)
     | `DataSelect of id * int (** Select n-th argument of given constructor *)
-    | `Polarized of id * bool (** function with polarity (in pos. or neg. position) *)
     | `Undefined of id * 'a (** Undefined case. argument=the undefined term *)
     ]
 
@@ -79,8 +78,6 @@ module Builtin = struct
     | `DataSelect (id, n) ->
         fpf out "select-%s-%d" (ID.name id) n
     | `Undefined (id,_) -> fpf out "undefined_%d" (ID.id id)
-    | `Polarized (id,p) ->
-        fpf out "%a%s" ID.print id (if p then "₊" else "₋")
 
   let equal
   : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
@@ -98,11 +95,9 @@ module Builtin = struct
     | `DataTest id, `DataTest id' -> ID.equal id id'
     | `DataSelect (id, n), `DataSelect (id', n') -> n=n' && ID.equal id id'
     | `Undefined (a,t1), `Undefined (b,t2) -> ID.equal a b && eqterm t1 t2
-    | `Polarized (i1,p1), `Polarized (i2,p2) -> ID.equal i1 i2 && p1=p2
     | `True, _ | `False, _ | `Ite _, _ | `Not, _
     | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
-    | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _
-    | `Polarized _, _ -> false
+    | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> false
 
   let map : f:('a -> 'b) -> 'a t -> 'b t
   = fun ~f b -> match b with
@@ -116,7 +111,6 @@ module Builtin = struct
     | `DataTest id -> `DataTest id
     | `Or -> `Or
     | `Not -> `Not
-    | `Polarized (id,p) -> `Polarized (id,p)
     | `DataSelect (c,n) -> `DataSelect (c,n)
     | `Undefined (id, t) -> `Undefined (id, f t)
 
@@ -129,7 +123,6 @@ module Builtin = struct
     | `Or
     | `DataTest _
     | `DataSelect _
-    | `Polarized _
     | `Not -> acc
     | `Ite (a,b,c) -> f (f (f acc a) b) c
     | `Eq (a,b)
@@ -146,8 +139,6 @@ module Builtin = struct
     | `False, `False
     | `Not, `Not
     | `Or, `Or -> acc
-    | `Polarized (i1,p1), `Polarized (i2,p2) ->
-        if ID.equal i1 i2 && p1=p2 then acc else fail()
     | `DataTest i1, `DataTest i2 -> if ID.equal i1 i2 then acc else fail()
     | `DataSelect (i1,n1), `DataSelect (i2,n2) ->
         if n1=n2 && ID.equal i1 i2 then acc else fail()
@@ -161,8 +152,7 @@ module Builtin = struct
         if ID.equal i1 i2 then f acc t1 t2 else fail()
     | `True, _ | `False, _ | `Ite _, _ | `Not, _
     | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
-    | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _
-    | `Polarized _, _ -> fail()
+    | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> fail()
 
 
 
@@ -175,7 +165,6 @@ module Builtin = struct
     | `Or
     | `DataTest _
     | `DataSelect _
-    | `Polarized _
     | `Not -> ()
     | `Ite (a,b,c) -> f a; f b; f c
     | `Eq (a,b)
@@ -905,7 +894,6 @@ module Util(T : S)
           | `True
           | `False -> prop
           | `Ite (_,b,_) -> ty_exn ~sigma b
-          | `Polarized (id,_) -> find_ty_ ~sigma id
           | `Equiv (_,_)
           | `Eq (_,_) -> prop
           | `DataTest id ->

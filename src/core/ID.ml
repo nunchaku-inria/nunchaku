@@ -39,18 +39,18 @@ let hash v = v.id land max_int (* >= 0 *)
 
 let print out v =
   if v.needs_at
-    then Format.fprintf out "@@%s" v.name
-    else CCFormat.string out v.name
+    then Format.fprintf out "@@%s%s" v.name (Polarity.to_string v.pol)
+    else Format.fprintf out "%s%s" v.name (Polarity.to_string v.pol)
 
 let to_string v =
   if v.needs_at
-    then Printf.sprintf "@@%s" v.name
-    else v.name
+    then Printf.sprintf "@@%s%s" v.name (Polarity.to_string v.pol)
+    else v.name ^ Polarity.to_string v.pol
 
 let print_full out v =
   if v.needs_at
-    then Format.fprintf out "@@%s/%d" v.name v.id
-    else Format.fprintf out "%s/%d" v.name v.id
+    then Format.fprintf out "@@%s%s/%d" v.name (Polarity.to_string v.pol) v.id
+    else Format.fprintf out "%s%s/%d" v.name (Polarity.to_string v.pol) v.id
 
 let print_name out v = CCFormat.string out v.name
 

@@ -15,10 +15,11 @@ let inv = function
 
 let equal = (=)
 
-let pp out p =
-  CCFormat.string out
-    (match p with
-    | Pos -> "+"
-    | Neg -> "-"
-    | NoPol -> "<none>")
+let to_string = function
+  | Pos -> "+"
+  | Neg -> "-"
+  | NoPol -> ""
+
+let pp out p = CCFormat.string out (to_string p)
+
 
