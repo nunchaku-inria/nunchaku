@@ -168,6 +168,12 @@ val mk_pred : info:info -> wf:[`Wf | `Not_wf] -> [`Pred | `Copred] ->
 val goal : info:info -> 'a -> ('a,_,_) t
 (** The goal of the problem *)
 
+val find_rec_def : defs:('a, 'b, 'c) rec_def list -> ID.t -> ('a, 'b, 'c) rec_def option
+
+val find_tydef : defs:'a tydef list -> ID.t -> 'a tydef option
+
+val find_pred : defs:('a, 'b, 'inv) pred_def list -> ID.t -> ('a, 'b, 'inv) pred_def option
+
 val map_defined:
   f:('ty -> 'ty2) ->
   'ty defined ->
@@ -178,6 +184,12 @@ val map_eqns:
   ty:('ty -> 'ty2) ->
   ('t, 'ty, <eqn:'inv;..>) equations ->
   ('t2, 'ty2, <eqn:'inv;..>) equations
+
+val map_clause:
+  term:('t -> 't2) ->
+  ty:('ty -> 'ty2) ->
+  ('t, 'ty, <ind_preds:'inv;..>) pred_clause ->
+  ('t2, 'ty2, <ind_preds:'inv;..>) pred_clause
 
 val cast_eqns:
   ('t, 'ty, <eqn:'inv;..>) equations ->

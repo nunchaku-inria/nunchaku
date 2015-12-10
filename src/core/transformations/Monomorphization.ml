@@ -276,12 +276,6 @@ module Make(T : TI.S) = struct
     | {Env.def=Env.NoDef; decl_kind=Stmt.Decl_type; _} ->
         false (* uninterpreted poly types: do not mangle *)
 
-  (* find a definition for [id] in [cases], or None *)
-  let find_rec_def ~defs id =
-    CCList.find_pred
-      (fun def -> ID.equal (def.Stmt.rec_defined.Stmt.defined_head) id)
-      defs
-
   (* bind the type variables of [def] to [tup]. *)
   let match_rec ?(subst=Subst.empty) ~def tup =
     assert (ArgTuple.length tup = List.length def.Stmt.rec_vars);
@@ -481,7 +475,7 @@ module Make(T : TI.S) = struct
     let specialize' = St.current_specialize ~state in
     St.push_specialize ~state
       (fun ~state ~depth id tup ->
-        match find_rec_def ~defs id with
+        match Stmt.find_rec_def ~defs id with
         | None ->
             (* delegate to previous specialization function *)
             specialize' ~state ~depth id tup
@@ -569,7 +563,7 @@ module Make(T : TI.S) = struct
     let specialize' = St.current_specialize ~state in
     St.push_specialize ~state
       (fun ~state ~depth id tup ->
-        match find_pred ~defs id with
+        match Stmt.find_pred ~defs id with
         | None ->
             (* delegate to previous specialization function *)
             specialize' ~state ~depth id tup
@@ -662,7 +656,7 @@ module Make(T : TI.S) = struct
     let specialize' = St.current_specialize ~state in
     St.push_specialize ~state
       (fun ~state ~depth id tup ->
-        match find_tydef_ ~defs:!tydefs id with
+        match Stmt.find_tydef ~defs:!tydefs id with
         | None ->
             begin match Env.find ~env:state.St.env id with
             | Some {Env.def=Env.Data (kind', tydefs', tydef'); _} ->

@@ -150,6 +150,24 @@ let data ~info l = mk_ty_def ~info `Data l
 let codata ~info l = mk_ty_def ~info `Codata l
 let goal ~info t = make_ ~info (Goal t)
 
+(* find a definition for [id] in [cases], or None *)
+let find_rec_def ~defs id =
+  CCList.find_pred
+    (fun def -> ID.equal (def.rec_defined.defined_head) id)
+    defs
+
+(* find a (co)inductive type declaration for [id] *)
+let find_tydef ~defs id =
+  CCList.find_pred
+    (fun tydef -> ID.equal id tydef.ty_id)
+    defs
+
+(* find a definition for [id] in [cases], or None *)
+let find_pred ~defs id =
+  CCList.find_pred
+    (fun def -> ID.equal (def.pred_defined.defined_head) id)
+    defs
+
 let map_defined ~f d = {
   defined_head=d.defined_head;
   defined_ty=f d.defined_ty;
