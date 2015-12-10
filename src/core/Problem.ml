@@ -43,6 +43,8 @@ let make ~meta statements = { metadata=meta; statements; }
 
 let of_list ~meta l = make ~meta (CCVector.of_list l)
 
+let iter_statements ~f pb = CCVector.iter f pb.statements
+
 let map_statements ~f pb = {
   metadata=pb.metadata;
   statements=CCVector.map f pb.statements;

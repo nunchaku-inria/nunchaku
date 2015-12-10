@@ -41,6 +41,11 @@ val of_list :
 val statements : ('t, 'ty, 'inv) t -> ('t, 'ty, 'inv) Statement.t vec_ro
 val metadata : _ t -> Metadata.t
 
+val iter_statements:
+  f:(('t, 'ty, 'inv) Statement.t -> unit) ->
+  ('t,'ty,'inv) t ->
+  unit
+
 val map_statements :
   f:(('t, 'ty, 'inv) Statement.t -> ('t2,'ty2,'inv2) Statement.t) ->
   ('t,'ty,'inv) t ->
