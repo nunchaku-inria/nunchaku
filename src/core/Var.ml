@@ -14,7 +14,7 @@ let equal v1 v2 = ID.equal v1.id v2.id
 let compare v1 v2 = ID.compare v1.id v2.id
 
 let make ~ty ~name =
-  let id = ID.make ~name in
+  let id = ID.make name in
   { ty; id }
 
 let fresh_copy v =
@@ -26,6 +26,7 @@ let of_id ~ty id = {id;ty}
 
 let ty t = t.ty
 let id t = t.id
+let name t = ID.name t.id
 
 let fresh_update_ty v ~f =
   let ty = f v.ty in
@@ -37,6 +38,7 @@ let update_ty v ~f =
 
 let print oc v = ID.print oc v.id
 let to_string v = ID.to_string v.id
+let print_full oc v = ID.print_full oc v.id
 
 (** {2 Substitutions} *)
 

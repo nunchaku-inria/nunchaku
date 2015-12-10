@@ -35,6 +35,8 @@ val ty : 'ty t -> 'ty
 
 val id : _ t -> id
 
+val name : _ t -> string
+
 val update_ty : 'a t -> f:('a -> 'b) -> 'b t
 (** Update the type, and make a new variable with it with {b THE SAME ID}.
     Careful not to break invariants. *)
@@ -42,8 +44,10 @@ val update_ty : 'a t -> f:('a -> 'b) -> 'b t
 val fresh_update_ty : 'a t -> f:('a -> 'b) -> 'b t
 (** Update the type, and make a new variable with it with a fresh ID. *)
 
-val print : Format.formatter -> _ t -> unit
+val print : _ t CCFormat.printer
 val to_string : _ t -> string
+
+val print_full : _ t CCFormat.printer
 
 (** {2 Substitutions} *)
 

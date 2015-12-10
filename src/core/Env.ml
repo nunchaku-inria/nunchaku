@@ -58,7 +58,7 @@ exception InvalidDef of id * string
 
 let pp_invalid_def_ out = function
   | InvalidDef (id, msg) ->
-      Format.fprintf out "@[<2>invalid definition for `%a`:@ %s@]" ID.print_name id msg
+      Format.fprintf out "@[<2>invalid definition for `%a`:@ %s@]" ID.print id msg
   | _ -> assert false
 
 let () = Printexc.register_printer

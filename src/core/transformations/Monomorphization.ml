@@ -87,7 +87,7 @@ module Make(T : TI.S) = struct
     let print out tup =
       let pp_mangled out = function
         | None -> ()
-        | Some id -> fpf out " as %a" ID.print_name id
+        | Some id -> fpf out " as %a" ID.print id
       in
       fpf out "@[%a%a@]"
         (CCFormat.list ~start:"(" ~stop:")" ~sep:", " print_ty) tup.args
@@ -131,7 +131,7 @@ module Make(T : TI.S) = struct
 
     let print out t =
       let pp_pair out (a,b) =
-        fpf out "@[<h>%a -> %a@]" ID.print_name a ArgTupleSet.print b
+        fpf out "@[<h>%a -> %a@]" ID.print a ArgTupleSet.print b
       in
       fpf out "{@[<hv>%a@]@,}"
         (CCFormat.seq ~start:"" ~stop:"" pp_pair) (ID.Tbl.to_seq t)
@@ -207,7 +207,7 @@ module Make(T : TI.S) = struct
       try Hashtbl.find state.mangle mangled
       with Not_found ->
         (* create new ID *)
-        let mangled' = ID.make ~name:mangled in
+        let mangled' = ID.make mangled in
         Hashtbl.add state.mangle mangled mangled';
         ID.Tbl.replace state.unmangle mangled' (id, tup);
         mangled'
@@ -236,7 +236,7 @@ module Make(T : TI.S) = struct
       if not (is_already_specialized ~state id tup)
       && not (is_already_declared ~state id tup)
         then Utils.debugf ~section 3 "specialize %a on %a"
-          (fun k-> k ID.print_name id ArgTuple.print tup);
+          (fun k-> k ID.print id ArgTuple.print tup);
       let f = current_specialize ~state in
       f ~state ~depth id tup
 
@@ -503,8 +503,8 @@ module Make(T : TI.S) = struct
       else (
         Utils.debugf ~section 3
           "@[<2>process case `%a` for@ (%a %a)@ at depth %d@]"
-          (fun k -> k ID.print_name def.Stmt.rec_defined.Stmt.defined_head
-            ID.print_no_id id ArgTuple.print tup depth);
+          (fun k -> k ID.print def.Stmt.rec_defined.Stmt.defined_head
+            ID.print id ArgTuple.print tup depth);
         St.specialization_is_done ~state id tup;
         (* we know [subst case.defined = (id args)], now
             specialize the axioms and other fields *)
@@ -585,8 +585,8 @@ module Make(T : TI.S) = struct
       else (
         Utils.debugf ~section 3
           "@[<2>process pred `%a` for@ (%a %a)@ at depth %d@]"
-          (fun k -> k ID.print_name def.Stmt.pred_defined.Stmt.defined_head
-            ID.print_no_id id ArgTuple.print tup depth);
+          (fun k -> k ID.print def.Stmt.pred_defined.Stmt.defined_head
+            ID.print id ArgTuple.print tup depth);
         St.specialization_is_done ~state id tup;
         (* we know [subst case.defined = (id args)], now
             specialize the axioms and other fields *)
@@ -628,7 +628,7 @@ module Make(T : TI.S) = struct
             ~args:(ArgTuple.args tup) ~m_args:(ArgTuple.m_args tup) in
           decl_sym ~state id' tup';
           Utils.debugf ~section 4 "@[<2>specialization of `@[<2>%a@ %a@]` is done@]"
-            (fun k -> k ID.print_name id' ArgTuple.print tup');
+            (fun k -> k ID.print id' ArgTuple.print tup');
           St.specialization_is_done ~state id' tup'
         )
         spec.Stmt.spec_defined;
@@ -664,21 +664,21 @@ module Make(T : TI.S) = struct
                 if kind <> kind'
                   then failf_
                     "@[<2>cannot handle nested {(co)data, data}:@ @[<h>{%a, %a}@]@]"
-                    ID.print_name id ID.print_name tydef.Stmt.ty_id;
+                    ID.print id ID.print tydef.Stmt.ty_id;
                 tydefs := tydefs' @ !tydefs; (* bigger recursive block! *)
                 Queue.push (tydef', depth, tup) q
             | _ ->
                 (* not in this block, use the previous specialization fun *)
                 Utils.debugf ~section 4
                   "%a not in same block, fallback to previous specialize function"
-                  (fun k -> k ID.print_name id);
+                  (fun k -> k ID.print id);
                 specialize' ~state ~depth id tup
             end
         | Some tydef ->
             (* specialize in the same block of mutual types *)
             Utils.debugf ~section 4
               "%a in same block, specialize in same (co)data"
-              (fun k -> k ID.print_name id);
+              (fun k -> k ID.print id);
             Queue.push (tydef, depth, tup) q
       );
     (* initialization: push the first tuple to process *)
@@ -694,7 +694,7 @@ module Make(T : TI.S) = struct
       else (
         Utils.debugf ~section 3
           "@[<2>process type decl `%a : %a` for@ %a@ at depth %d@]"
-          (fun k-> k ID.print_no_id tydef.Stmt.ty_id
+          (fun k-> k ID.print tydef.Stmt.ty_id
           print_ty tydef.Stmt.ty_type ArgTuple.print tup depth);
         St.specialization_is_done ~state tydef.Stmt.ty_id tup;
         (* mangle type name. Monomorphized type should be : Type *)
@@ -739,7 +739,7 @@ module Make(T : TI.S) = struct
   (* monomorphize every statement that declares or defines [id] *)
   let mono_statements_for_id ~state ~depth id tup =
     let env_info = match Env.find ~env:state.St.env id with
-      | None -> failf_ "could not find definition of %a" ID.print_name id
+      | None -> failf_ "could not find definition of %a" ID.print id
       | Some i -> i
     in
     let loc = Env.loc env_info in

@@ -157,7 +157,7 @@ module Make(T : TI.REPR) = struct
   (*$R
     let v = U.ty_meta_var (MetaVar.make ~name:"x") in
     let f = U.ty_var (Var.make ~ty:U.ty_type ~name:"f") in
-    let a' = ID.make ~name:"a" in
+    let a' = ID.make "a" in
     let a = U.ty_const a' in
     let t1 = U.ty_app f [v] in
     let t2 = U.ty_app f [a] in

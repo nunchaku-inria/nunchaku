@@ -80,7 +80,7 @@ module Builtin = struct
         fpf out "select-%s-%d" (ID.name id) n
     | `Undefined (id,_) -> fpf out "undefined_%d" (ID.id id)
     | `Polarized (id,p) ->
-        fpf out "%a%s" ID.print_name id (if p then "₊" else "₋")
+        fpf out "%a%s" ID.print id (if p then "₊" else "₋")
 
   let equal
   : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
@@ -267,7 +267,7 @@ module Print(T : REPR)
 
   let rec print out t = match T.repr t with
     | TyBuiltin b -> CCFormat.string out (TyBuiltin.to_string b)
-    | Const id -> ID.print_name out id
+    | Const id -> ID.print out id
     | TyMeta v -> MetaVar.print out v
     | Var v -> Var.print out v
     | Builtin b -> Builtin.pp print_in_app out b
@@ -284,7 +284,7 @@ module Print(T : REPR)
     | Match (t,l) ->
         let pp_case out (id,(vars,t)) =
           fpf out "@[<hv2>| @[<hv2>%a %a@] ->@ %a@]"
-            ID.print_name id (pp_list_ ~sep:" " Var.print) vars print t
+            ID.print id (pp_list_ ~sep:" " Var.print) vars print t
         in
         fpf out "@[<hv>@[<hv2>match @[%a@] with@ %a@]@ end@]"
           print t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
@@ -675,7 +675,7 @@ module Util(T : S)
 
   let imply a b = app_builtin `Imply [a; b]
   let undefined_ t =
-    let id = ID.make ~name:"_" in
+    let id = ID.make "_" in
     builtin (`Undefined (id,t))
 
   let ty_builtin b = T.build (TyBuiltin b)

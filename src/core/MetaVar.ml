@@ -14,7 +14,7 @@ type 'a t = {
 }
 
 let make ~name = {
-  id=ID.make ~name;
+  id=ID.make name;
   deref=None;
 }
 

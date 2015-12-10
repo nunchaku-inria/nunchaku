@@ -354,9 +354,9 @@ let print (type a)(type b)
 (module Pty : TI.PRINT with type t = b) out t =
   match t.view with
   | Decl (id,_,t) ->
-      fpf out "@[<2>val %a@ : %a.@]" ID.print_name id Pty.print t
+      fpf out "@[<2>val %a@ : %a.@]" ID.print id Pty.print t
   | Axiom a ->
-      let pp_defined out d = ID.print_name out d.defined_head
+      let pp_defined out d = ID.print out d.defined_head
       and pp_typed_var out v =
         fpf out "@[<2>%a:%a@]" Var.print v Pty.print (Var.ty v)
       in
@@ -372,9 +372,9 @@ let print (type a)(type b)
               pplist ~sep:";"
                 (fun out (vars,rhs,side) ->
                   if vars=[]
-                  then fpf out "@[<hv>%a%a =@ %a@]" pp_sides side ID.print_name id Pt.print rhs
+                  then fpf out "@[<hv>%a%a =@ %a@]" pp_sides side ID.print id Pt.print rhs
                   else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
-                    (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print_name id
+                    (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print id
                     (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
                 ) out l
           | Eqn_nested l ->
@@ -382,14 +382,14 @@ let print (type a)(type b)
                 (fun out  (vars,args,rhs,side) ->
                   if vars=[]
                   then fpf out "@[<hv>%a@[<2>%a@ %a@] =@ %a@]"
-                    pp_sides side ID.print_name id
+                    pp_sides side ID.print id
                     (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
                   else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
-                    (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print_name id
+                    (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print id
                     (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
                 ) out l
           | Eqn_single (vars,rhs) ->
-              fpf out "@[<2>%a %a =@ %a@]" ID.print_name id
+              fpf out "@[<2>%a %a =@ %a@]" ID.print id
                 (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
         in
         let pp_def out d =
@@ -430,7 +430,7 @@ let print (type a)(type b)
       in
       let pp_pred out pred =
         fpf out "@[<hv2>@[%a@ : %a@] :=@ %a@]"
-          ID.print_name pred.pred_defined.defined_head
+          ID.print pred.pred_defined.defined_head
           Pty.print pred.pred_defined.defined_ty
           (pplist ~sep:"; " pp_clause) pred.pred_clauses
       in
@@ -443,10 +443,10 @@ let print (type a)(type b)
   | TyDef (k, l) ->
       let ppcstors out c =
         fpf out "@[<hv2>%a %a@]"
-          ID.print_name c.cstor_name (pplist ~sep:" " Pty.print_in_app) c.cstor_args in
+          ID.print c.cstor_name (pplist ~sep:" " Pty.print_in_app) c.cstor_args in
       let print_def out tydef =
         fpf out "@[<hv2>@[%a %a@] :=@ @[<hv>%a@]@]"
-          ID.print_name tydef.ty_id
+          ID.print tydef.ty_id
           (pplist ~sep:" " Var.print) tydef.ty_vars
           (pplist_prefix ~first:" | " ~pre:" | " ppcstors)
             (ID.Map.to_list tydef.ty_cstors |> List.map snd)

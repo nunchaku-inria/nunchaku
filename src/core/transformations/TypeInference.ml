@@ -165,7 +165,7 @@ module Convert(Term : TermTyped.S) = struct
 
     let add_datatype ~env id cstors =
       if ID.Tbl.mem env.datatypes id
-        then ill_formedf ~kind:"datatype" "%a already defined" ID.print_name id;
+        then ill_formedf ~kind:"datatype" "%a already defined" ID.print id;
       ID.Tbl.add env.datatypes id cstors
 
     let find_var ?loc ~env v =
@@ -465,7 +465,7 @@ module Convert(Term : TermTyped.S) = struct
             if ID.Map.mem c m
               then ill_formedf ?loc ~kind:"match"
                 "constructor %a occurs twice in the list of cases"
-                ID.print_name c;
+                ID.print c;
             (* make scoped variables and infer their type from [t] *)
             let vars' = List.map
               (fun v ->
@@ -504,7 +504,7 @@ module Convert(Term : TermTyped.S) = struct
           | `Missing l ->
               ill_formedf ?loc ~kind:"match"
                 "pattern match is not exhaustive (missing %a)"
-                (CCFormat.list ID.print_name) l
+                (CCFormat.list ID.print) l
         end;
         (* ok, we're done here *)
         U.match_with ~ty t m
@@ -915,7 +915,7 @@ module Convert(Term : TermTyped.S) = struct
           "@[<2>equation `@[%a@]`,@ in definition of `@[%a@]`,@ \
             contains type variables `@[%a@]` that do not occur \
           in defined term@]"
-          A.print_term untyped_ax ID.print_name id
+          A.print_term untyped_ax ID.print id
           (CCFormat.list Var.print) vars'
 
   let prepare_defs ~env l =
@@ -923,7 +923,7 @@ module Convert(Term : TermTyped.S) = struct
       (fun env' (v,ty,l) ->
         (* convert the type *)
         let ty = convert_ty_exn ~env ty in
-        let id = ID.make ~name:v in
+        let id = ID.make v in
         let v_as_t = U.const ~ty id in
         (* set of allowed type variables in the definitions of [v] *)
         let n  = num_implicit_ ty in
@@ -967,7 +967,7 @@ module Convert(Term : TermTyped.S) = struct
             | None ->
                 ill_formedf ?loc
                   "@[<2>expected `@[forall <vars>.@ @[%a@] @[<hv><args>@ =@ <rhs>@]@]`@]"
-                    ID.print_name id
+                    ID.print id
             | Some (vars,args,rhs) ->
                 List.iter (check_prenex_types_ ?loc) args;
                 (* make sure that functions are totally applied *)
@@ -1021,7 +1021,7 @@ module Convert(Term : TermTyped.S) = struct
             | None ->
                 ill_formedf ?loc
                   "@[<2>expected `@[forall <vars>.@ <optional guard> => %a <args>@]`@]"
-                    ID.print_name id
+                    ID.print id
             | Some (vars,g,rhs) ->
                 CCOpt.iter (check_prenex_types_ ?loc) g;
                 {Stmt.clause_concl=rhs; clause_guard=g; clause_vars=vars; }
@@ -1050,9 +1050,9 @@ module Convert(Term : TermTyped.S) = struct
           (fun _v t -> U.ty_arrow U.ty_type t)
           vars U.ty_type
         in
-        let id = ID.make_full ~needs_at:false ~name in
+        let id = ID.make_full ~needs_at:false name in
         Utils.debugf ~section 3 "@[(co)inductive type %a: %a@]"
-          (fun k-> k ID.print_name id P.print ty);
+          (fun k-> k ID.print id P.print ty);
         (* declare *)
         let env' = Env.add_decl ~env name ~id ty in
         env', (id,vars,ty,cstors)
@@ -1080,10 +1080,10 @@ module Convert(Term : TermTyped.S) = struct
           (fun (env,cstors) (name,ty_args) ->
             let ty_args = List.map (convert_ty_exn ~env:env') ty_args in
             let ty' = ty_forall_l_ vars' (arrow_list ty_args ty_being_declared) in
-            let id' = ID.make_full ~needs_at:(vars<>[]) ~name in
+            let id' = ID.make_full ~needs_at:(vars<>[]) name in
             let env = Env.add_decl ~env name ~id:id' ty' in
             Utils.debugf ~section 3 "@[constructor %a: %a@]"
-              (fun k-> k ID.print_name id' P.print ty');
+              (fun k-> k ID.print id' P.print ty');
             Env.add_cstor ~env ~name id' ty';
             (* newly built constructor *)
             check_ty_is_prenex_ ?loc ty';
@@ -1119,7 +1119,7 @@ module Convert(Term : TermTyped.S) = struct
     | A.Decl (v, ty) ->
         check_new_ ?loc ~env v;
         let ty = convert_ty_exn ~env ty in
-        let id = ID.make_full ~needs_at:(ty_is_poly_ ty) ~name:v in
+        let id = ID.make_full ~needs_at:(ty_is_poly_ ty) v in
         let env = Env.add_decl ~env v ~id ty in
         check_ty_is_prenex_ ?loc ty;
         let env = Env.add_sig ~env ~id ty in
