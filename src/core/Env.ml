@@ -75,7 +75,7 @@ let def t = t.def
 let ty t = t.ty
 let decl_kind t = t.decl_kind
 
-let create() = {infos=ID.PerTbl.create 64}
+let create ?(size=64) () = {infos=ID.PerTbl.create size}
 
 let check_not_defined_ t ~id ~fail_msg =
   if ID.PerTbl.mem t.infos id then errorf_ id fail_msg

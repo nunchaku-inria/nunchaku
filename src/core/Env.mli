@@ -61,7 +61,7 @@ exception InvalidDef of id * string
 
 val pp_invalid_def_ : exn printer
 
-val create: unit -> _ t
+val create: ?size:int -> unit -> _ t
 (** Create a new environment *)
 
 val loc: _ info -> loc option
