@@ -10,8 +10,6 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 
 (** {2 Problem: a Set of Statements + Signature} *)
 
-type 'a vec_ro = ('a, CCVector.ro) CCVector.t
-
 module Metadata : sig
   type t = private {
     incomplete: bool;
@@ -23,13 +21,13 @@ module Metadata : sig
 end
 
 type ('t, 'ty, 'inv) t = private {
-  statements : ('t, 'ty, 'inv) Statement.t vec_ro;
+  statements : ('t, 'ty, 'inv) Statement.t CCVector.ro_vector;
   metadata: Metadata.t;
 }
 
 val make :
   meta:Metadata.t ->
-  ('t, 'ty, 'inv) Statement.t vec_ro ->
+  ('t, 'ty, 'inv) Statement.t CCVector.ro_vector ->
   ('t, 'ty, 'inv) t
 (** Build a problem from statements *)
 
@@ -38,7 +36,7 @@ val of_list :
   ('t, 'ty, 'inv) Statement.t list ->
   ('t, 'ty, 'inv) t
 
-val statements : ('t, 'ty, 'inv) t -> ('t, 'ty, 'inv) Statement.t vec_ro
+val statements : ('t, 'ty, 'inv) t -> ('t, 'ty, 'inv) Statement.t CCVector.ro_vector
 val metadata : _ t -> Metadata.t
 
 val iter_statements:

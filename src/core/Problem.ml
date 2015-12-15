@@ -18,8 +18,6 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 
 let fpf = Format.fprintf
 
-type 'a vec_ro = ('a, CCVector.ro) CCVector.t
-
 module Metadata = struct
   type t = {
     incomplete: bool;
@@ -31,7 +29,7 @@ module Metadata = struct
 end
 
 type ('t, 'ty, 'inv) t = {
-  statements : ('t, 'ty, 'inv) Statement.t vec_ro;
+  statements : ('t, 'ty, 'inv) Statement.t CCVector.ro_vector;
   metadata: Metadata.t;
 }
 

@@ -150,15 +150,13 @@ val default: (Default.T.t, Default.Ty.t) build
 
 (** {2 Problem} *)
 module Problem : sig
-  type 'a vec_ro = ('a, CCVector.ro) CCVector.t
-
   type ('t, 'ty) t = {
-    statements: ('t, 'ty) statement vec_ro;
+    statements: ('t, 'ty) statement CCVector.ro_vector;
   }
 
-  val make : ('t, 'ty) statement vec_ro -> ('t, 'ty) t
+  val make : ('t, 'ty) statement CCVector.ro_vector -> ('t, 'ty) t
   val of_list : ('t, 'ty) statement list -> ('t, 'ty) t
-  val statements : ('t, 'ty) t -> ('t, 'ty) statement vec_ro
+  val statements : ('t, 'ty) t -> ('t, 'ty) statement CCVector.ro_vector
   val fold_flat_map :
     ('acc -> ('t, 'ty) statement -> 'acc * ('t2, 'ty2) statement list) ->
     'acc ->

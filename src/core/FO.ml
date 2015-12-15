@@ -211,10 +211,9 @@ let default
 
 (** {2 The Problems sent to Solvers} *)
 module Problem = struct
-  type 'a vec_ro = ('a, CCVector.ro) CCVector.t
 
   type ('t, 'ty) t = {
-    statements: ('t, 'ty) statement vec_ro;
+    statements: ('t, 'ty) statement CCVector.ro_vector;
   }
 
   let make l = {statements=l}
