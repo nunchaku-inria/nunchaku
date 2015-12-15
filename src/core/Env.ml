@@ -34,8 +34,8 @@ type ('t, 'ty, 'inv) def =
   | Pred of
       [`Wf | `Not_wf] *
       [`Pred | `Copred] *
-      ('t, 'ty) Statement.pred_def *
-      ('t, 'ty, 'inv) Statement.mutual_preds *
+      ('t, 'ty, 'inv) Statement.pred_def *
+      ('t, 'ty, 'inv) Statement.pred_def list *
       loc option
 
   | NoDef
@@ -170,27 +170,23 @@ let def_data ?loc ~env:t ~kind tys =
         ) tydef.Stmt.ty_cstors t
     ) t tys
 
-let def_preds
-: type inv.
-  ?loc:loc ->
-  env:('t, 'ty, inv) t ->
-  wf:[`Wf | `Not_wf] ->
-  kind:[`Pred | `Copred] ->
-  ('t, 'ty, inv) Statement.mutual_preds ->
-  ('t, 'ty, inv) t
-= fun ?loc ~env ~wf ~kind ((Stmt.Some_preds l) as preds) ->
+let def_pred ?loc ~env ~wf ~kind def l =
+  let id = def.Stmt.pred_defined.Stmt.defined_head in
+  check_not_defined_ env ~id
+    ~fail_msg:"is (co)inductive pred, but already defined";
+  let info = {
+    loc;
+    decl_kind=Stmt.Decl_prop;
+    ty=def.Stmt.pred_defined.Stmt.defined_ty;
+    def=Pred(wf,kind,def,l,loc);
+  } in
+  {infos=ID.PerTbl.replace env.infos id info}
+
+
+let def_preds ?loc ~env ~wf ~kind l =
   List.fold_left
     (fun env def ->
-      let id = def.Stmt.pred_defined.Stmt.defined_head in
-      check_not_defined_ env ~id
-        ~fail_msg:"is (co)inductive pred, but already defined";
-      let info = {
-        loc;
-        decl_kind=Stmt.Decl_prop;
-        ty=def.Stmt.pred_defined.Stmt.defined_ty;
-        def=Pred(wf,kind,def,preds,loc);
-      } in
-      {infos=ID.PerTbl.replace env.infos id info})
+      def_pred ?loc ~env ~wf ~kind def l)
     env l
 
 let add_statement

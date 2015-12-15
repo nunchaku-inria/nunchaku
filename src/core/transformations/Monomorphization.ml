@@ -300,12 +300,13 @@ module Make(T : TI.S) = struct
 
   (* find a definition for [id] in [cases], or None *)
   let find_pred ~defs id =
-    CCList.find_pred
-      (fun def -> ID.equal (def.Stmt.pred_defined.Stmt.defined_head) id)
-      defs
+    let is_def_of (type i) id (def:(_,_,i) Stmt.pred_def) =
+      ID.equal (def.Stmt.pred_defined.Stmt.defined_head) id
+    in
+    CCList.find_pred (is_def_of id) defs
 
   (* bind the type variables of [def] to [tup]. *)
-  let match_pred ?(subst=Subst.empty) ~def tup =
+  let match_pred (type i) ?(subst=Subst.empty) ~(def:(_,_,i) Stmt.pred_def) tup =
     assert (ArgTuple.length tup = List.length def.Stmt.pred_tyvars);
     Subst.add_list ~subst def.Stmt.pred_tyvars (ArgTuple.m_args tup)
 
@@ -533,26 +534,32 @@ module Make(T : TI.S) = struct
       St.push_res ~state stmt;
     ()
 
+  let mono_clause
+  : type a b.
+    state:(a, b) St.t ->
+    local_state:local_state ->
+    (_,_,(a,b) inv1) Stmt.pred_clause ->
+    (_,_,(a,b) inv2) Stmt.pred_clause
+  = fun ~state ~local_state c ->
+    let open Stmt in
+    let Pred_clause c = c in
+    Pred_clause {
+      clause_concl=mono_term ~state ~local_state c.clause_concl;
+      clause_guard=CCOpt.map (mono_term ~state ~local_state) c.clause_guard;
+      clause_vars=List.map (mono_var ~state ~local_state) c.clause_vars;
+    }
+
   let mono_clauses ~state ~local_state clauses =
-    List.map
-      (fun c ->
-        let open Stmt in
-        {
-          clause_concl=mono_term ~state ~local_state c.clause_concl;
-          clause_guard=CCOpt.map (mono_term ~state ~local_state) c.clause_guard;
-          clause_vars=List.map (mono_var ~state ~local_state) c.clause_vars;
-        })
-    clauses
+    List.map (mono_clause ~state ~local_state) clauses
 
   let mono_pred
   : type a b.
       state:(a,b) St.t -> depth:int ->
       [`Wf | `Not_wf] * [`Pred | `Copred] *
-      (term, term) Stmt.pred_def *
-      (term, term, (a, b) inv1) Stmt.mutual_preds * Stmt.loc option ->
+      (term, term, (a, b) inv1) Stmt.pred_def *
+      (term, term, (a, b) inv1) Stmt.pred_def list * Stmt.loc option ->
       ArgTuple.t -> unit
   = fun ~state ~depth (wf, kind, def, defs, loc) tup ->
-    let Stmt.Some_preds defs = defs in
     let q = Queue.create () in (* task list, for the fixpoint *)
     let res = ref [] in (* resulting axioms *)
     (* if we required monomorphization of [id tup], and some case in [l]
@@ -608,8 +615,7 @@ module Make(T : TI.S) = struct
     (* push result, if any *)
     if !res <> []
     then
-      let stmt = Stmt.mk_pred ~info:{Stmt.name=None; loc;} ~wf
-        kind (Stmt.Some_preds !res) in
+      let stmt = Stmt.mk_pred ~info:{Stmt.name=None; loc;} ~wf kind !res in
       St.push_res ~state stmt;
     ()
 

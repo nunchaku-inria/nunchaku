@@ -243,9 +243,9 @@ module Make(T : TI.S) = struct
 
   let conv_preds
   : type a b.
-    ('t, 'ty, (a,b) inv1) Stmt.mutual_preds ->
-    ('t, 'ty, (a,b) inv2) Stmt.mutual_preds
-  = fun (Stmt.Some_preds l) -> Stmt.Some_preds l
+    ('t, 'ty, (a,b) inv1) Stmt.pred_def list ->
+    ('t, 'ty, (a,b) inv2) Stmt.pred_def list
+  = fun l -> (Obj.magic l)
 
   let uniq_eqn_st env st =
     let loc = Stmt.loc st in

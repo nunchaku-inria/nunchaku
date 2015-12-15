@@ -1024,7 +1024,9 @@ module Convert(Term : TermTyped.S) = struct
                     ID.print id
             | Some (vars,g,rhs) ->
                 CCOpt.iter (check_prenex_types_ ?loc) g;
-                {Stmt.clause_concl=rhs; clause_guard=g; clause_vars=vars; }
+                Stmt.Pred_clause {Stmt.
+                  clause_concl=rhs; clause_guard=g; clause_vars=vars;
+                }
           )
           l
         in

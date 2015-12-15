@@ -37,8 +37,8 @@ type ('t, 'ty, 'inv) def =
   | Pred of
       [`Wf | `Not_wf] *
       [`Pred | `Copred] *
-      ('t, 'ty) Statement.pred_def *
-      ('t, 'ty, 'inv) Statement.mutual_preds *
+      ('t, 'ty, 'inv) Statement.pred_def *
+      ('t, 'ty, 'inv) Statement.pred_def list *
       loc option
 
   | NoDef
@@ -116,7 +116,7 @@ val def_preds :
   env:('t, 'ty, 'inv) t ->
   wf:[`Wf | `Not_wf] ->
   kind:[`Pred | `Copred] ->
-  ('t, 'ty, 'inv) Statement.mutual_preds ->
+  ('t, 'ty, 'inv) Statement.pred_def list ->
   ('t, 'ty, 'inv) t
 
 val add_statement :
