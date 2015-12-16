@@ -21,7 +21,7 @@ Library "nunchaku_core"
   Modules:          ID, Var, MetaVar, Location, Intf, Utils, Transform,
                     UntypedAST, Model, TypeUnify, Problem, FO, Reduce,
                     Solver_intf, Env, Signature, Statement,
-                    Scheduling, CVC4, Polarity,
+                    Scheduling, CVC4, Polarity, Traversal,
                     terms/TermInner,
                     terms/TermTyped,
                     terms/TermPoly,

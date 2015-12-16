@@ -153,7 +153,7 @@ let goal ~info t = make_ ~info (Goal t)
 (* find a definition for [id] in [cases], or None *)
 let find_rec_def ~defs id =
   CCList.find_pred
-    (fun def -> ID.equal (def.rec_defined.defined_head) id)
+    (fun def -> ID.equal def.rec_defined.defined_head id)
     defs
 
 (* find a (co)inductive type declaration for [id] *)
@@ -165,7 +165,7 @@ let find_tydef ~defs id =
 (* find a definition for [id] in [cases], or None *)
 let find_pred ~defs id =
   CCList.find_pred
-    (fun def -> ID.equal (def.pred_defined.defined_head) id)
+    (fun def -> ID.equal def.pred_defined.defined_head id)
     defs
 
 let map_defined ~f d = {
