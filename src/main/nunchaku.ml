@@ -109,7 +109,7 @@ let options =
 
 let print_version_if_needed () =
   if !version_ then (
-    Format.printf "nunchaku %s@." Const.version;
+    Format.printf "nunchaku %s %s@." Const.version GitVersion.id;
     exit 0
   );
   ()
