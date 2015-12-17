@@ -417,8 +417,8 @@ let print (type a)(type b)
             Pty.print d.rec_defined.defined_ty
             (pp_eqns d.rec_defined.defined_head) d.rec_eqns
         in
-        fpf out "@[<hov>rec %a.@]"
-          (pplist_prefix ~first:"" ~pre:" and " pp_def) l
+        fpf out "@[<v>rec %a.@]"
+          (pplist_prefix ~first:"" ~pre:"and " pp_def) l
       and pp_spec_defs out d =
         let printerms = pplist ~sep:";" Pt.print in
         let pp_defined_list out =
