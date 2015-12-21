@@ -93,7 +93,8 @@ rule token = parse
       FILEPATH s }
   | _ as c
     {
-      NunParsingUtils.lex_error_ "lexer fails on char '%c'" c
+      let loc = Location.of_lexbuf lexbuf in
+      NunParsingUtils.lex_error_ ~loc "unexpected char '%c'" c
     }
 
 {

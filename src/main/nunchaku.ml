@@ -44,6 +44,7 @@ let print_smt_ = ref false
 let timeout_ = ref 30
 let version_ = ref false
 let file = ref ""
+let j = ref 3
 
 let set_file f =
   if !file <> ""
@@ -94,6 +95,7 @@ let options =
       " print input after elimination of recursive functions"
   ; "--print-elim-multi-eqns", Arg.Set print_elim_multi_eqns,
       " print input after elimination of multiple equations"
+  ; "-j", Arg.Set_int j, " set parallelism level"
   ; "--print-polarize", Arg.Set print_polarize_, " print input after polarization"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
@@ -174,7 +176,7 @@ let make_model_pipeline () =
     id
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  CVC4.close_pipe FO.default ~options:CVC4.options_l
+  CVC4.close_pipe FO.default ~options:CVC4.options_l ~j:!j
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 let make_proof_pipeline () =
@@ -211,7 +213,7 @@ let make_proof_pipeline () =
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   CVC4.close_pipe FO.default
-    ?options:None ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
+    ?options:None ~j:!j ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 (* search for results *)
 let rec find_model_ l =

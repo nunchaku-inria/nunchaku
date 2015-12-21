@@ -511,16 +511,20 @@ module Make(FO_T : FO.S) = struct
   let read_res_ ~state s =
     match DSexp.next s.sexp with
     | `Ok (`Atom "unsat") ->
+        Utils.debug ~section 5 "CVC4 returned `unsat`";
         Sol.Res.Unsat
     | `Ok (`Atom "sat") ->
+        Utils.debug ~section 5 "CVC4 returned `sat`";
         let m = if ID.Map.is_empty state.symbols
           then Model.empty
           else get_model_ ~state s |> rewrite_model_
         in
         Sol.Res.Sat m
     | `Ok (`Atom "unknown") ->
+        Utils.debug ~section 5 "CVC4 returned `unknown`";
         Sol.Res.Timeout
     | `Ok (`List [`Atom "error"; `Atom s]) ->
+        Utils.debugf ~section 5 "@[<2>CVC4 returned `error %s`@]" (fun k->k s);
         Sol.Res.Error (CVC4_error s)
     | `Ok sexp ->
         let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ %a@]"
@@ -604,7 +608,7 @@ module Make(FO_T : FO.S) = struct
           match res solver with
           | Sol.Res.Sat m -> Scheduling.Return_shortcut (Sol.Res.Sat m)
           | Sol.Res.Unsat -> Scheduling.Return Sol.Res.Unsat
-          | Sol.Res.Timeout -> Scheduling.Fail Timeout
+          | Sol.Res.Timeout -> Scheduling.Return Sol.Res.Timeout
           | Sol.Res.Error e ->
               Utils.debugf ~section 1
                 "@[<2>error while running CVC4@ with `%s`:@ @[%s@]@]"
@@ -615,8 +619,13 @@ module Make(FO_T : FO.S) = struct
     match res with
       | Scheduling.Return_shortcut x -> x
       | Scheduling.Return l ->
-          assert (List.for_all ((=) Sol.Res.Unsat) l);
-          Sol.Res.Unsat
+          if List.exists
+            (function
+              | Sol.Res.Unsat -> true
+              | Sol.Res.Timeout -> false
+              | _ -> assert false)
+            l
+          then Sol.Res.Unsat else Sol.Res.Timeout
       | Scheduling.Fail Timeout -> Sol.Res.Timeout
       | Scheduling.Fail e -> Sol.Res.Error e
 end
@@ -634,7 +643,7 @@ let options_l =
 (* solve problem using CVC4 before [deadline] *)
 let call (type t)(type ty)
 (module F : FO.S with type T.t=t and type Ty.t=ty)
-?(options=[""]) ~print ~print_smt ~deadline problem =
+?(options=[""]) ?j ~print ~print_smt ~deadline problem =
   if options=[] then invalid_arg "CVC4.call: empty list of options";
   let module FOBack = FO.Default in
   let module P = FO.Print(F) in
@@ -644,7 +653,7 @@ let call (type t)(type ty)
   if print
     then Format.printf "@[<v2>FO problem:@ %a@]@." P.print_problem problem;
   let timeout = deadline -. Unix.gettimeofday() in
-  let res = CVC4.solve_par ~options ~timeout ~print:print_smt problem in
+  let res = CVC4.solve_par ?j ~options ~timeout ~print:print_smt problem in
   match res with
     | Sol.Res.Sat m -> Res.Sat m
     | Sol.Res.Unsat -> Res.Unsat
@@ -654,10 +663,10 @@ let call (type t)(type ty)
 (* close a pipeline with CVC4 *)
 let close_pipe (type t)(type ty)
 (module F : FO.S with type T.t=t and type Ty.t=ty)
-?options ~pipe ~print ~print_smt ~deadline
+?options ?j ~pipe ~print ~print_smt ~deadline
 =
   let module FOBack = FO.Default in
   let module P = FO.Print(FOBack) in
   Transform.ClosedPipe.make1
     ~pipe
-    ~f:(call (module F) ?options ~deadline ~print ~print_smt)
+    ~f:(call (module F) ?options ?j ~deadline ~print ~print_smt)

@@ -397,8 +397,9 @@ module Convert(Term : TermTyped.S) = struct
     | A.App (f, [a;b]) when is_eq_ f ->
         let a = convert_term_ ~stack ~env a in
         let b = convert_term_ ~stack ~env b in
-        unify_in_ctx_ ~stack (U.ty_exn a) (U.ty_exn b);
-        U.eq ?loc a b
+        let ty = U.ty_exn a in
+        unify_in_ctx_ ~stack ty (U.ty_exn b);
+        if U.ty_is_Prop ty then U.equiv ?loc a b else U.eq ?loc a b
     | A.App (f, l) ->
         (* infer type of [f] *)
         let f' = convert_term_ ~stack ~env f in
@@ -411,8 +412,8 @@ module Convert(Term : TermTyped.S) = struct
         in
         (* now, convert elements of [l] depending on what is
            expected by the type of [f] *)
-        let ty, l' = convert_arguments_following_ty
-          ~stack ~env ~subst:Subst.empty ty_f l in
+        let ty, l' = convert_arguments_following_ty ty_f l
+          ~stack ~env ~subst:Subst.empty in
         U.app ?loc ~ty f' l'
     | A.Var (`Var v) ->
         (* a variable might be applied, too *)
@@ -478,8 +479,7 @@ module Convert(Term : TermTyped.S) = struct
             (* now infer the type of [rhs] *)
             let env = TyEnv.add_vars ~env vars vars' in
             let rhs = convert_term_ ~stack ~env rhs in
-            ID.Map.add c (vars', rhs) m
-          )
+            ID.Map.add c (vars', rhs) m)
           ID.Map.empty l
         in
         (* force all right-hand sides to have the same type *)
@@ -547,7 +547,7 @@ module Convert(Term : TermTyped.S) = struct
         let ty_b = U.ty_exn b in
         (* type of the function *)
         let ty_ret = U.ty_meta_var (MetaVar.make ~name:"_") in
-        MetaVar.bind ~var (U.ty_arrow ty_b ty_ret);
+        unify_in_ctx_ ~stack ty (U.ty_arrow ty_b ty_ret);
         (* application *)
         let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty_ret l' in
         ty', b :: l'
@@ -574,12 +574,12 @@ module Convert(Term : TermTyped.S) = struct
       (fun k-> k P.print ty_var v A.print_term t);
     (* unify with expected type *)
     CCOpt.iter
-      (fun ty ->
-        unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty)
-      ) ty_opt;
+      (fun ty -> unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty))
+      ty_opt;
     let var = Var.make ~name:v ~ty:ty_var in
     let env = TyEnv.add_var ~env v ~var  in
     let t = convert_term_ ~stack ~env t in
+    unify_in_ctx_ ~stack (U.ty_exn t) prop;
     (* which quantifier to build? *)
     let builder = match which with
       | `Forall -> U.forall
@@ -845,7 +845,7 @@ module Convert(Term : TermTyped.S) = struct
         CCOpt.map
           (fun (vars,args,rhs) -> v::vars,args,rhs)
           (extract_eqn ~f t')
-    | TI.Builtin (`Eq (l,r)) ->
+    | TI.Builtin (`Eq (l,r) | `Equiv (l,r)) ->
         begin match Term.repr l with
         | TI.Const f' when ID.equal f f' ->
             let vars, rhs = extract_fun_ r in

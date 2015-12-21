@@ -111,6 +111,8 @@ let debugf ?(section=Section.root) l msg k =
         debug_fmt_ msg)
   )
 
+let debug ?section l msg = debugf ?section l "%s" (fun k->k msg)
+
 module Callback = struct
   type callback_id = int
 
