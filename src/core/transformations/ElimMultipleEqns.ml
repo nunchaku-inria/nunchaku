@@ -46,6 +46,7 @@ module Make(T : TI.S) = struct
 
   and ('a, 'b) decision_node =
     | DN_match of ('a, 'b) decision_node_match
+    | DN_if of 'b list * 'b list  (* true/false *)
     | DN_bind of 'b list (* only accepts variables *)
 
   and ('a, 'b) decision_node_match = {
@@ -55,8 +56,16 @@ module Make(T : TI.S) = struct
   }
 
   let dnode_add_wildcard d x = match d with
+    | DN_if (l,r) -> DN_if (x::l, x::r)
     | DN_match d -> DN_match { d with dn_wildcard=x :: d.dn_wildcard }
     | DN_bind d -> DN_bind (x::d)
+
+  let dnode_add_bool d b x = match d, b with
+    | DN_if (l,r), `True -> DN_if (x::l,r)
+    | DN_if (l,r), `False -> DN_if (l,x::r)
+    | DN_bind _, _
+    | DN_match _, _ ->
+        errorf_ "@[<2>expected boolean decision node@]"
 
   let dnode_add_cstor d c x = match d with
     | DN_match d ->
@@ -67,6 +76,7 @@ module Make(T : TI.S) = struct
           (CCFormat.seq ID.print) (ID.Map.to_seq allowed_cstors |> Sequence.map fst);
         let l = try ID.Map.find c d.dn_by_cstor with Not_found -> [] in
         DN_match { d with dn_by_cstor = ID.Map.add c (x::l) d.dn_by_cstor }
+    | DN_if _ -> errorf_ "cannot match against %a, boolean case" ID.print c
     | DN_bind _ ->
         errorf_ "cannot match against %a, variable binding only" ID.print c
 
@@ -122,8 +132,10 @@ module Make(T : TI.S) = struct
         let dnode =
           Utils.debugf ~section 5 "build decision node for %a:%a"
             (fun k->k Var.print v P.print (Var.ty v));
-          try
-            let ty_id = U.head_sym (Var.ty v) in
+          let ty = Var.ty v in
+          if U.ty_is_Prop ty then DN_if ([], [])
+          else try
+            let ty_id = U.head_sym ty in
             match Env.def (Env.find_exn ~env:local_state.env ty_id) with
             | Env.Data (_, _, tydef) ->
                 DN_match {
@@ -147,6 +159,9 @@ module Make(T : TI.S) = struct
             | P_any -> dnode_add_wildcard dnode (pats,rhs,side,subst)
             | P_term t ->
                 match Pat.repr t with
+                | Pattern.Builtin ((`True | `False) as b) ->
+                    (* follow the [true] branch *)
+                    dnode_add_bool dnode b (pats,rhs,side,subst)
                 | Pattern.App (id,sub_pats) ->
                     (* follow the [id] branch *)
                     let sub_pats = List.map (fun x->P_term x) sub_pats in
@@ -165,6 +180,10 @@ module Make(T : TI.S) = struct
      the default cases;
      then compile the subtrees *)
   and compile_dnode ~local_state v next_vars dn : term = match dn with
+  | DN_if (l,r) ->
+      let l = compile_equations ~local_state next_vars l in
+      let r = compile_equations ~local_state next_vars r in
+      U.ite (U.var v) l r
   | DN_bind l -> compile_equations ~local_state next_vars l
   | DN_match dn when ID.Map.is_empty dn.dn_by_cstor ->
       (* no need to match, use next variables *)

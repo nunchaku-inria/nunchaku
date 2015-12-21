@@ -11,7 +11,15 @@ module TI = TermInner
 type id = ID.t
 type 'a var = 'a Var.t
 
+module Builtin = struct
+  type t =
+    [ `True
+    | `False
+    ]
+end
+
 type 'a view =
+  | Builtin of Builtin.t
   | App of id * 'a list (* constructor application *)
   | Var of 'a var
 
@@ -37,6 +45,8 @@ module Make(T : TI.REPR)
         | TI.Const id -> App (id, l)
         | _ -> assert false
         end
+    | TI.Builtin `True -> Builtin `True
+    | TI.Builtin `False -> Builtin `False
     | TI.Builtin _
     | TI.Bind _
     | TI.Let _
