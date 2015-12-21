@@ -615,11 +615,21 @@ module Util(T : S)
   let app_builtin b l = T.build (App (builtin b, l))
   let mk_bind b v t = T.build (Bind (b,v,t))
   let fun_ v t = T.build (Bind (`Fun,v, t))
-  let let_ v t u = T.build (Let (v, t, u))
+
+  let let_ v t u = match T.repr u with
+    | Builtin `True
+    | Builtin `False -> u
+    | _ -> T.build (Let (v, t, u))
+
   let match_with t l =
     if ID.Map.is_empty l then invalid_arg "Term.case: empty list of cases";
     T.build (Match (t,l))
-  let ite a b c = builtin (`Ite (a,b,c))
+
+  let ite a b c = match T.repr a with
+    | Builtin `True -> b
+    | Builtin `False -> c
+    | _ -> builtin (`Ite (a,b,c))
+
   let forall v t = T.build (Bind(`Forall,v, t))
   let exists v t = T.build (Bind(`Exists,v, t))
 
@@ -631,6 +641,8 @@ module Util(T : S)
   let flatten (b:[<`And | `Or]) l =
     CCList.flat_map
       (fun t -> match T.repr t with
+        | Builtin `True when b=`And -> []
+        | Builtin `False when b=`Or -> []
         | App (f, l') ->
             begin match T.repr f with
             | Builtin `Or when b=`Or -> l'
@@ -652,15 +664,15 @@ module Util(T : S)
         end
     | _ -> app_builtin `Not [t]
 
-  and and_ = function
-    | [] -> app_builtin `True []
+  and and_ l = match flatten `And l with
+    | [] -> true_
     | [x] -> x
-    | l -> app_builtin `And (flatten `And l)
+    | l -> app_builtin `And l
 
-  and or_ = function
-    | [] -> app_builtin `False []
+  and or_ l = match flatten `Or l with
+    | [] -> false_
     | [x] -> x
-    | l -> app_builtin `Or (flatten `Or l)
+    | l -> app_builtin `Or l
 
   let imply a b = app_builtin `Imply [a; b]
   let undefined_ t =
