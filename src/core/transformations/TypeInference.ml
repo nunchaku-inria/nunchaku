@@ -411,8 +411,8 @@ module Convert(Term : TermTyped.S) = struct
         in
         (* now, convert elements of [l] depending on what is
            expected by the type of [f] *)
-        let ty, l' = convert_arguments_following_ty
-          ~stack ~env ~subst:Subst.empty ty_f l in
+        let ty, l' = convert_arguments_following_ty ty_f l
+          ~stack ~env ~subst:Subst.empty in
         U.app ?loc ~ty f' l'
     | A.Var (`Var v) ->
         (* a variable might be applied, too *)
@@ -478,8 +478,7 @@ module Convert(Term : TermTyped.S) = struct
             (* now infer the type of [rhs] *)
             let env = TyEnv.add_vars ~env vars vars' in
             let rhs = convert_term_ ~stack ~env rhs in
-            ID.Map.add c (vars', rhs) m
-          )
+            ID.Map.add c (vars', rhs) m)
           ID.Map.empty l
         in
         (* force all right-hand sides to have the same type *)
@@ -547,7 +546,7 @@ module Convert(Term : TermTyped.S) = struct
         let ty_b = U.ty_exn b in
         (* type of the function *)
         let ty_ret = U.ty_meta_var (MetaVar.make ~name:"_") in
-        MetaVar.bind ~var (U.ty_arrow ty_b ty_ret);
+        unify_in_ctx_ ~stack ty (U.ty_arrow ty_b ty_ret);
         (* application *)
         let ty', l' = convert_arguments_following_ty ~stack ~env ~subst ty_ret l' in
         ty', b :: l'
