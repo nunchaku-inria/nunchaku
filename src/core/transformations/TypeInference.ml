@@ -397,8 +397,9 @@ module Convert(Term : TermTyped.S) = struct
     | A.App (f, [a;b]) when is_eq_ f ->
         let a = convert_term_ ~stack ~env a in
         let b = convert_term_ ~stack ~env b in
-        unify_in_ctx_ ~stack (U.ty_exn a) (U.ty_exn b);
-        U.eq ?loc a b
+        let ty = U.ty_exn a in
+        unify_in_ctx_ ~stack ty (U.ty_exn b);
+        if U.ty_is_Prop ty then U.equiv ?loc a b else U.eq ?loc a b
     | A.App (f, l) ->
         (* infer type of [f] *)
         let f' = convert_term_ ~stack ~env f in
@@ -844,7 +845,7 @@ module Convert(Term : TermTyped.S) = struct
         CCOpt.map
           (fun (vars,args,rhs) -> v::vars,args,rhs)
           (extract_eqn ~f t')
-    | TI.Builtin (`Eq (l,r)) ->
+    | TI.Builtin (`Eq (l,r) | `Equiv (l,r)) ->
         begin match Term.repr l with
         | TI.Const f' when ID.equal f f' ->
             let vars, rhs = extract_fun_ r in

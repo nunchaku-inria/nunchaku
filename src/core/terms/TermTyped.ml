@@ -65,6 +65,7 @@ module Util(T : S)
   val forall : ?loc:loc -> t var -> t -> t
   val exists : ?loc:loc -> t var -> t -> t
   val eq : ?loc:loc -> t -> t -> t
+  val equiv : ?loc:loc -> t -> t -> t
 
   val mk_bind :
     ?loc:loc ->
@@ -137,6 +138,9 @@ end = struct
 
   let eq ?loc a b =
     builtin ?loc ~ty:ty_prop (`Eq (a,b))
+
+  let equiv ?loc a b =
+    builtin ?loc ~ty:ty_prop (`Equiv (a,b))
 
   let ty_builtin ?loc b =
     build ?loc ~ty:ty_type (TI.TyBuiltin b)
