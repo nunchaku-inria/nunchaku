@@ -625,11 +625,6 @@ module Util(T : S)
     if ID.Map.is_empty l then invalid_arg "Term.case: empty list of cases";
     T.build (Match (t,l))
 
-  let ite a b c = match T.repr a with
-    | Builtin `True -> b
-    | Builtin `False -> c
-    | _ -> builtin (`Ite (a,b,c))
-
   let forall v t = T.build (Bind(`Forall,v, t))
   let exists v t = T.build (Bind(`Exists,v, t))
 
@@ -673,6 +668,15 @@ module Util(T : S)
     | [] -> false_
     | [x] -> x
     | l -> app_builtin `Or l
+
+  let ite a b c = match T.repr a, T.repr b, T.repr c with
+    | Builtin `True, _, _ -> b
+    | Builtin `False, _, _ -> c
+    | _, Builtin `True, Builtin `False -> a
+    | _, Builtin `False, Builtin `True -> not_ a
+    | _, Builtin `True, Builtin `True -> true_
+    | _, Builtin `False, Builtin `False -> false_
+    | _ -> builtin (`Ite (a,b,c))
 
   let imply a b = app_builtin `Imply [a; b]
   let undefined_ t =
