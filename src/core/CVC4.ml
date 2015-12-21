@@ -634,7 +634,7 @@ let options_l =
 (* solve problem using CVC4 before [deadline] *)
 let call (type t)(type ty)
 (module F : FO.S with type T.t=t and type Ty.t=ty)
-?(options=[""]) ~print ~print_smt ~deadline problem =
+?(options=[""]) ?j ~print ~print_smt ~deadline problem =
   if options=[] then invalid_arg "CVC4.call: empty list of options";
   let module FOBack = FO.Default in
   let module P = FO.Print(F) in
@@ -644,7 +644,7 @@ let call (type t)(type ty)
   if print
     then Format.printf "@[<v2>FO problem:@ %a@]@." P.print_problem problem;
   let timeout = deadline -. Unix.gettimeofday() in
-  let res = CVC4.solve_par ~options ~timeout ~print:print_smt problem in
+  let res = CVC4.solve_par ?j ~options ~timeout ~print:print_smt problem in
   match res with
     | Sol.Res.Sat m -> Res.Sat m
     | Sol.Res.Unsat -> Res.Unsat
@@ -654,10 +654,10 @@ let call (type t)(type ty)
 (* close a pipeline with CVC4 *)
 let close_pipe (type t)(type ty)
 (module F : FO.S with type T.t=t and type Ty.t=ty)
-?options ~pipe ~print ~print_smt ~deadline
+?options ?j ~pipe ~print ~print_smt ~deadline
 =
   let module FOBack = FO.Default in
   let module P = FO.Print(FOBack) in
   Transform.ClosedPipe.make1
     ~pipe
-    ~f:(call (module F) ?options ~deadline ~print ~print_smt)
+    ~f:(call (module F) ?options ?j ~deadline ~print ~print_smt)

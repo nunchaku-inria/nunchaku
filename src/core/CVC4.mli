@@ -28,11 +28,13 @@ val options_l : string list
     they are tried one by one until the deadline is reached or the solver
     returns "SAT"
   @raise Invalid_argument if options=[]
+  @param j number of processes to run in parallel
   @raise CVC4_error if the solver failed with an error
 *)
 val call :
   (module FO.S with type T.t = 't and type Ty.t = 'ty) ->
   ?options:string list ->
+  ?j:int ->
   print:bool ->
   print_smt:bool ->
   deadline:float ->
@@ -45,11 +47,13 @@ val call :
   @param deadline absolute time at which the solver should stop (even without an answer)
   @param options list of options to try. IF several options are provided,
     the deadline will still be respected.
+  @param j number of processes to run in parallel
   @raise CVC4_error if the solver failed with an error
 *)
 val close_pipe :
   (module FO.S with type T.t = 't and type Ty.t = 'ty) ->
   ?options:string list ->
+  ?j:int ->
   pipe:('d, ('t, 'ty) FO.Problem.t, 'e, 'f) Transform.Pipe.t ->
   print:bool ->
   print_smt:bool ->
