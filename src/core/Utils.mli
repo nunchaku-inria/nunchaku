@@ -59,6 +59,8 @@ val debugf : ?section:Section.t -> int ->
 (** Print a debug message, with the given section and verbosity level.
     The message might be dropped if its level is too high. *)
 
+val debug : ?section:Section.t -> int -> string -> unit
+
 (** {2 Callbacks} *)
 
 module Callback : sig
