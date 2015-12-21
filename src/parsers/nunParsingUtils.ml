@@ -13,19 +13,20 @@ let section = Utils.Section.make "parser"
 
 (** {2 Lexing} *)
 
-exception LexError of string
+exception LexError of Loc.t option * string
 exception ParseError of Loc.t option * string
 
 let () = Printexc.register_printer
   (function
-    | LexError msg -> Some ("lexing error: " ^ msg)
+    | LexError (loc, msg) ->
+        Some (CCFormat.sprintf "@[<2>lexing error:@ %s@ at %a@]" msg Loc.print_opt loc)
     | ParseError (loc,msg) ->
         Some (CCFormat.sprintf "@[<2>parsing error:@ %s@ at %a@]" msg Loc.print_opt loc)
     | _ -> None
   )
 
-let lex_error_ fmt =
-  Utils.exn_ksprintf fmt ~f:(fun msg -> raise (LexError msg))
+let lex_error_ ?loc fmt =
+  Utils.exn_ksprintf fmt ~f:(fun msg -> raise (LexError (loc, msg)))
 let parse_error_ ?loc fmt =
   Utils.exn_ksprintf fmt ~f:(fun msg -> raise (ParseError (loc,msg)))
 
