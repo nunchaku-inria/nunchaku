@@ -20,7 +20,7 @@ module type S = sig
   val create : ?prefix:string -> unit -> state
   (** @param prefix the prefix used to generate Skolem symbols *)
 
-  val nnf : T1.t -> T2.t
+  val nnf : state:state -> T1.t -> T2.t
   (** Put term in negation normal form *)
 
   val skolemize : state:state -> T2.t -> T2.t * (id * T2.t) list
@@ -67,6 +67,9 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
   module U = TI.Util(T2)
   module P2 = TI.Print(T2)
 
+  (* for direct translation *)
+  module Conv = TI.Convert(T1)(T2)
+
   module Subst = Var.Subst
   module Stmt = Statement
 
@@ -76,6 +79,7 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
   }
 
   type state = {
+    mutable sigma: T2.t Signature.t;
     tbl: new_sym ID.Tbl.t; (* skolem -> quantified form *)
     prefix:string; (* prefix for Skolem symbols *)
     mutable name : int;
@@ -83,6 +87,7 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
   }
 
   let create ?(prefix="nun_sk_") () = {
+    sigma=Signature.empty;
     tbl=ID.Tbl.create 32;
     prefix;
     name=0;
@@ -108,65 +113,86 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
   let mk_and a b = U.and_ [a;b]
   let mk_or a b = U.or_ [a;b]
 
-  (* first, negation normal form *)
-  let rec nnf t = match T1.repr t with
-    | TI.Const id -> U.const id
-    | TI.Var v -> U.var (nnf_var_ v)
-    | TI.App (f,l) ->
-        begin match T1.repr f, l with
-        | TI.Builtin (
-          (`True | `False | `Or | `And | `Ite _ | `Eq _ | `Equiv _) as b), _ ->
-            U.app_builtin (TI.Builtin.map ~f:nnf b) (List.map nnf l)
-        | TI.Builtin `Imply, [a;b] -> mk_or (nnf_neg a) (nnf b)
-        | TI.Builtin `Not, [f] -> nnf_neg f
-        | _ -> U.app (nnf f) (List.map nnf l)
-        end
-    | TI.Builtin (`Equiv (a,b)) -> (* a => b & b => a *)
-        mk_and (mk_or (nnf_neg a) (nnf b)) (mk_or (nnf_neg b) (nnf a))
-    | TI.Builtin b -> U.builtin (TI.Builtin.map b ~f:nnf)
-    | TI.Bind (k,v,t) -> U.mk_bind k (nnf_var_ v) (nnf t)
-    | TI.Let (v,t,u) ->
-        U.let_ (nnf_var_ v) (nnf t) (nnf u)
-    | TI.Match (t,l) ->
-        U.match_with (nnf t)
-          (ID.Map.map (fun (vars,rhs) -> List.map nnf_var_ vars,nnf rhs) l)
-    | TI.TyBuiltin b -> U.ty_builtin b
-    | TI.TyArrow (a,b) -> U.ty_arrow (nnf a) (nnf b)
-    | TI.TyMeta _ -> assert false
+  let conv_var v = Var.update_ty v ~f:Conv.convert
 
-  (* negation + negation normal form *)
-  and nnf_neg t = match T1.repr t with
-    | TI.Const id -> U.not_ (U.const id)
-    | TI.Var v -> U.not_ (U.var (nnf_var_ v))
-    | TI.App (f,l) ->
-        begin match T1.repr f, l with
-        | TI.Builtin `Or, l -> U.app_builtin `And (List.map nnf_neg l)
-        | TI.Builtin `And, l -> U.app_builtin `Or (List.map nnf_neg l)
-        | TI.Builtin `Imply, [a;b] ->
-            mk_and (nnf a) (nnf_neg b)  (* a & not b *)
-        | TI.Builtin `Not, [f] -> nnf f (* not not f -> f *)
-        | _ -> U.not_ (U.app (nnf f) (List.map nnf l))
-        end
-    | TI.Builtin `True -> U.builtin `False
-    | TI.Builtin `False -> U.builtin `True
-    | TI.Builtin (`Ite (a,b,c)) ->
-        U.ite (nnf a) (nnf_neg b) (nnf_neg c)
-    | TI.Builtin (`Equiv (a,b)) -> (* not a & b | not b & a *)
-        mk_or (mk_and (nnf_neg a) (nnf b)) (mk_and (nnf_neg b) (nnf a))
-    | TI.Builtin b -> U.not_ (U.builtin (TI.Builtin.map ~f:nnf b))
-    | TI.Bind (`Forall, v,t) -> U.exists (nnf_var_ v) (nnf_neg t)
-    | TI.Bind (`Exists, v,t) -> U.forall (nnf_var_ v) (nnf_neg t)
-    | TI.Bind (`Fun,_,_) -> failwith "cannot skolemize function"
-    | TI.Bind (`TyForall,_,_) -> failwith "cannot skolemize `ty_forall`"
-    | TI.Let (v,t,u) ->
-        U.let_ (nnf_var_ v) (nnf t) (nnf u)
-    | TI.Match _ ->
-        U.not_ (nnf t)
-    | TI.TyBuiltin b -> U.ty_builtin b
-    | TI.TyArrow (a,b) -> U.ty_arrow (nnf a) (nnf b)
-    | TI.TyMeta _ -> assert false
+  (* first, negation normal form.
+     Also transforms nested `C[if exists x.p[x] then a else b]` where `a`
+     is not of type prop, into `exists x.p[x] => C[a] & ¬ exists x.p[x] => C[b]` *)
 
-  and nnf_var_ v = Var.update_ty v ~f:nnf
+  let nnf ~state t =
+    let rec nnf t = match T1.repr t with
+      | TI.Const id -> U.const id
+      | TI.Var v -> U.var (conv_var v)
+      | TI.App (f,l) ->
+          begin match T1.repr f, l with
+          | TI.Builtin (
+            (`True | `False | `Or | `And | `Ite _ | `Eq _ | `Equiv _) as b), _ ->
+              U.app_builtin (TI.Builtin.map ~f:nnf b) (List.map nnf l)
+          | TI.Builtin `Imply, [a;b] -> mk_or (nnf_neg a) (nnf b)
+          | TI.Builtin `Not, [f] -> nnf_neg f
+          | TI.Const _, _ -> Conv.convert t (* just keep the term *)
+          | _ -> U.app (nnf f) (List.map nnf l)
+          end
+      | TI.Builtin (`Ite (a,b,c)) ->
+          let b' = nnf b in
+          if U.ty_is_Prop (U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) b')
+          then
+            (* (a => b) & (¬a => c) *)
+            mk_and (mk_or (nnf_neg a) b') (mk_or (nnf a) (nnf c))
+          else
+            U.ite (Conv.convert a) b' (Conv.convert c)
+      | TI.Builtin (`Equiv (a,b)) -> (* a => b & b => a *)
+          mk_and (mk_or (nnf_neg a) (nnf b)) (mk_or (nnf_neg b) (nnf a))
+      | TI.Builtin b -> U.builtin (TI.Builtin.map b ~f:nnf)
+      | TI.Bind (k,v,t) -> U.mk_bind k (conv_var v) (nnf t)
+      | TI.Let (v,t,u) ->
+          U.let_ (conv_var v) (nnf t) (nnf u)
+      | TI.Match (t,l) ->
+          U.match_with (nnf t)
+            (ID.Map.map (fun (vars,rhs) -> List.map conv_var vars,nnf rhs) l)
+      | TI.TyBuiltin _
+      | TI.TyArrow _
+      | TI.TyMeta _ -> assert false
+
+    (* negation + negation normal form *)
+    and nnf_neg t = match T1.repr t with
+      | TI.Const id -> U.not_ (U.const id)
+      | TI.Var v -> U.not_ (U.var (conv_var v))
+      | TI.App (f,l) ->
+          begin match T1.repr f, l with
+          | TI.Builtin `Or, l -> U.app_builtin `And (List.map nnf_neg l)
+          | TI.Builtin `And, l -> U.app_builtin `Or (List.map nnf_neg l)
+          | TI.Builtin `Imply, [a;b] ->
+              mk_and (nnf a) (nnf_neg b)  (* a & not b *)
+          | TI.Builtin `Not, [f] -> nnf f (* not not f -> f *)
+          | TI.Const _, _ -> U.not_ (Conv.convert t)
+          | _ -> U.not_ (U.app (nnf f) (List.map nnf l))
+          end
+      | TI.Builtin `True -> U.builtin `False
+      | TI.Builtin `False -> U.builtin `True
+      | TI.Builtin (`Ite (a,b,c)) ->
+          let b' = nnf_neg b in
+          if U.ty_is_Prop (U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) b')
+          then
+            (* not (ite a b c) --> (a & ¬ b) or (¬ a & ¬ c) *)
+            mk_or (mk_and (nnf a) (nnf_neg b)) (mk_and (nnf_neg a) (nnf_neg c))
+          else
+            U.not_ (U.ite (Conv.convert a) b' (Conv.convert c))
+      | TI.Builtin (`Equiv (a,b)) -> (* not a & b | not b & a *)
+          mk_or (mk_and (nnf_neg a) (nnf b)) (mk_and (nnf_neg b) (nnf a))
+      | TI.Builtin b -> U.not_ (U.builtin (TI.Builtin.map ~f:nnf b))
+      | TI.Bind (`Forall, v,t) -> U.exists (conv_var v) (nnf_neg t)
+      | TI.Bind (`Exists, v,t) -> U.forall (conv_var v) (nnf_neg t)
+      | TI.Let (v,t,u) ->
+          U.let_ (conv_var v) (nnf t) (nnf u)
+      | TI.Match _ ->
+          U.not_ (nnf t)
+      | TI.Bind ((`Fun | `TyForall),_,_) (* type error *)
+      | TI.TyBuiltin _
+      | TI.TyArrow _
+      | TI.TyMeta _ -> assert false
+    in
+    nnf t
 
   let skolemize_ ~state t =
     (* recursive traversal *)
@@ -191,8 +217,6 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
           | _ -> U.app (aux ~env f) (List.map (aux ~env) l)
           end
       | TI.Bind (`TyForall, v, t) ->
-          (* FIXME: here we know U.invariant_poly = T1.invariant_poly = polymorph
-             but the typechecker isn't aware. *)
           enter_var_ ~env v
             (fun env v -> U.mk_bind `TyForall v (aux ~env t))
       | TI.Bind ((`Fun | `Forall) as b, v, t) ->
@@ -258,16 +282,20 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
     t', List.map (fun (id,s) -> id,s.sym_ty) l
 
   let convert_problem ~state pb =
-    Problem.map_with
-      ~before:(fun () ->
+    Problem.flat_map_statements
+      ~f:(fun stmt ->
+        let stmt' = Stmt.map stmt
+          ~term:(fun t -> skolemize_ ~state (nnf ~state t)) ~ty:Conv.convert
+        in
+        state.sigma <- Signature.add_statement ~sigma:state.sigma stmt';
         let l = state.new_sym in
         state.new_sym <- [];
-        List.map
-          (fun (id,s) -> Stmt.decl ~info:Stmt.info_default id s.sym_ty)
-          l
-      )
-      ~term:(fun t -> skolemize_ ~state (nnf t))
-      ~ty:(fun t -> skolemize_ ~state (nnf t))
+        let prelude =
+          List.map
+            (fun (id,s) -> Stmt.decl ~info:Stmt.info_default id s.sym_ty)
+            l
+        in
+        List.rev_append prelude [stmt'])
       pb
 
   let fpf = Format.fprintf
