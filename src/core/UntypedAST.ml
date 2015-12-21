@@ -111,8 +111,8 @@ let view = Loc.get
 (* mutual definitions of symbols, with a type and a list of axioms for each one *)
 type rec_defs = (string * term * term list) list
 
-(* specification of specified symbols, as a list of axioms *)
-type spec_defs = string list * term list
+(* specification of symbols with their types, as a list of axioms *)
+type spec_defs = (string * term) list * term list
 
 (* list of mutual type definitions (the type name, its argument variables,
    and its constructors that are (id args) *)
@@ -281,8 +281,9 @@ let pp_rec_defs out l =
 
 let pp_spec_defs out (defined_l,l) =
   let ppterms = pp_list_ ~sep:";" print_term in
+  let pp_defined out (v,ty) = fpf out "@[%s : %a@]" v print_term ty in
   let pp_defined_list out =
-    fpf out "@[<hv>%a@]" (pp_list_ ~sep:" and " CCFormat.string)
+    fpf out "@[<hv>%a@]" (pp_list_ ~sep:" and " pp_defined)
   in
   fpf out "@[<v>%a :=@ %a@]" pp_defined_list defined_l ppterms l
 

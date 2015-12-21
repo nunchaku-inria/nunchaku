@@ -106,7 +106,7 @@ module Convert(Term : TermTyped.S) = struct
 
   (* Environment *)
 
-  module Env = struct
+  module TyEnv = struct
     type t = {
       vars: (term, term) term_def MStr.t; (* local vars *)
       signature : term signature;
@@ -200,10 +200,10 @@ module Convert(Term : TermTyped.S) = struct
     let reset_metas ~env = CCOpt.iter Hashtbl.clear env.metas
   end
 
-  type env = Env.t
-  let empty_env = Env.empty
+  type env = TyEnv.t
+  let empty_env = TyEnv.empty
 
-  let signature env = env.Env.signature
+  let signature env = env.TyEnv.signature
 
   (* find the closest available location *)
   let rec get_loc_ ~stack t = match Loc.get_loc t, stack with
@@ -226,7 +226,7 @@ module Convert(Term : TermTyped.S) = struct
       | A.Var `Wildcard ->
           U.ty_meta_var ?loc (MetaVar.make ~name:"_")
       | A.Var (`Var v) ->
-          begin match Env.find_var ?loc ~env v with
+          begin match TyEnv.find_var ?loc ~env v with
             | Decl (id, t) ->
                 (* var: _ ... _ -> Type mandatory *)
                 unify_in_ctx_ ~stack (U.ty_returns t) U.ty_type;
@@ -241,14 +241,14 @@ module Convert(Term : TermTyped.S) = struct
           end
       | A.AtVar _ ->
           ill_formed ~kind:"type" ?loc "@ syntax is not available for types"
-      | A.MetaVar v -> U.ty_meta_var (Env.find_meta_var ~env v)
+      | A.MetaVar v -> U.ty_meta_var (TyEnv.find_meta_var ~env v)
       | A.TyArrow (a,b) ->
           U.ty_arrow ?loc
             (convert_ty_ ~stack ~env a)
             (convert_ty_ ~stack ~env b)
       | A.TyForall (v,t) ->
           let var = Var.make ~ty:U.ty_type ~name:v in
-          let env = Env.add_var ~env v ~var in
+          let env = TyEnv.add_var ~env v ~var in
           U.ty_forall ?loc var (convert_ty_ ~stack ~env t)
       | A.Fun (_,_) -> ill_formed ?loc "no functions in types"
       | A.Let (_,_,_) -> ill_formed ?loc "no let in types"
@@ -354,7 +354,7 @@ module Convert(Term : TermTyped.S) = struct
   (* check that the map is exhaustive *)
   let check_cases_exhaustive_ ?loc ~env ~ty m =
     (* find the type definition *)
-    let cstors = Env.find_datatype ?loc ~env (U.head_sym ty) in
+    let cstors = TyEnv.find_datatype ?loc ~env (U.head_sym ty) in
     let missing = ID.Map.fold
       (fun id _ acc ->
         if ID.Map.mem id m then acc else id::acc
@@ -386,14 +386,14 @@ module Convert(Term : TermTyped.S) = struct
         in
         U.builtin ?loc ~ty b
     | A.AtVar v ->
-        begin match Env.find_var ?loc ~env v with
+        begin match TyEnv.find_var ?loc ~env v with
           | Decl (id, ty) ->
               U.const ?loc ~ty id
           | TyVar v -> U.ty_var ?loc v
           | Var var -> U.var ?loc var
           | Def t -> t
         end
-    | A.MetaVar v -> U.ty_meta_var (Env.find_meta_var ~env v)
+    | A.MetaVar v -> U.ty_meta_var (TyEnv.find_meta_var ~env v)
     | A.App (f, [a;b]) when is_eq_ f ->
         let a = convert_term_ ~stack ~env a in
         let b = convert_term_ ~stack ~env b in
@@ -416,7 +416,7 @@ module Convert(Term : TermTyped.S) = struct
         U.app ?loc ~ty f' l'
     | A.Var (`Var v) ->
         (* a variable might be applied, too *)
-        let head, ty_head = match Env.find_var ?loc ~env v with
+        let head, ty_head = match TyEnv.find_var ?loc ~env v with
           | Decl (id, ty) ->
               U.const ?loc ~ty id, ty
           | Var var -> U.var ?loc var, Var.ty var
@@ -442,7 +442,7 @@ module Convert(Term : TermTyped.S) = struct
           (fun ty ->
             unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty)
           ) ty_opt;
-        let env = Env.add_var ~env v ~var in
+        let env = TyEnv.add_var ~env v ~var in
         let t = convert_term_ ~stack ~env t in
         (* NOTE: for dependent types, need to check whether [var] occurs in [type t]
            so that a forall is issued here instead of a mere arrow *)
@@ -451,7 +451,7 @@ module Convert(Term : TermTyped.S) = struct
     | A.Let (v,t,u) ->
         let t = convert_term_ ~stack ~env t in
         let var = Var.make ~name:v ~ty:(U.ty_exn t) in
-        let env = Env.add_var ~env v ~var in
+        let env = TyEnv.add_var ~env v ~var in
         let u = convert_term_ ~stack ~env u in
         U.let_ ?loc var t u
     | A.Match (t,l) ->
@@ -461,7 +461,7 @@ module Convert(Term : TermTyped.S) = struct
         let m = List.fold_left
           (fun m (c,vars,rhs) ->
             (* find the constructor and the (co)inductive type *)
-            let c, ty_c = Env.find_cstor ~env c in
+            let c, ty_c = TyEnv.find_cstor ~env c in
             if ID.Map.mem c m
               then ill_formedf ?loc ~kind:"match"
                 "constructor %a occurs twice in the list of cases"
@@ -476,7 +476,7 @@ module Convert(Term : TermTyped.S) = struct
             let ty' = ty_apply ty_c (List.map Var.ty vars') in
             unify_in_ctx_ ~stack:[] ty_t ty';
             (* now infer the type of [rhs] *)
-            let env = Env.add_vars ~env vars vars' in
+            let env = TyEnv.add_vars ~env vars vars' in
             let rhs = convert_term_ ~stack ~env rhs in
             ID.Map.add c (vars', rhs) m
           )
@@ -578,7 +578,7 @@ module Convert(Term : TermTyped.S) = struct
         unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty)
       ) ty_opt;
     let var = Var.make ~name:v ~ty:ty_var in
-    let env = Env.add_var ~env v ~var  in
+    let env = TyEnv.add_var ~env v ~var  in
     let t = convert_term_ ~stack ~env t in
     (* which quantifier to build? *)
     let builder = match which with
@@ -597,7 +597,7 @@ module Convert(Term : TermTyped.S) = struct
 
   (* checks that the name is not declared/defined already *)
   let check_new_ ?loc ~env name =
-    if Env.mem_var ~env name
+    if TyEnv.mem_var ~env name
       then ill_formedf ~kind:"statement" ?loc
         "identifier %s already defined" name
 
@@ -764,18 +764,12 @@ module Convert(Term : TermTyped.S) = struct
 
   (* convert a specification *)
   let convert_spec_defs ?loc ~env (untyped_defined_l, ax_l) =
-    (* obtain id and type for declared variable [v] *)
-    let get_id_ty v = match Env.find_var ?loc ~env v with
-      | Decl (id, ty) -> id, ty
-      | Def _ -> ill_formedf ?loc "%s is defined, cannot specify" v
-      | TyVar _ -> ill_formedf ?loc "cannot specify a type variable (%s)" v
-      | Var _ -> ill_formedf ?loc "cannot specify a variable (%s)" v
-    in
     (* what are we specifying? a list of [Stmt.defined] terms *)
     let defined_l, env', spec_vars = match untyped_defined_l with
       | [] -> assert false (* parser error *)
-      | v :: tail ->
-          let id, ty = get_id_ty v in
+      | (v,ty) :: tail ->
+          let id = ID.make v in
+          let ty = convert_ty_exn ~env ty in
           (* generate fresh type variables *)
           let n = num_implicit_ ty in
           let vars = CCList.init n
@@ -784,10 +778,11 @@ module Convert(Term : TermTyped.S) = struct
           let defined = {Stmt.defined_head=id; defined_ty=ty;} in
           (* locally, ensure that [v] refers to the defined term *)
           let t = U.app ~ty:(ty_apply ty t_vars) (U.const ~ty id) t_vars in
-          let env' = Env.add_def ~env v ~as_:t in
+          let env' = TyEnv.add_def ~env v ~as_:t in
           let env', l = Utils.fold_map
-            (fun env' v' ->
-              let id', ty' = get_id_ty v' in
+            (fun env' (v',ty') ->
+              let id' = ID.make v' in
+              let ty' = convert_ty_exn ~env ty' in
               let n' = num_implicit_ ty' in
               (* every specified symbol must have the same number of type args *)
               if n<>n'
@@ -795,7 +790,7 @@ module Convert(Term : TermTyped.S) = struct
                   "specified terms %s and %s respectively require %d and %d \
                    type arguments" v v' n n';
               let t' = U.app ~ty:(ty_apply ty' t_vars) (U.const id' ~ty:ty') t_vars in
-              let env' = Env.add_def ~env:env' v' ~as_:t' in
+              let env' = TyEnv.add_def ~env:env' v' ~as_:t' in
               env', {Stmt.defined_head=id'; defined_ty=ty';}
             ) env' tail
           in
@@ -810,7 +805,7 @@ module Convert(Term : TermTyped.S) = struct
           begin match check_no_meta t with
           | `Ok -> ()
           | `Bad vars' ->
-            ill_formedf ?loc ~kind:"rec"
+            ill_formedf ?loc ~kind:"spec"
               "term `@[%a@]`@ contains non-generalized variables @[%a@]"
               P.print t (CCFormat.list MetaVar.print) vars'
           end;
@@ -827,7 +822,15 @@ module Convert(Term : TermTyped.S) = struct
     in
     (* check that no meta remains *)
     List.iter check_mono_var_ spec_vars;
-    {Stmt. spec_axioms=axioms; spec_vars; spec_defined=defined_l; }
+    let spec = {Stmt. spec_axioms=axioms; spec_vars; spec_defined=defined_l; } in
+    let env = List.fold_left
+      (fun env def ->
+        let id = def.Stmt.defined_head in
+        let ty = def.Stmt.defined_ty in
+        TyEnv.add_decl ~env (ID.name id) ~id ty)
+      env defined_l
+    in
+    env, spec
 
   (* change [fun x1...xn.t] into [[x1;...;xn], t] *)
   let rec extract_fun_ t = match Term.repr t with
@@ -932,12 +935,12 @@ module Convert(Term : TermTyped.S) = struct
         Utils.debugf ~section 4 "@[<2>locally define %s as `@[%a@]`@]"
           (fun k -> k v P.print v_as_t);
         (* declare [v] in the scope of equations *)
-        let env' = Env.add_def ~env:env' v ~as_:v_as_t in
+        let env' = TyEnv.add_def ~env:env' v ~as_:v_as_t in
         env', (id,ty,vars,l)
       )
       env l
 
-  let convert_rec_defs?loc ~env l =
+  let convert_rec_defs ?loc ~env l =
     (* first, build new variables for the defined terms,
         and build [env'] in which the defined identifiers are bound to constants *)
     let env', l' = prepare_defs ~env l in
@@ -948,8 +951,8 @@ module Convert(Term : TermTyped.S) = struct
         (* in the definitions of [id], actually ensure that [id.name]
            is bound to [id ty_vars]. This way we can be sure that all definitions
            will share the same set of type variables. *)
-        let env'' = Env.remove ~env:env' (ID.name id) in
-        let env'' = Env.add_def ~env:env'' (ID.name id)
+        let env'' = TyEnv.remove ~env:env' (ID.name id) in
+        let env'' = TyEnv.add_def ~env:env'' (ID.name id)
           ~as_:(
             let ty_vars' = List.map (U.ty_var ?loc:None) ty_vars in
             U.app (U.const ~ty id) ty_vars' ~ty:(ty_apply ty ty_vars'))
@@ -1001,8 +1004,8 @@ module Convert(Term : TermTyped.S) = struct
         (* in the definitions of [id], actually ensure that [id.name]
            is bound to [id ty_vars]. This way we can be sure that all definitions
            will share the same set of type variables. *)
-        let env'' = Env.remove ~env:env' (ID.name id) in
-        let env'' = Env.add_def ~env:env'' (ID.name id)
+        let env'' = TyEnv.remove ~env:env' (ID.name id) in
+        let env'' = TyEnv.add_def ~env:env'' (ID.name id)
           ~as_:(
             let ty_vars' = List.map (U.ty_var ?loc:None) ty_vars in
             U.app (U.const ~ty id) ty_vars' ~ty:(ty_apply ty ty_vars'))
@@ -1056,7 +1059,7 @@ module Convert(Term : TermTyped.S) = struct
         Utils.debugf ~section 3 "@[(co)inductive type %a: %a@]"
           (fun k-> k ID.print id P.print ty);
         (* declare *)
-        let env' = Env.add_decl ~env name ~id ty in
+        let env' = TyEnv.add_decl ~env name ~id ty in
         env', (id,vars,ty,cstors)
       ) env l
     in
@@ -1069,7 +1072,7 @@ module Convert(Term : TermTyped.S) = struct
         let env', vars' = Utils.fold_map
           (fun env v ->
             let var = Var.make ~name:v ~ty:U.ty_type in
-            Env.add_var ~env v ~var, var
+            TyEnv.add_var ~env v ~var, var
           ) env vars
         in
         let ty_being_declared =
@@ -1083,10 +1086,10 @@ module Convert(Term : TermTyped.S) = struct
             let ty_args = List.map (convert_ty_exn ~env:env') ty_args in
             let ty' = ty_forall_l_ vars' (arrow_list ty_args ty_being_declared) in
             let id' = ID.make_full ~needs_at:(vars<>[]) name in
-            let env = Env.add_decl ~env name ~id:id' ty' in
+            let env = TyEnv.add_decl ~env name ~id:id' ty' in
             Utils.debugf ~section 3 "@[constructor %a: %a@]"
               (fun k-> k ID.print id' P.print ty');
-            Env.add_cstor ~env ~name id' ty';
+            TyEnv.add_cstor ~env ~name id' ty';
             (* newly built constructor *)
             check_ty_is_prenex_ ?loc ty';
             List.iter (check_ty_is_mono_ ?loc) ty_args;
@@ -1098,7 +1101,7 @@ module Convert(Term : TermTyped.S) = struct
         in
         List.iter check_mono_var_ vars';
         (* remember the list of constructors for this type *)
-        Env.add_datatype ~env id cstors;
+        TyEnv.add_datatype ~env id cstors;
         check_ty_is_prenex_ ty_id;
         let tydef = {Stmt.
           ty_id=id; ty_vars=vars'; ty_type=ty_id; ty_cstors=cstors;
@@ -1122,9 +1125,9 @@ module Convert(Term : TermTyped.S) = struct
         check_new_ ?loc ~env v;
         let ty = convert_ty_exn ~env ty in
         let id = ID.make_full ~needs_at:(ty_is_poly_ ty) v in
-        let env = Env.add_decl ~env v ~id ty in
+        let env = TyEnv.add_decl ~env v ~id ty in
         check_ty_is_prenex_ ?loc ty;
-        let env = Env.add_sig ~env ~id ty in
+        let env = TyEnv.add_sig ~env ~id ty in
         let kind = kind_of_ty_ ty in
         Stmt.mk_decl ~info id kind ty, env
     | A.Axiom l ->
@@ -1132,7 +1135,7 @@ module Convert(Term : TermTyped.S) = struct
         let l = List.map (convert_prop_ ?before_generalize:None ~env) l in
         Stmt.axiom ~info l, env (* default *)
     | A.Spec s ->
-        let s = convert_spec_defs ?loc ~env s in
+        let env, s = convert_spec_defs ?loc ~env s in
         Stmt.axiom_spec ~info s, env
     | A.Rec s ->
         let env, s = convert_rec_defs ?loc ~env s in
@@ -1190,7 +1193,7 @@ module Convert(Term : TermTyped.S) = struct
     let env = CCVector.fold
       (fun env st ->
         let st, env = convert_statement_exn ~env st in
-        Env.reset_metas ~env;
+        TyEnv.reset_metas ~env;
         CCVector.push res st;
         env)
       env l

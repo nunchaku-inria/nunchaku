@@ -32,7 +32,12 @@ let add_statement ~sigma st = match Stmt.view st with
           let d = def.Stmt.rec_defined in
           declare ~sigma d.Stmt.defined_head d.Stmt.defined_ty)
         sigma l
-  | Stmt.Axiom (Stmt.Axiom_spec _ | Stmt.Axiom_std _)
+  | Stmt.Axiom (Stmt.Axiom_spec s) ->
+      List.fold_left
+        (fun sigma def ->
+          declare ~sigma def.Stmt.defined_head def.Stmt.defined_ty)
+        sigma s.Stmt.spec_defined
+  | Stmt.Axiom (Stmt.Axiom_std _)
   | Stmt.Goal _ -> sigma
   | Stmt.Pred (_, _, preds) -> add_preds ~sigma preds
   | Stmt.TyDef (_,l) ->

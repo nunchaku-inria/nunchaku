@@ -253,20 +253,23 @@ term:
       raise (A.ParseError loc)
     }
 
+defined_symbol:
+  | v=raw_var COLON ty=term { v, ty }
+
 rec_def:
-  | t=raw_var
-    COLON ty=term
-    EQDEF l=separated_nonempty_list(SEMI_COLON,term)
-    { t, ty, l }
+  | d=defined_symbol EQDEF l=separated_nonempty_list(SEMI_COLON,term)
+    { 
+      let v, ty = d in
+      v, ty, l }
 
 rec_defs:
   | l=separated_nonempty_list(AND, rec_def) { l }
 
 spec_defs:
-  | vars=separated_nonempty_list(AND, raw_var)
+  | d=separated_nonempty_list(AND, defined_symbol)
     EQDEF
     l=separated_nonempty_list(SEMI_COLON,term)
-    { vars, l }
+    { d, l }
 
 constructor:
   | v=raw_var l=atomic_term* { v, l }

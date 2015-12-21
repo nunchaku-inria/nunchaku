@@ -375,7 +375,8 @@ let print (type a)(type b)
   | Decl (id,_,t) ->
       fpf out "@[<2>val %a@ : %a.@]" ID.print id Pty.print t
   | Axiom a ->
-      let pp_defined out d = ID.print out d.defined_head
+      let pp_defined out d =
+        fpf out "@[%a : %a@]" ID.print d.defined_head Pty.print d.defined_ty
       and pp_typed_var out v =
         fpf out "@[<2>%a:%a@]" Var.print v Pty.print (Var.ty v)
       in
@@ -412,9 +413,8 @@ let print (type a)(type b)
                 (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
         in
         let pp_def out d =
-          fpf out "@[<hv2>%a : @[%a@] :=@ %a@]"
+          fpf out "@[<hv2>%a :=@ %a@]"
             pp_defined d.rec_defined
-            Pty.print d.rec_defined.defined_ty
             (pp_eqns d.rec_defined.defined_head) d.rec_eqns
         in
         fpf out "@[<v>rec %a.@]"
@@ -424,7 +424,7 @@ let print (type a)(type b)
         let pp_defined_list out =
           fpf out "@[<v>%a@]" (pplist_prefix ~first:"" ~pre:" and " pp_defined)
         in
-        fpf out "@[<hv2>spec @[<hv>%a@] :=@ %a@]"
+        fpf out "@[<hv2>spec %a :=@ %a@]"
           pp_defined_list d.spec_defined printerms d.spec_axioms
       in
       begin match a with

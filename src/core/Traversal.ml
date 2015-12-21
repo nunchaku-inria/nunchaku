@@ -357,12 +357,8 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
         in
         let loc = Env.loc env_info in
         match Env.def env_info with
-        | Env.Fun_spec l ->
-            (* specialize each definition *)
-            List.iter
-              (fun (spec,loc) ->
-                self#do_spec ~depth ~loc id spec arg)
-              l;
+        | Env.Fun_spec (spec,loc) ->
+            self#do_spec ~depth ~loc id spec arg;
             assert (self#has_processed id arg);
         | Env.Fun_def (defs, def, loc) ->
             self#do_def_rec ~depth ~loc defs def arg;
