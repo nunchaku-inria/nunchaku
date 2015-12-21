@@ -511,16 +511,20 @@ module Make(FO_T : FO.S) = struct
   let read_res_ ~state s =
     match DSexp.next s.sexp with
     | `Ok (`Atom "unsat") ->
+        Utils.debug ~section 5 "CVC4 returned `unsat`";
         Sol.Res.Unsat
     | `Ok (`Atom "sat") ->
+        Utils.debug ~section 5 "CVC4 returned `sat`";
         let m = if ID.Map.is_empty state.symbols
           then Model.empty
           else get_model_ ~state s |> rewrite_model_
         in
         Sol.Res.Sat m
     | `Ok (`Atom "unknown") ->
+        Utils.debug ~section 5 "CVC4 returned `unknown`";
         Sol.Res.Timeout
     | `Ok (`List [`Atom "error"; `Atom s]) ->
+        Utils.debugf ~section 5 "@[<2>CVC4 returned `error %s`@]" (fun k->k s);
         Sol.Res.Error (CVC4_error s)
     | `Ok sexp ->
         let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ %a@]"
@@ -604,7 +608,7 @@ module Make(FO_T : FO.S) = struct
           match res solver with
           | Sol.Res.Sat m -> Scheduling.Return_shortcut (Sol.Res.Sat m)
           | Sol.Res.Unsat -> Scheduling.Return Sol.Res.Unsat
-          | Sol.Res.Timeout -> Scheduling.Fail Timeout
+          | Sol.Res.Timeout -> Scheduling.Return Sol.Res.Timeout
           | Sol.Res.Error e ->
               Utils.debugf ~section 1
                 "@[<2>error while running CVC4@ with `%s`:@ @[%s@]@]"
@@ -615,8 +619,13 @@ module Make(FO_T : FO.S) = struct
     match res with
       | Scheduling.Return_shortcut x -> x
       | Scheduling.Return l ->
-          assert (List.for_all ((=) Sol.Res.Unsat) l);
-          Sol.Res.Unsat
+          if List.exists
+            (function
+              | Sol.Res.Unsat -> true
+              | Sol.Res.Timeout -> false
+              | _ -> assert false)
+            l
+          then Sol.Res.Unsat else Sol.Res.Timeout
       | Scheduling.Fail Timeout -> Sol.Res.Timeout
       | Scheduling.Fail e -> Sol.Res.Error e
 end
