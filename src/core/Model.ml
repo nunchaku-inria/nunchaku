@@ -47,6 +47,6 @@ let print pt out m =
       Format.fprintf out "(@[<hv2>types (@,%a@,)@])"
         (CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_dom) m
   in
-  Format.fprintf out "(@[<hv2>model@ (@[<hv2>terms@ (@[<hv>%a@])@]@,%a@]@,)@])"
+  Format.fprintf out "@[<hv2>(model@ (@[<hv2>terms@ (@[<hv>%a@])@]@,%a@]))@]"
     (CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_pair) m.terms
     pp_types m.finite_types

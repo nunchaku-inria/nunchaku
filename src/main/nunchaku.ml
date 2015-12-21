@@ -168,8 +168,8 @@ let make_model_pipeline () =
     Step_mono.pipe ~print:!print_mono_ @@@
     Step_ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~print:!print_elim_multi_eqns @@@
-    Step_elim_preds.pipe ~print:!print_elim_preds_ @@@
     Step_polarize.pipe ~print:!print_polarize_ @@@
+    Step_elim_preds.pipe ~print:!print_elim_preds_ @@@
     Step_rec_elim.pipe ~print:!print_recursion_elim_ @@@
     Step_ElimMatch.pipe ~print:!print_elim_match_ @@@
     Step_tofo.pipe () @@@

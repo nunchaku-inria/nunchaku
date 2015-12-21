@@ -182,7 +182,7 @@ module Make(T : TI.S) = struct
           | None, TI.Builtin `Imply, [a;b] ->
               let a, cond_a = tr_term_rec_ ~state ~local_state:(inv_pol local_state) a in
               let b, cond_b = tr_term_rec_ ~state ~local_state b in
-              add_conds local_state.pol (U.app b [a; b]) (List.append cond_a cond_b)
+              add_conds local_state.pol (U.imply a b) (List.append cond_a cond_b)
           | None, TI.Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
               let t', conds = tr_term_rec_ ~state ~local_state t in
               U.app_builtin b [t'], conds
