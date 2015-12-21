@@ -1021,7 +1021,9 @@ module Default : S
     view: t view;
   }
 
-  let repr t = t.view
+  let rec repr t = match t.view with
+    | TyMeta {MetaVar.deref=Some t'; _} -> repr t'
+    | v -> v
 
   let make_raw_ view = {view}
 

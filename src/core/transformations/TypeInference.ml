@@ -574,12 +574,12 @@ module Convert(Term : TermTyped.S) = struct
       (fun k-> k P.print ty_var v A.print_term t);
     (* unify with expected type *)
     CCOpt.iter
-      (fun ty ->
-        unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty)
-      ) ty_opt;
+      (fun ty -> unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty))
+      ty_opt;
     let var = Var.make ~name:v ~ty:ty_var in
     let env = TyEnv.add_var ~env v ~var  in
     let t = convert_term_ ~stack ~env t in
+    unify_in_ctx_ ~stack (U.ty_exn t) prop;
     (* which quantifier to build? *)
     let builder = match which with
       | `Forall -> U.forall
