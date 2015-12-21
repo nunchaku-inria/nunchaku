@@ -31,6 +31,7 @@ let cleanup_ (lazy ap) =
   Unix.kill ap.pid 15;
   close_out ap.stdin;
   close_in ap.stdout;
+  Unix.kill ap.pid 9; (* just to be sure *)
   ()
 
 let run_process pool cmd ~f ~stdout ~stdin ap =
