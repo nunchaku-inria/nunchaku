@@ -19,7 +19,7 @@ type ('t, 'ty, 'inv) def =
       (** ID is a defined fun/predicate. *)
 
   | Fun_spec of
-      (('t, 'ty) Statement.spec_defs * loc option) list
+      ('t, 'ty) Statement.spec_defs * loc option
 
   | Data of
       [`Codata | `Data] *

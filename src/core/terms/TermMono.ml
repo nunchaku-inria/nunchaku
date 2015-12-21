@@ -237,9 +237,18 @@ module ToFO(T : TI.S)(F : FO.S) = struct
         | St.Axiom_std l ->
             List.map (fun ax -> conv_form  ~sigma ax |> mk_ax) l
         | St.Axiom_spec s ->
-            List.map
+            (* first declare all types; then push axioms *)
+            let decls = List.rev_map
+              (fun def ->
+                let ty = conv_top_ty def.St.defined_ty in
+                let head = def.St.defined_head in
+                FOI.Decl (head, ty))
+              s.St.spec_defined
+            and ax = List.map
               (fun ax -> ax |> conv_form ~sigma |> mk_ax)
               s.St.spec_axioms
+            in
+            List.rev_append decls ax
         | St.Axiom_rec s ->
             (* first declare all types; then push axioms *)
             let decls =
@@ -249,8 +258,7 @@ module ToFO(T : TI.S)(F : FO.S) = struct
                   let d = def.St.rec_defined in
                   let ty = conv_top_ty d.St.defined_ty in
                   let head = d.St.defined_head in
-                  let st1 = FOI.Decl (head, ty) in
-                  st1)
+                  FOI.Decl (head, ty))
                 s
             and axioms =
               CCList.flat_map

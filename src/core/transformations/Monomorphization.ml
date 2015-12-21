@@ -423,7 +423,6 @@ module Make(T : TI.S) = struct
               ~mangled
               ~args:(ArgTuple.args tup)
               ~m_args:(ArgTuple.m_args tup) in
-            self#decl_sym id' tup';
             Utils.debugf ~section 4 "@[<2>specialization of `@[<2>%a@ %a@]` is done@]"
               (fun k -> k ID.print id' ArgTuple.print tup');
             self#done_processing id' tup';

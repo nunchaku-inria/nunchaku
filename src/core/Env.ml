@@ -16,7 +16,7 @@ type ('t, 'ty, 'inv) def =
       (** ID is a defined fun/predicate. *)
 
   | Fun_spec of
-      (('t, 'ty) Statement.spec_defs * loc option) list
+      ('t, 'ty) Statement.spec_defs * loc option
 
   | Data of
       [`Codata | `Data] *
@@ -125,20 +125,15 @@ let spec_funs
   List.fold_left
     (fun t defined ->
       let id = defined.Stmt.defined_head in
-      try
-        let info = ID.PerTbl.find t.infos id in
-        let l = match info.def with
-          | Data _
-          | Cstor _
-          | Fun_def _
-          | Pred _ -> errorf_ id "already defined"
-          | Fun_spec l -> l
-          | NoDef -> [] (* first def of id *)
-        in
-        let def = Fun_spec ((spec, loc) :: l) in
-        {infos=ID.PerTbl.replace t.infos id {info with def; }}
-      with Not_found ->
-        errorf_ id "function is defined but was never declared"
+      if ID.PerTbl.mem t.infos id
+        then errorf_ id "already declared or defined";
+      let info = {
+        loc;
+        ty=defined.Stmt.defined_ty;
+        decl_kind=Stmt.Decl_prop;
+        def=Fun_spec(spec, loc);
+      } in
+      {infos=ID.PerTbl.replace t.infos id info; }
     )
     t spec.Stmt.spec_defined
 
