@@ -10,4 +10,5 @@ setup.log
 setup.data
 qtest*
 src/main/const.ml
+src/main/GitVersion.ml
 doc/

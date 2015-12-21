@@ -18,8 +18,6 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 
 let fpf = Format.fprintf
 
-type 'a vec_ro = ('a, CCVector.ro) CCVector.t
-
 module Metadata = struct
   type t = {
     incomplete: bool;
@@ -31,7 +29,7 @@ module Metadata = struct
 end
 
 type ('t, 'ty, 'inv) t = {
-  statements : ('t, 'ty, 'inv) Statement.t vec_ro;
+  statements : ('t, 'ty, 'inv) Statement.t CCVector.ro_vector;
   metadata: Metadata.t;
 }
 
@@ -42,6 +40,8 @@ let metadata t = t.metadata
 let make ~meta statements = { metadata=meta; statements; }
 
 let of_list ~meta l = make ~meta (CCVector.of_list l)
+
+let iter_statements ~f pb = CCVector.iter f pb.statements
 
 let map_statements ~f pb = {
   metadata=pb.metadata;

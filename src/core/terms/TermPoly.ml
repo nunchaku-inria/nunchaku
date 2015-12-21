@@ -159,7 +159,6 @@ end = struct
           | `Undefined _
           | `DataSelect _
           | `DataTest _
-          | `Polarized _
           | `Ite _ -> assert false
         in
         Untyped.app (Untyped.builtin b) (List.map aux l)
@@ -272,7 +271,7 @@ end = struct
             | Var v -> U.var v
           with Not_found ->
             (* constant, not variable *)
-            let id = ID.make ~name:s in
+            let id = ID.make s in
             Hashtbl.add env s (ID id);
             U.const id
           end

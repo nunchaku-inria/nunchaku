@@ -81,29 +81,28 @@ type ('t,'ty,'kind) axiom =
   | Axiom_rec of ('t,'ty,'kind) rec_defs
     (** Axioms are part of an admissible (partial) definition *)
 
-type ('t, 'ty) pred_clause = {
+type ('t, 'ty) pred_clause_cell = {
   clause_vars: 'ty var list; (* universally quantified vars *)
   clause_guard: 't option;
   clause_concl: 't;
 }
 
-type ('t, 'ty) pred_def = {
+type (_, _, _) pred_clause =
+  | Pred_clause :
+    ('t, 'ty) pred_clause_cell ->
+    ('t, 'ty, <ind_preds:[`Present];..>) pred_clause
+
+type ('t, 'ty, 'inv) pred_def = {
   pred_defined: 'ty defined;
   pred_tyvars: 'ty var list;
-  pred_clauses: ('t, 'ty) pred_clause list;  (* each clause has an optional guard *)
+  pred_clauses: ('t, 'ty, 'inv) pred_clause list;
 }
-
-(** Mutually defined (co)inductive predicates *)
-type ('t, 'ty, 'kind) mutual_preds =
-  | Some_preds :
-    ('t, 'ty) pred_def list
-    -> ('t, 'ty, <ind_preds: [`Present]; ..>) mutual_preds
 
 type ('term, 'ty, 'inv) view =
   | Decl of id * decl * 'ty
   | Axiom of ('term, 'ty, 'inv) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
-  | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty, 'inv) mutual_preds
+  | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty, 'inv) pred_def list
   | Goal of 'term
 
 (** Additional informations on the statement *)
@@ -116,6 +115,8 @@ type ('term, 'ty, 'inv) t = {
   view: ('term, 'ty, 'inv) view;
   info: info;
 }
+
+type ('t, 'ty, 'inv) statement = ('t, 'ty, 'inv) t
 
 let info_default = { loc=None; name=None; }
 
@@ -143,11 +144,29 @@ let axiom1 ~info t = axiom ~info [t]
 let axiom_spec ~info t = mk_axiom ~info (Axiom_spec t)
 let axiom_rec ~info t = mk_axiom ~info (Axiom_rec t)
 let mk_pred ~info ~wf k l = make_ ~info (Pred (wf, k, l))
-let pred ~info ~wf l = mk_pred ~info ~wf `Pred (Some_preds l)
-let copred ~info ~wf l = mk_pred ~info ~wf `Copred (Some_preds l)
+let pred ~info ~wf l = mk_pred ~info ~wf `Pred l
+let copred ~info ~wf l = mk_pred ~info ~wf `Copred l
 let data ~info l = mk_ty_def ~info `Data l
 let codata ~info l = mk_ty_def ~info `Codata l
 let goal ~info t = make_ ~info (Goal t)
+
+(* find a definition for [id] in [cases], or None *)
+let find_rec_def ~defs id =
+  CCList.find_pred
+    (fun def -> ID.equal def.rec_defined.defined_head id)
+    defs
+
+(* find a (co)inductive type declaration for [id] *)
+let find_tydef ~defs id =
+  CCList.find_pred
+    (fun tydef -> ID.equal id tydef.ty_id)
+    defs
+
+(* find a definition for [id] in [cases], or None *)
+let find_pred ~defs id =
+  CCList.find_pred
+    (fun def -> ID.equal def.pred_defined.defined_head id)
+    defs
 
 let map_defined ~f d = {
   defined_head=d.defined_head;
@@ -216,28 +235,29 @@ let map_spec_defs ~term ~ty t = {
   spec_axioms=List.map term t.spec_axioms;
 }
 
-let map_preds
+let map_clause
 : type a a1 b b1 inv.
     term:(a -> a1) -> ty:(b -> b1) ->
-    (a,b,<ind_preds:inv;..>) mutual_preds ->
-    (a1,b1,<ind_preds:inv;..>) mutual_preds
-= fun ~term ~ty -> function
-  | Some_preds l ->
-      let l = List.map
-        (fun def ->
-          { pred_defined=map_defined ~f:ty def.pred_defined;
-            pred_tyvars=List.map (Var.update_ty ~f:ty) def.pred_tyvars;
-            pred_clauses=
-              List.map
-                (fun c ->
-                  {clause_vars=List.map (Var.update_ty ~f:ty) c.clause_vars;
-                   clause_guard=CCOpt.map term c.clause_guard;
-                   clause_concl=term c.clause_concl;
-                  })
-                def.pred_clauses;
-          })
-        l
-      in Some_preds l
+    (a,b,<ind_preds:inv;..>) pred_clause ->
+    (a1,b1,<ind_preds:inv;..>) pred_clause
+= fun ~term ~ty c ->
+  let Pred_clause c = c in
+  Pred_clause {
+    clause_vars=List.map (Var.update_ty ~f:ty) c.clause_vars;
+    clause_guard=CCOpt.map term c.clause_guard;
+    clause_concl=term c.clause_concl;
+  }
+
+let map_pred
+= fun ~term ~ty def ->
+  let def' = {
+    pred_defined=map_defined ~f:ty def.pred_defined;
+    pred_tyvars=List.map (Var.update_ty ~f:ty) def.pred_tyvars;
+    pred_clauses=List.map (map_clause ~term ~ty) def.pred_clauses;
+  } in
+  def'
+
+let map_preds ~term ~ty l = List.map (map_pred ~term ~ty) l
 
 let map ~term:ft ~ty:fty st =
   let info = st.info in
@@ -297,20 +317,19 @@ let fold_eqns_ (type inv) ~term ~ty acc (e:(_,_,inv) equations) =
       let acc = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc vars in
       term acc t
 
-let fold_preds (type inv) ~term ~ty acc (e:(_,_,inv) mutual_preds) =
-  match e with
-  | Some_preds l ->
-      List.fold_left
-        (fun acc def ->
-          let acc = ty acc def.pred_defined.defined_ty in
-          List.fold_left
-            (fun acc c ->
-              let acc =
-                List.fold_left (fun acc v -> ty acc (Var.ty v)) acc c.clause_vars in
-              let acc = term acc c.clause_concl in
-              CCOpt.fold term acc c.clause_guard)
-            acc def.pred_clauses)
-        acc l
+let fold_clause (type inv) ~term ~ty acc (c:(_,_,inv) pred_clause) =
+  let Pred_clause c = c in
+  let acc =
+    List.fold_left (fun acc v -> ty acc (Var.ty v)) acc c.clause_vars in
+  let acc = term acc c.clause_concl in
+  CCOpt.fold term acc c.clause_guard
+
+let fold_pred (type inv) ~term ~ty acc (def:(_,_,inv) pred_def) =
+  let acc = ty acc def.pred_defined.defined_ty in
+  List.fold_left (fold_clause ~term ~ty) acc def.pred_clauses
+
+let fold_preds ~term ~ty acc l =
+  List.fold_left (fold_pred ~term ~ty) acc l
 
 let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
   match st.view with
@@ -354,9 +373,9 @@ let print (type a)(type b)
 (module Pty : TI.PRINT with type t = b) out t =
   match t.view with
   | Decl (id,_,t) ->
-      fpf out "@[<2>val %a@ : %a.@]" ID.print_name id Pty.print t
+      fpf out "@[<2>val %a@ : %a.@]" ID.print id Pty.print t
   | Axiom a ->
-      let pp_defined out d = ID.print_name out d.defined_head
+      let pp_defined out d = ID.print out d.defined_head
       and pp_typed_var out v =
         fpf out "@[<2>%a:%a@]" Var.print v Pty.print (Var.ty v)
       in
@@ -372,9 +391,9 @@ let print (type a)(type b)
               pplist ~sep:";"
                 (fun out (vars,rhs,side) ->
                   if vars=[]
-                  then fpf out "@[<hv>%a%a =@ %a@]" pp_sides side ID.print_name id Pt.print rhs
+                  then fpf out "@[<hv>%a%a =@ %a@]" pp_sides side ID.print id Pt.print rhs
                   else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
-                    (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print_name id
+                    (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print id
                     (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
                 ) out l
           | Eqn_nested l ->
@@ -382,14 +401,14 @@ let print (type a)(type b)
                 (fun out  (vars,args,rhs,side) ->
                   if vars=[]
                   then fpf out "@[<hv>%a@[<2>%a@ %a@] =@ %a@]"
-                    pp_sides side ID.print_name id
+                    pp_sides side ID.print id
                     (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
                   else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
-                    (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print_name id
+                    (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print id
                     (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
                 ) out l
           | Eqn_single (vars,rhs) ->
-              fpf out "@[<2>%a %a =@ %a@]" ID.print_name id
+              fpf out "@[<2>%a %a =@ %a@]" ID.print id
                 (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
         in
         let pp_def out d =
@@ -398,8 +417,8 @@ let print (type a)(type b)
             Pty.print d.rec_defined.defined_ty
             (pp_eqns d.rec_defined.defined_head) d.rec_eqns
         in
-        fpf out "@[<hov>rec %a.@]"
-          (pplist_prefix ~first:"" ~pre:" and " pp_def) l
+        fpf out "@[<v>rec %a.@]"
+          (pplist_prefix ~first:"" ~pre:"and " pp_def) l
       and pp_spec_defs out d =
         let printerms = pplist ~sep:";" Pt.print in
         let pp_defined_list out =
@@ -417,7 +436,9 @@ let print (type a)(type b)
   | Pred (wf, k, l) ->
       let pp_wf out = function `Wf -> fpf out "[wf]" | `Not_wf -> () in
       let pp_k out = function `Pred -> fpf out "pred" | `Copred -> fpf out "copred" in
-      let pp_clause out c = match c.clause_vars, c.clause_guard with
+      let pp_clause (type inv) out (c:(_,_,inv) pred_clause) =
+        let Pred_clause c = c in
+        match c.clause_vars, c.clause_guard with
         | [], None -> Pt.print out c.clause_concl
         | [], Some g ->
             fpf out "@[<2>@[%a@]@ => @[%a@]@]" Pt.print g Pt.print c.clause_concl
@@ -430,23 +451,19 @@ let print (type a)(type b)
       in
       let pp_pred out pred =
         fpf out "@[<hv2>@[%a@ : %a@] :=@ %a@]"
-          ID.print_name pred.pred_defined.defined_head
+          ID.print pred.pred_defined.defined_head
           Pty.print pred.pred_defined.defined_ty
           (pplist ~sep:"; " pp_clause) pred.pred_clauses
       in
-      let pp_preds (type inv) out (preds:(_,_,inv) mutual_preds) =
-        match preds with
-        | Some_preds l ->
-            pplist ~sep:" and " pp_pred out l
-      in
+      let pp_preds out preds = pplist ~sep:" and " pp_pred out preds in
       fpf out "@[<hv>%a%a %a.@]" pp_k k pp_wf wf pp_preds l
   | TyDef (k, l) ->
       let ppcstors out c =
         fpf out "@[<hv2>%a %a@]"
-          ID.print_name c.cstor_name (pplist ~sep:" " Pty.print_in_app) c.cstor_args in
+          ID.print c.cstor_name (pplist ~sep:" " Pty.print_in_app) c.cstor_args in
       let print_def out tydef =
         fpf out "@[<hv2>@[%a %a@] :=@ @[<hv>%a@]@]"
-          ID.print_name tydef.ty_id
+          ID.print tydef.ty_id
           (pplist ~sep:" " Var.print) tydef.ty_vars
           (pplist_prefix ~first:" | " ~pre:" | " ppcstors)
             (ID.Map.to_list tydef.ty_cstors |> List.map snd)

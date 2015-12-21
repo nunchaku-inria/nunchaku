@@ -79,29 +79,28 @@ type ('t,'ty,'kind) axiom =
   | Axiom_rec of ('t,'ty,'kind) rec_defs
     (** Axioms are part of an admissible (partial) definition *)
 
-type ('t, 'ty) pred_clause = {
+type ('t, 'ty) pred_clause_cell = {
   clause_vars: 'ty var list; (* universally quantified vars *)
   clause_guard: 't option;
   clause_concl: 't;
 }
 
-type ('t, 'ty) pred_def = {
+type (_, _, _) pred_clause =
+  | Pred_clause :
+    ('t, 'ty) pred_clause_cell ->
+    ('t, 'ty, <ind_preds:[`Present];..>) pred_clause
+
+type ('t, 'ty, 'inv) pred_def = {
   pred_defined: 'ty defined;
   pred_tyvars: 'ty var list;
-  pred_clauses: ('t, 'ty) pred_clause list;  (* each clause has an optional guard *)
+  pred_clauses: ('t, 'ty, 'inv) pred_clause list;
 }
-
-(** Mutually defined (co)inductive predicates *)
-type ('t, 'ty, 'kind) mutual_preds =
-  | Some_preds :
-    ('t, 'ty) pred_def list
-    -> ('t, 'ty, <ind_preds: [`Present]; ..>) mutual_preds
 
 type ('term, 'ty, 'inv) view =
   | Decl of id * decl * 'ty
   | Axiom of ('term, 'ty, 'inv) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
-  | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty, 'inv) mutual_preds
+  | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty, 'inv) pred_def list
   | Goal of 'term
 
 (** Additional informations on the statement *)
@@ -114,6 +113,8 @@ type ('term, 'ty, 'inv) t = private {
   view: ('term, 'ty, 'inv) view;
   info: info;
 }
+
+type ('t, 'ty, 'inv) statement = ('t, 'ty, 'inv) t
 
 val tydef_vars : 'ty tydef -> 'ty Var.t list
 val tydef_id : _ tydef -> id
@@ -156,16 +157,22 @@ val data : info:info -> 'ty mutual_types -> (_, 'ty, _) t
 val codata : info:info -> 'ty mutual_types -> (_, 'ty, _) t
 
 val pred : info:info -> wf:[`Wf | `Not_wf] ->
-  ('t, 'ty) pred_def list -> ('t, 'ty, <ind_preds:[`Present]; ..>) t
+  ('t, 'ty, 'inv) pred_def list -> ('t, 'ty, 'inv) t
 
 val copred : info:info -> wf:[`Wf | `Not_wf] ->
-  ('t, 'ty) pred_def list -> ('t, 'ty, <ind_preds:[`Present]; ..>) t
+  ('t, 'ty, 'inv) pred_def list -> ('t, 'ty, 'inv) t
 
 val mk_pred : info:info -> wf:[`Wf | `Not_wf] -> [`Pred | `Copred] ->
-  ('t, 'ty, 'inv) mutual_preds -> ('t, 'ty, 'inv) t
+  ('t, 'ty, 'inv) pred_def list -> ('t, 'ty, 'inv) t
 
 val goal : info:info -> 'a -> ('a,_,_) t
 (** The goal of the problem *)
+
+val find_rec_def : defs:('a, 'b, 'c) rec_def list -> ID.t -> ('a, 'b, 'c) rec_def option
+
+val find_tydef : defs:'a tydef list -> ID.t -> 'a tydef option
+
+val find_pred : defs:('a, 'b, 'inv) pred_def list -> ID.t -> ('a, 'b, 'inv) pred_def option
 
 val map_defined:
   f:('ty -> 'ty2) ->
@@ -177,6 +184,12 @@ val map_eqns:
   ty:('ty -> 'ty2) ->
   ('t, 'ty, <eqn:'inv;..>) equations ->
   ('t2, 'ty2, <eqn:'inv;..>) equations
+
+val map_clause:
+  term:('t -> 't2) ->
+  ty:('ty -> 'ty2) ->
+  ('t, 'ty, <ind_preds:'inv;..>) pred_clause ->
+  ('t2, 'ty2, <ind_preds:'inv;..>) pred_clause
 
 val cast_eqns:
   ('t, 'ty, <eqn:'inv;..>) equations ->
@@ -209,10 +222,15 @@ val map_spec_defs :
   ('t, 'ty) spec_defs ->
   ('t2, 'ty2) spec_defs
 
+val map_pred :
+  term:('a -> 'a1) -> ty:('b -> 'b1) ->
+  ('a,'b,<ind_preds:'inv;..>) pred_def  ->
+  ('a1,'b1,<ind_preds:'inv;..>) pred_def
+
 val map_preds :
   term:('a -> 'a1) -> ty:('b -> 'b1) ->
-  ('a,'b,<ind_preds:'inv;..>) mutual_preds ->
-  ('a1,'b1,<ind_preds:'inv;..>) mutual_preds
+  ('a,'b,<ind_preds:'inv;..>) pred_def list ->
+  ('a1,'b1,<ind_preds:'inv;..>) pred_def list
 
 val map :
   term:('t -> 't2) ->

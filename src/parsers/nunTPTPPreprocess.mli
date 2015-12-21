@@ -16,8 +16,8 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 
 val preprocess_exn :
   UntypedAST.statement Sequence.t ->
-  (UntypedAST.statement, CCVector.ro) CCVector.t
+  UntypedAST.statement CCVector.ro_vector
 
 val preprocess :
   UntypedAST.statement Sequence.t ->
-  (UntypedAST.statement, CCVector.ro) CCVector.t or_error
+  UntypedAST.statement CCVector.ro_vector or_error

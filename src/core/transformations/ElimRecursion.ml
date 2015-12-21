@@ -7,6 +7,7 @@ module TI = TermInner
 module TyI = TypeMono
 module Stmt = Statement
 module Sig = Signature
+module Pol = Polarity
 
 type id = ID.t
 
@@ -88,25 +89,20 @@ module Make(T : TI.S) = struct
           Some (spf "@[<2>decoding of `@[%a@]` failed:@ %s@]" P.print t msg)
       | _ -> None)
 
-  type polarity =
-    | Pos
-    | Neg
-    | NoPolarity
-
   type local_state = {
-    pol: polarity;
+    pol: Pol.t;
       (* local polarity *)
     subst: (term,term) Subst.t;
       (* local substitution *)
   }
 
-  let empty_local_state = {pol=Pos; subst=Subst.empty; }
+  let empty_local_state = {pol=Pol.Pos; subst=Subst.empty; }
 
   let inv_pol ls = {ls with
-    pol=(match ls.pol with | Pos -> Neg | Neg -> Pos | NoPolarity -> NoPolarity)
+    pol=Pol.inv ls.pol;
   }
 
-  let no_pol ls = {ls with pol=NoPolarity}
+  let no_pol ls = {ls with pol=Pol.NoPol}
 
   (* list of argument types that (monomorphic) type expects *)
   let rec ty_args_ (ty:term) = match TyM.repr ty with
@@ -117,9 +113,9 @@ module Make(T : TI.S) = struct
   let add_conds pol t conds =
     if conds=[] then t, []
     else match pol with
-    | Pos -> U.and_ [t; U.and_ conds], []
-    | Neg -> U.or_ [t; U.not_ (U.and_ conds)], []
-    | NoPolarity -> t, conds
+    | Pol.Pos -> U.and_ [t; U.and_ conds], []
+    | Pol.Neg -> U.or_ [t; U.not_ (U.and_ conds)], []
+    | Pol.NoPol -> t, conds
 
   (*
     - apply substitution eagerly (build it when we enter `forall_f x. f x = t`)
@@ -156,7 +152,7 @@ module Make(T : TI.S) = struct
               if List.length l <> List.length fundef.fun_concretization
                 then fail_tr_ t
                   "defined function %a is partially applied (%d arguments, expected %d)"
-                  ID.print_name id (List.length l) (List.length fundef.fun_concretization);
+                  ID.print id (List.length l) (List.length fundef.fun_concretization);
               (* existential variable *)
               let alpha = Var.make ~name:"a" ~ty:fundef.fun_abstract_ty in
               let conds = ref [] in
@@ -187,7 +183,7 @@ module Make(T : TI.S) = struct
               let a, cond_a = tr_term_rec_ ~state ~local_state:(inv_pol local_state) a in
               let b, cond_b = tr_term_rec_ ~state ~local_state b in
               add_conds local_state.pol (U.app b [a; b]) (List.append cond_a cond_b)
-          | None, TI.Builtin ((`DataTest _ | `DataSelect _ | `Polarized _) as b), [t] ->
+          | None, TI.Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
               let t', conds = tr_term_rec_ ~state ~local_state t in
               U.app_builtin b [t'], conds
           | None, _, _ ->
@@ -202,8 +198,7 @@ module Make(T : TI.S) = struct
               U.app f l', conds
         end
     | TI.Builtin (`True | `False
-        | `And | `Or | `Not | `Imply | `DataSelect _
-        | `DataTest _ | `Polarized _) ->
+        | `And | `Or | `Not | `Imply | `DataSelect _ | `DataTest _) ->
           t, [] (* partially applied, or constant *)
     | TI.Builtin (`Undefined _ as b) ->
         U.builtin (TI.Builtin.map b
@@ -232,7 +227,7 @@ module Make(T : TI.S) = struct
         (* rename [v] *)
         let v' = Var.fresh_copy v in
         let subst = Subst.add ~subst:local_state.subst v (U.var v') in
-        let t, c_t = tr_term_rec_ t ~state ~local_state:{subst; pol=NoPolarity;} in
+        let t, c_t = tr_term_rec_ t ~state ~local_state:{subst; pol=Pol.NoPol;} in
         let u, c_u = tr_term_rec_ u ~state ~local_state:{local_state with subst;} in
         let conds = match c_u with
           | [] -> c_t
@@ -280,7 +275,7 @@ module Make(T : TI.S) = struct
       fun_encoding.fun_concretization
     in
     let subst = Subst.add_list ~subst:Subst.empty vars args' in
-    let local_state = { subst; pol=NoPolarity; } in
+    let local_state = { subst; pol=Pol.NoPol; } in
     (* convert right-hand side and add its side conditions *)
     let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
     let rhs', conds = tr_term ~state ~local_state rhs in
@@ -301,7 +296,7 @@ module Make(T : TI.S) = struct
         let id = def.Stmt.rec_defined.Stmt.defined_head in
         (* declare abstract type + projectors first *)
         let name = "G_" ^ ID.name id in
-        let abs_type_id = ID.make ~name in
+        let abs_type_id = ID.make name in
         let abs_type = U.ty_const abs_type_id in
         let ty = Sig.find_exn ~sigma:state.sigma id in
         (* projection function: one per argument. It has
@@ -309,7 +304,7 @@ module Make(T : TI.S) = struct
         let projectors =
           List.mapi
             (fun i ty_arg ->
-              let id' = ID.make ~name:(Printf.sprintf "proj_%s_%d" name i) in
+              let id' = ID.make (Printf.sprintf "proj_%s_%d" name i) in
               let ty' = U.ty_arrow abs_type ty_arg in
               id', ty'
             )
@@ -416,12 +411,17 @@ module Make(T : TI.S) = struct
 
   let pp_domain out d =
     let pp_tuple out (id,l) =
-      fpf out "%a → (@[%a@])" ID.print_name id
+      fpf out "%a → (@[%a@])" ID.print id
         (CCFormat.list ~start:"" ~stop:"" P.print) l
     in
     fpf out "[@[<hv2>`%a`:@ %a@]]"
-      ID.print_name d.dom_fun.fun_encoded_fun
+      ID.print d.dom_fun.fun_encoded_fun
       (CCFormat.seq ~start:"" ~stop:"" ~sep:" " pp_tuple) (ID.Tbl.to_seq d.dom_args)
+
+  let is_const_ t = match T.repr t with
+    | TI.Const _ -> true
+    | TI.App (_,[]) -> assert false
+    | _ -> false
 
   (* see whether [t] is of the form [var = const] *)
   let as_eqn_sym_ ~var:v t =
@@ -515,7 +515,7 @@ module Make(T : TI.S) = struct
                   try ID.Tbl.find projs f_id
                   with Not_found ->
                     fail_decode_ "could not find value of projection function %a on %a"
-                      ID.print_name f_id ID.print_name val_id
+                      ID.print f_id ID.print val_id
                 in
                 eval_proj_ proj.proj_tree val_id)
               fdom.dom_fun.fun_concretization
@@ -588,7 +588,7 @@ module Make(T : TI.S) = struct
             (* remove junk from the definition of [t] *)
             let u' = decode_fun_ f_id (ID.Tbl.find doms f_id) u in
             Utils.debugf ~section 3 "@[<2>decoding of recursive fun@ %a := `@[%a@]`@ is `@[%a@]`@]"
-              (fun k->k ID.print_name f_id P.print u P.print u');
+              (fun k->k ID.print f_id P.print u P.print u');
             Some (t, u')
         | _ -> Some (t,u))
       ~finite_types:(fun ((ty,_) as pair) -> match T.repr ty with

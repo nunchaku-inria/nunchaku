@@ -211,10 +211,9 @@ let default
 
 (** {2 The Problems sent to Solvers} *)
 module Problem = struct
-  type 'a vec_ro = ('a, CCVector.ro) CCVector.t
 
   type ('t, 'ty) t = {
-    statements: ('t, 'ty) statement vec_ro;
+    statements: ('t, 'ty) statement CCVector.ro_vector;
   }
 
   let make l = {statements=l}
@@ -254,9 +253,9 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
   let pp_list_ ?(sep=" ") out p = CCFormat.list ~start:"" ~stop:"" ~sep out p
 
   let rec print_ty out ty = match FO.Ty.view ty with
-    | TyApp (id, []) -> ID.print_no_id out id
+    | TyApp (id, []) -> ID.print out id
     | TyApp (id, l) ->
-        fpf out "@[<2>(%a@ %a)@]" ID.print_no_id id (pp_list_ print_ty) l
+        fpf out "@[<2>(%a@ %a)@]" ID.print id (pp_list_ print_ty) l
     | TyBuiltin b -> TyBuiltin.print out b
 
   let print_toplevel_ty out (args, ret) =
@@ -266,18 +265,18 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
   let rec print_term out t = match FO.T.view t with
     | Builtin b -> Builtin.print out b
     | Var v -> Var.print out v
-    | App (f,[]) -> ID.print_no_id out f
+    | App (f,[]) -> ID.print out f
     | App (f,l) ->
-        fpf out "(@[<2>%a@ %a@])" ID.print_no_id f (pp_list_ print_term) l
+        fpf out "(@[<2>%a@ %a@])" ID.print f (pp_list_ print_term) l
     | Fun (v,t) ->
         fpf out "(@[<2>fun %a:%a.@ %a@])"
           Var.print v print_ty (Var.ty v) print_term t
     | DataTest (c,t) ->
-        fpf out "(@[<2>is-%a@ %a@])" ID.print_name c print_term t
+        fpf out "(@[<2>is-%a@ %a@])" ID.print c print_term t
     | DataSelect (c,n,t) ->
-        fpf out "(@[<2>select-%a-%d@ %a@])" ID.print_name c n print_term t
+        fpf out "(@[<2>select-%a-%d@ %a@])" ID.print c n print_term t
     | Undefined (c,t) ->
-        fpf out "(@[<2>undefined-%a@ %a@])" ID.print_name c print_term t
+        fpf out "(@[<2>undefined-%a@ %a@])" ID.print c print_term t
     | Let (v,t,u) ->
         fpf out "(@[<2>let@ %a =@ %a in@ %a@])"
           Var.print v print_term t print_term u
@@ -304,25 +303,25 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
 
   let print_statement out s = match s with
     | TyDecl (id, n) ->
-        fpf out "@[<2>type %a (arity %d).@]" ID.print_no_id id n
+        fpf out "@[<2>type %a (arity %d).@]" ID.print id n
     | Decl (v, ty) ->
-        fpf out "@[<2>val %a@ : %a.@]" ID.print_no_id v print_toplevel_ty ty
+        fpf out "@[<2>val %a@ : %a.@]" ID.print v print_toplevel_ty ty
     | Axiom t -> fpf out "@[<2>axiom %a.@]" print_term t
     | MutualTypes (k, l) ->
         let pp_arg = print_ty in
         let pp_tyvars_ out = function
           | [] -> ()
-          | l -> fpf out "pi %a. " (pp_list_ ID.print_name) l
+          | l -> fpf out "pi %a. " (pp_list_ ID.print) l
         in
         let pp_cstor out c = match c.cstor_args with
-          | [] -> ID.print_name out c.cstor_name
+          | [] -> ID.print out c.cstor_name
           | _ ->
-              fpf out "@[<2>(%a@ %a)@]" ID.print_name c.cstor_name
+              fpf out "@[<2>(%a@ %a)@]" ID.print c.cstor_name
                 (pp_list_ ~sep:" " pp_arg) c.cstor_args
         in
         let print_tydef out tydef =
           fpf out "@[<hv2>%a :=@ %a@]"
-            ID.print_name tydef.ty_name
+            ID.print tydef.ty_name
             (pp_list_ ~sep:" | " pp_cstor)
             (ID.Map.to_list tydef.ty_cstors |> List.map snd)
         in

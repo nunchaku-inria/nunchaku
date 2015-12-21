@@ -83,12 +83,12 @@ module Convert(T : TermTyped.S) : sig
 
   val convert_problem :
     env:env ->
-    (UntypedAST.statement, CCVector.ro) CCVector.t ->
+    UntypedAST.statement CCVector.ro_vector ->
     (problem * env) or_error
 
   val convert_problem_exn :
     env:env ->
-    (UntypedAST.statement, CCVector.ro) CCVector.t ->
+    UntypedAST.statement CCVector.ro_vector ->
     problem * env
 end
 
@@ -101,7 +101,7 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) : sig
 
   val pipe :
     print:bool ->
-    ((UntypedAST.statement, CCVector.ro) CCVector.t,
+    (UntypedAST.statement CCVector.ro_vector,
       (term1, term1, stmt_invariant) Problem.t,
       term2 Model.t, UntypedAST.term Model.t)
       Transform.t
@@ -110,7 +110,7 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) : sig
   val pipe_with :
     decode:(signature:term1 Signature.t -> 'c -> 'd) ->
     print:bool ->
-    ((UntypedAST.statement, CCVector.ro) CCVector.t,
+    (UntypedAST.statement CCVector.ro_vector,
       (term1, term1, stmt_invariant) Problem.t, 'c, 'd
     ) Transform.t
 end

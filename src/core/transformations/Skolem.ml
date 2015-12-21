@@ -103,7 +103,7 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
   let new_sym ~state =
     let n = state.name in
     state.name <- n+1;
-    ID.make ~name:(state.prefix ^ string_of_int n)
+    ID.make (state.prefix ^ string_of_int n)
 
   let mk_and a b = U.and_ [a;b]
   let mk_or a b = U.or_ [a;b]
@@ -181,7 +181,7 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
       | TI.Builtin (`Equiv _) -> assert false
       | TI.Builtin
         ((`Eq _ | `Ite _ | `Imply | `DataSelect _
-           | `DataTest _ | `Undefined _ | `Polarized _ | `And | `Or | `Not) as b) ->
+           | `DataTest _ | `Undefined _ | `And | `Or | `Not) as b) ->
           U.builtin (TI.Builtin.map b ~f:(aux ~env))
       | TI.App (f,l) ->
           begin match T2.repr f, l with
@@ -211,7 +211,7 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
           state.new_sym <- (skolem_id, new_sym):: state.new_sym;
           Utils.debugf ~section 2
             "@[<2>new Skolem symbol `%a :@ @[%a@]` standing for@ @[`%a`@]@]"
-            (fun k-> k ID.print_no_id skolem_id P2.print ty P2.print t);
+            (fun k-> k ID.print skolem_id P2.print ty P2.print t);
           (* convert [t] and replace [v] with [skolem] in it *)
           let env = env_bind ~env v skolem in
           aux ~env t'
@@ -275,12 +275,12 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
   let print_state out st =
     let pp_sym out (id,s) =
       fpf out "@[<2>%a: %a@ standing for `@[%a@]`@]"
-        ID.print_no_id id P2.print s.sym_ty P2.print s.sym_defines
+        ID.print id P2.print s.sym_ty P2.print s.sym_defines
     in
     fpf out "@[<2>skolem table {@,%a@]@,}"
       (CCFormat.seq pp_sym) (ID.Tbl.to_seq st.tbl)
 
-  let epsilon = ID.make ~name:"_witness_of"
+  let epsilon = ID.make "_witness_of"
 
   let find_id_def ~state id =
     (* if [id] is a Skolem symbol, use an epsilon to display the

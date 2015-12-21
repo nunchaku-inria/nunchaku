@@ -63,12 +63,12 @@ module Make(T : TI.S) = struct
         let allowed_cstors = d.dn_tydef.Stmt.ty_cstors in
         if not (ID.Map.mem c allowed_cstors)
         then errorf_ "@[<2>%a is not a constructor of %a@ (these are @[%a@])@]"
-          ID.print_name c ID.print_name d.dn_tydef.Stmt.ty_id
-          (CCFormat.seq ID.print_name) (ID.Map.to_seq allowed_cstors |> Sequence.map fst);
+          ID.print c ID.print d.dn_tydef.Stmt.ty_id
+          (CCFormat.seq ID.print) (ID.Map.to_seq allowed_cstors |> Sequence.map fst);
         let l = try ID.Map.find c d.dn_by_cstor with Not_found -> [] in
         DN_match { d with dn_by_cstor = ID.Map.add c (x::l) d.dn_by_cstor }
     | DN_bind _ ->
-        errorf_ "cannot match against %a, variable binding only" ID.print_name c
+        errorf_ "cannot match against %a, variable binding only" ID.print c
 
   (* returns a pair [l1, l2] where [l1] contains RHS terms with no side
      conditions, and [l2] contains RHS terms with their condition *)
@@ -135,7 +135,7 @@ module Make(T : TI.S) = struct
             | Env.Fun_spec _
             | Env.Pred _
             | Env.Cstor (_,_,_,_) ->
-                errorf_ "@[%a is not a type.@]" ID.print_name ty_id
+                errorf_ "@[%a is not a type.@]" ID.print ty_id
             | Env.NoDef -> DN_bind []
           with Not_found ->
             DN_bind [] (* not an atomic type *)
@@ -175,7 +175,7 @@ module Make(T : TI.S) = struct
         (fun cstor ->
           let id = cstor.Stmt.cstor_name in
           Utils.debugf ~section 5 "compile_dnode for %a on cstor %a"
-            (fun k -> k Var.print v ID.print_name id);
+            (fun k -> k Var.print v ID.print id);
           (* fresh vars for the constructor's arguments *)
           let vars = List.mapi
             (fun i ty -> Var.make ~ty ~name:(spf "v_%d" i))
@@ -243,9 +243,9 @@ module Make(T : TI.S) = struct
 
   let conv_preds
   : type a b.
-    ('t, 'ty, (a,b) inv1) Stmt.mutual_preds ->
-    ('t, 'ty, (a,b) inv2) Stmt.mutual_preds
-  = fun (Stmt.Some_preds l) -> Stmt.Some_preds l
+    ('t, 'ty, (a,b) inv1) Stmt.pred_def list ->
+    ('t, 'ty, (a,b) inv2) Stmt.pred_def list
+  = fun l -> (Obj.magic l)
 
   let uniq_eqn_st env st =
     let loc = Stmt.loc st in

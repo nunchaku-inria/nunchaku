@@ -55,7 +55,6 @@ module Builtin = struct
     | `Eq of 'a * 'a
     | `DataTest of id (** Test whether [t : tau] starts with given constructor *)
     | `DataSelect of id * int (** Select n-th argument of given constructor *)
-    | `Polarized of id * bool (** function with polarity (in pos. or neg. position) *)
     | `Undefined of id * 'a (** Undefined case. argument=the undefined term *)
     ]
 
@@ -79,8 +78,6 @@ module Builtin = struct
     | `DataSelect (id, n) ->
         fpf out "select-%s-%d" (ID.name id) n
     | `Undefined (id,_) -> fpf out "undefined_%d" (ID.id id)
-    | `Polarized (id,p) ->
-        fpf out "%a%s" ID.print_name id (if p then "₊" else "₋")
 
   let equal
   : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
@@ -98,11 +95,9 @@ module Builtin = struct
     | `DataTest id, `DataTest id' -> ID.equal id id'
     | `DataSelect (id, n), `DataSelect (id', n') -> n=n' && ID.equal id id'
     | `Undefined (a,t1), `Undefined (b,t2) -> ID.equal a b && eqterm t1 t2
-    | `Polarized (i1,p1), `Polarized (i2,p2) -> ID.equal i1 i2 && p1=p2
     | `True, _ | `False, _ | `Ite _, _ | `Not, _
     | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
-    | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _
-    | `Polarized _, _ -> false
+    | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> false
 
   let map : f:('a -> 'b) -> 'a t -> 'b t
   = fun ~f b -> match b with
@@ -116,7 +111,6 @@ module Builtin = struct
     | `DataTest id -> `DataTest id
     | `Or -> `Or
     | `Not -> `Not
-    | `Polarized (id,p) -> `Polarized (id,p)
     | `DataSelect (c,n) -> `DataSelect (c,n)
     | `Undefined (id, t) -> `Undefined (id, f t)
 
@@ -129,7 +123,6 @@ module Builtin = struct
     | `Or
     | `DataTest _
     | `DataSelect _
-    | `Polarized _
     | `Not -> acc
     | `Ite (a,b,c) -> f (f (f acc a) b) c
     | `Eq (a,b)
@@ -146,8 +139,6 @@ module Builtin = struct
     | `False, `False
     | `Not, `Not
     | `Or, `Or -> acc
-    | `Polarized (i1,p1), `Polarized (i2,p2) ->
-        if ID.equal i1 i2 && p1=p2 then acc else fail()
     | `DataTest i1, `DataTest i2 -> if ID.equal i1 i2 then acc else fail()
     | `DataSelect (i1,n1), `DataSelect (i2,n2) ->
         if n1=n2 && ID.equal i1 i2 then acc else fail()
@@ -161,8 +152,7 @@ module Builtin = struct
         if ID.equal i1 i2 then f acc t1 t2 else fail()
     | `True, _ | `False, _ | `Ite _, _ | `Not, _
     | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
-    | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _
-    | `Polarized _, _ -> fail()
+    | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> fail()
 
 
 
@@ -175,7 +165,6 @@ module Builtin = struct
     | `Or
     | `DataTest _
     | `DataSelect _
-    | `Polarized _
     | `Not -> ()
     | `Ite (a,b,c) -> f a; f b; f c
     | `Eq (a,b)
@@ -267,7 +256,7 @@ module Print(T : REPR)
 
   let rec print out t = match T.repr t with
     | TyBuiltin b -> CCFormat.string out (TyBuiltin.to_string b)
-    | Const id -> ID.print_name out id
+    | Const id -> ID.print out id
     | TyMeta v -> MetaVar.print out v
     | Var v -> Var.print out v
     | Builtin b -> Builtin.pp print_in_app out b
@@ -284,7 +273,7 @@ module Print(T : REPR)
     | Match (t,l) ->
         let pp_case out (id,(vars,t)) =
           fpf out "@[<hv2>| @[<hv2>%a %a@] ->@ %a@]"
-            ID.print_name id (pp_list_ ~sep:" " Var.print) vars print t
+            ID.print id (pp_list_ ~sep:" " Var.print) vars print t
         in
         fpf out "@[<hv>@[<hv2>match @[%a@] with@ %a@]@ end@]"
           print t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
@@ -626,11 +615,21 @@ module Util(T : S)
   let app_builtin b l = T.build (App (builtin b, l))
   let mk_bind b v t = T.build (Bind (b,v,t))
   let fun_ v t = T.build (Bind (`Fun,v, t))
-  let let_ v t u = T.build (Let (v, t, u))
+
+  let let_ v t u = match T.repr u with
+    | Builtin `True
+    | Builtin `False -> u
+    | _ -> T.build (Let (v, t, u))
+
   let match_with t l =
     if ID.Map.is_empty l then invalid_arg "Term.case: empty list of cases";
     T.build (Match (t,l))
-  let ite a b c = builtin (`Ite (a,b,c))
+
+  let ite a b c = match T.repr a with
+    | Builtin `True -> b
+    | Builtin `False -> c
+    | _ -> builtin (`Ite (a,b,c))
+
   let forall v t = T.build (Bind(`Forall,v, t))
   let exists v t = T.build (Bind(`Exists,v, t))
 
@@ -642,6 +641,8 @@ module Util(T : S)
   let flatten (b:[<`And | `Or]) l =
     CCList.flat_map
       (fun t -> match T.repr t with
+        | Builtin `True when b=`And -> []
+        | Builtin `False when b=`Or -> []
         | App (f, l') ->
             begin match T.repr f with
             | Builtin `Or when b=`Or -> l'
@@ -663,19 +664,19 @@ module Util(T : S)
         end
     | _ -> app_builtin `Not [t]
 
-  and and_ = function
-    | [] -> app_builtin `True []
+  and and_ l = match flatten `And l with
+    | [] -> true_
     | [x] -> x
-    | l -> app_builtin `And (flatten `And l)
+    | l -> app_builtin `And l
 
-  and or_ = function
-    | [] -> app_builtin `False []
+  and or_ l = match flatten `Or l with
+    | [] -> false_
     | [x] -> x
-    | l -> app_builtin `Or (flatten `Or l)
+    | l -> app_builtin `Or l
 
   let imply a b = app_builtin `Imply [a; b]
   let undefined_ t =
-    let id = ID.make ~name:"_" in
+    let id = ID.make "_" in
     builtin (`Undefined (id,t))
 
   let ty_builtin b = T.build (TyBuiltin b)
@@ -905,7 +906,6 @@ module Util(T : S)
           | `True
           | `False -> prop
           | `Ite (_,b,_) -> ty_exn ~sigma b
-          | `Polarized (id,_) -> find_ty_ ~sigma id
           | `Equiv (_,_)
           | `Eq (_,_) -> prop
           | `DataTest id ->

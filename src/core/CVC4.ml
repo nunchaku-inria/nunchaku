@@ -13,6 +13,9 @@ type id = ID.t
 
 let section = Utils.Section.make "cvc4"
 
+let fpf = Format.fprintf
+let spf = CCFormat.sprintf
+
 module DSexp = CCSexpM.MakeDecode(struct
   type 'a t = 'a
   let return x = x
@@ -22,6 +25,11 @@ end)
 type model_elt = FO.Default.T.t
 
 exception CVC4_error of string
+
+let () = Printexc.register_printer
+  (function
+    | CVC4_error msg -> Some (spf "@[CVC4 error:@ %s@]" msg)
+    | _ -> None)
 
 module Make(FO_T : FO.S) = struct
   module FO_T = FO_T
@@ -106,9 +114,6 @@ module Make(FO_T : FO.S) = struct
     Gc.finalise close s; (* close on finalize *)
     s
 
-  let fpf = Format.fprintf
-  let spf = CCFormat.sprintf
-
   let pp_list ?(start="") ?(stop="") pp =
     CCFormat.list ~sep:" " ~start ~stop pp
 
@@ -177,7 +182,7 @@ module Make(FO_T : FO.S) = struct
           begin match b with
           | `Int n -> CCFormat.int out n
           end
-      | FOI.Var v -> Var.print out v
+      | FOI.Var v -> Var.print_full out v
       | FOI.App (f,[]) -> print_id out f
       | FOI.App (f,l) ->
           fpf out "(@[%a@ %a@])"
@@ -189,10 +194,10 @@ module Make(FO_T : FO.S) = struct
       | FOI.Undefined (_,t) -> print_term out t
       | FOI.Fun (v,t) ->
           fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
-            Var.print v print_ty (Var.ty v) print_term t
+            Var.print_full v print_ty (Var.ty v) print_term t
       | FOI.Let (v,t,u) ->
           fpf out "@[<3>(let@ ((%a %a))@ %a@])"
-            Var.print v print_term t print_term u
+            Var.print_full v print_term t print_term u
       | FOI.Ite (a,b,c) ->
           fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
             print_term a print_term b print_term c
@@ -215,10 +220,10 @@ module Make(FO_T : FO.S) = struct
           fpf out "(@[=@ %a@ %a@])" print_term a print_term b
       | FOI.Forall (v,f) ->
           fpf out "(@[<2>forall@ ((%a %a))@ %a@])"
-            Var.print v print_ty (Var.ty v) print_term f
+            Var.print_full v print_ty (Var.ty v) print_term f
       | FOI.Exists (v,f) ->
           fpf out "(@[<2>exists@ ((%a %a))@ %a@])"
-            Var.print v print_ty (Var.ty v) print_term f
+            Var.print_full v print_ty (Var.ty v) print_term f
 
     and print_statement out = function
       | FOI.TyDecl (id,arity) ->
@@ -236,18 +241,18 @@ module Make(FO_T : FO.S) = struct
         let pp_cstor out c =
           (* add selectors *)
           let args = List.mapi (fun i ty -> c.FOI.cstor_name,i,ty) c.FOI.cstor_args in
-          fpf out "(@[<2>%a@ %a@])" ID.print_name c.FOI.cstor_name
+          fpf out "(@[<2>%a@ %a@])" print_id c.FOI.cstor_name
             (pp_list pp_arg) args
         in
         let print_tydef out tydef =
           fpf out "(@[<2>%a@ %a@])"
-            ID.print_name tydef.FOI.ty_name
+            print_id tydef.FOI.ty_name
             (pp_list pp_cstor) (ID.Map.to_list tydef.FOI.ty_cstors |> List.map snd)
         in
         fpf out "(@[<2>%s (%a) (%a)@])"
           (match k with `Data -> "declare-datatypes"
             | `Codata -> "declare-codatatypes")
-          (pp_list ID.print_name) l.FOI.tys_vars
+          (pp_list print_id) l.FOI.tys_vars
           (pp_list print_tydef) l.FOI.tys_defs
 
     in
@@ -277,7 +282,7 @@ module Make(FO_T : FO.S) = struct
     try Hashtbl.find state.decode_tbl s
     with Not_found ->
       (* introduced by CVC4 in the model; make a new ID *)
-      let id = ID.make ~name:s in
+      let id = ID.make s in
       Hashtbl.replace state.decode_tbl s (ID id);
       ID id
 
@@ -465,7 +470,7 @@ module Make(FO_T : FO.S) = struct
     in
     let pp_rule out (l,r) =
       let module P = FO.Print(FOBack) in
-      fpf out "%a → @[%a@]" ID.print_name l P.print_term r
+      fpf out "%a → @[%a@]" ID.print l P.print_term r
     in
     Utils.debugf 5 ~section "@[<2>apply rewrite rules@ @[<hv>%a@]@]"
       (fun k->k (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_rule) (ID.Map.to_seq rules));
@@ -547,7 +552,7 @@ module Make(FO_T : FO.S) = struct
             ID.Map.add id Q_const acc, [stmt]
         | FOI.TyDecl (id,0) ->
             (* add a dummy constant *)
-            let c = ID.make ~name:(CCFormat.sprintf "__nun_card_witness_%d" !n) in
+            let c = ID.make (CCFormat.sprintf "__nun_card_witness_%d" !n) in
             incr n;
             let ty_c = [], FO_T.Ty.const id in
             let acc' = ID.Map.add c (Q_type id) acc in
