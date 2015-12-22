@@ -5,28 +5,42 @@ TODO explain there are libraries and the core
 {2 The Core Library}
 
 {!modules:
-NunBuiltin
-NunCVC4
-NunFO
-NunID
-NunIntf
-NunLocation
-NunMetaVar
-NunMonomorphization
-NunProblem
-NunReduce
-NunSkolem
-NunSolver_intf
-NunTerm_ho
-NunTerm_intf
-NunTerm_typed
-NunTransform
-NunTypeInference
-NunTypeUnify
-NunType_intf
-NunUntypedAST
-NunUtils
-NunVar
+Pattern
+TermInner
+TermMono
+TermPoly
+TermTyped
+TypeMono
+TypePoly
+ElimMultipleEqns
+ElimPatternMatch
+ElimRecursion
+Monomorphization
+Polarize
+Skolem
+TypeInference
+elimIndPreds
+CVC4
+Env
+FO
+ID
+Intf
+Location
+MetaVar
+Model
+Polarity
+Problem
+Reduce
+Scheduling
+Signature
+Solver_intf
+Statement
+Transform
+Traversal
+TypeUnify
+UntypedAST
+Utils
+Var
 }
 
 {2 Parsers}
@@ -34,6 +48,10 @@ NunVar
 {!modules:
 NunLexer
 NunParser
+NunParsingUtils
+NunTPTPLexer
+NunTPTPParser
+NunTPTPPreprocess
 }
 
 {2 Index}
