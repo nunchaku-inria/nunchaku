@@ -6,6 +6,9 @@ true: safe_string
 
 <tests> or <tptp>: -traverse
 
+# generated code...
+<src/parsers/nunTPTPParser.*>: warn(-20)
+
 # more warnings
 <src/**/*.ml>: warn(+a), warn(-4), warn(-44), warn(-50)
 
