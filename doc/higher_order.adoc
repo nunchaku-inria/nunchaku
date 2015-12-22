@@ -149,7 +149,7 @@ in_dom f n = (n = 0 || n = 1)
 has_default f = true
 default f = 0
 
-{(f, 1), (f, 2)} \subseteq alpha
+{(f, 0), (f, 1)} \subseteq alpha
 ----
 
 Example 2: The successor function on the integers can be approximated by
@@ -235,7 +235,55 @@ forall b : alpha_bump. ~ has_default (bump (gamma1_bump b)).
 
 === Partially Applied Functions as Arguments to Equality
 
-*TODO*
+A comparison "f = g" for "f", "g" functions is problematic. After the above
+translation, "f" and "g" are handles. But the same handle can correspond to
+two distinct functions. For example,
+
+----
+rec bad :=
+  bad 0 = (S 0);
+  bad (S 0) = S (S 0);
+  bad (S (S n)) = 0.
+----
+
+and
+
+----
+rec suc :=
+  suc n = S n.
+----
+
+may both be approximated by the handle
+
+----
+app f 0 = 1
+app f 1 = 2
+in_dom f n = (n = 0 || n = 1)
+has_default f = false
+
+{(f, 0), (f, 1)} \subseteq alpha
+----
+
+This means we have to be careful when comparing handles. In negative contexts,
+equalities such as "f = g" can be left as is. (Indeed, we rely implicitly on
+this for the built-in equality rules, e.g. congruence.) After all, in such
+contexts, it is OK to return "true" instead of "false". In positive contexts,
+we need a full scale comparison like this:
+
+----
+(forall a : alpha.
+  let x = gamma2 a in
+    gamma1 a = f
+    && in_dom f x
+    && (if exists b : alpha. gamma1 b = g && gamma2 b = x && in_dom g x then
+          app f x = app g x
+        else
+          has_default g && app f x = default g))
+&&
+<<same as above but with f and g swapped>>
+&&
+has_default f && has_default g && default f = default g
+----
 
 == Higher-Order Quantification
 
@@ -243,6 +291,10 @@ If we are lucky, skolemization eliminates a higher-order quantifier before it
 causes any trouble. Or perhaps the higher-order quantifier is in a recursive
 definition, and then it becomes first-order thanks to the introduction of a
 handle.
+
+If the quantification is of the form "\forall x. f x = g x" (for some terms "f
+x" and "g x" that may contain "x", it can be rewritten into "f = g", and then
+the techniques for partially applied functions as arguments to equality apply.
 
 The remaining cases are:
 
