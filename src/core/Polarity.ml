@@ -15,6 +15,8 @@ let inv = function
 
 let equal = (=)
 
+let is_neutral = function NoPol -> true | Pos | Neg -> false
+
 let to_string = function
   | Pos -> "+"
   | Neg -> "-"
