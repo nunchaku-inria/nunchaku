@@ -249,7 +249,7 @@ module Make(FO_T : FO.S) = struct
             print_id tydef.FOI.ty_name
             (pp_list pp_cstor) (ID.Map.to_list tydef.FOI.ty_cstors |> List.map snd)
         in
-        fpf out "(@[<2>%s (%a) (%a)@])"
+        fpf out "(@[<2>%s@ (@[%a@])@ (@[<hv>%a@])@])"
           (match k with `Data -> "declare-datatypes"
             | `Codata -> "declare-codatatypes")
           (pp_list print_id) l.FOI.tys_vars
