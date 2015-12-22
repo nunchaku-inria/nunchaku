@@ -676,12 +676,13 @@ module Util(T : S)
         end
     | `Or, _ ->
         begin match flatten `Or l with
-        | [] -> true_
+        | [] -> false_
         | [x] -> x
         | l -> app_builtin_ `Or l
         end
     | `Not, [t] ->
-        begin match T.repr t with| Builtin `True -> false_
+        begin match T.repr t with
+        | Builtin `True -> false_
         | Builtin `False -> true_
         | App (f, l) ->
             begin match T.repr f, l with
