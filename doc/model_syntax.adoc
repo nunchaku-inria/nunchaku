@@ -171,10 +171,9 @@ append = fun $xs : list. fun $ys : list.
 ----
 
 Notice the arguments to "?__": They indicate the dependency of the unspecified
-value on its arguments. An alternative is simply to write "append $xs $ys".
-Maybe that's the clearest one. In any case, the dependencies should be clearly
-marked. (One of my regrets with Nitpick is that I used the "..." notation for
-lots of things, resulting in an unclear notion of partial model.)
+value on its arguments. (One of my regrets with Nitpick is that I used the
+"..." notation for lots of things, resulting in an unclear notion of partial
+model.)
 
 Now we plug in the values from the "@uc_G_append_*" tuples given above for the
 "Xs" and "Ys":
@@ -230,11 +229,108 @@ append = fun $xs : list. fun $ys : list.
 
 That's it.
 
-== General Syntax.
+== Syntax
 
+The current output looks like an S-expression. For CVC4, such an output format
+makes a lot of sense, because SMT-LIB input is also a list of S-expressions
+(or something very similar). But for Nunchaku, this feels outlandish.
+Something like
+
+----
+val elem := {@elem_1, @elem_2}.
+----
+
+for uninterpreted types and
+
+----
+val append := fun $xs : list. fun $ys : list. blah_blah.
+----
+
+for terms would feel more natural (and wouldn't be harded to parse). You could
+even go further and really use the input syntax, e.g.
+
+----
+datatype elem = @elem_1 | @elem_2.
+rec append :=
+  append $xs $ys = blah_blah.
+----
+
+(even if "elem" is an uninterpreted type, i.e., "val elem : type" in the input
+problem, and "append" is specified by something else than "rec"). The
+advantage of this scheme is that the output syntax is a subset of the input
+syntax. And one could in principle take the input file, replace the
+declaration of "elem" and the definition of "append" with the model output,
+rerun Nunchaku, and get SAT again (modulo little syntactic issues like "?__",
+but even there I have some ideas [*]).
+
+[*] In essence, ?__ could be a special "fail" function, for which a guard
+ensures that it is never called. (You can think of it as being a function
+whose alpha type is constrained to be always empty.) This would be useful in
+other contexts in the input language. I wanted to bring this up at some point.
+No hurry, but it would be a great feature. Other possible names for "?__" (in
+the input language) would be "fail" or "abort" or "avoid" or "block".
+
+=== Presentation of Functions
+
+Irrespective of the above syntactic decision, a good question is how to
+present functions. There's the "if then else" scheme, with equals and
+conjunctions:
+
+----
+append = fun $xs : list. fun $ys : list.
+  if $xs = Cons @uc_a_1 Nil && $ys = Cons @uc_a_0 Nil then
+    Cons @uc_a_1 (Cons @uc_a_0 Nil)
+  else if $xs = Cons @uc_a_0 Nil && $ys = Cons @uc_a_1 Nil then
+    Cons @uc_a_0 (Cons @uc_a_1 Nil)
+  else if $xs = Nil && $ys = Cons @uc_a_0 Nil then
+    Cons @uc_a_0 Nil
+  else if $xs = Nil && $ys = Cons @uc_a_1 Nil then
+    Cons @uc_a_1 Nil
+  else
+    append $xs $ys
+----
+
+Then there's the ML-style tabular syntax, which has the definite advantage of
+compactness and readability. Also notice how the unspecified case does not
+have to be specified explicitly.
+
+----
+append (Cons @uc_a_1 Nil) (Cons @uc_a_0 Nil) = Cons @uc_a_1 (Cons @uc_a_0 Nil)
+append (Cons @uc_a_0 Nil) (Cons @uc_a_1 Nil) = Cons @uc_a_0 (Cons @uc_a_1 Nil)
+append Nil (Cons @uc_a_0 Nil) = Cons @uc_a_0 Nil
+append Nil (Cons @uc_a_1 Nil) = Cons @uc_a_1 Nil
+----
+
+The main disadvantages are:
+
+1. It does not really scale up to higher-order logic. I.e. at some point,
+we'll need to write out functions "(fun $xs. fun $ys. if ...)" anyway.
+
+2. It is less uniform and requires more interfacing for each frontend.
+
+So the "if then else" scheme is probably the best one. Also, users will rarely
+inspect the model of functions (e.g. nobody would look at the model of
+"append" in practice, unless they suspect a bug), except when these functions
+are free variables in the goal (for higher-order problems).
+
+== Self-Contained or Not?
+
+Should the output be self-contained or should it repeat declarations from the
+input, e.g. "data"? Repeating is what TSTP and CVC4 do. This can be
+interesting because then the output is potentially itself an input file, which
+is useful for testing (checking that the model is indeed a model by rerunning
+Nunchaku on the output) and connecting tools together. I have no strong
+opinion here.
 
 == Generated Names
 
+We need to do something about the names of atoms and the names of bound
+variables. For atoms, there should be a clear naming convention enforced by
+Nunchaku, irrespective of what CVC4 does. For example, if an uninterpreted
+type is called "elem", the atoms might be called "@elem_1", "@elem_2", ...,
+"@elem_N" or "elem@0", "elem@1", ..., "elem@N-1". Right now, CVC4 sometimes
+uses the name of some constant, and sometimes it generates some identifiers.
 
-
-*More to come.*
+For bound variables, again I would suggest aggressive renaming. Perhaps the
+same convention as for atoms can be used, but with (e.g.) "$" instead of "Q"
+or whatever.
