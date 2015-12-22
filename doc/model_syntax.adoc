@@ -334,5 +334,5 @@ type is called "elem", the atoms might be called "@elem_1", "@elem_2", ...,
 uses the name of some constant, and sometimes it generates some identifiers.
 
 For bound variables, aggressive renaming is also the way to go. Perhaps the
-same convention as for atoms can be used, but with (e.g.) "$" instead of "Q"
+same convention as for atoms can be used, but with (e.g.) "$" instead of "@"
 or whatever.
