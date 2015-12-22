@@ -1,3 +1,76 @@
 = Translation of Higher-Order Constructs
 
-*More to come.*
+What are the higher-order constructs? I believe this is a complete list:
+
+C1. Terms as formulas: x && y, where x, y : prop
+C2. Formulas within terms: p (x a = x) -> p true
+C3. Lambda-abstractions: (fun x y. y + x) = (+)
+C4. Higher-order arguments: map f [x] = [f x]
+C5. Partial function applications: f = g -> f x = g x
+C6. Higher-order quantification: forall x. exists f. f x = x
+
+C1 and C2 are not an issue for SMT-LIB or Nunchaku already today.
+
+== Lambda-Lifting
+
+C3 can be eliminated by extensionality and by a transformation that performs
+lambda-lifting (defunctionalization, supercombinators).
+
+=== Extensionality
+
+Applying extensionality in this case means translating
+
+----
+lhs = rhs
+----
+
+where either lhs or rhs is a lambda-abstraction (not otherwise!) to
+
+----
+forall x. lhs x = rhs x
+----
+
+Example:
+
+----
+empty = (fun x. false)
+----
+
+to
+
+----
+forall x. empty x = false
+----
+
+=== Lambda-Lifting
+
+Lambda-lifting introduces a new function symbol corresponding to each
+lambda-abstraction. That symbol takes all the free variables (not cons of the
+lambda-abstractions as argument, before taking the lambda argument itself.
+
+Example:
+
+----
+... forall u v. P (fun x. fun y. F x y u v) ...
+----
+
+becomes
+
+----
+... forall u v. P (lifted1 u v) ...
+
+rec lifted1 :=
+  lifted1 u v = (fun x. fun y. F x y u v).
+----
+
+which by extensionality becomes
+
+----
+forall u v. P (lifted1 u v)
+
+rec lifted1 :=
+  lifted1 u v x y = F x y u v.
+----
+
+Notice that a single definition ("lifted1") is sufficient for an interated
+lambda-abstraction (here "fun x. fun y. ...").
