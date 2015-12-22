@@ -575,7 +575,7 @@ module Make(FO_T : FO.S) = struct
       then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem problem';
     if timeout < 0. then invalid_arg "CVC4.create: wrong timeout";
     let cmd = Printf.sprintf
-      "cvc4 --tlimit-per=%d --lang smt --finite-model-find %s"
+      "cvc4 --tlimit-per=%d --lang smt --finite-model-find --uf-ss-fair-monotone %s"
       (int_of_float (timeout *. 1000.)) options in
     Utils.debugf ~section 2 "@[<2>run command@ `%s`@]" (fun k->k cmd);
     let ic, oc = Unix.open_process cmd in
@@ -597,7 +597,7 @@ module Make(FO_T : FO.S) = struct
       let timeout = deadline -. Unix.gettimeofday() in
       if timeout < 0.1 then raise Timeout;
       Printf.sprintf
-        "cvc4 --tlimit-per=%d --lang smt --finite-model-find %s"
+        "cvc4 --tlimit-per=%d --lang smt --finite-model-find --uf-ss-fair-monotone %s"
         (int_of_float (timeout *. 1000.)) options
     in
     let res = Scheduling.run options ~j ~cmd
