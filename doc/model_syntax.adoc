@@ -267,7 +267,7 @@ but even there I have some ideas [*]).
 ensures that it is never called. (You can think of it as being a function
 whose alpha type is constrained to be always empty.) This would be useful in
 other contexts in the input language. I wanted to bring this up at some point.
-No hurry, but it would be a great feature. Other possible names for "?__" (in
+No hurry, but it would be a nice feature. Other possible names for "?__" (in
 the input language) would be "fail" or "abort" or "avoid" or "block".
 
 === Presentation of Functions
@@ -319,8 +319,8 @@ Should the output be self-contained or should it repeat declarations from the
 input, e.g. "data"? Repeating is what TSTP and CVC4 do. This can be
 interesting because then the output is potentially itself an input file, which
 is useful for testing (checking that the model is indeed a model by rerunning
-Nunchaku on the output) and connecting tools together. I have no strong
-opinion here.
+Nunchaku on the output) and connecting tools together. But it also clutters
+things.
 
 == Generated Names
 
@@ -331,6 +331,6 @@ type is called "elem", the atoms might be called "@elem_1", "@elem_2", ...,
 "@elem_N" or "elem@0", "elem@1", ..., "elem@N-1". Right now, CVC4 sometimes
 uses the name of some constant, and sometimes it generates some identifiers.
 
-For bound variables, again I would suggest aggressive renaming. Perhaps the
+For bound variables, aggressive renaming is also the way to go. Perhaps the
 same convention as for atoms can be used, but with (e.g.) "$" instead of "Q"
 or whatever.
