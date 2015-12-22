@@ -78,6 +78,8 @@ lambda-abstraction (here "fun x. fun y. ...").
 
 == Higher-Order Arguments and Partial Function Applications
 
+*WARNING: The following text is very confusing.*
+
 C4 (higher-order arguments) and C5 (partial function applications) go hand
 in hand. In fact, C6 (higher-order quantification) is also a prerequisite for
 C4, but we will study it in more generality below.
@@ -86,13 +88,170 @@ Specialization is a neat trick that takes care of some higher-order
 quantifiers, e.g., the arguments to a "map" function. We will assume that it
 has been applied already and look at the remaining higher-order arguments.
 
+Consider the following example (substitution on de Bruijn terms):
+
+----
+rec subst : (nat -> term) -> term -> term :=
+  forall rho j. subst rho (Var j) = rho j;
+  forall rho t. subst rho (Lam t) = Lam (subst (bump rho) t);
+  forall rho t u. subst rho (App t u) = App (subst rho t) (subst rho u).
+
+rec bump : (nat -> term) -> nat -> term :=
+  forall rho. bump rho 0 = Var 0;
+  forall rho m. bump rho (Suc m) = lift (rho m).
+----
+
+=== Handles
+
+The trick here is to replace the higher-order function arrow by a new type. We
+could call it an (associative) "array" but that would be confusing because we
+are not going to use the built-in SMT theory of arrays to represent them. Let
+us call such new types _handle types_, and values of those types _handles_.
+
+Each handle type "H" corresponding to the function space "T -> U" is equipped
+with the following sort and operations:
+
+----
+(* the actual operations *)
+val app_H : H -> T -> U.
+val in_dom_H : H -> T -> prop.
+val has_default_H : H -> prop.
+val default_H : H -> U.
+
+(* an abstraction type with two gamma projections *)
+val alpha_H : type.
+val gamma1_H : alpha_H -> H.
+val gamma2_H : alpha_H -> T.
+----
+
+(Let's drop the "_H"s.) The intuition is as follows:
+
+* "app" applies a handle to an argument, producing a result value. The
+  function should only be applied to argument values for which "in_dom"
+  returns "true".
+
+* If "in_dom" returns false for a specific point, we a priori do not know what
+  value the function takes at that point. However, if the handle enjoys the
+  "has_default" property, we know it returns "default" and can use that.
+
+We will identify "alpha" with a product type "H * T" in the following, for
+notational convenience. The "alpha" type is similar to the type of the same
+name in the first-order translation (SMT 2015) for the "app" function, but not
+quite because there's also an "in_dom" predicate into play.
+
+Example 1: The function that maps 0 to 1, 1 to 2, and every other integer to 0
+can be represented semantically by the function "f" below:
+
+----
+app f 0 = 1
+app f 1 = 2
+in_dom f n = (n = 0 || n = 1)
+has_default f = true
+default f = 0
+
+{(f, 1), (f, 2)} \subseteq alpha
+----
+
+Example 2: The successor function on the integers can be approximated by
+
+----
+app g (-3) = 2
+app g 0 = 1
+app g 5 = 6
+in_dom g n = (n = -3 || n = 0 || n = 5)
+has_default g = false
+(default g is whatever)
+
+{(g, -3), (g, 0), (g, 5)} \subseteq alpha
+----
+
+=== Handle Axioms
+
+If two handles are distinct, they must really correspond to distinct
+functions. This is extensionality and can be axiomatized as follows:
+
+----
+axiom forall h : H, k : H.
+  h = k || (exists x : T. APP h x ~= APP k x).
+----
+
+=== Translation
+
+For each function symbol, we compute the minimum number of arguments it ever
+occurs with and pass additional arguments using "app" in the definition. For
+recursively defined functions, we set "has_default f = false". Finally, any
+call to a function variable needs to perform a complicated lookup routine, and
+guards are necessary whenever "app" or "is_dom" is checked. For our running
+example, we have:
+
+----
+val H : type.
+val app : H -> nat -> term.
+val in_dom : H -> nat -> prop.
+val has_default : H -> prop.
+val default : H -> term.
+
+val alpha : type.
+val gamma1 : alpha -> nat.
+val gamma2 : alpha -> term.
+
+; for my own convenience
+abbreviation APP h j :=
+  if in_dom h j then
+    app h j  WITH GUARD  (exists b : alpha. gamma1 b = h && gamma2 b = j)
+  else
+    default h  WITH GUARD  (exists b : alpha. gamma1 b = h && has_default h).
+
+rec subst : H -> term -> term :=
+  forall h j. subst h (Var j) = APP h j;
+  forall h t. subst h (Lam t) = Lam (subst (bump h) t);
+  forall h t u. subst h (App t u) = App (subst h t) (subst h u).
+
+rec bump : H -> H :=
+  forall h n.
+    in_dom (bump h) n
+      && (exists b : alpha. gamma1 b = bump h && gamma2 b = n) ->
+    app (bump h) n = (match n with | 0 => Var 0 | Suc m => lift (APP h m)).
+----
+
+When bump is later translated using the first-order translation (cf. SMT
+2015), some special handling is necessary to ensure that "in_dom" returns
+false for arguments where "bump" is no longer defined:
+
+----
+axiom
+  forall a : alpha_H.
+    in_dom (gamma1_H a) (gamma2_H a) =
+    (exists b : alpha_bump.
+          gamma1_H a = bump (gamma1_bump b) && gamma2_H a = gamma2_bump b).
+----
+
+And we need one more axiom to say that "bump" has no default (since it is a
+function introduced by "rec"):
+
+----
+forall b : alpha_bump. ~ has_default (bump (gamma1_bump b)).
+----
+
+=== Partially Applied Functions as Arguments to Equality
+
 *TODO*
 
 == Higher-Order Quantification
 
-=== Skolemization
-
 If we are lucky, skolemization eliminates a higher-order quantifier before it
-causes any trouble.
+causes any trouble. Or perhaps the higher-order quantifier is in a recursive
+definition, and then it becomes first-order thanks to the introduction of a
+handle.
 
-*TODO*
+The remaining cases are:
+
+* _The quantification is over a finite domain (after the possible introduction
+  of handles, which can transform some infinite types into finite ones)._
+  E.g. "prop -> prop". This could in principle be handled using SMT arrays,
+  but according to AJR arrays do not mix well with finite model finding. Maybe
+  we just give up, like we do for infinite quantification (with the wrong
+  polarity).
+
+* _The quantification is over an infinite domain._ E.g. "nat -> nat".
+  This is virtually hopeless.
