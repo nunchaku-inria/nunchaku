@@ -608,11 +608,9 @@ module Util(T : S)
   let ty_kind = T.build (TyBuiltin `Kind)
   let ty_prop = T.build (TyBuiltin `Prop)
 
-  let builtin s = T.build (Builtin s)
   let const id = T.build (Const id)
   let var v = T.build (Var v)
   let app t l = T.build (App(t,l))
-  let app_builtin b l = T.build (App (builtin b, l))
   let mk_bind b v t = T.build (Bind (b,v,t))
   let fun_ v t = T.build (Bind (`Fun,v, t))
 
@@ -628,11 +626,6 @@ module Util(T : S)
   let forall v t = T.build (Bind(`Forall,v, t))
   let exists v t = T.build (Bind(`Exists,v, t))
 
-  let eq a b = builtin (`Eq (a,b))
-  let equiv a b = builtin (`Equiv (a,b))
-  let true_ = builtin `True
-  let false_ = builtin `False
-
   let flatten (b:[<`And | `Or]) l =
     CCList.flat_map
       (fun t -> match T.repr t with
@@ -647,38 +640,78 @@ module Util(T : S)
         | _ -> [t])
       l
 
-  let rec not_ t = match T.repr t with
-    | Builtin `True -> false_
-    | Builtin `False -> true_
-    | App (f, l) ->
-        begin match T.repr f, l with
-        | Builtin `And, _ -> or_ (List.map not_ l)
-        | Builtin `Or, _ -> and_ (List.map not_ l)
-        | Builtin `Not, [t] -> t
-        | _ -> app_builtin `Not [t]
+  let builtin_ b = T.build (Builtin b)
+  let app_builtin_ b l = app (builtin_ b) l
+
+  let true_ = builtin_ `True
+  let false_ = builtin_ `False
+
+  let rec builtin arg = match arg with
+    | `Ite (a,b,c) ->
+        begin match T.repr a, T.repr b, T.repr c with
+        | Builtin `True, _, _ -> b
+        | Builtin `False, _, _ -> c
+        | _, Builtin `True, Builtin `False -> a
+        | _, Builtin `False, Builtin `True -> not_ a
+        | _, Builtin `True, Builtin `True -> true_
+        | _, Builtin `False, Builtin `False -> false_
+        | _ -> builtin_ arg
         end
-    | _ -> app_builtin `Not [t]
+    | `Equiv (a,b) ->
+        begin match T.repr a, T.repr b with
+        | Builtin `True, _ -> b
+        | _, Builtin `True -> a
+        | Builtin `False, _ -> not_ b
+        | _, Builtin `False -> not_ a
+        | _ -> builtin_ arg
+        end
+    | _ -> builtin_ arg
 
-  and and_ l = match flatten `And l with
-    | [] -> true_
-    | [x] -> x
-    | l -> app_builtin `And l
+  and app_builtin arg l = match arg, l with
+    | `And, _ ->
+        begin match flatten `And l with
+        | [] -> true_
+        | [x] -> x
+        | l -> app_builtin_ `And l
+        end
+    | `Or, _ ->
+        begin match flatten `Or l with
+        | [] -> true_
+        | [x] -> x
+        | l -> app_builtin_ `Or l
+        end
+    | `Not, [t] ->
+        begin match T.repr t with| Builtin `True -> false_
+        | Builtin `False -> true_
+        | App (f, l) ->
+            begin match T.repr f, l with
+            | Builtin `And, _ -> or_ (List.map not_ l)
+            | Builtin `Or, _ -> and_ (List.map not_ l)
+            | Builtin `Not, [t] -> t
+            | _ -> app_builtin_ `Not [t]
+            end
+        | _ -> app_builtin_ `Not [t]
+        end
+    | `Imply, [a;b] ->
+        begin match T.repr a, T.repr b with
+        | Builtin `True, _ -> b
+        | Builtin `False, _ -> true_
+        | _, Builtin `True -> true_
+        | _, Builtin `False -> not_ a
+        | _ -> app_builtin_ arg l
+        end
+    | (`Ite _ | `Eq _ | `Equiv _), [] -> builtin arg
+    | _ -> app_builtin_ arg l
 
-  and or_ l = match flatten `Or l with
-    | [] -> false_
-    | [x] -> x
-    | l -> app_builtin `Or l
+  and not_ t = app_builtin `Not [t]
+  and and_ l = app_builtin `And l
+  and or_ l = app_builtin `Or l
+  and imply a b = app_builtin `Imply [a;b]
 
-  let ite a b c = match T.repr a, T.repr b, T.repr c with
-    | Builtin `True, _, _ -> b
-    | Builtin `False, _, _ -> c
-    | _, Builtin `True, Builtin `False -> a
-    | _, Builtin `False, Builtin `True -> not_ a
-    | _, Builtin `True, Builtin `True -> true_
-    | _, Builtin `False, Builtin `False -> false_
-    | _ -> builtin (`Ite (a,b,c))
+  let eq a b = builtin (`Eq (a,b))
+  let equiv a b = builtin (`Equiv (a,b))
+  let ite a b c = app_builtin (`Ite (a,b,c)) []
 
-  let imply a b = app_builtin `Imply [a; b]
   let undefined_ t =
     let id = ID.make "_" in
     builtin (`Undefined (id,t))
