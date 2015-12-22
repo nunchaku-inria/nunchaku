@@ -1,0 +1,36 @@
+= Description Operators
+
+The description operators are
+
+----
+spec iota : pi a. (a -> prop) -> a :=
+  forall (P : a -> prop).
+    (exists (y : a). P y && (forall (z : a). P z => z = y)) =>
+    forall (x : a). P x = (x = iota P).
+----
+
+and
+
+----
+spec eps : pi a. (a -> prop) -> a :=
+  forall (P : a -> prop) (x : a). P x => P (eps P).
+----
+
+"iota" is the _definite description operator_ (Hilbert's iota). "eps" is the
+_indefinite description operator_ (Hilbert's epsilon or choice). The above
+specifications are (one version of their) conventional axiomatization.
+
+"iota" returns *the* element satisfying a predicate "P" if their exists such
+an element; otherwise, it returns an arbitrary element. (The arbitrary element
+may be different for different predicates "P", but it must be the same for two
+predicates that are equal, by congruence of equality.)
+
+"eps" returns *an* element satisfying a predicate "P". If there exists many,
+it chooses an arbitrary satisfying element (with the same twist on the word
+"arbitrary" as above). If there exists none, it returns an arbitrary element.
+
+The two operators are problematic because of the infinite quantification over
+"a" (together with "spec"). I have some ideas on what to do about it, but we
+must look into the translation of higher-order constructs first.
+
+*More to come.*

@@ -1,0 +1,3 @@
+= Syntax of Generated Models
+
+*More to come.*
