@@ -263,6 +263,8 @@ declaration of "elem" and the definition of "append" with the model output,
 rerun Nunchaku, and get SAT again (modulo little syntactic issues like "?__",
 but even there I have some ideas [*]).
 
+Oh, and the types should definitely come before the terms.
+
 [*] In essence, ?__ could be a special "fail" function, for which a guard
 ensures that it is never called. (You can think of it as being a function
 whose alpha type is constrained to be always empty.) This would be useful in
