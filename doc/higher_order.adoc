@@ -11,10 +11,11 @@ C6. Higher-order quantification: forall x. exists f. f x = x
 
 C1 and C2 are not an issue for SMT-LIB or Nunchaku already today.
 
-== Lambda-Lifting
+== Lambda-Abstractions
 
-C3 can be eliminated by extensionality and by a transformation that performs
-lambda-lifting (defunctionalization, supercombinators).
+C3 (lambda-abstractions) can be eliminated by extensionality and by a
+transformation that performs lambda-lifting (defunctionalization,
+supercombinators).
 
 === Extensionality
 
@@ -66,11 +67,32 @@ rec lifted1 :=
 which by extensionality becomes
 
 ----
-forall u v. P (lifted1 u v)
+... forall u v. P (lifted1 u v) ...
 
 rec lifted1 :=
   lifted1 u v x y = F x y u v.
 ----
 
-Notice that a single definition ("lifted1") is sufficient for an interated
+A single definition ("lifted1") is sufficient for an iterated
 lambda-abstraction (here "fun x. fun y. ...").
+
+== Higher-Order Arguments and Partial Function Applications
+
+C4 (higher-order arguments) and C5 (partial function applications) go hand
+in hand. In fact, C6 (higher-order quantification) is also a prerequisite for
+C4, but we will study it in more generality below.
+
+Specialization is a neat trick that takes care of some higher-order
+quantifiers, e.g., the arguments to a "map" function. We will assume that it
+has been applied already and look at the remaining higher-order arguments.
+
+*TODO*
+
+== Higher-Order Quantification
+
+=== Skolemization
+
+If we are lucky, skolemization eliminates a higher-order quantifier before it
+causes any trouble.
+
+*TODO*
