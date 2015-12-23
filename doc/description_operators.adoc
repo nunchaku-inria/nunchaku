@@ -30,7 +30,17 @@ it chooses an arbitrary satisfying element (with the same twist on the word
 "arbitrary" as above). If there exists none, it returns an arbitrary element.
 
 The two operators are problematic because of the infinite quantification over
-"a" (together with "spec"). I have some ideas on what to do about it, but we
-must look into the translation of higher-order constructs first.
+the ground type "t" that instantiates "a" (together with "spec").
 
-*More to come.*
+Although specialization is a priori only for "rec", exceptionally "iota" and
+"eps" can and should be specialized whenever possible.
+
+For instances where "t" is finite (and not too large, e.g. <= 256), the "spec"
+can (and should) be kept as such. Otherwise, the following translations should
+be used (in "pseudocode"):
+
+----
+rec eps_t : H_t_prop -> t :=
+  forall h. eps_t h.
+    ...
+----

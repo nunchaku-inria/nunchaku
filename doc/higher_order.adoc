@@ -115,8 +115,7 @@ with the following sort and operations:
 (* the actual operations *)
 val app_H : H -> T -> U.
 val in_dom_H : H -> T -> prop.
-val has_default_H : H -> prop.
-val default_H : H -> U.
+val prototype_H : H -> T.
 
 (* an abstraction type with two gamma projections *)
 val alpha_H : type.
@@ -131,8 +130,9 @@ val gamma2_H : alpha_H -> T.
   returns "true".
 
 * If "in_dom" returns false for a specific point, we a priori do not know what
-  value the function takes at that point. However, if the handle enjoys the
-  "has_default" property, we know it returns "default" and can use that.
+  value the function takes at that point. However, if the handle "H" enjoys
+  the property "in_dom H (prototype H)", we can assume that the function
+  returns "app H (prototype H)" at all points not in its domain.
 
 We will identify "alpha" with a product type "H * T" in the following, for
 notational convenience. The "alpha" type is similar to the type of the same
@@ -145,11 +145,11 @@ can be represented semantically by the function "f" below:
 ----
 app f 0 = 1
 app f 1 = 2
-in_dom f n = (n = 0 || n = 1)
-has_default f = true
-default f = 0
+app f 7 = 0
+in_dom f n = (n = 0 || n = 1 || n = 7)
+prototype f = 7
 
-{(f, 0), (f, 1)} \subseteq alpha
+{(f, 0), (f, 1), (f, 7)} \subseteq alpha
 ----
 
 Example 2: The successor function on the integers can be approximated by
@@ -159,8 +159,7 @@ app g (-3) = 2
 app g 0 = 1
 app g 5 = 6
 in_dom g n = (n = -3 || n = 0 || n = 5)
-has_default g = false
-(default g is whatever)
+prototype g = 7
 
 {(g, -3), (g, 0), (g, 5)} \subseteq alpha
 ----
@@ -179,17 +178,21 @@ axiom forall h : H, k : H.
 
 For each function symbol, we compute the minimum number of arguments it ever
 occurs with and pass additional arguments using "app" in the definition. For
-recursively defined functions, we set "has_default f = false". Finally, any
-call to a function variable needs to perform a complicated lookup routine, and
-guards are necessary whenever "app" or "is_dom" is checked. For our running
-example, we have:
+recursively defined functions, we require
+
+    ~ (in_dom h (prototype h)) || (forall x. in_dom h x)
+
+but drop the second conjunct if x ranges over an infinite type.
+
+Finally, any call to a function variable needs to perform a complicated lookup
+routine, and guards are necessary whenever "app" or "is_dom" is checked. For
+our running example, we have:
 
 ----
 val H : type.
 val app : H -> nat -> term.
 val in_dom : H -> nat -> prop.
-val has_default : H -> prop.
-val default : H -> term.
+val prototype : H -> term.
 
 val alpha : type.
 val gamma1 : alpha -> nat.
@@ -197,10 +200,11 @@ val gamma2 : alpha -> term.
 
 ; for my own convenience
 abbreviation APP h j :=
-  if in_dom h j then
-    app h j  WITH GUARD  (exists b : alpha. gamma1 b = h && gamma2 b = j)
-  else
-    default h  WITH GUARD  (exists b : alpha. gamma1 b = h && has_default h).
+  let k = if in_dom h j then j else prototype h in
+    app h k
+    WITH GUARD
+      in_dom h k
+      && (exists b : alpha. gamma1 b = h && gamma2 b = k).
 
 rec subst : H -> term -> term :=
   forall h j. subst h (Var j) = APP h j;
@@ -226,11 +230,11 @@ axiom
           gamma1_H a = bump (gamma1_bump b) && gamma2_H a = gamma2_bump b).
 ----
 
-And we need one more axiom to say that "bump" has no default (since it is a
+And we need one more axiom to say that "bump" has no prototype (since it is a
 function introduced by "rec"):
 
 ----
-forall b : alpha_bump. ~ has_default (bump (gamma1_bump b)).
+forall b : alpha_bump. ~ (in_dom h (prototype h)).
 ----
 
 === Partially Applied Functions as Arguments to Equality
@@ -258,10 +262,11 @@ may both be approximated by the handle
 ----
 app f 0 = 1
 app f 1 = 2
-in_dom f n = (n = 0 || n = 1)
-has_default f = false
+app f 7 = 0
+in_dom f n = (n = 0 || n = 1 || n = 7)
+prototype f = 7
 
-{(f, 0), (f, 1)} \subseteq alpha
+{(f, 0), (f, 1), (f, 7)} \subseteq alpha
 ----
 
 This means we have to be careful when comparing handles. In negative contexts,
@@ -270,6 +275,7 @@ this for the built-in equality rules, e.g. congruence.) After all, in such
 contexts, it is OK to return "true" instead of "false". In positive contexts,
 we need a full scale comparison like this:
 
+*BEGIN FIXME*
 ----
 (forall a : alpha.
   let x = gamma2 a in
@@ -284,6 +290,7 @@ we need a full scale comparison like this:
 &&
 has_default f && has_default g && default f = default g
 ----
+*END FIXME*
 
 == Higher-Order Quantification
 
