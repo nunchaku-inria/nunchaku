@@ -122,7 +122,7 @@ val gamma1_H : alpha_H -> H.
 val gamma2_H : alpha_H -> T.
 ----
 
-(Let's drop the "_H"s.) The intuition is as follows:
+(We'll drop the "_H"s when the context is clear.) The intuition is as follows:
 
 * "app" applies a handle to an argument, producing a result value. The
   function should only be applied to argument values for which a corresponding
@@ -133,20 +133,20 @@ val gamma2_H : alpha_H -> T.
   the property that "(H, prototype H) \in alpha", we can assume that the
   function returns "app H (prototype H)" at all such points.
 
-We will identify "alpha" with a product type "H * T" in the following, for
-notational convenience. The "alpha" type is similar to the type of the same
-name in the first-order translation for the "app" function (SMT 2015).
+We sometimes identify "alpha" with a product type "H * T" for notational
+convenience. The "alpha" type is similar to the type of the same name in the
+first-order translation for the "app" function (SMT 2015).
 
 Example 1: The function that maps 0 to 1, 1 to 2, and every other integer to 0
-can be represented semantically by the function "f" below:
+can be represented semantically by the handle "h" below:
 
 ----
-app f 0 = 1
-app f 1 = 2
-app f 7 = 0
-prototype f = 7
+app h 0 = 1
+app h 1 = 2
+app h 7 = 0
+prototype h = 7
 
-alpha = {(f, 0), (f, 1), (f, 7)}
+alpha = {(h, 0), (h, 1), (h, 7)}
 ----
 
 Example 2: The successor function on the integers can be approximated by
@@ -170,10 +170,10 @@ axiom forall h : H, k : H.
   h = k || (exists x : T. APP h x ~= APP k x).
 ----
 
-assuming
+with the following abbreviation:
 
 ----
-abbreviation APP h j :=
+APP h j :=
   if exists b : alpha. gamma1 b = h && gamma2 b = j then
     app h j
   else if exists b : alpha. gamma1 b = h && gamma2 b = prototype h then
@@ -184,18 +184,20 @@ abbreviation APP h j :=
 
 === Translation
 
-For each function symbol, we compute the minimum number of arguments it ever
-occurs with and pass additional arguments using "app" in the definition. For
-recursively defined functions, we require
+For each function symbol in the problem, we compute the minimum number of
+arguments it ever occurs with and pass additional arguments using "app" in the
+definition. For each recursively defined functions, we require
 
-    ~ (exists b. gamma1 b = h && gamma2 b = prototype h)
-    || (forall x. exists b. gamma1 b = h && gamma2 b = x)
+----
+(forall b. gamma1 b ~= h || gamma2 b ~= prototype h)
+|| (forall x. exists b. gamma1 b = h && gamma2 b = x)
+----
 
 but drop the second conjunct if x ranges over an infinite type.
 
 Finally, any call to a function variable needs to perform a complicated lookup
 routine, and guards are necessary whenever "app" or "is_dom" is checked. For
-our running example, we have:
+our running example, we have
 
 ----
 val H : type.
@@ -216,29 +218,42 @@ rec bump : nat -> H -> H :=
     app (bump n h) m = (match m with | 0 => Var n | Suc k => lift (APP h k)).
 ----
 
-When bump is later translated using the first-order translation (cf. SMT
-2015), some special handling is necessary to distinguish between the actual
-function application and the indirect one through "app":
+When bump is later translated using the first-order encoding of recursive
+functions (SMT 2015), some special handling is necessary to distinguish
+between the actual function application and the indirect one through "app":
 
 ----
 rec bump : nat -> H -> H :=
   forall (a : alpha_bump) (b : alpha_H).
     gamma1_H b = bump (gamma1_bump a) (gamma2_bump a) ->
-      app (bump (gamma1_bump a) (gamma2_bump a)) (gamma2_H b) =
-        (match m with
-         | 0 => Var (gamma1_bump a)
-         | Suc k => lift (APP (gamma2_bump a) k)).
+    app (bump (gamma1_bump a) (gamma2_bump a)) (gamma2_H b) =
+      (match m with
+       | 0 => Var (gamma1_bump a)
+       | Suc k => lift (APP (gamma2_bump a) k)).
 ----
 
-And we need one more axiom to say that "bump" has no prototype (since it is a
-function introduced by "rec", with an infinite domain [alpha_bump or
-alpha_H?]):
+And we need one more axiom to say that "bump" has no prototype since the
+second argument to "app" is an infinite type ("nat"):
 
 ----
 axiom forall (a : alpha_bump).
   let h = bump (gamma1_bump a) (gamma2_bump a) in
     forall b : alpha_H. gamma1_H b ~= h || gamma2_H b ~= prototype h.
 ----
+
+Had the type been finite, we could have written
+
+----
+axiom forall (a : alpha_bump).
+  let h = bump (gamma1_bump a) (gamma2_bump a) in
+    (forall b : alpha_H. gamma1_H b ~= h || gamma2_H b ~= prototype h)
+    || (forall x. exists b. gamma1_H b = h && gamma2_H b = x)
+----
+
+thereby allowing an "alpha_H" that covers the entire domain of an "app (bump n
+h) x" call. The key thing is: We only allow trivial prototypes: prototypes
+that talk about only one element (because all elements are covered by "alpha"
+values).
 
 === Partially Applied Functions as Arguments to Equality
 
@@ -265,10 +280,9 @@ may both be approximated by the handle
 ----
 app f 0 = 1
 app f 1 = 2
-app f 7 = 0
 prototype f = 7
 
-alpha = {(f, 0), (f, 1), (f, 7)}
+alpha = {(f, 0), (f, 1)}
 ----
 
 This means we have to be careful when comparing handles. In negative contexts,
@@ -277,13 +291,19 @@ this for the built-in equality rules, e.g. congruence.) After all, in such
 contexts, it is OK to return "true" instead of "false". In positive contexts,
 we need a full scale comparison like this:
 
-*BEGIN FIXME*
 ----
 f = g
 &&
 (exists a : alpha. gamma1 a = f && gamma2 a = prototype a)
 ----
-*END FIXME*
+
+In unpolarized contexts, we can have
+
+----
+f = g
+WITH GUARD
+(exists a : alpha. gamma1 a = f && gamma2 a = prototype a)
+----
 
 == Higher-Order Quantification
 
