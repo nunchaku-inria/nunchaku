@@ -170,6 +170,18 @@ axiom forall h : H, k : H.
   h = k || (exists x : T. APP h x ~= APP k x).
 ----
 
+assuming
+
+----
+abbreviation APP h j :=
+  if exists b : alpha. gamma1 b = h && gamma2 b = j then
+    app h j
+  else if exists b : alpha. gamma1 b = h && gamma2 b = prototype h then
+    app h (prototype h)
+  else
+    GUARD false.
+----
+
 === Translation
 
 For each function symbol, we compute the minimum number of arguments it ever
@@ -193,15 +205,6 @@ val prototype : H -> term.
 val alpha : type.
 val gamma1 : alpha -> nat.
 val gamma2 : alpha -> term.
-
-; for my own convenience
-abbreviation APP h j :=
-  if exists b : alpha. gamma1 b = h && gamma2 b = j then
-    app h j
-  else if exists b : alpha. gamma1 b = h && gamma2 b = prototype h then
-    app h (prototype h)
-  else
-    GUARD false.
 
 rec subst : H -> term -> term :=
   forall h j. subst h (Var j) = APP h j;
@@ -276,18 +279,9 @@ we need a full scale comparison like this:
 
 *BEGIN FIXME*
 ----
-(forall a : alpha.
-  let x = gamma2 a in
-    gamma1 a = f
-    && in_dom f x
-    && (if exists b : alpha. gamma1 b = g && gamma2 b = x && in_dom g x then
-          app f x = app g x
-        else
-          has_default g && app f x = default g))
+f = g
 &&
-<<same as above but with f and g swapped>>
-&&
-has_default f && has_default g && default f = default g
+(exists a : alpha. gamma1 a = f && gamma2 a = prototype a)
 ----
 *END FIXME*
 
