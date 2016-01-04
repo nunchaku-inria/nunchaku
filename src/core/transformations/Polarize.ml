@@ -33,6 +33,13 @@ module Make(T : TI.S) = struct
   type polarized_id = {
     pos: ID.t;
     neg: ID.t;
+    unroll:
+      [ `Unroll_pos of ID.t
+      | `Unroll_neg of ID.t
+      | `No_unroll];
+      (* [`Unroll_pos n] means we unroll [pos] on the natural number [n]
+         [`Unroll_neg n] means we unroll [neg] on [n]
+         [`No_unroll] means we do not unroll either *)
   }
 
   let term_contains_undefined t =
@@ -73,15 +80,6 @@ module Make(T : TI.S) = struct
     | Pol.Neg -> U.imply (U.and_ conds) t, []
     | Pol.NoPol -> t, conds
 
-  let app_polarized pol p l conds =
-    match pol with
-    | Pol.Pos -> U.app (U.const p.pos) l, conds
-    | Pol.Neg -> U.app (U.const p.neg) l, conds
-    | Pol.NoPol ->
-      (* choose positive, but make both equal *)
-      let p1 = U.const p.pos and p2 = U.const p.neg in
-      app_pol pol (U.app p1 l) (U.eq (U.app p1 l) (U.app p2 l) :: conds)
-
   type action =
     [ `Polarize of bool
     | `Keep (* do not polarize the symbol *)
@@ -105,42 +103,86 @@ module Make(T : TI.S) = struct
       polarized: polarized_id option ID.Tbl.t;
         (* id -> its polarized version, if we decided to polarize it *)
 
+      nat: ID.t;
+        (* the type of natural numbers used to make predicates well-founded *)
+
+      succ : ID.t;
+
+      zero: ID.t;
+
+      mutable declared_nat : bool;
+        (* have we declared nat yet? *)
+
+      declared_decr : unit ID.Tbl.t;
+        (* set of decreasing witnesses that have been declared *)
+
       mutable call: depth:int -> ID.t -> action -> unit;
         (* callback for recursion *)
 
       mutable get_env: unit -> ('a, 'b) env;
+
+      mutable add_deps : ID.t -> unit;
     }
 
     let create ?(size=64) () = {
       polarized=ID.Tbl.create size;
+      nat=ID.make "_nat";
+      succ=ID.make "_succ";
+      zero=ID.make "_zero";
+      declared_nat=false;
+      declared_decr=ID.Tbl.create 16;
       call=(fun ~depth:_ _ _ -> assert false);
       get_env=(fun () -> assert false);
+      add_deps=(fun _ -> assert false);
     }
 
+    let nat ~state = U.const state.nat
+    let succ ~state x = U.app (U.const state.succ) [x]
+    let zero ~state = U.const state.zero
     let env ~state = state.get_env()
     let call ~state ~depth id pol = state.call ~depth id pol
+    let add_deps ~state n = state.add_deps n
   end
 
+  (* depending on polarity [pol], apply the proper id of [p] to
+     arguments [l], along with guards [conds] *)
+  let app_polarized ~state pol p l conds =
+    let l_unrolled = match pol, p.unroll with
+      | _, `No_unroll -> l
+      | (Pol.Pos | Pol.NoPol), `Unroll_pos n ->
+          St.add_deps ~state n;
+          U.const n :: l
+      | (Pol.Pos | Pol.NoPol), `Unroll_neg _ -> l
+      | Pol.Neg, `Unroll_neg n ->
+          St.add_deps ~state n;
+          U.const n :: l
+      | Pol.Neg, `Unroll_pos _ -> l
+    in
+    match pol with
+    | Pol.Pos -> U.app (U.const p.pos) l_unrolled, conds
+    | Pol.Neg -> U.app (U.const p.neg) l_unrolled, conds
+    | Pol.NoPol ->
+      (* choose positive, but make both equal *)
+      let p_pos = U.const p.pos and p_neg = U.const p.neg in
+      app_pol pol
+        (U.app p_pos l_unrolled)
+        (U.eq (U.app p_pos l_unrolled) (U.app p_neg l) :: conds)
+
   (* return the pair of polarized IDs for [id], with caching *)
-  let polarize_id ~state id =
-    try
-      match ID.Tbl.find state.St.polarized id with
-      | None -> assert false
-      | Some p -> p
-    with Not_found ->
-      let pos = ID.make_full ~needs_at:false ~pol:Pol.Pos (ID.name id) in
-      let neg = ID.make_full ~needs_at:false ~pol:Pol.Neg (ID.name id) in
-      let p = {pos;neg} in
-      ID.Tbl.add state.St.polarized id (Some p);
-      p
+  let polarize_id ~state ~unroll id =
+    assert (not (ID.Tbl.mem state.St.polarized id));
+    let pos = ID.make_full ~needs_at:false ~pol:Pol.Pos (ID.name id) in
+    let neg = ID.make_full ~needs_at:false ~pol:Pol.Neg (ID.name id) in
+    let p = {pos; neg; unroll} in
+    ID.Tbl.add state.St.polarized id (Some p);
+    p
 
   let find_polarized_exn ~state id =
     match ID.Tbl.find state.St.polarized id with
     | Some p -> p
     | None -> assert false
 
-  let polarize_def_of ~state id pol =
-    match pol with
+  let polarize_def_of ~state id pol = match pol with
     | Pol.Pos -> St.call ~state ~depth:0 id (`Polarize true)
     | Pol.Neg -> St.call ~state ~depth:0 id (`Polarize false)
     | Pol.NoPol ->
@@ -187,7 +229,7 @@ module Make(T : TI.S) = struct
                 app_pol pol (U.app f l) conds
             | Some p ->
                 polarize_def_of ~state id pol;
-                app_polarized pol p l conds
+                app_polarized ~state pol p l conds
             end
         | TI.Const id, _ ->
             (* shall we polarize this constant? *)
@@ -208,7 +250,7 @@ module Make(T : TI.S) = struct
                 then (
                   polarize_def_of ~state id pol;
                   let p = find_polarized_exn ~state id in
-                  app_polarized pol p l conds
+                  app_polarized ~state pol p l conds
                 ) else (
                   ID.Tbl.add state.St.polarized id None;
                   St.call ~state ~depth:0 id `Keep;
@@ -218,7 +260,7 @@ module Make(T : TI.S) = struct
                 (* shall polarize in all cases *)
                 polarize_def_of ~state id pol;
                 let p = find_polarized_exn ~state id in
-                app_polarized pol p l conds
+                app_polarized ~state pol p l conds
             end
         | TI.Builtin `Imply, [a;b] ->
             let a, c_a = polarize_rec ~state (Pol.inv pol) a in
@@ -272,6 +314,7 @@ module Make(T : TI.S) = struct
     (_, _, (a,b)inv) Stmt.rec_def
   = fun ~state is_pos def p ->
     let open Stmt in
+    assert (p.unroll = `No_unroll);
     let defined = def.rec_defined in
     let defined = { defined with defined_head=(if is_pos then p.pos else p.neg); } in
     let rec_eqns = map_eqns def.rec_eqns
@@ -293,7 +336,20 @@ module Make(T : TI.S) = struct
   = fun ~state ~is_pos def p ->
     let open Stmt in
     let defined = def.pred_defined in
-    let defined = { defined with defined_head=(if is_pos then p.pos else p.neg); } in
+    let defined =
+      { Stmt.
+        defined_head=(if is_pos then p.pos else p.neg);
+        defined_ty=(match p.unroll, is_pos with
+          | `Unroll_pos _, true
+          | `Unroll_neg _, false ->
+              (* add a parameter of type [nat] that will decrease at every call *)
+              U.ty_arrow (St.nat ~state) defined.Stmt.defined_ty
+          | _ -> defined.Stmt.defined_ty
+        );
+      } in
+    (* TODO: if `Unroll, define the clauses slightly differently, by
+       adding a 0 case (true or false dep. on polarity)
+       and adding n ==> (s n) in every guarded clause *)
     let pred_clauses =
       List.map
         (map_clause
@@ -316,11 +372,12 @@ module Make(T : TI.S) = struct
   class ['a, 'b, 'c] traverse_pol ?(size=64) () = object(self)
     inherit [('a, 'b) inv, ('a, 'b) inv, 'c] Trav.traverse ~conf ~size ()
 
-    val st: ('inv1, 'inv2) St.t = St.create()
+    val st: ('inv1, 'inv2) St.t = St.create ()
 
     method setup() =
       st.St.call <- self#do_statements_for_id;
       st.St.get_env <- (fun () -> self#env);
+      st.St.add_deps <- (fun n-> self#add_deps n);
       ()
 
     method do_def ~depth:_ def act =
@@ -333,13 +390,40 @@ module Make(T : TI.S) = struct
             ~term:(polarize_root ~state:st Pol.Pos) ~ty:CCFun.id in
           [def]
       | `Polarize true ->
-          let p = polarize_id ~state:st id in
+          let p = polarize_id ~state:st ~unroll:`No_unroll id in
           [define_rec ~state:st true def p]
       | `Polarize false ->
-          let p = polarize_id ~state:st id in
+          let p = polarize_id ~state:st ~unroll:`No_unroll id in
           [define_rec ~state:st false def p]
 
-    method do_pred ~depth:_ def act =
+    (* declare the type [nat] *)
+    method private declare_nat =
+      let ty_nat = U.const st.St.nat in
+      let def = Stmt.mk_mutual_ty st.St.nat
+          ~ty_vars:[]
+          ~ty:U.ty_type
+          ~cstors:
+            [ st.St.zero, [], ty_nat
+            ; st.St.succ, [ty_nat], U.ty_arrow ty_nat ty_nat]
+      in
+      self#push_res
+        (Stmt.data ~info:Stmt.info_default [def]);
+      ()
+
+    (* declare the constant [n] of type [nat], to be used for unrolling *)
+    method private add_deps n =
+      if not st.St.declared_nat then (
+        st.St.declared_nat <- true;
+        self#declare_nat
+      );
+      if not (ID.Tbl.mem st.St.declared_decr n) then (
+        ID.Tbl.add st.St.declared_decr n ();
+        let ty = St.nat ~state:st in
+        (* declare n:nat *)
+        self#push_res (Stmt.decl ~info:Stmt.info_default n ty);
+      )
+
+    method do_pred ~depth:_ wf kind def act =
       let id = def.Stmt.pred_defined.Stmt.defined_head in
       if act<>`Keep
       then
@@ -350,12 +434,28 @@ module Make(T : TI.S) = struct
           let def = Stmt.map_pred def
             ~term:(polarize_root ~state:st Pol.Pos) ~ty:CCFun.id in
           [def]
-      | `Polarize true ->
-          let p = polarize_id ~state:st id in
-          [define_pred ~state:st ~is_pos:true def p]
-      | `Polarize false ->
-          let p = polarize_id ~state:st id in
-          [define_pred ~state:st ~is_pos:false def p]
+      | `Polarize is_pos ->
+          let p =
+            try
+              match ID.Tbl.find st.St.polarized id with
+              | None -> assert false (* incompatible *)
+              | Some p -> p
+            with Not_found ->
+              (* shall we unroll one of the polarized predicates? *)
+              let unroll = match wf, kind with
+                | `Wf, _
+                | `Not_wf, `Pred ->
+                    let n = ID.make (CCFormat.sprintf "decr_%a" ID.print_name id) in
+                    `Unroll_pos n
+                | `Not_wf, `Copred ->
+                    let n = ID.make (CCFormat.sprintf "decr_%a" ID.print_name id) in
+                    `Unroll_neg n
+              in
+              polarize_id ~state:st ~unroll id
+          in
+          if is_pos
+          then [define_pred ~state:st ~is_pos:true def p]
+          else [define_pred ~state:st ~is_pos:false def p]
 
     method do_term ~depth:_ t = polarize_term ~state:st t
 

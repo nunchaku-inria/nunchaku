@@ -56,6 +56,9 @@ module Make(T : TI.S) = struct
     let cases =
       List.map
         (fun (Stmt.Pred_clause c) ->
+          (* FIXME: need to equate  [vars = t_1...t_n]
+             where [c.clause_concl = id t_1...t_n]
+             instead of this *)
           let case = c.Stmt.clause_concl in
           let case =
             CCOpt.maybe
@@ -63,6 +66,10 @@ module Make(T : TI.S) = struct
               case
               c.Stmt.clause_guard
           in
+          (* TODO: optimization that replaces
+             `∃ y, x=s (s y) && p[y]`
+             with
+             `is-succ x && is-succ (pred x) && p[pred (pred x)]` *)
           List.fold_right U.exists c.Stmt.clause_vars case)
         pred.Stmt.pred_clauses
     in
