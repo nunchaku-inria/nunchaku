@@ -18,15 +18,8 @@ type output =
 
 let list_outputs_ () = "(available choices: nunchaku tptp)"
 
-type mode =
-  | M_model
-  | M_proof
-
-let list_modes_ () = "(available choices: model proof)"
-
 (** {2 Options} *)
 
-let mode_ = ref M_model
 let input_ = ref I_nunchaku
 let output_ = ref O_nunchaku
 let print_ = ref false
@@ -63,12 +56,6 @@ let set_output_ f =
     | "tptp" -> O_tptp
     | s -> failwith ("unsupported output format: " ^ s)
 
-let set_mode_ f =
-  mode_ := match String.lowercase f with
-    | "model" -> M_model
-    | "proof" -> M_proof
-    | s -> failwith ("unsupported mode: " ^ s)
-
 (* set debug levels *)
 let options_debug_ = Utils.Section.iter
   |> Sequence.map
@@ -103,7 +90,6 @@ let options =
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
   ; "--output", Arg.String set_output_, " set output format " ^ list_outputs_ ()
-  ; "--mode", Arg.String set_mode_, " search mode" ^ list_modes_ ()
   ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
   ; "--version", Arg.Set version_, " print version and exit"
   ]
@@ -179,42 +165,6 @@ let make_model_pipeline () =
   CVC4.close_pipe FO.default ~options:CVC4.options_l ~j:!j
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
-let make_proof_pipeline () =
-  let open Transform.Pipe in
-  let open Pipes in
-  (* type inference *)
-  let step_ty_infer = Step_tyinfer.pipe_with
-    ~decode:(fun ~signature:_ x->x) ~print:!print_typed_ in
-  (* encodings *)
-  let step_skolem = Step_skolem.pipe_with
-     ~decode:(fun _ x->x) ~print:!print_skolem_ in
-  let step_monomorphization = Step_mono.pipe_with
-    ~decode:(fun _ x -> x) ~print:!print_mono_ in
-  let step_elim_multi_eqns = Step_ElimMultipleEqns.pipe
-    ~decode:(fun x->x) ~print:!print_elim_multi_eqns in
-  let step_elim_preds = Step_elim_preds.pipe_with
-    ~decode:(fun _ x ->x) ~print:!print_elim_preds_ in
-  let step_elim_match = Step_ElimMatch.pipe ~print:!print_elim_match_ in
-  let step_recursion_elim = Step_rec_elim.pipe_with
-    ~decode:(fun _ x -> x) ~print:!print_recursion_elim_ in
-  (* conversion to FO *)
-  let step_fo = Step_tofo.pipe_with ~decode:(fun x->x) in
-  (* setup pipeline *)
-  let pipe =
-    step_ty_infer @@@
-    step_skolem @@@
-    step_monomorphization @@@
-    step_elim_multi_eqns @@@
-    step_elim_preds @@@
-    step_recursion_elim @@@
-    step_elim_match @@@
-    step_fo @@@
-    id
-  in
-  let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  CVC4.close_pipe FO.default
-    ?options:None ~j:!j ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
-
 (* search for results *)
 let rec find_model_ l =
   let module Res = Problem.Res in
@@ -238,23 +188,6 @@ let negate_goal stmts =
       | A.Goal f -> {st with A.stmt_value=A.Goal (A.not_ f); }
       | _ -> st
     ) stmts
-
-type proof_output =
-  | Unsat
-  | Sat
-
-(* look at the first result *)
-let find_proof_ l =
-  let module Res = Problem.Res in
-  try
-  match l() with
-    | `Nil -> E.fail "exhausted possibilities"
-    | `Cons ((res, _), _) ->
-        match res with
-        | Res.Timeout -> E.fail "timeout"
-        | Res.Unsat -> E.return Unsat
-        | Res.Sat _ -> E.return Sat
-  with e -> Utils.err_of_exn e
 
 (* additional printers *)
 let () = Printexc.register_printer
@@ -290,21 +223,6 @@ let main_model ~output statements =
   end;
   ()
 
-(* proof mode *)
-let main_proof statements =
-  (* run pipeline *)
-  let cpipe = make_proof_pipeline () in
-  if !print_pipeline_
-    then Format.printf "@[Pipeline: %a@]@." Transform.ClosedPipe.print cpipe;
-  let statements = negate_goal statements in
-  Transform.run_closed ~cpipe statements |> find_proof_
-  >|= fun res ->
-  begin match res with
-    | Unsat -> Format.printf "unsat@."
-    | Sat -> Format.printf "sat@."
-  end;
-  ()
-
 (* main *)
 let main () =
   Arg.parse options set_file "usage: nunchaku [options] file";
@@ -313,9 +231,7 @@ let main () =
   parse_file ~input:!input_ ()
   >>= fun statements ->
   print_input_if_needed statements;
-  match !mode_ with
-  | M_model -> main_model ~output:!output_ statements
-  | M_proof -> main_proof statements
+  main_model ~output:!output_ statements
 
 let () =
   E.catch (main ())

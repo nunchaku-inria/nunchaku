@@ -329,6 +329,14 @@ module type UTIL_REPR = sig
   val free_meta_vars : ?init:t_ MetaVar.t ID.Map.t -> t_ -> t_ MetaVar.t ID.Map.t
   (** The free type meta-variables in [t] *)
 
+  val ty_unfold : t_ -> t_ Var.t list * t_ list * t_
+  (** [ty_unfold ty] decomposes [ty] into a list of quantified type variables,
+      a list of parameters, and a return type (which is not an arrow).
+
+      [ty_unfold (forall a b, a -> b -> c -> d)] will return
+      [([a;b], [a;b;c], d)]
+  *)
+
   val ty_is_Type : t_ -> bool
   (** t == Type? *)
 
@@ -447,6 +455,23 @@ module UtilRepr(T : REPR)
       |> Sequence.fold
           (fun acc v -> ID.Map.add (MetaVar.id v) v acc)
           init
+
+  let ty_unfold t =
+    let rec aux1 t = match T.repr t with
+      | TyArrow (l, r) ->
+          let args, ret = aux2 r in
+          [], l :: args, ret
+      | Bind (`TyForall, v, t') ->
+          let vs, args, ret = aux1 t' in
+          v :: vs, args, ret
+      | _ -> [], [], t
+    and aux2 t = match T.repr t with
+      | TyArrow (l, r) ->
+          let args, ret = aux2 r in
+          l :: args, ret
+      | _ -> [], t
+    in
+    aux1 t
 
   let ty_is_Type t = match T.repr t with
     | TyBuiltin `Type -> true

@@ -232,6 +232,14 @@ val map_preds :
   ('a,'b,<ind_preds:'inv;..>) pred_def list ->
   ('a1,'b1,<ind_preds:'inv;..>) pred_def list
 
+val cast_pred :
+  ('t, 'ty, <ind_preds:'inv;..>) pred_def ->
+  ('t, 'ty, <ind_preds:'inv;..>) pred_def
+
+val cast_preds :
+  ('t, 'ty, <ind_preds:'inv;..>) pred_def list ->
+  ('t, 'ty, <ind_preds:'inv;..>) pred_def list
+
 val map :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
@@ -245,13 +253,12 @@ val fold :
 
 (** {2 Print} *)
 
-val print : 'a TermInner.print -> 'b TermInner.print ->
-            ('a,'b,_) t printer
-(** [print pt ptr] is a statement printer that relies upon [pt] to print
-    terms/formulas and [pty] to print types.
-*)
-
 module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
+  val print_spec_defs : (Pt.t, Pty.t) spec_defs printer
+  val print_pred_def : (Pt.t, Pty.t, _) pred_def printer
+  val print_pred_defs : (Pt.t, Pty.t, _) pred_def list printer
+  val print_rec_def : (Pt.t, Pty.t, _) rec_def printer
+  val print_rec_defs : (Pt.t, Pty.t, _) rec_def list printer
   val print : (Pt.t, Pty.t, _) t printer
 end
 
