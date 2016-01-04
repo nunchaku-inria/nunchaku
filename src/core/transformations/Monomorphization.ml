@@ -374,7 +374,7 @@ module Make(T : TI.S) = struct
       } in
       [def']
 
-    method do_pred ~depth def arg =
+    method do_pred ~depth _ _ def arg =
       Utils.debugf ~section 5 "monomorphize pred %a on %a"
         (fun k->k ID.print def.Stmt.pred_defined.Stmt.defined_head ArgTuple.print arg);
       let subst = match_pred ~def arg in
