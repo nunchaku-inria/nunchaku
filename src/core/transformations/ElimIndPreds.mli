@@ -7,24 +7,24 @@
   https://github.com/nunchaku-inria/nunchaku/issues/4
 *)
 
-type 'a inv1 = <eqn:'a; ty:[`Mono]; ind_preds:[`Present]>
-type 'a inv2 = <eqn:'a; ty:[`Mono]; ind_preds:[`Absent]>
+type inv1 = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Present]>
+type inv2 = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Absent]>
 
 module Make(T : TermInner.S) : sig
   type term = T.t
   type decode_state
 
   val elim_ind_preds :
-    (term, term, 'a inv1) Problem.t ->
-    (term, term, 'a inv2) Problem.t * decode_state
+    (term, term, inv1) Problem.t ->
+    (term, term, inv2) Problem.t * decode_state
 
   val decode_model : state:decode_state -> term Model.t -> term Model.t
 
   (** Pipeline component *)
   val pipe :
     print:bool ->
-    ((term, term, 'a inv1) Problem.t,
-      (term, term, 'a inv2) Problem.t,
+    ((term, term, inv1) Problem.t,
+      (term, term, inv2) Problem.t,
       term Model.t, term Model.t) Transform.t
 
   (** Generic Pipe Component
@@ -33,8 +33,8 @@ module Make(T : TermInner.S) : sig
   val pipe_with :
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
-    ((term, term, 'a inv1) Problem.t,
-      (term, term, 'a inv2) Problem.t,
+    ((term, term, inv1) Problem.t,
+      (term, term, inv2) Problem.t,
       'c, 'd
     ) Transform.t
 end
