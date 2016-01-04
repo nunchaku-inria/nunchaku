@@ -150,6 +150,16 @@ let data ~info l = mk_ty_def ~info `Data l
 let codata ~info l = mk_ty_def ~info `Codata l
 let goal ~info t = make_ ~info (Goal t)
 
+let mk_mutual_ty id ~ty_vars ~cstors ~ty =
+  let ty_cstors =
+    List.fold_left
+      (fun m (cstor_name, cstor_args, cstor_type) ->
+        ID.Map.add cstor_name {cstor_name; cstor_args; cstor_type} m)
+      ID.Map.empty
+      cstors
+  in
+  {ty_id=id; ty_type=ty; ty_vars; ty_cstors; }
+
 (* find a definition for [id] in [cases], or None *)
 let find_rec_def ~defs id =
   CCList.find_pred

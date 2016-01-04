@@ -168,6 +168,14 @@ val mk_pred : info:info -> wf:[`Wf | `Not_wf] -> [`Pred | `Copred] ->
 val goal : info:info -> 'a -> ('a,_,_) t
 (** The goal of the problem *)
 
+val mk_mutual_ty:
+  ID.t ->
+  ty_vars:'ty Var.t list ->
+  cstors:(ID.t * 'ty list * 'ty) list ->
+  ty:'ty ->
+  'ty tydef
+(** Constructor for {!tydef} *)
+
 val find_rec_def : defs:('a, 'b, 'c) rec_def list -> ID.t -> ('a, 'b, 'c) rec_def option
 
 val find_tydef : defs:'a tydef list -> ID.t -> 'a tydef option
