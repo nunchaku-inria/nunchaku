@@ -47,13 +47,13 @@ and then we can reverse the definition and turn it into a recursive function.
 
 .polarity
 |===
-| definition | + | -  | ±
+| definition  | +       | -         | ±
 
-| wf-pred | rec | rec | rec
+| wf-pred     | rec     | rec       | rec
 
-| pred | unroll | rec | guard
+| pred        | unroll  | rec       | guard
 
-| copred | rec | co-unroll | guard
+| copred      | rec     | co-unroll | guard
 |===
 
 where:
