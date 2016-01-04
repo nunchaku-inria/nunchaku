@@ -46,8 +46,9 @@ forall x. empty x = false
 === Lambda-Lifting
 
 Lambda-lifting introduces a new function symbol corresponding to each
-lambda-abstraction. That symbol takes all the free variables (not cons of the
-lambda-abstractions as argument, before taking the lambda argument itself.
+lambda-abstraction. That symbol takes all the free variables of the
+lambda-abstraction's body as argument, before taking the lambda argument
+itself.
 
 Example:
 
@@ -77,8 +78,6 @@ A single definition ("lifted1") is sufficient for an iterated
 lambda-abstraction (here "fun x. fun y. ...").
 
 == Higher-Order Arguments and Partial Function Applications
-
-*WARNING: The following text is very confusing.*
 
 C4 (higher-order arguments) and C5 (partial function applications) go hand
 in hand. In fact, C6 (higher-order quantification) is also a prerequisite for
@@ -152,12 +151,12 @@ alpha = {(h, 0), (h, 1), (h, 7)}
 Example 2: The successor function on the integers can be approximated by
 
 ----
-app g (-3) = 2
-app g 0 = 1
-app g 5 = 6
-prototype g = 7
+app h 0 = 1
+app h 1 = 2
+app h 7 = 8
+prototype h = 12
 
-alpha = {(g, -3), (g, 0), (g, 5)}
+alpha = {(h, 0), (h, 1), (h, 7)}
 ----
 
 === Handle Axioms
@@ -173,10 +172,13 @@ axiom forall h : H, k : H.
 with the following abbreviation:
 
 ----
+HAS_PROTOTYPE h :=
+  exists b : alpha. gamma1 b = h && gamma2 b = prototype h
+
 APP h j :=
   if exists b : alpha. gamma1 b = h && gamma2 b = j then
     app h j
-  else if exists b : alpha. gamma1 b = h && gamma2 b = prototype h then
+  else if HAS_PROTOTYPE h then
     app h (prototype h)
   else
     GUARD false.
@@ -189,15 +191,15 @@ arguments it ever occurs with and pass additional arguments using "app" in the
 definition. For each recursively defined functions, we require
 
 ----
-(forall b. gamma1 b ~= h || gamma2 b ~= prototype h)
+~ HAS_PROTOTYPE h
 || (forall x. exists b. gamma1 b = h && gamma2 b = x)
 ----
 
 but drop the second conjunct if x ranges over an infinite type.
 
 Finally, any call to a function variable needs to perform a complicated lookup
-routine, and guards are necessary whenever "app" or "is_dom" is checked. For
-our running example, we have
+routine, with suitable guards (all hidden in the "APP" abbreviation). For our
+running example, we have
 
 ----
 val H : type.
@@ -238,7 +240,7 @@ second argument to "app" is an infinite type ("nat"):
 ----
 axiom forall (a : alpha_bump).
   let h = bump (gamma1_bump a) (gamma2_bump a) in
-    forall b : alpha_H. gamma1_H b ~= h || gamma2_H b ~= prototype h.
+    ~ HAS_PROTOTYPE h.
 ----
 
 Had the type been finite, we could have written
@@ -246,14 +248,14 @@ Had the type been finite, we could have written
 ----
 axiom forall (a : alpha_bump).
   let h = bump (gamma1_bump a) (gamma2_bump a) in
-    (forall b : alpha_H. gamma1_H b ~= h || gamma2_H b ~= prototype h)
+    ~ HAS_PROTOTYPE h
     || (forall x. exists b. gamma1_H b = h && gamma2_H b = x)
 ----
 
 thereby allowing an "alpha_H" that covers the entire domain of an "app (bump n
-h) x" call. The key thing is: We only allow trivial prototypes: prototypes
-that talk about only one element (because all elements are covered by "alpha"
-values).
+h) x" call. The key thing is: We only allow trivial prototypes, i.e.,
+prototypes that talk about only one element (because all elements are covered
+by "alpha" values).
 
 === Partially Applied Functions as Arguments to Equality
 
@@ -294,7 +296,7 @@ we need a full scale comparison like this:
 ----
 f = g
 &&
-(exists a : alpha. gamma1 a = f && gamma2 a = prototype a)
+HAS_PROTOTYPE f
 ----
 
 In unpolarized contexts, we can have
@@ -302,7 +304,7 @@ In unpolarized contexts, we can have
 ----
 f = g
 WITH GUARD
-(exists a : alpha. gamma1 a = f && gamma2 a = prototype a)
+HAS_PROTOTYPE f
 ----
 
 == Higher-Order Quantification
@@ -326,4 +328,4 @@ The remaining cases are:
   polarity).
 
 * _The quantification is over an infinite domain._ E.g. "nat -> nat".
-  This is virtually hopeless.
+  This is generally hopeless.
