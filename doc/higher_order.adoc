@@ -113,7 +113,7 @@ with the following sort and operations:
 ----
 (* the actual operations *)
 val app_H : H -> T -> U.
-val prototype_H : H -> T.
+val proto_H : H -> T.
 
 (* an abstraction type with two gamma projections *)
 val alpha_H : type.
@@ -129,8 +129,8 @@ val gamma2_H : alpha_H -> T.
 
 * If there exists no "alpha" for a specific point, we a priori do not know what
   value the function takes at that point. However, if the handle "H" enjoys
-  the property that "(H, prototype H) \in alpha", we can assume that the
-  function returns "app H (prototype H)" at all such points.
+  the property that "(H, proto H) \in alpha", we can assume that the
+  function returns "app H (proto H)" at all such points.
 
 We sometimes identify "alpha" with a product type "H * T" for notational
 convenience. The "alpha" type is similar to the type of the same name in the
@@ -143,7 +143,7 @@ can be represented semantically by the handle "h" below:
 app h 0 = 1
 app h 1 = 2
 app h 7 = 0
-prototype h = 7
+proto h = 7
 
 alpha = {(h, 0), (h, 1), (h, 7)}
 ----
@@ -154,7 +154,7 @@ Example 2: The successor function on the integers can be approximated by
 app h 0 = 1
 app h 1 = 2
 app h 7 = 8
-prototype h = 12
+proto h = 12
 
 alpha = {(h, 0), (h, 1), (h, 7)}
 ----
@@ -173,13 +173,13 @@ with the following abbreviation:
 
 ----
 HAS_PROTOTYPE h :=
-  exists b : alpha. gamma1 b = h && gamma2 b = prototype h
+  exists b : alpha. gamma1 b = h && gamma2 b = proto h
 
 APP h j :=
   if exists b : alpha. gamma1 b = h && gamma2 b = j then
     app h j
   else if HAS_PROTOTYPE h then
-    app h (prototype h)
+    app h (proto h)
   else
     GUARD false.
 ----
@@ -204,7 +204,7 @@ running example, we have
 ----
 val H : type.
 val app : H -> nat -> term.
-val prototype : H -> term.
+val proto : H -> term.
 
 val alpha : type.
 val gamma1 : alpha -> nat.
@@ -282,7 +282,7 @@ may both be approximated by the handle
 ----
 app f 0 = 1
 app f 1 = 2
-prototype f = 7
+proto f = 7
 
 alpha = {(f, 0), (f, 1)}
 ----
