@@ -243,7 +243,7 @@ val elem := {@elem_1, @elem_2}.
 for uninterpreted types and
 
 ----
-val append := fun $xs : list. fun $ys : list. blah_blah.
+val append := fun ($xs : list). fun ($ys : list). blah_blah.
 ----
 
 for terms would feel more natural (and wouldn't be harded to parse). You could
@@ -251,7 +251,7 @@ even go further and really use the input syntax, e.g.
 
 ----
 datatype elem = @elem_1 | @elem_2.
-rec append :=
+rec append : list -> list -> list :=
   append $xs $ys = blah_blah.
 ----
 
@@ -270,7 +270,8 @@ ensures that it is never called. (You can think of it as being a function
 whose alpha type is constrained to be always empty.) This would be useful in
 other contexts in the input language. I wanted to bring this up at some point.
 No hurry, but it would be a nice feature. Other possible names for "?__" (in
-the input language) would be "fail" or "abort" or "avoid" or "block".
+the input language) would be "fail" or "abort" or "avoid" or "block" or
+"bottom".
 
 === Presentation of Functions
 
@@ -289,7 +290,7 @@ append = fun $xs : list. fun $ys : list.
   else if $xs = Nil && $ys = Cons @uc_a_1 Nil then
     Cons @uc_a_1 Nil
   else
-    append $xs $ys
+    ?__ $xs $ys
 ----
 
 Then there's the ML-style tabular syntax, which has the definite advantage of
@@ -317,12 +318,12 @@ are free variables in the goal (for higher-order problems).
 
 == Self-Contained or Not?
 
-Should the output be self-contained or should it repeat declarations from the
-input, e.g. "data"? Repeating is what TSTP and CVC4 do. This can be
+Should the output be self-contained -- i.e., should it repeat declarations
+from the input, e.g. "data"? Repeating is what TSTP and CVC4 do. This can be
 interesting because then the output is potentially itself an input file, which
 is useful for testing (checking that the model is indeed a model by rerunning
-Nunchaku on the output) and connecting tools together. But it also clutters
-things.
+Nunchaku on the output) and connecting tools together. But it also means more
+clutter.
 
 == Generated Names
 
@@ -334,5 +335,4 @@ type is called "elem", the atoms might be called "@elem_1", "@elem_2", ...,
 uses the name of some constant, and sometimes it generates some identifiers.
 
 For bound variables, aggressive renaming is also the way to go. Perhaps the
-same convention as for atoms can be used, but with (e.g.) "$" instead of "@"
-or whatever.
+same convention as for atoms can be used, but with, say, "$" instead of "@".
