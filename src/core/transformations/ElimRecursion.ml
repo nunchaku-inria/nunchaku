@@ -420,11 +420,6 @@ module Make(T : TI.S) = struct
       ID.print d.dom_fun.fun_encoded_fun
       (CCFormat.seq ~start:"" ~stop:"" ~sep:" " pp_tuple) (ID.Tbl.to_seq d.dom_args)
 
-  let is_const_ t = match T.repr t with
-    | TI.Const _ -> true
-    | TI.App (_,[]) -> assert false
-    | _ -> false
-
   (* see whether [t] is of the form [var = const] *)
   let as_eqn_sym_ ~var:v t =
     match T.repr t with

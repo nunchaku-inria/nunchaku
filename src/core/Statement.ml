@@ -204,12 +204,6 @@ external cast_eqns
   ('t, 'ty, <eqn:'inv;..>) equations
 = "%identity"
 
-let map_clause ~term ~ty c =
-  { clause_vars=List.map (Var.update_ty ~f:ty) c.clause_vars;
-    clause_concl=term c.clause_concl;
-    clause_guard=CCOpt.map term c.clause_guard;
-  }
-
 let map_rec_def ~term ~ty t = {
   rec_kind=t.rec_kind;
   rec_defined=map_defined ~f:ty t.rec_defined;
