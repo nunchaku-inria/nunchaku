@@ -7,23 +7,24 @@
     It encodes recursive functions as axioms, with a quantification over
     an uninterpreted abstraction type. *)
 
-type inv = <ty:[`Mono]; eqn:[`Single]; ind_preds:[`Absent]>
+type inv1 = <ty:[`Mono]; eqn:[`Single]; ind_preds:[`Absent]>
+type inv2 = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
 
 module Make(T : TermInner.S) : sig
   type term = T.t
   type decode_state
 
   val elim_recursion :
-    (term, term, inv) Problem.t ->
-    (term, term, inv) Problem.t * decode_state
+    (term, term, inv1) Problem.t ->
+    (term, term, inv2) Problem.t * decode_state
 
   val decode_model : state:decode_state -> term Model.t -> term Model.t
 
   (** Pipeline component *)
   val pipe :
     print:bool ->
-    ((term, term, inv) Problem.t,
-      (term, term, inv) Problem.t,
+    ((term, term, inv1) Problem.t,
+      (term, term, inv2) Problem.t,
       term Model.t, term Model.t) Transform.t
 
   (** Generic Pipe Component
@@ -32,8 +33,8 @@ module Make(T : TermInner.S) : sig
   val pipe_with :
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
-    ((term, term, inv) Problem.t,
-      (term, term, inv) Problem.t,
+    ((term, term, inv1) Problem.t,
+      (term, term, inv2) Problem.t,
       'c, 'd
     ) Transform.t
 end

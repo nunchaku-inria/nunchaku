@@ -232,6 +232,14 @@ val map_preds :
   ('a,'b,<ind_preds:'inv;..>) pred_def list ->
   ('a1,'b1,<ind_preds:'inv;..>) pred_def list
 
+val cast_pred :
+  ('t, 'ty, <ind_preds:'inv;..>) pred_def ->
+  ('t, 'ty, <ind_preds:'inv;..>) pred_def
+
+val cast_preds :
+  ('t, 'ty, <ind_preds:'inv;..>) pred_def list ->
+  ('t, 'ty, <ind_preds:'inv;..>) pred_def list
+
 val map :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->

@@ -13,7 +13,8 @@ type id = ID.t
 
 let section = Utils.Section.make "recursion_elim"
 
-type inv = <ty:[`Mono]; eqn:[`Single]; ind_preds:[`Absent]>
+type inv1 = <ty:[`Mono]; eqn:[`Single]; ind_preds:[`Absent]>
+type inv2 = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
 
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
@@ -360,18 +361,18 @@ module Make(T : TI.S) = struct
     match Stmt.view st with
     | Stmt.Decl (id,k,l) -> [Stmt.mk_decl ~info id k l] (* no type declaration changes *)
     | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l] (* no (co) data changes *)
-    | Stmt.Pred (wf, k, l) -> [Stmt.mk_pred ~info ~wf k l]
+    | Stmt.Pred (wf, k, l) ->
+        let l = Stmt.cast_preds l in
+        [Stmt.mk_pred ~info ~wf k l]
     | Stmt.Axiom l ->
         begin match l with
         | Stmt.Axiom_rec l ->
             tr_rec_defs ~info ~state l
         | Stmt.Axiom_spec spec ->
-            let axioms' =
-              List.map
-                (fun t -> tr_form ~state t)
-                spec.Stmt.spec_axioms
+            let spec' =
+              Stmt.map_spec_defs ~term:(tr_form ~state) ~ty:CCFun.id spec
             in
-            [Stmt.axiom_spec ~info {spec with Stmt.spec_axioms=axioms'}]
+            [Stmt.axiom_spec ~info spec']
         | Stmt.Axiom_std l ->
             let l = List.map
               (fun t -> tr_form ~state t)

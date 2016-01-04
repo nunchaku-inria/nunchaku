@@ -199,14 +199,10 @@ let map_eqns
     | Eqn_single (vars,rhs) ->
         Eqn_single (List.map (Var.update_ty ~f:ty) vars, term rhs)
 
-let cast_eqns
-: type inv.
-  ('t, 'ty, <eqn:inv;..>) equations ->
-  ('t, 'ty, <eqn:inv;..>) equations
-= function
-  | Eqn_nested l -> Eqn_nested l
-  | Eqn_linear l -> Eqn_linear l
-  | Eqn_single (vars,rhs) -> Eqn_single (vars,rhs)
+external cast_eqns
+: ('t, 'ty, <eqn:'inv;..>) equations ->
+  ('t, 'ty, <eqn:'inv;..>) equations
+= "%identity"
 
 let map_clause ~term ~ty c =
   { clause_vars=List.map (Var.update_ty ~f:ty) c.clause_vars;
@@ -221,19 +217,17 @@ let map_rec_def ~term ~ty t = {
   rec_eqns=map_eqns ~term ~ty t.rec_eqns;
 }
 
-let cast_rec_def
-: type inv.
-  ('t, 'ty, <eqn:inv;..>) rec_def ->
-  ('t, 'ty, <eqn:inv;..>) rec_def
-= fun def -> Obj.magic def
+external cast_rec_def
+: ('t, 'ty, <eqn:'inv;..>) rec_def ->
+  ('t, 'ty, <eqn:'inv;..>) rec_def
+= "%identity"
 
 let map_rec_defs ~term ~ty t = List.map (map_rec_def ~term ~ty) t
 
-let cast_rec_defs
-: type inv.
-  ('t, 'ty, <eqn:inv;..>) rec_defs ->
-  ('t, 'ty, <eqn:inv;..>) rec_defs
-= fun t -> (Obj.magic t)
+external cast_rec_defs
+: ('t, 'ty, <eqn:'inv;..>) rec_defs ->
+  ('t, 'ty, <eqn:'inv;..>) rec_defs
+= "%identity"
 
 let map_spec_defs ~term ~ty t = {
   spec_vars=List.map (Var.update_ty ~f:ty) t.spec_vars;
@@ -264,6 +258,16 @@ let map_pred
   def'
 
 let map_preds ~term ~ty l = List.map (map_pred ~term ~ty) l
+
+external cast_pred
+: ('t, 'ty, <ind_preds:'inv;..>) pred_def ->
+  ('t, 'ty, <ind_preds:'inv;..>) pred_def
+= "%identity"
+
+external cast_preds
+: ('t, 'ty, <ind_preds:'inv;..>) pred_def list ->
+  ('t, 'ty, <ind_preds:'inv;..>) pred_def list
+= "%identity"
 
 let map ~term:ft ~ty:fty st =
   let info = st.info in
