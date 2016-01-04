@@ -75,25 +75,27 @@ module Make(T : TI.S) = struct
 
   let app_polarized pol p l conds =
     match pol with
-    | Pol.Pos -> U.const p.pos, conds
-    | Pol.Neg -> U.const p.neg, conds
+    | Pol.Pos -> U.app (U.const p.pos) l, conds
+    | Pol.Neg -> U.app (U.const p.neg) l, conds
     | Pol.NoPol ->
       (* choose positive, but make both equal *)
       let p1 = U.const p.pos and p2 = U.const p.neg in
       app_pol pol (U.app p1 l) (U.eq (U.app p1 l) (U.app p2 l) :: conds)
 
   type action =
-    [ `Polarize of Pol.t
+    [ `Polarize of bool
     | `Keep (* do not polarize the symbol *)
     ]
+
+  let pp_act out = function
+    | `Keep -> Format.fprintf out "keep"
+    | `Polarize p -> Format.fprintf out "polarize(%B)" p
 
   module Trav = Traversal.Make(T)(struct
     type t = action
     let equal = (=)
     let hash _ = 0
-    let print out = function
-      | `Keep -> Format.fprintf out "keep"
-      | `Polarize p -> Format.fprintf out "polarize(%a)" Pol.pp p
+    let print = pp_act
     let section = section
     let fail = errorf_
   end)
@@ -119,6 +121,7 @@ module Make(T : TI.S) = struct
     let call ~state ~depth id pol = state.call ~depth id pol
   end
 
+  (* return the pair of polarized IDs for [id], with caching *)
   let polarize_id ~state id =
     try
       match ID.Tbl.find state.St.polarized id with
@@ -135,6 +138,15 @@ module Make(T : TI.S) = struct
     match ID.Tbl.find state.St.polarized id with
     | Some p -> p
     | None -> assert false
+
+  let polarize_def_of ~state id pol =
+    match pol with
+    | Pol.Pos -> St.call ~state ~depth:0 id (`Polarize true)
+    | Pol.Neg -> St.call ~state ~depth:0 id (`Polarize false)
+    | Pol.NoPol ->
+        (* ask for both polarities *)
+        St.call ~state ~depth:0 id (`Polarize true);
+        St.call ~state ~depth:0 id (`Polarize false)
 
   (* traverse [t], replacing some symbols by their polarized version,
      @return the term + a list of guards to enforce *)
@@ -167,6 +179,16 @@ module Make(T : TI.S) = struct
           [] l
         in
         begin match T.repr f, l with
+        | TI.Const id, _ when ID.Tbl.mem state.St.polarized id ->
+            (* we already chose whether [id] was polarized or not *)
+            begin match ID.Tbl.find state.St.polarized id with
+            | None ->
+                St.call ~state ~depth:0 id `Keep;
+                app_pol pol (U.app f l) conds
+            | Some p ->
+                polarize_def_of ~state id pol;
+                app_polarized pol p l conds
+            end
         | TI.Const id, _ ->
             (* shall we polarize this constant? *)
             let info = Env.find_exn ~env:(St.env ~state) id in
@@ -184,7 +206,7 @@ module Make(T : TI.S) = struct
                 (* we can polarize, or not: delegate to heuristic *)
                 if should_polarize def
                 then (
-                  St.call ~state ~depth:0 id (`Polarize pol);
+                  polarize_def_of ~state id pol;
                   let p = find_polarized_exn ~state id in
                   app_polarized pol p l conds
                 ) else (
@@ -194,7 +216,7 @@ module Make(T : TI.S) = struct
                 )
             | Env.Pred (`Not_wf,_,_,_preds,_) ->
                 (* shall polarize in all cases *)
-                St.call ~state ~depth:0 id (`Polarize pol);
+                polarize_def_of ~state id pol;
                 let p = find_polarized_exn ~state id in
                 app_polarized pol p l conds
             end
@@ -263,11 +285,12 @@ module Make(T : TI.S) = struct
   (* [p] is the polarization of the predicate defined by [def]; *)
   let define_pred
   : type a b.
-    state:(a, b) St.t -> bool ->
+    state:(a, b) St.t ->
+    is_pos:bool ->
     (_, _, (a,b)inv) Stmt.pred_def ->
     polarized_id ->
     (_, _, (a,b)inv) Stmt.pred_def
-  = fun ~state is_pos def p ->
+  = fun ~state ~is_pos def p ->
     let open Stmt in
     let defined = def.pred_defined in
     let defined = { defined with defined_head=(if is_pos then p.pos else p.neg); } in
@@ -309,34 +332,30 @@ module Make(T : TI.S) = struct
           let def = Stmt.map_rec_def def
             ~term:(polarize_root ~state:st Pol.Pos) ~ty:CCFun.id in
           [def]
-      | `Polarize Pol.Pos ->
+      | `Polarize true ->
           let p = polarize_id ~state:st id in
           [define_rec ~state:st true def p]
-      | `Polarize Pol.Neg ->
+      | `Polarize false ->
           let p = polarize_id ~state:st id in
           [define_rec ~state:st false def p]
-      | `Polarize Pol.NoPol ->
-          let p = polarize_id ~state:st id in
-          [define_rec ~state:st true def p; define_rec ~state:st false def p]
 
     method do_pred ~depth:_ def act =
       let id = def.Stmt.pred_defined.Stmt.defined_head in
       if act<>`Keep
-        then Utils.debugf ~section 2 "polarize (co)inductive predicate %a" (fun k->k ID.print id);
+      then
+        Utils.debugf ~section 2 "polarize (co)inductive predicate %a on (%a)"
+         (fun k->k ID.print id pp_act act);
       match act with
       | `Keep ->
           let def = Stmt.map_pred def
             ~term:(polarize_root ~state:st Pol.Pos) ~ty:CCFun.id in
           [def]
-      | `Polarize Pol.Pos ->
+      | `Polarize true ->
           let p = polarize_id ~state:st id in
-          [define_pred ~state:st true def p]
-      | `Polarize Pol.Neg ->
+          [define_pred ~state:st ~is_pos:true def p]
+      | `Polarize false ->
           let p = polarize_id ~state:st id in
-          [define_pred ~state:st false def p]
-      | `Polarize Pol.NoPol ->
-          let p = polarize_id ~state:st id in
-          [define_pred ~state:st true def p; define_pred ~state:st false def p]
+          [define_pred ~state:st ~is_pos:false def p]
 
     method do_term ~depth:_ t = polarize_term ~state:st t
 
