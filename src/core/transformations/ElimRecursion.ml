@@ -276,6 +276,7 @@ module Make(T : TI.S) = struct
       fun_encoding.fun_concretization
     in
     let subst = Subst.add_list ~subst:Subst.empty vars args' in
+    (* TODO: if defined ID is polarized, use its polarity instead of NoPol *)
     let local_state = { subst; pol=Pol.NoPol; } in
     (* convert right-hand side and add its side conditions *)
     let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
