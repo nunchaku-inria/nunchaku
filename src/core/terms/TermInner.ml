@@ -258,7 +258,7 @@ module Print(T : REPR)
     | TyBuiltin b -> CCFormat.string out (TyBuiltin.to_string b)
     | Const id -> ID.print out id
     | TyMeta v -> MetaVar.print out v
-    | Var v -> Var.print out v
+    | Var v -> Var.print_full out v
     | Builtin b -> Builtin.pp print_in_app out b
     | App (f,l) ->
         begin match T.repr f with
@@ -269,17 +269,17 @@ module Print(T : REPR)
               (pp_list_ ~sep:" " print_in_app) l
         end
     | Let (v,t,u) ->
-        fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print v print t print u
+        fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print_full v print t print u
     | Match (t,l) ->
         let pp_case out (id,(vars,t)) =
           fpf out "@[<hv2>| @[<hv2>%a %a@] ->@ %a@]"
-            ID.print id (pp_list_ ~sep:" " Var.print) vars print t
+            ID.print id (pp_list_ ~sep:" " Var.print_full) vars print t
         in
         fpf out "@[<hv>@[<hv2>match @[%a@] with@ %a@]@ end@]"
           print t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
     | Bind (b, v, t) ->
         let s = Binder.to_string b in
-        fpf out "@[<2>%s %a:%a.@ %a@]" s Var.print v print_in_app (Var.ty v) print t
+        fpf out "@[<2>%s %a:%a.@ %a@]" s Var.print_full v print_in_app (Var.ty v) print t
     | TyArrow (a,b) ->
         fpf out "@[<2>%a ->@ %a@]" print_in_binder a print b
   and print_in_app out t = match T.repr t with
