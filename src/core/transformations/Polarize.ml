@@ -401,11 +401,11 @@ module Make(T : TI.S) = struct
             map_clause clause ~ty:CCFun.id ~term:(polarize_root ~state pol)
     in
     let pred_clauses = List.map unroll_clause def.pred_clauses in
-    (* if we unroll, we must add a base case
-       [pred 0 _..._ = false] or [pred 0 _...._ = true] depending on whether
-       we deal with an inductive or coinductive predicate *)
+    (* if we unroll a coinductive predicate in negative polarity,
+       we must add a base case [pred 0 _...._ = true].
+       We don't need anything for the inductive predicate
+       because [pred 0 _ = false] is the default semantic *)
     let pred_clauses = match p.unroll, is_pos with
-      | `Unroll_pos _, true
       | `Unroll_neg _, false ->
           let _, ty_args, _ = U.ty_unfold def.pred_defined.defined_ty in
           let vars = make_vars ty_args in
@@ -413,10 +413,7 @@ module Make(T : TI.S) = struct
           let c = Pred_clause {
             clause_vars = vars;
             clause_guard = None;
-            clause_concl =
-              if is_pos
-              then U.not_ (U.app (U.const p.pos) (St.zero ~state :: vars_t))
-              else U.app (U.const p.neg) (St.zero ~state :: vars_t);
+            clause_concl = U.app (U.const p.neg) (St.zero ~state :: vars_t);
           } in
           c :: pred_clauses
       | _ -> pred_clauses
