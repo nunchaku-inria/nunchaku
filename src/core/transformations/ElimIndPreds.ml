@@ -68,9 +68,6 @@ module Make(T : TI.S) = struct
     let cases =
       List.map
         (fun (Stmt.Pred_clause c) ->
-          (* FIXME: need to equate  [vars = t_1...t_n]
-             where [c.clause_concl = id t_1...t_n]
-             instead of this *)
           (* the clause should be [guard => id args], here we extract [args] *)
           let args =
             let fail() =
@@ -88,20 +85,36 @@ module Make(T : TI.S) = struct
                 end
             | _ -> fail()
           in
-          (* add conditions that enforce [vargs = args],
-
-            TODO: optimization that replaces
+          (* add conditions that enforce [vargs = args].
+             For optimization purpose, we replace
                `∃ y, x=s (s y) && p[y]`
                with
                `is-succ x && is-succ (pred x) && p[pred (pred x)]` *)
-          let conds = List.map2 (fun v arg -> U.eq (U.var v) arg) vars args in
+          let subst, conds =
+            List.fold_left2
+              (fun (subst,l) v arg ->
+                match T.repr arg with
+                | TI.Var v' ->
+                    (* [arg_i = v'], so making [arg_i = v] is as simple as [v' := v] *)
+                    Var.Subst.add ~subst v' (U.var v), l
+                | _ ->
+                    (* default: just add constraint [arg_i = v] *)
+                    subst, U.eq (U.var v) arg :: l)
+              (Var.Subst.empty, [])
+              vars args
+          in
+          let conds = List.rev_map (U.eval ~subst) conds in
           (* add guard, if any *)
           let res = match c.Stmt.clause_guard with
             | None -> U.and_ conds
-            | Some g -> U.and_ (g :: conds)
+            | Some g -> U.and_ (U.eval ~subst g :: conds)
           in
-          (* quantify over the clause's variables *)
-          List.fold_right U.exists c.Stmt.clause_vars res)
+          (* quantify over the clause's variables that are not eliminated *)
+          let cvars =
+            List.filter
+              (fun v -> not (Var.Subst.mem ~subst v))
+              c.Stmt.clause_vars in
+          List.fold_right U.exists cvars res)
         pred.Stmt.pred_clauses
     in
     let rhs = U.or_ cases in
