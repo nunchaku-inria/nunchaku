@@ -172,13 +172,13 @@ axiom forall h : H, k : H.
 with the following abbreviation:
 
 ----
-HAS_PROTOTYPE h :=
+HAS_PROTO h :=
   exists b : alpha. gamma1 b = h && gamma2 b = proto h
 
 APP h j :=
   if exists b : alpha. gamma1 b = h && gamma2 b = j then
     app h j
-  else if HAS_PROTOTYPE h then
+  else if HAS_PROTO h then
     app h (proto h)
   else
     GUARD false.
@@ -191,7 +191,7 @@ arguments it ever occurs with and pass additional arguments using "app" in the
 definition. For each recursively defined functions, we require
 
 ----
-~ HAS_PROTOTYPE h
+~ HAS_PROTO h
 || (forall x. exists b. gamma1 b = h && gamma2 b = x)
 ----
 
@@ -240,7 +240,7 @@ second argument to "app" is an infinite type ("nat"):
 ----
 axiom forall (a : alpha_bump).
   let h = bump (gamma1_bump a) (gamma2_bump a) in
-    ~ HAS_PROTOTYPE h.
+    ~ HAS_PROTO h.
 ----
 
 Had the type been finite, we could have written
@@ -248,7 +248,7 @@ Had the type been finite, we could have written
 ----
 axiom forall (a : alpha_bump).
   let h = bump (gamma1_bump a) (gamma2_bump a) in
-    ~ HAS_PROTOTYPE h
+    ~ HAS_PROTO h
     || (forall x. exists b. gamma1_H b = h && gamma2_H b = x)
 ----
 
@@ -296,7 +296,7 @@ we need a full scale comparison like this:
 ----
 f = g
 &&
-HAS_PROTOTYPE f
+HAS_PROTO f
 ----
 
 In unpolarized contexts, we can have
@@ -304,7 +304,7 @@ In unpolarized contexts, we can have
 ----
 f = g
 WITH GUARD
-HAS_PROTOTYPE f
+HAS_PROTO f
 ----
 
 == Higher-Order Quantification

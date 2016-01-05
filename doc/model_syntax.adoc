@@ -227,7 +227,20 @@ append = fun $xs : list. fun $ys : list.
     ?__ $xs $ys
 ----
 
-That's it.
+If cases are identical, they should be merged into one condition. E.g.:
+
+----
+append = fun $xs : list. fun $ys : list.
+  if $xs = Nil && $ys = Cons @uc_a_0 Nil ||
+     $xs = Cons @uc_a_0 Nil && $ys = Nil then
+    Cons @uc_a_1 (Cons @uc_a_0 Nil)
+  else
+    ...
+----
+
+In the above, I have indented "if then else" chains in a flat fashion, which
+is my favorite style. But I don't mind too much if Nunchaku's output indents
+differently (since few users will be exposed directly to it).
 
 == Syntax
 
