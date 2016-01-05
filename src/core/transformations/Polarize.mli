@@ -7,23 +7,23 @@
   or (co)inductive specifications) depending on the call-site polarity.
 *)
 
-type ('a,'b) inv = <ty:[`Mono]; eqn:'a; ind_preds:'b>
+type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds:[`Present]>
 
 module Make(T : TermInner.S) : sig
   type term = T.t
   type decode_state
 
   val polarize :
-    (term, term, ('a,'b) inv) Problem.t ->
-    (term, term, ('a,'b) inv) Problem.t * decode_state
+    (term, term, 'a inv) Problem.t ->
+    (term, term, 'a inv) Problem.t * decode_state
 
   val decode_model : state:decode_state -> term Model.t -> term Model.t
 
   (** Pipeline component *)
   val pipe :
     print:bool ->
-    ((term, term, ('a,'b) inv) Problem.t,
-      (term, term, ('a,'b) inv) Problem.t,
+    ((term, term, 'a inv) Problem.t,
+      (term, term, 'a inv) Problem.t,
       term Model.t, term Model.t) Transform.t
 
   (** Generic Pipe Component
@@ -32,8 +32,8 @@ module Make(T : TermInner.S) : sig
   val pipe_with :
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
-    ((term, term, ('a,'b) inv) Problem.t,
-      (term, term, ('a,'b) inv) Problem.t,
+    ((term, term, 'a inv) Problem.t,
+      (term, term, 'a inv) Problem.t,
       'c, 'd
     ) Transform.t
 end

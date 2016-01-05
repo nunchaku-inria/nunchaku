@@ -209,6 +209,11 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       (term, term, 'inv1) Stmt.pred_def -> Arg.t ->
       (term, term, 'inv2) Stmt.pred_def list
 
+    (* how does well-foundedness translate? *)
+    method pred_translate_wf
+      : [`Wf | `Not_wf] -> [`Wf | `Not_wf]
+      = fun wf -> wf
+
     method do_pred_rec
     : depth:int -> loc:Loc.t option ->
       [`Wf | `Not_wf] -> [`Pred | `Copred] ->
@@ -234,7 +239,8 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       UF_list.append new_preds l;
       if frame.sf_is_root then (
         let res = UF_list.find_res l in
-        let stmt = Stmt.mk_pred ~info:{Stmt.name=None; loc;} ~wf kind res in
+        let wf' = self#pred_translate_wf wf in
+        let stmt = Stmt.mk_pred ~info:{Stmt.name=None; loc;} ~wf:wf' kind res in
         self#push_res stmt
       );
       self#pop;
