@@ -227,7 +227,8 @@ append = fun $xs : list. fun $ys : list.
     ?__ $xs $ys
 ----
 
-If cases are identical, they should be merged into one condition. E.g.:
+If cases are identical (whether or not they are consecutive), they should be
+merged into one condition. E.g.:
 
 ----
 append = fun $xs : list. fun $ys : list.
