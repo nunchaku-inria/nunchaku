@@ -263,7 +263,7 @@ module Print(T : REPR)
     | App (f,l) ->
         begin match T.repr f with
         | Builtin b when Builtin.is_infix b ->
-            print_infix_list b out l
+            fpf out "@[<hv>%a@]" (print_infix_list b) l
         | _ ->
             fpf out "@[<2>%a@ %a@]" print_in_app f
               (pp_list_ ~sep:" " print_in_app) l
@@ -302,7 +302,7 @@ module Print(T : REPR)
     | [] -> assert false
     | [t] -> print_in_app out t
     | t :: l' ->
-        fpf out "@[<hv>%a@ @[<hv>%a@ %a@]@]"
+        fpf out "@[%a@]@ @[%a@] %a"
           print_in_app t (Builtin.pp print_in_app) b (print_infix_list b) l'
 end
 
@@ -546,6 +546,8 @@ module type UTIL = sig
   val or_ : t_ list -> t_
   val not_ : t_ -> t_
   val undefined_ : t_ -> t_ (** fresh undefined term *)
+  val data_test : ID.t -> t_ -> t_
+  val data_select : ID.t -> int -> t_ -> t_
 
   val mk_bind : Binder.t -> t_ var -> t_ -> t_
 
@@ -741,6 +743,9 @@ module Util(T : S)
   let undefined_ t =
     let id = ID.make "_" in
     builtin (`Undefined (id,t))
+
+  let data_test c t = app_builtin (`DataTest c) [t]
+  let data_select c i t = app_builtin (`DataSelect (c,i)) [t]
 
   let ty_builtin b = T.build (TyBuiltin b)
   let ty_const id = const id
