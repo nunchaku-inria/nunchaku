@@ -11,6 +11,13 @@ type inv2 = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Absent]>
 
 let section = Utils.Section.make "elim_ind_pred"
 
+exception Error of string
+
+let () = Printexc.register_printer
+  (function
+    | Error msg -> Some (CCFormat.sprintf "@[<2>error in elim_ind_pred:@ %s@]" msg)
+    | _ -> None)
+
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
@@ -18,6 +25,9 @@ module Make(T : TI.S) = struct
 
   type term = T.t
   type decode_state = unit
+
+  let error_ msg = raise (Error msg)
+  let errorf_ msg = CCFormat.ksprintf msg ~f:error_
 
   (* transform a (co)inductive predicate into a recursive boolean function
 
@@ -40,6 +50,7 @@ module Make(T : TI.S) = struct
       (fun k->k PStmt.print_pred_def pred);
     assert (pred.Stmt.pred_tyvars = []); (* mono *)
     let d = pred.Stmt.pred_defined in
+    let id = d.Stmt.defined_head in
     let ty_vars, ty_args, ty_ret = U.ty_unfold d.Stmt.defined_ty in
     assert (U.ty_is_Prop ty_ret);
     assert (ty_vars = []); (* mono *)
@@ -51,6 +62,7 @@ module Make(T : TI.S) = struct
           Var.make ~name ~ty)
         ty_args
     in
+    let arity = List.length ty_args in
     (* translate clauses into one existentially quantified case,
      then take the disjunction *)
     let cases =
@@ -59,18 +71,37 @@ module Make(T : TI.S) = struct
           (* FIXME: need to equate  [vars = t_1...t_n]
              where [c.clause_concl = id t_1...t_n]
              instead of this *)
-          let case = c.Stmt.clause_concl in
-          let case =
-            CCOpt.maybe
-              (fun g -> U.and_ [g; case])
-              case
-              c.Stmt.clause_guard
+          (* the clause should be [guard => id args], here we extract [args] *)
+          let args =
+            let fail() =
+              errorf_
+                "@[<2>expect conclusion of clause to be of the \
+                form@ `%a <arg_1...arg_%d>`,@ but got `@[%a@]`@]"
+                ID.print id arity P.print c.Stmt.clause_concl
+            in
+            match T.repr c.Stmt.clause_concl with
+            | TI.App (f, l) ->
+                if List.length l <> arity then fail();
+                begin match T.repr f with
+                | TI.Const id' when ID.equal id' id -> l
+                | _ -> fail()
+                end
+            | _ -> fail()
           in
-          (* TODO: optimization that replaces
-             `∃ y, x=s (s y) && p[y]`
-             with
-             `is-succ x && is-succ (pred x) && p[pred (pred x)]` *)
-          List.fold_right U.exists c.Stmt.clause_vars case)
+          (* add conditions that enforce [vargs = args],
+
+            TODO: optimization that replaces
+               `∃ y, x=s (s y) && p[y]`
+               with
+               `is-succ x && is-succ (pred x) && p[pred (pred x)]` *)
+          let conds = List.map2 (fun v arg -> U.eq (U.var v) arg) vars args in
+          (* add guard, if any *)
+          let res = match c.Stmt.clause_guard with
+            | None -> U.and_ conds
+            | Some g -> U.and_ (g :: conds)
+          in
+          (* quantify over the clause's variables *)
+          List.fold_right U.exists c.Stmt.clause_vars res)
         pred.Stmt.pred_clauses
     in
     let rhs = U.or_ cases in
