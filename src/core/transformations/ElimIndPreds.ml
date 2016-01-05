@@ -29,6 +29,55 @@ module Make(T : TI.S) = struct
   let error_ msg = raise (Error msg)
   let errorf_ msg = CCFormat.ksprintf msg ~f:error_
 
+  exception ExitAsCstors
+
+  (* if [t = c1(c2_1(...), c2_2(...), ...)] recursively, where each [c_] is
+     a (co)data constructor and leaves are variables, then it returns
+     [Some (conds, subst')] where:
+       - [conds] is a set of conditions for [t] to have the given shape
+       - [subst'] is an extension of [subst] that binds leave variables
+         to selectors on [t]
+    @param env environment
+    @param root the term that must have the shaped described by [t]
+  *)
+  let as_cstors ~env ~subst ~root t =
+    let subst = ref subst in
+    let conds = ref [] in
+    let rec aux select t = match T.repr t with
+      | TI.Var v ->
+          begin match Var.Subst.find ~subst:!subst v with
+          | None ->
+              (* bind [v] *)
+              subst := Var.Subst.add ~subst:!subst v select
+          | Some select' ->
+              (* [v = select] and [v = select'], so we better make sure
+                 that [select = select'] to eliminate [v] *)
+              conds := U.eq select select' :: !conds
+          end
+      | TI.App (f, l) ->
+          begin match T.repr f with
+          | TI.Const id ->
+              let info = Env.find_exn ~env id in
+              begin match Env.def info with
+              | Env.Cstor _ ->
+                  (* yay, a constructor!
+                    - ensure that [select] has this constructor as head
+                    - transform each subterm in [l] *)
+                  conds := U.data_test id select :: !conds;
+                  List.iteri
+                    (fun i t' -> aux (U.data_select id i select) t')
+                    l
+              | _ -> raise ExitAsCstors
+              end
+          | _ -> raise ExitAsCstors
+          end
+      | _ -> raise ExitAsCstors
+    in
+    try
+      aux root t;
+      Some (!subst, !conds)
+    with ExitAsCstors -> None
+
   (* transform a (co)inductive predicate into a recursive boolean function
 
      translate
@@ -44,8 +93,8 @@ module Make(T : TI.S) = struct
          || ....`
   *)
   let pred_to_def
-  : (term, term, inv1) Stmt.pred_def -> (term, term, inv2) Stmt.rec_def
-  = fun pred ->
+  : env:(term, term, inv1) Env.t -> (term, term, inv1) Stmt.pred_def -> (term, term, inv2) Stmt.rec_def
+  = fun ~env pred ->
     Utils.debugf ~section 3 "@[<2>pred_to_def@ `@[%a@]`@]"
       (fun k->k PStmt.print_pred_def pred);
     assert (pred.Stmt.pred_tyvars = []); (* mono *)
@@ -98,8 +147,13 @@ module Make(T : TI.S) = struct
                     (* [arg_i = v'], so making [arg_i = v] is as simple as [v' := v] *)
                     Var.Subst.add ~subst v' (U.var v), l
                 | _ ->
-                    (* default: just add constraint [arg_i = v] *)
-                    subst, U.eq (U.var v) arg :: l)
+                    begin match as_cstors ~env ~subst arg ~root:(U.var v) with
+                    | Some (subst', conds) ->
+                        subst', conds @ l
+                    | None ->
+                        (* default: just add constraint [arg_i = v] *)
+                        subst, U.eq (U.var v) arg :: l
+                    end)
               (Var.Subst.empty, [])
               vars args
           in
@@ -129,13 +183,14 @@ module Make(T : TI.S) = struct
   : (term, term, inv1) Problem.t ->
     (term, term, inv2) Problem.t * decode_state
   = fun pb ->
+    let env = Problem.env pb in
     let pb' = Problem.flat_map_statements pb
       ~f:(fun st ->
           let info = Stmt.info st in
           match Stmt.view st with
           | Stmt.Pred (`Wf, _, l) ->
               (* well-founded: translate directly to recursive functions *)
-              let l = List.map pred_to_def l in
+              let l = List.map (pred_to_def ~env) l in
               [Stmt.axiom_rec ~info l]
           | Stmt.Pred (`Not_wf, _, _) ->
               (* should have been  transformed into a [`Wf] (co)predicate
