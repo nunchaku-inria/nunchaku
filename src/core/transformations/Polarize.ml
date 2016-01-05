@@ -450,12 +450,15 @@ module Make(T : TI.S) = struct
           let def = Stmt.map_rec_def def
             ~term:(polarize_root ~state:st Pol.Pos) ~ty:CCFun.id in
           [def]
-      | `Polarize true ->
-          let p = polarize_id ~state:st ~unroll:`No_unroll id in
-          [define_rec ~state:st true def p]
-      | `Polarize false ->
-          let p = polarize_id ~state:st ~unroll:`No_unroll id in
-          [define_rec ~state:st false def p]
+      | `Polarize is_pos ->
+          let p =
+            try match ID.Tbl.find st.St.polarized id with
+              | None -> assert false
+              | Some p -> p
+            with Not_found ->
+              polarize_id ~state:st ~unroll:`No_unroll id
+          in
+          [define_rec ~state:st is_pos def p]
 
     (* declare the type [nat] *)
     method private declare_nat =
