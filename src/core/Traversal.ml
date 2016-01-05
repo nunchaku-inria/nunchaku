@@ -205,6 +205,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
 
     method virtual do_pred
     : depth:int ->
+      [`Wf | `Not_wf] -> [`Pred | `Copred] ->
       (term, term, 'inv1) Stmt.pred_def -> Arg.t ->
       (term, term, 'inv2) Stmt.pred_def list
 
@@ -229,7 +230,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       } in
       self#push frame;
       self#in_processing id arg frame;
-      let new_preds = self#do_pred ~depth def arg in
+      let new_preds = self#do_pred ~depth wf kind def arg in
       UF_list.append new_preds l;
       if frame.sf_is_root then (
         let res = UF_list.find_res l in
@@ -383,12 +384,14 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
             assert (ID.equal tydef.Stmt.ty_id id);
             self#do_mutual_types_rec ~depth ~loc k tydefs tydef arg;
             assert (self#has_processed id arg);
-        | Env.NoDef when conf.direct_tydef -> ()
+        | Env.NoDef when conf.direct_tydef -> () (* already defined *)
         | Env.NoDef ->
             let ty = env_info.Env.ty in
             let decl = env_info.Env.decl_kind in
             let loc = env_info.Env.loc in
             self#do_ty_def ?loc decl id ~ty arg
+
+    method update_env f = env <- f env
 
     (* register the statement into the state's [env], so that next statements
       can monomorphize it. Some statements are automatically kept (goal and axiom) *)
