@@ -219,10 +219,12 @@ module Make(T : TI.S) = struct
         add_conds local_state.pol (U.ite a b c) conds
     | TI.Bind (`Forall,v,t) ->
         let t', conds = tr_term_rec_ ~state ~local_state t in
-        U.forall v t', List.map (U.forall v) conds
+        let cond = U.forall v (U.and_ conds) in
+        U.forall v t', List.map (U.forall v) [cond]
     | TI.Bind (`Exists,v,t) ->
-        let t, cond = tr_term_rec_ ~state ~local_state t in
-        add_conds local_state.pol (U.exists v t) cond
+        let t, conds = tr_term_rec_ ~state ~local_state t in
+        let cond = U.exists v (U.and_ conds) in
+        add_conds local_state.pol (U.exists v t) [cond]
     | TI.Bind (`Fun,_,_) -> fail_tr_ t "translation of λ impossible"
     | TI.Let (v,t,u) ->
         (* rename [v] *)
