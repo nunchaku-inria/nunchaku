@@ -281,11 +281,18 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
     state.new_sym <- [];
     t', List.map (fun (id,s) -> id,s.sym_ty) l
 
+  (* TODO: heuristics, should only skolemize a subset of terms (including at
+     least the goal; maybe stop skolemization at <=>/ite or other depolarizing
+     connectives in the rest of the problem? *)
+
   let convert_problem ~state pb =
     Problem.flat_map_statements
       ~f:(fun stmt ->
         let stmt' = Stmt.map stmt
-          ~term:(fun t -> skolemize_ ~state (nnf ~state t)) ~ty:Conv.convert
+          ~term:(fun t ->
+            let t' = nnf ~state t in
+            skolemize_ ~state t')
+          ~ty:Conv.convert
         in
         state.sigma <- Signature.add_statement ~sigma:state.sigma stmt';
         let l = state.new_sym in
