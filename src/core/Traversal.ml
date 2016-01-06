@@ -180,7 +180,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     = fun ~depth ~loc _defs def arg ->
       let id = def.Stmt.rec_defined.Stmt.defined_head in
       Utils.debugf ~section 3
-        "@[<2>process case `%a` for@ (%a)@ at depth %d@]"
+        "@[<2>process rec case `%a` for@ (%a)@ at depth %d@]"
         (fun k -> k ID.print id Arg.print arg depth);
       let l = UF_list.make [] in
       let frame = {
@@ -196,6 +196,9 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       if frame.sf_is_root then (
         (* at root, make statement *)
         let res = UF_list.find_res l in
+        Utils.debugf ~section 5
+          "@[<2>rec case `%a`@ is root of mutual block@ @[%a@]@]"
+          (fun k->k ID.print id (CCFormat.list PStmt.print_rec_def) res);
         let stmt = Stmt.axiom_rec ~info:{Stmt.name=None; loc;} res in
         self#push_res stmt
       );
@@ -239,6 +242,9 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       UF_list.append new_preds l;
       if frame.sf_is_root then (
         let res = UF_list.find_res l in
+        Utils.debugf ~section 5
+          "@[<2>pred `%a`@ is root of mutual block@ @[%a@]@]"
+          (fun k->k ID.print id (CCFormat.list PStmt.print_pred_def) res);
         let wf' = self#pred_translate_wf wf in
         let stmt = Stmt.mk_pred ~info:{Stmt.name=None; loc;} ~wf:wf' kind res in
         self#push_res stmt

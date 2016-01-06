@@ -364,7 +364,7 @@ module Make(T : TI.S) = struct
           | _ -> defined.Stmt.defined_ty
         );
       } in
-    (* TODO: if `Unroll, define the clauses slightly differently, by
+    (* if `Unroll, define the clauses slightly differently, by
        adding a 0 case (true or false dep. on polarity)
        and adding n ==> (s n) in every guarded clause *)
     let unroll_clause
@@ -444,7 +444,8 @@ module Make(T : TI.S) = struct
     method do_def ~depth:_ def act =
       let id = def.Stmt.rec_defined.Stmt.defined_head in
       if act<>`Keep
-        then Utils.debugf ~section 5 "polarize def %a" (fun k->k ID.print id);
+        then Utils.debugf ~section 5 "polarize def %a on %a"
+          (fun k->k ID.print id pp_act act);
       match act with
       | `Keep ->
           let def = Stmt.map_rec_def def
@@ -523,9 +524,7 @@ module Make(T : TI.S) = struct
               let p = polarize_id ~state:st ~unroll id in
               p
           in
-          if is_pos
-          then [define_pred ~state:st ~is_pos:true def p]
-          else [define_pred ~state:st ~is_pos:false def p]
+          [define_pred ~state:st ~is_pos def p]
 
     method do_term ~depth:_ t = polarize_term ~state:st t
 
