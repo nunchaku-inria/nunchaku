@@ -98,8 +98,6 @@ module Make(FO_T : FO.S) = struct
       with _ -> ()
     )
 
-  (* TODO: use Scheduling instead *)
-
   let create_ ~symbols (ic,oc) =
     (* the [t] instance *)
     let s = {
@@ -130,9 +128,11 @@ module Make(FO_T : FO.S) = struct
   let id_to_name ~state id =
     try ID.Tbl.find state.id_to_name id
     with Not_found ->
-      let name0 = match ID.name id with
-        | "distinct" -> "distinct_"
-        | s -> s
+      let name0 = match ID.name id, ID.polarity id with
+        | "distinct", _ -> "distinct_"
+        | s, Polarity.NoPol  -> s
+        | s, Polarity.Pos -> s ^ "_+"
+        | s, Polarity.Neg -> s ^ "_-"
       in
       let name = find_unique_name_ ~state name0 in
       Hashtbl.add state.decode_tbl name (ID id);
