@@ -171,9 +171,8 @@ module Make(T : TI.S) = struct
     | Pol.NoPol ->
       (* choose positive, but make both equal *)
       let p_pos = U.const p.pos and p_neg = U.const p.neg in
-      app_pol pol
-        (U.app p_pos l_unrolled)
-        (U.eq (U.app p_pos l_unrolled) (U.app p_neg l) :: conds)
+      U.app p_pos l_unrolled,
+      U.eq (U.app p_pos l_unrolled) (U.app p_neg l) :: conds
 
   (* return the pair of polarized IDs for [id], with caching *)
   let polarize_id ~state ~unroll id =
@@ -198,7 +197,6 @@ module Make(T : TI.S) = struct
         St.call ~state ~depth:0 id (`Polarize false)
 
   (* traverse [t], replacing some symbols by their polarized version,
-     @param change if we need to add some argument
      @return the term + a list of guards to enforce *)
   let rec polarize_rec
   : type i.  state:i St.t -> Pol.t -> T.t -> T.t * T.t list
@@ -234,7 +232,7 @@ module Make(T : TI.S) = struct
             begin match ID.Tbl.find state.St.polarized id with
             | None ->
                 St.call ~state ~depth:0 id `Keep;
-                app_pol pol (U.app f l) conds
+                U.app f l, conds
             | Some p ->
                 polarize_def_of ~state id pol;
                 app_polarized pol p l conds
@@ -251,7 +249,7 @@ module Make(T : TI.S) = struct
                 (* do not polarize *)
                 ID.Tbl.add state.St.polarized id None;
                 St.call ~state ~depth:0 id `Keep;
-                app_pol pol (U.app f l) conds
+                U.app f l, conds
             | Env.Fun_def (_defs,def,_) ->
                 (* we can polarize, or not: delegate to heuristic *)
                 if should_polarize def
@@ -262,7 +260,7 @@ module Make(T : TI.S) = struct
                 ) else (
                   ID.Tbl.add state.St.polarized id None;
                   St.call ~state ~depth:0 id `Keep;
-                  app_pol pol (U.app f l) conds
+                  U.app f l, conds
                 )
             | Env.Pred (`Not_wf,_,_,_preds,_) ->
                 (* shall polarize in all cases *)
@@ -283,26 +281,36 @@ module Make(T : TI.S) = struct
     | TI.Bind (`Fun,v,t) ->
         (* no polarity *)
         let t, conds = polarize_rec ~state Pol.NoPol t in
-        app_pol pol (U.fun_ v t) conds
+        U.fun_ v t, conds
     | TI.Bind (`TyForall, _, _) ->
         assert false  (* we do not polarize in types *)
     | TI.Let (v,t,u) ->
         (* we don't know the polarity of [t] in [u], so we prepare for
            the worst case *)
+        let v' = Var.fresh_copy v in
         let t, c_t = polarize_rec ~state Pol.NoPol t in
         let u, c_u = polarize_rec ~state pol u in
-        app_pol pol (U.let_ v t u) (U.let_ v t (U.and_ c_u) :: c_t @ c_u)
+        let term = U.let_ v' t u in
+        let conds = U.let_ v t (U.and_ c_u) :: c_t in
+        if U.ty_is_Prop (U.ty_exn ~sigma:(Env.find_ty ~env:(state.St.get_env ())) u)
+        then app_pol pol term conds
+        else term, conds
     | TI.Match (t,l) ->
         let t, c_t = polarize_rec ~state Pol.NoPol t in
-        let conds = ref [] in
-        let l = ID.Map.map
-          (fun (vars,rhs) ->
+        let conds = ref ID.Map.empty in
+        let l = ID.Map.mapi
+          (fun c (vars,rhs) ->
             let rhs, c_rhs = polarize_rec ~state pol rhs in
-            conds := c_rhs @ !conds;
+            conds := ID.Map.add c (vars, c_rhs) !conds;
             vars, rhs)
           l
         in
-        app_pol pol (U.match_with t l) (c_t @ !conds)
+        let conds =
+          if ID.Map.for_all (fun _ (_,l) -> CCList.is_empty l) !conds
+          then []
+          else [U.match_with t (ID.Map.map (fun (vars,l) -> vars, U.and_ l) !conds)]
+        in
+        U.match_with t l, conds @ c_t
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> t, []
     | TI.TyMeta _ -> assert false
