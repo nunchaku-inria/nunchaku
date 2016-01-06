@@ -204,6 +204,16 @@ module Make(T : TI.S) = struct
     | TI.Builtin (`Undefined _ as b) ->
         U.builtin (TI.Builtin.map b
           ~f:(fun t-> fst(tr_term_rec_ ~state ~local_state t))), []
+    | TI.Builtin (`Guard (t, g)) ->
+        let t, cond_t = tr_term_rec_ ~state ~local_state t in
+        (* how to translate a guard
+           TODO: once guards are eliminated elsewhere, this should become unecessary *)
+        let tr_guard t =
+          let t, cond = tr_term_rec_ ~state ~local_state t in
+          U.asserting t cond
+        in
+        let g' = TI.Builtin.map_guard tr_guard g in
+        U.guard t g', cond_t
     | TI.Builtin (`Equiv _) -> fail_tr_ t "cannot translate equivalence (polarity)"
     | TI.Builtin (`Eq (a,b)) ->
         let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in

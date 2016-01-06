@@ -159,6 +159,7 @@ end = struct
           | `Undefined _
           | `DataSelect _
           | `DataTest _
+          | `Guard _
           | `Ite _ -> assert false
         in
         Untyped.app (Untyped.builtin b) (List.map aux l)

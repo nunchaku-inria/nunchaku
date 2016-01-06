@@ -43,6 +43,16 @@ module TyBuiltin = struct
 end
 
 module Builtin = struct
+  type 'a guard = {
+    assuming: 'a list; (* preconditions *)
+    asserting: 'a list; (* postconditions, to be enforced *)
+  }
+
+  let map_guard f g =
+    { assuming = List.map f g.assuming;
+      asserting = List.map f g.asserting;
+    }
+
   type 'a t =
     [ `True
     | `False
@@ -56,13 +66,14 @@ module Builtin = struct
     | `DataTest of id (** Test whether [t : tau] starts with given constructor *)
     | `DataSelect of id * int (** Select n-th argument of given constructor *)
     | `Undefined of id * 'a (** Undefined case. argument=the undefined term *)
+    | `Guard of 'a * 'a guard (** term + some boolean conditions *)
     ]
 
-  let is_infix = function
-    | `Eq _ | `Or | `And | `Equiv _ | `Imply -> true
+  let is_infix : _ t -> bool = function
+    | `Eq _ | `Or | `And | `Equiv _ | `Imply | `Guard _ -> true
     | _ -> false
 
-  let pp pterm out = function
+  let pp pterm out : _ t -> unit = function
     | `True -> CCFormat.string out "true"
     | `False -> CCFormat.string out "false"
     | `Not -> CCFormat.string out "~"
@@ -78,6 +89,17 @@ module Builtin = struct
     | `DataSelect (id, n) ->
         fpf out "select-%s-%d" (ID.name id) n
     | `Undefined (id,_) -> fpf out "undefined_%d" (ID.id id)
+    | `Guard (t, o) ->
+        let pp_case name out l = match l with
+          | [] -> ()
+          | _::_ ->
+              fpf out "@[<2>%s@ (@[<hv>%a@])@]" name
+                (CCFormat.list ~start:"" ~stop:"" ~sep:" && " pterm) l
+        in
+        assert (not (o.asserting=[] && o.assuming=[]));
+        fpf out "@[<hv>%a@ %a@ %a@]" pterm t
+          (pp_case "assuming") o.assuming
+          (pp_case "asserting") o.asserting
 
   let equal
   : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
@@ -95,6 +117,13 @@ module Builtin = struct
     | `DataTest id, `DataTest id' -> ID.equal id id'
     | `DataSelect (id, n), `DataSelect (id', n') -> n=n' && ID.equal id id'
     | `Undefined (a,t1), `Undefined (b,t2) -> ID.equal a b && eqterm t1 t2
+    | `Guard (t1, g1), `Guard (t2, g2) ->
+        List.length g1.assuming = List.length g2.assuming
+        && List.length g1.asserting = List.length g2.asserting
+        && eqterm t1 t2
+        && List.for_all2 eqterm g1.assuming g2.assuming
+        && List.for_all2 eqterm g1.asserting g2.asserting
+    | `Guard _, _
     | `True, _ | `False, _ | `Ite _, _ | `Not, _
     | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> false
@@ -113,6 +142,9 @@ module Builtin = struct
     | `Not -> `Not
     | `DataSelect (c,n) -> `DataSelect (c,n)
     | `Undefined (id, t) -> `Undefined (id, f t)
+    | `Guard (t, g) ->
+        let g' = map_guard f g in
+        `Guard (f t, g')
 
   let fold : f:('acc -> 'a -> 'acc) -> x:'acc -> 'a t -> 'acc
   = fun ~f ~x:acc b -> match b with
@@ -128,6 +160,10 @@ module Builtin = struct
     | `Eq (a,b)
     | `Equiv (a,b) -> f (f acc a) b
     | `Undefined (_,t) -> f acc t
+    | `Guard (t, g) ->
+        let acc = f acc t in
+        let acc = List.fold_left f acc g.assuming in
+        List.fold_left f acc g.asserting
 
   let fold2 :
       f:('acc -> 'a -> 'b -> 'acc) -> fail:(unit -> 'acc) ->
@@ -150,6 +186,13 @@ module Builtin = struct
     | `Equiv (a1,b1), `Equiv (a2,b2) -> let acc = f acc a1 a2 in f acc b1 b2
     | `Undefined (i1,t1), `Undefined (i2,t2) ->
         if ID.equal i1 i2 then f acc t1 t2 else fail()
+    | `Guard (t1, g1), `Guard (t2, g2)
+      when List.length g1.asserting=List.length g2.asserting
+      && List.length g1.assuming = List.length g2.assuming ->
+        let acc = f acc t1 t2 in
+        let acc = List.fold_left2 f acc g1.assuming g2.assuming in
+        List.fold_left2 f acc g1.asserting g2.asserting
+    | `Guard _, _
     | `True, _ | `False, _ | `Ite _, _ | `Not, _
     | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> fail()
@@ -170,6 +213,10 @@ module Builtin = struct
     | `Eq (a,b)
     | `Equiv (a,b) -> f a; f b
     | `Undefined (_,t) -> f t
+    | `Guard (t,g) ->
+        f t;
+        List.iter f g.asserting;
+        List.iter f g.assuming
 
   let to_seq b f = iter f b
 end
@@ -570,6 +617,10 @@ module type UTIL = sig
   val data_test : ID.t -> t_ -> t_
   val data_select : ID.t -> int -> t_ -> t_
 
+  val asserting : t_ -> t_ list -> t_
+  val assuming : t_ -> t_ list -> t_
+  val guard : t_ -> t_ Builtin.guard -> t_
+
   val mk_bind : Binder.t -> t_ var -> t_ -> t_
 
   val ty_type : t_ (** Type of types *)
@@ -674,19 +725,26 @@ module Util(T : S)
   let forall v t = T.build (Bind(`Forall,v, t))
   let exists v t = T.build (Bind(`Exists,v, t))
 
+  exception FlattenExit of T.t
+
   let flatten (b:[<`And | `Or]) l =
-    CCList.flat_map
-      (fun t -> match T.repr t with
-        | Builtin `True when b=`And -> []
-        | Builtin `False when b=`Or -> []
-        | App (f, l') ->
-            begin match T.repr f with
-            | Builtin `Or when b=`Or -> l'
-            | Builtin `And when b=`And -> l'
-            | _ -> [t]
-            end
-        | _ -> [t])
-      l
+    try
+      CCList.flat_map
+        (fun t -> match T.repr t with
+          | Builtin `True when b=`And -> []
+          | Builtin `True when b=`Or -> raise (FlattenExit t) (* shortcut *)
+          | Builtin `False when b=`Or -> []
+          | Builtin `False when b=`And -> raise (FlattenExit t)
+          | App (f, l') ->
+              begin match T.repr f with
+              | Builtin `Or when b=`Or -> l'
+              | Builtin `And when b=`And -> l'
+              | _ -> [t]
+              end
+          | _ -> [t])
+        l
+    with FlattenExit t ->
+      [t]
 
   let builtin_ b = T.build (Builtin b)
   let app_builtin_ b l = app (builtin_ b) l
@@ -767,6 +825,22 @@ module Util(T : S)
 
   let data_test c t = app_builtin (`DataTest c) [t]
   let data_select c i t = app_builtin (`DataSelect (c,i)) [t]
+
+  let guard t g =
+    let open Builtin in
+    match T.repr t, g.asserting, g.assuming with
+    | _, [], [] -> t
+    | Builtin (`Guard (t', g')), _, _ ->
+        let g' = {
+          assuming = g.assuming @ g'.assuming;
+          asserting = g.asserting @ g'.asserting;
+        } in
+        builtin (`Guard (t', g'))
+    | _ ->
+        builtin (`Guard (t, g))
+
+  let asserting t p = guard t {Builtin. asserting=p; assuming=[]}
+  let assuming t p = guard t {Builtin. assuming=p; asserting=[]}
 
   let ty_builtin b = T.build (TyBuiltin b)
   let ty_const id = const id
@@ -1012,6 +1086,7 @@ module Util(T : S)
                   failwith "cannot infer type, wrong argument to DataSelect"
               end
           | `Undefined (_,t) -> ty_exn ~sigma t
+          | `Guard (t, _) -> ty_exn ~sigma t
         end
     | Var v -> Var.ty v
     | App (f,l) ->

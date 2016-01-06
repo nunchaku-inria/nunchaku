@@ -196,6 +196,10 @@ module Make(T : TI.S) = struct
         St.call ~state ~depth:0 id (`Polarize true);
         St.call ~state ~depth:0 id (`Polarize false)
 
+  let is_prop ~state t =
+    let ty = U.ty_exn ~sigma:(Env.find_ty ~env:(state.St.get_env ())) t in
+    U.ty_is_Prop ty
+
   (* traverse [t], replacing some symbols by their polarized version,
      @return the term + a list of guards to enforce *)
   let rec polarize_rec
@@ -215,6 +219,14 @@ module Make(T : TI.S) = struct
         let b, c_b = polarize_rec ~state pol b in
         let c, c_c = polarize_rec ~state pol c in
         app_pol pol (U.ite a b c) (U.ite a (U.and_ c_b) (U.and_ c_c) :: c_a)
+    | TI.Builtin (`Guard (t, g)) ->
+        let tr_guard t =
+          let t, c_t = polarize_rec ~state pol t in
+          U.asserting t c_t
+        in
+        let g = TI.Builtin.map_guard tr_guard g in
+        let t, c_t = polarize_rec ~state pol t in
+        U.asserting (U.guard t g) c_t, []
     | TI.Builtin _
     | TI.Var _
     | TI.Const _ -> t, []
@@ -263,7 +275,8 @@ module Make(T : TI.S) = struct
                   U.app f l, conds
                 )
             | Env.Pred (`Not_wf,_,_,_preds,_) ->
-                (* shall polarize in all cases *)
+                (* shall polarize in all cases
+                   TODO: only when there is at least one variable *)
                 polarize_def_of ~state id pol;
                 let p = find_polarized_exn ~state id in
                 app_polarized pol p l conds
@@ -272,8 +285,7 @@ module Make(T : TI.S) = struct
             let a, c_a = polarize_rec ~state (Pol.inv pol) a in
             let b, c_b = polarize_rec ~state pol b in
             app_pol pol (U.imply a b) (c_a @ c_b)
-        | _ ->
-            app_pol pol (U.app f l) conds
+        | _ -> U.app f l, conds
         end
     | TI.Bind ((`Forall | `Exists) as b,v,t) ->
         let t, conds = polarize_rec ~state pol t in
@@ -292,25 +304,18 @@ module Make(T : TI.S) = struct
         let u, c_u = polarize_rec ~state pol u in
         let term = U.let_ v' t u in
         let conds = U.let_ v t (U.and_ c_u) :: c_t in
-        if U.ty_is_Prop (U.ty_exn ~sigma:(Env.find_ty ~env:(state.St.get_env ())) u)
+        if is_prop ~state u
         then app_pol pol term conds
         else term, conds
-    | TI.Match (t,l) ->
-        let t, c_t = polarize_rec ~state Pol.NoPol t in
-        let conds = ref ID.Map.empty in
-        let l = ID.Map.mapi
-          (fun c (vars,rhs) ->
+    | TI.Match (lhs,l) ->
+        let lhs, c_lhs = polarize_rec ~state Pol.NoPol lhs in
+        let l = ID.Map.map
+          (fun (vars,rhs) ->
             let rhs, c_rhs = polarize_rec ~state pol rhs in
-            conds := ID.Map.add c (vars, c_rhs) !conds;
-            vars, rhs)
+            vars, U.asserting rhs c_rhs)
           l
         in
-        let conds =
-          if ID.Map.for_all (fun _ (_,l) -> CCList.is_empty l) !conds
-          then []
-          else [U.match_with t (ID.Map.map (fun (vars,l) -> vars, U.and_ l) !conds)]
-        in
-        U.match_with t l, conds @ c_t
+        U.match_with lhs l, c_lhs
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> t, []
     | TI.TyMeta _ -> assert false

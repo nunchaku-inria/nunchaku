@@ -169,9 +169,11 @@ module ToFO(T : TI.S)(F : FO.S) = struct
     | Bind (`Exists, v,f) ->
         FO.T.exists (conv_var v) (conv_term ~sigma f)
     | Match _ -> fail_ t "no case in FO terms"
+    | Builtin (`Guard _) -> fail_ t "no guards (assert/assume) in FO"
+    | Builtin (`DataSelect _ | `DataTest _) ->
+        fail_ t "no unapplied data-select/test in FO"
     | TyBuiltin _
     | TyArrow (_,_) -> fail_ t "no types in FO terms"
-    | Builtin _ -> fail_ t "no builtin in terms"
 
   let conv_form ~sigma f =
     Utils.debugf 3 ~section
