@@ -114,8 +114,8 @@ module Make(T : TI.S) = struct
   let add_conds pol t conds =
     if conds=[] then t, []
     else match pol with
-    | Pol.Pos -> U.and_ [t; U.and_ conds], []
-    | Pol.Neg -> U.or_ [t; U.not_ (U.and_ conds)], []
+    | Pol.Pos -> U.and_ (t :: conds), []
+    | Pol.Neg -> U.imply (U.and_ conds) t, []
     | Pol.NoPol -> t, conds
 
   (*
@@ -236,7 +236,9 @@ module Make(T : TI.S) = struct
           | [] -> c_t
           | _::_ -> U.let_ v' t (U.and_ c_u) :: c_t
         in
-        add_conds local_state.pol (U.let_ v' t u) conds
+        if U.ty_is_Prop (U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) u)
+        then add_conds local_state.pol (U.let_ v' t u) conds
+        else U.let_ v' t u, conds
     | TI.Match (t, l) ->
         let t, ct = tr_term_rec_ ~state ~local_state t in
         let conds' = ref ID.Map.empty in
