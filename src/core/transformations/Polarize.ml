@@ -73,7 +73,10 @@ module Make(T : TI.S) = struct
 
   (* shall we polarize the recursive function defined as follows? *)
   let should_polarize def =
-    U.ty_returns_Prop def.Stmt.rec_defined.Stmt.defined_ty
+    let _, ty_args, ty_ret = U.ty_unfold def.Stmt.rec_defined.Stmt.defined_ty in
+    U.ty_is_Prop ty_ret
+    &&
+    List.length ty_args > 0 (* function, not constant *)
     &&
     not (eqns_contains_undefined def.Stmt.rec_eqns)
 
