@@ -298,7 +298,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
         List.iter
           (fun f' ->
             (* stop if [f] and [f'] are the same frame *)
-            if ID.equal f.sf_id f'.sf_id then raise Exit;
+            if f == f' then raise Exit;
             f'.sf_is_root <- false; (* above [f] *)
             match f.sf_def, f'.sf_def with
             | `Types (k1, l1), `Types (k2, l2) ->
