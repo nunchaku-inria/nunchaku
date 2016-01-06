@@ -981,16 +981,17 @@ module Util(T : S)
     | Some ty -> ty
     | None -> raise (Undefined id)
 
+  let prop = ty_prop
+  let prop1 = ty_arrow prop prop
+  let prop2 = ty_arrow prop (ty_arrow prop prop)
+
   let rec ty_exn ~sigma t = match T.repr t with
     | Const id -> find_ty_ ~sigma id
-    | Builtin b->
-        let prop = ty_prop in
-        let prop1 = ty_arrow prop prop in
-        let prop2 = ty_arrow prop (ty_arrow prop prop) in
+    | Builtin b ->
         begin match b with
-          | `Imply
+          | `Imply -> prop2
           | `Or
-          | `And -> prop2
+          | `And -> assert false (* should be handled below *)
           | `Not -> prop1
           | `True
           | `False -> prop
@@ -1014,7 +1015,10 @@ module Util(T : S)
         end
     | Var v -> Var.ty v
     | App (f,l) ->
-        ty_apply (ty_exn ~sigma f) (List.map (ty_exn ~sigma) l)
+        begin match T.repr f with
+        | Builtin (`And | `Or) -> prop
+        | _ -> ty_apply (ty_exn ~sigma f) (List.map (ty_exn ~sigma) l)
+        end
     | Bind (b,v,t) ->
         begin match b with
         | `Forall
