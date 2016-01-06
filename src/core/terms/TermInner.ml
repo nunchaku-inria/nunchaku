@@ -254,11 +254,32 @@ module Print(T : REPR)
   let pp_list_ ?(start="") ?(stop="") ~sep pp =
     CCFormat.list ~start ~stop ~sep pp
 
+  let is_if_ t = match T.repr t with
+    | Builtin (`Ite _) -> true
+    | _ -> false
+
+  let rec unroll_if_ t = match T.repr t with
+    | Builtin (`Ite (a,b,c)) ->
+        let l, last = unroll_if_ c in
+        (a,b) :: l, last
+    | _ -> [], t
+
   let rec print out t = match T.repr t with
     | TyBuiltin b -> CCFormat.string out (TyBuiltin.to_string b)
     | Const id -> ID.print out id
     | TyMeta v -> MetaVar.print out v
     | Var v -> Var.print_full out v
+    | Builtin (`Ite (a,b,c)) when is_if_ c ->
+        (* special case to avoid deep nesting of ifs *)
+        let pp_middle out (a,b) =
+          fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]" print a print b
+        in
+        let middle, last = unroll_if_ c in
+        assert (not (is_if_ last));
+        fpf out "@[<hv>@[<2>if@ @[%a@]@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
+          print a print b
+          (pp_list_ ~sep:"" pp_middle) middle
+          print last
     | Builtin b -> Builtin.pp print_in_app out b
     | App (f,l) ->
         begin match T.repr f with

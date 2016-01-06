@@ -210,6 +210,12 @@ let pp_var_or_wildcard out = function
   | `Var v -> CCFormat.string out v
   | `Wildcard -> CCFormat.string out "_"
 
+let rec unroll_if_ t = match Loc.get t with
+  | Ite (a,b,c) ->
+      let l, last = unroll_if_ c in
+      (a,b) :: l, last
+  | _ -> [], t
+
 let rec print_term out term = match Loc.get term with
   | Builtin s -> Builtin.print out s
   | Var v -> pp_var_or_wildcard out v
@@ -239,8 +245,15 @@ let rec print_term out term = match Loc.get term with
       fpf out "@[<hv2>match @[%a@] with@ %a end@]"
         print_term t (pp_list_ ~sep:"" pp_case) l
   | Ite (a,b,c) ->
-      fpf out "@[<hv>@[<2>if@ %a@]@ @[<2>then@ %a@]@ @[<2>else@ %a@]@]"
-        print_term_inner a print_term b print_term c
+      (* special case to avoid deep nesting of ifs *)
+      let pp_middle out (a,b) =
+        fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]" print_term a print_term b
+      in
+      let middle, last = unroll_if_ c in
+      fpf out "@[<hv>@[<2>if@ @[%a@]@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
+        print_term a print_term b
+        (pp_list_ ~sep:"" pp_middle) middle
+        print_term last
   | Forall (v, t) ->
       fpf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
   | Exists (v, t) ->
