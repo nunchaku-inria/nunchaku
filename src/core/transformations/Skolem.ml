@@ -204,9 +204,11 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
             | Some t -> t
           end
       | TI.Builtin (`True | `False) -> t
-      | TI.Builtin (`Equiv _) -> assert false
+      | TI.Builtin (`Equiv _) -> t (* preserve *)
+      | TI.Builtin (`Ite (a,b,c)) ->
+          U.ite a (aux ~env b) (aux ~env c)
       | TI.Builtin
-        ((`Eq _ | `Ite _ | `Imply | `DataSelect _ | `Guard _
+        ((`Eq _ | `Imply | `DataSelect _ | `Guard _
            | `DataTest _ | `Undefined _ | `And | `Or | `Not) as b) ->
           U.builtin (TI.Builtin.map b ~f:(aux ~env))
       | TI.App (f,l) ->
