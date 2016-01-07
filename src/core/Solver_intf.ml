@@ -15,6 +15,12 @@ module Res = struct
     | Unsat
     | Timeout
     | Error of exn
+
+  let pp out = function
+    | Sat _ -> CCFormat.string out "sat"
+    | Unsat -> CCFormat.string out "unsat"
+    | Timeout -> CCFormat.string out "unknown"
+    | Error _ -> CCFormat.string out "error"
 end
 
 exception SolverClosed

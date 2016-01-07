@@ -605,9 +605,11 @@ module Make(FO_T : FO.S) = struct
           (* the [t] instance *)
           let solver = create_ ~symbols (ic,oc) in
           send_ solver problem';
-          match res solver with
+          let r = res solver in
+          Utils.debugf ~section 3 "@[<2>result: %a@]" (fun k->k Sol.Res.pp r);
+          match r with
           | Sol.Res.Sat m -> Scheduling.Return_shortcut (Sol.Res.Sat m)
-          | Sol.Res.Unsat -> Scheduling.Return Sol.Res.Unsat
+          | Sol.Res.Unsat -> Scheduling.Return_shortcut Sol.Res.Unsat
           | Sol.Res.Timeout -> Scheduling.Return Sol.Res.Timeout
           | Sol.Res.Error e ->
               Utils.debugf ~section 1
