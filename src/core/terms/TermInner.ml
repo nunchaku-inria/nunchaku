@@ -1059,7 +1059,8 @@ module Util(T : S)
   let prop1 = ty_arrow prop prop
   let prop2 = ty_arrow prop (ty_arrow prop prop)
 
-  let rec ty_exn ~sigma t = match T.repr t with
+  let rec ty_exn ~sigma t =
+    match T.repr t with
     | Const id -> find_ty_ ~sigma id
     | Builtin b ->
         begin match b with
@@ -1097,7 +1098,7 @@ module Util(T : S)
     | Bind (b,v,t) ->
         begin match b with
         | `Forall
-        | `Exists -> ty_arrow (Var.ty v) ty_prop
+        | `Exists -> ty_exn ~sigma t
         | `Fun ->
             if ty_returns_Type (Var.ty v)
             then ty_forall v (ty_exn ~sigma t)
