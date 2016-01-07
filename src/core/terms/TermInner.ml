@@ -43,7 +43,7 @@ module TyBuiltin = struct
 end
 
 module Builtin = struct
-  type 'a guard = {
+  type +'a guard = {
     assuming: 'a list; (* preconditions *)
     asserting: 'a list; (* postconditions, to be enforced *)
   }
@@ -93,11 +93,11 @@ module Builtin = struct
         let pp_case name out l = match l with
           | [] -> ()
           | _::_ ->
-              fpf out "@[<2>%s@ (@[<hv>%a@])@]" name
+              fpf out "@ @[<2>%s@ @[<hv>%a@]@]" name
                 (CCFormat.list ~start:"" ~stop:"" ~sep:" && " pterm) l
         in
         assert (not (o.asserting=[] && o.assuming=[]));
-        fpf out "@[<hv>%a@ %a@ %a@]" pterm t
+        fpf out "@[<hv>%a%a%a@]" pterm t
           (pp_case "assuming") o.assuming
           (pp_case "asserting") o.asserting
 

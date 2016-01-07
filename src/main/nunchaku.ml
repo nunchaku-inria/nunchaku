@@ -28,10 +28,11 @@ let print_typed_ = ref false
 let print_skolem_ = ref false
 let print_mono_ = ref false
 let print_elim_match_ = ref false
-let print_elim_preds_ = ref false
 let print_recursion_elim_ = ref false
 let print_elim_multi_eqns = ref false
 let print_polarize_ = ref false
+let print_elim_preds_ = ref false
+let print_intro_guards_ = ref false
 let print_fo_ = ref false
 let print_smt_ = ref false
 let timeout_ = ref 30
@@ -84,6 +85,8 @@ let options =
       " print input after elimination of multiple equations"
   ; "-j", Arg.Set_int j, " set parallelism level"
   ; "--print-polarize", Arg.Set print_polarize_, " print input after polarization"
+  ; "--print-intro-guards", Arg.Set print_intro_guards_,
+      " print input after introduction of guards"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
@@ -139,6 +142,7 @@ module Pipes = struct
   module Step_elim_preds = ElimIndPreds.Make(HO)
   module Step_rec_elim = ElimRecursion.Make(HO)
   module Step_polarize = Polarize.Make(HO)
+  module Step_intro_guards = IntroGuards.Make(HO)
   (* conversion to FO *)
   module Step_tofo = TermMono.TransFO(HO)(FO.Default)
 end
@@ -158,6 +162,7 @@ let make_model_pipeline () =
     Step_elim_preds.pipe ~print:!print_elim_preds_ @@@
     Step_rec_elim.pipe ~print:!print_recursion_elim_ @@@
     Step_ElimMatch.pipe ~print:!print_elim_match_ @@@
+    Step_intro_guards.pipe ~print:!print_intro_guards_ @@@
     Step_tofo.pipe () @@@
     id
   in
