@@ -7,7 +7,6 @@ module TI = TermInner
 module TyI = TypeMono
 module Stmt = Statement
 module Sig = Signature
-module Pol = Polarity
 
 type id = ID.t
 
@@ -91,32 +90,16 @@ module Make(T : TI.S) = struct
       | _ -> None)
 
   type local_state = {
-    pol: Pol.t;
-      (* local polarity *)
     subst: (term,term) Subst.t;
       (* local substitution *)
   }
 
-  let empty_local_state = {pol=Pol.Pos; subst=Subst.empty; }
-
-  let inv_pol ls = {ls with
-    pol=Pol.inv ls.pol;
-  }
-
-  let no_pol ls = {ls with pol=Pol.NoPol}
+  let empty_local_state = {subst=Subst.empty; }
 
   (* list of argument types that (monomorphic) type expects *)
   let rec ty_args_ (ty:term) = match TyM.repr ty with
     | TyI.Builtin _ | TyI.Const _ | TyI.App (_,_) -> []
     | TyI.Arrow (a,ty') -> a :: ty_args_ ty'
-
-  (* combine side-conditions with [t], depending on polarity *)
-  let add_conds pol t conds =
-    if conds=[] then t, []
-    else match pol with
-    | Pol.Pos -> U.and_ (t :: conds), []
-    | Pol.Neg -> U.imply (U.and_ conds) t, []
-    | Pol.NoPol -> t, conds
 
   (*
     - apply substitution eagerly (build it when we enter `forall_f x. f x = t`)
@@ -135,17 +118,16 @@ module Make(T : TI.S) = struct
         end
     | _ -> None
 
-  (* translate term/formula recursively. Returns new term and a list
-    of side-conditions (guards) *)
-  let rec tr_term_rec_ ~state ~local_state (t:term): term * term list =
+  (* translate term/formula recursively into a new (guarded) term. *)
+  let rec tr_term_rec_ ~state ~local_state (t:term) : term =
     match T.repr t with
-    | TI.Const _ -> t, []
+    | TI.Const _ -> t
     | TI.Var v ->
         (* substitute if needed; no side-condition *)
-        let t' = match Subst.find ~subst:local_state.subst v with
+        begin match Subst.find ~subst:local_state.subst v with
           | None -> t
           | Some t' -> t'
-        in t', []
+        end
     | TI.App (f,l) ->
         begin match as_defined_ ~state f, T.repr f, l with
           | Some (id, fundef), _, _ ->
@@ -156,112 +138,83 @@ module Make(T : TI.S) = struct
                   ID.print id (List.length l) (List.length fundef.fun_concretization);
               (* existential variable *)
               let alpha = Var.make ~name:"a" ~ty:fundef.fun_abstract_ty in
-              let conds = ref [] in
               let eqns = ref [] in
               let l' = List.map2
                 (fun arg (proj,_ty_proj) ->
                   (* under a function: no polarity *)
-                  let arg', cond_arg = tr_term_rec_ arg
-                    ~state ~local_state:(no_pol local_state) in
+                  let arg' = tr_term_rec_ arg ~state ~local_state in
                   let eqn = U.eq arg' (U.app (U.const proj) [U.var alpha]) in
                   eqns := eqn :: !eqns;
-                  conds := cond_arg @ !conds;
                   arg'
                 )
                 l
                 fundef.fun_concretization
               in
-              conds := (U.exists alpha (U.and_ !eqns)) :: !conds;
-              U.app f l', !conds
+              let cond = U.exists alpha (U.and_ !eqns) in
+              U.asserting (U.app f l') [cond]
           | None, TI.Builtin `Not, [t] ->
-              let t, cond = tr_term_rec_ ~state ~local_state:(inv_pol local_state) t in
-              add_conds local_state.pol (U.not_ t) cond
+              let t = tr_term_rec_ ~state ~local_state t in
+              U.not_ t
           | None, TI.Builtin ((`Or | `And) as b), l ->
-              let l_conds = List.map (tr_term_rec_ ~state ~local_state) l in
-              let l, conds = List.split l_conds in
-              add_conds local_state.pol (U.app_builtin b l) (List.flatten conds)
+              let l = List.map (tr_term_rec_ ~state ~local_state) l in
+              U.app_builtin b l
           | None, TI.Builtin `Imply, [a;b] ->
-              let a, cond_a = tr_term_rec_ ~state ~local_state:(inv_pol local_state) a in
-              let b, cond_b = tr_term_rec_ ~state ~local_state b in
-              add_conds local_state.pol (U.imply a b) (List.append cond_a cond_b)
+              let a = tr_term_rec_ ~state ~local_state a in
+              let b = tr_term_rec_ ~state ~local_state b in
+              U.imply a b
           | None, TI.Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
-              let t', conds = tr_term_rec_ ~state ~local_state t in
-              U.app_builtin b [t'], conds
+              let t' = tr_term_rec_ ~state ~local_state t in
+              U.app_builtin b [t']
           | None, _, _ ->
               (* combine side conditions from every sub-term *)
-              let conds, l' = Utils.fold_map
-                (fun conds t ->
-                  let t', c = tr_term_rec_ t
-                    ~state ~local_state:(no_pol local_state) in
-                  List.rev_append c conds, t')
-                [] l
+              let l' = List.map
+                (tr_term_rec_ ~state ~local_state)
+                l
               in
-              U.app f l', conds
+              U.app f l'
         end
     | TI.Builtin (`True | `False
         | `And | `Or | `Not | `Imply | `DataSelect _ | `DataTest _) ->
-          t, [] (* partially applied, or constant *)
+          t (* partially applied, or constant *)
     | TI.Builtin (`Undefined _ as b) ->
-        U.builtin (TI.Builtin.map b
-          ~f:(fun t-> fst(tr_term_rec_ ~state ~local_state t))), []
+        U.builtin (TI.Builtin.map b ~f:(tr_term_rec_ ~state ~local_state))
     | TI.Builtin (`Guard (t, g)) ->
-        let t, cond_t = tr_term_rec_ ~state ~local_state t in
-        (* how to translate a guard
-           TODO: once guards are eliminated elsewhere, this should become unecessary *)
-        let tr_guard t =
-          let t, cond = tr_term_rec_ ~state ~local_state t in
-          U.asserting t cond
-        in
-        let g' = TI.Builtin.map_guard tr_guard g in
-        U.guard t g', cond_t
+        let t = tr_term_rec_ ~state ~local_state t in
+        let g' = TI.Builtin.map_guard (tr_term_rec_ ~state ~local_state) g in
+        U.guard t g'
     | TI.Builtin (`Equiv _) -> fail_tr_ t "cannot translate equivalence (polarity)"
     | TI.Builtin (`Eq (a,b)) ->
-        let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
-        let b, cond_b = tr_term_rec_ ~state ~local_state:(no_pol local_state) b in
-        add_conds local_state.pol
-          (U.eq a b)
-          (List.rev_append cond_a cond_b)
+        let a = tr_term_rec_ ~state ~local_state a in
+        let b = tr_term_rec_ ~state ~local_state b in
+        U.eq a b
     | TI.Builtin (`Ite (a,b,c)) ->
-        let a, cond_a = tr_term_rec_ ~state ~local_state:(no_pol local_state) a in
-        let b, cond_b = tr_term_rec_ ~state ~local_state b in
-        let c, cond_c = tr_term_rec_ ~state ~local_state c in
-        let conds = (U.ite a (U.and_ cond_b) (U.and_ cond_c)) :: cond_a in
-        add_conds local_state.pol (U.ite a b c) conds
+        let a = tr_term_rec_ ~state ~local_state a in
+        let b = tr_term_rec_ ~state ~local_state b in
+        let c = tr_term_rec_ ~state ~local_state c in
+        U.ite a b c
     | TI.Bind (`Forall,v,t) ->
-        let t', conds = tr_term_rec_ ~state ~local_state t in
-        let cond = U.forall v (U.and_ conds) in
-        U.forall v t', List.map (U.forall v) [cond]
+        let t' = tr_term_rec_ ~state ~local_state t in
+        U.forall v t'
     | TI.Bind (`Exists,v,t) ->
-        let t, conds = tr_term_rec_ ~state ~local_state t in
-        let cond = U.exists v (U.and_ conds) in
-        add_conds local_state.pol (U.exists v t) [cond]
+        let t = tr_term_rec_ ~state ~local_state t in
+        U.exists v t
     | TI.Bind (`Fun,_,_) -> fail_tr_ t "translation of λ impossible"
     | TI.Let (v,t,u) ->
         (* rename [v] *)
         let v' = Var.fresh_copy v in
         let subst = Subst.add ~subst:local_state.subst v (U.var v') in
-        let t, c_t = tr_term_rec_ t ~state ~local_state:{subst; pol=Pol.NoPol;} in
-        let u, c_u = tr_term_rec_ u ~state ~local_state:{local_state with subst;} in
-        let conds = match c_u with
-          | [] -> c_t
-          | _::_ -> U.let_ v' t (U.and_ c_u) :: c_t
-        in
-        if U.ty_is_Prop (U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) u)
-        then add_conds local_state.pol (U.let_ v' t u) conds
-        else U.let_ v' t u, conds
+        let t = tr_term_rec_ t ~state ~local_state:{subst;} in
+        let u = tr_term_rec_ u ~state ~local_state:{subst;} in
+        U.let_ v' t u
     | TI.Match (t, l) ->
-        let t, ct = tr_term_rec_ ~state ~local_state t in
-        let conds' = ref ID.Map.empty in
-        let l = ID.Map.mapi
-          (fun c (vars,rhs) ->
-            let rhs, conds = tr_term_rec_ ~state ~local_state rhs in
-            conds' := ID.Map.add c (vars, U.and_ conds) !conds';
-            vars,rhs
-          ) l
+        let t = tr_term_rec_ ~state ~local_state t in
+        let l = ID.Map.map
+          (fun (vars,rhs) -> vars, tr_term_rec_ ~state ~local_state rhs)
+          l
         in
-        U.match_with t l, (U.match_with t !conds') :: ct
+        U.match_with t l
     | TI.TyBuiltin _
-    | TI.TyArrow (_,_) -> t, []
+    | TI.TyArrow (_,_) -> t
     | TI.Bind (`TyForall, _, _)
     | TI.TyMeta _ -> assert false
 
@@ -272,9 +225,7 @@ module Make(T : TI.S) = struct
 
   (* translate a top-level formula *)
   let tr_form ~state t =
-    let t', conds = tr_term ~state ~local_state:empty_local_state t in
-    if conds=[] then t'
-    else U.imply (U.and_ conds) t'
+    tr_term ~state ~local_state:empty_local_state t
 
   (* translate equation [eqn], which is defining the function
      corresponding to [fun_encoding].
@@ -291,13 +242,12 @@ module Make(T : TI.S) = struct
     in
     let subst = Subst.add_list ~subst:Subst.empty vars args' in
     (* if defined ID is polarized, use its polarity *)
-    let pol = ID.polarity fun_encoding.fun_encoded_fun in
-    let local_state = { subst; pol; } in
+    let local_state = { subst; } in
     (* convert right-hand side and add its side conditions *)
     let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
-    let rhs', conds = tr_term ~state ~local_state rhs in
+    let rhs' = tr_term ~state ~local_state rhs in
     let mk_eq = if U.ty_returns_Prop ty then U.equiv else U.eq in
-    U.forall alpha (U.and_ (mk_eq lhs rhs' :: conds))
+    U.forall alpha (mk_eq lhs rhs')
 
   (* transform the recursive definition (mostly, its equations) *)
   let tr_rec_def ~state ~fun_encoding def =
