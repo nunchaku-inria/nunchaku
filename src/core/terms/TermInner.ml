@@ -761,6 +761,10 @@ module Util(T : S)
         | _, Builtin `False, Builtin `True -> not_ a
         | _, Builtin `True, Builtin `True -> true_
         | _, Builtin `False, Builtin `False -> false_
+        | _, Builtin `True, _ -> imply (not_ a) c (* then branch: true *)
+        | _, Builtin `False, _ -> and_ [not_ a; c] (* then branch: false *)
+        | _, _, Builtin `True -> imply a b (* else branch: true *)
+        | _, _, Builtin `False -> and_ [a; b] (* else branch: false *)
         | _ -> builtin_ arg
         end
     | `Equiv (a,b) ->
