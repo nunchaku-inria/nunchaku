@@ -162,14 +162,27 @@ end = struct
         let a, g_a = tr_term ~state ~pol:Pol.NoPol a in
         let b, g_b = tr_term ~state ~pol b in
         let c, g_c = tr_term ~state ~pol c in
-        let asserting =
-          U.ite a (U.and_ g_b.asserting) (U.and_ g_c.asserting)
-          :: g_a.asserting
-        and assuming =
-          U.ite a (U.and_ g_b.assuming) (U.and_ g_c.assuming)
-          :: g_a.assuming
-        in
-        combine pol (U.ite a b c) {assuming; asserting;}
+        if is_prop ~state b && pol <> Pol.NoPol
+        then (
+          (* push guards in each branch of this boolean `if` *)
+          let is_pos = match pol with
+            | Pol.NoPol -> assert false
+            | Pol.Pos -> true
+            | Pol.Neg -> false
+          in
+          let b = combine_polarized ~is_pos b g_b in
+          let c = combine_polarized ~is_pos c g_c in
+          combine_polarized ~is_pos (U.ite a b c) g_a, empty_guard
+        ) else (
+          let asserting =
+            U.ite a (U.and_ g_b.asserting) (U.and_ g_c.asserting)
+            :: g_a.asserting
+          and assuming =
+            U.ite a (U.and_ g_b.assuming) (U.and_ g_c.assuming)
+            :: g_a.assuming
+          in
+          U.ite a b c, {assuming; asserting;}
+        )
     | TI.Bind ((`Forall | `Exists) as b, v, t) ->
         let t, g = tr_term ~state ~pol t in
         begin match pol with
