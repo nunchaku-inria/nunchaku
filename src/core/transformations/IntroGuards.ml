@@ -253,7 +253,7 @@ end = struct
   let tr_root ~state t =
     let pol = Pol.Pos in
     let t', g = tr_term ~state ~pol t in
-    fst (combine pol t' g)
+    combine_polarized ~is_pos:true t' g
 
   let encode_pb pb =
     let sigma = Problem.signature pb in
