@@ -22,6 +22,7 @@ let list_outputs_ () = "(available choices: nunchaku tptp)"
 
 let input_ = ref I_nunchaku
 let output_ = ref O_nunchaku
+let polarize_rec_ = ref true
 let print_ = ref false
 let print_pipeline_ = ref false
 let print_typed_ = ref false
@@ -90,6 +91,8 @@ let options =
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
+  ; "--polarize-rec", Arg.Set polarize_rec_, " enable polarization of rec predicates"
+  ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
   ; "--output", Arg.String set_output_, " set output format " ^ list_outputs_ ()
@@ -158,7 +161,7 @@ let make_model_pipeline () =
     Step_mono.pipe ~print:!print_mono_ @@@
     Step_ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~print:!print_elim_multi_eqns @@@
-    Step_polarize.pipe ~print:!print_polarize_ @@@
+    Step_polarize.pipe ~print:!print_polarize_ ~polarize_rec:!polarize_rec_ @@@
     Step_elim_preds.pipe ~print:!print_elim_preds_ @@@
     Step_rec_elim.pipe ~print:!print_recursion_elim_ @@@
     Step_ElimMatch.pipe ~print:!print_elim_match_ @@@

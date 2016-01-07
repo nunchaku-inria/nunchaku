@@ -13,7 +13,12 @@ module Make(T : TermInner.S) : sig
   type term = T.t
   type decode_state
 
+  (** Polarize inductive predicates and possibly some other predicates
+      in the problem.
+      @param polarize_rec if true, some propositions defined with `rec`
+        might be polarized *)
   val polarize :
+    polarize_rec:bool ->
     (term, term, 'a inv) Problem.t ->
     (term, term, 'a inv) Problem.t * decode_state
 
@@ -21,6 +26,7 @@ module Make(T : TermInner.S) : sig
 
   (** Pipeline component *)
   val pipe :
+    polarize_rec:bool ->
     print:bool ->
     ((term, term, 'a inv) Problem.t,
       (term, term, 'a inv) Problem.t,
@@ -31,6 +37,7 @@ module Make(T : TermInner.S) : sig
         in addition to the state *)
   val pipe_with :
     decode:(decode_state -> 'c -> 'd) ->
+    polarize_rec:bool ->
     print:bool ->
     ((term, term, 'a inv) Problem.t,
       (term, term, 'a inv) Problem.t,

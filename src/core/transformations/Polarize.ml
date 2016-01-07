@@ -71,15 +71,6 @@ module Make(T : TI.S) = struct
     | Stmt.Eqn_single (_,rhs) ->
         term_contains_undefined rhs
 
-  (* shall we polarize the recursive function defined as follows? *)
-  let should_polarize def =
-    let _, ty_args, ty_ret = U.ty_unfold def.Stmt.rec_defined.Stmt.defined_ty in
-    U.ty_is_Prop ty_ret
-    &&
-    List.length ty_args > 0 (* function, not constant *)
-    &&
-    not (eqns_contains_undefined def.Stmt.rec_eqns)
-
   type action =
     [ `Polarize of bool
     | `Keep (* do not polarize the symbol *)
@@ -103,6 +94,9 @@ module Make(T : TI.S) = struct
       polarized: polarized_id option ID.Tbl.t;
         (* id -> its polarized version, if we decided to polarize it *)
 
+      polarize_rec: bool;
+        (* enable/disable polarization of predicates defined with `rec` *)
+
       nat: ID.t;
         (* the type of natural numbers used to make predicates well-founded *)
 
@@ -124,8 +118,9 @@ module Make(T : TI.S) = struct
       mutable add_deps : ID.t -> unit;
     }
 
-    let create ?(size=64) () = {
+    let create ?(size=64) ~polarize_rec () = {
       polarized=ID.Tbl.create size;
+      polarize_rec;
       nat=ID.make "_nat";
       succ=ID.make "_succ";
       zero=ID.make "_zero";
@@ -143,6 +138,17 @@ module Make(T : TI.S) = struct
     let call ~state ~depth id pol = state.call ~depth id pol
     let add_deps ~state n = state.add_deps n
   end
+
+  (* shall we polarize the recursive function defined as follows? *)
+  let should_polarize ~state def =
+    state.St.polarize_rec (* option enabled? *)
+    &&
+    let _, ty_args, ty_ret = U.ty_unfold def.Stmt.rec_defined.Stmt.defined_ty in
+    U.ty_is_Prop ty_ret
+    &&
+    List.length ty_args > 0 (* function, not constant *)
+    &&
+    not (eqns_contains_undefined def.Stmt.rec_eqns)
 
   (* depending on polarity [pol], apply the proper id of [p] to
      arguments [l], along with guards [conds] *)
@@ -194,33 +200,33 @@ module Make(T : TI.S) = struct
 
   (* traverse [t], replacing some symbols by their polarized version,
      @return the term with more internal guards and polarized symbols *)
-  let rec polarize_rec
+  let rec polarize_term_rec
   : type i.  state:i St.t -> Pol.t -> T.t -> T.t
   = fun ~state pol t ->
     match T.repr t with
     | TI.Builtin (`Eq (a,b)) ->
-        let a = polarize_rec ~state Pol.NoPol a in
-        let b = polarize_rec ~state Pol.NoPol b in
+        let a = polarize_term_rec ~state Pol.NoPol a in
+        let b = polarize_term_rec ~state Pol.NoPol b in
         U.eq a b
     | TI.Builtin (`Equiv (a,b)) ->
-        let a = polarize_rec ~state Pol.NoPol a in
-        let b = polarize_rec ~state Pol.NoPol b in
+        let a = polarize_term_rec ~state Pol.NoPol a in
+        let b = polarize_term_rec ~state Pol.NoPol b in
         U.equiv a b
     | TI.Builtin (`Ite (a,b,c)) ->
-        let a = polarize_rec ~state pol a in
-        let b = polarize_rec ~state pol b in
-        let c = polarize_rec ~state pol c in
+        let a = polarize_term_rec ~state pol a in
+        let b = polarize_term_rec ~state pol b in
+        let c = polarize_term_rec ~state pol c in
         U.ite a b c
     | TI.Builtin (`Guard (t, g)) ->
-        let g = TI.Builtin.map_guard (polarize_rec ~state pol) g in
-        let t = polarize_rec ~state pol t in
+        let g = TI.Builtin.map_guard (polarize_term_rec ~state pol) g in
+        let t = polarize_term_rec ~state pol t in
         U.guard t g
     | TI.Builtin _
     | TI.Var _
     | TI.Const _ -> t
     | TI.App (f,l) ->
         (* convert arguments *)
-        let l = List.map (polarize_rec ~state Pol.NoPol) l in
+        let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
         begin match T.repr f, l with
         | TI.Const id, _ when ID.Tbl.mem state.St.polarized id ->
             (* we already chose whether [id] was polarized or not *)
@@ -247,7 +253,7 @@ module Make(T : TI.S) = struct
                 U.app f l
             | Env.Fun_def (_defs,def,_) ->
                 (* we can polarize, or not: delegate to heuristic *)
-                if should_polarize def
+                if should_polarize ~state def
                 then (
                   polarize_def_of ~state id pol;
                   let p = find_polarized_exn ~state id in
@@ -265,30 +271,30 @@ module Make(T : TI.S) = struct
                 app_polarized pol p l
             end
         | TI.Builtin `Imply, [a;b] ->
-            let a = polarize_rec ~state (Pol.inv pol) a in
-            let b = polarize_rec ~state pol b in
+            let a = polarize_term_rec ~state (Pol.inv pol) a in
+            let b = polarize_term_rec ~state pol b in
             U.imply a b
         | _ -> U.app f l
         end
     | TI.Bind ((`Forall | `Exists) as b,v,t) ->
-        let t = polarize_rec ~state pol t in
+        let t = polarize_term_rec ~state pol t in
         U.mk_bind b v t
     | TI.Bind (`Fun,v,t) ->
         (* no polarity *)
-        let t = polarize_rec ~state Pol.NoPol t in
+        let t = polarize_term_rec ~state Pol.NoPol t in
         U.fun_ v t
     | TI.Bind (`TyForall, _, _) ->
         assert false  (* we do not polarize in types *)
     | TI.Let (v,t,u) ->
         (* we don't know the polarity of [t] in [u], so we prepare for
            the worst case *)
-        let t = polarize_rec ~state Pol.NoPol t in
-        let u = polarize_rec ~state pol u in
+        let t = polarize_term_rec ~state Pol.NoPol t in
+        let u = polarize_term_rec ~state pol u in
         U.let_ v t u
     | TI.Match (lhs,l) ->
-        let lhs = polarize_rec ~state Pol.NoPol lhs in
+        let lhs = polarize_term_rec ~state Pol.NoPol lhs in
         let l = ID.Map.map
-          (fun (vars,rhs) -> vars, polarize_rec ~state pol rhs)
+          (fun (vars,rhs) -> vars, polarize_term_rec ~state pol rhs)
           l
         in
         U.match_with lhs l
@@ -310,7 +316,7 @@ module Make(T : TI.S) = struct
     let defined = { defined with defined_head=(if is_pos then p.pos else p.neg); } in
     let rec_eqns = map_eqns def.rec_eqns
       ~ty:CCFun.id
-      ~term:(polarize_rec ~state (if is_pos then Pol.Pos else Pol.Neg))
+      ~term:(polarize_term_rec ~state (if is_pos then Pol.Pos else Pol.Neg))
     in
     { def with
       rec_defined=defined;
@@ -374,17 +380,17 @@ module Make(T : TI.S) = struct
                     let additional_param = U.var v in
                     let p' = { p with unroll=`Unroll_in_def additional_param; } in
                     with_local_polarized ~state id p'
-                      ~f:(fun () -> polarize_rec ~state pol g))
+                      ~f:(fun () -> polarize_term_rec ~state pol g))
                   c.clause_guard;
               clause_concl =
                 (* in concl, replace [pred] by [pred v] *)
                 let additional_param = St.succ ~state (U.var v) in
                 let p' = { p with unroll=`Unroll_in_def additional_param; } in
                 with_local_polarized ~state id p'
-                  ~f:(fun () -> polarize_rec ~state pol c.clause_concl);
+                  ~f:(fun () -> polarize_term_rec ~state pol c.clause_concl);
             }
         | _ ->
-            map_clause clause ~ty:CCFun.id ~term:(polarize_rec ~state pol)
+            map_clause clause ~ty:CCFun.id ~term:(polarize_term_rec ~state pol)
     in
     let pred_clauses = List.map unroll_clause def.pred_clauses in
     (* if we unroll a coinductive predicate in negative polarity,
@@ -408,7 +414,7 @@ module Make(T : TI.S) = struct
       pred_defined=defined;
       pred_clauses; }
 
-  let polarize_term ~state t = polarize_rec ~state Pol.NoPol t
+  let polarize_term ~state t = polarize_term_rec ~state Pol.NoPol t
 
   let conf = {Traversal.
     direct_tydef=true;
@@ -416,10 +422,10 @@ module Make(T : TI.S) = struct
     direct_mutual_types=true;
   }
 
-  class ['a, 'c] traverse_pol ?(size=64) () = object(self)
+  class ['a, 'c] traverse_pol ?(size=64) ~polarize_rec () = object(self)
     inherit ['a inv, 'a inv, 'c] Trav.traverse ~conf ~size ()
 
-    val st: 'inv1 St.t = St.create ()
+    val st: 'inv1 St.t = St.create ~polarize_rec ()
 
     method setup() =
       st.St.call <- self#do_statements_for_id;
@@ -435,7 +441,7 @@ module Make(T : TI.S) = struct
       match act with
       | `Keep ->
           let def = Stmt.map_rec_def def
-            ~term:(polarize_rec ~state:st Pol.Pos) ~ty:CCFun.id in
+            ~term:(polarize_term_rec ~state:st Pol.Pos) ~ty:CCFun.id in
           [def]
       | `Polarize is_pos ->
           let p =
@@ -486,7 +492,7 @@ module Make(T : TI.S) = struct
       match act with
       | `Keep ->
           let def = Stmt.map_pred def
-            ~term:(polarize_rec ~state:st Pol.Pos) ~ty:CCFun.id in
+            ~term:(polarize_term_rec ~state:st Pol.Pos) ~ty:CCFun.id in
           [def]
       | `Polarize is_pos ->
           let p =
@@ -522,10 +528,11 @@ module Make(T : TI.S) = struct
   end
 
   let polarize
-  : (term, term, 'a inv) Problem.t ->
+  : polarize_rec:bool ->
+    (term, term, 'a inv) Problem.t ->
     (term, term, 'a inv) Problem.t * decode_state
-  = fun pb ->
-    let trav = new traverse_pol () in
+  = fun ~polarize_rec pb ->
+    let trav = new traverse_pol ~polarize_rec () in
     trav#setup();
     Problem.iter_statements pb ~f:trav#do_stmt;
     let res = trav#output in
@@ -534,6 +541,8 @@ module Make(T : TI.S) = struct
     pb', ()
 
   (* TODO: something? do we have to merge both functions?
+     ---> yes: take true values from p+, and false values from p- (the set
+        of such values should be disjoint)
 
    - also, remember unrolling, so that the additional decreasing parameter
     is erased from all subterms in the model
@@ -542,7 +551,7 @@ module Make(T : TI.S) = struct
   *)
   let decode_model ~state:_ m = m
 
-  let pipe_with ~decode ~print =
+  let pipe_with ~decode ~polarize_rec ~print =
     let on_encoded = if print
       then
         let module Ppb = Problem.Print(P)(P) in
@@ -552,11 +561,11 @@ module Make(T : TI.S) = struct
     Transform.make1
       ~name:"polarize"
       ~on_encoded
-      ~encode:(fun pb -> polarize pb)
+      ~encode:(fun pb -> polarize ~polarize_rec pb)
       ~decode
       ()
 
-  let pipe ~print =
-    pipe_with ~decode:(fun state m -> decode_model ~state m) ~print
+  let pipe ~polarize_rec ~print =
+    pipe_with ~decode:(fun state m -> decode_model ~state m) ~polarize_rec ~print
 end
 
