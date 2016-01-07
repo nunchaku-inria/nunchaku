@@ -282,10 +282,9 @@ module Make(T : TI.S) = struct
     | TI.Let (v,t,u) ->
         (* we don't know the polarity of [t] in [u], so we prepare for
            the worst case *)
-        let v' = Var.fresh_copy v in
         let t = polarize_rec ~state Pol.NoPol t in
         let u = polarize_rec ~state pol u in
-        U.let_ v' t u
+        U.let_ v t u
     | TI.Match (lhs,l) ->
         let lhs = polarize_rec ~state Pol.NoPol lhs in
         let l = ID.Map.map
