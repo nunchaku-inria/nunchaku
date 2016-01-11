@@ -158,7 +158,7 @@ let iter ~constants ~funs ~finite_types m =
 
 let print pt pty out m =
   let pplist ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp in
-  let pp_pair out (t,u) = fpf out "(@[<hv2>@[%a@]@ @[%a@]@])" pt t pt u in
+  let pp_pair out (t,u) = fpf out "@[<2>val %a :=@ @[%a@]@]." pt t pt u in
   let pp_type out (ty,dom) =
     fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
       pty ty (pplist ~sep:", " ID.print) dom

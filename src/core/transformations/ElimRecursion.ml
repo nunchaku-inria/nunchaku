@@ -510,9 +510,9 @@ module Make(T : TI.S) = struct
 
   let decode_model ~state m =
     let projs, domains = pass1_ ~state m in
+    pass2_ projs domains;
     Utils.debugf ~section 2 "@[<2>domains:@ @[%a@]@]"
       (fun k->k (CCFormat.seq ~start:"" ~stop:"" pp_domain) (ID.Tbl.values domains));
-    pass2_ projs domains;
     pass3_ ~state domains m
 
   (** {6 Pipe} *)
