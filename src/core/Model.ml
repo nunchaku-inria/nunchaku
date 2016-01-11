@@ -168,10 +168,15 @@ let print pt pty out m =
       (pplist ~sep:" " Var.print_full) vars
       (DT.print pt) dt
   in
-  fpf out "@[<v>%a@,%a@,%a@,@]"
-    (pplist ~sep:"" pp_type) m.finite_types
-    (pplist ~sep:"" pp_pair) m.constants
-    (pplist ~sep:"" pp_fun) m.funs
+  (* only print non-empty lists *)
+  let pp_nonempty_list pp out l =
+    if l=[] then ()
+    else fpf out "@[<v>%a@]@," (pplist ~sep:"" pp) l
+  in
+  fpf out "@[<v>%a%a%a@]"
+    (pp_nonempty_list pp_type) m.finite_types
+    (pp_nonempty_list pp_pair) m.constants
+    (pp_nonempty_list pp_fun) m.funs
 
 module Util(T : TI.S) = struct
   module U = TI.Util(T)
