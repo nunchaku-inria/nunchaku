@@ -583,8 +583,6 @@ module Make(FO_T : FO.S) = struct
     send_ s problem';
     s
 
-  (* TODO some global parameter for [j] (default 3) *)
-
   exception Timeout
 
   let solve_par ?(j=3) ?(options=[""]) ?(timeout=30.) ?(print=false) problem =
