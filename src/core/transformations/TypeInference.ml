@@ -1216,7 +1216,7 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
     (* we get back "regular" HO terms *)
     let module Erase = TermPoly.Erase(HO2) in
     let ctx = Erase.create () in
-    Model.map m ~f:(Erase.erase ~ctx)
+    Model.map m ~term:(Erase.erase ~ctx) ~ty:(Erase.erase ~ctx)
 
   module THO = Term_ho
 

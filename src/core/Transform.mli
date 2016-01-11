@@ -50,6 +50,13 @@ val make1 : ?print:(Format.formatter -> 'st -> unit) ->
             ('a, 'b, 'c, 'd) t
 (** Constructor when [encode] returns exactly one solution *)
 
+val backward :
+  ?name:string ->
+  ('b -> 'c) ->
+  ('a, 'a, 'b, 'c) t
+(** [backward f] is the identity in the direct way, and the same as [f]
+    in the way back *)
+
 val nop : unit -> ('a, 'a, 'b, 'b) t
 (** Transformation that does nothing *)
 

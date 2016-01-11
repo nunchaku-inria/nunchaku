@@ -10,8 +10,8 @@ type id = ID.t
 type 'a var = 'a Var.t
 
 module Res = struct
-  type 't t =
-    | Sat of 't Model.t
+  type ('t, 'ty) t =
+    | Sat of ('t,'ty) Model.t
     | Unsat
     | Timeout
     | Error of exn
@@ -40,10 +40,10 @@ module type S = sig
   val name : string
   (** Name of the solver *)
 
-  val res : t -> FOBack.T.t Res.t
+  val res : t -> (FOBack.T.t, FOBack.Ty.t) Res.t
   (** [res s] blocks until the result of [s] is available, then return it *)
 
-  val peek_res : t -> FOBack.T.t Res.t option
+  val peek_res : t -> (FOBack.T.t, FOBack.Ty.t) Res.t option
   (** [peek_res s] checks whether the result of [s] is already available *)
 
   val solve : ?options:string -> ?timeout:float -> ?print:bool -> problem -> t

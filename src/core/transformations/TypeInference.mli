@@ -96,14 +96,14 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) : sig
   type term1 = T1.t
   type term2 = T2.t
 
-  val erase : T2.t Model.t -> UntypedAST.term Model.t
+  val erase : (T2.t, T2.t) Model.t -> (UntypedAST.term, UntypedAST.ty) Model.t
   (** Decoding function used by {!pipe} *)
 
   val pipe :
     print:bool ->
     (UntypedAST.statement CCVector.ro_vector,
       (term1, term1, stmt_invariant) Problem.t,
-      term2 Model.t, UntypedAST.term Model.t)
+      (term2, term2) Model.t, (UntypedAST.term, UntypedAST.ty) Model.t)
       Transform.t
   (** Pipeline component. Takes input and output Term representations. *)
 

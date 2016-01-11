@@ -16,13 +16,14 @@ let section = Utils.Section.make "cvc4"
 let fpf = Format.fprintf
 let spf = CCFormat.sprintf
 
+type model_term = FO.Default.T.t
+type model_ty = FO.Default.Ty.t
+
 module DSexp = CCSexpM.MakeDecode(struct
   type 'a t = 'a
   let return x = x
   let (>>=) x f = f x
 end)
-
-type model_elt = FO.Default.T.t
 
 exception CVC4_error of string
 
@@ -38,6 +39,7 @@ module Make(FO_T : FO.S) = struct
 
   (* for the model *)
   module FOBack = FO.Default
+  module P = FO.Print(FOBack)
 
   type problem = (FO_T.T.t, FO_T.Ty.t) FO.Problem.t
 
@@ -49,6 +51,8 @@ module Make(FO_T : FO.S) = struct
   type model_query =
     | Q_const
         (* we want to know the value of this constant *)
+    | Q_fun of int
+        (* we want to know the value of this function (int: arity) *)
     | Q_type of ID.t
         (* [id -> ty] means that [id : ty] is a dummy value, and we  want
            to know the finite domain of [ty] by asking [(fmf.card.val id)] *)
@@ -60,12 +64,15 @@ module Make(FO_T : FO.S) = struct
       (* map (stringof ID) -> ID, and other builtins *)
     symbols : model_query ID.Map.t;
       (* set of symbols to ask values for in the model *)
+    vars: FOBack.Ty.t Var.t ID.Tbl.t;
+      (* variables in scope *)
   }
 
   let create_decode_state ~symbols = {
     id_to_name=ID.Tbl.create 32;
     decode_tbl=Hashtbl.create 32;
     symbols;
+    vars=ID.Tbl.create 32;
   }
 
   (* the solver is dealt with through stdin/stdout *)
@@ -76,7 +83,7 @@ module Make(FO_T : FO.S) = struct
     decode: decode_state;
     mutable sexp : DSexp.t;
     mutable closed : bool;
-    mutable res : model_elt Sol.Res.t option;
+    mutable res : (FOBack.T.t, FOBack.Ty.t) Sol.Res.t option;
   }
 
   let name = "cvc4"
@@ -277,6 +284,7 @@ module Make(FO_T : FO.S) = struct
     print_problem_ ~state out pb
 
   let error_ e = raise (CVC4_error e)
+  let errorf_ fmt = CCFormat.ksprintf fmt ~f:error_
 
   let find_atom_ ~state s =
     try Hashtbl.find state.decode_tbl s
@@ -322,12 +330,20 @@ module Make(FO_T : FO.S) = struct
   let rec parse_term_ ~state = function
     | `Atom "true" -> FOBack.T.true_
     | `Atom "false" -> FOBack.T.false_
-    | `Atom _ as t -> FOBack.T.const (parse_id_ ~state t)
+    | `Atom _ as t ->
+        let id = parse_id_ ~state t in
+        (* can be a constant or a variable, depending on scoping *)
+        begin try FOBack.T.var (ID.Tbl.find state.vars id)
+        with Not_found -> FOBack.T.const id
+        end
     | `List [`Atom "LAMBDA"; `List bindings; body] ->
         (* lambda term *)
         let bindings = List.map (parse_var_ ~state) bindings in
-        let body = parse_term_ ~state body in
-        List.fold_right FOBack.T.fun_ bindings body
+        (* enter scope of variables *)
+        within_scope ~state bindings
+          (fun () ->
+            let body = parse_term_ ~state body in
+            List.fold_right FOBack.T.fun_ bindings body)
     | `List [`Atom "ite"; a; b; c] ->
         let a = parse_term_ ~state a in
         let b = parse_term_ ~state b in
@@ -346,12 +362,16 @@ module Make(FO_T : FO.S) = struct
         FOBack.T.or_ (List.map (parse_term_ ~state) l)
     | `List [`Atom "forall"; `List bindings; f] ->
         let bindings = List.map (parse_var_ ~state) bindings in
-        let f = parse_term_ ~state f in
-        List.fold_right FOBack.T.forall bindings f
+        within_scope ~state bindings
+          (fun () ->
+            let f = parse_term_ ~state f in
+            List.fold_right FOBack.T.forall bindings f)
     | `List [`Atom "exists"; `List bindings; f] ->
         let bindings = List.map (parse_var_ ~state) bindings in
-        let f = parse_term_ ~state f in
-        List.fold_right FOBack.T.exists bindings f
+        within_scope ~state bindings
+          (fun () ->
+            let f = parse_term_ ~state f in
+            List.fold_right FOBack.T.exists bindings f)
     | `List [`Atom "=>"; a; b] ->
         let a = parse_term_ ~state a in
         let b = parse_term_ ~state b in
@@ -374,16 +394,70 @@ module Make(FO_T : FO.S) = struct
     | `List (`List _ :: _) -> error_ "non first-order list"
     | `List [] -> error_ "expected term, got empty list"
 
+  and within_scope ~state bindings f =
+    List.iter (fun v -> ID.Tbl.add state.vars (Var.id v) v) bindings;
+    CCFun.finally
+      ~f
+      ~h:(fun () ->
+        List.iter (fun v -> ID.Tbl.remove state.vars (Var.id v)) bindings)
+
+  (* parse a function with [n] arguments *)
+  let parse_fun_ ~state ~arity:n term =
+    (* split [t] into [n]-ary function arguments and body *)
+    let rec get_args t n =
+      if n=0
+      then [], t
+      else match FOBack.T.view t with
+      | FO.Fun (v, t') ->
+          let vars, body = get_args t' (n-1) in
+          v :: vars, body
+      | _ -> errorf_ "expected %d-ary function,@ got `@[%a@]`" n P.print_term t
+    in
+    (* split [t] into a list of equations [var = t'] where [var in vars] *)
+    let rec get_eqns ~vars t =
+      let fail() =
+        errorf_ "expected a test <var = term>@ with var among @[%a@],@ but got @[%a@]@]"
+          (CCFormat.list Var.print_full) vars P.print_term t
+      in
+      match FOBack.T.view t with
+      | FO.And l -> CCList.flat_map (get_eqns ~vars) l
+      | FO.Eq (t1, t2) ->
+          begin match FOBack.T.view t1, FOBack.T.view t2 with
+            | FO.Var v, _ when List.exists (Var.equal v) vars ->
+                [v, t2]
+            | _, FO.Var v when List.exists (Var.equal v) vars ->
+                [v, t1]
+            | _ -> fail()
+          end
+      | _ -> fail()
+    in
+    (* convert [t] into a decision tree *)
+    let rec dt_of_body ~vars t = match FOBack.T.view t with
+      | FO.Ite (test, t1, t2) ->
+          let eqns = get_eqns ~vars test in
+          let t1 = dt_of_body ~vars t1 in
+          let t2 = dt_of_body ~vars t2 in
+          Model.DT.ite eqns t1 t2
+      | _ -> Model.DT.yield t
+    in
+    (* parse term, then convert into [vars -> decision-tree] *)
+    let t = parse_term_ ~state term in
+    let vars, body = get_args t n in
+    let dt = dt_of_body ~vars body in
+    vars, dt
+
   let sym_get_const_ ~state id = match ID.Map.find id state.symbols with
-    | Q_const -> ()
+    | Q_const -> `Const
+    | Q_fun n -> `Fun n
     | Q_type _ -> assert false
 
   let sym_get_ty_ ~state id = match ID.Map.find id state.symbols with
-    | Q_const -> assert false
+    | Q_const
+    | Q_fun _ -> assert false
     | Q_type ty -> ty
 
   (* state: decode_state *)
-  let parse_model_ ~state = function
+  let parse_model_ ~state : CCSexp.t -> _ Model.t = function
     | `Atom _ -> error_ "expected model, got atom"
     | `List assoc ->
       (* parse model *)
@@ -392,15 +466,20 @@ module Make(FO_T : FO.S) = struct
           | `List [`Atom _ as s; term] ->
               (* regular constant, whose value we are interested in *)
               let id = parse_id_ ~state s in
-              sym_get_const_ ~state id;  (* check it's a constant *)
-              let t = parse_term_ ~state term in
-              Model.add m (FOBack.T.const id, t)
+              begin match sym_get_const_ ~state id with
+              | `Const ->
+                  let t = parse_term_ ~state term in
+                  Model.add_const m (FOBack.T.const id, t)
+              | `Fun n ->
+                  let vars, t = parse_fun_ ~state ~arity:n term in
+                  Model.add_fun m (FOBack.T.const id, vars, t)
+              end
           | `List [`List [`Atom "fmf.card.val"; (`Atom _ as s)]; n] ->
               (* finite domain *)
               let id = parse_id_ ~state s in
               (* which type? *)
               let ty_id = sym_get_ty_ ~state id in
-              let ty = FOBack.T.const ty_id in
+              let ty = FOBack.Ty.const ty_id in
               (* read cardinal *)
               let n = parse_int_ n in
               let terms = Sequence.(0 -- (n-1)
@@ -411,7 +490,7 @@ module Make(FO_T : FO.S) = struct
                       | ID id -> id
                       | _ -> assert false
                     in
-                    FOBack.T.const id)
+                    id)
                 |> to_rev_list
               ) in
               Model.add_finite_type m ty terms
@@ -425,7 +504,8 @@ module Make(FO_T : FO.S) = struct
     (* print a single symbol *)
     let pp_id out i = CCFormat.string out (ID.Tbl.find state.id_to_name i) in
     let pp_mquery out (id, q) = match q with
-      | Q_const -> pp_id out id
+      | Q_const
+      | Q_fun _ -> pp_id out id
       | Q_type _ -> fpf out "(fmf.card.val %a)" pp_id id
     in
     fpf out "(@[<hv2>get-value@ (@[<hv>%a@])@])"
@@ -447,65 +527,14 @@ module Make(FO_T : FO.S) = struct
         let m = parse_model_ ~state sexp in
         (* check all symbols are defined *)
         let ok =
-          List.length m.Model.terms + List.length m.Model.finite_types
+          List.length m.Model.constants
+            + List.length m.Model.funs
+            + List.length m.Model.finite_types
           =
           ID.Map.cardinal state.symbols
         in
         if not ok then error_ "some symbols are not defined in the model";
         m
-
-  (* rewrite model to be nicer
-   TODO: CLI flag to opt-out?
-   TODO: put this into Model? *)
-  let rewrite_model_ m =
-    (* compute a basic set of rules *)
-    let rules = m.Model.terms
-      |> CCList.filter_map
-        (fun (t, u) ->
-            match FOBack.T.view u with
-            | FO.App (id, []) when CCString.prefix ~pre:"@uc_" (ID.name id) ->
-                Some (id, t) (* id --> t *)
-            | _ -> None)
-      |> ID.Map.of_list
-    in
-    let pp_rule out (l,r) =
-      let module P = FO.Print(FOBack) in
-      fpf out "%a → @[%a@]" ID.print l P.print_term r
-    in
-    Utils.debugf 5 ~section "@[<2>apply rewrite rules@ @[<hv>%a@]@]"
-      (fun k->k (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_rule) (ID.Map.to_seq rules));
-    (* rewrite [t] using the set of rewrite rules *)
-    let rec rewrite_term_ t = match FOBack.T.view t with
-      | FO.Builtin _
-      | FO.Var _ -> t
-      | FO.App (id,[]) ->
-          begin try ID.Map.find id rules (* apply rule *)
-          with Not_found -> t
-          end
-      | FO.DataTest(c,t) -> FOBack.T.data_test c (rewrite_term_ t)
-      | FO.DataSelect(c,n,t) -> FOBack.T.data_select c n (rewrite_term_ t)
-      | FO.Undefined _ -> assert false
-      | FO.App (id, l) -> FOBack.T.app id (List.map rewrite_term_ l)
-      | FO.Fun (v,t) ->
-          (* no capture, rules rewrite to closed terms *)
-          FOBack.T.fun_ v (rewrite_term_ t)
-      | FO.Let (v,t,u) ->
-          FOBack.T.let_ v (rewrite_term_ t) (rewrite_term_ u)
-      | FO.Ite (a,b,c) ->
-          FOBack.T.ite (rewrite_term_ a) (rewrite_term_ b) (rewrite_term_ c)
-      | FO.True
-      | FO.False -> t
-      | FO.Eq (a,b) -> FOBack.T.eq (rewrite_term_ a) (rewrite_term_ b)
-      | FO.And l -> FOBack.T.and_ (List.map (rewrite_term_) l)
-      | FO.Or l -> FOBack.T.or_ (List.map (rewrite_term_) l)
-      | FO.Not form -> FOBack.T.not_ (rewrite_term_ form)
-      | FO.Imply (a,b) -> FOBack.T.imply (rewrite_term_ a)(rewrite_term_ b)
-      | FO.Equiv (a,b) -> FOBack.T.equiv (rewrite_term_ a)(rewrite_term_ b)
-      | FO.Forall (v,form) -> FOBack.T.forall v (rewrite_term_ form)
-      | FO.Exists (v,form) -> FOBack.T.exists v (rewrite_term_ form)
-    in
-    (* rewrite every term *)
-    Model.map m ~f:rewrite_term_
 
   (* read the result *)
   let read_res_ ~state s =
@@ -517,7 +546,7 @@ module Make(FO_T : FO.S) = struct
         Utils.debug ~section 5 "CVC4 returned `sat`";
         let m = if ID.Map.is_empty state.symbols
           then Model.empty
-          else get_model_ ~state s |> rewrite_model_
+          else get_model_ ~state s
         in
         Sol.Res.Sat m
     | `Ok (`Atom "unknown") ->
@@ -552,8 +581,11 @@ module Make(FO_T : FO.S) = struct
     let n = ref 0 in
     FOI.Problem.fold_flat_map
       (fun acc stmt -> match stmt with
-        | FOI.Decl (id,_) ->
-            ID.Map.add id Q_const acc, [stmt]
+        | FOI.Decl (id,(args,_)) ->
+            let len = List.length args in
+            if len=0
+            then ID.Map.add id Q_const acc, [stmt]
+            else ID.Map.add id (Q_fun len) acc, [stmt]
         | FOI.TyDecl (id,0) ->
             (* add a dummy constant *)
             let c = ID.make (CCFormat.sprintf "__nun_card_witness_%d" !n) in

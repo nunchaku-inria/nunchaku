@@ -12,11 +12,12 @@ module Make(F : FO.S) : sig
 
   val solve_par :
     ?j:int -> ?options:string list -> ?timeout:float -> ?print:bool ->
-    problem -> FOBack.T.t Solver_intf.Res.t
+    problem -> (FOBack.T.t, FOBack.Ty.t) Solver_intf.Res.t
   (** Version of {!solve} that tries different sets of options in parallel *)
 end
 
-type model_elt = FO.Default.T.t
+type model_term = FO.Default.T.t
+type model_ty = FO.Default.Ty.t
 
 exception CVC4_error of string
 
@@ -39,7 +40,7 @@ val call :
   print_smt:bool ->
   deadline:float ->
   ('t, 'ty) FO.Problem.t ->
-  model_elt Problem.Res.t
+  (model_term, model_ty) Problem.Res.t
 
 (** Close a pipeline by calling CVC4
   @param print if true, print the input problem
@@ -58,4 +59,4 @@ val close_pipe :
   print:bool ->
   print_smt:bool ->
   deadline:float ->
-  ('d, 'e, 'f, model_elt Problem.Res.t) Transform.ClosedPipe.t
+  ('d, 'e, 'f, (model_term, model_ty) Problem.Res.t) Transform.ClosedPipe.t

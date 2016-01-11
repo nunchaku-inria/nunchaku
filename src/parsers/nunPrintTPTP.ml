@@ -10,7 +10,8 @@ type 'a printer = Format.formatter -> 'a -> unit
 
 type term = UntypedAST.term
 type form= UntypedAST.term
-type model = term M.t
+type ty = UntypedAST.ty
+type model = (term, ty) Model.t
 
 let fpf = Format.fprintf
 let section = Utils.Section.make "print_tptp"
@@ -127,7 +128,8 @@ let pre_state_bind ~state v = {state with pre_bound=StrSet.add v state.pre_bound
 let pre_state_enter_ty ~state = {state with pre_in_ty=true }
 
 (* preprocess model to make it as FO as possible, and associate it a role. *)
-let preprocess_model m =
+let preprocess_model _m =
+  (* FIXME
   let role_fun = "fi_functors" and _role_pred = "fi_predicates" in
   let mk_cst v = "\"" ^ v ^ "\"" in (* a domain constant *)
   (* make a valid TPTP variable *)
@@ -197,7 +199,8 @@ let preprocess_model m =
     in
     [ f, "fi_domain" ]
   in
-  (* make formula(s) out of a pair t=u *)
+  (* make formula(s) out of a pair t=u, pushing tests, quantifiers etc.
+    outside *)
   let return x = [x]
   and (>|=) l f = CCList.map f l
   and (>>=) l f = CCList.flat_map f l in
@@ -236,6 +239,8 @@ let preprocess_model m =
   in
   let prelude = mk_domain ~state in
   prelude @ m'
+  *)
+  assert false
 
 (* print a model *)
 let print_model out m =

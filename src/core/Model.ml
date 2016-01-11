@@ -1,52 +1,250 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-type 'a printer = Format.formatter -> 'a -> unit
+module TI = TermInner
 
-type 't t = {
-  terms: ('t * 't) list;  (* term -> its interpretation *)
-  finite_types: ('t * 't list) list;  (* type -> finite domain *)
+type 'a printer = Format.formatter -> 'a -> unit
+let fpf = Format.fprintf
+
+let section = Utils.Section.make "model"
+
+(** {2 Decision Trees}
+
+    A decision tree is a nested if/then/else used to describe functions
+    over finite domains. *)
+
+module DT = struct
+  type ('t, 'ty) test = ('ty Var.t * 't) list
+  (** List of equations (var = term) *)
+
+  type (+'t, +'ty) t = {
+    tests: (('t, 'ty) test * ('t, 'ty) t) list;
+      (* [(else) if v_1 = t_1 & ... & v_n = t_n then ...] *)
+
+    else_ : 't;
+      (* else t *)
+  }
+
+  let test l ~else_ = { tests=l; else_; }
+
+  let yield x = test [] ~else_:x
+
+  let test_flatten l ~else_ =
+    let tests = match else_.tests with
+      | [] -> l
+      | l' -> l @ l'
+    in
+    { tests; else_ = else_.else_; }
+
+  let ite a b c = match c.tests with
+    | [] -> test [a,b] ~else_:c.else_
+    | l ->
+        test ((a,b) :: l) ~else_:c.else_
+
+  let rec map ?var ~term ~ty t =
+    let map_eqn ~term ~ty (v,t) =
+      let v = match var with
+        | None -> Var.update_ty ~f:ty v
+        | Some f ->
+            match f v with
+            | Some v' -> v'
+            | None -> Var.update_ty ~f:ty v
+      in
+      v, term t
+    in
+    let map_pair ~term ~ty (a,b) =
+      List.map (map_eqn ~term ~ty) a, map ?var ~term ~ty b in
+    { tests=List.map (map_pair ~term ~ty) t.tests;
+      else_ = term t.else_;
+    }
+
+  let rec print pp out t =
+    let pp_eqn out (v,t) = fpf out "@[<2>%a@ = @[%a@]@]" Var.print_full v pp t in
+    let pp_eqns = CCFormat.list ~start:"" ~stop:"" ~sep:" && " pp_eqn in
+    match t.tests with
+    | [] -> fpf out "@[%a@]" pp t.else_
+    | [a,b] ->
+        fpf out "@[@[<2>if@ @[<hv>%a@]@]@ @[<2>then@ %a@]@ @[<2>else@ %a@]@]"
+          pp_eqns a (print pp) b pp t.else_
+    | (a,b) :: l ->
+        let pp_pair out (a,b) =
+          fpf out "@[<2>else if@ @[<hv>%a@]@]@ @[<2>then@ %a@]" pp_eqns a (print pp) b in
+        let pp_elif = CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_pair in
+        fpf out "@[@[<hv2>if@ %a@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
+          pp_eqns a (print pp) b pp_elif l pp t.else_
+end
+
+type ('t,'ty) decision_tree = ('t,'ty) DT.t
+
+module DT_util(T : TI.S) = struct
+  module U = TermInner.Util(T)
+
+  let rec eval ~subst dt =
+    let open DT in
+    let tests =
+      CCList.find
+        (fun (eqns,then_) ->
+          (* evaluate the test *)
+          if List.for_all
+            (fun (v, rhs) ->
+              let lhs = Var.Subst.find_exn ~subst v in
+              U.equal_with ~subst lhs rhs)
+            eqns
+          then Some (eval ~subst then_)
+          else None)
+      dt.tests
+    in
+    let res = match tests with
+      | None -> dt.else_
+      | Some res -> res
+    in
+    U.eval ~subst res
+
+  let rec to_term dt =
+    let open DT in
+    let conv_eqn (v,t) = U.eq (U.var v) t in
+    let conv_eqns l = U.and_ (List.map conv_eqn l) in
+    List.fold_right
+      (fun (test, then_) else_ -> U.ite (conv_eqns test) (to_term then_) else_)
+      dt.tests
+      dt.else_
+end
+
+(** {2 Models} *)
+
+type (+'t, +'ty) t = {
+  constants: ('t * 't) list;
+    (* constant -> its interpretation *)
+
+  funs: ('t * 'ty Var.t list * ('t,'ty) decision_tree) list;
+    (* fun * var list -> body *)
+
+  finite_types: ('ty * ID.t list) list;
+    (* type -> finite domain *)
 }
 
 let empty = {
-  terms=[];
+  constants=[];
+  funs=[];
   finite_types=[];
 }
 
-let make ?(finite_types=[]) terms = {terms; finite_types; }
+let add_const t pair = {t with constants = pair :: t.constants; }
 
-let add t pair = {t with terms = pair :: t.terms; }
+let add_fun t f = {t with funs = f :: t.funs; }
 
 let add_finite_type t ty dom =
   {t with finite_types = (ty, dom) :: t.finite_types; }
 
-let map ~f m = {
-  terms=CCList.map (fun (x,y) -> f x, f y) m.terms;
-  finite_types=List.map (fun (ty,l) -> f ty, List.map f l) m.finite_types;
+let map ~term:fterm ~ty:fty m = {
+  constants=CCList.map (fun (x,y) -> fterm x, fterm y) m.constants;
+  funs=CCList.map
+    (fun (t,vars,dt) ->
+      fterm t, List.map (Var.update_ty ~f:fty) vars, DT.map ~term:fterm ~ty:fty dt)
+    m.funs;
+  finite_types=List.map (fun (ty,l) -> fty ty, l) m.finite_types;
 }
 
-let filter_map ~terms ~finite_types m = {
-  terms = CCList.filter_map terms m.terms;
+let filter_map ~constants ~funs ~finite_types m = {
+  constants = CCList.filter_map constants m.constants;
+  funs = CCList.filter_map funs m.funs;
   finite_types = CCList.filter_map finite_types m.finite_types;
 }
 
-let iter ~terms ~finite_types m =
-  List.iter terms m.terms;
+let iter ~constants ~funs ~finite_types m =
+  List.iter constants m.constants;
+  List.iter funs m.funs;
   List.iter finite_types m.finite_types;
   ()
 
-let print pt out m =
-  let fpf = Format.fprintf in
+let print pt pty out m =
+  let pplist ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp in
   let pp_pair out (t,u) = fpf out "(@[<hv2>@[%a@]@ @[%a@]@])" pt t pt u in
-  let pp_dom out (ty, dom) =
-    fpf out "(@[<h>@[%a@] {@[<hv>%a@]}@])"
-      pt ty (CCFormat.list ~start:"" ~stop:"" ~sep:", " pt) dom
+  let pp_type out (ty,dom) =
+    fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
+      pty ty (pplist ~sep:", " ID.print) dom
+  and pp_fun out (f,vars,dt) =
+    fpf out "@[<2>val @[%a@]@ :=@ @[<2>@[fun %a@].@ @[%a@]@]@]."
+      pt f
+      (pplist ~sep:" " Var.print_full) vars
+      (DT.print pt) dt
   in
-  let pp_types out m = match m with
-    | [] -> ()
-    | _::_ ->
-      Format.fprintf out "(@[<hv2>types (@,%a@,)@])"
-        (CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_dom) m
-  in
-  Format.fprintf out "@[<hv2>(model@ (@[<hv2>terms@ (@[<hv>%a@])@]@,%a@]))@]"
-    (CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_pair) m.terms
-    pp_types m.finite_types
+  fpf out "@[<v>%a@,%a@,%a@,@]"
+    (pplist ~sep:"" pp_type) m.finite_types
+    (pplist ~sep:"" pp_pair) m.constants
+    (pplist ~sep:"" pp_fun) m.funs
+
+module Util(T : TI.S) = struct
+  module U = TI.Util(T)
+  module Ty = TypeMono.Make(T)
+
+  (* return a prefix for constants in the domain of this given type *)
+  let pick_prefix_ ty =
+    (* TODO: improve, to avoid collisions *)
+    let id = U.head_sym ty in
+    ID.name id
+
+  (* compute a set of renaming rules for the model [m] *)
+  let renaming_rules_of_model_ m =
+    List.fold_left
+      (fun acc (t, dom) ->
+        let prefix = pick_prefix_ t in
+        CCList.Idx.foldi
+          (fun acc i id ->
+            let name = CCFormat.sprintf "%s_%d" prefix i in
+            let rhs = ID.make name in
+            ID.Map.add id rhs acc)
+          acc dom)
+      ID.Map.empty
+      m.finite_types
+
+  let pp_rule_ out (l,r) =
+    fpf out "%a → @[%a@]" ID.print l ID.print r
+
+  let rename m =
+    let rules = renaming_rules_of_model_ m in
+    Utils.debugf 5 ~section "@[<2>apply rewrite rules@ @[<hv>%a@]@]"
+      (fun k->k (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_rule_) (ID.Map.to_seq rules));
+    (* rename [v] and add the renaming to [subst] *)
+    let rename_copy subst v =
+      let name = Format.sprintf "v_%d" (Var.Subst.size subst) in
+      let v' = Var.make ~ty:(Var.ty v) ~name in
+      Var.Subst.add ~subst v v', v'
+    in
+    (* rewrite [t] using the set of rewrite rules *)
+    let rec rewrite_term_ subst t = match T.repr t with
+      | TI.Const id ->
+          begin try
+            let id' = ID.Map.find id rules in
+            U.const id'
+          with Not_found -> t
+          end
+      | _ ->
+          U.map subst t
+            ~f:rewrite_term_
+            ~bind:rename_copy
+    in
+    (* update domains *)
+    let finite_types =
+      let rename_id id =
+        try ID.Map.find id rules
+        with Not_found -> id
+      in
+      List.map
+        (fun (t, dom) -> t, List.map rename_id dom)
+        m.finite_types
+    in
+    (* rewrite every term *)
+    let rw = rewrite_term_ Var.Subst.empty in
+    { finite_types;
+      constants=List.map
+        (fun (t,u) -> rw t, rw u)
+        m.constants;
+      funs=List.map
+        (fun (t,vars,rhs) ->
+          let t = rw t in
+          let subst, vars = Utils.fold_map rename_copy Var.Subst.empty vars in
+          let rw t = rewrite_term_ subst t in
+          t, vars, DT.map ~var:(Var.Subst.find ~subst) ~term:rw ~ty:rw rhs)
+        m.funs;
+    }
+end

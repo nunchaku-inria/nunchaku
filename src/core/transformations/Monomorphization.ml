@@ -557,7 +557,7 @@ module Make(T : TI.S) = struct
 
   (* rewrite mangled constants to their definition *)
   let unmangle_model ~state =
-    Model.map ~f:(unmangle_term ~state)
+    Model.map ~term:(unmangle_term ~state) ~ty:(unmangle_term ~state)
 
   let pipe_with ~decode ~print =
     let on_encoded = if print
@@ -578,6 +578,6 @@ module Make(T : TI.S) = struct
       ()
 
   let pipe ~print =
-    let decode state = Model.map ~f:(unmangle_term ~state) in
+    let decode state = unmangle_model ~state in
     pipe_with ~print ~decode
 end

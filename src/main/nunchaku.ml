@@ -148,6 +148,8 @@ module Pipes = struct
   module Step_intro_guards = IntroGuards.Make(HO)
   (* conversion to FO *)
   module Step_tofo = TermMono.TransFO(HO)(FO.Default)
+  (* renaming in model *)
+  module Step_rename_model = Model.Util(HO)
 end
 
 (* build a pipeline, depending on options *)
@@ -166,6 +168,7 @@ let make_model_pipeline () =
     Step_rec_elim.pipe ~print:!print_recursion_elim_ @@@
     Step_ElimMatch.pipe ~print:!print_elim_match_ @@@
     Step_intro_guards.pipe ~print:!print_intro_guards_ @@@
+    Transform.backward Step_rename_model.rename @@@
     Step_tofo.pipe () @@@
     id
   in
@@ -216,8 +219,8 @@ let main_model ~output statements =
   >|= fun res ->
   begin match res, output with
   | `Sat m, O_nunchaku ->
-      Format.printf "@[<v2>SAT: @,%a@]@."
-        (Model.print UntypedAST.print_term) m;
+      Format.printf "@[<v>@[<2>SAT: {@,@[<v>%a@]@]@,}@]@."
+        (Model.print UntypedAST.print_term UntypedAST.print_term) m;
   | `Sat m, O_tptp ->
       Format.printf "@[<v2>%a@]@,@." NunPrintTPTP.print_model m
   | `Unsat, O_nunchaku ->

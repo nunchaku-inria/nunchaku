@@ -130,23 +130,21 @@ let env ?init:(env=Env.create()) pb =
     ill_formedf_ "invalid env: %a" Env.pp_invalid_def_ e
 
 module Res = struct
-  type 't model = 't Model.t
-
-  type 't t =
+  type (+'t,+'ty) t =
     | Unsat
-    | Sat of 't model  (** model maps terms to values *)
+    | Sat of ('t,'ty) Model.t
     | Timeout
 
-  let map ~f t = match t with
+  let map ~term ~ty t = match t with
     | Unsat -> Unsat
     | Timeout -> Timeout
-    | Sat model -> Sat (Model.map ~f model)
+    | Sat model -> Sat (Model.map ~term ~ty model)
 
   let fpf = Format.fprintf
 
-  let print pt out = function
+  let print pt pty out = function
     | Unsat -> fpf out "unsat"
     | Timeout -> fpf out "timeout"
     | Sat m ->
-        fpf out "@[<2>sat {@,%a}@]" (Model.print pt) m
+        fpf out "@[<hv>@[<v2>sat {@,@[<v>%a@]@]@,}@]" (Model.print pt pty) m
 end

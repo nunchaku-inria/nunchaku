@@ -22,7 +22,7 @@ module Make(T : TermInner.S) : sig
     (term, term, 'a inv) Problem.t ->
     (term, term, 'a inv) Problem.t * decode_state
 
-  val decode_model : state:decode_state -> term Model.t -> term Model.t
+  val decode_model : state:decode_state -> (term,term) Model.t -> (term,term) Model.t
 
   (** Pipeline component *)
   val pipe :
@@ -30,7 +30,7 @@ module Make(T : TermInner.S) : sig
     print:bool ->
     ((term, term, 'a inv) Problem.t,
       (term, term, 'a inv) Problem.t,
-      term Model.t, term Model.t) Transform.t
+      (term, term) Model.t, (term, term) Model.t) Transform.t
 
   (** Generic Pipe Component
       @param decode the decode function that takes an applied [(module S)]

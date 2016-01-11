@@ -39,13 +39,13 @@ module type S = sig
   (** Find definition of this Skolemized ID *)
 
   val decode_model :
-    state:state -> T2.t Model.t -> T2.t Model.t
+    state:state -> (T2.t,T2.t) Model.t -> (T2.t,T2.t) Model.t
 
   val pipe :
     print:bool ->
     ((T1.t,T1.t,<eqn:_;ind_preds:_;..> as 'inv) Problem.t,
       (T2.t,T2.t,'inv) Problem.t,
-      T2.t Model.t, T2.t Model.t
+      (T2.t,T2.t) Model.t, (T2.t,T2.t) Model.t
     ) Transform.t
 
   (** Similar to {!pipe} but with a generic decode function.
@@ -331,7 +331,8 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
   let decode_model ~state m =
     Model.filter_map m
       ~finite_types:(fun (ty,dom) -> Some (ty,dom))
-      ~terms:(fun (t,u) ->
+      ~funs:(fun (t,vars,body) -> Some (t,vars,body))
+      ~constants:(fun (t,u) ->
           match T2.repr t with
           | TI.Const id ->
               begin match find_id_def ~state id with

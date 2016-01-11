@@ -363,7 +363,7 @@ module OfFO(T:TI.S)(F : FO.VIEW) = struct
     | FO.Ite (a,b,c) ->
         U.ite (convert_term a) (convert_term b) (convert_term c)
 
-  let convert_model m = Model.map ~f:convert_term m
+  let convert_model m = Model.map m ~term:convert_term ~ty:convert_ty
 end
 
 module TransFO(T1 : TI.S)(T2 : FO.S) = struct

@@ -105,12 +105,12 @@ val env : ?init:('t,'ty, 'inv) Env.t -> ('t, 'ty, 'inv) t -> ('t,'ty, 'inv) Env.
 (** {2 Result} *)
 
 module Res : sig
-  type 't t =
+  type (+'t,+'ty) t =
     | Unsat
-    | Sat of 't Model.t
+    | Sat of ('t,'ty) Model.t
     | Timeout
 
-  val map : f:('a -> 'b) -> 'a t -> 'b t
+  val map : term:('t1 -> 't2) -> ty:('ty1 -> 'ty2) -> ('t1,'ty1) t -> ('t2, 'ty2) t
 
-  val print : 't printer -> 't t printer
+  val print : 't printer -> 'ty printer -> ('t,'ty) t printer
 end

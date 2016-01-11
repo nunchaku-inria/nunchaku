@@ -4,34 +4,103 @@
 
 type 'a printer = Format.formatter -> 'a -> unit
 
-type 't t = {
-  terms: ('t * 't) list;  (* term -> its interpretation *)
-  finite_types: ('t * 't list) list;  (* type -> finite domain *)
+(** {2 Decision Trees}
+
+    A decision tree is a nested if/then/else used to describe functions
+    over finite domains. *)
+
+module DT : sig
+  type ('t, 'ty) test = ('ty Var.t * 't) list
+  (** List of equations (var = term) *)
+
+  type (+'t, +'ty) t = private {
+    tests: (('t, 'ty) test * ('t, 'ty) t) list;
+      (* [(else) if v_1 = t_1 & ... & v_n = t_n then ...] *)
+
+    else_ : 't;
+      (* else t *)
+  }
+
+  val yield : 't -> ('t, 'ty) t
+  val ite : ('ty Var.t * 't) list -> ('t, 'ty) t -> ('t, 'ty) t -> ('t, 'ty) t
+  val test : (('t, 'ty) test * ('t, 'ty) t) list -> else_:'t -> ('t, 'ty) t
+  val test_flatten : (('t,'ty) test * ('t,'ty) t) list -> else_:('t,'ty) t -> ('t,'ty) t
+
+  val map :
+    ?var:('ty1 Var.t -> 'ty2 Var.t option) ->
+    term:('t1 -> 't2) ->
+    ty:('ty1 -> 'ty2) ->
+    ('t1,'ty1) t ->
+    ('t2,'ty2) t
+
+  val print : 't printer -> ('t,_) t printer
+end
+
+type ('t,'ty) decision_tree = ('t,'ty) DT.t
+
+(** {2 Helpers for Decision Trees} *)
+
+module DT_util(T : TermInner.S) : sig
+  val eval : subst:(T.t,T.t) Var.Subst.t -> (T.t, T.t) DT.t -> T.t
+  (** Evaluate a decision tree on the given substitution.
+      @raise Not_found if some variable in [dt.vars] is not bound. *)
+
+  val to_term : (T.t, T.t) DT.t -> T.t
+  (** Convert the decision tree to a term *)
+end
+
+(** {2 Models} *)
+
+type (+'t, +'ty) t = {
+  constants: ('t * 't) list;
+    (* constant -> its interpretation *)
+
+  funs: ('t * 'ty Var.t list * ('t,'ty) decision_tree) list;
+    (* fun * var list -> body *)
+
+  finite_types: ('ty * ID.t list) list;
+    (* type -> finite domain *)
 }
 
-val empty : 'a t
+val empty : (_,_) t
 (** Empty model *)
 
-val make : ?finite_types:('t * 't list) list -> ('t * 't) list -> 't t
-
-val add : 'a t -> 'a * 'a -> 'a t
+val add_const : ('t,'ty) t -> 't * 't -> ('t,'ty) t
 (** Add a term interpretation *)
 
-val add_finite_type : 'a t -> 'a -> 'a list -> 'a t
+val add_fun : ('t,'ty) t -> 't * 'ty Var.t list * ('t,'ty) decision_tree -> ('t,'ty) t
+(** Add a function interpretation *)
+
+val add_finite_type : ('t, 'ty) t -> 'ty -> ID.t list -> ('t, 'ty) t
 (** Map the type to its finite domain. *)
 
 val iter :
-  terms:('a * 'a -> unit) ->
-  finite_types:('a * 'a list -> unit) ->
-  'a t ->
+  constants:('a * 'a -> unit) ->
+  funs:('a * 'b Var.t list * ('a,'b) decision_tree -> unit) ->
+  finite_types:('b * ID.t list -> unit) ->
+  ('a,'b) t ->
   unit
 
 val filter_map :
-  terms:('a * 'a -> ('b * 'b) option) ->
-  finite_types:('a * 'a list -> ('b * 'b list) option) ->
-  'a t ->
-  'b t
+  constants:('t1 * 't1 -> ('t2 * 't2) option) ->
+  funs:('t1 * 'ty1 Var.t list * ('t1,'ty1) decision_tree ->
+         ('t2 * 'ty2 Var.t list * ('t2,'ty2) decision_tree) option) ->
+  finite_types:('ty1 * ID.t list -> ('ty2 * ID.t list) option) ->
+  ('t1, 'ty1) t ->
+  ('t2, 'ty2) t
 
-val map : f:('a -> 'b) -> 'a t -> 'b t
+val map :
+  term:('t1 -> 't2) ->
+  ty:('ty1 -> 'ty2) ->
+  ('t1, 'ty1) t ->
+  ('t2, 'ty2) t
 
-val print : 't printer -> 't t printer
+val print : 't printer -> 'ty printer -> ('t,'ty) t printer
+
+module Util(T : TermInner.S) : sig
+  val rename : (T.t, T.t) t -> (T.t, T.t) t
+  (** [rename m] performs a renaming of domain constants and bound variables
+      that should be regular and readable.
+      Assumes the types that have finite domains are ground types.
+      @raise Invalid_argument if some assumption is invalidated *)
+end

@@ -55,15 +55,15 @@ module Make(T : TermInner.S) : sig
 
   val unmangle_model :
       state:unmangle_state ->
-      term Model.t ->
-      term Model.t
+      (term,term) Model.t ->
+      (term,term) Model.t
   (** Unmangles constants that have been collapsed with their type arguments *)
 
   val pipe :
     print:bool ->
     ((term, term, ('a,'b) inv1) Problem.t,
      (term, term, ('a,'b) inv2) Problem.t,
-      term Model.t, term Model.t
+      (term,term) Model.t, (term,term) Model.t
     ) Transform.t
   (** Pipeline component *)
 

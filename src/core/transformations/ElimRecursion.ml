@@ -370,7 +370,7 @@ module Make(T : TI.S) = struct
       (* abstract domain *)
     dom_args: term list ID.Tbl.t;
       (* for each abstract value in the approximation type, the list of
-         concrete arguments it  corresponds to *)
+         concrete arguments it corresponds to *)
   }
 
   type finite_domains = finite_domain ID.Tbl.t
@@ -385,88 +385,49 @@ module Make(T : TI.S) = struct
       ID.print d.dom_fun.fun_encoded_fun
       (CCFormat.seq ~start:"" ~stop:"" ~sep:" " pp_tuple) (ID.Tbl.to_seq d.dom_args)
 
-  (* see whether [t] is of the form [var = const] *)
-  let as_eqn_sym_ ~var:v t =
-    match T.repr t with
-    | TI.Builtin (`Eq (a,b)) ->
-        begin match T.repr a, T.repr b with
-        | TI.Var v', TI.Const c
-        | TI.Const c, TI.Var v' ->
-            if Var.equal v v' then Some c else None
-        | _ -> None
-        end
-    | _ -> None
-
-  (* see [t] as [fun args -> body] *)
-  let rec as_fun_ t = match T.repr t with
-    | TI.Bind (`Fun, v, t') ->
-        let args, body = as_fun_ t' in
-        v :: args, body
-    | _ -> [], t
-
-  type proj_decision_tree =
-    | Proj_E of T.t (* last case *)
-    | Proj_If of ID.t * T.t * proj_decision_tree (* if x=id then term else tree *)
-
   type proj_fun = {
-    proj_var: T.t Var.t;  (* argument to the projection function *)
-    proj_tree: proj_decision_tree;
+    proj_var: T.t Var.t;
+      (* argument to the projection function *)
+
+    proj_tree: (T.t, T.t) Model.decision_tree;
+      (* decision tree for the variable *)
   }
 
-  let rec extract_proj_tree_ v t = match T.repr t with
-    | TI.Builtin (`Ite (a,b,c)) ->
-        begin match as_eqn_sym_ ~var:v a with
-          | Some id -> Proj_If (id, b, extract_proj_tree_ v c)
-          | None -> Proj_E t
-        end
-    | _ -> Proj_E t
-
-  let extract_proj_ t = match T.repr t with
-    | TI.Bind (`Fun, v, body) ->
-        { proj_var=v; proj_tree=extract_proj_tree_ v body; }
-    | _ -> fail_decode_ ~term:t "expected a function"
+  module DT_util = Model.DT_util(T)
 
   (*
      - gather definitions of projections
      - gather domains of abstract types
   *)
   let pass1_ ~state m =
-    let projs = ID.Tbl.create 16 in
-    let doms = ID.Tbl.create 16 in
+    let projs : proj_fun ID.Tbl.t = ID.Tbl.create 16 in
+    let doms  : finite_domain ID.Tbl.t = ID.Tbl.create 16 in
     Model.iter m
-      ~terms:(fun (t,u) -> match T.repr t with
+      ~constants:(fun (t,_) -> match T.repr t with
         | TI.Const id ->
-            if ID.Tbl.mem state.approx_fun id
-            then ID.Tbl.add projs id (extract_proj_ u)
+            (* a function should not be modeled by a constant *)
+            assert (not (ID.Tbl.mem state.approx_fun id));
         | _ -> ())
+      ~funs:(fun (t,vars,body) -> match T.repr t, vars with
+        | TI.Const id, [v] ->
+            (* register the model for this approximated function *)
+            if ID.Tbl.mem state.approx_fun id
+            then ID.Tbl.add projs id {proj_var=v; proj_tree=body; }
+        | _, _ -> ())
       ~finite_types:(fun (ty,dom) -> match T.repr ty with
         | TI.Const id ->
             begin try
               let dom_fun = ID.Tbl.find state.abstract_ty id in
-              let dom_dom = List.map
-                (fun t -> match T.repr t with
-                  | TI.Const id' -> id'
-                  | _ ->
-                    fail_decode_ ~term:t
-                      "expected finite domains elements to be constants, got `@[%a@]`"
-                      P.print t)
-                dom
-              in
-              let dom = {dom_fun; dom_dom; dom_args=ID.Tbl.create 16; } in
+              let dom = {dom_fun; dom_dom=dom; dom_args=ID.Tbl.create 16; } in
               ID.Tbl.add doms dom_fun.fun_encoded_fun dom
             with Not_found -> ()
             end
         | _ -> ());
       projs, doms
 
-  (* compute map `abstract type -> set of tuples by projection` *)
+  (* compute map `abstract type -> set of tuples by projection`.
+   Update doms. *)
   let pass2_ projs (doms:finite_domains) =
-    (* evaluate projection function on [id] *)
-    let rec eval_proj_ dt id = match dt with
-      | Proj_E t -> t
-      | Proj_If (id', a, dt') ->
-          if ID.equal id id' then a else eval_proj_ dt' id
-    in
     ID.Tbl.iter
       (fun _ fdom ->
         List.iter
@@ -479,7 +440,8 @@ module Make(T : TI.S) = struct
                     fail_decode_ "could not find value of projection function %a on %a"
                       ID.print f_id ID.print val_id
                 in
-                eval_proj_ proj.proj_tree val_id)
+                let subst = Var.Subst.singleton proj.proj_var (U.const val_id) in
+                DT_util.eval ~subst proj.proj_tree)
               fdom.dom_fun.fun_concretization
             in
             ID.Tbl.add fdom.dom_args val_id args)
@@ -493,66 +455,54 @@ module Make(T : TI.S) = struct
       projections, the rest is junk)
   *)
   let pass3_ ~state doms m =
-    let is_and_ t = match T.repr t with TI.Builtin `And -> true | _ -> false in
-    (* evaluate a boolean condition *)
-    let rec eval_cond_ ~subst t =
-      let t = U.deref ~subst t in
-      match T.repr t with
-      | TI.App(b, l) when is_and_ b -> List.for_all (eval_cond_ ~subst) l
-      | TI.Builtin (`Eq (a,b)) -> U.equal_with ~subst a b
-      | _ -> fail_decode_ ~term:t "expected a boolean condition"
-    in
-    (* evaluate the body of a function with the given substitution *)
-    let rec eval_body subst t =
-      let t = U.deref ~subst t in
-      match T.repr t with
-      | TI.Builtin (`Ite (a,b,c)) ->
-          if eval_cond_ ~subst a then b
-          else eval_body subst c
-      | TI.Let (v, t, u) ->
-          let subst = Subst.add ~subst v (U.eval ~subst t) in
-          eval_body subst u
-      | _ -> U.eval ~subst t  (* yield *)
-    in
-    (* decode a function *)
-    let decode_fun_ f_id dom t =
+    (* decode a function. *)
+    let decode_fun_ f_id dom vars body =
       let arity = List.length dom.dom_fun.fun_concretization in
-      let args, body = as_fun_ t in
-      if List.length args <> arity
-        then fail_decode_ ~term:t "expected a function of %d arguments" arity;
+      if List.length vars <> arity
+        then fail_decode_
+          ~term:(U.fun_l vars (DT_util.to_term body))
+          "expected a function of %d arguments" arity;
       (* compute value of the function applied to [tup] *)
       let apply_to tup =
-        let subst = Subst.add_list ~subst:Subst.empty args tup in
-        eval_body subst body
+        let subst = Subst.add_list ~subst:Subst.empty vars tup in
+        DT_util.eval ~subst body
       in
       (* set of tuples on which the function is defined *)
       let dom_tuples = ID.Tbl.to_list dom.dom_args |> List.map snd in
         (* default case: undefined
           TODO: if initial domain was finite, this might be unecessary,
             because CVC4 could model the whole domain? *)
-        let default = U.undefined_ (U.app (U.const f_id) (List.map U.var args)) in
-        let new_body = List.fold_left
-          (fun else_ tup ->
-            U.ite
-              (U.and_ (List.map2 (fun v t -> U.eq (U.var v) t) args tup))
-              (apply_to tup)
-              else_)
-          default dom_tuples
-        in
-        List.fold_right U.fun_ args new_body
+      let default = U.undefined_ (U.app (U.const f_id) (List.map U.var vars)) in
+      let new_body =
+        List.map
+          (fun tup ->
+            let test = List.combine vars tup in
+            let then_ = apply_to tup in
+            test, Model.DT.yield then_)
+          dom_tuples
+      in
+      Model.DT.test new_body ~else_:default
     in
     (* now remove projections and filter recursion functions's values *)
     Model.filter_map m
-      ~terms:(fun (t,u) -> match T.repr t with
+      ~constants:(fun (t,u) -> match T.repr t with
+        | TI.Const id when ID.Tbl.mem state.approx_fun id ->
+            None (* drop approximation functions *)
+        | _ -> Some (t,u))
+      ~funs:(fun (t,vars,body) -> match T.repr t with
         | TI.Const id when ID.Tbl.mem state.approx_fun id ->
             None (* drop approximation functions *)
         | TI.Const f_id when ID.Tbl.mem state.encoded_fun f_id ->
             (* remove junk from the definition of [t] *)
-            let u' = decode_fun_ f_id (ID.Tbl.find doms f_id) u in
-            Utils.debugf ~section 3 "@[<2>decoding of recursive fun@ %a := `@[%a@]`@ is `@[%a@]`@]"
-              (fun k->k ID.print f_id P.print u P.print u');
-            Some (t, u')
-        | _ -> Some (t,u))
+            let body' = decode_fun_ f_id (ID.Tbl.find doms f_id) vars body in
+            Utils.debugf ~section 3
+              "@[<hv2>decoding of recursive fun @[%a %a@] :=@ `@[%a@]`@ is `@[%a@]`@]"
+              (fun k->k ID.print f_id (CCFormat.list Var.print_full) vars
+              (Model.DT.print P.print) body (Model.DT.print P.print) body');
+            Some (t, vars, body')
+        | _ ->
+            (* keep *)
+            Some (t,vars,body))
       ~finite_types:(fun ((ty,_) as pair) -> match T.repr ty with
         | TI.Const id when ID.Tbl.mem state.abstract_ty id ->
             None (* remove abstraction types *)
