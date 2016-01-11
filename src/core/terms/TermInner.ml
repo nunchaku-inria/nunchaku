@@ -646,6 +646,29 @@ module type UTIL = sig
   val equal : t_ -> t_ -> bool
   (** Syntactic equality *)
 
+  (** {6 Traversal} *)
+
+  val fold :
+    f:('acc -> 'b_acc -> t_ -> 'acc) ->
+    bind:('b_acc -> t_ Var.t -> 'b_acc) ->
+    'acc ->
+    'b_acc ->
+    t_ ->
+    'acc
+  (** Non recursive fold.
+      @param bind updates the binding accumulator with the bound variable
+      @param f used to update the regular accumulator (that is returned) *)
+
+  val map :
+    f:('b_acc -> t_ -> t_) ->
+    bind:('b_acc -> t_ Var.t -> 'b_acc * t_ Var.t) ->
+    'b_acc ->
+    t_ ->
+    t_
+  (** Non recursive map.
+      @param f maps a term to a term
+      @param bind updates the binding accumulator and returns a new variable *)
+
   (** {6 Substitution Utils} *)
 
   type subst = (t_, t_) Var.Subst.t
@@ -951,6 +974,75 @@ module Util(T : S)
 
   let equal a b = equal_with ~subst:Subst.empty a b
 
+  let fold ~f ~bind acc b_acc t =
+    let rec fold_l ~f ~bind acc b_acc = function
+      | [] -> acc
+      | t :: l' ->
+          let acc = f acc b_acc t in
+          fold_l ~f ~bind acc b_acc l'
+    in
+    match T.repr t with
+    | TyMeta _
+    | Const _
+    | TyBuiltin _
+    | Var _ -> acc
+    | App (hd,l) ->
+        let acc = f acc b_acc hd in
+        fold_l ~f ~bind acc b_acc l
+    | Builtin b -> Builtin.fold ~f:(fun acc t -> f acc b_acc t) ~x:acc b
+    | Bind (_,v,t) ->
+        let b_acc = bind b_acc v in
+        f acc b_acc t
+    | Let (v,t,u) ->
+        let acc = f acc b_acc t in
+        let b_acc = bind b_acc v in
+        f acc b_acc u
+    | Match (t,cases) ->
+        let acc = f acc b_acc t in
+        ID.Map.fold
+          (fun _ (vars,rhs) acc ->
+            let b_acc = List.fold_left bind b_acc vars in
+            f acc b_acc rhs)
+          cases acc
+    | TyArrow (a,b) ->
+        let acc = f acc b_acc a in
+        f acc b_acc b
+
+  let map ~f ~bind b_acc t = match T.repr t with
+    | TyBuiltin _
+    | Const _
+    | TyMeta _ -> t
+    | Var v -> var (Var.update_ty ~f:(f b_acc) v)
+    | App (hd,l) ->
+        let hd = f b_acc hd in
+        let l = List.map (f b_acc) l in
+        app hd l
+    | Builtin b ->
+        let b = Builtin.map ~f:(f b_acc) b in
+        builtin b
+    | Let (v,t,u) ->
+        let t = f b_acc t in
+        let b_acc, v' = bind b_acc v in
+        let u = f b_acc u in
+        let_ v' t u
+    | Bind (b,v,t) ->
+        let b_acc, v' = bind b_acc v in
+        let t = f b_acc t in
+        mk_bind b v' t
+    | Match (lhs,cases) ->
+        let lhs = f b_acc lhs in
+        let cases = ID.Map.map
+          (fun (vars,rhs) ->
+            let b_acc, vars' = Utils.fold_map bind b_acc vars in
+            vars', f b_acc rhs)
+          cases
+        in
+        match_with lhs cases
+    | TyArrow (a,b) ->
+        let a = f b_acc a in
+        let b = f b_acc b in
+        ty_arrow a b
+
   let rec deref ~subst t = match T.repr t with
     | Var v ->
         begin match Subst.find ~subst v with
@@ -959,38 +1051,20 @@ module Util(T : S)
         end
     | _ -> t
 
-  (* NOTE: when dependent types are added, substitution in types is needed *)
-
-  let rec eval ~subst t = match T.repr t with
-    | TyMeta _ -> t
-    | Const _
-    | TyBuiltin _ -> t
-    | Builtin b ->
-        builtin (Builtin.map b ~f:(eval ~subst))
-    | Bind (b, v, t) ->
-        let v' = Var.fresh_copy v in
-        let subst = Subst.add ~subst v (var v') in
-        mk_bind b v' (eval ~subst t)
-    | Let (v,t,u) ->
-        let v' = Var.fresh_copy v in
-        let t = eval ~subst t in
-        let subst = Subst.add ~subst v (var v') in
-        let_ v' t (eval ~subst u)
-    | Match (t,l) ->
-        let t = eval ~subst t in
-        let l = ID.Map.map
-          (fun (vars,rhs) ->
-            let vars' = Var.fresh_copies vars in
-            let subst = Subst.add_list ~subst vars (List.map var vars') in
-            vars', eval ~subst rhs
-          ) l
-        in
-        match_with t l
-    | Var v -> CCOpt.get t (Subst.find ~subst v)
-    | App (f,l) ->
-        app (eval ~subst f) (List.map (eval ~subst) l)
-    | TyArrow (a,b) ->
-        ty_arrow (eval ~subst a) (eval ~subst b)
+  let eval ~subst t =
+    let rec aux subst t = match T.repr t with
+      | Var v ->
+          (* NOTE: when dependent types are added, substitution in types
+             will be needed *)
+          CCOpt.get t (Subst.find ~subst v)
+      | _ ->
+          map subst t
+            ~f:aux
+            ~bind:(fun subst v ->
+              let v' = Var.fresh_copy v in
+              Var.Subst.add ~subst v (var v'), v')
+    in
+    aux subst t
 
   exception ApplyError of string * T.t * T.t list
   (** Raised when a type application fails *)
