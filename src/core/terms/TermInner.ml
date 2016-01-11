@@ -636,6 +636,10 @@ module type UTIL = sig
   val ty_meta : t_ MetaVar.t -> t_
   val ty_forall : t_ var -> t_ -> t_
 
+  val fun_l : t_ var list -> t_ -> t_
+  val forall_l : t_ var list -> t_ -> t_
+  val exists_l : t_ var list -> t_ -> t_
+
   val hash : t_ -> int
   (** Hash into a positive integer *)
 
@@ -854,6 +858,10 @@ module Util(T : S)
   let ty_forall v t = T.build (Bind (`TyForall,v,t))
   let ty_var v = T.build (Var v)
   let ty_meta v = T.build (TyMeta v)
+
+  let fun_l = List.fold_right fun_
+  let forall_l = List.fold_right forall
+  let exists_l = List.fold_right exists
 
   let hash t =
     let d = ref 30 in (* number of nodes to explore *)

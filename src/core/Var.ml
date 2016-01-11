@@ -51,6 +51,7 @@ module Subst = struct
 
   let empty = M.empty
   let is_empty = M.is_empty
+  let singleton v x = M.singleton v.id (v,x)
 
   let add ~subst v x = M.add v.id (v,x) subst
 

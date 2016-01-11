@@ -60,6 +60,8 @@ module Subst : sig
   val empty : _ t
   val is_empty : _ t -> bool
 
+  val singleton : 'ty var -> 'a -> ('ty, 'a) t
+
   val add : subst:('ty,'a) t -> 'ty var -> 'a -> ('ty,'a) t
 
   val add_list : subst:('ty,'a) t -> 'ty var list -> 'a list -> ('ty,'a) t

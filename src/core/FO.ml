@@ -264,13 +264,13 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
 
   let rec print_term out t = match FO.T.view t with
     | Builtin b -> Builtin.print out b
-    | Var v -> Var.print out v
+    | Var v -> Var.print_full out v
     | App (f,[]) -> ID.print out f
     | App (f,l) ->
         fpf out "(@[<2>%a@ %a@])" ID.print f (pp_list_ print_term) l
     | Fun (v,t) ->
         fpf out "(@[<2>fun %a:%a.@ %a@])"
-          Var.print v print_ty (Var.ty v) print_term t
+          Var.print_full v print_ty (Var.ty v) print_term t
     | DataTest (c,t) ->
         fpf out "(@[<2>is-%a@ %a@])" ID.print c print_term t
     | DataSelect (c,n,t) ->
@@ -279,7 +279,7 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
         fpf out "(@[<2>undefined-%a@ %a@])" ID.print c print_term t
     | Let (v,t,u) ->
         fpf out "(@[<2>let@ %a =@ %a in@ %a@])"
-          Var.print v print_term t print_term u
+          Var.print_full v print_term t print_term u
     | Ite (a,b,c) ->
         fpf out "(@[<2>ite@ %a@ %a@ %a@])"
           print_term a print_term b print_term c
@@ -292,9 +292,9 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     | Imply (a,b) -> fpf out "(@[%a =>@ %a@])" print_term a print_term b
     | Equiv (a,b) -> fpf out "(@[%a <=>@ %a@])" print_term a print_term b
     | Forall (v,f) ->
-        fpf out "(@[forall %a@ %a@])" Var.print v print_term f
+        fpf out "(@[forall %a@ %a@])" Var.print_full v print_term f
     | Exists (v,f) ->
-        fpf out "(@[forall %a@ %a@])" Var.print v print_term f
+        fpf out "(@[forall %a@ %a@])" Var.print_full v print_term f
 
   let print_model out m =
     let pp_pair out (t,u) = fpf out "@[%a -> %a@]" print_term t print_term u in
