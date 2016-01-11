@@ -88,7 +88,7 @@ module Builtin = struct
     | `DataTest id -> fpf out "is-%s" (ID.name id)
     | `DataSelect (id, n) ->
         fpf out "select-%s-%d" (ID.name id) n
-    | `Undefined (id,_) -> fpf out "undefined_%d" (ID.id id)
+    | `Undefined (id,t) -> fpf out "undefined_%d %a" (ID.id id) pterm t
     | `Guard (t, o) ->
         let pp_case name out l = match l with
           | [] -> ()
