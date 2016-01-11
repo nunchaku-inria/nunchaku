@@ -59,6 +59,7 @@ module Subst : sig
 
   val empty : _ t
   val is_empty : _ t -> bool
+  val size : _ t -> int
 
   val singleton : 'ty var -> 'a -> ('ty, 'a) t
 
