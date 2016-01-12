@@ -69,7 +69,7 @@ module DT = struct
         let pp_pair out (a,b) =
           fpf out "@[<2>else if@ @[<hv>%a@]@]@ @[<2>then@ %a@]" pp_eqns a pp b in
         let pp_elif = CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_pair in
-        fpf out "@[@[<hv2>if@ %a@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
+        fpf out "@[<hv>@[<2>if@ %a@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
           pp_eqns a pp b pp_elif l pp t.else_
 end
 

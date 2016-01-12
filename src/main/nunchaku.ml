@@ -36,6 +36,7 @@ let print_elim_preds_ = ref false
 let print_intro_guards_ = ref false
 let print_fo_ = ref false
 let print_smt_ = ref false
+let print_model_ = ref false
 let timeout_ = ref 30
 let version_ = ref false
 let file = ref ""
@@ -91,6 +92,7 @@ let options =
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
+  ; "--print-model", Arg.Set print_model_, " print model after cleanup"
   ; "--polarize-rec", Arg.Set polarize_rec_, " enable polarization of rec predicates"
   ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
@@ -168,7 +170,7 @@ let make_model_pipeline () =
     Step_rec_elim.pipe ~print:!print_recursion_elim_ @@@
     Step_ElimMatch.pipe ~print:!print_elim_match_ @@@
     Step_intro_guards.pipe ~print:!print_intro_guards_ @@@
-    Transform.backward Step_rename_model.rename @@@
+    Step_rename_model.pipe_rename ~print:!print_model_ @@@
     Step_tofo.pipe () @@@
     id
   in
