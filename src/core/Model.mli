@@ -10,11 +10,13 @@ type 'a printer = Format.formatter -> 'a -> unit
     over finite domains. *)
 
 module DT : sig
-  type ('t, 'ty) test = ('ty Var.t * 't) list
-  (** List of equations (var = term) *)
+  type ('t, 'ty) test = 'ty Var.t * 't (** Equation var=term *)
+
+  val print_test : 't CCFormat.printer -> ('t, _) test CCFormat.printer
+  val print_tests : 't CCFormat.printer -> ('t, _) test list CCFormat.printer
 
   type (+'t, +'ty) t = private {
-    tests: (('t, 'ty) test * ('t, 'ty) t) list;
+    tests: (('t, 'ty) test list * 't) list;
       (* [(else) if v_1 = t_1 & ... & v_n = t_n then ...] *)
 
     else_ : 't;
@@ -22,9 +24,9 @@ module DT : sig
   }
 
   val yield : 't -> ('t, 'ty) t
-  val ite : ('ty Var.t * 't) list -> ('t, 'ty) t -> ('t, 'ty) t -> ('t, 'ty) t
-  val test : (('t, 'ty) test * ('t, 'ty) t) list -> else_:'t -> ('t, 'ty) t
-  val test_flatten : (('t,'ty) test * ('t,'ty) t) list -> else_:('t,'ty) t -> ('t,'ty) t
+  val ite : ('ty Var.t * 't) list -> 't -> ('t, 'ty) t -> ('t, 'ty) t
+  val test : (('t, 'ty) test list * 't) list -> else_:'t -> ('t, 'ty) t
+  val test_flatten : (('t,'ty) test list * 't) list -> else_:('t,'ty) t -> ('t,'ty) t
 
   val map :
     ?var:('ty1 Var.t -> 'ty2 Var.t option) ->
@@ -74,6 +76,14 @@ val add_fun : ('t,'ty) t -> 't * 'ty Var.t list * ('t,'ty) decision_tree -> ('t,
 val add_finite_type : ('t, 'ty) t -> 'ty -> ID.t list -> ('t, 'ty) t
 (** Map the type to its finite domain. *)
 
+val fold :
+  constants:('acc -> 'a * 'a -> 'acc) ->
+  funs:('acc -> 'a * 'b Var.t list * ('a,'b) decision_tree -> 'acc) ->
+  finite_types:('acc -> 'b * ID.t list -> 'acc) ->
+  'acc ->
+  ('a,'b) t ->
+  'acc
+
 val iter :
   constants:('a * 'a -> unit) ->
   funs:('a * 'b Var.t list * ('a,'b) decision_tree -> unit) ->
@@ -103,4 +113,8 @@ module Util(T : TermInner.S) : sig
       that should be regular and readable.
       Assumes the types that have finite domains are ground types.
       @raise Invalid_argument if some assumption is invalidated *)
+
+  val pipe_rename :
+    print:bool ->
+    ('a, 'a, (T.t, T.t) t, (T.t, T.t) t) Transform.t
 end

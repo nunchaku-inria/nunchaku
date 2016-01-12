@@ -478,7 +478,7 @@ module Make(T : TI.S) = struct
           (fun tup ->
             let test = List.combine vars tup in
             let then_ = apply_to tup in
-            test, Model.DT.yield then_)
+            test, then_)
           dom_tuples
       in
       Model.DT.test new_body ~else_:default

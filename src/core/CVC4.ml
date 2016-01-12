@@ -431,19 +431,27 @@ module Make(FO_T : FO.S) = struct
           end
       | _ -> fail()
     in
-    (* convert [t] into a decision tree *)
-    let rec dt_of_body ~vars t = match FOBack.T.view t with
+    (* convert [t] into a decision tree.
+       [f] is applied to RHS terms *)
+    let rec dt_of_body ~vars ~f t = match FOBack.T.view t with
       | FO.Ite (test, t1, t2) ->
           let eqns = get_eqns ~vars test in
-          let t1 = dt_of_body ~vars t1 in
-          let t2 = dt_of_body ~vars t2 in
-          Model.DT.ite eqns t1 t2
+          let t2 = dt_of_body ~vars ~f t2 in
+          Model.DT.ite eqns (f t1) t2
+      | FO.Not t ->
+          (* boolean decision tree, this is the "else" branch; we can
+             push the negation in every result *)
+          dt_of_body ~vars ~f:(fun t -> FOBack.T.not_ (f t)) t
+      | FO.And _ ->
+          (* a boolean test! we might succeed in interpreting it as a test *)
+          let t' = FOBack.T.(ite t true_ false_) in
+          dt_of_body ~vars ~f t'
       | _ -> Model.DT.yield t
     in
     (* parse term, then convert into [vars -> decision-tree] *)
     let t = parse_term_ ~state term in
     let vars, body = get_args t n in
-    let dt = dt_of_body ~vars body in
+    let dt = dt_of_body ~vars ~f:CCFun.id body in
     vars, dt
 
   let sym_get_const_ ~state id = match ID.Map.find id state.symbols with
