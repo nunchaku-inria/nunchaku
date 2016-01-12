@@ -7,4 +7,7 @@ all: $(HTML_DOCS)
 %.html: %.adoc
 	asciidoc $<
 
+upload: all
+	./upload_doc.sh *.html
+
 .PHONY: all

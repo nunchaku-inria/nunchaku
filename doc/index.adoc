@@ -1,0 +1,22 @@
+= Nunchaku
+
+A counter-example finder for higher-order logic, designed to be used from
+various proof assistants. A spiritual successor to Nitpick.
+
+The development repository is hosted
+https://github.com/nunchaku-inria/nunchaku[on github]. Nunchaku is written in
+http://ocaml.org/[OCaml], funded by http://inria.fr[Inria]
+and released under the BSD license.
+
+== Contact
+
+Bugs should be reported on https://github.com/nunchaku-inria/nunchaku/issues[github].
+
+There is a mailing list for users and proof assistants developers,
+nunchaku-users@lists.gforge.inria.fr
+(https://lists.gforge.inria.fr/mailman/listinfo/nunchaku-users[subscription]).
+
+== Misc
+
+More information can be found in the link:README.html[README].
+
