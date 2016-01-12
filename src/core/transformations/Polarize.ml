@@ -263,12 +263,21 @@ module Make(T : TI.S) = struct
                   St.call ~state ~depth:0 id `Keep;
                   U.app f l
                 )
-            | Env.Pred (`Not_wf,_,_,_preds,_) ->
-                (* shall polarize in all cases
-                   TODO: only when there is at least one variable *)
-                polarize_def_of ~state id pol;
-                let p = find_polarized_exn ~state id in
-                app_polarized pol p l
+            | Env.Pred (`Not_wf,_,pred,_preds,_) ->
+                let ty = pred.Stmt.pred_defined.Stmt.defined_ty in
+                if U.ty_is_Prop ty then (
+                  (* constant: degenerate case of (co)inductive pred, no need
+                     for polarization, and necessarily WF. *)
+                  ID.Tbl.add state.St.polarized id None;
+                  St.call ~state ~depth:0 id `Keep;
+                  assert (l = []);
+                  f
+                ) else (
+                  (* polarize *)
+                  polarize_def_of ~state id pol;
+                  let p = find_polarized_exn ~state id in
+                  app_polarized pol p l
+                )
             end
         | TI.Builtin `Imply, [a;b] ->
             let a = polarize_term_rec ~state (Pol.inv pol) a in
