@@ -91,7 +91,7 @@ module Make(T : TI.S) = struct
               begin match eval_bool ~eval ~subst f with
               | BTrue -> BFalse
               | BFalse -> BTrue
-              | BPartial t -> BPartial (U.app_builtin `Not [t])
+              | BPartial t -> BPartial (U.not_ t)
               end
           | TI.Builtin _, _ -> BPartial t
           | _ -> BPartial t
@@ -125,15 +125,15 @@ module Make(T : TI.S) = struct
 
     (* evaluate [b] using [eval] *)
     let eval_app_builtin ~eval (b:T.t TI.Builtin.t) ~st =
-      (* auxiliary function *)
+      (* auxiliary function to evaluate subterms *)
       let eval_term ~subst t =
         term_of_state (eval {args=[]; head=t; subst}) in
       match b with
       | `True | `False -> st (* normal form *)
       | `And | `Imply | `Not | `Or | `Eq _ | `Equiv _ ->
           begin match eval_bool ~eval:eval_term ~subst:st.subst st.head with
-          | BTrue -> {st with head=U.builtin `True}
-          | BFalse -> {st with head=U.builtin `False}
+          | BTrue -> {st with head=U.true_; }
+          | BFalse -> {st with head=U.false_; }
           | BPartial t -> {st with head=t}
           end
       | `Ite (a,b,c) ->

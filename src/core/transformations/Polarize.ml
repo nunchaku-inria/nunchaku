@@ -615,7 +615,7 @@ module Make(T : TI.S) = struct
      only the cases that return [true] (if [is_pos]) or [false] (if [not is_pos]) *)
   let filter_dt_ ~is_pos ~polarized ~sys ~removed_var dt =
     Utils.debugf ~section 5
-      "@[<v>filter occurrences of polarity %B for `%a`@ removing var (@[%a@])@ from `@[%a@]`@]"
+      "@[<v>retain branches that yield %B for `%a`@ removing var (@[%a@])@ from `@[%a@]`@]"
       (fun k->k
         is_pos ID.print polarized (CCFormat.opt Var.print_full) removed_var
         (Model.DT.print P.print) dt);
