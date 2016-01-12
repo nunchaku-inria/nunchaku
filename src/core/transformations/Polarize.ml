@@ -26,7 +26,6 @@ module Make(T : TI.S) = struct
   module P = TI.Print(T)
 
   type term = T.t
-  type decode_state = unit
 
   type 'a env = (term, term, 'a inv) Env.t
 
@@ -34,14 +33,30 @@ module Make(T : TI.S) = struct
     pos: ID.t;
     neg: ID.t;
     unroll:
-      [ `Unroll_pos of ID.t
+      [ `No_unroll
+      | `Unroll_pos of ID.t
       | `Unroll_neg of ID.t
       | `Unroll_in_def of term
-      (* add the given term parameter, regardless of polarity *)
-      | `No_unroll];
-      (* [`Unroll_pos n] means we unroll [pos] on the natural number [n]
-         [`Unroll_neg n] means we unroll [neg] on [n]
-         [`No_unroll] means we do not unroll either *)
+          (* add the given term parameter, regardless of polarity *)
+      ];
+    (* [`Unroll_pos n] means we unroll [pos] on the natural number [n]
+       [`Unroll_neg n] means we unroll [neg] on [n]
+       [`No_unroll] means we do not unroll either *)
+  }
+
+  (* the type of natural numbers used to make predicates well-founded, and its
+     constructors *)
+  type nat_ty = {
+    nat: ID.t;
+    succ : ID.t;
+    zero: ID.t;
+  }
+
+  type decode_state = {
+    rev_map: (ID.t * bool * polarized_id) ID.Tbl.t;
+      (* polarized_id -> (original_id, polarity, unroll) *)
+
+    rev_nat: nat_ty;
   }
 
   let term_contains_undefined t =
@@ -97,18 +112,16 @@ module Make(T : TI.S) = struct
       polarize_rec: bool;
         (* enable/disable polarization of predicates defined with `rec` *)
 
-      nat: ID.t;
-        (* the type of natural numbers used to make predicates well-founded *)
-
-      succ : ID.t;
-
-      zero: ID.t;
+      nat_ty : nat_ty;
 
       mutable declared_nat : bool;
         (* have we declared nat yet? *)
 
       declared_decr : unit ID.Tbl.t;
         (* set of decreasing witnesses that have been declared *)
+
+      decode_state : decode_state;
+        (* for decoding *)
 
       mutable call: depth:int -> ID.t -> action -> unit;
         (* callback for recursion *)
@@ -118,22 +131,29 @@ module Make(T : TI.S) = struct
       mutable add_deps : ID.t -> unit;
     }
 
-    let create ?(size=64) ~polarize_rec () = {
-      polarized=ID.Tbl.create size;
-      polarize_rec;
-      nat=ID.make "_nat";
-      succ=ID.make "_succ";
-      zero=ID.make "_zero";
-      declared_nat=false;
-      declared_decr=ID.Tbl.create 16;
-      call=(fun ~depth:_ _ _ -> assert false);
-      get_env=(fun () -> assert false);
-      add_deps=(fun _ -> assert false);
+    let create ?(size=64) ~polarize_rec () =
+      let nat_ty = {
+        nat=ID.make "_nat";
+        succ=ID.make "_succ";
+        zero=ID.make "_zero";
+      } in
+      { polarized=ID.Tbl.create size;
+        polarize_rec;
+        declared_nat=false;
+        declared_decr=ID.Tbl.create 16;
+        nat_ty;
+        decode_state = {
+          rev_map=ID.Tbl.create 32;
+          rev_nat=nat_ty;
+        };
+        call=(fun ~depth:_ _ _ -> assert false);
+        get_env=(fun () -> assert false);
+        add_deps=(fun _ -> assert false);
     }
 
-    let nat ~state = U.const state.nat
-    let succ ~state x = U.app (U.const state.succ) [x]
-    let zero ~state = U.const state.zero
+    let nat ~state = U.const state.nat_ty.nat
+    let succ ~state x = U.app (U.const state.nat_ty.succ) [x]
+    let zero ~state = U.const state.nat_ty.zero
     let env ~state = state.get_env()
     let call ~state ~depth id pol = state.call ~depth id pol
     let add_deps ~state n = state.add_deps n
@@ -183,6 +203,9 @@ module Make(T : TI.S) = struct
     let neg = ID.make_full ~needs_at:false ~pol:Pol.Neg (ID.name id) in
     let p = {pos; neg; unroll} in
     ID.Tbl.add state.St.polarized id (Some p);
+    (* reverse mapping, for decoding *)
+    ID.Tbl.add state.St.decode_state.rev_map pos (id, true, p);
+    ID.Tbl.add state.St.decode_state.rev_map neg (id, false, p);
     p
 
   let find_polarized_exn ~state id =
@@ -442,6 +465,8 @@ module Make(T : TI.S) = struct
       st.St.add_deps <- (fun n-> self#add_deps n);
       ()
 
+    method decode_state = st.St.decode_state
+
     method do_def ~depth:_ def act =
       let id = def.Stmt.rec_defined.Stmt.defined_head in
       if act<>`Keep
@@ -464,13 +489,13 @@ module Make(T : TI.S) = struct
 
     (* declare the type [nat] *)
     method private declare_nat =
-      let ty_nat = U.const st.St.nat in
-      let def = Stmt.mk_mutual_ty st.St.nat
+      let ty_nat = St.nat ~state:st in
+      let def = Stmt.mk_mutual_ty st.St.nat_ty.nat
           ~ty_vars:[]
           ~ty:U.ty_type
           ~cstors:
-            [ st.St.zero, [], ty_nat
-            ; st.St.succ, [ty_nat], U.ty_arrow ty_nat ty_nat]
+            [ st.St.nat_ty.zero, [], ty_nat
+            ; st.St.nat_ty.succ, [ty_nat], U.ty_arrow ty_nat ty_nat]
       in
       self#push_res
         (Stmt.data ~info:Stmt.info_default [def]);
@@ -547,18 +572,169 @@ module Make(T : TI.S) = struct
     let res = trav#output in
     let pb' =
       Problem.make ~meta:(Problem.metadata pb) (CCVector.freeze res) in
-    pb', ()
+    pb', trav#decode_state
 
-  (* TODO: something? do we have to merge both functions?
-     ---> yes: take true values from p+, and false values from p- (the set
-        of such values should be disjoint)
+  (** {6 Decoding} *)
 
-   - also, remember unrolling, so that the additional decreasing parameter
-    is erased from all subterms in the model
-    (might be done via rewriting, say, [pred+ _ → pred])
+  module U_dt = Model.DT_util(T)
 
+  (* rewrite the term recursively.
+     Rules are of the form:
+    - [id -> id', `Rm_0] means [id] should be rewritten into [id']
+    - [id -> id', `Rm_1] means [id _] should be rewritten into [id']
+    *)
+  let rec rewrite sys t =
+    (* rewrite subterms first *)
+    let t = U.map () t
+      ~f:(fun () t -> rewrite sys t)
+      ~bind:(fun () v -> (), v)
+    in
+    match T.repr t with
+    | TI.Const id ->
+        begin try
+          let id', act = ID.Map.find id sys in
+          if act=`Rm_0 then U.const id' else assert false
+        with Not_found -> t
+        end
+    | TI.App (f, l) ->
+        begin match T.repr f, l with
+        | _, [] -> assert false
+        | TI.Const id, _ :: l' ->
+            begin try
+              let id', act = ID.Map.find id sys in
+              match act with
+              | `Rm_0 -> U.app (U.const id') l
+              | `Rm_1 -> U.app (U.const id') l'  (* remove first arg *)
+            with Not_found -> t
+            end
+        | _ -> t
+        end
+    | _ -> t
+
+  (* filter [dt], the decision tree for [polarized], returning
+     only the cases that return [true] (if [is_pos]) or [false] (if [not is_pos]) *)
+  let filter_dt_ ~is_pos ~polarized ~sys ~removed_var dt =
+    Utils.debugf ~section 5
+      "@[<v>filter occurrences of polarity %B for `%a`@ removing var (@[%a@])@ from `@[%a@]`@]"
+      (fun k->k
+        is_pos ID.print polarized (CCFormat.opt Var.print_full) removed_var
+        (Model.DT.print P.print) dt);
+    CCList.filter_map
+      (fun (eqns, then_) ->
+        match T.repr then_, is_pos with
+        | TI.Builtin `True, true
+        | TI.Builtin `False, false ->
+            let eqns' =
+              CCList.filter_map
+                (fun (v, t) ->
+                  match removed_var with
+                  | Some v' when Var.equal v v' -> None (* remove test *)
+                  | _ ->
+                      (* otherwise just rewrite the term *)
+                      Some (v, rewrite sys t))
+                eqns
+            in
+            let then' = rewrite sys then_ in
+            Some (eqns', then')
+        | TI.Builtin `False, true
+        | TI.Builtin `True, false -> None
+        | _ ->
+            errorf_
+              "@[<2>expected decision tree for %a@ to yield only true/false@ \
+               but branch `@[%a@]`@ yields `@[%a@]`@]"
+               ID.print polarized
+               (Model.DT.print_tests P.print) eqns
+               P.print then_)
+      dt.Model.DT.tests
+
+  (* build a rewrite system from the given model. The rewrite system erases
+     polarities and unrolling parameters. *)
+  let make_rw_sys_ ~state m =
+    Model.fold ID.Map.empty m
+      ~constants:(fun sys _ -> sys)
+      ~finite_types:(fun sys _ -> sys)
+      ~funs:(fun sys (t,_,_) ->
+        match T.repr t with
+        | TI.Const id when ID.is_polarized id ->
+            (* rewrite into the unpolarized version *)
+            let id', is_pos, p = ID.Tbl.find state.rev_map id in
+            let act = match is_pos, p.unroll with
+              | true, `Unroll_pos _
+              | false, `Unroll_neg _ ->
+                  `Rm_1 (* [id _ --> id'], to remove the unroll invariant *)
+              | _ -> `Rm_0 (* just [id --> id'] *)
+            in
+            Utils.debugf ~section 4 "@[<2>decoding:@ rewrite %a into %a, %s@]"
+              (fun k->k ID.print id ID.print id'
+                (match act with `Rm_0 -> "rm0" | `Rm_1 -> "rm1"));
+            ID.Map.add id (id', act) sys
+        | _ -> sys)
+
+  (* decoding:
+    - keep positive cases for p+, negative cases for p-, and undefined otherwise
+    - remove the additional parameter introduced by unrolling, if any
   *)
-  let decode_model ~state:_ m = m
+  let decode_model ~state m =
+    (* compute a rewrite system for eliminating polarized IDs *)
+    let sys = make_rw_sys_ ~state m in
+    (* this tables stores the half-decision tree for polarized IDs
+       (when we have met one polarity but not the other *)
+    let partial_map = ID.Tbl.create 32 in
+    Model.filter_map m
+      ~constants:(fun (t,u) ->
+        match T.repr t with
+        | TI.Const id when ID.equal id state.rev_nat.zero ->
+            None (* remove "zero" *)
+        | _ ->
+            let u = rewrite sys u in
+            Some (t,u))
+      ~finite_types:(fun (t,dom) ->
+        match T.repr t with
+        | TI.Const id when ID.equal id state.rev_nat.nat ->
+            None (* remove "nat" *)
+        | _ -> Some (t,dom))
+      ~funs:(fun (t,vars,dt) ->
+        match T.repr t with
+        | TI.Const id when ID.equal id state.rev_nat.succ ->
+            None (* remove "succ" *)
+        | TI.Const id when ID.is_polarized id ->
+            (* unpolarize. id' is the unpolarized ID. *)
+            let id', is_pos, p = ID.Tbl.find state.rev_map id in
+            (* do we need to remove a variable? *)
+            let removed_var, vars = match is_pos, p.unroll, vars with
+              | true, `Unroll_pos _, v :: vars'
+              | false, `Unroll_neg _, v :: vars' -> Some v, vars'
+              | _, (`Unroll_pos _ | `Unroll_neg _), [] -> assert false
+              | _ -> None, vars
+            in
+            let cases = filter_dt_ ~polarized:id ~is_pos ~sys ~removed_var dt in
+            begin try
+              (* if [id' in partial_map], we already met its other polarized
+                 version, so we can merge the decision trees and push [id']
+                 in the model. *)
+              let cases' = ID.Tbl.find partial_map id' in
+              (* merge the two partial decision trees — they should not overlap *)
+              let else_ = U.undefined_ (U.app (U.const id') (List.map U.var vars)) in
+              let new_dt =
+                Model.DT.test
+                  (List.rev_append cases cases')
+                  ~else_
+              in
+              (* emit model for [id'] *)
+              Some (U.const id', vars, new_dt)
+            with Not_found ->
+              (* store the decision tree in [partial_map]; [id'] will
+                 be added to the model when its second polarized version
+                 is met *)
+              ID.Tbl.add partial_map id' cases;
+              None
+            end
+        | _ ->
+            (* remove polarized IDs *)
+            let dt = Model.DT.map dt ~term:(rewrite sys) ~ty:CCFun.id in
+            Some (t,vars,dt))
+
+  (** {6 Pipes} *)
 
   let pipe_with ~decode ~polarize_rec ~print =
     let on_encoded = if print
