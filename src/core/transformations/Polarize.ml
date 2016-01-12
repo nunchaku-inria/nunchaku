@@ -57,6 +57,10 @@ module Make(T : TI.S) = struct
       (* polarized_id -> (original_id, polarity, unroll) *)
 
     rev_nat: nat_ty;
+      (* the triple [nat, 0, succ] *)
+
+    rev_decr: unit ID.Tbl.t;
+      (* set of decreasing witnesses *)
   }
 
   let term_contains_undefined t =
@@ -143,8 +147,9 @@ module Make(T : TI.S) = struct
         declared_decr=ID.Tbl.create 16;
         nat_ty;
         decode_state = {
-          rev_map=ID.Tbl.create 32;
+          rev_map=ID.Tbl.create 16;
           rev_nat=nat_ty;
+          rev_decr=ID.Tbl.create 16;
         };
         call=(fun ~depth:_ _ _ -> assert false);
         get_env=(fun () -> assert false);
@@ -540,10 +545,12 @@ module Make(T : TI.S) = struct
                 | `Wf, _
                 | `Not_wf, `Pred ->
                     let n = ID.make (CCFormat.sprintf "decr_%a" ID.print_name id) in
+                    ID.Tbl.add st.St.decode_state.rev_decr n ();
                     St.add_deps ~state:st n;
                     `Unroll_pos n
                 | `Not_wf, `Copred ->
                     let n = ID.make (CCFormat.sprintf "decr_%a" ID.print_name id) in
+                    ID.Tbl.add st.St.decode_state.rev_decr n ();
                     St.add_deps ~state:st n;
                     `Unroll_neg n
               in
@@ -683,8 +690,10 @@ module Make(T : TI.S) = struct
     Model.filter_map m
       ~constants:(fun (t,u) ->
         match T.repr t with
-        | TI.Const id when ID.equal id state.rev_nat.zero ->
-            None (* remove "zero" *)
+        | TI.Const id
+          when ID.equal id state.rev_nat.zero
+            || ID.Tbl.mem state.rev_decr id ->
+            None (* remove "zero" and decreasing witnesses *)
         | _ ->
             let u = rewrite sys u in
             Some (t,u))
