@@ -446,7 +446,7 @@ module Make(FO_T : FO.S) = struct
           (* a boolean test! we might succeed in interpreting it as a test *)
           let t' = FOBack.T.(ite t true_ false_) in
           dt_of_body ~vars ~f t'
-      | _ -> Model.DT.yield t
+      | _ -> Model.DT.yield (f t)
     in
     (* parse term, then convert into [vars -> decision-tree] *)
     let t = parse_term_ ~state term in
