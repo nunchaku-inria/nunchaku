@@ -1093,6 +1093,49 @@ module Convert(Term : TermTyped.S) = struct
         env, tydef)
       env l
 
+  let convert_copy ?loc ~env c =
+    let name = c.A.id in
+    let id = ID.make name in
+    (* introduce type variables into env, locally *)
+    let env', vars =
+      Utils.fold_map
+        (fun env v ->
+          let v' = Var.make ~ty:U.ty_type ~name:v in
+          let env = TyEnv.add_var ~env v ~var:v' in
+          env, v')
+        env c.A.copy_vars
+    in
+    let ty_id =
+      arrow_list (List.map (fun _ -> U.ty_type) vars) U.ty_type in
+    let ty_new =
+      U.ty_app (U.const ~ty:ty_id id) (List.map (fun v->U.ty_var v) vars) in
+    (* convert the type alias *)
+    let ty_of = convert_ty_exn ~env:env' c.A.of_ in
+    let ok_vars =
+      check_vars ~rel:`Equal ty_of ~vars:(VarSet.of_list vars) in
+    begin match ok_vars with
+      | `Ok -> ()
+      | `Bad subset ->
+          ill_formedf ?loc ~kind:"copy"
+            "@[<2>the type variables@ @[%a@]@ do not occur \
+             in both the copy and the definition@]"
+             (CCFormat.list Var.print_full) subset
+    end;
+    let abstract = ID.make c.A.abstract in
+    let concretize = ID.make c.A.concretize in
+    (* declare abstract and concretize *)
+    let env = TyEnv.add_decl ~env name ~id ty_id in
+    let env =
+      TyEnv.add_decl ~env c.A.abstract ~id:abstract
+        (U.ty_arrow ty_of ty_new)
+    in
+    let env =
+      TyEnv.add_decl ~env c.A.concretize ~id:concretize
+        (U.ty_arrow ty_new ty_of)
+    in
+    let c = Stmt.mk_copy ~of_:ty_of ~abstract ~concretize ~vars id in
+    env, c
+
   module PStmt = Stmt.Print(P)(P)
 
   let convert_statement_exn ~env st =
@@ -1151,6 +1194,9 @@ module Convert(Term : TermTyped.S) = struct
     | A.Copred (wf, l) ->
         let env, l = convert_preds ?loc ~env l in
         Stmt.copred ~info ~wf l, env
+    | A.Copy c ->
+        let env, c = convert_copy ?loc ~env c in
+        Stmt.copy ~info c, env
     | A.Goal t ->
         (* infer type for t *)
         let t = convert_term_exn ~env t in
