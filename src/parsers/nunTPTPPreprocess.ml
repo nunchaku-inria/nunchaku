@@ -242,6 +242,9 @@ let process_statement_ ~state st =
       add_stmt ~state {st with A.stmt_value=A.Goal f}
   | A.Spec _
   | A.Rec _
+  | A.Pred _
+  | A.Copred _
+  | A.Copy _
   | A.Data _
   | A.Codata _ -> add_stmt ~state st (* NOTE: should not happen *)
 

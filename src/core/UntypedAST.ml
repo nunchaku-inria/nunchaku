@@ -122,6 +122,13 @@ type mutual_types = (var * var list * (var * ty list) list) list
     is the predicate, its type, and a list of clauses defining it *)
 type mutual_preds = (var * ty * term list) list
 
+type copy = {
+  copy: term; (* the new copy *)
+  of_: term; (* the definition *)
+  abstract: var; (* abstract function *)
+  concretize: var; (* concretize function *)
+}
+
 type statement_node =
   | Include of string * (string list) option (* file, list of symbols *)
   | Decl of var * ty (* declaration of uninterpreted symbol *)
@@ -133,6 +140,7 @@ type statement_node =
   | Def of string * term  (* a=b, simple def *)
   | Pred of [`Wf | `Not_wf] * mutual_preds
   | Copred of [`Wf | `Not_wf] * mutual_preds
+  | Copy of copy
   | Goal of term (* goal *)
 
 type statement = {
@@ -192,6 +200,8 @@ let data ?name ?loc l = mk_stmt_ ?name ?loc (Data l)
 let codata ?name ?loc l = mk_stmt_ ?name ?loc (Codata l)
 let pred ?name ?loc ~wf l = mk_stmt_ ?name ?loc (Pred (wf, l))
 let copred ?name ?loc ~wf l = mk_stmt_ ?name ?loc (Copred (wf, l))
+let copy ?name ?loc ~of_ ~abstract ~concretize copy =
+  mk_stmt_ ?name ?loc (Copy {copy; of_; abstract; concretize; })
 let goal ?name ?loc t = mk_stmt_ ?name ?loc (Goal t)
 
 let rec head t = match Loc.get t with
@@ -335,6 +345,9 @@ let print_statement out st = match st.stmt_value with
   | Codata l -> fpf out "@[codata %a.@]" pp_ty_defs l
   | Goal t -> fpf out "@[goal %a.@]" print_term t
   | Pred (k, preds) -> fpf out "@[pred%a %a.@]" pp_wf k pp_mutual_preds preds
+  | Copy c ->
+      fpf out "@[<v2>@[copy @[%a@] :=@ @[%a@]@]@,abstract = %s@,concretize = %s@]"
+        print_term c.copy print_term c.of_ c.abstract c.concretize
   | Copred (k, preds) -> fpf out "@[copred%a %a.@]" pp_wf k pp_mutual_preds preds
 
 let print_statement_list out l =
