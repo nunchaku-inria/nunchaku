@@ -72,7 +72,7 @@ module Pipe = struct
     = fun out t -> match t with
     | Id -> ()
     | Comp (Ex tr, t') ->
-        if !first then first:=false else fpf out " =≡=≡=@ ";
+        if !first then first:=false else fpf out " ≡≡@ ";
         fpf out "%s" tr.name;
         pp out t'
     in

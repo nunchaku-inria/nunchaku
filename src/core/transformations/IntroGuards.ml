@@ -284,7 +284,7 @@ end = struct
     in
     Transform.make1
       ~on_encoded
-      ~name:"recursion_elim"
+      ~name:"intro_guards"
       ~encode:(fun p -> encode_pb p, ())
       ~decode:(fun () x -> x)
       ()
