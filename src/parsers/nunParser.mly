@@ -351,13 +351,13 @@ statement:
       let loc = L.mk_pos $startpos $endpos in
       A.include_ ~loc f
     }
-  | COPY t=apply_term EQDEF u=term
+  | COPY id=raw_var vars=raw_var* EQDEF u=term
     ABSTRACT abs=raw_var
     CONCRETIZE conc=raw_var
     DOT
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.copy ~loc ~of_:u ~abstract:abs ~concretize:conc t
+      A.copy ~loc ~of_:u ~abstract:abs ~concretize:conc id vars
     }
   | error
     {

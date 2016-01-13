@@ -98,11 +98,21 @@ type ('t, 'ty, 'inv) pred_def = {
   pred_clauses: ('t, 'ty, 'inv) pred_clause list;
 }
 
+type ('t, 'ty) copy = {
+  copy_id: ID.t; (* new name *)
+  copy_vars: 'ty Var.t list; (* list of type variables *)
+  copy_of: 'ty; (* [id vars] is a copy of [of_]. Set of variables = vars *)
+  copy_abstract: ID.t; (* [of_ -> id vars] *)
+  copy_concretize: ID.t; (* [id vars -> of] *)
+  copy_pred: 't option; (* invariant *)
+}
+
 type ('term, 'ty, 'inv) view =
   | Decl of id * decl * 'ty
   | Axiom of ('term, 'ty, 'inv) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
   | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty, 'inv) pred_def list
+  | Copy of ('term, 'ty) copy
   | Goal of 'term
 
 (** Additional informations on the statement *)
@@ -148,6 +158,7 @@ let pred ~info ~wf l = mk_pred ~info ~wf `Pred l
 let copred ~info ~wf l = mk_pred ~info ~wf `Copred l
 let data ~info l = mk_ty_def ~info `Data l
 let codata ~info l = mk_ty_def ~info `Codata l
+let copy ~info c = make_ ~info (Copy c)
 let goal ~info t = make_ ~info (Goal t)
 
 let mk_mutual_ty id ~ty_vars ~cstors ~ty =
@@ -159,6 +170,15 @@ let mk_mutual_ty id ~ty_vars ~cstors ~ty =
       cstors
   in
   {ty_id=id; ty_type=ty; ty_vars; ty_cstors; }
+
+let mk_copy ?pred ~of_ ~abstract ~concretize ~vars id =
+  { copy_id=id;
+    copy_vars=vars;
+    copy_of=of_;
+    copy_abstract=abstract;
+    copy_concretize=concretize;
+    copy_pred=pred;
+  }
 
 (* find a definition for [id] in [cases], or None *)
 let find_rec_def ~defs id =
@@ -208,6 +228,13 @@ let map_eqns
             l)
     | Eqn_single (vars,rhs) ->
         Eqn_single (List.map (Var.update_ty ~f:ty) vars, term rhs)
+
+let map_copy ~term ~ty c =
+  { c with
+    copy_vars = List.map (Var.update_ty ~f:ty) c.copy_vars;
+    copy_of = ty c.copy_of;
+    copy_pred = CCOpt.map term c.copy_pred;
+  }
 
 external cast_eqns
 : ('t, 'ty, <eqn:'inv;..>) equations ->
@@ -305,6 +332,7 @@ let map ~term:ft ~ty:fty st =
   | Pred (wf, k, preds) ->
       let preds = map_preds ~term:ft ~ty:fty preds in
       mk_pred ~info ~wf k preds
+  | Copy c -> copy ~info (map_copy ~term:ft ~ty:fty c)
   | Goal t -> goal ~info (ft t)
 
 let fold_defined ~ty acc d = ty acc d.defined_ty
@@ -369,6 +397,10 @@ let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
           let acc = ty acc tydef.ty_type in
           ID.Map.fold (fun _ c acc -> ty acc c.cstor_type) tydef.ty_cstors acc
         ) acc l
+  | Copy c ->
+      let acc = ty acc c.copy_of in
+      let acc = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc c.copy_vars in
+      CCOpt.fold term acc c.copy_pred
   | Goal t -> term acc t
 
 let fpf = Format.fprintf
@@ -457,6 +489,20 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
 
   let print_pred_defs out preds = pplist ~sep:" and " print_pred_def out preds
 
+  let print_copy out c =
+    let pp_pred out = function
+      | None -> ()
+      | Some p -> fpf out "@,@[<2>pred@ @[%a@]@]" Pt.print p
+    in
+    fpf out
+      "@[<2>copy @[%a %a@] :=@ @[%a@]@ abstract %a@ concretize %a%a@]"
+      ID.print c.copy_id
+      (CCFormat.list ~start:"" ~stop:"" ~sep:" " Var.print_full) c.copy_vars
+      Pty.print c.copy_of
+      ID.print c.copy_abstract
+      ID.print c.copy_concretize
+      pp_pred c.copy_pred
+
   let print out t = match t.view with
   | Decl (id,_,t) ->
       fpf out "@[<2>val %a@ : %a.@]" ID.print id Pty.print t
@@ -490,5 +536,6 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
           print_def out tydef
         ) l;
       fpf out ".@]"
+  | Copy c -> fpf out "@[<2>%a.@]" print_copy c
   | Goal t -> fpf out "@[<2>goal %a.@]" Pt.print t
 end

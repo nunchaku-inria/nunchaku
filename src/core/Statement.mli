@@ -96,11 +96,21 @@ type ('t, 'ty, 'inv) pred_def = {
   pred_clauses: ('t, 'ty, 'inv) pred_clause list;
 }
 
+type ('t, 'ty) copy = {
+  copy_id: ID.t; (* new name *)
+  copy_vars: 'ty Var.t list; (* list of type variables *)
+  copy_of: 'ty; (* [id vars] is a copy of [of_]. Set of variables = vars *)
+  copy_abstract: ID.t; (* [of_ -> id vars] *)
+  copy_concretize: ID.t; (* [id vars -> of] *)
+  copy_pred: 't option; (* invariant *)
+}
+
 type ('term, 'ty, 'inv) view =
   | Decl of id * decl * 'ty
   | Axiom of ('term, 'ty, 'inv) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
   | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty, 'inv) pred_def list
+  | Copy of ('term, 'ty) copy
   | Goal of 'term
 
 (** Additional informations on the statement *)
@@ -165,6 +175,8 @@ val copred : info:info -> wf:[`Wf | `Not_wf] ->
 val mk_pred : info:info -> wf:[`Wf | `Not_wf] -> [`Pred | `Copred] ->
   ('t, 'ty, 'inv) pred_def list -> ('t, 'ty, 'inv) t
 
+val copy : info:info -> ('t, 'ty) copy -> ('t, 'ty, 'inv) t
+
 val goal : info:info -> 'a -> ('a,_,_) t
 (** The goal of the problem *)
 
@@ -175,6 +187,15 @@ val mk_mutual_ty:
   ty:'ty ->
   'ty tydef
 (** Constructor for {!tydef} *)
+
+val mk_copy :
+  ?pred:'t ->
+  of_:'ty ->
+  abstract:ID.t ->
+  concretize:ID.t ->
+  vars:'ty Var.t list ->
+  ID.t ->
+  ('t, 'ty) copy
 
 val find_rec_def : defs:('a, 'b, 'c) rec_def list -> ID.t -> ('a, 'b, 'c) rec_def option
 
@@ -240,6 +261,12 @@ val map_preds :
   ('a,'b,<ind_preds:'inv;..>) pred_def list ->
   ('a1,'b1,<ind_preds:'inv;..>) pred_def list
 
+val map_copy :
+  term:('t1 -> 't2) ->
+  ty:('ty1 -> 'ty2) ->
+  ('t1,'ty1) copy ->
+  ('t2,'ty2) copy
+
 val cast_pred :
   ('t, 'ty, <ind_preds:'inv;..>) pred_def ->
   ('t, 'ty, <ind_preds:'inv;..>) pred_def
@@ -267,6 +294,7 @@ module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
   val print_pred_defs : (Pt.t, Pty.t, _) pred_def list printer
   val print_rec_def : (Pt.t, Pty.t, _) rec_def printer
   val print_rec_defs : (Pt.t, Pty.t, _) rec_def list printer
+  val print_copy : (Pt.t, Pty.t) copy printer
   val print : (Pt.t, Pty.t, _) t printer
 end
 
