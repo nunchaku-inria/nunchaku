@@ -6,7 +6,6 @@
 type 'a or_error = [`Ok of 'a | `Error of string]
 type id = ID.t
 type 'a var = 'a Var.t
-type 'a signature = 'a Signature.t
 type loc = Location.t
 
 type stmt_invariant = <ty:[`Poly]; eqn:[`Nested]; ind_preds:[`Present]>
@@ -33,8 +32,6 @@ module Convert(T : TermTyped.S) : sig
   val empty_env : env
   (** Make a new, empty environment. The build function will be used
       to construct new terms *)
-
-  val signature : env -> term signature
 
   val convert_ty : env:env -> UntypedAST.ty -> term or_error
   (** [convert ~env ty] converts the raw, unscoped type [ty] into a
@@ -108,7 +105,7 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) : sig
   (** Pipeline component. Takes input and output Term representations. *)
 
   val pipe_with :
-    decode:(signature:term1 Signature.t -> 'c -> 'd) ->
+    decode:('c -> 'd) ->
     print:bool ->
     (UntypedAST.statement CCVector.ro_vector,
       (term1, term1, stmt_invariant) Problem.t, 'c, 'd

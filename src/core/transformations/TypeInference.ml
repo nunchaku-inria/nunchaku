@@ -9,7 +9,6 @@ module ID = ID
 module Var = Var
 module MetaVar = MetaVar
 module Loc = Location
-module Sig = Signature
 module Stmt = Statement
 
 module TI = TermInner
@@ -18,7 +17,6 @@ module TyI = TypePoly
 type 'a or_error = [`Ok of 'a | `Error of string]
 type id = ID.t
 type 'a var = 'a Var.t
-type 'a signature = 'a Sig.t
 type loc = Loc.t
 
 let fpf = Format.fprintf
@@ -109,7 +107,6 @@ module Convert(Term : TermTyped.S) = struct
   module TyEnv = struct
     type t = {
       vars: (term, term) term_def MStr.t; (* local vars *)
-      signature : term signature;
       cstors: (string, id * term) Hashtbl.t;  (* constructor ID + type *)
       datatypes: Term.t Stmt.ty_constructor ID.Map.t ID.Tbl.t;
         (* datatype -> ID + constructors *)
@@ -119,7 +116,6 @@ module Convert(Term : TermTyped.S) = struct
 
     let empty = {
       vars=MStr.empty;
-      signature = Sig.empty;
       cstors=Hashtbl.create 16;
       datatypes=ID.Tbl.create 16;
       metas=None;
@@ -129,10 +125,6 @@ module Convert(Term : TermTyped.S) = struct
 
     let add_decl ~env v ~id ty = {
       env with vars=MStr.add v (Decl (id, ty)) env.vars;
-    }
-
-    let add_sig ~env ~id ty =  {
-      env with signature=Sig.declare ~sigma:env.signature id ty;
     }
 
     let add_var ~env v ~var =
@@ -202,8 +194,6 @@ module Convert(Term : TermTyped.S) = struct
 
   type env = TyEnv.t
   let empty_env = TyEnv.empty
-
-  let signature env = env.TyEnv.signature
 
   (* find the closest available location *)
   let rec get_loc_ ~stack t = match Loc.get_loc t, stack with
@@ -759,8 +749,7 @@ module Convert(Term : TermTyped.S) = struct
       |> Sequence.exists
         (fun t -> match Term.repr t with
           | TI.Const id' when ID.equal id id' -> true
-          | _ -> false
-        )
+          | _ -> false)
 
   (* convert a specification *)
   let convert_spec_defs ?loc ~env (untyped_defined_l, ax_l) =
@@ -791,8 +780,8 @@ module Convert(Term : TermTyped.S) = struct
                    type arguments" v v' n n';
               let t' = U.app ~ty:(ty_apply ty' t_vars) (U.const id' ~ty:ty') t_vars in
               let env' = TyEnv.add_def ~env:env' v' ~as_:t' in
-              env', {Stmt.defined_head=id'; defined_ty=ty';}
-            ) env' tail
+              env', {Stmt.defined_head=id'; defined_ty=ty';})
+            env' tail
           in
           defined :: l, env', vars
     in
@@ -817,8 +806,8 @@ module Convert(Term : TermTyped.S) = struct
                   that do not occur in defined term@ @[`%a`@]"
                 (CCFormat.list Var.print) bad_vars P.print t
         in
-        convert_prop_ ~before_generalize ~env:env' ax
-      ) ax_l
+        convert_prop_ ~before_generalize ~env:env' ax)
+      ax_l
     in
     (* check that no meta remains *)
     List.iter check_mono_var_ spec_vars;
@@ -936,8 +925,7 @@ module Convert(Term : TermTyped.S) = struct
           (fun k -> k v P.print v_as_t);
         (* declare [v] in the scope of equations *)
         let env' = TyEnv.add_def ~env:env' v ~as_:v_as_t in
-        env', (id,ty,vars,l)
-      )
+        env', (id,ty,vars,l))
       env l
 
   let convert_rec_defs ?loc ~env l =
@@ -979,16 +967,14 @@ module Convert(Term : TermTyped.S) = struct
                 vars @ vars',
                 args @ vars'_as_t,
                 U.app ~ty:ty' rhs vars'_as_t,
-                []
-          )
+                [])
           l
         in
         (* return case *)
         let kind = kind_of_ty_ ty in
         {Stmt.
           rec_defined=defined; rec_kind=kind; rec_vars=ty_vars;
-          rec_eqns=Stmt.Eqn_nested rec_eqns; }
-      )
+          rec_eqns=Stmt.Eqn_nested rec_eqns; })
       l'
     in
     env', l'
@@ -1029,15 +1015,13 @@ module Convert(Term : TermTyped.S) = struct
                 CCOpt.iter (check_prenex_types_ ?loc) g;
                 Stmt.Pred_clause {Stmt.
                   clause_concl=rhs; clause_guard=g; clause_vars=vars;
-                }
-          )
+                })
           l
         in
         {Stmt.
           pred_defined=defined; pred_tyvars=ty_vars;
           pred_clauses;
-        }
-      )
+        })
       l'
     in
     env', l'
@@ -1060,8 +1044,8 @@ module Convert(Term : TermTyped.S) = struct
           (fun k-> k ID.print id P.print ty);
         (* declare *)
         let env' = TyEnv.add_decl ~env name ~id ty in
-        env', (id,vars,ty,cstors)
-      ) env l
+        env', (id,vars,ty,cstors))
+      env l
     in
     (* then declare constructors. *)
     Utils.fold_map
@@ -1072,8 +1056,8 @@ module Convert(Term : TermTyped.S) = struct
         let env', vars' = Utils.fold_map
           (fun env v ->
             let var = Var.make ~name:v ~ty:U.ty_type in
-            TyEnv.add_var ~env v ~var, var
-          ) env vars
+            TyEnv.add_var ~env v ~var, var)
+          env vars
         in
         let ty_being_declared =
           U.app ~ty:U.ty_type
@@ -1106,8 +1090,7 @@ module Convert(Term : TermTyped.S) = struct
         let tydef = {Stmt.
           ty_id=id; ty_vars=vars'; ty_type=ty_id; ty_cstors=cstors;
         } in
-        env, tydef
-      )
+        env, tydef)
       env l
 
   module PStmt = Stmt.Print(P)(P)
@@ -1127,7 +1110,6 @@ module Convert(Term : TermTyped.S) = struct
         let id = ID.make_full ~needs_at:(ty_is_poly_ ty) v in
         let env = TyEnv.add_decl ~env v ~id ty in
         check_ty_is_prenex_ ?loc ty;
-        let env = TyEnv.add_sig ~env ~id ty in
         let kind = kind_of_ty_ ty in
         Stmt.mk_decl ~info id kind ty, env
     | A.Axiom l ->
@@ -1154,8 +1136,8 @@ module Convert(Term : TermTyped.S) = struct
               l
             then ill_formedf ?loc ~kind:"def"
               "right-hand side of definition contains defined symbol %a"
-              ID.print id1;
-          ) s;
+              ID.print id1)
+          s;
         Stmt.axiom_rec ~info s, env
     | A.Data l ->
         let env, l = convert_tydef ?loc ~env l in
@@ -1234,17 +1216,14 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
       ~on_encoded
       ~name:"type inference"
       ~encode:(fun l ->
-        let problem, env = l
+        let problem, _ = l
           |> Conv.convert_problem_exn ~env:Conv.empty_env
         in
-        problem, Conv.signature env
-      )
-      ~decode:(fun signature x ->
-        decode ~signature x
-      )
+        problem, ())
+      ~decode:(fun () x -> decode x)
       ()
 
   let pipe ~print =
-    let decode ~signature:_ m = erase m in
+    let decode m = erase m in
     pipe_with ~decode ~print
 end
