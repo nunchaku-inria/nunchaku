@@ -126,6 +126,9 @@ module Make(T : TI.S) = struct
       with Not_found ->
         (* create new ID *)
         let mangled' = ID.make mangled in
+        Utils.debugf ~section 5
+          "@[<2>save_mangled %a@ for %a (@[%a@])@]"
+          (fun k->k ID.print mangled' ID.print id (CCFormat.list P.print) tup);
         Hashtbl.add state.mangle mangled mangled';
         ID.Tbl.replace state.unmangle mangled' (id, tup);
         mangled'
@@ -192,6 +195,9 @@ module Make(T : TI.S) = struct
 
   (* monomorphize term *)
   let rec mono_term ~state ~local_state (t:term) : term =
+    (*
+    Utils.debugf ~section 5 "@[<2>mono term@ `@[%a@]`@]" (fun k->k P.print t);
+    *)
     match T.repr t with
     | TI.Builtin b ->
         U.builtin (TI.Builtin.map b ~f:(mono_term ~state ~local_state))
@@ -231,10 +237,10 @@ module Make(T : TI.S) = struct
               else id, None
             in
             (* specialize [id] *)
-            let unmangled_tup = ArgTuple.make
-              ~mangled ~args:unmangled_tup ~m_args:mangled_tup in
+            let tup =
+              ArgTuple.make ~mangled ~args:unmangled_tup ~m_args:mangled_tup in
             let depth = local_state.depth + 1 in
-            St.call ~state ~depth id unmangled_tup;
+            St.call ~state ~depth id tup;
             (* convert arguments.
                Drop type arguments iff they are mangled with ID *)
             let l = if mangled=None then l else CCList.drop n l in
@@ -266,8 +272,8 @@ module Make(T : TI.S) = struct
         let l = ID.Map.map
           (fun (vars,rhs) ->
             let vars = List.map (mono_var ~state ~local_state) vars in
-            vars, mono_term ~state ~local_state rhs
-          ) l
+            vars, mono_term ~state ~local_state rhs)
+          l
         in
         U.match_with t l
     | TI.TyBuiltin b -> U.ty_builtin b
@@ -277,7 +283,7 @@ module Make(T : TI.S) = struct
           (mono_term ~state ~local_state b)
     | TI.TyMeta _ -> assert false
     | TI.Bind (`TyForall,_,_) ->
-        failf_ "cannot monomorphize quantified type %a" print_ty t
+        failf_ "@[<2>cannot monomorphize quantified type@ @[%a@]@]" print_ty t
 
   and mono_var ~state ~local_state v : term Var.t =
     Var.update_ty v ~f:(mono_type ~state ~local_state)
@@ -453,29 +459,31 @@ module Make(T : TI.S) = struct
       ()
 
     method do_mutual_types ~depth tydef tup =
+      (* mangle type name. Monomorphized type should be : Type *)
+      let id, mangled =
+        mangle_ ~state:st tydef.Stmt.ty_id (ArgTuple.m_args tup) in
+      let tup = {tup with ArgTuple.mangled; } in
       Utils.debugf ~section 5 "monomorphize data %a on %a"
         (fun k->k ID.print tydef.Stmt.ty_id ArgTuple.print tup);
-      (* mangle type name. Monomorphized type should be : Type *)
-      let id, _ =
-        mangle_ ~state:st tydef.Stmt.ty_id (ArgTuple.m_args tup) in
       let ty = U.ty_type in
       (* specialize each constructor *)
       let cstors = ID.Map.fold
         (fun _ c acc ->
           (* mangle ID *)
-          let id', _ = mangle_ ~state:st c.Stmt.cstor_name (ArgTuple.m_args tup) in
+          let id', mangled = mangle_ ~state:st c.Stmt.cstor_name (ArgTuple.m_args tup) in
+          let tup' = {tup with ArgTuple.mangled; } in
           (* apply, then convert type. Arity should match. *)
           let ty', subst =
-            U.ty_apply_full c.Stmt.cstor_type (ArgTuple.args tup)
+            U.ty_apply_full c.Stmt.cstor_type (ArgTuple.args tup')
           in
+          Utils.debugf ~section 5 "@[<hv2>monomorphize cstor %a@ : @[%a@]@ with @[%a@]@]"
+            (fun k->k ID.print id' P.print ty' (Subst.print P.print) subst);
           (* convert type and substitute in it *)
-          let ty' = mono_term
-            ~state:st ~local_state:{depth=0; subst;} ty' in
           let local_state = {depth=depth+1; subst} in
+          let ty' = mono_term ~state:st ~local_state ty' in
           let args' = List.map (mono_term ~state:st ~local_state) c.Stmt.cstor_args in
           let c' = { Stmt.cstor_name=id'; cstor_type=ty'; cstor_args=args'; } in
-          ID.Map.add id' c' acc
-        )
+          ID.Map.add id' c' acc)
         tydef.Stmt.ty_cstors
         ID.Map.empty
       in
@@ -491,8 +499,9 @@ module Make(T : TI.S) = struct
       let id = c.Stmt.copy_id in
       if not (self#has_processed id tup) then (
         Utils.debugf ~section 3
-          "@[<2>monomorphize copy type@ `@[%a@]`@ on (%a)@]"
-          (fun k->k PStmt.print_copy c ArgTuple.print tup);
+          "@[<2>monomorphize copy type@ `@[%a@]`@ on (%a)@ at depth %d@]"
+          (fun k->k PStmt.print_copy c ArgTuple.print tup depth);
+        self#done_processing id tup;
         let subst =
           Subst.add_list ~subst:Subst.empty
             c.Stmt.copy_vars (ArgTuple.m_args tup) in
@@ -504,11 +513,13 @@ module Make(T : TI.S) = struct
         let abstract', _ =
           mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
         let ty_abstract' =
-          mono_type ~state:st ~local_state c.Stmt.copy_abstract_ty in
+          U.ty_apply c.Stmt.copy_abstract_ty (ArgTuple.m_args tup)
+          |> mono_type ~state:st ~local_state in
         let concretize', _ =
-          mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
+          mangle_ ~state:st c.Stmt.copy_concretize (ArgTuple.m_args tup) in
         let ty_concretize' =
-          mono_type ~state:st ~local_state c.Stmt.copy_concretize_ty in
+          U.ty_apply c.Stmt.copy_concretize_ty (ArgTuple.m_args tup)
+          |> mono_type ~state:st ~local_state in
         let ty' = U.ty_type in
         (* create new copy type *)
         let c' = Stmt.mk_copy
@@ -569,6 +580,8 @@ module Make(T : TI.S) = struct
     Utils.debugf ~section 3 "@[<2>instances:@ @[%a@]@]"
       (fun k-> k print_tbl_ traverse#processed);
     pb', traverse#decode_state
+
+  (** {6 Decoding} *)
 
   let unmangle_term ~(state:unmangle_state) (t:term):term =
     let rec aux t = match T.repr t with

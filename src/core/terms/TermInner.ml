@@ -573,10 +573,10 @@ module UtilRepr(T : REPR)
     | Const _
     | App _
     | TyBuiltin _ -> 0
-    | TyArrow (_,t') ->
-        if ty_is_Type t'
-          then 1 + ty_num_param t'
-          else 0  (* asks for term parameters *)
+    | TyArrow (a,t') ->
+        if ty_is_Type a
+        then 1 + ty_num_param t' (* [a] is a type parameter *)
+        else 0 (* asks for term parameters *)
     | Bind (`TyForall, _,t) -> 1 + ty_num_param t
     | _ -> assert false
 end
