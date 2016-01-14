@@ -41,6 +41,15 @@ type ('t, 'ty, 'inv) def =
       ('t, 'ty, 'inv) Statement.pred_def list *
       loc option
 
+  | Copy_ty of ('t, 'ty) Statement.copy
+    (** ID is the copy type *)
+
+  | Copy_abstract of ('t, 'ty) Statement.copy
+    (** ID is the abstraction function *)
+
+  | Copy_concretize of ('t, 'ty) Statement.copy
+    (** ID is the concretization function *)
+
   | NoDef
       (** Undefined symbol *)
 
@@ -117,6 +126,12 @@ val def_preds :
   wf:[`Wf | `Not_wf] ->
   kind:[`Pred | `Copred] ->
   ('t, 'ty, 'inv) Statement.pred_def list ->
+  ('t, 'ty, 'inv) t
+
+val add_copy :
+  ?loc:loc ->
+  env:('t, 'ty, 'inv) t ->
+  ('t, 'ty) Statement.copy ->
   ('t, 'ty, 'inv) t
 
 val add_statement :

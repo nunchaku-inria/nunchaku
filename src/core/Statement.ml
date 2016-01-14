@@ -101,10 +101,13 @@ type ('t, 'ty, 'inv) pred_def = {
 type ('t, 'ty) copy = {
   copy_id: ID.t; (* new name *)
   copy_vars: 'ty Var.t list; (* list of type variables *)
+  copy_ty: 'ty;  (* type of [copy_id], of the form [type -> type -> ... -> type] *)
   copy_of: 'ty; (* [id vars] is a copy of [of_]. Set of variables = vars *)
-  copy_abstract: ID.t; (* [of_ -> id vars] *)
+  copy_abstract: ID.t; (* [of -> id vars] *)
+  copy_abstract_ty: 'ty;
   copy_concretize: ID.t; (* [id vars -> of] *)
-  copy_pred: 't option; (* invariant *)
+  copy_concretize_ty: 'ty;
+  copy_pred: 't option; (* invariant (prop) *)
 }
 
 type ('term, 'ty, 'inv) view =
@@ -171,12 +174,17 @@ let mk_mutual_ty id ~ty_vars ~cstors ~ty =
   in
   {ty_id=id; ty_type=ty; ty_vars; ty_cstors; }
 
-let mk_copy ?pred ~of_ ~abstract ~concretize ~vars id =
+let mk_copy ?pred ~of_ ~ty ~abstract ~concretize ~vars id =
+  let copy_abstract, copy_abstract_ty = abstract in
+  let copy_concretize, copy_concretize_ty = concretize in
   { copy_id=id;
     copy_vars=vars;
+    copy_ty=ty;
     copy_of=of_;
-    copy_abstract=abstract;
-    copy_concretize=concretize;
+    copy_abstract;
+    copy_abstract_ty;
+    copy_concretize;
+    copy_concretize_ty;
     copy_pred=pred;
   }
 
@@ -233,6 +241,9 @@ let map_copy ~term ~ty c =
   { c with
     copy_vars = List.map (Var.update_ty ~f:ty) c.copy_vars;
     copy_of = ty c.copy_of;
+    copy_ty = ty c.copy_ty;
+    copy_abstract_ty = ty c.copy_abstract_ty;
+    copy_concretize_ty = ty c.copy_concretize_ty;
     copy_pred = CCOpt.map term c.copy_pred;
   }
 
@@ -399,6 +410,9 @@ let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
         ) acc l
   | Copy c ->
       let acc = ty acc c.copy_of in
+      let acc = ty acc c.copy_ty in
+      let acc = ty acc c.copy_abstract_ty in
+      let acc = ty acc c.copy_concretize_ty in
       let acc = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc c.copy_vars in
       CCOpt.fold term acc c.copy_pred
   | Goal t -> term acc t

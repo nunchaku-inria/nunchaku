@@ -99,10 +99,13 @@ type ('t, 'ty, 'inv) pred_def = {
 type ('t, 'ty) copy = {
   copy_id: ID.t; (* new name *)
   copy_vars: 'ty Var.t list; (* list of type variables *)
+  copy_ty: 'ty;  (* type of [copy_id], of the form [type -> type -> ... -> type] *)
   copy_of: 'ty; (* [id vars] is a copy of [of_]. Set of variables = vars *)
   copy_abstract: ID.t; (* [of_ -> id vars] *)
+  copy_abstract_ty: 'ty;
   copy_concretize: ID.t; (* [id vars -> of] *)
-  copy_pred: 't option; (* invariant *)
+  copy_concretize_ty: 'ty;
+  copy_pred: 't option; (* invariant (prop) *)
 }
 
 type ('term, 'ty, 'inv) view =
@@ -191,8 +194,9 @@ val mk_mutual_ty:
 val mk_copy :
   ?pred:'t ->
   of_:'ty ->
-  abstract:ID.t ->
-  concretize:ID.t ->
+  ty:'ty ->
+  abstract:(ID.t * 'ty) ->
+  concretize:(ID.t * 'ty) ->
   vars:'ty Var.t list ->
   ID.t ->
   ('t, 'ty) copy

@@ -38,6 +38,15 @@ type ('t, 'ty, 'inv) def =
       ('t, 'ty, 'inv) Statement.pred_def list *
       loc option
 
+  | Copy_ty of ('t, 'ty) Statement.copy
+    (** ID is the copy type *)
+
+  | Copy_abstract of ('t, 'ty) Statement.copy
+    (** ID is the abstraction function *)
+
+  | Copy_concretize of ('t, 'ty) Statement.copy
+    (** ID is the concretization function *)
+
   | NoDef
       (** Undefined symbol *)
 
@@ -184,6 +193,20 @@ let def_preds ?loc ~env ~wf ~kind l =
       def_pred ?loc ~env ~wf ~kind def l)
     env l
 
+let add_copy ?loc ~env c =
+  let infos =
+    ID.PerTbl.replace env.infos c.Stmt.copy_id
+      {loc; decl_kind=Stmt.Decl_type; ty=c.Stmt.copy_ty; def=Copy_ty c; } in
+  let infos =
+    ID.PerTbl.replace infos c.Stmt.copy_abstract
+      {loc; decl_kind=Stmt.Decl_fun;
+       ty=c.Stmt.copy_abstract_ty; def=Copy_abstract c; } in
+  let infos =
+    ID.PerTbl.replace infos c.Stmt.copy_concretize
+      {loc; decl_kind=Stmt.Decl_fun;
+       ty=c.Stmt.copy_concretize_ty; def=Copy_concretize c; } in
+  {infos; }
+
 let add_statement
 : type inv.
   env:('t,'ty,inv) t ->
@@ -202,6 +225,8 @@ let add_statement
       spec_funs ?loc ~env l
   | Stmt.Axiom (Stmt.Axiom_rec l) ->
       rec_funs ?loc ~env l
+  | Stmt.Copy c ->
+      add_copy ?loc ~env c
   | Stmt.Pred (wf, kind, preds) ->
       def_preds ?loc ~env ~wf ~kind preds
 
