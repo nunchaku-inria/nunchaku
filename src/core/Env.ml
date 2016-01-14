@@ -194,8 +194,9 @@ let def_preds ?loc ~env ~wf ~kind l =
     env l
 
 let add_copy ?loc ~env c =
+  let infos = env.infos in
   let infos =
-    ID.PerTbl.replace env.infos c.Stmt.copy_id
+    ID.PerTbl.replace infos c.Stmt.copy_id
       {loc; decl_kind=Stmt.Decl_type; ty=c.Stmt.copy_ty; def=Copy_ty c; } in
   let infos =
     ID.PerTbl.replace infos c.Stmt.copy_abstract

@@ -275,7 +275,7 @@ module ToFO(T : TI.S)(F : FO.S) = struct
         end
     | St.Goal f ->
         [ FOI.Goal (conv_form ~sigma f) ]
-    | St.Copy _
+    | St.Copy _ -> Utils.not_implemented "termMono.to_fo for copy"
     | St.Pred _ -> assert false
     | St.TyDef (k, l) ->
         let convert_cstor c =
