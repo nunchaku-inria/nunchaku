@@ -88,7 +88,7 @@ let options =
       " print input after elimination of multiple equations"
   ; "-j", Arg.Set_int j, " set parallelism level"
   ; "--print-polarize", Arg.Set print_polarize_, " print input after polarization"
-  ; "--print-copy", Arg.Set print_copy_, " print input after elimination of copy types"
+  ; "--print-elim-copy", Arg.Set print_copy_, " print input after elimination of copy types"
   ; "--print-intro-guards", Arg.Set print_intro_guards_,
       " print input after introduction of guards"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
