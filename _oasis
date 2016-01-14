@@ -36,6 +36,7 @@ Library "nunchaku_core"
                     transformations/ElimRecursion,
                     transformations/ElimMultipleEqns,
                     transformations/ElimIndPreds,
+                    transformations/ElimCopy,
                     transformations/Polarize,
                     transformations/IntroGuards
   Install:          true
