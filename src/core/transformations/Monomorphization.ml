@@ -156,11 +156,13 @@ module Make(T : TI.S) = struct
       mangled, Some mangled
 
   (* should [id] be mangled? in all cases, yes, except if it's an
-     uninterpreted type. *)
+     uninterpreted or copy type. *)
   let should_be_mangled_ ~env id =
     match Env.find_exn ~env id with
     | {Env.def=(Env.Fun_def _ | Env.Fun_spec _ |
-                Env.Cstor _ | Env.Data _ | Env.Pred _); _} ->
+                Env.Cstor _ | Env.Data _ | Env.Pred _ |
+                Env.Copy_abstract _ | Env.Copy_concretize _ |
+                Env.Copy_ty _); _} ->
         true (* defined objects: mangle *)
     | {Env.def=Env.NoDef; decl_kind=(Stmt.Decl_fun | Stmt.Decl_prop); _} ->
         true (* functions and prop: mangle *)
@@ -336,6 +338,7 @@ module Make(T : TI.S) = struct
   let conf = {Traversal.
     direct_tydef=false;
     direct_spec=false;
+    direct_copy=false;
     direct_mutual_types=false;
   }
 
@@ -481,6 +484,42 @@ module Make(T : TI.S) = struct
         ty_id=id; ty_type=ty; ty_cstors=cstors; ty_vars=[];
       } in
       [tydef']
+
+    (* monomorphize the given copy type *)
+    method do_copy ~depth ~loc c tup =
+      assert (ArgTuple.length tup = List.length c.Stmt.copy_vars);
+      let id = c.Stmt.copy_id in
+      if not (self#has_processed id tup) then (
+        Utils.debugf ~section 3
+          "@[<2>monomorphize copy type@ `@[%a@]`@ on (%a)@]"
+          (fun k->k PStmt.print_copy c ArgTuple.print tup);
+        let subst =
+          Subst.add_list ~subst:Subst.empty
+            c.Stmt.copy_vars (ArgTuple.m_args tup) in
+        (* mangle ID, functions and definition, possibly monomorphizing
+           other types in the process *)
+        let id', _ = mangle_ ~state:st c.Stmt.copy_id (ArgTuple.m_args tup) in
+        let local_state = {depth; subst} in
+        let of_' = mono_type ~state:st ~local_state c.Stmt.copy_of in
+        let abstract', _ =
+          mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
+        let ty_abstract' =
+          mono_type ~state:st ~local_state c.Stmt.copy_abstract_ty in
+        let concretize', _ =
+          mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
+        let ty_concretize' =
+          mono_type ~state:st ~local_state c.Stmt.copy_concretize_ty in
+        let ty' = U.ty_type in
+        (* create new copy type *)
+        let c' = Stmt.mk_copy
+          ~of_:of_' ~ty:ty' ~vars:[]
+          ~abstract:(abstract', ty_abstract')
+          ~concretize:(concretize', ty_concretize')
+          id'
+        in
+        self#push_res (Stmt.copy ~info:{Stmt.name=None; loc;} c')
+      );
+      ()
 
     method do_ty_def ?loc decl id ~ty tup =
       Utils.debugf ~section 5 "declare type for %a on %a"

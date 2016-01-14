@@ -13,6 +13,11 @@ module Make(T : TI.S) = struct
 
   type term = T.t
 
+  (* TODO:
+    - rewrite terms by removing abstract/concretization functions
+    - change type to its definition, including in variables and other types
+      (should be just a constant since we are after monomorphization)
+    - insert `asserting pred` if the predicate is not None *)
   let elim pb = pb (* TODO *)
 
   let pipe ~print =

@@ -146,8 +146,11 @@ module Make(T : TI.S) = struct
             | Env.Fun_def (_,_,_)
             | Env.Fun_spec _
             | Env.Pred _
+            | Env.Copy_abstract _
+            | Env.Copy_concretize _
             | Env.Cstor (_,_,_,_) ->
                 errorf_ "@[%a is not a type.@]" ID.print ty_id
+            | Env.Copy_ty _
             | Env.NoDef -> DN_bind []
           with Not_found ->
             DN_bind [] (* not an atomic type *)
@@ -295,6 +298,9 @@ module Make(T : TI.S) = struct
         let l = conv_preds l in
         let env = Env.def_preds ?loc ~env ~wf ~kind:k l in
         env, Stmt.mk_pred ~info ~wf k l
+    | Stmt.Copy c ->
+        let env = Env.add_copy ?loc ~env c in
+        env, Stmt.copy ~info c
     | Stmt.Goal g ->
         env, Stmt.goal ~info g
 

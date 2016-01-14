@@ -40,12 +40,17 @@ let add_statement ~sigma st = match Stmt.view st with
   | Stmt.Axiom (Stmt.Axiom_std _)
   | Stmt.Goal _ -> sigma
   | Stmt.Pred (_, _, preds) -> add_preds ~sigma preds
+  | Stmt.Copy c ->
+      let sigma = declare ~sigma c.Stmt.copy_id c.Stmt.copy_ty in
+      let sigma = declare ~sigma c.Stmt.copy_abstract c.Stmt.copy_abstract_ty in
+      let sigma = declare ~sigma c.Stmt.copy_concretize c.Stmt.copy_concretize_ty in
+      sigma
   | Stmt.TyDef (_,l) ->
       List.fold_left
         (fun sigma tydef ->
           let sigma = declare ~sigma tydef.Stmt.ty_id tydef.Stmt.ty_type in
           ID.Map.fold
             (fun _ cstor sigma ->
-              declare ~sigma cstor.Stmt.cstor_name cstor.Stmt.cstor_type
-            ) tydef.Stmt.ty_cstors sigma
-        ) sigma l
+              declare ~sigma cstor.Stmt.cstor_name cstor.Stmt.cstor_type)
+            tydef.Stmt.ty_cstors sigma)
+        sigma l

@@ -274,6 +274,9 @@ module Make(T : TI.S) = struct
             | Env.Data (_,_,_)
             | Env.Cstor (_,_,_,_)
             | Env.Pred (`Wf,_,_,_,_)
+            | Env.Copy_abstract _
+            | Env.Copy_concretize _
+            | Env.Copy_ty _
             | Env.Fun_spec _ ->
                 (* do not polarize *)
                 ID.Tbl.add state.St.polarized id None;
@@ -456,6 +459,7 @@ module Make(T : TI.S) = struct
   let conf = {Traversal.
     direct_tydef=true;
     direct_spec=true;
+    direct_copy=true;
     direct_mutual_types=true;
   }
 
@@ -562,6 +566,8 @@ module Make(T : TI.S) = struct
     method do_term ~depth:_ t = polarize_term ~state:st t
 
     method do_spec ~depth:_ ~loc:_ _ _ = assert false
+
+    method do_copy ~depth:_ ~loc:_ _ _ = assert false
 
     method do_mutual_types ~depth:_ _ _ = assert false
 

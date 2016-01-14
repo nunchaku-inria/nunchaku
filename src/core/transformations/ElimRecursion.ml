@@ -345,6 +345,7 @@ module Make(T : TI.S) = struct
               l in
             [Stmt.axiom ~info l]
         end
+    | Stmt.Copy c -> [Stmt.copy ~info c]
     | Stmt.Goal g ->
         [Stmt.goal ~info (tr_form ~state g)]
 

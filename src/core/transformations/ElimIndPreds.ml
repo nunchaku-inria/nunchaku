@@ -197,6 +197,7 @@ module Make(T : TI.S) = struct
                  by polarize *)
               assert false
           | Stmt.Decl (id,k,d) -> [Stmt.mk_decl ~info id k d]
+          | Stmt.Copy c -> [Stmt.copy ~info c]
           | Stmt.Axiom (Stmt.Axiom_std l) -> [Stmt.axiom ~info l]
           | Stmt.Axiom (Stmt.Axiom_spec l) -> [Stmt.axiom_spec ~info l]
           | Stmt.Axiom (Stmt.Axiom_rec l) ->

@@ -20,6 +20,7 @@ type conf = {
   direct_tydef: bool;
   direct_spec: bool;
   direct_mutual_types: bool;
+  direct_copy: bool;
 }
 
 (* union-find list *)
@@ -253,6 +254,10 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       self#done_processing id arg;
       ()
 
+    method virtual do_copy
+    : depth:int -> loc:Loc.t option ->
+      (term, term) Stmt.copy -> Arg.t -> unit
+
     method virtual do_spec
     : depth:int -> loc:Loc.t option -> ID.t ->
       (term, term) Stmt.spec_defs -> Arg.t ->
@@ -346,7 +351,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
         assert false  (* should have found the frame *)
       with Exit -> ()
 
-    (* monomorphize [id,arg] if depth is not too high and if
+    (* traverse [id,arg] if depth is not too high and if
        it is not already being processed *)
     method private do_statements_for_id
       : depth:int -> ID.t -> Arg.t -> unit
@@ -366,7 +371,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
         | `New ->
             self#do_new_statement_for_id ~depth id arg
 
-    (* [id,arg] not processed yet, monomorphize it depending on
+    (* [id,arg] not processed yet, traverse it depending on
        what its definition looks like *)
     method private do_new_statement_for_id
       : depth:int -> ID.t -> Arg.t -> unit
@@ -396,6 +401,13 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
             assert (ID.equal tydef.Stmt.ty_id id);
             self#do_mutual_types_rec ~depth ~loc k tydefs tydef arg;
             assert (self#has_processed id arg);
+        | Env.Copy_abstract c
+        | Env.Copy_concretize c
+        | Env.Copy_ty c ->
+            if not conf.direct_spec then (
+              self#do_copy ~depth ~loc c arg;
+              assert (self#has_processed c.Stmt.copy_id arg);
+            )
         | Env.NoDef when conf.direct_tydef -> () (* already defined *)
         | Env.NoDef ->
             let ty = env_info.Env.ty in
@@ -406,7 +418,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     method update_env f = env <- f env
 
     (* register the statement into the state's [env], so that next statements
-      can monomorphize it. Some statements are automatically kept (goal and axiom) *)
+      can refer to it. Some statements are automatically kept (goal and axiom) *)
     method do_stmt
     : (term, term, 'inv1) Stmt.t -> unit
     = fun st ->
@@ -435,6 +447,9 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
           if conf.direct_spec then self#push_res (Stmt.axiom_spec ~info l)
       | Stmt.Axiom (Stmt.Axiom_rec l) ->
           env <- Env.rec_funs ?loc ~env l;
+      | Stmt.Copy c ->
+          env <- Env.add_copy ?loc ~env c;
+          if conf.direct_copy then self#push_res (Stmt.copy ~info c);
       | Stmt.TyDef (k, l) ->
           env <- Env.def_data ?loc ~kind:k ~env l;
           if conf.direct_tydef then self#push_res (Stmt.mk_ty_def ~info k l)
