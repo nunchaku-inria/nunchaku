@@ -509,12 +509,12 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
       | Some p -> fpf out "@,@[<2>pred@ @[%a@]@]" Pt.print p
     in
     fpf out
-      "@[<2>copy @[%a %a@] :=@ @[%a@]@ abstract %a@ concretize %a%a@]"
+      "@[<v2>copy @[%a %a :=@ @[%a@]@]@ abstract %a : %a@ concretize %a : %a%a@]"
       ID.print c.copy_id
       (CCFormat.list ~start:"" ~stop:"" ~sep:" " Var.print_full) c.copy_vars
       Pty.print c.copy_of
-      ID.print c.copy_abstract
-      ID.print c.copy_concretize
+      ID.print c.copy_abstract Pty.print c.copy_abstract_ty
+      ID.print c.copy_concretize Pty.print c.copy_concretize_ty
       pp_pred c.copy_pred
 
   let print out t = match t.view with

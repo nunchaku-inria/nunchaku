@@ -1121,9 +1121,9 @@ module Convert(Term : TermTyped.S) = struct
              in both the copy and the definition@]"
              (CCFormat.list Var.print_full) subset
     end;
-    let abstract = ID.make c.A.abstract in
+    let abstract = ID.make_full ~needs_at:(vars<>[]) c.A.abstract in
     let ty_abstract = ty_forall_l_ vars (U.ty_arrow ty_of ty_new) in
-    let concretize = ID.make c.A.concretize in
+    let concretize = ID.make_full ~needs_at:(vars<>[]) c.A.concretize in
     let ty_concretize = ty_forall_l_ vars (U.ty_arrow ty_new ty_of) in
     (* declare abstract and concretize *)
     let env = TyEnv.add_decl ~env name ~id ty_id in

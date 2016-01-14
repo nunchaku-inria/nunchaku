@@ -78,6 +78,8 @@ module Subst : sig
   val find_exn : subst:('ty,'a) t -> 'ty var -> 'a  (** @raise Not_found if var not bound *)
 
   val to_list : ('ty,'a) t -> ('ty var * 'a) list
+
+  val print : 'a CCFormat.printer -> (_, 'a) t CCFormat.printer
 end
 
 (** {2 Data structures} *)

@@ -277,7 +277,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     = fun ~depth ~loc kind _tydefs tydef arg ->
       let id = tydef.Stmt.ty_id in
       Utils.debugf ~section 3
-        "@[<2>process type decl `%a : %a` for@ %a@ at depth %d@]"
+        "@[<2>process type decl `%a : %a`@ for %a@ at depth %d@]"
         (fun k-> k ID.print id P.print tydef.Stmt.ty_type Arg.print arg depth);
       let l = UF_list.make [] in
       let frame = {

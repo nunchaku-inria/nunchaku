@@ -71,6 +71,13 @@ module Subst = struct
   let find ~subst v = try Some (find_exn ~subst v) with Not_found -> None
 
   let to_list s = M.fold (fun _ (v,x) acc -> (v,x)::acc) s []
+
+  let print pt out s =
+    let pp_pair out (v,t) =
+      Format.fprintf out "@[<2>%a →@ @[%a@]@]" print_full v pt t in
+    Format.fprintf out "{@[<hv>%a@]}"
+      (CCFormat.seq ~start:"" ~stop:"" ~sep:", " pp_pair)
+      (M.to_seq s |> Sequence.map snd)
 end
 
 module Set(Ty : sig type t end) = CCSet.Make(struct
