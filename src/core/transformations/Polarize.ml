@@ -24,6 +24,7 @@ let errorf_ msg = Utils.exn_ksprintf msg ~f:error_
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
+  module PStmt = Stmt.Print(P)(P)
 
   type term = T.t
 
@@ -250,8 +251,10 @@ module Make(T : TI.S) = struct
         let t = polarize_term_rec ~state pol t in
         U.guard t g
     | TI.Builtin _
-    | TI.Var _
-    | TI.Const _ -> t
+    | TI.Var _ -> t
+    | TI.Const id ->
+        St.call ~state ~depth:0 id `Keep; (* keep it as is *)
+        t
     | TI.App (f,l) ->
         (* convert arguments *)
         let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
@@ -354,6 +357,8 @@ module Make(T : TI.S) = struct
     assert (p.unroll = `No_unroll);
     let defined = def.rec_defined in
     let defined = { defined with defined_head=(if is_pos then p.pos else p.neg); } in
+    Utils.debugf ~section 5 "@[<2>polarize def @[%a@]@ on %B@]"
+      (fun k->k PStmt.print_rec_def def is_pos);
     let rec_eqns = map_eqns def.rec_eqns
       ~ty:CCFun.id
       ~term:(polarize_term_rec ~state (if is_pos then Pol.Pos else Pol.Neg))
@@ -478,13 +483,12 @@ module Make(T : TI.S) = struct
 
     method do_def ~depth:_ def act =
       let id = def.Stmt.rec_defined.Stmt.defined_head in
-      if act<>`Keep
-        then Utils.debugf ~section 5 "polarize def %a on %a"
-          (fun k->k ID.print id pp_act act);
+      Utils.debugf ~section 5 "@[<2>polarize def @[%a@]@ on %a@]"
+        (fun k->k ID.print id pp_act act);
       match act with
       | `Keep ->
           let def = Stmt.map_rec_def def
-            ~term:(polarize_term_rec ~state:st Pol.Pos) ~ty:CCFun.id in
+            ~term:(polarize_term ~state:st) ~ty:CCFun.id in
           [def]
       | `Polarize is_pos ->
           let p =
