@@ -73,6 +73,9 @@ module Subst : sig
   (** Remove binding for this variable.
       {b careful} if other bindings depend on this variable's binding... *)
 
+  val deref_rec : subst:('ty, 'ty var) t -> 'ty var -> 'ty var
+  (** For renamings, follow the substitution until we find an unbound var *)
+
   val mem : subst:('ty,'a) t -> 'ty var -> bool
   val find : subst:('ty,'a) t -> 'ty var -> 'a option
   val find_exn : subst:('ty,'a) t -> 'ty var -> 'a  (** @raise Not_found if var not bound *)

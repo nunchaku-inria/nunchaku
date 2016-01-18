@@ -686,6 +686,9 @@ module type UTIL = sig
   val eval : subst:subst -> t_ -> t_
   (** Applying a substitution *)
 
+  val eval_renaming : subst:(t_, t_ Var.t) Var.Subst.t -> t_ -> t_
+  (** Applying a variable renaming *)
+
   val ty_apply : t_ -> t_ list -> t_
   (** [apply t l] computes the type of [f args] where [f : t] and [args : l].
       @raise ApplyError if the arguments do not match *)
@@ -1063,6 +1066,20 @@ module Util(T : S)
             ~bind:(fun subst v ->
               let v' = Var.fresh_copy v in
               Var.Subst.add ~subst v (var v'), v')
+    in
+    aux subst t
+
+  let eval_renaming ~subst t =
+    let rec aux subst t = match T.repr t with
+      | Var v ->
+          let v' = CCOpt.get v (Subst.find ~subst v) in
+          var v'
+      | _ ->
+          map subst t
+            ~f:aux
+            ~bind:(fun subst v ->
+              let v' = Var.fresh_copy v in
+              Var.Subst.add ~subst v v', v')
     in
     aux subst t
 
