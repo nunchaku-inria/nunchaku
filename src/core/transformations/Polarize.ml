@@ -357,7 +357,7 @@ module Make(T : TI.S) = struct
     assert (p.unroll = `No_unroll);
     let defined = def.rec_defined in
     let defined = { defined with defined_head=(if is_pos then p.pos else p.neg); } in
-    Utils.debugf ~section 5 "@[<2>polarize def @[%a@]@ on %B@]"
+    Utils.debugf ~section 5 "@[<2>polarize def `@[%a@]`@ on %B@]"
       (fun k->k PStmt.print_rec_def def is_pos);
     let rec_eqns = map_eqns def.rec_eqns
       ~ty:CCFun.id
@@ -483,7 +483,7 @@ module Make(T : TI.S) = struct
 
     method do_def ~depth:_ def act =
       let id = def.Stmt.rec_defined.Stmt.defined_head in
-      Utils.debugf ~section 5 "@[<2>polarize def @[%a@]@ on %a@]"
+      Utils.debugf ~section 5 "@[<2>polarize def `@[%a@]`@ on %a@]"
         (fun k->k ID.print id pp_act act);
       match act with
       | `Keep ->
