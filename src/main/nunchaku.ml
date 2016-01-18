@@ -225,7 +225,7 @@ let main_model ~output statements =
   >|= fun res ->
   begin match res, output with
   | `Sat m, O_nunchaku ->
-      Format.printf "@[<v>@[<2>SAT: {@,@[<v>%a@]@]@,}@]@."
+      Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]@."
         (Model.print UntypedAST.print_term UntypedAST.print_term) m;
   | `Sat m, O_tptp ->
       Format.printf "@[<v2>%a@]@,@." NunPrintTPTP.print_model m
