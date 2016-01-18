@@ -352,20 +352,15 @@ module Print(T : REPR)
         fpf out "@[<2>%a ->@ %a@]" print_in_binder a print b
   and print_in_app out t = match T.repr t with
     | Builtin b when not (Builtin.is_infix b) -> print out t
-    | TyBuiltin _ | Const _ -> print out t
-    | TyMeta _ -> print out t
-    | Var _ -> print out t
-    | App (_,_) | Builtin _
-    | Let _ | Match _ -> fpf out "(@[%a@])" print t
-    | Bind _ -> fpf out "(@[%a@])" print t
-    | TyArrow (_,_) -> fpf out "(@[%a@])" print t
+    | TyBuiltin _ | Const _ | TyMeta _ | Var _ | Match _ -> print out t
+    | App (_,_) | Builtin _ | Let _ | Bind _ | TyArrow _ -> fpf out "(@[%a@])" print t
   and print_in_binder out t = match T.repr t with
-    | TyBuiltin _ | Const _ | App (_,_) | Builtin _ ->
+    | TyBuiltin _ | Const _ | App _ | Builtin _ | Match _ ->
         print out t
     | Var _ -> print out t
     | TyMeta _ -> print out t
     | Bind _ -> fpf out "(@[%a@])" print t
-    | Let _ | Match _ | TyArrow (_,_) -> fpf out "(@[%a@])" print t
+    | Let _ | TyArrow (_,_) -> fpf out "(@[%a@])" print t
   and print_infix_list b out l = match l with
     | [] -> assert false
     | [t] -> print_in_app out t
