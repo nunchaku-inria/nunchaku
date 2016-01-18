@@ -1072,7 +1072,7 @@ module Util(T : S)
   let eval_renaming ~subst t =
     let rec aux subst t = match T.repr t with
       | Var v ->
-          let v' = CCOpt.get v (Subst.find ~subst v) in
+          let v' = Subst.deref_rec ~subst v in
           var v'
       | _ ->
           map subst t

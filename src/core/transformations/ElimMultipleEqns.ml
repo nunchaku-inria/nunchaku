@@ -37,6 +37,7 @@ module Make(T : TI.S) = struct
 
   type ('a,'b) local_state = {
     root: term; (* term being pattern matched on (for undefined) *)
+    mutable renaming: (term, term Var.t) Subst.t;
     env: ('a,'b) env;
   }
 
@@ -74,6 +75,7 @@ module Make(T : TI.S) = struct
         then errorf_ "@[<2>%a is not a constructor of %a@ (these are @[%a@])@]"
           ID.print c ID.print d.dn_tydef.Stmt.ty_id
           (CCFormat.seq ID.print) (ID.Map.to_seq allowed_cstors |> Sequence.map fst);
+        (* add [x] to the list [l] of subtrees already present for case [c] *)
         let l = try ID.Map.find c d.dn_by_cstor with Not_found -> [] in
         DN_match { d with dn_by_cstor = ID.Map.add c (x::l) d.dn_by_cstor }
     | DN_if _ -> errorf_ "cannot match against %a, boolean case" ID.print c
@@ -94,10 +96,12 @@ module Make(T : TI.S) = struct
   (* transform flat equations into a match tree. *)
   let rec compile_equations ~local_state vars l : term =
     match vars, l with
-    | _, [] -> U.undefined_ local_state.root (* undefined case *)
+    | _, [] ->
+        let root = U.eval_renaming ~subst:local_state.renaming local_state.root in
+        U.undefined_ root (* undefined case *)
     | [], [([], rhs, [], subst)] ->
         (* simple case: no side conditions, one RHS *)
-        U.eval ~subst rhs
+        U.eval_renaming ~subst rhs
     | [], l ->
         let l = List.map
           (fun (args,rhs,side,subst) ->
@@ -116,11 +120,11 @@ module Make(T : TI.S) = struct
               let default = U.undefined_ local_state.root in
               List.fold_left
                 (fun acc (cond,rhs,subst) ->
-                  let rhs = U.eval ~subst rhs in
+                  let rhs = U.eval_renaming ~subst rhs in
                   U.ite cond rhs acc)
                 default l
           | [rhs,subst], [] ->
-              U.eval ~subst rhs
+              U.eval_renaming ~subst rhs
           | [t,_], _::_ ->
               errorf_
                 "@[ambiguity: term `@[%a@]`@ has no side conditions,@ but other terms do.@]"
@@ -133,7 +137,7 @@ module Make(T : TI.S) = struct
           Utils.debugf ~section 5 "build decision node for %a:%a"
             (fun k->k Var.print v P.print (Var.ty v));
           let ty = Var.ty v in
-          if U.ty_is_Prop ty then DN_if ([], [])
+          if U.ty_is_Prop ty then DN_if ([], []) (* decision tree on prop *)
           else try
             let ty_id = U.head_sym ty in
             match Env.def (Env.find_exn ~env:local_state.env ty_id) with
@@ -170,12 +174,23 @@ module Make(T : TI.S) = struct
                     let sub_pats = List.map (fun x->P_term x) sub_pats in
                     dnode_add_cstor dnode id (sub_pats,pats,rhs,side,subst)
                 | Pattern.Var v' ->
-                    (* renaming *)
-                    let subst = Subst.add ~subst v' (U.var v) in
+                    (* renaming. We try to use [v'] rather than [v] because
+                       the name of [v'] is probably more relevant, except
+                       if [v] is already renamed to something else . *)
+                    let subst = match Subst.find ~subst:local_state.renaming v with
+                      | None ->
+                          (* v -> v', use [v'] instead of [v] now. *)
+                          local_state.renaming <-
+                            Subst.add ~subst:local_state.renaming v v';
+                          Subst.add ~subst v v'
+                      | Some v'' ->
+                          Subst.add ~subst v' v'' (* v -> v'' <- v' *)
+                    in
                     dnode_add_wildcard dnode (pats,rhs,side,subst)
           )
           dnode l
         in
+        let v = Subst.deref_rec ~subst:local_state.renaming v in
         compile_dnode ~local_state v vars' dnode
 
   (* add missing constructors (not explicitely matched upon) to the set
@@ -186,6 +201,7 @@ module Make(T : TI.S) = struct
   | DN_if (l,r) ->
       let l = compile_equations ~local_state next_vars l in
       let r = compile_equations ~local_state next_vars r in
+      let v = Subst.deref_rec ~subst:local_state.renaming v in
       U.ite (U.var v) l r
   | DN_bind l -> compile_equations ~local_state next_vars l
   | DN_match dn when ID.Map.is_empty dn.dn_by_cstor ->
@@ -221,13 +237,16 @@ module Make(T : TI.S) = struct
                 l
             with Not_found -> []
           in
-          let rhs' =compile_equations ~local_state
-            (vars @ next_vars) (cases @ wildcard_cases)
+          let rhs' =
+            compile_equations ~local_state
+              (vars @ next_vars) (cases @ wildcard_cases)
           in
-          vars, rhs'
-        )
+          (* see whether the variables were renamed *)
+          let vars = List.map (Subst.deref_rec ~subst:local_state.renaming) vars in
+          vars, rhs')
         dn.dn_tydef.Stmt.ty_cstors
       in
+      let v = Subst.deref_rec ~subst:local_state.renaming v in
       U.match_with (U.var v) l
 
   (* @param env the environment for types and constructors
@@ -258,9 +277,11 @@ module Make(T : TI.S) = struct
           l
       and local_state = {
         root=U.app (U.const id) (List.map U.var vars); (* defined term *)
+        renaming=Subst.empty;
         env;
       } in
       let new_rhs = compile_equations ~local_state vars cases in
+      let vars = List.map (Subst.deref_rec ~subst:local_state.renaming) vars in
       Stmt.Eqn_single (vars,new_rhs)
 
   let conv_preds
