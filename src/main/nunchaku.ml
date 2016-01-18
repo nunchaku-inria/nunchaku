@@ -164,11 +164,12 @@ let make_model_pipeline () =
   (* setup pipeline *)
   let pipe =
     Step_tyinfer.pipe ~print:!print_typed_  @@@
-    Step_skolem.pipe ~print:!print_skolem_ @@@
+    Step_skolem.pipe ~print:!print_skolem_ ~mode:`Sk_types @@@
     Step_mono.pipe ~print:!print_mono_ @@@
     Step_ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~print:!print_elim_multi_eqns @@@
     Step_polarize.pipe ~print:!print_polarize_ ~polarize_rec:!polarize_rec_ @@@
+    Step_skolem.pipe_no_nnf ~print:!print_skolem_ ~mode:`Sk_all @@@
     Step_elim_preds.pipe ~print:!print_elim_preds_ @@@
     Step_rec_elim.pipe ~print:!print_recursion_elim_ @@@
     Step_ElimMatch.pipe ~print:!print_elim_match_ @@@
