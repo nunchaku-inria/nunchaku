@@ -250,16 +250,16 @@ module Make(T : TI.S) = struct
         let g = TI.Builtin.map_guard (polarize_term_rec ~state pol) g in
         let t = polarize_term_rec ~state pol t in
         U.guard t g
-    | TI.Builtin _
+    | TI.Builtin (`True | `False | `DataTest _ | `And | `Or | `Not
+                 | `DataSelect _ | `Undefined _ | `Imply)
     | TI.Var _ -> t
     | TI.Const id ->
         St.call ~state ~depth:0 id `Keep; (* keep it as is *)
         t
     | TI.App (f,l) ->
-        (* convert arguments *)
-        let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
         begin match T.repr f, l with
         | TI.Const id, _ when ID.Tbl.mem state.St.polarized id ->
+            let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
             (* we already chose whether [id] was polarized or not *)
             begin match ID.Tbl.find state.St.polarized id with
             | None ->
@@ -271,6 +271,7 @@ module Make(T : TI.S) = struct
             end
         | TI.Const id, _ ->
             (* shall we polarize this constant? *)
+            let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
             let info = Env.find_exn ~env:(St.env ~state) id in
             begin match Env.def info with
             | Env.NoDef
@@ -313,11 +314,26 @@ module Make(T : TI.S) = struct
                   app_polarized pol p l
                 )
             end
+        | TI.Builtin ((`And | `Or) as b), _ ->
+            let l = List.map (polarize_term_rec ~state pol) l in
+            U.app_builtin b l
         | TI.Builtin `Imply, [a;b] ->
             let a = polarize_term_rec ~state (Pol.inv pol) a in
             let b = polarize_term_rec ~state pol b in
             U.imply a b
-        | _ -> U.app f l
+        | TI.Builtin `Not, [t] ->
+            let t = polarize_term_rec ~state (Pol.inv pol) t in
+            U.not_ t
+        | TI.Builtin (`Ite _ ), l ->
+            (* might return functions *)
+            let f = polarize_term_rec ~state pol f in
+            let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
+            U.app f l
+        | TI.Builtin (`Eq _ | `Equiv _ | `Not), _ ->
+            assert false
+        | _ ->
+            let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
+            U.app f l
         end
     | TI.Bind ((`Forall | `Exists) as b,v,t) ->
         let t = polarize_term_rec ~state pol t in
