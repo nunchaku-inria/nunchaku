@@ -38,6 +38,7 @@ let print_intro_guards_ = ref false
 let print_fo_ = ref false
 let print_smt_ = ref false
 let print_model_ = ref false
+let enable_polarize_ = ref true
 let timeout_ = ref 30
 let version_ = ref false
 let file = ref ""
@@ -97,6 +98,7 @@ let options =
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
   ; "--polarize-rec", Arg.Set polarize_rec_, " enable polarization of rec predicates"
   ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
+  ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
   ; "--output", Arg.String set_output_, " set output format " ^ list_outputs_ ()
@@ -168,7 +170,10 @@ let make_model_pipeline () =
     Step_mono.pipe ~print:!print_mono_ @@@
     Step_ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~print:!print_elim_multi_eqns @@@
-    Step_polarize.pipe ~print:!print_polarize_ ~polarize_rec:!polarize_rec_ @@@
+    (if !enable_polarize_
+      then Step_polarize.pipe ~print:!print_polarize_ ~polarize_rec:!polarize_rec_
+      else Transform.nop ())
+    @@@
     Step_skolem.pipe_no_nnf ~print:!print_skolem_ ~mode:`Sk_all @@@
     Step_elim_preds.pipe ~print:!print_elim_preds_ @@@
     Step_rec_elim.pipe ~print:!print_recursion_elim_ @@@
