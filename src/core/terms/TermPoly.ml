@@ -146,6 +146,9 @@ end = struct
     | Builtin (`Ite (a,b,c)) -> Untyped.ite (aux a)(aux b)(aux c)
     | Builtin (`Undefined (id, _)) ->
         Untyped.builtin (`Undefined (ID.name id))
+    | Builtin (`Guard (t, _)) ->
+        (* XXX ignore guards when decoding *)
+        aux t
     | Builtin b ->
         let b, l = match b with
           | `True  -> `True, []
@@ -156,10 +159,10 @@ end = struct
           | `Imply -> `Imply, []
           | `Equiv (a,b) -> `Equiv, [a;b]
           | `Eq (a,b) -> `Eq, [a;b]
+          | `Guard _
           | `Undefined _
           | `DataSelect _
           | `DataTest _
-          | `Guard _
           | `Ite _ -> assert false
         in
         Untyped.app (Untyped.builtin b) (List.map aux l)

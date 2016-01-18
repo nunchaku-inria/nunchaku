@@ -15,10 +15,17 @@ module type S = sig
   module T1 : TI.REPR
   module T2 : TI.S
 
+  type mode =
+    [ `Sk_types (** Skolemize type variables only *)
+    | `Sk_ho (** Skolemize type variables and term variables of fun type *)
+    | `Sk_all (** All variables are susceptible of being skolemized *)
+    ]
+
   type state
 
-  val create : ?prefix:string -> unit -> state
-  (** @param prefix the prefix used to generate Skolem symbols *)
+  val create : ?prefix:string -> mode:mode -> unit -> state
+  (** @param prefix the prefix used to generate Skolem symbols
+      @param mode the kind of skolemization we expect *)
 
   val nnf : state:state -> T1.t -> T2.t
   (** Put term in negation normal form *)
@@ -30,9 +37,14 @@ module type S = sig
 
   val print_state : Format.formatter -> state -> unit
 
-  val convert_problem :
+  val nnf_and_skolemize_pb :
     state:state ->
     (T1.t, T1.t, <eqn:_;ind_preds:_;..> as 'inv) Problem.t ->
+    (T2.t, T2.t, 'inv) Problem.t
+
+  val skolemize_pb :
+    state:state ->
+    (T2.t, T2.t, <eqn:_;ind_preds:_;..> as 'inv) Problem.t ->
     (T2.t, T2.t, 'inv) Problem.t
 
   val find_id_def : state:state -> id -> T2.t option
@@ -42,16 +54,28 @@ module type S = sig
     state:state -> (T2.t,T2.t) Model.t -> (T2.t,T2.t) Model.t
 
   val pipe :
+    mode:mode ->
     print:bool ->
     ((T1.t,T1.t,<eqn:_;ind_preds:_;..> as 'inv) Problem.t,
       (T2.t,T2.t,'inv) Problem.t,
       (T2.t,T2.t) Model.t, (T2.t,T2.t) Model.t
     ) Transform.t
 
+  (** If the input is already in NNF, this step only performs Skolemization *)
+  val pipe_no_nnf :
+    mode:mode ->
+    print:bool ->
+    ((T2.t,T2.t,<eqn:_;ind_preds:_;..> as 'inv) Problem.t,
+      (T2.t,T2.t,'inv) Problem.t,
+      (T2.t,T2.t) Model.t, (T2.t,T2.t) Model.t
+    ) Transform.t
+
   (** Similar to {!pipe} but with a generic decode function.
+      @param mode determines which variables are skolemized
       @param decode is given [find_id_def], which maps Skolemized
         constants to the formula they define *)
   val pipe_with :
+    mode:mode ->
     decode:(state -> 'c -> 'd) ->
     print:bool ->
     ((T1.t,T1.t, <eqn:_;ind_preds:_;..> as 'inv) Problem.t,
@@ -78,18 +102,26 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
     sym_ty : T2.t; (* type of the symbol *)
   }
 
+  type mode =
+    [ `Sk_types (** Skolemize type variables only *)
+    | `Sk_ho (** Skolemize type variables and term variables of fun type *)
+    | `Sk_all (** All variables are susceptible of being skolemized *)
+    ]
+
   type state = {
     mutable sigma: T2.t Signature.t;
     tbl: new_sym ID.Tbl.t; (* skolem -> quantified form *)
     prefix:string; (* prefix for Skolem symbols *)
+    mode: mode;
     mutable name : int;
     mutable new_sym: (id * new_sym) list; (* list of newly defined symbols *)
   }
 
-  let create ?(prefix="nun_sk_") () = {
+  let create ?(prefix="nun_sk_") ~mode () = {
     sigma=Signature.empty;
     tbl=ID.Tbl.create 32;
     prefix;
+    mode;
     name=0;
     new_sym=[];
   }
@@ -116,7 +148,7 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
   let conv_var v = Var.update_ty v ~f:Conv.convert
 
   (* first, negation normal form.
-     Also transforms nested `C[if exists x.p[x] then a else b]` where `a`
+     TODO: Also transforms nested `C[if exists x.p[x] then a else b]` where `a`
      is not of type prop, into `exists x.p[x] => C[a] & ¬ exists x.p[x] => C[b]` *)
 
   let nnf ~state t =
@@ -194,6 +226,16 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
     in
     nnf t
 
+  (* shall we skolemize the existential variable [v]? *)
+  let should_skolemize_ ~state v =
+    let ty = Var.ty v in
+    match state.mode, T2.repr ty with
+    | `Sk_all, _ -> true
+    | (`Sk_types | `Sk_ho), TI.TyBuiltin `Type -> true
+    | `Sk_types, _ -> false
+    | `Sk_ho, TI.TyArrow _ -> true
+    | `Sk_ho, _ -> false
+
   let skolemize_ ~state t =
     (* recursive traversal *)
     let rec aux ~env t = match T2.repr t with
@@ -221,10 +263,7 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
       | TI.Bind (`TyForall, v, t) ->
           enter_var_ ~env v
             (fun env v -> U.mk_bind `TyForall v (aux ~env t))
-      | TI.Bind ((`Fun | `Forall) as b, v, t) ->
-          enter_var_ ~env v
-            (fun env v -> U.mk_bind b v (aux ~env t))
-      | TI.Bind (`Exists, v, t') ->
+      | TI.Bind (`Exists, v, t') when should_skolemize_ ~state v ->
           (* type of Skolem function *)
           let ty_ret = aux ~env (Var.ty v) in
           let ty_args = List.map Var.ty env.vars in
@@ -241,6 +280,9 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
           (* convert [t] and replace [v] with [skolem] in it *)
           let env = env_bind ~env v skolem in
           aux ~env t'
+      | TI.Bind ((`Fun | `Forall | `Exists) as b, v, t) ->
+          enter_var_ ~env v
+            (fun env v -> U.mk_bind b v (aux ~env t))
       | TI.Let (v,t,u) ->
           let t = aux ~env t in
           enter_var_ ~env v (fun env v -> U.let_ v t (aux ~env u))
@@ -287,7 +329,7 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
      least the goal; maybe stop skolemization at <=>/ite or other depolarizing
      connectives in the rest of the problem? *)
 
-  let convert_problem ~state pb =
+  let nnf_and_skolemize_pb ~state pb =
     Problem.flat_map_statements
       ~f:(fun stmt ->
         let stmt' = Stmt.map stmt
@@ -295,6 +337,24 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
             let t' = nnf ~state t in
             skolemize_ ~state t')
           ~ty:Conv.convert
+        in
+        state.sigma <- Signature.add_statement ~sigma:state.sigma stmt';
+        let l = state.new_sym in
+        state.new_sym <- [];
+        let prelude =
+          List.map
+            (fun (id,s) -> Stmt.decl ~info:Stmt.info_default id s.sym_ty)
+            l
+        in
+        List.rev_append prelude [stmt'])
+      pb
+
+  let skolemize_pb ~state pb =
+    Problem.flat_map_statements
+      ~f:(fun stmt ->
+        let stmt' = Stmt.map stmt
+          ~term:(skolemize_ ~state)
+          ~ty:CCFun.id
         in
         state.sigma <- Signature.add_statement ~sigma:state.sigma stmt';
         let l = state.new_sym in
@@ -342,7 +402,7 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
           | _ -> Some (t, u)
         )
 
-  let pipe_with ~decode ~print =
+  let pipe_ ~op ~mode ~decode ~print =
     let on_encoded = if print
       then
         let module P = Problem.Print(P2)(P2) in
@@ -354,13 +414,20 @@ module Make(T1 : TI.REPR)(T2 : TI.S)
       ~on_encoded
       ~print:print_state
       ~encode:(fun pb ->
-        let state = create() in
-        let pb = convert_problem ~state pb in
+        let state = create ~mode () in
+        let pb = op ~state pb in
         pb, state
       )
       ~decode
       ()
 
-  let pipe ~print =
-    pipe_with ~decode:(fun state m -> decode_model ~state m) ~print
+  let pipe_no_nnf ~mode ~print =
+    pipe_ ~op:skolemize_pb ~mode ~print
+      ~decode:(fun state m -> decode_model ~state m)
+
+  let pipe_with ~mode ~decode ~print =
+    pipe_ ~op:nnf_and_skolemize_pb ~mode ~decode ~print
+
+  let pipe ~mode ~print =
+    pipe_with ~mode ~decode:(fun state m -> decode_model ~state m) ~print
 end

@@ -417,6 +417,11 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
 
     method update_env f = env <- f env
 
+    (* translation of toplevel goal or axiom (default is {!do_term}) *)
+    method do_goal_or_axiom
+    : term -> term
+    = self#do_term ~depth:0
+
     (* register the statement into the state's [env], so that next statements
       can refer to it. Some statements are automatically kept (goal and axiom) *)
     method do_stmt
@@ -434,11 +439,11 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
           if conf.direct_tydef then self#push_res (Stmt.mk_decl ~info id k ty)
       | Stmt.Goal g ->
           (* convert goal *)
-          let g = self#do_term ~depth:0 g in
+          let g = self#do_goal_or_axiom g in
           self#push_res (Stmt.goal ~info g)
       | Stmt.Axiom (Stmt.Axiom_std l) ->
           (* keep axioms *)
-          let l = List.map (self#do_term ~depth:0) l in
+          let l = List.map self#do_goal_or_axiom l in
           self#push_res (Stmt.axiom ~info l)
       | Stmt.Pred (wf, k, preds) ->
           env <- Env.def_preds ?loc ~env ~wf ~kind:k preds;

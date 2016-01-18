@@ -12,5 +12,7 @@ true: safe_string
 # more warnings
 <src/**/*.ml>: warn(+a), warn(-4), warn(-44), warn(-50)
 
+<src/core/Utils.cm*>: inline(15)
+
 # modern OCaml!
 true: bin_annot, no_alias_deps, short_paths

@@ -244,7 +244,7 @@ module Util(T : TI.S) = struct
 
   let rename m =
     let rules = renaming_rules_of_model_ m in
-    Utils.debugf 5 ~section "@[<2>apply rewrite rules@ @[<hv>%a@]@]"
+    Utils.debugf 5 ~section "@[<2>apply rewrite rules@ @[<v>%a@]@]"
       (fun k->k (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_rule_) (ID.Map.to_seq rules));
     (* update domains *)
     let finite_types =

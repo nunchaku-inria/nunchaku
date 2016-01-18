@@ -164,11 +164,12 @@ let make_model_pipeline () =
   (* setup pipeline *)
   let pipe =
     Step_tyinfer.pipe ~print:!print_typed_  @@@
-    Step_skolem.pipe ~print:!print_skolem_ @@@
+    Step_skolem.pipe ~print:!print_skolem_ ~mode:`Sk_types @@@
     Step_mono.pipe ~print:!print_mono_ @@@
     Step_ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~print:!print_elim_multi_eqns @@@
     Step_polarize.pipe ~print:!print_polarize_ ~polarize_rec:!polarize_rec_ @@@
+    Step_skolem.pipe_no_nnf ~print:!print_skolem_ ~mode:`Sk_all @@@
     Step_elim_preds.pipe ~print:!print_elim_preds_ @@@
     Step_rec_elim.pipe ~print:!print_recursion_elim_ @@@
     Step_ElimMatch.pipe ~print:!print_elim_match_ @@@
@@ -225,7 +226,7 @@ let main_model ~output statements =
   >|= fun res ->
   begin match res, output with
   | `Sat m, O_nunchaku ->
-      Format.printf "@[<v>@[<2>SAT: {@,@[<v>%a@]@]@,}@]@."
+      Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]@."
         (Model.print UntypedAST.print_term UntypedAST.print_term) m;
   | `Sat m, O_tptp ->
       Format.printf "@[<v2>%a@]@,@." NunPrintTPTP.print_model m

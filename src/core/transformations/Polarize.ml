@@ -24,6 +24,7 @@ let errorf_ msg = Utils.exn_ksprintf msg ~f:error_
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
+  module PStmt = Stmt.Print(P)(P)
 
   type term = T.t
 
@@ -249,14 +250,16 @@ module Make(T : TI.S) = struct
         let g = TI.Builtin.map_guard (polarize_term_rec ~state pol) g in
         let t = polarize_term_rec ~state pol t in
         U.guard t g
-    | TI.Builtin _
-    | TI.Var _
-    | TI.Const _ -> t
+    | TI.Builtin (`True | `False | `DataTest _ | `And | `Or | `Not
+                 | `DataSelect _ | `Undefined _ | `Imply)
+    | TI.Var _ -> t
+    | TI.Const id ->
+        St.call ~state ~depth:0 id `Keep; (* keep it as is *)
+        t
     | TI.App (f,l) ->
-        (* convert arguments *)
-        let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
         begin match T.repr f, l with
         | TI.Const id, _ when ID.Tbl.mem state.St.polarized id ->
+            let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
             (* we already chose whether [id] was polarized or not *)
             begin match ID.Tbl.find state.St.polarized id with
             | None ->
@@ -268,6 +271,7 @@ module Make(T : TI.S) = struct
             end
         | TI.Const id, _ ->
             (* shall we polarize this constant? *)
+            let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
             let info = Env.find_exn ~env:(St.env ~state) id in
             begin match Env.def info with
             | Env.NoDef
@@ -310,11 +314,26 @@ module Make(T : TI.S) = struct
                   app_polarized pol p l
                 )
             end
+        | TI.Builtin ((`And | `Or) as b), _ ->
+            let l = List.map (polarize_term_rec ~state pol) l in
+            U.app_builtin b l
         | TI.Builtin `Imply, [a;b] ->
             let a = polarize_term_rec ~state (Pol.inv pol) a in
             let b = polarize_term_rec ~state pol b in
             U.imply a b
-        | _ -> U.app f l
+        | TI.Builtin `Not, [t] ->
+            let t = polarize_term_rec ~state (Pol.inv pol) t in
+            U.not_ t
+        | TI.Builtin (`Ite _ ), l ->
+            (* might return functions *)
+            let f = polarize_term_rec ~state pol f in
+            let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
+            U.app f l
+        | TI.Builtin (`Eq _ | `Equiv _ | `Not), _ ->
+            assert false
+        | _ ->
+            let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
+            U.app f l
         end
     | TI.Bind ((`Forall | `Exists) as b,v,t) ->
         let t = polarize_term_rec ~state pol t in
@@ -354,6 +373,8 @@ module Make(T : TI.S) = struct
     assert (p.unroll = `No_unroll);
     let defined = def.rec_defined in
     let defined = { defined with defined_head=(if is_pos then p.pos else p.neg); } in
+    Utils.debugf ~section 5 "@[<2>polarize def `@[%a@]`@ on %B@]"
+      (fun k->k PStmt.print_rec_def def is_pos);
     let rec_eqns = map_eqns def.rec_eqns
       ~ty:CCFun.id
       ~term:(polarize_term_rec ~state (if is_pos then Pol.Pos else Pol.Neg))
@@ -478,13 +499,12 @@ module Make(T : TI.S) = struct
 
     method do_def ~depth:_ def act =
       let id = def.Stmt.rec_defined.Stmt.defined_head in
-      if act<>`Keep
-        then Utils.debugf ~section 5 "polarize def %a on %a"
-          (fun k->k ID.print id pp_act act);
+      Utils.debugf ~section 5 "@[<2>polarize def `@[%a@]`@ on %a@]"
+        (fun k->k ID.print id pp_act act);
       match act with
       | `Keep ->
           let def = Stmt.map_rec_def def
-            ~term:(polarize_term_rec ~state:st Pol.Pos) ~ty:CCFun.id in
+            ~term:(polarize_term ~state:st) ~ty:CCFun.id in
           [def]
       | `Polarize is_pos ->
           let p =
@@ -564,6 +584,8 @@ module Make(T : TI.S) = struct
           [define_pred ~state:st ~is_pos def p]
 
     method do_term ~depth:_ t = polarize_term ~state:st t
+
+    method! do_goal_or_axiom t = polarize_term_rec ~state:st Pol.Pos t
 
     method do_spec ~depth:_ ~loc:_ _ _ = assert false
 
