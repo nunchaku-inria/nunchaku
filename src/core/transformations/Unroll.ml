@@ -11,16 +11,6 @@ type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds:[`Present]>
 
 let section = Utils.Section.make "unroll"
 
-exception Error of string
-
-let () = Printexc.register_printer
-  (function
-    | Error msg -> Some (CCFormat.sprintf "@[<2>error in unrolling:@ %s@]" msg)
-    | _ -> None)
-
-let error_ msg = raise (Error msg)
-let errorf_ msg = Utils.exn_ksprintf msg ~f:error_
-
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
