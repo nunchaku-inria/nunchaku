@@ -230,7 +230,7 @@ module Make(T : TI.S) = struct
       (fun def ->
         let id = def.Stmt.rec_defined.Stmt.defined_head in
         (* declare abstract type + projectors first *)
-        let name = "G_" ^ ID.to_string id in
+        let name = "G_" ^ ID.to_string_slug id in
         let abs_type_id = ID.make name in
         let abs_type = U.ty_const abs_type_id in
         let ty = Sig.find_exn ~sigma:state.sigma id in
