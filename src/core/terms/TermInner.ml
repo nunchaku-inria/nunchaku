@@ -1396,6 +1396,8 @@ let default = (module Default : S)
 module Convert(T1 : REPR)(T2 : BUILD)
 : sig
   val convert : T1.t -> T2.t
+
+  val pipe : unit -> (T1.t, T2.t, 'a, 'a) Transform.t
 end = struct
   let rec convert t = T2.build
     ( match T1.repr t with
@@ -1416,4 +1418,10 @@ end = struct
     )
   and aux_var v = Var.update_ty ~f:convert v
   and aux_meta v = MetaVar.update ~f:convert v
+
+  let pipe () =
+    Transform.make1 ~name:"convert"
+      ~encode:(fun t -> convert t, ())
+      ~decode:(fun () x -> x)
+      ()
 end
