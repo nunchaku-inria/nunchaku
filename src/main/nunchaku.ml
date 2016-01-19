@@ -24,6 +24,7 @@ let input_ = ref I_nunchaku
 let output_ = ref O_nunchaku
 let polarize_rec_ = ref true
 let print_ = ref false
+let print_all_ = ref false
 let print_pipeline_ = ref false
 let print_typed_ = ref false
 let print_skolem_ = ref false
@@ -75,6 +76,7 @@ let options =
   Arg.align ?limit:None @@ List.sort Pervasives.compare @@ (
   options_debug_ @
   [ "--print-input", Arg.Set print_, " print input"
+  ; "--print-all", Arg.Set print_all_, " print every step of the pipeline"
   ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
   ; "--print-skolem", Arg.Set print_skolem_, " print input after Skolemization"
@@ -165,22 +167,24 @@ let make_model_pipeline () =
   let open Pipes in
   (* setup pipeline *)
   let pipe =
-    Step_tyinfer.pipe ~print:!print_typed_  @@@
-    Step_skolem.pipe ~print:!print_skolem_ ~mode:`Sk_types @@@
-    Step_mono.pipe ~print:!print_mono_ @@@
+    Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
+    Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_types @@@
+    Step_mono.pipe ~print:(!print_mono_ || !print_all_) @@@
     Step_ElimMultipleEqns.pipe
-      ~decode:(fun x->x) ~print:!print_elim_multi_eqns @@@
+      ~decode:(fun x->x)
+      ~print:(!print_elim_multi_eqns || !print_all_) @@@
     (if !enable_polarize_
-      then Step_polarize.pipe ~print:!print_polarize_ ~polarize_rec:!polarize_rec_
+      then Step_polarize.pipe ~print:(!print_polarize_ || !print_all_)
+        ~polarize_rec:!polarize_rec_
       else Transform.nop ())
     @@@
-    Step_skolem.pipe_no_nnf ~print:!print_skolem_ ~mode:`Sk_all @@@
-    Step_elim_preds.pipe ~print:!print_elim_preds_ @@@
-    Step_rec_elim.pipe ~print:!print_recursion_elim_ @@@
-    Step_ElimMatch.pipe ~print:!print_elim_match_ @@@
-    Step_elim_copy.pipe ~print:!print_copy_ @@@
-    Step_intro_guards.pipe ~print:!print_intro_guards_ @@@
-    Step_rename_model.pipe_rename ~print:!print_model_ @@@
+    Step_skolem.pipe_no_nnf ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all @@@
+    Step_elim_preds.pipe ~print:(!print_elim_preds_ || !print_all_) @@@
+    Step_rec_elim.pipe ~print:(!print_recursion_elim_ || !print_all_) @@@
+    Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) @@@
+    Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) @@@
+    Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) @@@
+    Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
     Step_tofo.pipe () @@@
     id
   in
