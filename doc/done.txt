@@ -26,3 +26,5 @@ x 2015-10-27 2015-10-15 un-nesting/mutualization of (co)data
 x 2016-01-19 2016-01-19 fix skolemization
 x 2016-01-19 2015-10-02 recursive definitions (with well-foundedness check)
 x 2016-01-19 2015-10-30 fix mangling
+x 2016-01-19 2016-01-19 split unrolling off polarize?
+x 2016-01-19 2016-01-19 fix polarization (use same var in whole block, with table)
