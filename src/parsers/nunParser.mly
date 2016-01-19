@@ -178,7 +178,7 @@ apply_term:
       let loc = L.mk_pos $startpos $endpos in
       A.app ~loc t u
     }
-  | LOGIC_NOT t=atomic_term
+  | LOGIC_NOT t=apply_term
     {
       let loc = L.mk_pos $startpos $endpos in
       A.app ~loc (A.builtin ~loc `Not) [t]
