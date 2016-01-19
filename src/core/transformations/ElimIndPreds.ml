@@ -195,7 +195,8 @@ module Make(T : TI.S) = struct
           | Stmt.Pred (`Not_wf, _, _) ->
               (* should have been  transformed into a [`Wf] (co)predicate
                  by polarize *)
-              assert false
+              Utils.not_implemented
+                "cannot eliminate non-well-founded predicates without polarization"
           | Stmt.Decl (id,k,d) -> [Stmt.mk_decl ~info id k d]
           | Stmt.Copy c -> [Stmt.copy ~info c]
           | Stmt.Axiom (Stmt.Axiom_std l) -> [Stmt.axiom ~info l]

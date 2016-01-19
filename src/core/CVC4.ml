@@ -137,6 +137,7 @@ module Make(FO_T : FO.S) = struct
     with Not_found ->
       let name0 = match ID.name id, ID.polarity id with
         | "distinct", _ -> "distinct_"
+        | "concat", _ -> "concat_"
         | s, Polarity.NoPol  -> s
         | s, Polarity.Pos -> s ^ "_+"
         | s, Polarity.Neg -> s ^ "_-"
