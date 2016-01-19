@@ -559,7 +559,7 @@ module Make(FO_T : FO.S) = struct
         Sol.Res.Sat m
     | `Ok (`Atom "unknown") ->
         Utils.debug ~section 5 "CVC4 returned `unknown`";
-        Sol.Res.Timeout
+        Sol.Res.Unknown
     | `Ok (`List [`Atom "error"; `Atom s]) ->
         Utils.debugf ~section 5 "@[<2>CVC4 returned `error %s`@]" (fun k->k s);
         Sol.Res.Error (CVC4_error s)
@@ -650,7 +650,8 @@ module Make(FO_T : FO.S) = struct
           match r with
           | Sol.Res.Sat m -> Scheduling.Return_shortcut (Sol.Res.Sat m)
           | Sol.Res.Unsat -> Scheduling.Return_shortcut Sol.Res.Unsat
-          | Sol.Res.Timeout -> Scheduling.Return Sol.Res.Timeout
+          | Sol.Res.Timeout
+          | Sol.Res.Unknown -> Scheduling.Return r
           | Sol.Res.Error e ->
               Utils.debugf ~section 1
                 "@[<2>error while running CVC4@ with `%s`:@ @[%s@]@]"
@@ -661,13 +662,12 @@ module Make(FO_T : FO.S) = struct
     match res with
       | Scheduling.Return_shortcut x -> x
       | Scheduling.Return l ->
-          if List.exists
-            (function
-              | Sol.Res.Unsat -> true
-              | Sol.Res.Timeout -> false
-              | _ -> assert false)
-            l
-          then Sol.Res.Unsat else Sol.Res.Timeout
+          if List.mem Sol.Res.Unsat l then Sol.Res.Unsat
+          else if List.mem Sol.Res.Timeout l then Sol.Res.Timeout
+          else (
+            assert (List.for_all ((=) Sol.Res.Unknown) l);
+            Sol.Res.Unknown
+          )
       | Scheduling.Fail Timeout -> Sol.Res.Timeout
       | Scheduling.Fail e -> Sol.Res.Error e
 end
@@ -700,6 +700,7 @@ let call (type t)(type ty)
     | Sol.Res.Sat m -> Res.Sat m
     | Sol.Res.Unsat -> Res.Unsat
     | Sol.Res.Timeout -> Res.Timeout
+    | Sol.Res.Unknown -> Res.Unknown
     | Sol.Res.Error e -> raise e
 
 (* close a pipeline with CVC4 *)

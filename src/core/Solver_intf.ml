@@ -14,12 +14,14 @@ module Res = struct
     | Sat of ('t,'ty) Model.t
     | Unsat
     | Timeout
+    | Unknown
     | Error of exn
 
   let pp out = function
     | Sat _ -> CCFormat.string out "sat"
     | Unsat -> CCFormat.string out "unsat"
-    | Timeout -> CCFormat.string out "unknown"
+    | Timeout -> CCFormat.string out "timeout"
+    | Unknown -> CCFormat.string out "unknown"
     | Error _ -> CCFormat.string out "error"
 end
 
