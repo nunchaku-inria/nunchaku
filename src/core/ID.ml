@@ -47,6 +47,14 @@ let to_string v =
     then Printf.sprintf "@@%s%s" v.name (Polarity.to_string v.pol)
     else v.name ^ Polarity.to_string v.pol
 
+let to_string_slug v =
+  let suffix = match v.pol with
+    | Polarity.Pos -> "_pos"
+    | Polarity.Neg -> "_neg"
+    | Polarity.NoPol -> ""
+  in
+  v.name ^ suffix
+
 let print_full out v =
   if v.needs_at
     then Format.fprintf out "@@%s%s/%d" v.name (Polarity.to_string v.pol) v.id

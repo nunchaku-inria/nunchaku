@@ -35,6 +35,10 @@ include Intf.PRINT with type t := t
 
 val to_string : t -> string
 
+val to_string_slug : t -> string
+(** Pure alphanumerical identifier, see
+    https://en.wikipedia.org/wiki/Semantic_URL#Slug *)
+
 val print_full : Format.formatter -> t -> unit
 (** Print with the unique integer ID *)
 

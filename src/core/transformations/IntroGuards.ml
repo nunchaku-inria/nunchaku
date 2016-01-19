@@ -149,7 +149,9 @@ end = struct
               add_assuming acc (combine_polarized ~is_pos:true pred g))
             conds g.assuming
         in
-        t, conds
+        if is_prop ~state t
+        then combine pol t conds
+        else t, conds
     | TI.Builtin (`Equiv (a,b)) ->
         let a, g_a = tr_term ~state ~pol:Pol.NoPol a in
         let b, g_b = tr_term ~state ~pol:Pol.NoPol b in
