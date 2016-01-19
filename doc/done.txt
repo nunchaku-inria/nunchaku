@@ -23,3 +23,6 @@ x 2015-10-21 2015-10-20 add ite in THF
 x 2015-10-22 2015-10-20 use vector instead of list for statements?
 x 2015-10-23 2015-10-22 make `pipe` operators that take `decode` as arg
 x 2015-10-27 2015-10-15 un-nesting/mutualization of (co)data
+x 2016-01-19 2016-01-19 fix skolemization
+x 2016-01-19 2015-10-02 recursive definitions (with well-foundedness check)
+x 2016-01-19 2015-10-30 fix mangling
