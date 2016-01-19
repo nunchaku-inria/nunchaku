@@ -282,6 +282,29 @@ module Make(T : TI.S) = struct
       ~f:(fun () t -> rewrite ~state t)
       ~bind:(fun () v -> (), v)
 
+      (* remove the tests for the unrolling variable in [dt] *)
+  let filter_dt_ ~state ~removed_var dt =
+    Utils.debugf ~section 5
+      "@[<v>remove var @[%a@]@ from `@[%a@]`@]"
+      (fun k->k Var.print_full removed_var (Model.DT.print P.print) dt);
+    let tests =
+      CCList.filter_map
+        (fun (eqns, then_) ->
+            let eqns' =
+              CCList.filter_map
+                (fun (v, t) ->
+                  if Var.equal v removed_var
+                  then None
+                  else Some (v, rewrite ~state t))
+                eqns
+            in
+            let then' = rewrite ~state then_ in
+            Some (eqns', then'))
+        dt.Model.DT.tests
+    in
+    let else_ = rewrite ~state dt.Model.DT.else_ in
+    Model.DT.test tests ~else_
+
   (* remove the additional parameter introduced by unrolling, if any *)
   let decode_model ~state m =
     Model.filter_map m
@@ -303,6 +326,14 @@ module Make(T : TI.S) = struct
         match T.repr t with
         | TI.Const id when ID.equal id state.nat_ty.succ ->
             None (* remove "succ" *)
+        | TI.Const id when ID.Tbl.mem state.map id ->
+            (* id is unrolled, remove the additional variable *)
+            let removed_var, vars = match vars with
+              | [] -> assert false
+              | v :: l -> v, l
+            in
+            let dt = filter_dt_ ~state ~removed_var dt in
+            Some (t,vars,dt)
         | _ ->
             (* simply rewrite *)
             let dt = Model.DT.map dt ~term:(rewrite ~state) ~ty:CCFun.id in
