@@ -89,13 +89,6 @@ module Make(T : TI.S) = struct
           Some (spf "@[<2>decoding of `@[%a@]` failed:@ %s@]" P.print t msg)
       | _ -> None)
 
-  type local_state = {
-    subst: (term,term) Subst.t;
-      (* local substitution *)
-  }
-
-  let empty_local_state = {subst=Subst.empty; }
-
   (* list of argument types that (monomorphic) type expects *)
   let rec ty_args_ (ty:term) = match TyM.repr ty with
     | TyI.Builtin _ | TyI.Const _ | TyI.App (_,_) -> []
@@ -119,18 +112,18 @@ module Make(T : TI.S) = struct
     | _ -> None
 
   (* translate term/formula recursively into a new (guarded) term. *)
-  let rec tr_term_rec_ ~state ~local_state (t:term) : term =
+  let rec tr_term_rec_ ~state subst t =
     match T.repr t with
     | TI.Const _ -> t
     | TI.Var v ->
         (* substitute if needed; no side-condition *)
-        begin match Subst.find ~subst:local_state.subst v with
+        begin match Subst.find ~subst v with
           | None -> t
           | Some t' -> t'
         end
     | TI.App (f,l) ->
-        begin match as_defined_ ~state f, T.repr f, l with
-          | Some (id, fundef), _, _ ->
+        begin match as_defined_ ~state f with
+          | Some (id, fundef) ->
               (* [f] is a recursive function we are encoding *)
               if List.length l <> List.length fundef.fun_concretization
                 then fail_tr_ t
@@ -142,7 +135,7 @@ module Make(T : TI.S) = struct
               let l' = List.map2
                 (fun arg (proj,_ty_proj) ->
                   (* under a function: no polarity *)
-                  let arg' = tr_term_rec_ arg ~state ~local_state in
+                  let arg' = tr_term_rec_ ~state subst arg in
                   let eqn = U.eq arg' (U.app (U.const proj) [U.var alpha]) in
                   eqns := eqn :: !eqns;
                   arg'
@@ -152,80 +145,47 @@ module Make(T : TI.S) = struct
               in
               let cond = U.exists alpha (U.and_ !eqns) in
               U.asserting (U.app f l') [cond]
-          | None, TI.Builtin `Not, [t] ->
-              let t = tr_term_rec_ ~state ~local_state t in
-              U.not_ t
-          | None, TI.Builtin ((`Or | `And) as b), l ->
-              let l = List.map (tr_term_rec_ ~state ~local_state) l in
-              U.app_builtin b l
-          | None, TI.Builtin `Imply, [a;b] ->
-              let a = tr_term_rec_ ~state ~local_state a in
-              let b = tr_term_rec_ ~state ~local_state b in
-              U.imply a b
-          | None, TI.Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
-              let t' = tr_term_rec_ ~state ~local_state t in
-              U.app_builtin b [t']
-          | None, _, _ ->
-              (* combine side conditions from every sub-term *)
-              let l' = List.map
-                (tr_term_rec_ ~state ~local_state)
-                l
-              in
-              U.app f l'
+          | None ->
+              (* generic treatment *)
+              tr_term_rec_' ~state subst t
         end
     | TI.Builtin (`True | `False
         | `And | `Or | `Not | `Imply | `DataSelect _ | `DataTest _) ->
           t (* partially applied, or constant *)
     | TI.Builtin (`Undefined _ as b) ->
-        U.builtin (TI.Builtin.map b ~f:(tr_term_rec_ ~state ~local_state))
+        U.builtin (TI.Builtin.map b ~f:(tr_term_rec_ ~state subst))
     | TI.Builtin (`Guard (t, g)) ->
-        let t = tr_term_rec_ ~state ~local_state t in
-        let g' = TI.Builtin.map_guard (tr_term_rec_ ~state ~local_state) g in
+        let t = tr_term_rec_ ~state subst t in
+        let g' = TI.Builtin.map_guard (tr_term_rec_ ~state subst) g in
         U.guard t g'
-    | TI.Builtin (`Equiv _) -> fail_tr_ t "cannot translate equivalence (polarity)"
-    | TI.Builtin (`Eq (a,b)) ->
-        let a = tr_term_rec_ ~state ~local_state a in
-        let b = tr_term_rec_ ~state ~local_state b in
-        U.eq a b
-    | TI.Builtin (`Ite (a,b,c)) ->
-        let a = tr_term_rec_ ~state ~local_state a in
-        let b = tr_term_rec_ ~state ~local_state b in
-        let c = tr_term_rec_ ~state ~local_state c in
-        U.ite a b c
-    | TI.Bind (`Forall,v,t) ->
-        let t' = tr_term_rec_ ~state ~local_state t in
-        U.forall v t'
-    | TI.Bind (`Exists,v,t) ->
-        let t = tr_term_rec_ ~state ~local_state t in
-        U.exists v t
     | TI.Bind (`Fun,_,_) -> fail_tr_ t "translation of λ impossible"
-    | TI.Let (v,t,u) ->
-        (* rename [v] *)
-        let v' = Var.fresh_copy v in
-        let subst = Subst.add ~subst:local_state.subst v (U.var v') in
-        let t = tr_term_rec_ t ~state ~local_state:{subst;} in
-        let u = tr_term_rec_ u ~state ~local_state:{subst;} in
-        U.let_ v' t u
-    | TI.Match (t, l) ->
-        let t = tr_term_rec_ ~state ~local_state t in
-        let l = ID.Map.map
-          (fun (vars,rhs) -> vars, tr_term_rec_ ~state ~local_state rhs)
-          l
-        in
-        U.match_with t l
+    | TI.Builtin (`Equiv _ | `Eq _ | `Ite _)
+    | TI.Bind ((`Forall | `Exists), _, _)
+    | TI.Match _
+    | TI.Let _ ->
+        tr_term_rec_' ~state subst t
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> t
     | TI.Bind (`TyForall, _, _)
     | TI.TyMeta _ -> assert false
 
-  let tr_term ~state ~local_state t =
+  and tr_term_rec_' ~state subst t =
+    U.map subst t
+      ~f:(tr_term_rec_ ~state)
+      ~bind:(fun subst v ->
+        (* rename [v] *)
+        let v' = Var.fresh_copy v in
+        let subst = Subst.add ~subst v (U.var v') in
+        subst, v')
+
+  let tr_term ~state subst t =
     Utils.debugf ~section 4
       "@[<2>convert toplevel term@ `@[%a@]`@]" (fun k -> k P.print t);
-    tr_term_rec_ ~state ~local_state t
+    tr_term_rec_ ~state subst t
 
   (* translate a top-level formula *)
   let tr_form ~state t =
-    tr_term ~state ~local_state:empty_local_state t
+    tr_term ~state Subst.empty t
 
   (* translate equation [eqn], which is defining the function
      corresponding to [fun_encoding].
@@ -241,11 +201,9 @@ module Make(T : TI.S) = struct
       fun_encoding.fun_concretization
     in
     let subst = Subst.add_list ~subst:Subst.empty vars args' in
-    (* if defined ID is polarized, use its polarity *)
-    let local_state = { subst; } in
     (* convert right-hand side and add its side conditions *)
     let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
-    let rhs' = tr_term ~state ~local_state rhs in
+    let rhs' = tr_term ~state subst rhs in
     let mk_eq = if U.ty_returns_Prop ty then U.equiv else U.eq in
     U.forall alpha (mk_eq lhs rhs')
 
