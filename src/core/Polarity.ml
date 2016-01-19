@@ -20,5 +20,13 @@ let to_string = function
   | Neg -> "-"
   | NoPol -> ""
 
+let is_pos = function
+  | Pos -> true
+  | Neg | NoPol -> false
+
+let is_neg = function
+  | Neg -> true
+  | Pos | NoPol -> false
+
 let pp out p = CCFormat.string out (to_string p)
 

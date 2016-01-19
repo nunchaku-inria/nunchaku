@@ -38,6 +38,7 @@ Library "nunchaku_core"
                     transformations/ElimIndPreds,
                     transformations/ElimCopy,
                     transformations/Polarize,
+                    transformations/Unroll,
                     transformations/IntroGuards
   Install:          true
   FindlibName:      nunchaku

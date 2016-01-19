@@ -33,6 +33,7 @@ let print_elim_match_ = ref false
 let print_recursion_elim_ = ref false
 let print_elim_multi_eqns = ref false
 let print_polarize_ = ref false
+let print_unroll_ = ref false
 let print_elim_preds_ = ref false
 let print_copy_ = ref false
 let print_intro_guards_ = ref false
@@ -91,6 +92,7 @@ let options =
       " print input after elimination of multiple equations"
   ; "-j", Arg.Set_int j, " set parallelism level"
   ; "--print-polarize", Arg.Set print_polarize_, " print input after polarization"
+  ; "--print-unroll", Arg.Set print_unroll_, " print input after unrolling"
   ; "--print-elim-copy", Arg.Set print_copy_, " print input after elimination of copy types"
   ; "--print-intro-guards", Arg.Set print_intro_guards_,
       " print input after introduction of guards"
@@ -154,6 +156,7 @@ module Pipes = struct
   module Step_elim_preds = ElimIndPreds.Make(HO)
   module Step_rec_elim = ElimRecursion.Make(HO)
   module Step_polarize = Polarize.Make(HO)
+  module Step_unroll = Unroll.Make(HO)
   module Step_elim_copy = ElimCopy.Make(HO)
   module Step_intro_guards = IntroGuards.Make(HO)
   (* conversion to FO *)
@@ -180,6 +183,7 @@ let make_model_pipeline () =
         ~polarize_rec:!polarize_rec_
       else Transform.nop ())
     @@@
+    Step_unroll.pipe ~print:(!print_unroll_ || !print_all_) @@@
     Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all @@@
     Step_elim_preds.pipe ~print:(!print_elim_preds_ || !print_all_) @@@
     Step_rec_elim.pipe ~print:(!print_recursion_elim_ || !print_all_) @@@
