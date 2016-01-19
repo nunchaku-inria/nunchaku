@@ -17,6 +17,7 @@ let section = Utils.Section.make "elim_multiple_eqns"
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
+  module PStmt = Statement.Print(P)(P)
   module Pat = Pattern.Make(T)
 
   type term = T.t
@@ -92,6 +93,13 @@ module Make(T : TI.S) = struct
           aux noside_acc ((U.and_ sides, rhs, subst) :: side_acc) l'
     in
     aux [] [] l
+
+  let add_renaming ~local_state v v' =
+    Utils.debugf ~section 5 "@[<2>add %a -> %a@ to renaming @[%a@]@]"
+      (fun k->k Var.print_full v Var.print_full v'
+        (Subst.print Var.print_full) local_state.renaming);
+    local_state.renaming <- Subst.add ~subst:local_state.renaming v v';
+    ()
 
   (* transform flat equations into a match tree. *)
   let rec compile_equations ~local_state vars l : term =
@@ -180,9 +188,9 @@ module Make(T : TI.S) = struct
                     let subst = match Subst.find ~subst:local_state.renaming v with
                       | None ->
                           (* v -> v', use [v'] instead of [v] now. *)
-                          local_state.renaming <-
-                            Subst.add ~subst:local_state.renaming v v';
+                          add_renaming ~local_state v v';
                           Subst.add ~subst v v'
+                      | Some v'' when Var.equal v' v'' -> subst
                       | Some v'' ->
                           Subst.add ~subst v' v'' (* v -> v'' <- v' *)
                     in
@@ -190,6 +198,9 @@ module Make(T : TI.S) = struct
           )
           dnode l
         in
+        Utils.debugf ~section 5
+          "@[<2>renaming after compile_equations %a:@ @[%a@]@]"
+          (fun k->k Var.print_full v (Subst.print Var.print) local_state.renaming);
         let v = Subst.deref_rec ~subst:local_state.renaming v in
         compile_dnode ~local_state v vars' dnode
 
@@ -288,13 +299,15 @@ module Make(T : TI.S) = struct
   : type a b.
     ('t, 'ty, (a,b) inv1) Stmt.pred_def list ->
     ('t, 'ty, (a,b) inv2) Stmt.pred_def list
-  = fun l -> (Obj.magic l)
+  = fun l -> Stmt.cast_preds l
 
   let uniq_eqn_st env st =
     let loc = Stmt.loc st in
     let info = Stmt.info st in
     match Stmt.view st with
     | Stmt.Axiom (Stmt.Axiom_rec l) ->
+        Utils.debugf ~section 5 "@[<2>compile equations@ `@[%a@]`@]"
+          (fun k->k PStmt.print_rec_defs l);
         let l' = List.map
           (fun def ->
             let id = def.Stmt.rec_defined.Stmt.defined_head in
