@@ -93,7 +93,9 @@ module Make(T : TI.S) = struct
          || ....`
   *)
   let pred_to_def
-  : env:(term, term, inv1) Env.t -> (term, term, inv1) Stmt.pred_def -> (term, term, inv2) Stmt.rec_def
+  : env:(term, term, inv1) Env.t ->
+    (term, term, inv1) Stmt.pred_def ->
+    (term, term, inv2) Stmt.rec_def
   = fun ~env pred ->
     Utils.debugf ~section 3 "@[<2>pred_to_def@ `@[%a@]`@]"
       (fun k->k PStmt.print_pred_def pred);

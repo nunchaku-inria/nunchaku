@@ -9,6 +9,9 @@ TAGS
 setup.log
 setup.data
 qtest*
+*.exe
 src/main/const.ml
 src/main/GitVersion.ml
 doc/
+done.txt
+todo.txt
