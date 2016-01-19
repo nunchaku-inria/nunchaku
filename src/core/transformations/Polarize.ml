@@ -233,19 +233,6 @@ module Make(T : TI.S) = struct
   : type i.  state:i St.t -> Pol.t -> T.t -> T.t
   = fun ~state pol t ->
     match T.repr t with
-    | TI.Builtin (`Eq (a,b)) ->
-        let a = polarize_term_rec ~state Pol.NoPol a in
-        let b = polarize_term_rec ~state Pol.NoPol b in
-        U.eq a b
-    | TI.Builtin (`Equiv (a,b)) ->
-        let a = polarize_term_rec ~state Pol.NoPol a in
-        let b = polarize_term_rec ~state Pol.NoPol b in
-        U.equiv a b
-    | TI.Builtin (`Ite (a,b,c)) ->
-        let a = polarize_term_rec ~state pol a in
-        let b = polarize_term_rec ~state pol b in
-        let c = polarize_term_rec ~state pol c in
-        U.ite a b c
     | TI.Builtin (`Guard (t, g)) ->
         let g = TI.Builtin.map_guard (polarize_term_rec ~state pol) g in
         let t = polarize_term_rec ~state pol t in
@@ -314,52 +301,28 @@ module Make(T : TI.S) = struct
                   app_polarized pol p l
                 )
             end
-        | TI.Builtin ((`And | `Or) as b), _ ->
-            let l = List.map (polarize_term_rec ~state pol) l in
-            U.app_builtin b l
-        | TI.Builtin `Imply, [a;b] ->
-            let a = polarize_term_rec ~state (Pol.inv pol) a in
-            let b = polarize_term_rec ~state pol b in
-            U.imply a b
-        | TI.Builtin `Not, [t] ->
-            let t = polarize_term_rec ~state (Pol.inv pol) t in
-            U.not_ t
-        | TI.Builtin (`Ite _ ), l ->
-            (* might return functions *)
-            let f = polarize_term_rec ~state pol f in
-            let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
-            U.app f l
-        | TI.Builtin (`Eq _ | `Equiv _ | `Not), _ ->
-            assert false
         | _ ->
-            let l = List.map (polarize_term_rec ~state Pol.NoPol) l in
-            U.app f l
+            polarize_term_rec' ~state pol t
         end
-    | TI.Bind ((`Forall | `Exists) as b,v,t) ->
-        let t = polarize_term_rec ~state pol t in
-        U.mk_bind b v t
-    | TI.Bind (`Fun,v,t) ->
-        (* no polarity *)
-        let t = polarize_term_rec ~state Pol.NoPol t in
-        U.fun_ v t
     | TI.Bind (`TyForall, _, _) ->
-        assert false  (* we do not polarize in types *)
-    | TI.Let (v,t,u) ->
-        (* we don't know the polarity of [t] in [u], so we prepare for
-           the worst case *)
-        let t = polarize_term_rec ~state Pol.NoPol t in
-        let u = polarize_term_rec ~state pol u in
-        U.let_ v t u
-    | TI.Match (lhs,l) ->
-        let lhs = polarize_term_rec ~state Pol.NoPol lhs in
-        let l = ID.Map.map
-          (fun (vars,rhs) -> vars, polarize_term_rec ~state pol rhs)
-          l
-        in
-        U.match_with lhs l
+        t (* we do not polarize in types *)
+    | TI.Bind ((`Forall | `Exists | `Fun), _, _)
+    | TI.Builtin (`Ite _|`Eq _|`Equiv _)
+    | TI.Let _
+    | TI.Match _ ->
+        (* generic treatment *)
+        polarize_term_rec' ~state pol t
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> t
     | TI.TyMeta _ -> assert false
+
+  (* generic recursive step *)
+  and polarize_term_rec'
+  : type i.  state:i St.t -> Pol.t -> T.t -> T.t
+  = fun ~state pol t ->
+    U.map_pol () pol t
+      ~f:(fun () -> polarize_term_rec ~state)
+      ~bind:(fun () _pol v -> (), v) (* no renaming *)
 
   (* [p] is the polarization of the function defined by [def]; *)
   let define_rec
