@@ -664,6 +664,15 @@ module type UTIL = sig
       @param f maps a term to a term
       @param bind updates the binding accumulator and returns a new variable *)
 
+  val map_pol :
+    f:('b_acc -> Polarity.t -> t_ -> t_) ->
+    bind:('b_acc -> Polarity.t -> t_ Var.t -> 'b_acc * t_ Var.t) ->
+    'b_acc ->
+    Polarity.t ->
+    t_ ->
+    t_
+  (** Similar to {!map} but also keeping the subterm polarity *)
+
   (** {6 Substitution Utils} *)
 
   type subst = (t_, t_) Var.Subst.t
@@ -1039,6 +1048,85 @@ module Util(T : S)
     | TyArrow (a,b) ->
         let a = f b_acc a in
         let b = f b_acc b in
+        ty_arrow a b
+
+  let map_pol ~f ~bind b_acc pol t =
+    let module P = Polarity in
+    match T.repr t with
+    | TyBuiltin _
+    | Const _
+    | TyMeta _ -> t
+    | Var v -> var (Var.update_ty ~f:(f b_acc P.NoPol) v)
+    | App (hd,l) ->
+        begin match T.repr hd, l with
+        | Builtin `Not, [t] ->
+            let t = f b_acc (P.inv pol) t in
+            not_ t
+        | Builtin ((`Or | `And) as b), l ->
+            let l = List.map (f b_acc pol) l in
+            app_builtin b l
+        | Builtin `Imply, [a;b] ->
+            let a = f b_acc (P.inv pol) a in
+            let b = f b_acc pol b in
+            imply a b
+        | Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
+            let t = f b_acc pol t in
+            app_builtin b [t]
+        | _ ->
+            let hd = f b_acc P.NoPol hd in
+            let l = List.map (f b_acc P.NoPol) l in
+            app hd l
+        end
+    | Builtin
+      (`True | `False | `And | `Or | `Not
+        | `Imply | `DataSelect _ | `DataTest _) ->
+       (* partially applied, or constant *)
+          t
+    | Builtin (`Undefined _ as b) -> builtin b
+    | Builtin (`Guard (t, g)) ->
+        let t = f b_acc pol t in
+        let g = Builtin.map_guard (f b_acc pol) g in
+        guard t g
+    | Builtin (`Equiv (a,b)) ->
+        let a = f b_acc P.NoPol a in
+        let b = f b_acc P.NoPol b in
+        equiv a b
+    | Builtin (`Eq (a,b)) ->
+        let a = f b_acc P.NoPol a in
+        let b = f b_acc P.NoPol b in
+        eq a b
+    | Builtin (`Ite (a,b,c)) ->
+        let a = f b_acc P.NoPol a in
+        let b = f b_acc pol b in
+        let c = f b_acc pol c in
+        ite a b c
+    | Let (v,t,u) ->
+        let t = f b_acc P.NoPol t in
+        let b_acc, v' = bind b_acc pol v in
+        let u = f b_acc pol u in
+        let_ v' t u
+    | Bind ((`Forall | `Exists as b), v, t) ->
+        let b_acc, v' = bind b_acc pol v in
+        let t = f b_acc pol t in
+        mk_bind b v' t
+    | Bind ((`TyForall | `Fun) as b, v, t) ->
+        (* no polarity in those binders *)
+        let b_acc, v' = bind b_acc P.NoPol v in
+        let t = f b_acc P.NoPol t in
+        mk_bind b v' t
+    | Match (lhs,cases) ->
+        let lhs = f b_acc P.NoPol lhs in
+        let cases = ID.Map.map
+          (fun (vars,rhs) ->
+            let b_acc, vars' =
+              Utils.fold_map (fun acc v -> bind acc pol v) b_acc vars in
+            vars', f b_acc pol rhs)
+          cases
+        in
+        match_with lhs cases
+    | TyArrow (a,b) ->
+        let a = f b_acc pol a in
+        let b = f b_acc pol b in
         ty_arrow a b
 
   let rec deref ~subst t = match T.repr t with
