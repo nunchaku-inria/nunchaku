@@ -133,11 +133,13 @@ module Res = struct
   type (+'t,+'ty) t =
     | Unsat
     | Sat of ('t,'ty) Model.t
+    | Unknown
     | Timeout
 
   let map ~term ~ty t = match t with
     | Unsat -> Unsat
     | Timeout -> Timeout
+    | Unknown -> Unknown
     | Sat model -> Sat (Model.map ~term ~ty model)
 
   let fpf = Format.fprintf
@@ -145,6 +147,7 @@ module Res = struct
   let print pt pty out = function
     | Unsat -> fpf out "unsat"
     | Timeout -> fpf out "timeout"
+    | Unknown -> fpf out "unknown"
     | Sat m ->
         fpf out "@[<hv>@[<v2>sat {@,@[<v>%a@]@]@,}@]" (Model.print pt pty) m
 end

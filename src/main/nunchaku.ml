@@ -189,15 +189,17 @@ let make_model_pipeline () =
     ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
 
 (* search for results *)
-let rec find_model_ l =
+let rec find_model_ ~found_unsat l =
   let module Res = Problem.Res in
   try
   match l() with
-    | `Nil -> E.return `Unsat
+    | `Nil ->
+        E.return (if found_unsat then `Unsat else `Unknown)
     | `Cons ((res, conv_back), tail) ->
         match res with
         | Res.Timeout -> E.return `Timeout
-        | Res.Unsat -> find_model_ tail
+        | Res.Unknown -> find_model_ ~found_unsat tail
+        | Res.Unsat -> find_model_ ~found_unsat:true tail
         | Res.Sat m ->
             let m = conv_back m in
             E.return (`Sat m)
@@ -227,7 +229,7 @@ let main_model ~output statements =
   let cpipe = make_model_pipeline() in
   if !print_pipeline_
     then Format.printf "@[Pipeline: %a@]@." Transform.ClosedPipe.print cpipe;
-  Transform.run_closed ~cpipe statements |> find_model_
+  Transform.run_closed ~cpipe statements |> find_model_ ~found_unsat:false
   >|= fun res ->
   begin match res, output with
   | `Sat m, O_nunchaku ->
@@ -241,6 +243,8 @@ let main_model ~output statements =
   | `Unsat, O_tptp ->
       (* TODO: check whether we have a "spurious" flag *)
       Format.printf "@[SZS Status: Unsatisfiable@]@."
+  | `Unknown, _ ->
+      Format.printf "@[UNKNOWN@]@."
   | `Timeout, _ ->
       Format.printf "@[TIMEOUT@]@."
   end;

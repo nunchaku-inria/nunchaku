@@ -108,6 +108,7 @@ module Res : sig
   type (+'t,+'ty) t =
     | Unsat
     | Sat of ('t,'ty) Model.t
+    | Unknown
     | Timeout
 
   val map : term:('t1 -> 't2) -> ty:('ty1 -> 'ty2) -> ('t1,'ty1) t -> ('t2, 'ty2) t
