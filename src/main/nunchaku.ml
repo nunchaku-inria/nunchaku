@@ -143,10 +143,11 @@ let print_input_if_needed statements =
 module Pipes = struct
   module HO = TI.Default
   module Typed = TermTyped.Default
-  (* typeference *)
+  (* type inference *)
   module Step_tyinfer = TypeInference.Make(Typed)(HO)
+  module Step_conv_ty = Problem.Convert(Typed)(HO)
   (* encodings *)
-  module Step_skolem = Skolem.Make(Typed)(HO)
+  module Step_skolem = Skolem.Make(HO)
   module Step_mono = Monomorphization.Make(HO)
   module Step_ElimMultipleEqns = ElimMultipleEqns.Make(HO)
   module Step_ElimMatch = ElimPatternMatch.Make(HO)
@@ -168,6 +169,7 @@ let make_model_pipeline () =
   (* setup pipeline *)
   let pipe =
     Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
+    Step_conv_ty.pipe () @@@
     Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_types @@@
     Step_mono.pipe ~print:(!print_mono_ || !print_all_) @@@
     Step_ElimMultipleEqns.pipe
@@ -178,7 +180,7 @@ let make_model_pipeline () =
         ~polarize_rec:!polarize_rec_
       else Transform.nop ())
     @@@
-    Step_skolem.pipe_no_nnf ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all @@@
+    Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all @@@
     Step_elim_preds.pipe ~print:(!print_elim_preds_ || !print_all_) @@@
     Step_rec_elim.pipe ~print:(!print_recursion_elim_ || !print_all_) @@@
     Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) @@@
