@@ -84,6 +84,21 @@ module Print(P1 : TermInner.PRINT)(P2:TermInner.PRINT) : sig
   val print : (P1.t, P2.t, _) t printer
 end
 
+(** {2 Convert the term representations} *)
+module Convert(T1 : TermInner.REPR)(T2 : TermInner.BUILD) : sig
+  type ('a, 'b, 'c) inv = <eqn:'a; ind_preds:'b; ty: 'c>
+
+  val convert :
+    (T1.t, T1.t, ('a,'b, 'c) inv) t ->
+    (T2.t, T2.t, ('a,'b, 'c) inv) t
+
+  val pipe :
+    unit ->
+    ((T1.t, T1.t, ('a, 'b, 'c) inv) t,
+     (T2.t, T2.t, ('a, 'b, 'c) inv) t,
+     'ret, 'ret) Transform.t
+end
+
 exception IllFormed of string
 (** Ill-formed problem *)
 

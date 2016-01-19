@@ -89,6 +89,21 @@ module Print(P1 : TermInner.PRINT)(P2 : TermInner.PRINT) = struct
       pb.statements
 end
 
+module Convert(T1 : TermInner.REPR)(T2 : TermInner.BUILD) = struct
+  module C = TermInner.Convert(T1)(T2)
+
+  type ('a, 'b, 'c) inv = <eqn:'a; ind_preds:'b; ty: 'c>
+
+  let convert pb = map ~term:C.convert ~ty:C.convert pb
+
+  let pipe () =
+    Transform.make1
+      ~name:"convert"
+      ~encode:(fun pb -> convert pb, ())
+      ~decode:(fun () x -> x)
+      ()
+end
+
 exception IllFormed of string
 (** Ill-formed problem *)
 
