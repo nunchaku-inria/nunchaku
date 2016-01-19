@@ -5,9 +5,7 @@
 2015-10-15 create a logo; push it on github team
 2015-10-20 add let in THF
 (B) 2015-10-23 printTPTP: need types (differentiate type args from term args; 1 domain decl per type) p:1
-(A) 2015-10-27 implement and document recursion elim id:3
 (B) 2015-10-29 flag to print signature (post-ty inference)
-(A) 2015-10-30 fix remaining bugs id:2 p:3
-(A) 2015-10-30 fix scoping in spec/rec (alias not used) p:2
 (A) 2016-01-19 fix polarization (use same var in whole block, with table)
 (A) 2016-01-19 split unrolling off polarize?
+(A) 2016-01-19 allow ambiguous matching, resolved by order (ML-like)
