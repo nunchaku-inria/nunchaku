@@ -447,6 +447,10 @@ module Make(FO_T : FO.S) = struct
           (* a boolean test! we might succeed in interpreting it as a test *)
           let t' = FOBack.T.(ite t true_ false_) in
           dt_of_body ~vars ~f t'
+      | FO.Eq _ ->
+          (* `a = b` becomes `if a=b then true else false` *)
+          let eqns = get_eqns ~vars t in
+          Model.DT.ite eqns (f FOBack.T.true_) (Model.DT.yield (f FOBack.T.false_))
       | _ -> Model.DT.yield (f t)
     in
     (* parse term, then convert into [vars -> decision-tree] *)
