@@ -192,6 +192,7 @@ module Make(T : TI.S) = struct
      It returns an axiom instead. *)
   let tr_eqns ~state ~fun_encoding ty eqn =
     let Stmt.Eqn_single (vars,rhs) = eqn in
+    let id = fun_encoding.fun_encoded_fun in
     (* quantify over abstract variable now *)
     let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
     (* replace each [x_i] by [proj_i var] *)
@@ -204,12 +205,21 @@ module Make(T : TI.S) = struct
     (* convert right-hand side and add its side conditions *)
     let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
     let rhs' = tr_term ~state subst rhs in
-    let mk_eq = if U.ty_returns_Prop ty then U.equiv else U.eq in
-    U.forall alpha (mk_eq lhs rhs')
+    (* how to connect [lhs] and [rhs]? *)
+    let connect lhs rhs = match ID.polarity id with
+      | Polarity.Pos -> U.imply lhs rhs
+      | Polarity.Neg -> U.imply rhs lhs
+      | Polarity.NoPol ->
+          if U.ty_returns_Prop ty
+          then U.equiv lhs rhs
+          else U.eq lhs rhs
+    in
+    U.forall alpha (connect lhs rhs')
 
   (* transform the recursive definition (mostly, its equations) *)
   let tr_rec_def ~state ~fun_encoding def =
-    tr_eqns ~state ~fun_encoding def.Stmt.rec_defined.Stmt.defined_ty def.Stmt.rec_eqns
+    tr_eqns ~state ~fun_encoding
+      def.Stmt.rec_defined.Stmt.defined_ty def.Stmt.rec_eqns
 
   let tr_rec_defs ~info ~state l =
     (* transform each axiom, considering case_head as rec. defined *)
@@ -231,8 +241,7 @@ module Make(T : TI.S) = struct
             (fun i ty_arg ->
               let id' = ID.make (Printf.sprintf "proj_%s_%d" name i) in
               let ty' = U.ty_arrow abs_type ty_arg in
-              id', ty'
-            )
+              id', ty')
             (ty_args_ ty)
         in
         let fun_encoding = {
@@ -247,13 +256,13 @@ module Make(T : TI.S) = struct
            NOTE: we need to declare the function because it is no longer
             defined, only axiomatized *)
         add_stmt (Stmt.ty_decl ~info:Stmt.info_default abs_type_id U.ty_type);
-        add_stmt (Stmt.decl ~info:Stmt.info_default
-                  id def.Stmt.rec_defined.Stmt.defined_ty);
+        add_stmt
+          (Stmt.decl ~info:Stmt.info_default
+            id def.Stmt.rec_defined.Stmt.defined_ty);
         List.iter
           (fun (proj,ty_proj) ->
             add_stmt (Stmt.decl ~info:Stmt.info_default proj ty_proj);
-            ID.Tbl.add state.decode.approx_fun proj fun_encoding;
-          )
+            ID.Tbl.add state.decode.approx_fun proj fun_encoding)
           fun_encoding.fun_concretization;
       )
       l;
@@ -270,8 +279,7 @@ module Make(T : TI.S) = struct
             "@[<2>recursion elimination in@ @[%a@]@ \
               failed on subterm @[%a@]:@ %s@]"
               (fun k -> k PStmt.print (Stmt.axiom_rec ~info l) P.print t msg);
-          raise e
-      )
+          raise e)
       l
     in
     (* add new statements (type declarations) before l' *)
@@ -285,9 +293,7 @@ module Make(T : TI.S) = struct
     match Stmt.view st with
     | Stmt.Decl (id,k,l) -> [Stmt.mk_decl ~info id k l] (* no type declaration changes *)
     | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l] (* no (co) data changes *)
-    | Stmt.Pred (wf, k, l) ->
-        let l = Stmt.cast_preds l in
-        [Stmt.mk_pred ~info ~wf k l]
+    | Stmt.Pred _ -> assert false (* typing: should be absent *)
     | Stmt.Axiom l ->
         begin match l with
         | Stmt.Axiom_rec l ->
