@@ -34,7 +34,11 @@ module Make(T : TI.S) = struct
     - TODO insert `asserting pred` if the predicate is not None
     *)
   let rec rewrite_term ~env subst t = match T.repr t with
-    | TI.Var v -> Var.Subst.find_exn ~subst v
+    | TI.Var v ->
+        begin match Var.Subst.find ~subst v with
+        | None -> t
+        | Some v' -> U.var v'
+        end
     | TI.Const id ->
         begin match as_copy_ ~env id with
         | `Not_copy -> t
@@ -62,7 +66,7 @@ module Make(T : TI.S) = struct
         let ty = Var.ty v in
         let ty = rewrite_term ~env subst ty in
         let v' = Var.make ~name:(Var.name v) ~ty in
-        Var.Subst.add ~subst v (U.var v'), v')
+        Var.Subst.add ~subst v v', v')
       ~f:(rewrite_term ~env)
 
   let elim pb =

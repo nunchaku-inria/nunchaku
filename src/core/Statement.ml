@@ -491,10 +491,10 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
           fpf out "@[<2>@[%a@]@ => @[%a@]@]" Pt.print g Pt.print c.clause_concl
       | _::_ as vars, None ->
           fpf out "@[<2>forall %a.@ @[%a@]@]"
-          (pplist ~sep:" " Var.print) vars Pt.print c.clause_concl
+          (pplist ~sep:" " Var.print_full) vars Pt.print c.clause_concl
       | _::_ as vars, Some g ->
           fpf out "@[<2>forall %a.@ @[%a@] =>@ @[%a@]@]"
-          (pplist ~sep:" " Var.print) vars Pt.print g Pt.print c.clause_concl
+          (pplist ~sep:" " Var.print_full) vars Pt.print g Pt.print c.clause_concl
     in
     fpf out "@[<hv2>@[%a@ : %a@] :=@ %a@]"
       ID.print pred.pred_defined.defined_head
@@ -538,7 +538,7 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
       let print_def out tydef =
         fpf out "@[<hv2>@[%a %a@] :=@ @[<hv>%a@]@]"
           ID.print tydef.ty_id
-          (pplist ~sep:" " Var.print) tydef.ty_vars
+          (pplist ~sep:" " Var.print_full) tydef.ty_vars
           (pplist_prefix ~first:" | " ~pre:" | " ppcstors)
             (ID.Map.to_list tydef.ty_cstors |> List.map snd)
       in
