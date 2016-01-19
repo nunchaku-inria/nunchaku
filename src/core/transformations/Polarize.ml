@@ -683,7 +683,10 @@ module Make(T : TI.S) = struct
       dt.Model.DT.tests
 
   (* build a rewrite system from the given model. The rewrite system erases
-     polarities and unrolling parameters. *)
+     polarities and unrolling parameters.
+
+     NOTE: this rewrite system is also useful for knowing whether a
+     particular polarized symbol occurs in the model or not. *)
   let make_rw_sys_ ~state m =
     Model.fold ID.Map.empty m
       ~constants:(fun sys _ -> sys)
@@ -713,7 +716,8 @@ module Make(T : TI.S) = struct
     (* compute a rewrite system for eliminating polarized IDs *)
     let sys = make_rw_sys_ ~state m in
     (* this tables stores the half-decision tree for polarized IDs
-       (when we have met one polarity but not the other *)
+       (when we have met one polarity but not the other, and we know the other
+       is defined somewhere in the model) *)
     let partial_map = ID.Tbl.create 32 in
     Model.filter_map m
       ~constants:(fun (t,u) ->
@@ -760,11 +764,21 @@ module Make(T : TI.S) = struct
               (* emit model for [id'] *)
               Some (U.const id', vars, new_dt)
             with Not_found ->
-              (* store the decision tree in [partial_map]; [id'] will
-                 be added to the model when its second polarized version
-                 is met *)
-              ID.Tbl.add partial_map id' cases;
-              None
+              let opp_id = if is_pos then p.neg else p.pos in
+              if ID.Map.mem opp_id sys
+              then (
+                (* store the decision tree in [partial_map]; [id'] will
+                   be added to the model when its second polarized version
+                   is met *)
+                ID.Tbl.add partial_map id' cases;
+                None
+              ) else (
+                (* the other polarized version of [id'] is not defined in the
+                   model, we can emit this function now *)
+                let else_ = U.undefined_ (U.app (U.const id') (List.map U.var vars)) in
+                let new_dt = Model.DT.test cases ~else_ in
+                Some (U.const id', vars, new_dt)
+              )
             end
         | _ ->
             (* remove polarized IDs *)

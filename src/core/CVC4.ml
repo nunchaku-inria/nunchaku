@@ -609,14 +609,18 @@ module Make(FO_T : FO.S) = struct
       ID.Map.empty
       pb
 
+  (* the command line to invoke CVC4 *)
+  let mk_cvc4_cmd_ timeout options =
+    Printf.sprintf
+      "cvc4 --tlimit-per=%d --lang smt --finite-model-find --uf-ss-fair-monotone %s"
+      (int_of_float (timeout *. 1000.)) options
+
   let solve ?(options="") ?(timeout=30.) ?(print=false) problem =
     let symbols, problem' = preprocess_pb_ problem in
     if print
       then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem problem';
     if timeout < 0. then invalid_arg "CVC4.create: wrong timeout";
-    let cmd = Printf.sprintf
-      "cvc4 --tlimit-per=%d --lang smt --finite-model-find --uf-ss-fair-monotone %s"
-      (int_of_float (timeout *. 1000.)) options in
+    let cmd = mk_cvc4_cmd_ timeout options in
     Utils.debugf ~section 2 "@[<2>run command@ `%s`@]" (fun k->k cmd);
     let ic, oc = Unix.open_process cmd in
     let s = create_ ~symbols (ic,oc) in
@@ -634,9 +638,7 @@ module Make(FO_T : FO.S) = struct
     let cmd options =
       let timeout = deadline -. Unix.gettimeofday() in
       if timeout < 0.1 then raise Timeout;
-      Printf.sprintf
-        "cvc4 --tlimit-per=%d --lang smt --finite-model-find --uf-ss-fair-monotone %s"
-        (int_of_float (timeout *. 1000.)) options
+      mk_cvc4_cmd_ timeout options
     in
     let res = Scheduling.run options ~j ~cmd
       ~f:(fun cmd (ic,oc) ->
