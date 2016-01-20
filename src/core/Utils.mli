@@ -96,6 +96,22 @@ val vec_fold_map :  ('b -> 'a -> 'b * 'c) -> 'b -> ('a,_) CCVector.t -> 'b * ('c
 
 val fold_map : ('b -> 'a -> 'b * 'c) -> 'b -> 'a list -> 'b * 'c list
 
+(** {2 Warnings} *)
+
+type warning =
+  | Warn_overlapping_match
+
+val toggle_warning : warning -> bool -> unit
+(** Enable/disable the given warning *)
+
+val is_warning_enabled : warning -> bool
+(** Is this warning enabled? *)
+
+val warning : warning -> string -> unit
+(** Emit the given warning with the associated message *)
+
+val warningf : warning -> ('a, Format.formatter, unit, unit) format4 -> 'a
+
 (** {2 Misc} *)
 
 exception NotImplemented of string

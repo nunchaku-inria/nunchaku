@@ -174,6 +174,39 @@ let rec fold_map f acc l = match l with
       let acc, tail' = fold_map f acc tail in
       acc, y :: tail'
 
+(** {2 Warnings} *)
+
+type warning =
+  | Warn_overlapping_match
+
+let pp_warn out = function
+  | Warn_overlapping_match -> CCFormat.string out "overlapping pattern-match"
+
+(* list of enabled warnings *)
+let warnings_ = ref []
+
+let is_warning_enabled w = List.mem w !warnings_
+
+let toggle_warning w b =
+  if b && not (is_warning_enabled w)
+    then warnings_ := w :: !warnings_
+  else if not b && is_warning_enabled w
+    then warnings_ := List.filter (fun w' -> w<>w') !warnings_;
+  ()
+
+let warningf w msg =
+  if is_warning_enabled w
+  then (
+    Format.eprintf "@[<2>@{<yellow>warning@}[%a]:@ " pp_warn w;
+    Format.kfprintf
+      (fun out ->
+        Format.fprintf out "@]@.";
+        ())
+      Format.err_formatter msg
+  ) else Format.ikfprintf (fun _ -> ()) Format.err_formatter msg
+
+let warning b msg = warningf b "%s" msg
+
 (** {2 Misc} *)
 
 exception NotImplemented of string
