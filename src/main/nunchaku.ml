@@ -1,6 +1,8 @@
 
 (** {1 Main program} *)
 
+open Nunchaku_core
+
 module E = CCError
 module A = UntypedAST
 module Utils = Utils

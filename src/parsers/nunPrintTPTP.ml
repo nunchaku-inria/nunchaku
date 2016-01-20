@@ -3,6 +3,8 @@
 
 (* {1 TPTP Printer} *)
 
+open Nunchaku_core
+
 module A = UntypedAST
 module M = Model
 

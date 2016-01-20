@@ -4,6 +4,7 @@
 (** {1 Parser for Nunchaku} *)
 
 %{
+  open Nunchaku_core
 
   module L = Location
   module A = UntypedAST
@@ -75,10 +76,10 @@
 %token <string> LOWER_WORD
 %token <string> UPPER_WORD
 
-%start <UntypedAST.statement> parse_statement
-%start <UntypedAST.statement list> parse_statement_list
-%start <UntypedAST.term> parse_term
-%start <UntypedAST.ty> parse_ty
+%start <Nunchaku_core.UntypedAST.statement> parse_statement
+%start <Nunchaku_core.UntypedAST.statement list> parse_statement_list
+%start <Nunchaku_core.UntypedAST.term> parse_term
+%start <Nunchaku_core.UntypedAST.ty> parse_ty
 
 %%
 

@@ -2,6 +2,8 @@
 
 (* {1 TPTP Printer} *)
 
+open Nunchaku_core
+
 type 'a printer = Format.formatter -> 'a -> unit
 
 type term = UntypedAST.term

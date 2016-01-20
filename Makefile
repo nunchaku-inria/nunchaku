@@ -56,7 +56,7 @@ QTESTABLE=$(filter-out $(DONTTEST), \
 qtest-clean:
 	@rm -rf qtest/
 
-QTEST_PREAMBLE=''
+QTEST_PREAMBLE='open Nunchaku_core;; '
 
 qtest-gen:
 	@mkdir -p qtest
