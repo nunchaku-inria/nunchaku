@@ -37,6 +37,7 @@ type ('t, 'ty) view =
   | DataSelect of id * int * 't
   | Undefined of id * 't (** ['t] is not defined here *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
+  | Mu of 'ty var * 't   (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
   | Ite of 't * 't * 't
   | True
@@ -124,6 +125,7 @@ module type S = sig
     val var : Ty.t var -> t
     val let_ : Ty.t var -> t -> t -> t
     val fun_ : Ty.t var -> t -> t
+    val mu : Ty.t var -> t -> t
     val ite : t -> t -> t -> t
     val true_ : t
     val false_ : t
@@ -175,6 +177,7 @@ module Default : S = struct
     let undefined c t = make_ (Undefined (c,t))
     let let_ v t u = make_ (Let(v,t,u))
     let fun_ v t = make_ (Fun (v,t))
+    let mu v t = make_ (Mu (v,t))
     let ite f t u = make_ (Ite (f,t,u))
     let true_ = make_ True
     let false_ = make_ False
@@ -271,6 +274,8 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     | Fun (v,t) ->
         fpf out "(@[<2>fun %a:%a.@ %a@])"
           Var.print_full v print_ty (Var.ty v) print_term t
+    | Mu (v,t) ->
+        fpf out "(@[<2>mu %a.@ %a@])" Var.print_full v print_term t
     | DataTest (c,t) ->
         fpf out "(@[<2>is-%a@ %a@])" ID.print c print_term t
     | DataSelect (c,n,t) ->

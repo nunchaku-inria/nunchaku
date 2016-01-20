@@ -8,3 +8,18 @@
 (B) 2015-10-29 flag to print signature (post-ty inference)
 (A) 2016-01-19 allow ambiguous matching, resolved by order (ML-like)
 (A) 2016-01-19 µ terms, parse them from CVC4 and deal with them internally
+2015-11-10 run larger scale tests @test
+2015-11-10 think about clean distinction term/type @design
+(B) 2015-11-10 think about adding dependent type (+ encoding step before mono) @design @feature
+2015-11-16 Earley algo with caching, based on pre-matching of terms p:1 @feature
+2015-11-16 simple narrowing without caching p:1 @feature
+2015-11-16 narrowing id:1 @feature
+(B) 2015-11-17 simple S-expr format from/to TermTyped @feature
+(B) 2015-11-30 finish specialization @feature
+(B) 2015-12-02 printer: have binding power argument to put ( ) properly @cleanup
+(B) 2015-12-22 optional: simplifications  t = (ite a b c) → ite a (t=b)(t=c) @cleanup
+2016-01-06 make And/Or parametrized builtins @design
+(B) 2016-01-11 print models in TPTP properly @feature
+(B) 2016-01-11 harmonize names in debug/print CLI options @cleanup
+(A) 2016-01-11 use bisect for test coverage http://bisect.x9c.fr/distrib/bisect.html#htoc10 @test
+(B) 2016-01-18 deal with empty sorts

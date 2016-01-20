@@ -74,6 +74,10 @@ module Subst = struct
     | None -> v
     | Some v' -> deref_rec ~subst v'
 
+  let find_deref_rec ~subst v = match find ~subst v with
+    | None -> None
+    | Some v' -> Some (deref_rec ~subst v')
+
   let to_list s = M.fold (fun _ (v,x) acc -> (v,x)::acc) s []
 
   let print pt out s =

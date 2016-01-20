@@ -198,6 +198,7 @@ end = struct
             U.mk_bind b v t, g'
         end
     | TI.Bind (`Fun, _, _) -> fail_tr_ t "translation of λ impossible"
+    | TI.Bind (`Mu, _, _) -> fail_tr_ t "translation of µ impossible"
     | TI.Let (v,t,u) ->
         let t, g_t = tr_term t ~state ~pol:Pol.NoPol in
         let u, g_u = tr_term u ~state ~pol in

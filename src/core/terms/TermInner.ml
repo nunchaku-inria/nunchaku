@@ -20,13 +20,15 @@ module Binder = struct
     | `Exists
     | `Fun
     | `TyForall
+    | `Mu  (** fixpoint *)
     ]
 
-  let to_string = function
+  let to_string : t -> string = function
     | `Fun -> "fun"
     | `Forall -> "forall"
     | `Exists -> "exists"
     | `TyForall -> "pi"
+    | `Mu -> "mu"
 end
 
 module TyBuiltin = struct
@@ -594,6 +596,7 @@ module type UTIL = sig
   val var : t_ var -> t_
   val app : t_ -> t_ list -> t_
   val fun_ : t_ var -> t_ -> t_
+  val mu : t_ var -> t_ -> t_
   val let_ : t_ var -> t_ -> t_ -> t_
   val match_with : t_ -> t_ cases -> t_
   val ite : t_ -> t_ -> t_ -> t_
@@ -744,8 +747,9 @@ module Util(T : S)
   let const id = T.build (Const id)
   let var v = T.build (Var v)
   let app t l = T.build (App(t,l))
-  let mk_bind b v t = T.build (Bind (b,v,t))
-  let fun_ v t = T.build (Bind (`Fun,v, t))
+  let mk_bind b v t = T.build (Bind (b, v, t))
+  let fun_ v t = T.build (Bind (`Fun, v, t))
+  let mu v t = T.build (Bind (`Mu, v, t))
 
   let let_ v t u = match T.repr u with
     | Builtin `True
@@ -1109,7 +1113,7 @@ module Util(T : S)
         let b_acc, v' = bind b_acc pol v in
         let t = f b_acc pol t in
         mk_bind b v' t
-    | Bind ((`TyForall | `Fun) as b, v, t) ->
+    | Bind ((`TyForall | `Fun | `Mu) as b, v, t) ->
         (* no polarity in those binders *)
         let b_acc, v' = bind b_acc P.NoPol v in
         let t = f b_acc P.NoPol t in
@@ -1147,6 +1151,7 @@ module Util(T : S)
           map subst t
             ~f:aux
             ~bind:(fun subst v ->
+              assert (not (Var.Subst.mem ~subst v));
               let v' = Var.fresh_copy v in
               Var.Subst.add ~subst v (var v'), v')
     in
@@ -1161,6 +1166,7 @@ module Util(T : S)
           map subst t
             ~f:aux
             ~bind:(fun subst v ->
+              assert (not (Var.Subst.mem ~subst v));
               let v' = Var.fresh_copy v in
               Var.Subst.add ~subst v v', v')
     in
@@ -1284,7 +1290,8 @@ module Util(T : S)
     | Bind (b,v,t) ->
         begin match b with
         | `Forall
-        | `Exists -> ty_exn ~sigma t
+        | `Exists
+        | `Mu -> ty_exn ~sigma t
         | `Fun ->
             if ty_returns_Type (Var.ty v)
             then ty_forall v (ty_exn ~sigma t)

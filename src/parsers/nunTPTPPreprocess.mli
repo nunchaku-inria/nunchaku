@@ -12,6 +12,8 @@
   }
 *)
 
+open Nunchaku_core
+
 type 'a or_error = [`Ok of 'a | `Error of string]
 
 val preprocess_exn :

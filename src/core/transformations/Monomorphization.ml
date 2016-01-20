@@ -259,7 +259,7 @@ module Make(T : TI.S) = struct
         | _ ->
             failf_ "@[<2>cannot monomorphize application term@ `@[%a@]`@]" print_term t
         end
-    | TI.Bind ((`Fun | `Forall | `Exists) as b, v, t) ->
+    | TI.Bind ((`Fun | `Forall | `Exists | `Mu) as b, v, t) ->
         U.mk_bind b
           (mono_var ~state ~local_state v)
           (mono_term ~state ~local_state t)
@@ -594,7 +594,7 @@ module Make(T : TI.S) = struct
           end
       | TI.App (f,l) -> U.app (aux f) (List.map aux l)
       | TI.Builtin b -> U.builtin (TI.Builtin.map b ~f:aux)
-      | TI.Bind ((`Forall | `Exists | `Fun) as b,v,t) ->
+      | TI.Bind ((`Forall | `Exists | `Fun | `Mu) as b,v,t) ->
           U.mk_bind b (aux_var v) (aux t)
       | TI.Let (v,t,u) -> U.let_ (aux_var v) (aux t) (aux u)
       | TI.Match (t,l) ->

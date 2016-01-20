@@ -432,7 +432,7 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
   let pp_defined out d =
     fpf out "@[%a : %a@]" ID.print d.defined_head Pty.print d.defined_ty
   and pp_typed_var out v =
-    fpf out "@[<2>%a:%a@]" Var.print v Pty.print (Var.ty v)
+    fpf out "@[<2>%a:%a@]" Var.print_full v Pty.print (Var.ty v)
 
   let pp_defined_list out =
     fpf out "@[<v>%a@]" (pplist_prefix ~first:"" ~pre:" and " pp_defined)

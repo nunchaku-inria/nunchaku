@@ -10,6 +10,7 @@
 print_endline "load nunchaku..." ;;
 #directory "_build/src/core";;
 #load "nunchaku_core.cma";;
+open Nunchaku_core;;
 #install_printer NunUntypedAST.print_ty;;
 #install_printer NunUntypedAST.print_term;;
 #install_printer NunUntypedAST.print_statement;;

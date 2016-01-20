@@ -3,6 +3,8 @@
 
 (* {1 TPTP Printer} *)
 
+open Nunchaku_core
+
 module A = UntypedAST
 module M = Model
 
@@ -25,6 +27,7 @@ let rec print_term out t = match A.view t with
   | A.Var (`Var v) -> print_var out v
   | A.Fun (v,t) ->
       fpf out "@[<2>^[%a]:@ %a@]" print_tyvar v print_inner t
+  | A.Mu _ -> Utils.not_implemented "print mu in TPTP"
   | A.Let _ -> Utils.not_implemented "print let in TPTP"
   | A.Match _ -> Utils.not_implemented "print match in TPTP"
   | A.Ite (a,b,c) ->
@@ -95,6 +98,7 @@ and print_inner out t = match A.view t with
       | _ -> print_term out t
       end
   | A.Fun (_,_)
+  | A.Mu _
   | A.Match _
   | A.Forall (_,_)
   | A.Exists (_,_)

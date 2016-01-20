@@ -206,6 +206,7 @@ module Make(FO_T : FO.S) = struct
       | FOI.Let (v,t,u) ->
           fpf out "@[<3>(let@ ((%a %a))@ %a@])"
             Var.print_full v print_term t print_term u
+      | FOI.Mu _ -> Utils.not_implemented "cannot send MU-term to CVC4"
       | FOI.Ite (a,b,c) ->
           fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
             print_term a print_term b print_term c

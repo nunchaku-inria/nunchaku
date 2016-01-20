@@ -5,6 +5,7 @@
 
 {
 
+  open Nunchaku_core
   open NunParser
 
 }

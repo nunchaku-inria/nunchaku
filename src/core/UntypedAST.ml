@@ -95,6 +95,7 @@ and term_node =
   | Ite of term * term * term
   | Forall of typed_var * term
   | Exists of typed_var * term
+  | Mu of typed_var * term
   | TyArrow of ty * ty
   | TyForall of var * ty
 
@@ -175,6 +176,7 @@ let eq ?loc a b = app ?loc (builtin ?loc `Eq) [a;b]
 let neq ?loc a b = not_ ?loc (eq ?loc a b)
 let forall ?loc v t = Loc.with_loc ?loc (Forall (v, t))
 let exists ?loc v t = Loc.with_loc ?loc (Exists (v, t))
+let mu ?loc v t = Loc.with_loc ?loc (Mu (v,t))
 let ty_arrow ?loc a b = Loc.with_loc ?loc (TyArrow (a,b))
 let ty_forall ?loc v t = Loc.with_loc ?loc (TyForall (v,t))
 
@@ -210,7 +212,7 @@ let rec head t = match Loc.get t with
   | App (f,_) -> head f
   | Var `Wildcard | Builtin _ | TyArrow (_,_)
   | Fun (_,_) | Let _ | Match _ | Ite (_,_,_)
-  | Forall (_,_) | Exists (_,_) | TyForall (_,_) ->
+  | Forall (_,_) | Mu _ | Exists (_,_) | TyForall (_,_) ->
       invalid_arg "untypedAST.head"
 
 let fpf = Format.fprintf
@@ -246,6 +248,8 @@ let rec print_term out term = match Loc.get term with
         print_term_inner a (pp_list_ ~sep:" " print_term_inner) l
   | Fun (v, t) ->
       fpf out "@[<2>fun %a.@ %a@]" print_typed_var v print_term t
+  | Mu (v, t) ->
+      fpf out "@[<2>mu %a.@ %a@]" print_typed_var v print_term t
   | Let (v,t,u) ->
       fpf out "@[<2>let %s :=@ %a in@ %a@]" v print_term t print_term u
   | Match (t,l) ->
@@ -276,7 +280,7 @@ let rec print_term out term = match Loc.get term with
       fpf out "@[<2>pi %s:type.@ %a@]" v print_term t
 and print_term_inner out term = match Loc.get term with
   | App _ | Fun _ | Let _ | Ite _ | Match _
-  | Forall _ | Exists _ | TyForall _ | TyArrow _ ->
+  | Forall _ | Exists _ | TyForall _ | Mu _ | TyArrow _ ->
       fpf out "(%a)" print_term term
   | Builtin _ | AtVar _ | Var _ | MetaVar _ -> print_term out term
 and print_term_in_arrow out t = match Loc.get t with
@@ -287,6 +291,7 @@ and print_term_in_arrow out t = match Loc.get t with
   | Ite _
   | Forall (_,_)
   | Exists (_,_)
+  | Mu _
   | Fun (_,_)
   | TyArrow (_,_)
   | TyForall (_,_) -> fpf out "@[(%a)@]" print_term t

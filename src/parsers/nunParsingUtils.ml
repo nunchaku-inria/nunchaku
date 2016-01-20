@@ -3,6 +3,8 @@
 
 (** {1 Various Utils for Parsing} *)
 
+open Nunchaku_core
+
 module E = CCError
 module A = UntypedAST
 module Loc = Location

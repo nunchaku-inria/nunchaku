@@ -28,3 +28,30 @@ x 2016-01-19 2015-10-02 recursive definitions (with well-foundedness check)
 x 2016-01-19 2015-10-30 fix mangling
 x 2016-01-19 2016-01-19 split unrolling off polarize?
 x 2016-01-19 2016-01-19 fix polarization (use same var in whole block, with table)
+x 2015-11-09 2015-11-04 continue refactor
+x 2015-11-10 2015-11-04 continue elim of recursion (by removing nested eqns first)
+x 2015-11-10 2015-11-09 fix tests back
+x 2015-11-13 2015-11-09 improve printing (especially _in_app stuff)
+x 2015-11-13 2015-11-10 remove useless translation after type inference
+x 2015-11-19 2015-11-18 accept non-atomic terms in RHS of definitions (no ambiguity)
+x 2015-11-19 2015-11-18 allow declaration+definition in one statement
+x 2015-12-02 2015-12-01 fix bug in elim_multi_eqns due:2015-12-02
+x 2015-12-07 2015-12-03 try several CLI flags for CVC4 (see mail)
+x 2015-12-07 2015-12-07 include statement due:2015-12-08
+x 2015-12-08 2015-12-07 run several instances of CVC4 in parallel (portfolio)
+x 2015-12-08 2015-12-07 find a clean way to do scheduling
+x 2015-12-08 2015-11-13 parametrize builtins by their arguments?
+x 2015-12-09 2015-12-08 add builtins for polarized functions
+x 2015-12-09 2015-12-09 syntax for (co)ind predicates
+x 2015-12-10 2015-12-09 put polarization in ID, remove it from builtin
+x 2015-12-22 2015-12-10 after monomorphization, IDs do not need `@` anymore
+x 2016-01-05 2015-12-09 polarization of (co)ind predicates
+x 2016-01-06 2015-12-09 translation of (co)ind predicates to recursive functions
+x 2016-01-07 2015-11-16 inductive propositions due:2015-12-10
+x 2016-01-11 2015-12-22 print models like problems
+x 2016-01-11 2015-12-22 fix issues in model translation (see doc/)
+x 2016-01-12 2016-01-06 do not unroll/encode inductive preds with 0 args
+x 2016-01-12 2016-01-07 decoding of polarized symbols
+x 2016-01-14 2016-01-12 add type aliases (with conversion functions) @feature
+x 2016-01-18 2016-01-14 split skolemization into 1/ early skolemization of types  2/ late sk. of terms (maybe only HO vars)
+x 2016-01-20 2016-01-14 a constant rec is a spec

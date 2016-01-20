@@ -240,6 +240,7 @@ module Convert(Term : TermTyped.S) = struct
           let var = Var.make ~ty:U.ty_type ~name:v in
           let env = TyEnv.add_var ~env v ~var in
           U.ty_forall ?loc var (convert_ty_ ~stack ~env t)
+      | A.Mu _ -> ill_formed ?loc "no mu-binders in types"
       | A.Fun (_,_) -> ill_formed ?loc "no functions in types"
       | A.Let (_,_,_) -> ill_formed ?loc "no let in types"
       | A.Match _ -> ill_formed ?loc "no match in types"
@@ -439,6 +440,18 @@ module Convert(Term : TermTyped.S) = struct
            so that a forall is issued here instead of a mere arrow *)
         let ty = U.ty_arrow ?loc ty_var (U.ty_exn t) in
         U.fun_ ?loc var ~ty t
+    | A.Mu ((v,ty_opt),t) ->
+        let ty_var = fresh_ty_var_ ~name:v in
+        (* unify with expected type *)
+        CCOpt.iter
+          (fun ty -> unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty))
+          ty_opt;
+        let var = Var.make ~name:v ~ty:ty_var in
+        let env = TyEnv.add_var ~env v ~var  in
+        let t = convert_term_ ~stack ~env t in
+        (* unify [ty t] with [ty_var], since [var = t] *)
+        unify_in_ctx_ ~stack (U.ty_exn t) ty_var;
+        U.mu ?loc var t
     | A.Let (v,t,u) ->
         let t = convert_term_ ~stack ~env t in
         let var = Var.make ~name:v ~ty:(U.ty_exn t) in

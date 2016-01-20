@@ -76,6 +76,10 @@ module Subst : sig
   val deref_rec : subst:('ty, 'ty var) t -> 'ty var -> 'ty var
   (** For renamings, follow the substitution until we find an unbound var *)
 
+  val find_deref_rec : subst:('ty, 'ty var) t -> 'ty var -> 'ty var option
+  (** [find_deref_rec ~subst v] returns [Some (deref_rec subst v')] if [v]
+      is bound, or [None] otherwise *)
+
   val mem : subst:('ty,'a) t -> 'ty var -> bool
   val find : subst:('ty,'a) t -> 'ty var -> 'a option
   val find_exn : subst:('ty,'a) t -> 'ty var -> 'a  (** @raise Not_found if var not bound *)

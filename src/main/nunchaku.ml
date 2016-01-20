@@ -1,6 +1,8 @@
 
 (** {1 Main program} *)
 
+open Nunchaku_core
+
 module E = CCError
 module A = UntypedAST
 module Utils = Utils
@@ -76,6 +78,7 @@ let options =
   let open CCFun in
   Arg.align ?limit:None @@ List.sort Pervasives.compare @@ (
   options_debug_ @
+  Utils.options_warnings_ @
   [ "--print-input", Arg.Set print_, " print input"
   ; "--print-all", Arg.Set print_all_, " print every step of the pipeline"
   ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline"
@@ -90,6 +93,7 @@ let options =
       " print input after elimination of recursive functions"
   ; "--print-elim-multi-eqns", Arg.Set print_elim_multi_eqns,
       " print input after elimination of multiple equations"
+  ; "--color", Arg.Bool CCFormat.set_color_default, " enable/disable color"
   ; "-j", Arg.Set_int j, " set parallelism level"
   ; "--print-polarize", Arg.Set print_polarize_, " print input after polarization"
   ; "--print-unroll", Arg.Set print_unroll_, " print input after unrolling"
@@ -262,6 +266,7 @@ let main_model ~output statements =
 
 (* main *)
 let main () =
+  CCFormat.set_color_default true; (* default: enable colors *)
   Arg.parse options set_file "usage: nunchaku [options] file";
   print_version_if_needed ();
   (* parse *)

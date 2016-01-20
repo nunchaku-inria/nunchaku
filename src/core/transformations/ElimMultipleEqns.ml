@@ -57,6 +57,10 @@ module Make(T : TI.S) = struct
     dn_wildcard: 'b list; (* matching anything *)
   }
 
+  let pp_pat out = function
+    | P_any -> Format.fprintf out "_"
+    | P_term t -> P.print out t
+
   let dnode_add_wildcard d x = match d with
     | DN_if (l,r) -> DN_if (x::l, x::r)
     | DN_match d -> DN_match { d with dn_wildcard=x :: d.dn_wildcard }
@@ -83,73 +87,55 @@ module Make(T : TI.S) = struct
     | DN_bind _ ->
         errorf_ "cannot match against %a, variable binding only" ID.print c
 
-  (* returns a pair [l1, l2] where [l1] contains RHS terms with no side
-     conditions, and [l2] contains RHS terms with their condition *)
-  let extract_side_conds l =
-    let rec aux noside_acc side_acc l = match l with
-      | [] -> noside_acc, side_acc
-      | (rhs, [], subst) :: l' -> aux ((rhs,subst) :: noside_acc) side_acc l'
-      | (rhs, ((_::_) as sides), subst) :: l' ->
-          aux noside_acc ((U.and_ sides, rhs, subst) :: side_acc) l'
-    in
-    aux [] [] l
-
   let add_renaming ~local_state v v' =
-    Utils.debugf ~section 5 "@[<2>add %a -> %a@ to renaming @[%a@]@]"
-      (fun k->k Var.print_full v Var.print_full v'
-        (Subst.print Var.print_full) local_state.renaming);
     local_state.renaming <- Subst.add ~subst:local_state.renaming v v';
     ()
+
+  (* print function for debugging *)
+  let pp_quad out (pats,rhs,side,subst) =
+    Format.fprintf out "case @[<hv>@[%a@]@ -> `@[%a@]`@ if @[%a@]@ with @[%a@]@]"
+      (CCFormat.list pp_pat) pats
+      P.print rhs (CCFormat.list P.print) side
+      (Subst.print Var.print_full) subst
+
+  (* TODO: carry a "path" argument to know which branch we are in,
+     that should be useful for error messages and warnings *)
 
   (* transform flat equations into a match tree. *)
   let rec compile_equations ~local_state vars l : term =
     match vars, l with
-    | _, [] ->
-        let root = U.eval_renaming ~subst:local_state.renaming local_state.root in
-        U.undefined_ root (* undefined case *)
+    | _, [] -> U.undefined_ local_state.root (* undefined case *)
     | [], [([], rhs, [], subst)] ->
         (* simple case: no side conditions, one RHS *)
         U.eval_renaming ~subst rhs
     | [], l ->
-        let l = List.map
+        (* reverse list, because the first clauses in pattern-match are the
+           ones at the end of the list *)
+        let l = List.rev_map
           (fun (args,rhs,side,subst) ->
             assert (args=[]);
             rhs,side,subst)
           l
         in
-        (* add side conditions *)
-        let noside, side = extract_side_conds l in
-        begin match noside, side with
-          | (t1,_)::(t2,_)::_, _ ->
-              errorf_ "@[ambiguity: terms `@[%a@]`@ and `@[%a@]`@ have no side conditions@]"
-                P.print t1 P.print t2
-          | [], l ->
-              (* try conditions one by one, fail otherwise *)
-              let default = U.undefined_ local_state.root in
-              List.fold_left
-                (fun acc (cond,rhs,subst) ->
-                  let rhs = U.eval_renaming ~subst rhs in
-                  U.ite cond rhs acc)
-                default l
-          | [rhs,subst], [] ->
-              U.eval_renaming ~subst rhs
-          | [t,_], _::_ ->
-              errorf_
-                "@[ambiguity: term `@[%a@]`@ has no side conditions,@ but other terms do.@]"
-                P.print t
-        end
+        yield_list ~local_state l
     | v::vars', _ ->
-        (* obtain the relevant type definition *)
         (* build one node of the decision tree *)
         let dnode =
-          Utils.debugf ~section 5 "build decision node for %a:%a"
-            (fun k->k Var.print v P.print (Var.ty v));
+          Utils.debugf ~section 5
+            "@[<2>build decision node for %a:%a @[%a@]@ with @[<1>%a@]@]"
+            (fun k->k Var.print_full v P.print (Var.ty v)
+              (CCFormat.list Var.print_full) vars'
+              (CCFormat.list pp_quad) l);
           let ty = Var.ty v in
-          if U.ty_is_Prop ty then DN_if ([], []) (* decision tree on prop *)
+          if U.ty_is_Prop ty
+          then DN_if ([], []) (* [v] is a prop, we use a if/then/else *)
           else try
             let ty_id = U.head_sym ty in
+            (* what does the type of [v] look like? *)
             match Env.def (Env.find_exn ~env:local_state.env ty_id) with
             | Env.Data (_, _, tydef) ->
+                (* [v] is a variable of type (co)data, so we use the list
+                   of constructors to build a shallow pattern match *)
                 DN_match {
                   dn_tydef=tydef;
                   dn_by_cstor=ID.Map.empty;
@@ -163,7 +149,10 @@ module Make(T : TI.S) = struct
             | Env.Cstor (_,_,_,_) ->
                 errorf_ "@[%a is not a type.@]" ID.print ty_id
             | Env.Copy_ty _
-            | Env.NoDef -> DN_bind []
+            | Env.NoDef ->
+                (* [v] is of a non-matchable type, but we can still bind
+                   it to an (opaque) value *)
+                DN_bind []
           with Not_found ->
             DN_bind [] (* not an atomic type *)
         in
@@ -185,11 +174,11 @@ module Make(T : TI.S) = struct
                     (* renaming. We try to use [v'] rather than [v] because
                        the name of [v'] is probably more relevant, except
                        if [v] is already renamed to something else . *)
-                    let subst = match Subst.find ~subst:local_state.renaming v with
+                    let subst = match Subst.find_deref_rec ~subst:local_state.renaming v with
                       | None ->
-                          (* v -> v', use [v'] instead of [v] now. *)
+                          (* v -> v', use [v'] instead of [v] now, in every branch. *)
                           add_renaming ~local_state v v';
-                          Subst.add ~subst v v'
+                          subst
                       | Some v'' when Var.equal v' v'' -> subst
                       | Some v'' ->
                           Subst.add ~subst v' v'' (* v -> v'' <- v' *)
@@ -198,11 +187,31 @@ module Make(T : TI.S) = struct
           )
           dnode l
         in
-        Utils.debugf ~section 5
-          "@[<2>renaming after compile_equations %a:@ @[%a@]@]"
-          (fun k->k Var.print_full v (Subst.print Var.print) local_state.renaming);
         let v = Subst.deref_rec ~subst:local_state.renaming v in
         compile_dnode ~local_state v vars' dnode
+
+  (* yield the term composed from the list [l] of cases. The first elements
+     of [l] are prioritary w.r.t. the later ones. *)
+  and yield_list ~local_state l = match l with
+    | [] -> assert false
+    | [t,[],subst] ->
+        (* final case *)
+        U.eval_renaming ~subst t
+    | [t, ((_::_) as sides), subst] ->
+        (* final case, but might fail *)
+        let else_ = U.undefined_ local_state.root in
+        let sides = List.map (U.eval_renaming ~subst) sides in
+        U.ite (U.and_ sides) (U.eval_renaming ~subst t) else_
+    | (t,[],subst)::_::_ ->
+        Utils.warningf Utils.Warn_overlapping_match
+          "@[ignore terms following `@[%a@]`, for it has no side condition@]" P.print t;
+        U.eval_renaming ~subst t
+    | (t, ((_::_) as sides), subst) :: l' ->
+        (* try [sides], yielding [t], otherwise fall back on [l'] *)
+        let sides = List.map (U.eval_renaming ~subst) sides in
+        U.ite (U.and_ sides)
+          (U.eval_renaming ~subst t)
+          (yield_list ~local_state l')
 
   (* add missing constructors (not explicitely matched upon) to the set
      of cases, complemented with a list of fresh vars, leading to
@@ -291,7 +300,10 @@ module Make(T : TI.S) = struct
         renaming=Subst.empty;
         env;
       } in
+      (* compile equations into flat pattern matches *)
       let new_rhs = compile_equations ~local_state vars cases in
+      (* apply global renaming *)
+      let new_rhs = U.eval_renaming ~subst:local_state.renaming new_rhs in
       let vars = List.map (Subst.deref_rec ~subst:local_state.renaming) vars in
       Stmt.Eqn_single (vars,new_rhs)
 

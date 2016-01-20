@@ -174,6 +174,7 @@ end = struct
           (fun v' ->
             let t = aux t in
             match b with
+            | `Mu -> Untyped.mu v' t
             | `Fun -> Untyped.fun_ v' t
             | `Forall -> Untyped.forall v' t
             | `Exists -> Untyped.exists v' t
@@ -282,9 +283,12 @@ end = struct
       | A.MetaVar _ -> error_ t "meta variable"
       | A.Exists ((_, None), _)
       | A.Forall ((_, None), _)
+      | A.Mu ((_,None), _)
       | A.Fun ((_, None), _) -> error_ t "untyped variable"
       | A.Fun ((v, Some ty),t) ->
           enter_var_ ~ty v (fun v -> U.fun_ v (aux t))
+      | A.Mu ((v, Some ty),t) ->
+          enter_var_ ~ty v (fun v -> U.mu v (aux t))
       | A.Let _ ->
           error_ t "`let` unsupported (no way of inferring the type)"
       | A.Match _ ->

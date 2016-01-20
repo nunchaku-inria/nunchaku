@@ -59,6 +59,7 @@ module Util(T : S)
   val var : ?loc:loc -> t var -> t
   val app : ?loc:loc -> ty:t -> t -> t list -> t
   val fun_ : ?loc:loc -> ty:t -> t var -> t -> t
+  val mu : ?loc:loc -> t var -> t -> t
   val let_ : ?loc:loc -> t var -> t -> t -> t
   val match_with : ?loc:loc -> ty:t -> t -> t TI.cases -> t
   val ite : ?loc:loc -> t -> t -> t -> t
@@ -119,6 +120,11 @@ end = struct
   let mk_bind ?loc ~ty b v t = build ?loc ~ty (TI.Bind (b,v,t))
 
   let fun_ ?loc ~ty v t = build ?loc ~ty (TI.Bind(`Fun,v, t))
+
+  let mu ?loc v t =
+    (* typeof v = typeof t = typeof µv.t *)
+    let ty = Var.ty v in
+    build ?loc ~ty (TI.Bind (`Mu, v, t))
 
   let let_ ?loc v t u =
     build ?loc ~ty:(ty_exn u) (TI.Let (v, t, u))

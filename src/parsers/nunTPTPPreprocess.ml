@@ -3,6 +3,8 @@
 
 (** {1 TPTP Preprocessor} *)
 
+open Nunchaku_core
+
 module A = UntypedAST
 module Loc = Location
 
@@ -106,6 +108,7 @@ let close_forall t =
     | A.Ite (a,b,c) -> compute_fvars a; compute_fvars b; compute_fvars c
     | A.Forall (v,t)
     | A.Exists (v,t)
+    | A.Mu (v,t)
     | A.Fun (v,t) -> enter_ty_bvar v (fun () -> compute_fvars t)
     | A.TyArrow (a,b) -> compute_fvars a; compute_fvars b
     | A.TyForall (v,t) -> enter_bvar v (fun () -> compute_fvars t)
@@ -177,6 +180,7 @@ let rec declare_missing ~ctx ~state t =
   | A.Fun (v,t) ->
       enter_typed_var_ ~state v
         (fun v -> A.fun_ ?loc v (declare_missing ~ctx ~state t))
+  | A.Mu _ -> assert false (* no "mu" in TPTP *)
   | A.Let (v,t,u) ->
       let t = declare_missing ~ctx ~state t in
       enter_var_ ~state v
@@ -270,6 +274,7 @@ let preprocess seq =
   with e -> Utils.err_of_exn e
 
 (*$inject
+  open Nunchaku_core
   module A = UntypedAST
   let parses_ok p t = match p t with `Ok _ -> true | _ -> false
   let ho_parses_ok = parses_ok NunTPTPLexer.ho_form_of_string

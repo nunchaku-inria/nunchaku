@@ -112,7 +112,6 @@ module Make(T : TI.S) = struct
     }
     let env ~state = state.get_env()
     let call ~state ~depth id pol = state.call ~depth id pol
-    let add_deps ~state n = state.add_deps n
   end
 
   (* shall we polarize the recursive function defined as follows? *)
@@ -242,7 +241,7 @@ module Make(T : TI.S) = struct
         end
     | TI.Bind (`TyForall, _, _) ->
         t (* we do not polarize in types *)
-    | TI.Bind ((`Forall | `Exists | `Fun), _, _)
+    | TI.Bind ((`Forall | `Exists | `Fun | `Mu), _, _)
     | TI.Builtin (`Ite _|`Eq _|`Equiv _)
     | TI.Let _
     | TI.Match _ ->
@@ -280,17 +279,6 @@ module Make(T : TI.S) = struct
     { def with
       rec_defined=defined;
       rec_eqns; }
-
-  (* make a variable for each type *)
-  let make_vars tys =
-    List.mapi (fun i ty -> Var.make ~name:(CCFormat.sprintf "v_%d" i) ~ty) tys
-
-  (* replace [id]' polarized with [p] locally *)
-  let with_local_polarized ~state id p ~f =
-    ID.Tbl.add state.St.polarized id (Some p);
-    CCFun.finally
-      ~h:(fun () -> ID.Tbl.remove state.St.polarized id)
-      ~f
 
   (* [p] is the polarization of the predicate defined by [def]; *)
   let define_pred
@@ -442,6 +430,8 @@ module Make(T : TI.S) = struct
         end
     | _ -> t
 
+  module Red = Reduce.Make(T)
+
   (* filter [dt], the decision tree for [polarized], returning
      only the cases that return [true] (if [is_pos]) or [false] (if [not is_pos]) *)
   let filter_dt_ ~is_pos ~polarized ~sys dt =
@@ -450,6 +440,8 @@ module Make(T : TI.S) = struct
       (fun k->k is_pos ID.print polarized (Model.DT.print P.print) dt);
     CCList.filter_map
       (fun (eqns, then_) ->
+        (* evaluate as fully as possible, hoping for [true] or [false] *)
+        let then_ = Red.whnf then_ in
         match T.repr then_, is_pos with
         | TI.Builtin `True, true
         | TI.Builtin `False, false ->
