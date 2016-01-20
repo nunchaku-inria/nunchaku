@@ -112,7 +112,6 @@ module Make(T : TI.S) = struct
     }
     let env ~state = state.get_env()
     let call ~state ~depth id pol = state.call ~depth id pol
-    let add_deps ~state n = state.add_deps n
   end
 
   (* shall we polarize the recursive function defined as follows? *)
@@ -280,17 +279,6 @@ module Make(T : TI.S) = struct
     { def with
       rec_defined=defined;
       rec_eqns; }
-
-  (* make a variable for each type *)
-  let make_vars tys =
-    List.mapi (fun i ty -> Var.make ~name:(CCFormat.sprintf "v_%d" i) ~ty) tys
-
-  (* replace [id]' polarized with [p] locally *)
-  let with_local_polarized ~state id p ~f =
-    ID.Tbl.add state.St.polarized id (Some p);
-    CCFun.finally
-      ~h:(fun () -> ID.Tbl.remove state.St.polarized id)
-      ~f
 
   (* [p] is the polarization of the predicate defined by [def]; *)
   let define_pred
