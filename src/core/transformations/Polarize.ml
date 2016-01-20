@@ -442,6 +442,8 @@ module Make(T : TI.S) = struct
         end
     | _ -> t
 
+  module Red = Reduce.Make(T)
+
   (* filter [dt], the decision tree for [polarized], returning
      only the cases that return [true] (if [is_pos]) or [false] (if [not is_pos]) *)
   let filter_dt_ ~is_pos ~polarized ~sys dt =
@@ -450,6 +452,8 @@ module Make(T : TI.S) = struct
       (fun k->k is_pos ID.print polarized (Model.DT.print P.print) dt);
     CCList.filter_map
       (fun (eqns, then_) ->
+        (* evaluate as fully as possible, hoping for [true] or [false] *)
+        let then_ = Red.whnf then_ in
         match T.repr then_, is_pos with
         | TI.Builtin `True, true
         | TI.Builtin `False, false ->

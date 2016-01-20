@@ -333,7 +333,7 @@ module Make(T : TI.S) = struct
       (* function *)
     dom_dom: ID.t list;
       (* abstract domain *)
-    dom_args: term list ID.Tbl.t;
+    mutable dom_args: term list ID.Map.t;
       (* for each abstract value in the approximation type, the list of
          concrete arguments it corresponds to *)
   }
@@ -346,9 +346,9 @@ module Make(T : TI.S) = struct
       fpf out "%a → (@[%a@])" ID.print id
         (CCFormat.list ~start:"" ~stop:"" P.print) l
     in
-    fpf out "[@[<hv2>`%a`:@ %a@]]"
+    fpf out "[@[<v2>`%a`:@ %a@]]"
       ID.print d.dom_fun.fun_encoded_fun
-      (CCFormat.seq ~start:"" ~stop:"" ~sep:" " pp_tuple) (ID.Tbl.to_seq d.dom_args)
+      (CCFormat.seq ~start:"" ~stop:"" ~sep:" " pp_tuple) (ID.Map.to_seq d.dom_args)
 
   type proj_fun = {
     proj_var: T.t Var.t;
@@ -383,7 +383,7 @@ module Make(T : TI.S) = struct
         | TI.Const id ->
             begin try
               let dom_fun = ID.Tbl.find state.abstract_ty id in
-              let dom = {dom_fun; dom_dom=dom; dom_args=ID.Tbl.create 16; } in
+              let dom = {dom_fun; dom_dom=dom; dom_args=ID.Map.empty; } in
               ID.Tbl.add doms dom_fun.fun_encoded_fun dom
             with Not_found -> ()
             end
@@ -409,9 +409,8 @@ module Make(T : TI.S) = struct
                 DT_util.eval ~subst proj.proj_tree)
               fdom.dom_fun.fun_concretization
             in
-            ID.Tbl.add fdom.dom_args val_id args)
-          fdom.dom_dom
-      )
+            fdom.dom_args <- ID.Map.add val_id args fdom.dom_args)
+          fdom.dom_dom)
       doms;
     ()
 
@@ -433,7 +432,7 @@ module Make(T : TI.S) = struct
         DT_util.eval ~subst body
       in
       (* set of tuples on which the function is defined *)
-      let dom_tuples = ID.Tbl.to_list dom.dom_args |> List.map snd in
+      let dom_tuples = ID.Map.to_list dom.dom_args |> List.map snd in
         (* default case: undefined
           TODO: if initial domain was finite, this might be unecessary,
             because CVC4 could model the whole domain? *)
@@ -474,11 +473,16 @@ module Make(T : TI.S) = struct
         | _ -> Some pair)
 
   let decode_model ~state m =
+    Utils.debugf ~section 3 "@[<2>decode model:@ @[%a@]@]"
+      (fun k->k (Model.print P.print P.print) m);
     let projs, domains = pass1_ ~state m in
     pass2_ projs domains;
     Utils.debugf ~section 2 "@[<2>domains:@ @[%a@]@]"
       (fun k->k (CCFormat.seq ~start:"" ~stop:"" pp_domain) (ID.Tbl.values domains));
-    pass3_ ~state domains m
+    let m = pass3_ ~state domains m in
+    Utils.debugf ~section 3 "@[<2>model after decoding:@ @[%a@]@]"
+      (fun k->k (Model.print P.print P.print) m);
+    m
 
   (** {6 Pipe} *)
 
