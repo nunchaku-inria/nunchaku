@@ -1151,6 +1151,7 @@ module Util(T : S)
           map subst t
             ~f:aux
             ~bind:(fun subst v ->
+              assert (not (Var.Subst.mem ~subst v));
               let v' = Var.fresh_copy v in
               Var.Subst.add ~subst v (var v'), v')
     in
@@ -1165,6 +1166,7 @@ module Util(T : S)
           map subst t
             ~f:aux
             ~bind:(fun subst v ->
+              assert (not (Var.Subst.mem ~subst v));
               let v' = Var.fresh_copy v in
               Var.Subst.add ~subst v v', v')
     in
