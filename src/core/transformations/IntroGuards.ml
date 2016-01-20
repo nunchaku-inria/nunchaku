@@ -8,20 +8,21 @@
 
 module TI = TermInner
 module Pol = Polarity
+module Stmt = Statement
 
-type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds:[`Absent]>
+type inv = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
 
 module Make(T : TI.S) : sig
   type term = T.t
 
-  val encode_pb : (term, term, 'a inv) Problem.t -> (term, term, 'a inv) Problem.t
+  val encode_pb : (term, term, inv) Problem.t -> (term, term, inv) Problem.t
 
   (** Pipeline component *)
   val pipe :
     print:bool ->
-    ((term, term, 'a inv) Problem.t,
-      (term, term, 'a inv) Problem.t,
-      'b, 'b) Transform.t
+    ((term, term, inv) Problem.t,
+      (term, term, inv) Problem.t,
+      'ret, 'ret) Transform.t
 end = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
@@ -125,7 +126,7 @@ end = struct
       (`True | `False | `And | `Or | `Not
         | `Imply | `DataSelect _ | `DataTest _) ->
        (* partially applied, or constant *)
-          t, empty_guard
+        t, empty_guard
     | TI.Builtin (`Undefined _ as b) ->
         let t' =
           U.builtin (TI.Builtin.map b ~f:(fun t-> fst(tr_term ~state ~pol t)))
@@ -274,6 +275,8 @@ end = struct
   let encode_pb pb =
     let sigma = Problem.signature pb in
     let state = { sigma; } in
+    (* all polarities are positive at root, because we don't have [rec/pred]
+       anymore thanks to {!inv} *)
     Problem.map pb
       ~term:(tr_root ~state)
       ~ty:CCFun.id
