@@ -36,6 +36,7 @@ type ('t, 'ty) view =
   | DataSelect of id * int * 't
   | Undefined of id * 't (** ['t] is not defined here *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
+  | Mu of 'ty var * 't   (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
   | Ite of 't * 't * 't
   | True
@@ -123,6 +124,7 @@ module type S = sig
     val var : Ty.t var -> t
     val let_ : Ty.t var -> t -> t -> t
     val fun_ : Ty.t var -> t -> t
+    val mu : Ty.t var -> t -> t
     val ite : t -> t -> t -> t
     val true_ : t
     val false_ : t

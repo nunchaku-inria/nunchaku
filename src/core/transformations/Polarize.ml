@@ -241,7 +241,7 @@ module Make(T : TI.S) = struct
         end
     | TI.Bind (`TyForall, _, _) ->
         t (* we do not polarize in types *)
-    | TI.Bind ((`Forall | `Exists | `Fun), _, _)
+    | TI.Bind ((`Forall | `Exists | `Fun | `Mu), _, _)
     | TI.Builtin (`Ite _|`Eq _|`Equiv _)
     | TI.Let _
     | TI.Match _ ->

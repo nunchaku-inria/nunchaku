@@ -10,12 +10,13 @@ module Builtin = TI.Builtin
 module TyBuiltin = TI.TyBuiltin
 
 module Binder = struct
-  type t = [`Forall | `Exists | `Fun]
+  type t = [`Forall | `Exists | `Fun | `Mu]
   let lift
   : t -> TI.Binder.t
   = function
     | `Forall -> `Forall
     | `Exists -> `Exists
+    | `Mu -> `Mu
     | `Fun -> `Fun
 end
 
@@ -57,7 +58,7 @@ module Make(T : TI.REPR)
     | TI.Builtin b -> Builtin b
     | TI.Bind (`TyForall,_,_)
     | TI.TyMeta _ -> assert false
-    | TI.Bind ((`Forall | `Exists | `Fun) as b,v,t) -> Bind(b,v,t)
+    | TI.Bind ((`Forall | `Exists | `Fun | `Mu) as b,v,t) -> Bind(b,v,t)
     | TI.Let (v,t,u) -> Let(v,t,u)
     | TI.Match (t,l) -> Match (t,l)
     | TI.TyBuiltin b -> TyBuiltin b
@@ -164,6 +165,8 @@ module ToFO(T : TI.S)(F : FO.S) = struct
         end
     | Bind (`Fun,v,t) ->
         FO.T.fun_ (conv_var v) (conv_term ~sigma t)
+    | Bind (`Mu,v,t) ->
+        FO.T.mu (conv_var v) (conv_term ~sigma t)
     | Bind (`Forall, v,f) ->
         FO.T.forall (conv_var v) (conv_term ~sigma f)
     | Bind (`Exists, v,f) ->
@@ -351,6 +354,9 @@ module OfFO(T:TI.S)(F : FO.VIEW) = struct
     | FO.App (f,l) ->
         let l = List.map convert_term l in
         U.app (U.const f) l
+    | FO.Mu (v,t) ->
+        let v = Var.update_ty v ~f:(convert_ty) in
+        U.mu v (convert_term t)
     | FO.Fun (v,t) ->
         let v = Var.update_ty v ~f:(convert_ty) in
         U.fun_ v (convert_term t)

@@ -160,7 +160,7 @@ module Make(T : TI.S) = struct
         U.guard t g'
     | TI.Bind (`Fun,_,_) -> fail_tr_ t "translation of λ impossible"
     | TI.Builtin (`Equiv _ | `Eq _ | `Ite _)
-    | TI.Bind ((`Forall | `Exists), _, _)
+    | TI.Bind ((`Forall | `Exists | `Mu), _, _)
     | TI.Match _
     | TI.Let _ ->
         tr_term_rec_' ~state subst t

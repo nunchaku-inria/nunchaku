@@ -167,7 +167,9 @@ module Make(T : TI.S) = struct
       | _ -> None
 
     (* reduce until the head is not a function *)
-    let rec whnf_ st = match T.repr st.head with
+    let rec whnf_ st =
+      let head = st.head in
+      match T.repr head with
       | TI.Const _ -> st
       | TI.Builtin (`False | `True) -> st
       | TI.Builtin b ->
@@ -191,6 +193,12 @@ module Make(T : TI.S) = struct
                 subst=Subst.add ~subst:st.subst v a
               }
           end
+      | TI.Bind (`Mu, v, body) ->
+          (* [µ v. t] --> [t with v:= µv. t] *)
+          whnf_ {st with
+            head=body;
+            subst=Subst.add ~subst:st.subst v head;
+          }
       | TI.Match (t, l) ->
           let st_t = whnf_ {head=t; args=[]; subst=st.subst; } in
           (* see whether [st] matches some case *)

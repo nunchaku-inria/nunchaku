@@ -27,7 +27,7 @@ module Make(T : TermInner.S) = struct
     | TI.Const _ -> t
     | TI.App (f,l) -> U.app (elim_match_ ~subst f) (elim_match_l_ ~subst l)
     | TI.Builtin b -> U.builtin (TI.Builtin.map b ~f:(elim_match_ ~subst))
-    | TI.Bind ((`Forall | `Exists | `Fun) as b,v,t) ->
+    | TI.Bind ((`Forall | `Exists | `Fun | `Mu) as b,v,t) ->
         let v' = Var.fresh_copy v in
         let subst = Subst.add ~subst v (U.var v') in
         let t' = elim_match_ ~subst t in
@@ -63,8 +63,7 @@ module Make(T : TermInner.S) = struct
               subst vars
             in
             let rhs' = elim_match_ ~subst:subst' rhs in
-            U.ite (mk_test_ c t') rhs' acc
-          )
+            U.ite (mk_test_ c t') rhs' acc)
           l
           default_case
 
