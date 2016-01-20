@@ -112,6 +112,8 @@ val warning : warning -> string -> unit
 
 val warningf : warning -> ('a, Format.formatter, unit, unit) format4 -> 'a
 
+val options_warnings_ : (Arg.key * Arg.spec * Arg.doc) list
+
 (** {2 Misc} *)
 
 exception NotImplemented of string

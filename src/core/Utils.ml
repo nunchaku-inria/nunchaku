@@ -197,15 +197,26 @@ let toggle_warning w b =
 let warningf w msg =
   if is_warning_enabled w
   then (
-    Format.eprintf "@[<2>@{<yellow>warning@}[%a]:@ " pp_warn w;
+    Format.eprintf "@[<2>[@{<yellow>Warning@} %a:@ " pp_warn w;
     Format.kfprintf
       (fun out ->
-        Format.fprintf out "@]@.";
+        Format.fprintf out "]@]@.";
         ())
       Format.err_formatter msg
   ) else Format.ikfprintf (fun _ -> ()) Format.err_formatter msg
 
 let warning b msg = warningf b "%s" msg
+
+let enable_warn_ w () = toggle_warning w true
+
+let options_warnings_ =
+  [ "--warn-overlapping-match"
+      , Arg.Unit (enable_warn_ Warn_overlapping_match)
+      , " enable warning on overlapping cases of pattern-matching"
+  ; "-W1"
+      , Arg.Unit (enable_warn_ Warn_overlapping_match)
+      , " shortcut for --warn-overlapping-match"
+  ]
 
 (** {2 Misc} *)
 
