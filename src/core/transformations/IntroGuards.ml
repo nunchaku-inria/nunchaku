@@ -201,7 +201,6 @@ end = struct
             (* quantify over guards, too. We always quantify universally
                 because the universal guard is valid in both polarities,
                 whereas the existential guard would not. *)
-            if b = `Exists then state.lost_precision <- true;
             let g' = wrap_guard (U.forall v) g in
             U.mk_bind b v t, g'
         end
