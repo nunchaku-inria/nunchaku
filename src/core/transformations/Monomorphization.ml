@@ -572,8 +572,8 @@ module Make(T : TI.S) = struct
       (Problem.statements pb);
     (* output result. If depth limit reached we might be incomplete *)
     let meta = Problem.metadata pb in
-    let meta =
-      Problem.Metadata.add_incomplete meta traverse#reached_depth_limit in
+    let meta = Problem.Metadata.add_sat_means_unknown
+      traverse#reached_depth_limit meta in
     let res = traverse#output in
     let pb' = Problem.make ~meta (CCVector.freeze res) in
     (* some debug *)
