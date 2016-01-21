@@ -25,11 +25,13 @@ module DSexp = CCSexpM.MakeDecode(struct
   let (>>=) x f = f x
 end)
 
+exception Error of string
 exception CVC4_error of string
 
 let () = Printexc.register_printer
   (function
-    | CVC4_error msg -> Some (spf "@[CVC4 error:@ %s@]" msg)
+    | Error msg -> Some (spf "@[Error in the interface to CVC4:@ %s@]" msg)
+    | CVC4_error msg -> Some (spf "@[Error in CVC4:@ %s@]" msg)
     | _ -> None)
 
 module Make(FO_T : FO.S) = struct
@@ -283,7 +285,7 @@ module Make(FO_T : FO.S) = struct
     let state = create_decode_state ~symbols:ID.Map.empty in
     print_problem_ ~state out pb
 
-  let error_ e = raise (CVC4_error e)
+  let error_ e = raise (Error e)
   let errorf_ fmt = CCFormat.ksprintf fmt ~f:error_
 
   let find_atom_ ~state s =
@@ -571,9 +573,9 @@ module Make(FO_T : FO.S) = struct
         let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ %a@]"
           CCSexpM.print sexp
         in
-        Sol.Res.Error (CVC4_error msg)
-    | `Error e -> Sol.Res.Error (CVC4_error e)
-    | `End -> Sol.Res.Error (CVC4_error "no answer from the solver")
+        Sol.Res.Error (Error msg)
+    | `Error e -> Sol.Res.Error (Error e)
+    | `End -> Sol.Res.Error (Error "no answer from the solver")
 
   let res t = match t.res with
     | Some r -> r
@@ -617,7 +619,7 @@ module Make(FO_T : FO.S) = struct
   let mk_cvc4_cmd_ timeout options =
     Printf.sprintf
       "cvc4 --tlimit-per=%d --lang smt --finite-model-find \
-       --uf-ss-fair-monotone %s"
+       --uf-ss-fair-monotone --no-condense-function-values %s"
       (int_of_float (timeout *. 1000.)) options
 
   let solve ?(options="") ?(timeout=30.) ?(print=false) problem =
