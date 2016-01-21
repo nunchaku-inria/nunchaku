@@ -20,12 +20,20 @@ let fpf = Format.fprintf
 
 module Metadata = struct
   type t = {
-    incomplete: bool;
+    unsat_means_unknown: bool; (* we lost some models *)
+    sat_means_unknown: bool; (* models may be spurious *)
   }
 
-  let default = {incomplete=false}
-  let set_incomplete _ = {incomplete=true}
-  let add_incomplete m b = {incomplete=m.incomplete||b}
+  let default =
+    { sat_means_unknown=false;
+      unsat_means_unknown=false;
+    }
+
+  let set_sat_means_unknown m = {m with sat_means_unknown=true; }
+  let add_sat_means_unknown b m = if b then set_sat_means_unknown m else m
+
+  let set_unsat_means_unknown m = {m with unsat_means_unknown=true; }
+  let add_unsat_means_unknown b m = if b then set_unsat_means_unknown m else m
 end
 
 type ('t, 'ty, 'inv) t = {
@@ -36,6 +44,13 @@ type ('t, 'ty, 'inv) t = {
 
 let statements t = t.statements
 let metadata t = t.metadata
+let update_meta t f = { t with metadata = f t.metadata; }
+
+let add_sat_means_unknown b t = update_meta t (Metadata.add_sat_means_unknown b)
+let set_sat_means_unknown t = update_meta t Metadata.set_sat_means_unknown
+
+let add_unsat_means_unknown b t = update_meta t (Metadata.add_unsat_means_unknown b)
+let set_unsat_means_unknown t = update_meta t Metadata.set_unsat_means_unknown
 
 let make ~meta statements = { metadata=meta; statements; }
 

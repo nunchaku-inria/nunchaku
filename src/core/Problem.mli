@@ -12,12 +12,17 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 
 module Metadata : sig
   type t = private {
-    incomplete: bool;
+    unsat_means_unknown: bool; (* we lost some models *)
+    sat_means_unknown: bool; (* models may be spurious *)
   }
 
   val default: t
-  val set_incomplete: t -> t
-  val add_incomplete: t -> bool -> t
+
+  val set_unsat_means_unknown: t -> t
+  val add_unsat_means_unknown: bool -> t -> t
+
+  val set_sat_means_unknown: t -> t
+  val add_sat_means_unknown: bool -> t -> t
 end
 
 type ('t, 'ty, 'inv) t = private {
@@ -38,6 +43,12 @@ val of_list :
 
 val statements : ('t, 'ty, 'inv) t -> ('t, 'ty, 'inv) Statement.t CCVector.ro_vector
 val metadata : _ t -> Metadata.t
+val update_meta : ('t,'ty,'inv) t -> (Metadata.t -> Metadata.t) -> ('t,'ty,'inv) t
+
+val add_sat_means_unknown : bool -> ('t,'ty,'inv) t -> ('t,'ty,'inv) t
+val set_sat_means_unknown : ('t,'ty,'inv) t -> ('t,'ty,'inv) t
+val add_unsat_means_unknown : bool -> ('t,'ty,'inv) t -> ('t,'ty,'inv) t
+val set_unsat_means_unknown : ('t,'ty,'inv) t -> ('t,'ty,'inv) t
 
 val iter_statements:
   f:(('t, 'ty, 'inv) Statement.t -> unit) ->
