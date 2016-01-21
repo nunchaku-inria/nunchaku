@@ -617,7 +617,7 @@ module Make(FO_T : FO.S) = struct
   let mk_cvc4_cmd_ timeout options =
     Printf.sprintf
       "cvc4 --tlimit-per=%d --lang smt --finite-model-find \
-       --uf-ss-fair-monotone %s"
+       --uf-ss-fair-monotone --no-condense-function-values %s"
       (int_of_float (timeout *. 1000.)) options
 
   let solve ?(options="") ?(timeout=30.) ?(print=false) problem =
