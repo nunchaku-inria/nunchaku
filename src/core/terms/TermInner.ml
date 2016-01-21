@@ -1077,7 +1077,7 @@ module Util(T : S)
             let t = f b_acc pol t in
             app_builtin b [t]
         | _ ->
-            let hd = f b_acc P.NoPol hd in
+            let hd = f b_acc pol hd in
             let l = List.map (f b_acc P.NoPol) l in
             app hd l
         end
@@ -1088,8 +1088,12 @@ module Util(T : S)
           t
     | Builtin (`Undefined _ as b) -> builtin b
     | Builtin (`Guard (t, g)) ->
+        let open Builtin in
         let t = f b_acc pol t in
-        let g = Builtin.map_guard (f b_acc pol) g in
+        let g = {
+          asserting = List.map (f b_acc P.Pos) g.asserting;
+          assuming = List.map (f b_acc P.Neg) g.assuming;
+        } in
         guard t g
     | Builtin (`Equiv (a,b)) ->
         let a = f b_acc P.NoPol a in
