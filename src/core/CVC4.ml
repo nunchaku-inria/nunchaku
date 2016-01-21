@@ -497,7 +497,7 @@ module Make(FO_T : FO.S) = struct
               let terms = Sequence.(0 -- (n-1)
                 |> map
                   (fun i ->
-                    let name = CCFormat.sprintf "@uc_%a_%d" ID.print_name ty_id i in
+                    let name = CCFormat.sprintf "@uc_%a__%d" ID.print_name ty_id i in
                     let id = match find_atom_ ~state name with
                       | ID id -> id
                       | _ -> assert false
