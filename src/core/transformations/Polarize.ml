@@ -241,8 +241,13 @@ module Make(T : TI.S) = struct
         end
     | TI.Bind (`TyForall, _, _) ->
         t (* we do not polarize in types *)
+    | TI.Builtin (`Equiv (a,b)) when pol <> Pol.NoPol ->
+        (* we can gain precision here, because if we expand the <=> we
+          obtain two polarized formulas, whereas if we keep it we
+          only obtain a non-polarized one. *)
+        polarize_term_rec ~state pol (U.and_ [U.imply a b; U.imply b a])
     | TI.Bind ((`Forall | `Exists | `Fun | `Mu), _, _)
-    | TI.Builtin (`Ite _|`Eq _|`Equiv _)
+    | TI.Builtin (`Ite _ | `Eq _ | `Equiv _)
     | TI.Let _
     | TI.Match _ ->
         (* generic treatment *)
