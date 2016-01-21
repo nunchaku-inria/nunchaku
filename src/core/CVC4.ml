@@ -136,9 +136,7 @@ module Make(FO_T : FO.S) = struct
     try ID.Tbl.find state.id_to_name id
     with Not_found ->
       let name0 = match ID.name id, ID.polarity id with
-        | "distinct", _ -> "distinct_"
-        | "concat", _ -> "concat_"
-        | s, Polarity.NoPol  -> s
+        | s, Polarity.NoPol  -> s ^ "_" (* avoid clashes with CVC4 builtins *)
         | s, Polarity.Pos -> s ^ "_+"
         | s, Polarity.Neg -> s ^ "_-"
       in
@@ -618,7 +616,8 @@ module Make(FO_T : FO.S) = struct
   (* the command line to invoke CVC4 *)
   let mk_cvc4_cmd_ timeout options =
     Printf.sprintf
-      "cvc4 --tlimit-per=%d --lang smt --finite-model-find --uf-ss-fair-monotone %s"
+      "cvc4 --tlimit-per=%d --lang smt --finite-model-find \
+       --uf-ss-fair-monotone %s"
       (int_of_float (timeout *. 1000.)) options
 
   let solve ?(options="") ?(timeout=30.) ?(print=false) problem =
