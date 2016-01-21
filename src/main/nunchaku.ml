@@ -200,7 +200,9 @@ let make_model_pipeline () =
   in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   CVC4.close_pipe FO.default ~options:CVC4.options_l ~j:!j
-    ~pipe ~deadline ~print:!print_fo_ ~print_smt:!print_smt_
+    ~pipe ~deadline
+      ~print:(!print_fo_ || !print_all_)
+      ~print_smt:(!print_smt_ || !print_all_)
 
 (* search for results *)
 let rec find_model_ ~found_unsat l =
@@ -246,16 +248,18 @@ let main_model ~output statements =
   Transform.run_closed ~cpipe statements |> find_model_ ~found_unsat:false
   >|= fun res ->
   begin match res, output with
+  | `Sat m, O_nunchaku when m.Model.potentially_spurious ->
+      Format.printf "@[<v>@[<v2>SAT: (potentially spurious) {@,@[<v>%a@]@]@,}@]@."
+        (Model.print UntypedAST.print_term UntypedAST.print_term) m;
   | `Sat m, O_nunchaku ->
       Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]@."
         (Model.print UntypedAST.print_term UntypedAST.print_term) m;
   | `Sat m, O_tptp ->
+      (* XXX: if potentially spurious, what should we print? *)
       Format.printf "@[<v2>%a@]@,@." NunPrintTPTP.print_model m
   | `Unsat, O_nunchaku ->
-      (* TODO: check whether we have a "spurious" flag *)
       Format.printf "@[UNSAT@]@."
   | `Unsat, O_tptp ->
-      (* TODO: check whether we have a "spurious" flag *)
       Format.printf "@[SZS Status: Unsatisfiable@]@."
   | `Unknown, _ ->
       Format.printf "@[UNKNOWN@]@."

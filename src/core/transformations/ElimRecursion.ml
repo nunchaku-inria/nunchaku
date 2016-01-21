@@ -134,7 +134,6 @@ module Make(T : TI.S) = struct
               let eqns = ref [] in
               let l' = List.map2
                 (fun arg (proj,_ty_proj) ->
-                  (* under a function: no polarity *)
                   let arg' = tr_term_rec_ ~state subst arg in
                   let eqn = U.eq arg' (U.app (U.const proj) [U.var alpha]) in
                   eqns := eqn :: !eqns;

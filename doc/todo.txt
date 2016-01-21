@@ -6,7 +6,6 @@
 2015-10-20 add let in THF
 (B) 2015-10-23 printTPTP: need types (differentiate type args from term args; 1 domain decl per type) p:1
 (B) 2015-10-29 flag to print signature (post-ty inference)
-(A) 2016-01-19 allow ambiguous matching, resolved by order (ML-like)
 (A) 2016-01-19 µ terms, parse them from CVC4 and deal with them internally
 2015-11-10 run larger scale tests @test
 2015-11-10 think about clean distinction term/type @design
@@ -23,3 +22,4 @@
 (B) 2016-01-11 harmonize names in debug/print CLI options @cleanup
 (A) 2016-01-11 use bisect for test coverage http://bisect.x9c.fr/distrib/bisect.html#htoc10 @test
 (B) 2016-01-18 deal with empty sorts
+(B) 2016-01-21 compute type cardinalities to approximate exists/forall with top/bot in non polarized cases

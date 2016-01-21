@@ -497,7 +497,7 @@ module Make(FO_T : FO.S) = struct
               let terms = Sequence.(0 -- (n-1)
                 |> map
                   (fun i ->
-                    let name = CCFormat.sprintf "@uc_%a_%d" ID.print_name ty_id i in
+                    let name = CCFormat.sprintf "@uc_%a__%d" ID.print_name ty_id i in
                     let id = match find_atom_ ~state name with
                       | ID id -> id
                       | _ -> assert false
@@ -591,7 +591,7 @@ module Make(FO_T : FO.S) = struct
       - compute the set of symbols for which we want the model's value *)
   let preprocess_pb_ pb =
     let n = ref 0 in
-    FOI.Problem.fold_flat_map
+    FOI.Problem.fold_flat_map ~meta:(FO.Problem.meta pb)
       (fun acc stmt -> match stmt with
         | FOI.Decl (id,(args,_)) ->
             let len = List.length args in
@@ -635,6 +635,8 @@ module Make(FO_T : FO.S) = struct
   exception Timeout
 
   let solve_par ?(j=3) ?(options=[""]) ?(timeout=30.) ?(print=false) problem =
+    let unsat_means_unknown =
+      problem.FO.Problem.meta.ProblemMetadata.unsat_means_unknown in
     let symbols, problem' = preprocess_pb_ problem in
     if print
       then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem problem';
@@ -654,7 +656,11 @@ module Make(FO_T : FO.S) = struct
           Utils.debugf ~section 3 "@[<2>result: %a@]" (fun k->k Sol.Res.pp r);
           match r with
           | Sol.Res.Sat m -> Scheduling.Return_shortcut (Sol.Res.Sat m)
-          | Sol.Res.Unsat -> Scheduling.Return_shortcut Sol.Res.Unsat
+          | Sol.Res.Unsat ->
+              (* beware, this "unsat" might be wrong *)
+              if unsat_means_unknown
+              then Scheduling.Return Sol.Res.Unknown
+              else Scheduling.Return_shortcut Sol.Res.Unsat
           | Sol.Res.Timeout
           | Sol.Res.Unknown -> Scheduling.Return r
           | Sol.Res.Error e ->

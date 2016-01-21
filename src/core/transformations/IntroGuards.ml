@@ -121,7 +121,8 @@ end = struct
         | _ ->
             (* combine side conditions from every sub-term *)
             let f, g_f = tr_term ~state ~pol f in
-            let l, g = tr_list ~state ~pol ~acc:g_f l in
+            (* under a function: no polarity *)
+            let l, g = tr_list ~state ~pol:Pol.NoPol ~acc:g_f l in
             let t' = U.app f l in
             if is_prop ~state t then combine pol t' g else t', g
         end
@@ -149,7 +150,7 @@ end = struct
           List.fold_left
             (fun acc pred ->
               (* apply guards to [pred] itself, then add [pred] to assuming *)
-              let pred, g = tr_term ~state ~pol:Pol.Pos pred in
+              let pred, g = tr_term ~state ~pol:Pol.Neg pred in
               add_assuming acc (combine_polarized ~is_pos:true pred g))
             conds g.assuming
         in
@@ -200,7 +201,7 @@ end = struct
             (* quantify over guards, too. We always quantify universally
                 because the universal guard is valid in both polarities,
                 whereas the existential guard would not. *)
-            state.lost_precision <- true;
+            if b = `Exists then state.lost_precision <- true;
             let g' = wrap_guard (U.forall v) g in
             U.mk_bind b v t, g'
         end
@@ -287,9 +288,10 @@ end = struct
       ~term:(tr_root ~state)
       ~ty:CCFun.id
     in
-    (* if [state.lost_precision] then "UNSAT" means "UNKNOWN" *)
+    (* if [state.lost_precision] then "UNSAT" means "UNKNOWN"
+      TODO emit warning? *)
     if state.lost_precision
-      then Utils.debug ~section 1 "@[<2>lost precision, now UNSAT means UNKNOWN";
+      then Utils.debug ~section 1 "lost precision, now UNSAT means UNKNOWN";
     Problem.add_unsat_means_unknown state.lost_precision pb'
 
   let pipe ~print =

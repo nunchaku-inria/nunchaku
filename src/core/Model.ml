@@ -120,12 +120,17 @@ type (+'t, +'ty) t = {
 
   finite_types: ('ty * ID.t list) list;
     (* type -> finite domain *)
+
+  potentially_spurious: bool;
+    (** the model might be spurious, i.e. some approximation made the
+        translation unsound *)
 }
 
 let empty = {
   constants=[];
   funs=[];
   finite_types=[];
+  potentially_spurious=false;
 }
 
 let add_const t pair = {t with constants = pair :: t.constants; }
@@ -136,6 +141,7 @@ let add_finite_type t ty dom =
   {t with finite_types = (ty, dom) :: t.finite_types; }
 
 let map ~term:fterm ~ty:fty m = {
+  m with
   constants=CCList.map (fun (x,y) -> fterm x, fterm y) m.constants;
   funs=CCList.map
     (fun (t,vars,dt) ->
@@ -145,6 +151,7 @@ let map ~term:fterm ~ty:fty m = {
 }
 
 let filter_map ~constants ~funs ~finite_types m = {
+  m with
   constants = CCList.filter_map constants m.constants;
   funs = CCList.filter_map funs m.funs;
   finite_types = CCList.filter_map finite_types m.finite_types;
@@ -258,7 +265,8 @@ module Util(T : TI.S) = struct
     in
     (* rewrite every term *)
     let rw_nil = rewrite_term_ rules Var.Subst.empty in
-    { finite_types;
+    { m with
+      finite_types;
       constants=List.map
         (fun (t,u) -> rw_nil t, rw_nil u)
         m.constants;
@@ -278,7 +286,6 @@ module Util(T : TI.S) = struct
         if must_print then (
           let module P = TI.Print(T) in
           Format.printf "@[<v2>after model renaming:@ {@,%a@]}@."
-            (print P.print P.print) m'
-        );
+            (print P.print P.print) m');
         m')
 end

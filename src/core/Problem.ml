@@ -4,12 +4,7 @@
 (** {1 Statements with Locations} *)
 
 module Loc = Location
-module ID = ID
-module Var = Var
-module Statement = Statement
-module Model = Model
-module Signature = Signature
-module Env = Env
+module Metadata = ProblemMetadata
 
 type loc = Loc.t
 type id = ID.t
@@ -18,29 +13,10 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 
 let fpf = Format.fprintf
 
-module Metadata = struct
-  type t = {
-    unsat_means_unknown: bool; (* we lost some models *)
-    sat_means_unknown: bool; (* models may be spurious *)
-  }
-
-  let default =
-    { sat_means_unknown=false;
-      unsat_means_unknown=false;
-    }
-
-  let set_sat_means_unknown m = {m with sat_means_unknown=true; }
-  let add_sat_means_unknown b m = if b then set_sat_means_unknown m else m
-
-  let set_unsat_means_unknown m = {m with unsat_means_unknown=true; }
-  let add_unsat_means_unknown b m = if b then set_unsat_means_unknown m else m
-end
-
 type ('t, 'ty, 'inv) t = {
   statements : ('t, 'ty, 'inv) Statement.t CCVector.ro_vector;
   metadata: Metadata.t;
 }
-
 
 let statements t = t.statements
 let metadata t = t.metadata
