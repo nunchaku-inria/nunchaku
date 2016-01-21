@@ -62,6 +62,10 @@ type (+'t, +'ty) t = {
 
   finite_types: ('ty * ID.t list) list;
     (* type -> finite domain *)
+
+  potentially_spurious: bool;
+    (** the model might be spurious, i.e. some approximation made the
+        translation unsound *)
 }
 
 val empty : (_,_) t

@@ -7,6 +7,8 @@
   sent to some SMT solver. Types are monomorphic, formulas are first-order
 *)
 
+module Metadata = ProblemMetadata
+
 type id = ID.t
 type 'a var = 'a Var.t
 type 'a printer = Format.formatter -> 'a -> unit
@@ -154,12 +156,15 @@ val default: (Default.T.t, Default.Ty.t) build
 module Problem : sig
   type ('t, 'ty) t = {
     statements: ('t, 'ty) statement CCVector.ro_vector;
+    meta: Metadata.t;
   }
 
-  val make : ('t, 'ty) statement CCVector.ro_vector -> ('t, 'ty) t
-  val of_list : ('t, 'ty) statement list -> ('t, 'ty) t
+  val make : meta:Metadata.t -> ('t, 'ty) statement CCVector.ro_vector -> ('t, 'ty) t
+  val of_list : meta:Metadata.t -> ('t, 'ty) statement list -> ('t, 'ty) t
   val statements : ('t, 'ty) t -> ('t, 'ty) statement CCVector.ro_vector
+  val meta : _ t -> Metadata.t
   val fold_flat_map :
+    meta:Metadata.t ->
     ('acc -> ('t, 'ty) statement -> 'acc * ('t2, 'ty2) statement list) ->
     'acc ->
     ('t, 'ty) t ->

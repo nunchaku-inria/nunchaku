@@ -3,27 +3,14 @@
 
 (** {1 Top-Level Statements (with locations)} *)
 
+module Metadata = ProblemMetadata
+
 type loc = Location.t
 type id = ID.t
 type 'a printer = Format.formatter -> 'a -> unit
 type 'a or_error = [`Ok of 'a | `Error of string]
 
 (** {2 Problem: a Set of Statements + Signature} *)
-
-module Metadata : sig
-  type t = private {
-    unsat_means_unknown: bool; (* we lost some models *)
-    sat_means_unknown: bool; (* models may be spurious *)
-  }
-
-  val default: t
-
-  val set_unsat_means_unknown: t -> t
-  val add_unsat_means_unknown: bool -> t -> t
-
-  val set_sat_means_unknown: t -> t
-  val add_sat_means_unknown: bool -> t -> t
-end
 
 type ('t, 'ty, 'inv) t = private {
   statements : ('t, 'ty, 'inv) Statement.t CCVector.ro_vector;

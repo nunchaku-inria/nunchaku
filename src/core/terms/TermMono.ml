@@ -302,15 +302,15 @@ module ToFO(T : TI.S)(F : FO.S) = struct
         [ FOI.MutualTypes (k, l) ]
 
   let convert_problem p =
+    let meta = Problem.metadata p in
     let res = CCVector.create() in
     let sigma = Problem.signature p in
     CCVector.iter
       (fun st ->
         let l = convert_statement ~sigma st in
-        CCVector.append_seq res (Sequence.of_list l)
-      )
+        CCVector.append_seq res (Sequence.of_list l))
       (Problem.statements p);
-    res |> CCVector.freeze |> FOI.Problem.make
+    res |> CCVector.freeze |> FOI.Problem.make ~meta
 end
 
 module OfFO(T:TI.S)(F : FO.VIEW) = struct

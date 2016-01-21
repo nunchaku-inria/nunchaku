@@ -3,8 +3,7 @@
 
 (** {1 First-Order Monomorphic Terms} *)
 
-module ID = ID
-module Var = Var
+module Metadata = ProblemMetadata
 
 type id = ID.t
 type 'a var = 'a Var.t
@@ -217,13 +216,15 @@ module Problem = struct
 
   type ('t, 'ty) t = {
     statements: ('t, 'ty) statement CCVector.ro_vector;
+    meta: Metadata.t;
   }
 
-  let make l = {statements=l}
-  let of_list l = make (CCVector.of_list l)
+  let make ~meta l = { meta; statements=l; }
+  let of_list ~meta l = make ~meta (CCVector.of_list l)
   let statements t = t.statements
+  let meta t = t.meta
 
-  let fold_flat_map f acc pb =
+  let fold_flat_map ~meta f acc pb =
     let res = CCVector.create () in
     let acc' = CCVector.fold
       (fun acc st ->
@@ -232,7 +233,7 @@ module Problem = struct
         acc)
       acc pb.statements
     in
-    let pb' = make (CCVector.freeze res) in
+    let pb' = make ~meta (CCVector.freeze res) in
     acc', pb'
 end
 
