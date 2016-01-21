@@ -1,23 +1,4 @@
 # OASIS_START
-# DO NOT EDIT (digest: 46e0874cd42df6fcc83e050ddbc0351c)
-NunID
-NunVar
-NunMetaVar
-NunLocation
-NunIntf
-NunUtils
-NunTransform
-NunType_intf
-NunUntypedAST
-NunTerm_typed
-NunTypeUnify
-NunTypeInference
-NunProblem
-NunTerm_ho
-NunFO
-NunBuiltin
-NunReduce
-NunSolver_intf
-NunCVC4
-NunMonomorphization
+# DO NOT EDIT (digest: 69c54341e01ab4574e9743d19a848ff3)
+Nunchaku_core
 # OASIS_STOP

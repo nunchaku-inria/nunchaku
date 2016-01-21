@@ -12,6 +12,8 @@ module Stmt = Statement
 
 type inv = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
 
+let section = Utils.Section.make "intro_guards"
+
 module Make(T : TI.S) : sig
   type term = T.t
 
@@ -31,6 +33,7 @@ end = struct
   type term = T.t
 
   type state = {
+    mutable lost_precision: bool;
     sigma: term Signature.t;
   }
 
@@ -194,8 +197,11 @@ end = struct
         | Pol.Neg ->
             U.mk_bind b v (combine_polarized ~is_pos:false t g), empty_guard
         | Pol.NoPol ->
-            (* quantify over guards, too *)
-            let g' = wrap_guard (U.mk_bind b v) g in
+            (* quantify over guards, too. We always quantify universally
+                because the universal guard is valid in both polarities,
+                whereas the existential guard would not. *)
+            state.lost_precision <- true;
+            let g' = wrap_guard (U.forall v) g in
             U.mk_bind b v t, g'
         end
     | TI.Bind (`Fun, _, _) -> fail_tr_ t "translation of λ impossible"
@@ -274,12 +280,17 @@ end = struct
 
   let encode_pb pb =
     let sigma = Problem.signature pb in
-    let state = { sigma; } in
+    let state = { lost_precision=false; sigma; } in
     (* all polarities are positive at root, because we don't have [rec/pred]
        anymore thanks to {!inv} *)
-    Problem.map pb
+    let pb' = Problem.map pb
       ~term:(tr_root ~state)
       ~ty:CCFun.id
+    in
+    (* if [state.lost_precision] then "UNSAT" means "UNKNOWN" *)
+    if state.lost_precision
+      then Utils.debug ~section 1 "@[<2>lost precision, now UNSAT means UNKNOWN";
+    Problem.add_unsat_means_unknown state.lost_precision pb'
 
   let pipe ~print =
     let on_encoded = if print
