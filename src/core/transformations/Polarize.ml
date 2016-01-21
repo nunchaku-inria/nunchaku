@@ -115,7 +115,7 @@ module Make(T : TI.S) = struct
   end
 
   (* shall we polarize the recursive function defined as follows? *)
-  let should_polarize ~state def =
+  let should_polarize_rec ~state def =
     state.St.polarize_rec (* option enabled? *)
     &&
     let _, ty_args, ty_ret = U.ty_unfold def.Stmt.rec_defined.Stmt.defined_ty in
@@ -199,7 +199,6 @@ module Make(T : TI.S) = struct
             | Env.NoDef
             | Env.Data (_,_,_)
             | Env.Cstor (_,_,_,_)
-            | Env.Pred (`Wf,_,_,_,_)
             | Env.Copy_abstract _
             | Env.Copy_concretize _
             | Env.Copy_ty _
@@ -210,7 +209,7 @@ module Make(T : TI.S) = struct
                 U.app f l
             | Env.Fun_def (_defs,def,_) ->
                 (* we can polarize, or not: delegate to heuristic *)
-                if should_polarize ~state def
+                if should_polarize_rec ~state def
                 then (
                   polarize_def_of ~state id pol;
                   let p = find_polarized_exn ~state id in
@@ -220,7 +219,7 @@ module Make(T : TI.S) = struct
                   St.call ~state ~depth:0 id `Keep;
                   U.app f l
                 )
-            | Env.Pred (`Not_wf,_,pred,_preds,_) ->
+            | Env.Pred (_,_,pred,_preds,_) ->
                 let ty = pred.Stmt.pred_defined.Stmt.defined_ty in
                 if U.ty_is_Prop ty then (
                   (* constant: degenerate case of (co)inductive pred, no need
