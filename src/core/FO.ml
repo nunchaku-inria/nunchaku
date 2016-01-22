@@ -8,6 +8,7 @@ module Metadata = ProblemMetadata
 type id = ID.t
 type 'a var = 'a Var.t
 type 'a printer = Format.formatter -> 'a -> unit
+type 'a or_error = [`Ok of 'a | `Error of string]
 
 module TyBuiltin = struct
   type t =
@@ -190,6 +191,8 @@ module Default : S = struct
       | [x] -> x
       | l -> make_ (Or l)
     let not_ = function
+      | {view=True; _} -> false_
+      | {view=False; _} -> true_
       | {view=Not f; _} -> f
       | f -> make_ (Not f)
     let imply a b = make_ (Imply (a,b))
@@ -213,7 +216,6 @@ let default
 
 (** {2 The Problems sent to Solvers} *)
 module Problem = struct
-
   type ('t, 'ty) t = {
     statements: ('t, 'ty) statement CCVector.ro_vector;
     meta: Metadata.t;
@@ -341,4 +343,152 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     fpf out "@[<v>%a@]"
       (CCVector.print ~start:"" ~stop:"" ~sep:"" print_statement)
       (Problem.statements pb)
+end
+
+(** {2 Utils} *)
+module Util(Repr : S) = struct
+  module T = Repr.T
+  module P = Print(Repr)
+
+  (* internal error *)
+  exception Error of string
+  let error_ msg = raise (Error msg)
+  let errorf_ msg = CCFormat.ksprintf msg ~f:error_
+
+  (* split [t] into a list of equations [var = t'] where [var in vars] *)
+  let rec get_eqns ~vars t =
+    Utils.debugf 5 "get_eqns @[%a@]" (fun k->k P.print_term t);
+    let fail() =
+      errorf_ "expected a test <var = term>@ with var among @[%a@],@ but got @[%a@]@]"
+        (CCFormat.list Var.print_full) vars P.print_term t
+    in
+    match T.view t with
+    | And l -> CCList.flat_map (get_eqns ~vars) l
+    | Eq (t1, t2) ->
+        begin match T.view t1, T.view t2 with
+          | Var v, _ when List.exists (Var.equal v) vars ->
+              [v, t2]
+          | _, Var v when List.exists (Var.equal v) vars ->
+              [v, t1]
+          | _ -> fail()
+        end
+    | Var v when List.exists (Var.equal v) vars ->
+        [v, T.true_] (* boolean variable *)
+    | Var _ ->
+        errorf_ "expected a boolean variable among @[%a@],@ but got @[%a@]@]"
+          (CCFormat.list Var.print_full) vars P.print_term t
+    | _ -> fail()
+
+  type cond = Repr.Ty.t Var.t * T.t
+
+  module DT = Model.DT
+
+  module Ite_M = struct
+    (* returns a sequence of (conditions, 'a).
+       Invariant: the last element of the sequence is exactly the only
+       one with an empty list of conditions *)
+    type +'a t = (cond list * 'a) Sequence.t
+
+    let return x = Sequence.return ([], x)
+
+    let (>|=)
+    : 'a t -> ('a -> 'b) -> 'b t
+    = fun x f ->
+      let open Sequence.Infix in
+      x >|= fun (conds, t) -> conds, f t
+
+    let (>>=)
+    : 'a t -> ('a -> 'b t) -> 'b t
+    = fun x f ->
+      let open Sequence.Infix in
+      x >>= fun (conds, t) ->
+      f t >|= fun (conds', t') -> List.rev_append conds' conds, t'
+
+    (* add a test; if the test holds yield [b], else yield [c] *)
+    let guard
+    : cond list -> 'a -> 'a -> 'a t
+    = fun a b c ->
+      Sequence.doubleton (a, b) ([], c)
+
+    let rec fold_m f acc l = match l with
+      | [] -> return acc
+      | x :: tail ->
+          f acc x >>= fun acc -> fold_m f acc tail
+
+    (* convert to a decision tree. Careful with the order of cases,
+       we reverse twice. *)
+    let to_dt t : _ DT.t =
+      let l = Sequence.to_rev_list t in
+      match l with
+      | [] -> assert false
+      | (_::_,_)::_ -> assert false
+      | ([], else_) :: cases ->
+          let cases = List.rev cases in
+          DT.test cases ~else_
+  end
+
+  let dt_of_term ~vars t =
+    let open Ite_M in
+    let rec aux t : T.t Ite_M.t =
+      match T.view t with
+      | Builtin _
+      | DataTest (_,_)
+      | DataSelect (_,_,_)
+      | Undefined (_,_)
+      | Mu (_,_)
+      | True
+      | False
+      | Let _
+      | Fun _
+      | Equiv (_,_)
+      | Forall (_,_)
+      | Exists (_,_) -> return t
+      | Var v ->
+          (* boolean variable: perform a test on it *)
+          guard [v, T.true_] T.true_ T.false_
+      | Eq (a,b) ->
+          begin try
+            (* yield true if equality holds, false otherwise *)
+            let cond = get_eqns ~vars t in
+            guard cond T.true_ T.false_
+          with Error _ ->
+            aux a >>= fun a ->
+            aux b >|= fun b -> T.eq a b
+          end
+      | Imply (a,b) ->
+          begin try
+            (* a => b becomes if a then b else false *)
+            let cond = get_eqns ~vars a in
+            aux b >>= fun b ->
+            guard cond b T.false_
+          with Error _ ->
+            aux a >>= fun a ->
+            aux b >|= fun b ->
+            T.imply a b
+          end
+      | Ite (a,b,c) ->
+          let cond = get_eqns ~vars a in
+          aux b >>= fun b ->
+          aux c >>= fun c ->
+          guard cond b c
+      | And l ->
+          begin try
+            let cond = get_eqns ~vars t in
+            guard cond T.true_ T.false_
+          with Error _ ->
+            aux_l l >|= T.and_
+          end
+      | Or l -> aux_l l >|= T.or_
+      | Not t -> aux t >|= T.not_
+      | App (id,l) -> aux_l l >|= T.app id
+    and aux_l l =
+      fold_m
+        (fun l x -> aux x >|= fun y -> y :: l)
+        [] l
+       >|= List.rev
+    in
+    try
+      let res = aux t in
+      `Ok (Ite_M.to_dt res)
+    with Error msg -> `Error msg
 end
