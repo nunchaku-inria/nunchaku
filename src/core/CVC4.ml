@@ -688,7 +688,7 @@ end
 let options_l =
   [ ""
   ; "--fmf-inst-engine"
-  ; "--uf-ss=no-minimal"
+  ; "--uf-ss=no-minimal --decision=internal"
   ; "--uf-ss=none"
   ; "--mbqi=none"
   ; "--mbqi=gen-ev"
