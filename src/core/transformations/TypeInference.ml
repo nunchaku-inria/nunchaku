@@ -1260,8 +1260,6 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
     let ctx = Erase.create () in
     Model.map m ~term:(Erase.erase ~ctx) ~ty:(Erase.erase ~ctx)
 
-  module THO = Term_ho
-
   let pipe_with ~decode ~print =
     (* type inference *)
     let module Conv = Convert(T1) in

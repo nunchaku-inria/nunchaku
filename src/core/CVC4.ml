@@ -415,50 +415,15 @@ module Make(FO_T : FO.S) = struct
           v :: vars, body
       | _ -> errorf_ "expected %d-ary function,@ got `@[%a@]`" n P.print_term t
     in
-    (* split [t] into a list of equations [var = t'] where [var in vars] *)
-    let rec get_eqns ~vars t =
-      let fail() =
-        errorf_ "expected a test <var = term>@ with var among @[%a@],@ but got @[%a@]@]"
-          (CCFormat.list Var.print_full) vars P.print_term t
-      in
-      match FOBack.T.view t with
-      | FO.And l -> CCList.flat_map (get_eqns ~vars) l
-      | FO.Eq (t1, t2) ->
-          begin match FOBack.T.view t1, FOBack.T.view t2 with
-            | FO.Var v, _ when List.exists (Var.equal v) vars ->
-                [v, t2]
-            | _, FO.Var v when List.exists (Var.equal v) vars ->
-                [v, t1]
-            | _ -> fail()
-          end
-      | _ -> fail()
-    in
-    (* convert [t] into a decision tree.
-       [f] is applied to RHS terms *)
-    let rec dt_of_body ~vars ~f t = match FOBack.T.view t with
-      | FO.Ite (test, t1, t2) ->
-          let eqns = get_eqns ~vars test in
-          let t2 = dt_of_body ~vars ~f t2 in
-          Model.DT.ite eqns (f t1) t2
-      | FO.Not t ->
-          (* boolean decision tree, this is the "else" branch; we can
-             push the negation in every result *)
-          dt_of_body ~vars ~f:(fun t -> FOBack.T.not_ (f t)) t
-      | FO.And _ ->
-          (* a boolean test! we might succeed in interpreting it as a test *)
-          let t' = FOBack.T.(ite t true_ false_) in
-          dt_of_body ~vars ~f t'
-      | FO.Eq _ ->
-          (* `a = b` becomes `if a=b then true else false` *)
-          let eqns = get_eqns ~vars t in
-          Model.DT.ite eqns (f FOBack.T.true_) (Model.DT.yield (f FOBack.T.false_))
-      | _ -> Model.DT.yield (f t)
-    in
     (* parse term, then convert into [vars -> decision-tree] *)
     let t = parse_term_ ~state term in
     let vars, body = get_args t n in
-    let dt = dt_of_body ~vars ~f:CCFun.id body in
-    vars, dt
+    (* change the shape of [body] so it looks more like a decision tree *)
+    let module U = FO.Util(FOBack) in
+    match U.dt_of_term ~vars body with
+    | `Ok dt -> vars, dt
+    | `Error msg ->
+        errorf_ "expected decision tree,@ but %s" msg
 
   let sym_get_const_ ~state id = match ID.Map.find id state.symbols with
     | Q_const -> `Const
@@ -688,7 +653,7 @@ end
 let options_l =
   [ ""
   ; "--fmf-inst-engine"
-  ; "--uf-ss=no-minimal"
+  ; "--uf-ss=no-minimal --decision=internal"
   ; "--uf-ss=none"
   ; "--mbqi=none"
   ; "--mbqi=gen-ev"
