@@ -9,7 +9,8 @@ module Pol = Polarity
 
 type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds:[`Present]>
 
-let section = Utils.Section.make "unroll"
+let name = "unroll"
+let section = Utils.Section.make name
 
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
@@ -349,7 +350,7 @@ module Make(T : TI.S) = struct
       else []
     in
     Transform.make1
-      ~name:"unroll"
+      ~name
       ~on_encoded
       ~encode:(fun pb -> unroll pb)
       ~decode

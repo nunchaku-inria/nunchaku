@@ -56,3 +56,4 @@ x 2016-01-14 2016-01-12 add type aliases (with conversion functions) @feature
 x 2016-01-18 2016-01-14 split skolemization into 1/ early skolemization of types  2/ late sk. of terms (maybe only HO vars)
 x 2016-01-20 2016-01-14 a constant rec is a spec
 x 2016-01-21 2016-01-19 allow ambiguous matching, resolved by order (ML-like)
+x 2016-01-26 2016-01-11 harmonize names in debug/print CLI options @cleanup

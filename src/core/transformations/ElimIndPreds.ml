@@ -9,7 +9,9 @@ module Stmt = Statement
 type inv1 = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Present]>
 type inv2 = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Absent]>
 
-let section = Utils.Section.make "elim_ind_pred"
+let name = "elim_ind_pred"
+
+let section = Utils.Section.make name
 
 exception Error of string
 
@@ -221,7 +223,7 @@ module Make(T : TI.S) = struct
       else []
     in
     Transform.make1
-      ~name:"elim_ind_pred"
+      ~name
       ~on_encoded
       ~encode:(fun pb -> elim_ind_preds pb)
       ~decode

@@ -12,7 +12,9 @@ type id = ID.t
 type ('a,'b) inv1 = <ty:'a; ind_preds:'b; eqn:[`Nested]>
 type ('a,'b) inv2 = <ty:'a; ind_preds:'b; eqn:[`Single]>
 
-let section = Utils.Section.make "elim_multiple_eqns"
+let name = "elim_multi_eqns"
+
+let section = Utils.Section.make name
 
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
@@ -364,7 +366,7 @@ module Make(T : TI.S) = struct
     and decode _ x = decode x in
     Transform.make1
       ~on_encoded
-      ~name:"elim_multi_eqns"
+      ~name
       ~encode:(fun p ->
         let p = uniq_eqns_pb p in
         p, ()

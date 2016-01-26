@@ -8,6 +8,8 @@ module Stmt = Statement
 
 type ('a,'b) inv = <eqn:'a; ind_preds:'b; ty:[`Mono]>
 
+let name = "elim_copy"
+
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
@@ -87,7 +89,7 @@ module Make(T : TI.S) = struct
       else []
     in
     Transform.make1
-      ~name:"elim_copy"
+      ~name
       ~on_encoded
       ~encode:(fun pb -> elim pb, ())
       ~decode:(fun () x -> x)

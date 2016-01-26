@@ -5,6 +5,8 @@
 
 type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds:[`Present]>
 
+val name : string
+
 module Make(T : TermInner.S) : sig
   type term = T.t
   type decode_state

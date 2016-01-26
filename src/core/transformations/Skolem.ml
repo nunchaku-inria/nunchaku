@@ -10,7 +10,8 @@ module Var = Var
 
 type id = ID.t
 
-let section = Utils.Section.make "skolem"
+let name = "skolem"
+let section = Utils.Section.make name
 
 module type S = sig
   module T : TI.S
@@ -282,7 +283,7 @@ module Make(T : TI.S)
       else []
     in
     Transform.make1
-      ~name:"skolem"
+      ~name
       ~on_encoded
       ~print:print_state
       ~encode:(fun pb ->

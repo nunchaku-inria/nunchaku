@@ -12,7 +12,8 @@ module Stmt = Statement
 
 type inv = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
 
-let section = Utils.Section.make "intro_guards"
+let name = "intro_guards"
+let section = Utils.Section.make name
 
 module Make(T : TI.S) : sig
   type term = T.t
@@ -302,7 +303,7 @@ end = struct
     in
     Transform.make1
       ~on_encoded
-      ~name:"intro_guards"
+      ~name
       ~encode:(fun p -> encode_pb p, ())
       ~decode:(fun () x -> x)
       ()

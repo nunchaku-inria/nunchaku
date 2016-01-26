@@ -16,7 +16,7 @@ let cmd cmd =
 
 let git_describe () =
   try
-    let id = cmd "git rev-parse --short HEAD" in
+    let id = cmd "git rev-parse HEAD" in
     Printf.sprintf "let id = \"(commit %s)\"" id
   with _ -> "let id = \"\""
 

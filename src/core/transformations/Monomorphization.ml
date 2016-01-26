@@ -13,7 +13,8 @@ module Subst = Var.Subst
 
 type id = ID.t
 
-let section = Utils.Section.make "mono"
+let name = "mono"
+let section = Utils.Section.make name
 
 type ('a,'b) inv1 = <ty:[`Poly]; eqn:'a; ind_preds:'b>
 type ('a,'b) inv2 = <ty:[`Mono]; eqn:'a; ind_preds:'b>
@@ -620,7 +621,7 @@ module Make(T : TI.S) = struct
     in
     Transform.make1
       ~on_encoded
-      ~name:"monomorphization"
+      ~name
       ~encode:(fun p ->
         let p, state = monomorphize p in
         p, state

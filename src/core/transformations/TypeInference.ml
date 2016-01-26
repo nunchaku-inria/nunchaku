@@ -21,7 +21,9 @@ type loc = Loc.t
 
 let fpf = Format.fprintf
 let spf = CCFormat.sprintf
-let section = Utils.Section.make "type_infer"
+
+let name = "ty_infer"
+let section = Utils.Section.make name
 
 type attempt_stack = UntypedAST.term list
 
@@ -1272,7 +1274,7 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
     in
     Transform.make1
       ~on_encoded
-      ~name:"type inference"
+      ~name
       ~encode:(fun l ->
         let problem, _ = l
           |> Conv.convert_problem_exn ~env:Conv.empty_env
