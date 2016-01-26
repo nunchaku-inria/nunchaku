@@ -19,7 +19,6 @@
 (B) 2015-12-22 optional: simplifications  t = (ite a b c) → ite a (t=b)(t=c) @cleanup
 2016-01-06 make And/Or parametrized builtins @design
 (B) 2016-01-11 print models in TPTP properly @feature
-(B) 2016-01-11 harmonize names in debug/print CLI options @cleanup
 (A) 2016-01-11 use bisect for test coverage http://bisect.x9c.fr/distrib/bisect.html#htoc10 @test
 (B) 2016-01-18 deal with empty sorts
 (B) 2016-01-21 compute type cardinalities to approximate exists/forall with top/bot in non polarized cases

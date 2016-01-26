@@ -10,6 +10,8 @@
 type inv1 = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Present]>
 type inv2 = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Absent]>
 
+val name : string
+
 module Make(T : TermInner.S) : sig
   type term = T.t
   type decode_state

@@ -10,7 +10,9 @@ module Sig = Signature
 
 type id = ID.t
 
-let section = Utils.Section.make "recursion_elim"
+let name = "rec_elim"
+
+let section = Utils.Section.make name
 
 type inv1 = <ty:[`Mono]; eqn:[`Single]; ind_preds:[`Absent]>
 type inv2 = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
@@ -494,7 +496,7 @@ module Make(T : TI.S) = struct
     in
     Transform.make1
       ~on_encoded
-      ~name:"recursion_elim"
+      ~name
       ~encode:(fun p ->
         let p, state = elim_recursion p in
         p, state

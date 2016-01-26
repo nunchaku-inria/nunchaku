@@ -17,7 +17,7 @@ type 'a lazy_list = unit -> [`Nil | `Cons of 'a * 'a lazy_list]
 type ('a, 'b, 'c, 'd) t = Ex : ('a, 'b, 'c, 'd, 'st) inner -> ('a, 'b, 'c, 'd) t
 
 and ('a, 'b, 'c, 'd, 'st) inner = {
-  name : string; (** informal name for the transformation *)
+  name : string; (** name for the transformation, used for debug, CLI options, etc. *)
   encode : 'a -> ('b * 'st) lazy_list;
   decode : 'st -> 'c -> 'd;
   mutable on_input : ('a -> unit) list;
@@ -28,8 +28,8 @@ and ('a, 'b, 'c, 'd, 'st) inner = {
 type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 (** Alias to {!t} *)
 
-let make ?print ?(name="<trans>") ?(on_input=[])
-?(on_encoded=[]) ~encode ~decode () =
+let make ?print ?(on_input=[])
+?(on_encoded=[]) ~name ~encode ~decode () =
   Ex {
     name;
     encode;
@@ -39,15 +39,15 @@ let make ?print ?(name="<trans>") ?(on_input=[])
     print_state=print;
   }
 
-let make1 ?print ?name ?on_input ?on_encoded ~encode ~decode =
+let make1 ?print ?on_input ?on_encoded ~name ~encode ~decode =
   let encode x = CCKList.return (encode x) in
-  make ?print ?name ?on_input ?on_encoded ~encode ~decode
+  make ?print ?on_input ?on_encoded ~name ~encode ~decode
 
-let backward ?name f =
+let backward ~name f =
   let decode () x = f x in
-  make1 ?name ~encode:(fun x->x,()) ~decode ()
+  make1 ~name ~encode:(fun x->x,()) ~decode ()
 
-let nop () = make1 ~encode:(fun x->x,()) ~decode:(fun () y->y) ()
+let nop () = make1 ~name:"nop" ~encode:(fun x->x,()) ~decode:(fun () y->y) ()
 
 let on_input (Ex tr) ~f = tr.on_input <- f :: tr.on_input
 let on_encoded (Ex tr) ~f = tr.on_encoded <- f :: tr.on_encoded

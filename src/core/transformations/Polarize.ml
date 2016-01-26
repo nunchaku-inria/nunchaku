@@ -10,7 +10,8 @@ module Subst = Var.Subst
 
 type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds:[`Present]>
 
-let section = Utils.Section.make "polarize"
+let name = "polarize"
+let section = Utils.Section.make name
 
 exception Error of string
 
@@ -561,7 +562,7 @@ module Make(T : TI.S) = struct
       else []
     in
     Transform.make1
-      ~name:"polarize"
+      ~name
       ~on_encoded
       ~encode:(fun pb -> polarize ~polarize_rec pb)
       ~decode

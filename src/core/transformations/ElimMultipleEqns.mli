@@ -8,6 +8,8 @@ type id = ID.t
 type ('a,'b) inv1 = <ty:'a; ind_preds:'b; eqn:[`Nested]>
 type ('a,'b) inv2 = <ty:'a; ind_preds:'b; eqn:[`Single]>
 
+val name : string
+
 module Make(T : TermInner.S) : sig
   type term = T.t
 

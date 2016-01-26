@@ -19,7 +19,7 @@ type ('a, 'b, 'c, 'd) t = Ex : ('a, 'b, 'c, 'd, 'st) inner -> ('a, 'b, 'c, 'd) t
 
 (** Transformation with explicit hidden state *)
 and ('a, 'b, 'c, 'd, 'st) inner = {
-  name : string; (** informal name for the transformation *)
+  name : string; (** name for the transformation, used for debug, CLI options, etc. *)
   encode : 'a -> ('b * 'st) lazy_list;
   decode : 'st -> 'c -> 'd;
   mutable on_input : ('a -> unit) list;
@@ -31,9 +31,9 @@ type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 (** Alias to {!t} *)
 
 val make : ?print:(Format.formatter -> 'st -> unit) ->
-           ?name:string ->
            ?on_input:('a -> unit) list ->
            ?on_encoded:('b -> unit) list ->
+           name:string ->
            encode:('a -> ('b * 'st) lazy_list) ->
            decode:('st -> 'c -> 'd) ->
            unit ->
@@ -41,9 +41,9 @@ val make : ?print:(Format.formatter -> 'st -> unit) ->
 (** Constructor *)
 
 val make1 : ?print:(Format.formatter -> 'st -> unit) ->
-            ?name:string ->
             ?on_input:('a -> unit) list ->
             ?on_encoded:('b -> unit) list ->
+            name:string ->
             encode:('a -> 'b * 'st) ->
             decode:('st -> 'c -> 'd) ->
             unit ->
@@ -51,7 +51,7 @@ val make1 : ?print:(Format.formatter -> 'st -> unit) ->
 (** Constructor when [encode] returns exactly one solution *)
 
 val backward :
-  ?name:string ->
+  name:string ->
   ('b -> 'c) ->
   ('a, 'a, 'b, 'c) t
 (** [backward f] is the identity in the direct way, and the same as [f]

@@ -24,6 +24,8 @@ type id = ID.t
 type ('a,'b) inv1 = <ty:[`Poly]; eqn:'a; ind_preds:'b>
 type ('a,'b) inv2 = <ty:[`Mono]; eqn:'a; ind_preds:'b>
 
+val name : string
+
 module Make(T : TermInner.S) : sig
   type term = T.t
 

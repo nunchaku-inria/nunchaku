@@ -5,6 +5,8 @@
 
 type ('a,'b) inv = <eqn:'a; ind_preds:'b; ty:[`Mono]>
 
+val name : string
+
 module Make(T : TermInner.S) : sig
   type term = T.t
 

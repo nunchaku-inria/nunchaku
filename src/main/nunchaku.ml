@@ -83,27 +83,31 @@ let options =
   ; "--print-all", Arg.Set print_all_, " print every step of the pipeline"
   ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
-  ; "--print-skolem", Arg.Set print_skolem_, " print input after Skolemization"
-  ; "--print-mono", Arg.Set print_mono_, " print input after monomorphization"
-  ; "--print-elim-match", Arg.Set print_elim_match_,
-      " print input after elimination of pattern matching"
-  ; "--print-elim-preds", Arg.Set print_elim_preds_,
-      " print input after elimination of (co)inductive predicates"
-  ; "--print-rec-elim", Arg.Set print_recursion_elim_,
-      " print input after elimination of recursive functions"
-  ; "--print-elim-multi-eqns", Arg.Set print_elim_multi_eqns,
-      " print input after elimination of multiple equations"
-  ; "--color", Arg.Bool CCFormat.set_color_default, " enable/disable color"
-  ; "-j", Arg.Set_int j, " set parallelism level"
-  ; "--print-polarize", Arg.Set print_polarize_, " print input after polarization"
-  ; "--print-unroll", Arg.Set print_unroll_, " print input after unrolling"
-  ; "--print-elim-copy", Arg.Set print_copy_, " print input after elimination of copy types"
-  ; "--print-intro-guards", Arg.Set print_intro_guards_,
+  ; "--print-" ^ Skolem.name, Arg.Set print_skolem_, " print input after Skolemization"
+  ; "--print-" ^ Monomorphization.name, Arg.Set print_mono_, " print input after monomorphization"
+  ; "--print-" ^ ElimPatternMatch.name
+      , Arg.Set print_elim_match_
+      , " print input after elimination of pattern matching"
+  ; "--print-" ^ ElimIndPreds.name
+      , Arg.Set print_elim_preds_
+      , " print input after elimination of (co)inductive predicates"
+  ; "--print-" ^ ElimRecursion.name
+      , Arg.Set print_recursion_elim_
+      , " print input after elimination of recursive functions"
+  ; "--print-" ^ ElimMultipleEqns.name
+      , Arg.Set print_elim_multi_eqns
+      , " print input after elimination of multiple equations"
+  ; "--print-" ^ Polarize.name , Arg.Set print_polarize_, " print input after polarization"
+  ; "--print-" ^ Unroll.name, Arg.Set print_unroll_, " print input after unrolling"
+  ; "--print-" ^ ElimCopy.name, Arg.Set print_copy_, " print input after elimination of copy types"
+  ; "--print-" ^ IntroGuards.name, Arg.Set print_intro_guards_,
       " print input after introduction of guards"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
+  ; "--color", Arg.Bool CCFormat.set_color_default, " enable/disable color"
+  ; "-j", Arg.Set_int j, " set parallelism level"
   ; "--polarize-rec", Arg.Set polarize_rec_, " enable polarization of rec predicates"
   ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
   ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"

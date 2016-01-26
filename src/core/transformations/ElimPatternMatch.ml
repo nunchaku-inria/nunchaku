@@ -8,6 +8,8 @@ module TI = TermMono
 module TyI = TypeMono
 module Subst = Var.Subst
 
+let name = "elim_match"
+
 module Make(T : TermInner.S) = struct
   module U = TermInner.Util(T)
   module P = TermInner.Print(T)
@@ -85,7 +87,7 @@ module Make(T : TermInner.S) = struct
         [Format.printf "@[<v2>after elimination of pattern-match: %a@]@." PPb.print]
       else [] in
     let encode pb = tr_problem pb, () in
-    make1 ~name:"elim_match"
+    make1 ~name
       ~encode
       ~on_encoded
       ~decode:(fun () x -> x)
