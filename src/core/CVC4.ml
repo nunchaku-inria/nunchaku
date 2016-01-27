@@ -582,10 +582,11 @@ module Make(FO_T : FO.S) = struct
 
   (* the command line to invoke CVC4 *)
   let mk_cvc4_cmd_ timeout options =
+    let timeout_ms = int_of_float (timeout *. 1000.) in
     Printf.sprintf
-      "cvc4 --tlimit-per=%d --lang smt --finite-model-find \
+      "cvc4 --tlimit-per=%d --hard-limit --lang smt --finite-model-find \
        --uf-ss-fair-monotone --no-condense-function-values %s"
-      (int_of_float (timeout *. 1000.)) options
+      timeout_ms options
 
   let solve ?(options="") ?(timeout=30.) ?(print=false) problem =
     let symbols, problem' = preprocess_pb_ problem in
