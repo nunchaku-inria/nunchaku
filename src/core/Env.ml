@@ -64,6 +64,7 @@ type ('t, 'ty, 'inv) t = {
 }
 
 exception InvalidDef of id * string
+exception UndefinedID of ID.t
 
 let pp_invalid_def_ out = function
   | InvalidDef (id, msg) ->
@@ -72,8 +73,11 @@ let pp_invalid_def_ out = function
 
 let () = Printexc.register_printer
   (function
-      | InvalidDef _ as e -> Some (CCFormat.to_string pp_invalid_def_ e)
-      | _ -> None
+    | InvalidDef _ as e ->
+        Some (CCFormat.sprintf "@[<2>internal error: %a@]" pp_invalid_def_ e)
+    | UndefinedID id ->
+        Some (CCFormat.sprintf "internal error: undefined ID `%a`" ID.print id)
+    | _ -> None
   )
 
 let errorf_ id msg =
@@ -116,13 +120,6 @@ let declare_rec_funs ?loc ~env defs =
       let id = d.Stmt.defined_head in
       declare ~kind:def.Stmt.rec_kind ?loc ~env id d.Stmt.defined_ty)
     env defs
-
-exception UndefinedID of ID.t
-
-let () = Printexc.register_printer
-  (function
-    | UndefinedID id -> Some ("undefined ID " ^ ID.to_string id)
-    | _ -> None)
 
 let find_exn ~env:t id =
   try ID.PerTbl.find t.infos id
