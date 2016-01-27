@@ -114,14 +114,22 @@ let declare_rec_funs ?loc ~env defs =
     (fun env def ->
       let d = def.Stmt.rec_defined in
       let id = d.Stmt.defined_head in
-      declare ~kind:def.Stmt.rec_kind ?loc ~env id d.Stmt.defined_ty
-    )
+      declare ~kind:def.Stmt.rec_kind ?loc ~env id d.Stmt.defined_ty)
     env defs
 
-let find_exn ~env:t id = ID.PerTbl.find t.infos id
+exception UndefinedID of ID.t
+
+let () = Printexc.register_printer
+  (function
+    | UndefinedID id -> Some ("undefined ID " ^ ID.to_string id)
+    | _ -> None)
+
+let find_exn ~env:t id =
+  try ID.PerTbl.find t.infos id
+  with Not_found -> raise (UndefinedID id)
 
 let find ~env:t id =
-  try Some (find_exn ~env:t id)
+  try Some (ID.PerTbl.find t.infos id)
   with Not_found -> None
 
 let spec_funs

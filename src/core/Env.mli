@@ -142,12 +142,14 @@ val add_statement :
 
 val find : env:('t, 'ty, 'inv) t -> id -> ('t, 'ty, 'inv) info option
 
+exception UndefinedID of ID.t
+
 val find_exn : env:('t, 'ty, 'inv) t -> id -> ('t, 'ty, 'inv) info
-(** @raise Not_found if ID not defined *)
+(** @raise UndefinedID if ID not defined *)
 
 val find_ty_exn : env:('t, 'ty, _) t -> id -> 'ty
 (** Find the type of a symbol
-    @raise Not_found if the symbol is not declared *)
+    @raise UndefinedID if the symbol is not declared *)
 
 val find_ty : env:('t, 'ty, _) t -> id -> 'ty option
 (** Safe version of {!find_ty_exn} *)
