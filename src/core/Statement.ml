@@ -301,6 +301,21 @@ let map_pred
 
 let map_preds ~term ~ty l = List.map (map_pred ~term ~ty) l
 
+let map_ty_def ~ty:fty l =
+  List.map
+    (fun tydef ->
+      {tydef with
+        ty_type=fty tydef.ty_type;
+        ty_vars=List.map (Var.update_ty ~f:fty) tydef.ty_vars;
+        ty_cstors=
+          ID.Map.map
+            (fun c -> {c with
+              cstor_args=List.map fty c.cstor_args;
+              cstor_type=fty c.cstor_type
+            })
+            tydef.ty_cstors;
+      }) l
+
 external cast_pred
 : ('t, 'ty, <ind_preds:'inv;..>) pred_def ->
   ('t, 'ty, <ind_preds:'inv;..>) pred_def
@@ -325,20 +340,7 @@ let map ~term:ft ~ty:fty st =
           axiom_rec ~info (map_rec_defs ~term:ft ~ty:fty t)
       end
   | TyDef (k, l) ->
-      let l = List.map
-        (fun tydef ->
-          {tydef with
-            ty_type=fty tydef.ty_type;
-            ty_vars=List.map (Var.update_ty ~f:fty) tydef.ty_vars;
-            ty_cstors=
-              ID.Map.map
-                (fun c -> {c with
-                  cstor_args=List.map fty c.cstor_args;
-                  cstor_type=fty c.cstor_type
-                })
-                tydef.ty_cstors;
-          }) l
-      in
+      let l = map_ty_def ~ty:fty l in
       mk_ty_def ~info k l
   | Pred (wf, k, preds) ->
       let preds = map_preds ~term:ft ~ty:fty preds in

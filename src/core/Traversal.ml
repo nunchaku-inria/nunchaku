@@ -404,7 +404,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
         | Env.Copy_abstract c
         | Env.Copy_concretize c
         | Env.Copy_ty c ->
-            if not conf.direct_spec then (
+            if not conf.direct_copy then (
               self#do_copy ~depth ~loc c arg;
               assert (self#has_processed c.Stmt.copy_id arg);
             )
@@ -432,11 +432,16 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       (* process statement *)
       let info = Stmt.info st in
       let loc = Stmt.loc st in
+      (* most basic processing: just traverse the terms to update dependencies *)
+      let tr_term = self#do_term ~depth:0 in
+      let tr_type = tr_term in
       begin match Stmt.view st with
       | Stmt.Decl (id,k,ty) ->
           (* declare the statement (in case it is needed later) *)
           env <- Env.declare ?loc ~kind:k ~env id ty;
-          if conf.direct_tydef then self#push_res (Stmt.mk_decl ~info id k ty)
+          if conf.direct_tydef then
+            let ty = tr_type ty in
+            self#push_res (Stmt.mk_decl ~info id k ty)
       | Stmt.Goal g ->
           (* convert goal *)
           let g = self#do_goal_or_axiom g in
@@ -449,15 +454,21 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
           env <- Env.def_preds ?loc ~env ~wf ~kind:k preds;
       | Stmt.Axiom (Stmt.Axiom_spec l) ->
           env <- Env.spec_funs ?loc ~env l;
-          if conf.direct_spec then self#push_res (Stmt.axiom_spec ~info l)
+          if conf.direct_spec then
+            let l = Stmt.map_spec_defs ~term:tr_term ~ty:tr_type l in
+            self#push_res (Stmt.axiom_spec ~info l)
       | Stmt.Axiom (Stmt.Axiom_rec l) ->
           env <- Env.rec_funs ?loc ~env l;
       | Stmt.Copy c ->
           env <- Env.add_copy ?loc ~env c;
-          if conf.direct_copy then self#push_res (Stmt.copy ~info c);
+          if conf.direct_copy then
+            let c = Stmt.map_copy ~term:tr_term ~ty:tr_type c in
+            self#push_res (Stmt.copy ~info c);
       | Stmt.TyDef (k, l) ->
           env <- Env.def_data ?loc ~kind:k ~env l;
-          if conf.direct_tydef then self#push_res (Stmt.mk_ty_def ~info k l)
+          if conf.direct_tydef then
+            let l = Stmt.map_ty_def ~ty:tr_type l in
+            self#push_res (Stmt.mk_ty_def ~info k l)
       end
   end
 

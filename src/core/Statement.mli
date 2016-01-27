@@ -249,6 +249,11 @@ val cast_rec_defs:
   ('t, 'ty, <eqn:'inv;..>) rec_defs ->
   ('t, 'ty, <eqn:'inv;..>) rec_defs
 
+val map_ty_def :
+  ty:('ty -> 'ty2) ->
+  'ty mutual_types ->
+  'ty2 mutual_types
+
 val map_spec_defs :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
