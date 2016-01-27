@@ -585,7 +585,7 @@ module Make(FO_T : FO.S) = struct
     let timeout_hard = int_of_float (timeout +. 1.) in
     let timeout_ms = int_of_float (timeout *. 1000.) in
     Printf.sprintf
-      "ulimit -t %d; cvc4 --tlimit-per=%d --lang smt --finite-model-find \
+      "ulimit -t %d; exec cvc4 --tlimit-per=%d --lang smt --finite-model-find \
        --uf-ss-fair-monotone --no-condense-function-values %s"
       timeout_hard timeout_ms options
 
