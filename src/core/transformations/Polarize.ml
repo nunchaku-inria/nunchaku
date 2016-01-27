@@ -171,7 +171,11 @@ module Make(T : TI.S) = struct
   = fun ~state pol t ->
     match T.repr t with
     | TI.Builtin (`Guard (t, g)) ->
-        let g = TI.Builtin.map_guard (polarize_term_rec ~state pol) g in
+        let open TI.Builtin in
+        let g = {
+          asserting = List.map (polarize_term_rec ~state Pol.Pos) g.asserting;
+          assuming = List.map (polarize_term_rec ~state Pol.Neg) g.assuming;
+        } in
         let t = polarize_term_rec ~state pol t in
         U.guard t g
     | TI.Builtin (`True | `False | `DataTest _ | `And | `Or | `Not
@@ -213,10 +217,14 @@ module Make(T : TI.S) = struct
                 (* we can polarize, or not: delegate to heuristic *)
                 if should_polarize_rec ~state def
                 then (
+                  Utils.debugf ~section 5 "@[<2>polarize fun `%a`@]"
+                    (fun k->k ID.print_full id);
                   polarize_def_of ~state id pol;
                   let p = find_polarized_exn ~state id in
                   app_polarized pol p l
                 ) else (
+                  Utils.debugf ~section 5 "@[<2>do not polarize fun `%a`@]"
+                    (fun k->k ID.print_full id);
                   ID.Tbl.add state.St.polarized id None;
                   St.call ~state ~depth:0 id `Keep;
                   U.app f l
@@ -308,6 +316,10 @@ module Make(T : TI.S) = struct
           (term, term, a inv) pred_clause
       = fun clause ->
         let pol = if is_pos then Pol.Pos else Pol.Neg in
+        (* we keep the same polarity in the guard, because it is not
+           a proper implication. Instead we see this as
+           [concl <-> exists... guard] which, in positive polarity, will become
+           [concl+ => exists... guard], making guard positive too *)
         map_clause clause ~ty:CCFun.id ~term:(polarize_term_rec ~state pol)
     in
     let pred_clauses = List.map tr_clause def.pred_clauses in

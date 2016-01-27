@@ -21,3 +21,5 @@
 (B) 2016-01-11 print models in TPTP properly @feature
 (B) 2016-01-18 deal with empty sorts
 (B) 2016-01-21 compute type cardinalities to approximate exists/forall with top/bot in non polarized cases
+(A) 2016-01-26 release
+(A) 2016-01-27 check problems in polarize
