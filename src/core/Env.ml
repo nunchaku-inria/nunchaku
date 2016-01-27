@@ -66,14 +66,17 @@ type ('t, 'ty, 'inv) t = {
 exception InvalidDef of id * string
 exception UndefinedID of ID.t
 
-let spf = CCFormat.sprintf
+let pp_invalid_def_ out = function
+  | InvalidDef (id, msg) ->
+      Format.fprintf out "@[<2>invalid definition for `%a`:@ %s@]" ID.print id msg
+  | _ -> assert false
 
 let () = Printexc.register_printer
   (function
-    | InvalidDef (id,msg) ->
-        Some (spf "@[<2>internal error: invalid definition for `%a`:@ %s@]" ID.print id msg)
+    | InvalidDef _ as e ->
+        Some (CCFormat.sprintf "@[<2>internal error: %a@]" pp_invalid_def_ e)
     | UndefinedID id ->
-        Some (spf "internal error: undefined ID `%a`" ID.print id)
+        Some (CCFormat.sprintf "internal error: undefined ID `%a`" ID.print id)
     | _ -> None
   )
 
