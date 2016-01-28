@@ -58,3 +58,4 @@ x 2016-01-20 2016-01-14 a constant rec is a spec
 x 2016-01-21 2016-01-19 allow ambiguous matching, resolved by order (ML-like)
 x 2016-01-26 2016-01-11 harmonize names in debug/print CLI options @cleanup
 x 2016-01-26 2016-01-11 use bisect for test coverage http://bisect.x9c.fr/distrib/bisect.html#htoc10 @test
+x 2016-01-28 2016-01-26 release
