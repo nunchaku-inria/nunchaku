@@ -1,0 +1,43 @@
+# OASIS_START
+# DO NOT EDIT (digest: 9ffdba65d97eebfcd816635f34cb5eff)
+ID
+Var
+MetaVar
+Location
+Intf
+Utils
+Transform
+UntypedAST
+Model
+TypeUnify
+Problem
+FO
+Reduce
+Solver_intf
+Env
+Signature
+Statement
+Scheduling
+CVC4
+Polarity
+Traversal
+ProblemMetadata
+terms/TermInner
+terms/TermTyped
+terms/TermPoly
+terms/TermMono
+terms/Pattern
+types/TypePoly
+types/TypeMono
+transformations/Skolem
+transformations/TypeInference
+transformations/ElimPatternMatch
+transformations/Monomorphization
+transformations/ElimRecursion
+transformations/ElimMultipleEqns
+transformations/ElimIndPreds
+transformations/ElimCopy
+transformations/Polarize
+transformations/Unroll
+transformations/IntroGuards
+# OASIS_STOP
