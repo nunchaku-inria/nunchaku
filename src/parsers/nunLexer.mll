@@ -50,6 +50,7 @@ rule token = parse
   | ';' { SEMI_COLON }
   | '?' { META_VAR }
   | "=" { LOGIC_EQ }
+  | "!=" { LOGIC_NEQ }
   | ":=" { EQDEF }
   | "->" { ARROW }
   | "fun" { FUN }

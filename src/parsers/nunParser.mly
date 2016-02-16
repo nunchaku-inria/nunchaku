@@ -46,6 +46,7 @@
 %token LOGIC_FORALL
 %token LOGIC_EXISTS
 %token LOGIC_EQ
+%token LOGIC_NEQ
 
 %token PROP
 %token TYPE
@@ -190,7 +191,12 @@ eq_term:
   | t=apply_term LOGIC_EQ u=apply_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc `Eq) [t; u]
+      A.eq ~loc t u
+    }
+  | t=apply_term LOGIC_NEQ u=apply_term
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.neq ~loc t u
     }
 
 and_term:
