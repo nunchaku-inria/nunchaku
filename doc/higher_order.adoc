@@ -3,10 +3,15 @@
 What are the higher-order constructs? I believe this is a complete list:
 
 C1. Terms as formulas: x && y, where x, y : prop
+
 C2. Formulas within terms: p (x a = x) -> p true
+
 C3. Lambda-abstractions: (fun x y. y + x) = (+)
+
 C4. Higher-order arguments: map f [x] = [f x]
+
 C5. Partial function applications: f = g -> f x = g x
+
 C6. Higher-order quantification: forall x. exists f. f x = x
 
 C1 and C2 are not an issue for SMT-LIB or Nunchaku already today.
