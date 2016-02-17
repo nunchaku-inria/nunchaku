@@ -81,6 +81,7 @@ type ('t, 'ty) statement =
   | TyDecl of id * int  (** number of arguments *)
   | Decl of id * 'ty toplevel_ty
   | Axiom of 't
+  | CardBound of id * [`Max | `Min] * int (** cardinality bound *)
   | MutualTypes of [`Data | `Codata] * 'ty mutual_types
   | Goal of 't
 
@@ -173,6 +174,11 @@ module Problem : sig
   val of_list : meta:Metadata.t -> ('t, 'ty) statement list -> ('t, 'ty) t
   val statements : ('t, 'ty) t -> ('t, 'ty) statement CCVector.ro_vector
   val meta : _ t -> Metadata.t
+  val flat_map :
+    meta:Metadata.t ->
+    (('t, 'ty) statement -> ('t2, 'ty2) statement list) ->
+    ('t, 'ty) t ->
+    ('t2, 'ty2) t
   val fold_flat_map :
     meta:Metadata.t ->
     ('acc -> ('t, 'ty) statement -> 'acc * ('t2, 'ty2) statement list) ->

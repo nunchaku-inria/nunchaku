@@ -151,15 +151,16 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     method processed = processed
 
     method declare_sym
-      : ID.t -> Arg.t -> as_:ID.t -> ty:term -> unit
-      = fun id arg ~as_ ~ty ->
+      : attrs:Stmt.decl_attr list ->
+        ID.t -> Arg.t -> as_:ID.t -> ty:term -> unit
+      = fun ~attrs id arg ~as_ ~ty ->
         if not (self#has_declared id arg) then (
           (* only declare once *)
           self#done_declaring id arg;
           let env_info = Env.find_exn ~env id in
           let loc = env_info.Env.loc in
           self#push_res
-            (Stmt.mk_decl ~info:{Stmt.loc; name=None}
+            (Stmt.mk_decl ~attrs ~info:{Stmt.loc; name=None}
               as_ env_info.Env.decl_kind ty);
         )
 
@@ -300,7 +301,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       ()
 
     method virtual do_ty_def
-    : ?loc:Loc.t -> Stmt.decl -> ID.t -> ty:term -> Arg.t -> unit
+    : ?loc:Loc.t -> attrs:Stmt.decl_attr list -> Stmt.decl -> ID.t -> ty:term -> Arg.t -> unit
 
     (* traverse the stack downward, merging every frame with [f] until we
        reach [f] itself *)
@@ -412,8 +413,9 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
         | Env.NoDef ->
             let ty = env_info.Env.ty in
             let decl = env_info.Env.decl_kind in
+            let attrs = env_info.Env.decl_attrs in
             let loc = env_info.Env.loc in
-            self#do_ty_def ?loc decl id ~ty arg
+            self#do_ty_def ?loc ~attrs decl id ~ty arg
 
     method update_env f = env <- f env
 
@@ -436,12 +438,12 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       let tr_term = self#do_term ~depth:0 in
       let tr_type = tr_term in
       begin match Stmt.view st with
-      | Stmt.Decl (id,k,ty) ->
+      | Stmt.Decl (id,k,ty,attrs) ->
           (* declare the statement (in case it is needed later) *)
-          env <- Env.declare ?loc ~kind:k ~env id ty;
+          env <- Env.declare ?loc ~attrs ~kind:k ~env id ty;
           if conf.direct_tydef then
             let ty = tr_type ty in
-            self#push_res (Stmt.mk_decl ~info id k ty)
+            self#push_res (Stmt.mk_decl ~attrs ~info id k ty)
       | Stmt.Goal g ->
           (* convert goal *)
           let g = self#do_goal_or_axiom g in

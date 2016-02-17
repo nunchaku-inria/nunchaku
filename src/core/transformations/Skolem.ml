@@ -234,7 +234,7 @@ module Make(T : TI.S)
         state.new_sym <- [];
         let prelude =
           List.map
-            (fun (id,s) -> Stmt.decl ~info:Stmt.info_default id s.sym_ty)
+            (fun (id,s) -> Stmt.decl ~info:Stmt.info_default ~attrs:[] id s.sym_ty)
             l
         in
         List.rev_append prelude [stmt'])

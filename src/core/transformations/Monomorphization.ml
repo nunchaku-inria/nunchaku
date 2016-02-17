@@ -409,7 +409,7 @@ module Make(T : TI.S) = struct
       [def']
 
     (* declare a symbol that is axiomatized *)
-    method decl_sym id tup =
+    method decl_sym ~attrs id tup =
       if not (self#has_declared id tup) then (
         let env_info = Env.find_exn ~env:self#env id in
         (* declare specialized type *)
@@ -419,7 +419,7 @@ module Make(T : TI.S) = struct
         in
         let ty = U.ty_apply env_info.Env.ty (ArgTuple.args tup) in
         let new_ty = mono_type ~state:st ~local_state:{depth=0; subst=Subst.empty} ty in
-        self#declare_sym id tup ~as_:new_id ~ty:new_ty
+        self#declare_sym ~attrs id tup ~as_:new_id ~ty:new_ty
       )
 
     (* specialize specification *)
@@ -533,7 +533,7 @@ module Make(T : TI.S) = struct
       );
       ()
 
-    method do_ty_def ?loc decl id ~ty tup =
+    method do_ty_def ?loc ~attrs decl id ~ty tup =
       Utils.debugf ~section 5 "declare type for %a on %a"
         (fun k->k ID.print id ArgTuple.print tup);
       begin match decl with
@@ -546,10 +546,10 @@ module Make(T : TI.S) = struct
             let new_ty = mono_type ~state:st
               ~local_state:{depth=0; subst=Subst.empty} ty in
             self#push_res
-              (Stmt.ty_decl ~info:{Stmt.loc; name=None} id new_ty)
+              (Stmt.ty_decl ~info:{Stmt.loc; name=None} ~attrs id new_ty)
           )
       | Stmt.Decl_fun
-      | Stmt.Decl_prop -> self#decl_sym id tup
+      | Stmt.Decl_prop -> self#decl_sym ~attrs id tup
       end
   end
 

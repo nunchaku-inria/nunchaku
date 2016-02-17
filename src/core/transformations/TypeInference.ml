@@ -1154,6 +1154,17 @@ module Convert(Term : TermTyped.S) = struct
 
   module PStmt = Stmt.Print(P)(P)
 
+  let convert_attr ~env:_ a =
+    let fail() = ill_formedf "ill-formed attribute %a" A.pp_attr a in
+    match a with
+    | ["max_card"; n] ->
+        let n = try int_of_string n with _ -> fail() in
+        Stmt.Decl_attr_card_max n
+    | ["min_card"; n] ->
+        let n = try int_of_string n with _ -> fail() in
+        Stmt.Decl_attr_card_min n
+    | _ -> fail()
+
   let convert_statement_exn ~env st =
     let name = st.A.stmt_name in
     let loc = st.A.stmt_loc in
@@ -1163,14 +1174,16 @@ module Convert(Term : TermTyped.S) = struct
     let st', env = match st.A.stmt_value with
     | A.Include _ ->
         ill_formed ?loc ~kind:"statement" "includes should have been eliminated"
-    | A.Decl (v, ty) ->
+    | A.Decl (v, ty, attrs) ->
         check_new_ ?loc ~env v;
         let ty = convert_ty_exn ~env ty in
         let id = ID.make_full ~needs_at:(ty_is_poly_ ty) v in
         let env = TyEnv.add_decl ~env v ~id ty in
         check_ty_is_prenex_ ?loc ty;
         let kind = kind_of_ty_ ty in
-        Stmt.mk_decl ~info id kind ty, env
+        (* parse attributes *)
+        let attrs = List.map (convert_attr ~env) attrs in
+        Stmt.mk_decl ~info ~attrs id kind ty, env
     | A.Axiom l ->
         (* convert terms, and force them to be propositions *)
         let l = List.map (convert_prop_ ?before_generalize:None ~env) l in

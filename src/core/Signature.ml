@@ -25,7 +25,7 @@ let add_preds ~sigma preds =
   List.fold_left (fun sigma d -> add_pred ~sigma d) sigma preds
 
 let add_statement ~sigma st = match Stmt.view st with
-  | Stmt.Decl (id,_,ty) -> declare ~sigma id ty
+  | Stmt.Decl (id,_,ty,_) -> declare ~sigma id ty
   | Stmt.Axiom (Stmt.Axiom_rec l) ->
       List.fold_left
         (fun sigma def ->
