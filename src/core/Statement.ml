@@ -114,6 +114,7 @@ type ('t, 'ty) copy = {
 type decl_attr =
   | Decl_attr_card_max of int
   | Decl_attr_card_min of int
+  | Decl_attr_exn of exn (** open case *)
 
 type ('term, 'ty, 'inv) view =
   | Decl of id * decl * 'ty * decl_attr list
@@ -527,6 +528,7 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
   let pp_attr out = function
     | Decl_attr_card_max i -> fpf out "max_card %d" i
     | Decl_attr_card_min i -> fpf out "min_card %d" i
+    | Decl_attr_exn e -> CCFormat.string out (Printexc.to_string e)
 
   let pp_attrs out = function
     | [] -> ()

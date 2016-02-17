@@ -1172,7 +1172,8 @@ module Convert(Term : TermTyped.S) = struct
     List.iter
       (function
         | Stmt.Decl_attr_card_max n -> max_card := n
-        | Stmt.Decl_attr_card_min n -> min_card := n)
+        | Stmt.Decl_attr_card_min n -> min_card := n
+        | Stmt.Decl_attr_exn _ -> ())
       l;
     if !min_card > !max_card
     then ill_formedf ?loc ~kind:"attributes"

@@ -112,6 +112,7 @@ type ('t, 'ty) copy = {
 type decl_attr =
   | Decl_attr_card_max of int (** maximal cardinality of type *)
   | Decl_attr_card_min of int (** minimal cardinality of type *)
+  | Decl_attr_exn of exn (** open case *)
 
 type ('term, 'ty, 'inv) view =
   | Decl of id * decl * 'ty * decl_attr list
