@@ -58,7 +58,7 @@ let declare_sym_default ~state ~ctx s arity =
     (fun k-> k s A.print_term ty);
   (* declare [s : ty] *)
   StrTbl.replace state.declared s ();
-  CCVector.push state.into (A.decl s ty);
+  CCVector.push state.into (A.decl ~attrs:[] s ty);
   ()
 
 let enter_var_ ~state v f =
@@ -237,10 +237,10 @@ let process_statement_ ~state st =
   | A.Def (a,b) ->
       let b = declare_missing ~ctx:Ctx_prop ~state b in
       add_stmt ~state {st with A.stmt_value=A.Def (a,b)}
-  | A.Decl (v,t) ->
+  | A.Decl (v,t,attrs) ->
       declare_sym ~state v; (* explicitely declared *)
       let t = declare_missing ~ctx:Ctx_ty ~state t in
-      add_stmt ~state {st with A.stmt_value=A.Decl (v,t)}
+      add_stmt ~state {st with A.stmt_value=A.Decl (v,t,attrs)}
   | A.Goal f ->
       let f = process_form ~state f in
       add_stmt ~state {st with A.stmt_value=A.Goal f}

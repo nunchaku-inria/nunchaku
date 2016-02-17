@@ -212,7 +212,7 @@ module Make(T : TI.S) = struct
               (* from now on, [id] will become [id n] *)
               ID.Tbl.add state.map id (`Unroll n);
               ID.Tbl.add state.decr n ();
-              let st = Stmt.decl ~info:Stmt.info_default n (nat ~state) in
+              let st = Stmt.decl ~info:Stmt.info_default ~attrs:[] n (nat ~state) in
               new_decls := st :: !new_decls)
             ids;
           (* enter in "definition mode" for every defined predicate; locally

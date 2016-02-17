@@ -256,13 +256,15 @@ module Make(T : TI.S) = struct
         (* declare abstract type + projectors + the function
            NOTE: we need to declare the function because it is no longer
             defined, only axiomatized *)
-        add_stmt (Stmt.ty_decl ~info:Stmt.info_default abs_type_id U.ty_type);
+        (* TODO: add attribute for abstraction type and projections *)
         add_stmt
-          (Stmt.decl ~info:Stmt.info_default
+          (Stmt.ty_decl ~info:Stmt.info_default ~attrs:[] abs_type_id U.ty_type);
+        add_stmt
+          (Stmt.decl ~info:Stmt.info_default ~attrs:[]
             id def.Stmt.rec_defined.Stmt.defined_ty);
         List.iter
           (fun (proj,ty_proj) ->
-            add_stmt (Stmt.decl ~info:Stmt.info_default proj ty_proj);
+            add_stmt (Stmt.decl ~info:Stmt.info_default ~attrs:[] proj ty_proj);
             ID.Tbl.add state.decode.approx_fun proj fun_encoding)
           fun_encoding.fun_concretization;
       )
@@ -292,7 +294,8 @@ module Make(T : TI.S) = struct
     state.sigma <- Sig.add_statement ~sigma:state.sigma st;
     let info = Stmt.info st in
     match Stmt.view st with
-    | Stmt.Decl (id,k,l) -> [Stmt.mk_decl ~info id k l] (* no type declaration changes *)
+    | Stmt.Decl (id,k,l,attrs) ->
+        [Stmt.mk_decl ~info ~attrs id k l] (* no type declaration changes *)
     | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l] (* no (co) data changes *)
     | Stmt.Pred _ -> assert false (* typing: should be absent *)
     | Stmt.Axiom l ->

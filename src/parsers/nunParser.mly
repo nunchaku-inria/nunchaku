@@ -46,6 +46,7 @@
 %token LOGIC_FORALL
 %token LOGIC_EXISTS
 %token LOGIC_EQ
+%token LOGIC_NEQ
 
 %token PROP
 %token TYPE
@@ -75,6 +76,7 @@
 
 %token <string> LOWER_WORD
 %token <string> UPPER_WORD
+%token <string> INTEGER
 
 %start <Nunchaku_core.UntypedAST.statement> parse_statement
 %start <Nunchaku_core.UntypedAST.statement list> parse_statement_list
@@ -190,7 +192,12 @@ eq_term:
   | t=apply_term LOGIC_EQ u=apply_term
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc `Eq) [t; u]
+      A.eq ~loc t u
+    }
+  | t=apply_term LOGIC_NEQ u=apply_term
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.neq ~loc t u
     }
 
 and_term:
@@ -301,11 +308,23 @@ wf_attribute:
   | LEFT_BRACKET WF_ATTRIBUTE RIGHT_BRACKET { `Wf }
   | { `Not_wf }
 
+decl_attribute_element:
+  | w=UPPER_WORD { w }
+  | w=LOWER_WORD { w }
+  | w=INTEGER { w }
+
+decl_attributes:
+  | LEFT_BRACKET
+    l=separated_nonempty_list(SEMI_COLON, decl_attribute_element+)
+    RIGHT_BRACKET
+    { l }
+  | { [] }
+
 statement:
-  | VAL v=raw_var COLON t=term DOT
+  | VAL v=raw_var COLON t=term attrs=decl_attributes DOT
     {
       let loc = L.mk_pos $startpos $endpos in
-      A.decl ~loc v t
+      A.decl ~loc ~attrs v t
     }
   | AXIOM l=separated_nonempty_list(SEMI_COLON, term) DOT
     {

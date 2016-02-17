@@ -54,6 +54,7 @@ type ('t, 'ty, 'inv) def =
 type ('t, 'ty, 'inv) info = {
   ty: 'ty; (** type of symbol *)
   decl_kind: Statement.decl;
+  decl_attrs: Statement.decl_attr list;
   loc: loc option;
   def: ('t, 'ty, 'inv) def;
 }
@@ -93,9 +94,9 @@ let create ?(size=64) () = {infos=ID.PerTbl.create size}
 let check_not_defined_ t ~id ~fail_msg =
   if ID.PerTbl.mem t.infos id then errorf_ id fail_msg
 
-let declare ?loc ~kind ~env:t id ty =
+let declare ?loc ~kind ~attrs ~env:t id ty =
   check_not_defined_ t ~id ~fail_msg:"already declared";
-  let info = {loc; decl_kind=kind; ty; def=NoDef} in
+  let info = {loc; decl_kind=kind; decl_attrs=attrs; ty; def=NoDef} in
   {infos=ID.PerTbl.replace t.infos id info}
 
 let rec_funs ?loc ~env:t defs =
@@ -108,6 +109,7 @@ let rec_funs ?loc ~env:t defs =
         loc;
         ty=def.Stmt.rec_defined.Stmt.defined_ty;
         decl_kind=def.Stmt.rec_kind;
+        decl_attrs=[];
         def=Fun_def (defs, def, loc);
       } in
       {infos=ID.PerTbl.replace t.infos id info}
@@ -118,7 +120,7 @@ let declare_rec_funs ?loc ~env defs =
     (fun env def ->
       let d = def.Stmt.rec_defined in
       let id = d.Stmt.defined_head in
-      declare ~kind:def.Stmt.rec_kind ?loc ~env id d.Stmt.defined_ty)
+      declare ~kind:def.Stmt.rec_kind ~attrs:[] ?loc ~env id d.Stmt.defined_ty)
     env defs
 
 let find_exn ~env:t id =
@@ -145,6 +147,7 @@ let spec_funs
         loc;
         ty=defined.Stmt.defined_ty;
         decl_kind=Stmt.Decl_prop;
+        decl_attrs=[];
         def=Fun_spec(spec, loc);
       } in
       {infos=ID.PerTbl.replace t.infos id info; }
@@ -161,6 +164,7 @@ let def_data ?loc ~env:t ~kind tys =
         loc;
         decl_kind=Stmt.Decl_type;
         ty=tydef.Stmt.ty_type;
+        decl_attrs=[];
         def=Data (kind, tys, tydef);
       } in
       let t = {infos=ID.PerTbl.replace t.infos id info} in
@@ -173,6 +177,7 @@ let def_data ?loc ~env:t ~kind tys =
             loc;
             decl_kind=Stmt.Decl_fun;
             ty=cstor.Stmt.cstor_type;
+            decl_attrs=[];
             def=Cstor (kind,tys,tydef, cstor);
           } in
           {infos=ID.PerTbl.replace t.infos id info}
@@ -187,6 +192,7 @@ let def_pred ?loc ~env ~wf ~kind def l =
     loc;
     decl_kind=Stmt.Decl_prop;
     ty=def.Stmt.pred_defined.Stmt.defined_ty;
+    decl_attrs=[];
     def=Pred(wf,kind,def,l,loc);
   } in
   {infos=ID.PerTbl.replace env.infos id info}
@@ -202,14 +208,15 @@ let add_copy ?loc ~env c =
   let infos = env.infos in
   let infos =
     ID.PerTbl.replace infos c.Stmt.copy_id
-      {loc; decl_kind=Stmt.Decl_type; ty=c.Stmt.copy_ty; def=Copy_ty c; } in
+      {loc; decl_kind=Stmt.Decl_type; decl_attrs=[];
+       ty=c.Stmt.copy_ty; def=Copy_ty c; } in
   let infos =
     ID.PerTbl.replace infos c.Stmt.copy_abstract
-      {loc; decl_kind=Stmt.Decl_fun;
+      {loc; decl_kind=Stmt.Decl_fun; decl_attrs=[];
        ty=c.Stmt.copy_abstract_ty; def=Copy_abstract c; } in
   let infos =
     ID.PerTbl.replace infos c.Stmt.copy_concretize
-      {loc; decl_kind=Stmt.Decl_fun;
+      {loc; decl_kind=Stmt.Decl_fun; decl_attrs=[];
        ty=c.Stmt.copy_concretize_ty; def=Copy_concretize c; } in
   {infos; }
 
@@ -221,8 +228,8 @@ let add_statement
 = fun ~env st ->
   let loc = Stmt.loc st in
   match Stmt.view st with
-  | Stmt.Decl (id,kind,ty) ->
-      declare ?loc ~kind ~env id ty
+  | Stmt.Decl (id,kind,ty,attrs) ->
+      declare ?loc ~attrs ~kind ~env id ty
   | Stmt.TyDef (kind,l) ->
       def_data ?loc ~env ~kind l
   | Stmt.Goal _ -> env

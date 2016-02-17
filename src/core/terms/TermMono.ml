@@ -224,18 +224,27 @@ module ToFO(T : TI.S)(F : FO.S) = struct
   let convert_statement ~sigma st =
     let module St = Statement in
     match St.view st with
-    | St.Decl (id, k, ty) ->
-        begin match k with
+    | St.Decl (id, k, ty, attrs) ->
+        let st' = match k with
         | St.Decl_type ->
             let n = U.ty_num_param ty in
-            [ FOI.TyDecl (id, n) ]
+            FOI.TyDecl (id, n)
         | St.Decl_fun ->
             let ty = conv_top_ty ty in
-            [ FOI.Decl (id, ty) ]
+            FOI.Decl (id, ty)
         | St.Decl_prop ->
             let ty = conv_top_ty ty in
-            [ FOI.Decl (id, ty) ]
-        end
+            FOI.Decl (id, ty)
+        in
+        (* additional statements, obtained from attributes *)
+        let others =
+          List.map
+            (function
+              | St.Decl_attr_card_max n -> FOI.CardBound (id, `Max, n)
+              | St.Decl_attr_card_min n -> FOI.CardBound (id, `Min, n))
+            attrs
+        in
+        st' :: others
     | St.Axiom a ->
         let mk_ax x = FOI.Axiom x in
         begin match a with

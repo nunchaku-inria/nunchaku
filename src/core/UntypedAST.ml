@@ -131,9 +131,12 @@ type copy = {
   concretize: var; (* concretize function *)
 }
 
+type attribute = string list
+(** one attribute = list of strings separated by spaces *)
+
 type statement_node =
   | Include of string * (string list) option (* file, list of symbols *)
-  | Decl of var * ty (* declaration of uninterpreted symbol *)
+  | Decl of var * ty * attribute list (* declaration of uninterpreted symbol *)
   | Axiom of term list (* axiom *)
   | Spec of spec_defs (* spec *)
   | Rec of rec_defs (* mutual rec *)
@@ -194,7 +197,7 @@ let mk_stmt_ ?loc ?name st =
   {stmt_loc=loc; stmt_name=name; stmt_value=st }
 
 let include_ ?name ?loc ?which f = mk_stmt_ ?name ?loc (Include(f,which))
-let decl ?name ?loc v t = mk_stmt_ ?name ?loc (Decl(v,t))
+let decl ?name ?loc ~attrs v t = mk_stmt_ ?name ?loc (Decl(v,t,attrs))
 let axiom ?name ?loc l = mk_stmt_ ?name ?loc (Axiom l)
 let spec ?name ?loc l = mk_stmt_ ?name ?loc (Spec l)
 let rec_ ?name ?loc l = mk_stmt_ ?name ?loc (Rec l)
@@ -337,11 +340,16 @@ let pp_mutual_preds out l =
   in
   pp_list_ ~sep:" and " pp_def out l
 
+let pp_attr out l = fpf out "@[%a@]" (pp_list_ ~sep:" " CCFormat.string) l
+let pp_attrs out = function
+  | [] -> ()
+  | l -> fpf out "@ [@[%a@]]" (pp_list_ ~sep:"," pp_attr) l
+
 let print_statement out st = match st.stmt_value with
   | Include (f, None) -> fpf out "@[include %s.@]" f
   | Include (f, Some l) -> fpf out "@[include (%a) from %s.@]"
       (pp_list_ ~sep:"," CCFormat.string) l f
-  | Decl (v, t) -> fpf out "@[val %s : %a.@]" v print_term t
+  | Decl (v, t, attrs) -> fpf out "@[val %s : %a%a.@]" v print_term t pp_attrs attrs
   | Axiom l -> fpf out "@[axiom @[%a@].@]" (pp_list_ ~sep:";" print_term) l
   | Spec l -> fpf out "@[spec %a.@]" pp_spec_defs l
   | Rec l -> fpf out "@[rec %a.@]" pp_rec_defs l
@@ -366,9 +374,9 @@ module TPTP = struct
   let prelude =
     let (==>) = ty_arrow in
     let ty_term = var "$i" in
-    [ decl "$i" ty_type
-    ; decl "!!" ((ty_term ==> ty_prop) ==> ty_prop)
-    ; decl "??" ((ty_term ==> ty_prop) ==> ty_prop)
+    [ decl ~attrs:[] "$i" ty_type
+    ; decl ~attrs:[] "!!" ((ty_term ==> ty_prop) ==> ty_prop)
+    ; decl ~attrs:[] "??" ((ty_term ==> ty_prop) ==> ty_prop)
     ]
 
   (* meta-data used in TPTP `additional_info` *)

@@ -8,7 +8,11 @@ module Make(F : FO.S) : sig
   with module FO_T = F
   and module FOBack = FO.Default
 
-  val print_problem : Format.formatter -> problem -> unit
+  type processed_problem
+
+  val preprocess : problem -> processed_problem
+
+  val print_problem : Format.formatter -> processed_problem -> unit
 
   val solve_par :
     ?j:int -> ?options:string list -> ?timeout:float -> ?print:bool ->

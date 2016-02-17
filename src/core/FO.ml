@@ -79,6 +79,7 @@ type ('t, 'ty) statement =
   | TyDecl of id * int  (** number of arguments *)
   | Decl of id * 'ty toplevel_ty
   | Axiom of 't
+  | CardBound of id * [`Max | `Min] * int (** cardinality bound *)
   | MutualTypes of [`Data | `Codata] * 'ty mutual_types
   | Goal of 't
 
@@ -226,6 +227,10 @@ module Problem = struct
   let statements t = t.statements
   let meta t = t.meta
 
+  let flat_map ~meta f pb =
+    let res = CCVector.flat_map_list f pb.statements in
+    make ~meta res
+
   let fold_flat_map ~meta f acc pb =
     let res = CCVector.create () in
     let acc' = CCVector.fold
@@ -315,6 +320,9 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     | Decl (v, ty) ->
         fpf out "@[<2>val %a@ : %a.@]" ID.print v print_toplevel_ty ty
     | Axiom t -> fpf out "@[<2>axiom %a.@]" print_term t
+    | CardBound (ty_id, which, n) ->
+        let s = match which with `Max -> "max_card" | `Min -> "min_card" in
+        fpf out "@[<2>%s %a@ = %d.@]" s ID.print ty_id n
     | MutualTypes (k, l) ->
         let pp_arg = print_ty in
         let pp_tyvars_ out = function

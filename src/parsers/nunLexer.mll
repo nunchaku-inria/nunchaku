@@ -50,6 +50,7 @@ rule token = parse
   | ';' { SEMI_COLON }
   | '?' { META_VAR }
   | "=" { LOGIC_EQ }
+  | "!=" { LOGIC_NEQ }
   | ":=" { EQDEF }
   | "->" { ARROW }
   | "fun" { FUN }
@@ -91,6 +92,7 @@ rule token = parse
   | '@' { AT }
   | lower_word { LOWER_WORD(Lexing.lexeme lexbuf) }
   | upper_word { UPPER_WORD(Lexing.lexeme lexbuf) }
+  | integer { INTEGER(Lexing.lexeme lexbuf) }
   | filepath {
       let s = Lexing.lexeme lexbuf in
       let s = String.sub s 1 (String.length s -2) in (* remove " " *)
