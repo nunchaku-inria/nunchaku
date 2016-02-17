@@ -1165,6 +1165,19 @@ module Convert(Term : TermTyped.S) = struct
         Stmt.Decl_attr_card_min n
     | _ -> fail()
 
+  (* check that attributes are "sound" *)
+  let check_attrs ?loc l =
+    let min_card = ref 0 in
+    let max_card = ref max_int in
+    List.iter
+      (function
+        | Stmt.Decl_attr_card_max n -> max_card := n
+        | Stmt.Decl_attr_card_min n -> min_card := n)
+      l;
+    if !min_card > !max_card
+    then ill_formedf ?loc ~kind:"attributes"
+     "cardinality bounds are unsat (min_card = %d, max_card = %d)" !min_card !max_card
+
   let convert_statement_exn ~env st =
     let name = st.A.stmt_name in
     let loc = st.A.stmt_loc in
@@ -1183,6 +1196,7 @@ module Convert(Term : TermTyped.S) = struct
         let kind = kind_of_ty_ ty in
         (* parse attributes *)
         let attrs = List.map (convert_attr ~env) attrs in
+        check_attrs ?loc attrs;
         Stmt.mk_decl ~info ~attrs id kind ty, env
     | A.Axiom l ->
         (* convert terms, and force them to be propositions *)
