@@ -57,6 +57,7 @@ type ('t, 'ty, 'inv) def =
 type ('t, 'ty, 'inv) info = {
   ty: 'ty; (** type of symbol *)
   decl_kind: Statement.decl;
+  decl_attrs: Statement.decl_attr list;
   loc: loc option;
   def: ('t, 'ty, 'inv) def;
 }
@@ -81,6 +82,7 @@ val decl_kind: _ info -> Statement.decl
 val declare:
   ?loc:loc ->
   kind:Statement.decl ->
+  attrs:Statement.decl_attr list ->
   env:('t, 'ty, 'inv) t ->
   id ->
   'ty ->

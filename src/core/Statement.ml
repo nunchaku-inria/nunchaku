@@ -110,8 +110,13 @@ type ('t, 'ty) copy = {
   copy_pred: 't option; (* invariant (prop) *)
 }
 
+(** Attribute on declarations *)
+type decl_attr =
+  | Decl_attr_card_max of int
+  | Decl_attr_card_min of int
+
 type ('term, 'ty, 'inv) view =
-  | Decl of id * decl * 'ty
+  | Decl of id * decl * 'ty * decl_attr list
   | Axiom of ('term, 'ty, 'inv) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
   | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty, 'inv) pred_def list
@@ -146,12 +151,12 @@ let name t = t.info.name
 let make_ ~info view = {info;view}
 
 let mk_axiom ~info t = make_ ~info (Axiom t)
-let mk_decl ~info id k decl = make_ ~info (Decl (id,k,decl))
+let mk_decl ~info ~attrs id k decl = make_ ~info (Decl (id,k,decl,attrs))
 let mk_ty_def ~info k l = make_ ~info (TyDef (k, l))
 
-let ty_decl ~info id t = mk_decl ~info id Decl_type t
-let decl ~info id t = mk_decl ~info id Decl_fun t
-let prop_decl ~info id t = mk_decl ~info id Decl_prop t
+let ty_decl ~info ~attrs id t = mk_decl ~info ~attrs id Decl_type t
+let decl ~info ~attrs id t = mk_decl ~info ~attrs id Decl_fun t
+let prop_decl ~info ~attrs id t = mk_decl ~info ~attrs id Decl_prop t
 let axiom ~info l = mk_axiom ~info (Axiom_std l)
 let axiom1 ~info t = axiom ~info [t]
 let axiom_spec ~info t = mk_axiom ~info (Axiom_spec t)
@@ -329,8 +334,8 @@ external cast_preds
 let map ~term:ft ~ty:fty st =
   let info = st.info in
   match st.view with
-  | Decl (id,k,t) ->
-      mk_decl ~info id k (fty t)
+  | Decl (id,k,t,attrs) ->
+      mk_decl ~info ~attrs id k (fty t)
   | Axiom a ->
       begin match a with
       | Axiom_std l -> axiom ~info (List.map ft l)
@@ -388,7 +393,7 @@ let fold_preds ~term ~ty acc l =
 
 let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
   match st.view with
-  | Decl (_, _, t) -> ty acc t
+  | Decl (_, _, t, _) -> ty acc t
   | Axiom a ->
       begin match a with
       | Axiom_std l -> List.fold_left term acc l
@@ -519,9 +524,17 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
       ID.print c.copy_concretize Pty.print c.copy_concretize_ty
       pp_pred c.copy_pred
 
+  let pp_attr out = function
+    | Decl_attr_card_max i -> fpf out "max_card %d" i
+    | Decl_attr_card_min i -> fpf out "min_card %d" i
+
+  let pp_attrs out = function
+    | [] -> ()
+    | l -> fpf out "@ [@[%a@]]" (pplist ~sep:"," pp_attr) l
+
   let print out t = match t.view with
-  | Decl (id,_,t) ->
-      fpf out "@[<2>val %a@ : %a.@]" ID.print id Pty.print t
+  | Decl (id,_,t,attrs) ->
+      fpf out "@[<2>val %a@ : %a%a.@]" ID.print id Pty.print t pp_attrs attrs
   | Axiom a ->
       begin match a with
       | Axiom_std l ->

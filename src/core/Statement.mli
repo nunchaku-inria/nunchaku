@@ -108,8 +108,13 @@ type ('t, 'ty) copy = {
   copy_pred: 't option; (* invariant (prop) *)
 }
 
+(** Attribute on declarations *)
+type decl_attr =
+  | Decl_attr_card_max of int (** maximal cardinality of type *)
+  | Decl_attr_card_min of int (** minimal cardinality of type *)
+
 type ('term, 'ty, 'inv) view =
-  | Decl of id * decl * 'ty
+  | Decl of id * decl * 'ty * decl_attr list
   | Axiom of ('term, 'ty, 'inv) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
   | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty, 'inv) pred_def list
@@ -141,17 +146,17 @@ val loc : _ t -> loc option
 val name : _ t -> string option
 val info : _ t -> info
 
-val mk_decl : info:info  -> id -> decl -> 'ty -> ('t,'ty,'inv) t
+val mk_decl : info:info -> attrs:decl_attr list -> id -> decl -> 'ty -> ('t,'ty,'inv) t
 val mk_axiom : info:info -> ('a,'ty,'inv) axiom -> ('a, 'ty,'inv) t
 val mk_ty_def : info:info -> [`Data | `Codata] -> 'ty mutual_types -> (_, 'ty,_) t
 
-val ty_decl : info:info -> id -> 'a -> (_, 'a, _) t
+val ty_decl : info:info -> attrs:decl_attr list -> id -> 'a -> (_, 'a, _) t
 (** declare a type constructor *)
 
-val decl : info:info -> id -> 'a -> (_, 'a, _) t
+val decl : info:info -> attrs:decl_attr list -> id -> 'a -> (_, 'a, _) t
 (** declare a function symbol *)
 
-val prop_decl : info:info -> id -> 'a -> (_, 'a, _) t
+val prop_decl : info:info -> attrs:decl_attr list -> id -> 'a -> (_, 'a, _) t
 (** Declare a proposition ([prop] must be provided) *)
 
 val axiom : info:info -> 'a list -> ('a,_,_) t

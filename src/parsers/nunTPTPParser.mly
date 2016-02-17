@@ -162,7 +162,7 @@ statement:
     {
       let s, ty = decl in
       let loc = L.mk_pos $startpos $endpos in
-      A.decl ~name ~loc s ty
+      A.decl ~name ~attrs:[] ~loc s ty
     }
   | INCLUDE LEFT_PAREN x=SINGLE_QUOTED RIGHT_PAREN DOT
     {
