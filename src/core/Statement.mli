@@ -301,6 +301,11 @@ val fold :
   ty:('a -> 'ty -> 'a) ->
   'a -> ('t, 'ty, 'inv) t -> 'a
 
+val iter :
+  term:('t -> unit) ->
+  ty:('ty -> unit) ->
+  ('t, 'ty, 'inv) t -> unit
+
 (** {2 Print} *)
 
 module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig

@@ -425,6 +425,9 @@ let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
       CCOpt.fold term acc c.copy_pred
   | Goal t -> term acc t
 
+let iter ~term ~ty st =
+  fold () st ~term:(fun () t -> term t) ~ty:(fun () t -> ty t)
+
 let fpf = Format.fprintf
 let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 

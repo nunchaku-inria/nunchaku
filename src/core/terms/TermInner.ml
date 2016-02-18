@@ -657,6 +657,16 @@ module type UTIL = sig
       @param bind updates the binding accumulator with the bound variable
       @param f used to update the regular accumulator (that is returned) *)
 
+  val iter :
+    f:('b_acc -> t_ -> unit) ->
+    bind:('b_acc -> t_ Var.t -> 'b_acc) ->
+    'b_acc ->
+    t_ ->
+    unit
+  (** Non recursive iter.
+      @param bind updates the binding accumulator with the bound variable
+      @param f called on immediate subterms and on the regular accumulator *)
+
   val map :
     f:('b_acc -> t_ -> t_) ->
     bind:('b_acc -> t_ Var.t -> 'b_acc * t_ Var.t) ->
@@ -1018,6 +1028,9 @@ module Util(T : S)
     | TyArrow (a,b) ->
         let acc = f acc b_acc a in
         f acc b_acc b
+
+  let iter ~f ~bind b_acc t =
+    fold () b_acc t ~bind ~f:(fun () b_acc t -> f b_acc t)
 
   let map ~f ~bind b_acc t = match T.repr t with
     | TyBuiltin _
