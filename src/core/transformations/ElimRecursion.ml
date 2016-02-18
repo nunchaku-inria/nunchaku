@@ -248,6 +248,9 @@ module Make(T : TI.S) = struct
       fun_encoding.fun_concretization;
     ()
 
+  (* TODO: before creating new projectors, check whether some already
+    exist (thanks to attributes, etc.) *)
+
   let tr_rec_defs ~info ~state l =
     (* transform each axiom, considering case_head as rec. defined *)
     let new_stmts = ref [] in

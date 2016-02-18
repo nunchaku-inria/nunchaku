@@ -33,6 +33,7 @@ Library "nunchaku_core"
                     transformations/TypeInference,
                     transformations/ElimPatternMatch,
                     transformations/Monomorphization,
+                    transformations/ElimHOF,
                     transformations/ElimRecursion,
                     transformations/ElimMultipleEqns,
                     transformations/ElimIndPreds,
