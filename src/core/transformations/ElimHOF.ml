@@ -234,11 +234,12 @@ module Make(T : TI.S) = struct
   }
 
   let pp_apply_fun out f =
-    fpf out "@[<2>%a :@ `@[%a@]`@]" ID.print f.af_id P.print f.af_ty
+    fpf out "@[<2>%a/%d :@ `@[%a@]`@]" ID.print f.af_id f.af_arity P.print f.af_ty
+
+  let pp_app_funs out =
+    fpf out "[@[%a@]]" (CCFormat.list ~start:"" ~stop:"" ~sep:"" pp_apply_fun)
 
   let pp_fun_encoding out =
-    let pp_app_funs out =
-      fpf out "[@[%a@]]" (CCFormat.list ~start:"" ~stop:"" ~sep:"" pp_apply_fun) in
     fpf out "[@[<v>%a@]]"
       (IntMap.print ~start:"" ~stop:"" ~sep:"" ~arrow:" -> " CCFormat.int pp_app_funs)
 
@@ -297,11 +298,6 @@ module Make(T : TI.S) = struct
     | [] -> h
     | a :: l' -> H_arrow (a, handle_arrow_l l' h)
 
-  (* number of arguments of handle *)
-  let rec handle_arity_ = function
-    | H_leaf _ -> 0
-    | H_arrow (_, h') -> 1 + handle_arity_ h'
-
   let pp_decl_ out (id,ty) = fpf out "@[<2>%a :@ %a@]" ID.print id P.print ty
 
   (* handle -> application symbol for this handle *)
@@ -319,7 +315,7 @@ module Make(T : TI.S) = struct
       let app_fun = {
         af_id=app_id;
         af_ty=ty_app;
-        af_arity=handle_arity_ h;
+        af_arity=List.length args;
       } in
       state.app_symbols <- HandleMap.add h app_fun state.app_symbols;
       app_fun
@@ -343,8 +339,7 @@ module Make(T : TI.S) = struct
       new one *)
 
   (* for each id in arities, introduce required app symbols
-     and store data structure that
-     maps [arity -> sequence of apply symbs to use].
+     and store data structure that maps [arity -> sequence of apply symbs to use].
      @return a list of new type declarations *)
   let introduce_apply_syms ~state =
     ID.Map.iter
@@ -371,7 +366,7 @@ module Make(T : TI.S) = struct
           | (args, remaining_args) :: chunks' ->
               (* first application: no app symbol *)
               let m = IntMap.singleton (List.length args) [] in
-              let handle = 
+              let handle =
                 handle_arrow_l args
                   (handle_arrow_l remaining_args (H_leaf ty_ret))
                 |> ty_of_handle_ ~state |> handle_leaf in
@@ -393,7 +388,7 @@ module Make(T : TI.S) = struct
               let app_fun = app_of_handle_ ~state args' handle_ret in
               let n_args' = List.length args + n_args in
               let app_l' = app_fun :: app_l in
-              let m = IntMap.add n_args' app_l' m in
+              let m = IntMap.add n_args' (List.rev app_l') m in
               (* return handle_ret, because it is the type obtained by
                  fully applying [app_fun] *)
               handle_ret, n_args', app_l', m
@@ -407,15 +402,74 @@ module Make(T : TI.S) = struct
         state.fun_encodings <- ID.Map.add id m state.fun_encodings
       )
       state.arities;
-    (* obtain new declarations *)
-    let decls = CCVector.to_list state.new_decls in
+    (* obtain new declarations as a map id -> ty *)
+    let decls =
+      CCVector.fold
+        (fun m (id,ty) -> ID.Map.add id ty m)
+        ID.Map.empty state.new_decls
+    in
     CCVector.clear state.new_decls;
     decls
+
+  (* apply the list of apply_fun to [l]. Arities should match. *)
+  let rec apply_app_funs_ stack l =
+    Utils.debugf ~section 5 "@[<2>apply_stack@ @[%a@]@ to @[%a@]@]"
+      (fun k->k pp_app_funs stack (CCFormat.list P.print) l);
+    match stack with
+    | [] -> assert false
+    | [f] ->
+        assert (f.af_arity = List.length l);
+        U.app (U.const f.af_id) l
+    | f :: stack' ->
+        assert (f.af_arity >= 1);
+        let args, l' = CCList.take_drop f.af_arity l in
+        assert (List.length args = f.af_arity);
+        (* compute closure, then push it on l *)
+        let closure =  U.app (U.const f.af_id) args in
+        apply_app_funs_ stack' (closure :: l')
+
+  (* traverse [t] and replace partial applications with fully applied symbols
+      from state.app_symbols. Also encodes every type using [handle_id] *)
+  let elim_hof_term ~state t =
+    let rec aux subst t = match T.repr t with
+      | TI.Var v -> Var.Subst.find_exn ~subst v |> U.var
+      | TI.TyArrow _ -> aux_ty subst t (* type: encode it *)
+      | TI.App (f,l) ->
+          begin match T.repr f with
+          | TI.Const id when ID.Map.mem id state.fun_encodings ->
+              let l = List.map (aux subst) l in
+              (* replace by applications symbols, based on [length l] *)
+              let n = List.length l in
+              let fun_encoding = ID.Map.find id state.fun_encodings in
+              (* stack of application functions to use *)
+              let app_l = IntMap.find n fun_encoding in
+              apply_app_funs_ app_l (f::l)
+          | _ -> aux' subst t
+          end
+      | TI.Bind _
+      | TI.Let _
+      | TI.Match _
+      | TI.Const _
+      | TI.Builtin _
+      | TI.TyBuiltin _
+      | TI.TyMeta _ -> aux' subst t
+    (* traverse subterms of [t] *)
+    and aux' subst t =
+      U.map subst t ~f:aux
+      ~bind:(fun subst v ->
+        (* replace [v] with [v'], which has an encoded type *)
+        let v' = Var.update_ty v ~f:(aux_ty subst) in
+        let subst = Var.Subst.add ~subst v v' in
+        subst, v')
+    and aux_ty subst ty = encode_ty_ ~state (U.eval_renaming ~subst ty) in
+    aux Var.Subst.empty t
 
   (* eliminate partial applications in the given statement. Can return several
      statements because of the declarations of new application symbols. *)
   let elim_hof_statement ~state stmt =
     let info = Stmt.info stmt in
+    let tr_term = elim_hof_term ~state in
+    let tr_type = encode_ty_ ~state in
     match Stmt.view stmt with
     | Stmt.Decl (id,decl,ty,attrs) ->
         if ID.Map.mem id state.arities
@@ -426,17 +480,17 @@ module Make(T : TI.S) = struct
             let handle_ty = ID.Tbl.find state.handles
 
           *)
-          assert false (* TODO *)
-
+          [stmt] (* TODO *)
         )
         else
           (* keep as is, not a partially applied fun *)
           [Stmt.mk_decl ~info id decl ty ~attrs]
-    | Stmt.Axiom ax -> [stmt]
+    | Stmt.Axiom _
     | Stmt.TyDef (_,_)
     | Stmt.Pred (_,_,_)
     | Stmt.Copy _
-    | Stmt.Goal _ -> assert false (* TODO *)
+    | Stmt.Goal _ ->
+        [Stmt.map ~term:tr_term ~ty:tr_type stmt] (* TODO *)
 
   let elim_hof pb =
     let env = Problem.env pb in
@@ -449,7 +503,8 @@ module Make(T : TI.S) = struct
     Utils.debug ~section 3 "introduce application symbols and handle types…";
     let decls_app = introduce_apply_syms ~state in
     Utils.debugf ~section 3 "@[<2>new declarations:@ @[<v>%a@]@]"
-      (fun k->k CCFormat.(list ~start:"" ~stop:"" ~sep:"" pp_decl_) decls_app);
+      (fun k->k
+        (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_decl_) (ID.Map.to_seq decls_app));
     let pb' = Problem.flat_map_statements pb ~f:(elim_hof_statement ~state) in
     (* return new problem *)
     pb', state.decode
