@@ -148,15 +148,16 @@ module Make(T : TI.S) = struct
     | H_leaf of encoded_ty (* leaf type *)
     | H_arrow of encoded_ty * handle (* [H_arrow (a,b)] reifies [a -> b] into an atomic type *)
 
-  and encoded_ty = ET_ty of ty
+  and encoded_ty = ty
 
-  let handle_is_leaf = function
-    | H_leaf _ -> true
-    | H_arrow _ -> false
+  let handle_is_leaf = function | H_leaf _ -> true | H_arrow _ -> false
+  let handle_is_fun = function H_leaf _ -> false | H_arrow _ -> true
+  let handle_leaf x = H_leaf x
+  let handle_arrow x y = H_arrow (x,y)
 
   let rec pp_handle out = function
-    | H_leaf (ET_ty t) -> P.print out t
-    | H_arrow (ET_ty t, h') -> fpf out "@[@[%a@] ·> @[%a@]@]" P.print t pp_handle h'
+    | H_leaf t -> P.print out t
+    | H_arrow (t, h') -> fpf out "@[@[%a@] ·> @[%a@]@]" P.print t pp_handle h'
 
   (* map from handles to 'a *)
   module HandleMap = struct
@@ -169,17 +170,17 @@ module Make(T : TI.S) = struct
 
     (* find binding for [h] in [m], or raise Not_found *)
     let rec find_exn h m = match h with
-      | H_leaf (ET_ty t) -> CCList.Assoc.get_exn ~eq:U.equal m.leaves t
-      | H_arrow (ET_ty t, h') ->
+      | H_leaf t -> CCList.Assoc.get_exn ~eq:U.equal m.leaves t
+      | H_arrow (t, h') ->
           let m' = CCList.Assoc.get_exn ~eq:U.equal m.arrows t in
           find_exn h' m'
 
     (* add [h -> v] to map [m] *)
     let rec add h v m = match h with
-      | H_leaf (ET_ty t) ->
+      | H_leaf t ->
           let leaves = CCList.Assoc.set ~eq:U.equal m.leaves t v in
           {m with leaves;}
-      | H_arrow (ET_ty t, h') ->
+      | H_arrow (t, h') ->
           let arrows =
             try
               let m' = CCList.Assoc.get_exn ~eq:U.equal m.arrows t in
@@ -232,9 +233,14 @@ module Make(T : TI.S) = struct
       (* bookkeeping for, later, decoding *)
   }
 
-  let pp_apply_fun out f = fpf out "@[%a :@ %a@]" ID.print f.af_id P.print f.af_ty
+  let pp_apply_fun out f =
+    fpf out "@[<2>%a :@ `@[%a@]`@]" ID.print f.af_id P.print f.af_ty
+
   let pp_fun_encoding out =
-    fpf out "@[<hv>%a@]" (IntMap.print CCFormat.int (CCFormat.list pp_apply_fun))
+    let pp_app_funs out =
+      fpf out "[@[%a@]]" (CCFormat.list ~start:"" ~stop:"" ~sep:"" pp_apply_fun) in
+    fpf out "[@[<v>%a@]]"
+      (IntMap.print ~start:"" ~stop:"" ~sep:"" ~arrow:" -> " CCFormat.int pp_app_funs)
 
   let create_state ~env arities = {
     env;
@@ -274,37 +280,22 @@ module Make(T : TI.S) = struct
           U.ty_app (U.ty_const to_) [aux a; aux b]
       | _ -> U.map () t ~bind:(fun () v ->(),v) ~f:(fun () -> aux)
     in
-    ET_ty (aux t)
-
-  let ty_of_encoded_ (ET_ty t) = t
-  let pp_encoded_ty_ out (ET_ty t) = P.print out t
-
-  let encoded_arrow_l l t =
-    U.ty_arrow_l (List.map ty_of_encoded_ l) (ty_of_encoded_ t)
+    aux t
 
   (* convert a handle to a proper encoded type *)
   let ty_of_handle_ ~state t : encoded_ty =
     let rec aux = function
-      | H_leaf (ET_ty t) -> t
-      | H_arrow (ET_ty t, h') ->
+      | H_leaf t -> t
+      | H_arrow (t, h') ->
           let id = get_handle_id_ ~state in
           U.ty_app (U.const id) [t; aux h']
     in
-    ET_ty (aux t)
-
-  (* split [l] into chunks of length given by elements of [lens] minus the
-     previous length. Each chunk is paired with the previous length. *)
-  let rec split_chunks_ prev lens l = match lens, l with
-    | [], [] -> []
-    | [], _ -> [prev,l]  (* return remaining elements *)
-    | len :: lens', _ ->
-        let c, l' = CCList.take_drop (len-prev) l in
-        (prev,c) :: split_chunks_ len lens' l'
+    aux t
 
   (* build the handle [l_1 -> ... -> l_n -> h] where the [l_i] are encoded types *)
-  let rec handle_fun_ l h = match l with
+  let rec handle_arrow_l l h = match l with
     | [] -> h
-    | a :: l' -> H_arrow (a, handle_fun_ l' h)
+    | a :: l' -> H_arrow (a, handle_arrow_l l' h)
 
   (* number of arguments of handle *)
   let rec handle_arity_ = function
@@ -315,13 +306,13 @@ module Make(T : TI.S) = struct
 
   (* handle -> application symbol for this handle *)
   let app_of_handle_ ~state args ret : apply_fun =
-    let h = handle_fun_ args ret in
+    let h = handle_arrow_l args ret in
     try HandleMap.find_exn h state.app_symbols
     with Not_found ->
       let i = state.app_count in
       state.app_count <- i+1;
       let app_id = ID.make ("app_" ^ string_of_int i) in
-      let ty_app = encoded_arrow_l args (ty_of_handle_ ~state ret) in
+      let ty_app = U.ty_arrow_l args (ty_of_handle_ ~state ret) in
       Utils.debugf ~section 5 "@[<2>declare app_sym `@[%a :@ @[%a@]@]@]`"
         (fun k->k ID.print app_id P.print ty_app);
       CCVector.push state.new_decls (app_id, ty_app);
@@ -332,6 +323,21 @@ module Make(T : TI.S) = struct
       } in
       state.app_symbols <- HandleMap.add h app_fun state.app_symbols;
       app_fun
+
+  (* split [l] into chunks of length given by elements of [lens] minus the
+     previous length. Each chunk is paired with
+     the remaining set of arguments. *)
+  let rec split_chunks_ prev lens l = match lens, l with
+    | [], [] -> []
+    | [], _ -> [l,[]]  (* return remaining elements *)
+    | len :: lens', _ ->
+        let c, l' = CCList.take_drop (len-prev) l in
+        (c,l') :: split_chunks_ len lens' l'
+
+  let pp_chunks out =
+    let pp_tys out = fpf out "@[%a@]" CCFormat.(list P.print) in
+    let pp_pair out (a,b) = fpf out "@[(%a, remaining %a)@]" pp_tys a pp_tys b in
+    fpf out "[@[%a@]]" CCFormat.(list ~start:"" ~stop:"" pp_pair)
 
   (* TODO: [id] already declared, so we need to skip old decl and replace with
       new one *)
@@ -344,45 +350,60 @@ module Make(T : TI.S) = struct
     ID.Map.iter
       (fun id {as_set=set; as_ty_args=ty_args; as_ty_ret=ty_ret; _} ->
         let l = IntSet.to_list set in
+        let n = List.length ty_args in
         (* split type arguments into "blocks" *)
-        assert (List.length l <= List.length ty_args + 1); (* +1: arity 0 exists *)
+        assert (List.length l <= n + 1); (* +1: arity 0 exists *)
+
+        (* encode type arguments and return type *)
+        let ty_args = List.map (encode_ty_ ~state) ty_args in
+        let ty_ret = encode_ty_ ~state ty_ret in
+
         let chunks = split_chunks_ 0 l ty_args in
         Utils.debugf ~section 4 "@[<2>process %a :@ `@[%a@]`@ chunks: @[%a@]@]"
-          (fun k->k ID.print id P.print (U.ty_arrow_l ty_args ty_ret)
-          CCFormat.(list (pair int (list P.print))) chunks);
-        let rev_chunks = List.rev chunks in
-        (* traverse [rev chunks], computing the handles and declaring
-           new app symbols. Note that all app symbols conceptually have
-           the same type, [ty_args->ty_ret], but they place handle boundaries
-             (replacing [a -> b] with [to(a,b)]) at different places.
-            @param m [map int -> list app_symbols], that is [m : fun_encoding]
-            @param app_l current stack of app_symbols
-            @param ret_handle type of handle that is returned by chunk *)
-        let rec aux m app_l ret_handle l = match l with
+          (fun k->k
+            ID.print id P.print (U.ty_arrow_l ty_args ty_ret) pp_chunks chunks);
+
+        (* special case for first chunk, which doesn't need an application
+           symbol *)
+        let first_handle, n_args, m, chunks' =
+          match chunks with
           | [] -> assert false
-          | [(i,c)] ->
-              let c = List.map (encode_ty_ ~state) c in
-              (* innermost chunk: no handle, no apply. However, we need to
-                 declare [id : \over{c} -> ret_handle] *)
-              let ty_id = encoded_arrow_l c (ty_of_handle_ ~state ret_handle) in
-              CCVector.push state.new_decls (id, ty_id);
-              IntMap.add i app_l m
-          | (_,[]) :: _ -> assert false   (* only last one can have 0 args *)
-          | (i,(_::_ as c)) :: l' ->
-              let c = List.map (encode_ty_ ~state) c in
-              (* handle [\over{c} -> typof(ret_handle)] *)
-              let handle' = handle_fun_ c ret_handle in
-              let app_fun = app_of_handle_ ~state
-                (ty_of_handle_ ~state handle' :: c) ret_handle in
-              (* push app_fun onto the stack of apply functions to use *)
-              let app_l = app_fun :: app_l in
-              let m = IntMap.add (i+List.length c) app_l m in
-              aux m app_l handle' l'
+          | (args, remaining_args) :: chunks' ->
+              (* first application: no app symbol *)
+              let m = IntMap.singleton (List.length args) [] in
+              let handle = 
+                handle_arrow_l args
+                  (handle_arrow_l remaining_args (H_leaf ty_ret))
+                |> ty_of_handle_ ~state |> handle_leaf in
+              handle, List.length args, m, chunks'
         in
-        (* map i->app_i *)
-        let m = aux IntMap.empty [] (H_leaf (encode_ty_ ~state ty_ret)) rev_chunks in
-        Utils.debugf ~section 4 "@[<2>map %a to@ %a@]"
+        (* deal with remaining chunks. For each chunk we need the handle
+           returned by the previous chunks (that is, if we apply arguments
+           that come earlier, which handle type do we get?) *)
+        let _, _, _, m =
+          List.fold_left
+            (fun (prev_handle, n_args, app_l, m) chunk ->
+              (* we already applied the function to [n_args] using [app_l] *)
+              let args, remaining_args = chunk in
+              (* not the initial application: need an app symbol.
+                 type of app symbol is
+                  [handle :=  args -> (remaining_args to ty_ret)] *)
+              let handle_ret = handle_arrow_l remaining_args (H_leaf ty_ret) in
+              let args' = ty_of_handle_ ~state prev_handle :: args in
+              let app_fun = app_of_handle_ ~state args' handle_ret in
+              let n_args' = List.length args + n_args in
+              let app_l' = app_fun :: app_l in
+              let m = IntMap.add n_args' app_l' m in
+              (* return handle_ret, because it is the type obtained by
+                 fully applying [app_fun] *)
+              handle_ret, n_args', app_l', m
+            )
+            (first_handle, n_args, [], m)
+            chunks'
+        in
+        Utils.debugf ~section 4 "@[<hv2>map %a to@ %a@]"
           (fun k->k ID.print id pp_fun_encoding m);
+
         state.fun_encodings <- ID.Map.add id m state.fun_encodings
       )
       state.arities;
