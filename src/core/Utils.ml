@@ -102,8 +102,8 @@ let debug_fmt_ = Format.err_formatter
 let debugf_real section msg k =
   let now = Time.total () in
   if section == Section.root
-  then Format.fprintf debug_fmt_ "@[<hov 3>%.3f[]@ " now
-  else Format.fprintf debug_fmt_ "@[<hov 3>%.3f[%s]:@ "
+  then Format.fprintf debug_fmt_ "@[<hov 3>@{<Black>%.3f[]@}@ " now
+  else Format.fprintf debug_fmt_ "@[<hov 3>@{<Black>%.3f[%s]@}@ "
     now section.Section.full_name;
   k (Format.kfprintf
       (fun fmt -> Format.fprintf fmt "@]@.")
@@ -222,9 +222,17 @@ let options_warnings_ =
 
 exception NotImplemented of string
 
+(* print error prefix *)
+let pp_error_prefix out () = Format.fprintf out "@{<Red>Error@}: "
+
+let err_sprintf fmt =
+  CCFormat.ksprintf fmt
+    ~f:(fun s -> CCFormat.sprintf "@[<2>%a%s@]" pp_error_prefix () s)
+
 let () = Printexc.register_printer
   (function
-    | NotImplemented s -> Some ("error: feature `" ^ s ^ "` is not implemented")
+    | NotImplemented s ->
+        Some (CCFormat.sprintf "%a feature `%s` is not implemented" pp_error_prefix () s)
     | _ -> None
   )
 
@@ -232,8 +240,8 @@ let not_implemented feat = raise (NotImplemented feat)
 
 let err_of_exn e =
   let trace = Printexc.get_backtrace () in
-  let msg = Printexc.to_string e in
-  CCError.fail (msg ^ "\n" ^ trace)
+  let msg = CCFormat.sprintf "%s\n%s" (Printexc.to_string e) trace in
+  CCError.fail msg
 
 let exn_ksprintf ~f fmt =
   let buf = Buffer.create 32 in

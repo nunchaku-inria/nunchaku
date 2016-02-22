@@ -75,6 +75,8 @@ let options_debug_ = Utils.Section.iter
       " verbosity level for " ^ (if name="" then "all messages" else name))
   |> Sequence.to_rev_list
 
+let call_with x f = Arg.Unit (fun () -> f x)
+
 let options =
   let open CCFun in
   Arg.align ?limit:None @@ List.sort Pervasives.compare @@ (
@@ -110,7 +112,8 @@ let options =
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
-  ; "--color", Arg.Bool CCFormat.set_color_default, " enable/disable color"
+  ; "--color", call_with true CCFormat.set_color_default, " enable color"
+  ; "--no-color", call_with false CCFormat.set_color_default, " enable color"
   ; "-j", Arg.Set_int j, " set parallelism level"
   ; "--polarize-rec", Arg.Set polarize_rec_, " enable polarization of rec predicates"
   ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
