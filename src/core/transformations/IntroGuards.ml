@@ -275,6 +275,7 @@ end = struct
     l, acc
 
   let tr_root ~state t =
+    Utils.debugf ~section 5 "@[<2>intro guards in@ `@[%a@]`@]" (fun k->k P.print t);
     let pol = Pol.Pos in
     let t', g = tr_term ~state ~pol t in
     combine_polarized ~is_pos:true t' g

@@ -420,6 +420,7 @@ module type UTIL_REPR = sig
   (** t == Prop? *)
 
   val ty_num_param : t_ -> int
+  (** Number of type variables that must be bound in the type. *)
 end
 
 (** Utils that only require a {!REPR} *)
