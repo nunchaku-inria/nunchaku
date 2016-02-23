@@ -141,6 +141,21 @@ module Make(T : TI.S) = struct
     aux t;
     !m
 
+  (* TODO: fix problem with missing arities (rec definitions, spec?) *)
+  (* TODO: anyway changing rec (for a function [f:a_1-> ... -> a_n -> ret])
+            is hard, we need to add [n] to arities of [a], and then:
+              
+          - remove rec definition of [f] (mere declaration)
+          - add some "multi_rec" statement for defining the set of application
+            symbols used to defined [f], including the current definition
+            that becomes a definition of [app1] (where full application
+            of [f] is now [app1 (... (app_k (f a) b) ...) c])
+
+          -> need to add a statement "multi_rec" that is like "axiom"
+             (not a definition, multiple axioms ok) but still has the
+             well-founded  properties for RecElim.
+    *)
+
   let compute_arities_stmt ~env m stmt =
     let f = compute_arities_term ~env in
     Stmt.fold m stmt ~ty:f ~term:f
@@ -450,10 +465,12 @@ module Make(T : TI.S) = struct
     Utils.debugf ~section 5 "@[<2>apply_stack@ @[%a@]@ to @[%a@]@]"
       (fun k->k pp_app_funs stack (CCFormat.list P.print) l);
     match stack with
-    | [] -> assert false
-    | [f] ->
-        assert (f.af_arity = List.length l);
-        U.app (U.const f.af_id) l
+    | [] ->
+        begin match l with
+          | [] -> assert false
+          | [f] -> f
+          | f :: l' -> U.app f l' (* apply directly *)
+        end
     | f :: stack' ->
         assert (f.af_arity >= 1);
         let args, l' = CCList.take_drop f.af_arity l in
@@ -462,9 +479,19 @@ module Make(T : TI.S) = struct
         let closure =  U.app (U.const f.af_id) args in
         apply_app_funs_ stack' (closure :: l')
 
+  let elim_hof_ty ~state subst ty =
+    encode_ty_ ~state (U.eval_renaming ~subst ty)
+
+  (* encode [v]'s type, and add it to [subst] *)
+  let bind_hof_var ~state subst v =
+    (* replace [v] with [v'], which has an encoded type *)
+    let v' = Var.update_ty v ~f:(elim_hof_ty ~state subst) in
+    let subst = Var.Subst.add ~subst v v' in
+    subst, v'
+
   (* traverse [t] and replace partial applications with fully applied symbols
       from state.app_symbols. Also encodes every type using [handle_id] *)
-  let elim_hof_term ~state t =
+  let elim_hof_term ~state subst t =
     let rec aux subst t = match T.repr t with
       | TI.Var v -> Var.Subst.find_exn ~subst v |> U.var
       | TI.TyArrow _ -> aux_ty subst t (* type: encode it *)
@@ -496,14 +523,9 @@ module Make(T : TI.S) = struct
       | TI.TyMeta _ -> aux' subst t
     (* traverse subterms of [t] *)
     and aux' subst t =
-      U.map subst t ~f:aux
-      ~bind:(fun subst v ->
-        (* replace [v] with [v'], which has an encoded type *)
-        let v' = Var.update_ty v ~f:(aux_ty subst) in
-        let subst = Var.Subst.add ~subst v v' in
-        subst, v')
+      U.map subst t ~f:aux ~bind:(bind_hof_var ~state)
     and aux_ty subst ty = encode_ty_ ~state (U.eval_renaming ~subst ty) in
-    aux Var.Subst.empty t
+    aux subst t
 
   (* given a (function) type, encode its arguments and return type but
      keeps the toplevel arrows *)
@@ -519,7 +541,8 @@ module Make(T : TI.S) = struct
   let elim_hof_statement ~state stmt =
     let info = Stmt.info stmt in
     let tr_term = elim_hof_term ~state in
-    let tr_type = encode_toplevel_ty ~state in
+    let tr_type _subst ty = encode_toplevel_ty ~state ty in
+    Utils.debugf ~section 3 "@[<2>elim HOF in stmt@ `@[%a@]`@]" (fun k->k PStmt.print stmt);
     let stmt' = match Stmt.view stmt with
     | Stmt.Decl (id,decl,ty,attrs) ->
         if ID.Map.mem id state.arities
@@ -528,8 +551,9 @@ module Make(T : TI.S) = struct
             "introduce application symbols and handle types for %a…"
             (fun k->k ID.print id);
           let fun_encoding = introduce_apply_syms ~state id in
-          let ty' = U.ty_arrow_l fun_encoding.fe_args
-            (ty_of_handle_ ~state fun_encoding.fe_ret_handle) in
+          let ty' =
+            U.ty_arrow_l fun_encoding.fe_args
+              (ty_of_handle_ ~state fun_encoding.fe_ret_handle) in
           Utils.debugf ~section 4 "@[<2>fun %a now has type `@[%a@]`@]"
             (fun k->k ID.print id P.print ty');
           let stmt = Stmt.mk_decl ~info id decl ty' ~attrs in
@@ -544,7 +568,11 @@ module Make(T : TI.S) = struct
     | Stmt.Pred (_,_,_)
     | Stmt.Copy _
     | Stmt.Goal _ ->
-        [Stmt.map ~term:tr_term ~ty:tr_type stmt] (* TODO *)
+        let stmt' =
+          Stmt.map_bind Var.Subst.empty stmt
+            ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
+        in
+        [stmt']
     in
     (* obtain new type declarations *)
     let new_stmts =
@@ -587,7 +615,7 @@ module Make(T : TI.S) = struct
     let on_encoded = if print
       then
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after elimination of HOF: %a@]@." PPb.print]
+        [Format.printf "@[<v2>@{<Yellow>after elimination of HOF@}: %a@]@." PPb.print]
       else []
     in
     Transform.make1
