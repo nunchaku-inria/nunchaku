@@ -505,12 +505,21 @@ module Make(T : TI.S) = struct
     and aux_ty subst ty = encode_ty_ ~state (U.eval_renaming ~subst ty) in
     aux Var.Subst.empty t
 
+  (* given a (function) type, encode its arguments and return type but
+     keeps the toplevel arrows *)
+  let encode_toplevel_ty ~state ty =
+    let tyvars, args, ret = U.ty_unfold ty in
+    assert (tyvars=[]);
+    let args = List.map (encode_ty_ ~state) args in
+    let ret = encode_ty_ ~state ret in
+    U.ty_arrow_l args ret
+
   (* eliminate partial applications in the given statement. Can return several
      statements because of the declarations of new application symbols. *)
   let elim_hof_statement ~state stmt =
     let info = Stmt.info stmt in
     let tr_term = elim_hof_term ~state in
-    let tr_type = encode_ty_ ~state in
+    let tr_type = encode_toplevel_ty ~state in
     let stmt' = match Stmt.view stmt with
     | Stmt.Decl (id,decl,ty,attrs) ->
         if ID.Map.mem id state.arities
@@ -527,7 +536,8 @@ module Make(T : TI.S) = struct
           [stmt]
         )
         else
-          (* keep as is, not a partially applied fun *)
+          (* keep as is, not a partially applied fun; still have to modify type *)
+          let ty = encode_toplevel_ty ~state ty in
           [Stmt.mk_decl ~info id decl ty ~attrs]
     | Stmt.Axiom _
     | Stmt.TyDef (_,_)
