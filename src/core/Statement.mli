@@ -296,6 +296,16 @@ val map :
   ('t, 'ty, <eqn:'inv;ind_preds:'inv2;..>) t ->
   ('t2, 'ty2, <eqn:'inv;ind_preds:'inv2;..>) t
 
+val map_bind :
+  bind:('b_acc -> 'ty Var.t -> 'b_acc * 'ty2 Var.t) ->
+  term:('b_acc -> 't -> 't2) ->
+  ty:('b_acc -> 'ty -> 'ty2) ->
+  'b_acc ->
+  ('t, 'ty, <eqn:'inv;ind_preds:'inv2;..>) t ->
+  ('t2, 'ty2, <eqn:'inv;ind_preds:'inv2;..>) t
+(** Similar to {!map}, but accumulating some value of type [b_acc] when
+    entering binders *)
+
 val fold :
   term:('a -> 't -> 'a) ->
   ty:('a -> 'ty -> 'a) ->
