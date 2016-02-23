@@ -16,6 +16,7 @@ let fpf = Format.fprintf
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
+  module PStmt = Stmt.Print(P)(P)
   module TM = TermMono.Make(T)
   module TMI = TermMono
 
@@ -214,7 +215,11 @@ module Make(T : TI.S) = struct
 
      A list [app1, app2, app3] means that [f x y z] will be
      encoded as [app3 (app2 (app1 x) y) z]. *)
-  type fun_encoding = apply_fun list IntMap.t
+  type fun_encoding = {
+    fe_stack: apply_fun list IntMap.t;
+    fe_args: ty list; (* type arguments used to return the first handle *)
+    fe_ret_handle: handle; (* handle type returned by the function *)
+  }
 
   type 'a state = {
     env: (term, ty, 'a inv) Env.t;
@@ -335,81 +340,77 @@ module Make(T : TI.S) = struct
     let pp_pair out (a,b) = fpf out "@[(%a, remaining %a)@]" pp_tys a pp_tys b in
     fpf out "[@[%a@]]" CCFormat.(list ~start:"" ~stop:"" pp_pair)
 
-  (* TODO: [id] already declared, so we need to skip old decl and replace with
-      new one *)
-
-  (* for each id in arities, introduce required app symbols
+  (* introduce/get required app symbols for the given ID
      and store data structure that maps [arity -> sequence of apply symbs to use].
-     @return a list of new type declarations *)
-  let introduce_apply_syms ~state =
-    ID.Map.iter
-      (fun id {as_set=set; as_ty_args=ty_args; as_ty_ret=ty_ret; _} ->
-        let l = IntSet.to_list set in
-        let n = List.length ty_args in
-        (* split type arguments into "blocks" *)
-        assert (List.length l <= n + 1); (* +1: arity 0 exists *)
-
-        (* encode type arguments and return type *)
-        let ty_args = List.map (encode_ty_ ~state) ty_args in
-        let ty_ret = encode_ty_ ~state ty_ret in
-
-        let chunks = split_chunks_ 0 l ty_args in
-        Utils.debugf ~section 4 "@[<2>process %a :@ `@[%a@]`@ chunks: @[%a@]@]"
-          (fun k->k
-            ID.print id P.print (U.ty_arrow_l ty_args ty_ret) pp_chunks chunks);
-
-        (* special case for first chunk, which doesn't need an application
-           symbol *)
-        let first_handle, n_args, m, chunks' =
-          match chunks with
-          | [] -> assert false
-          | (args, remaining_args) :: chunks' ->
-              (* first application: no app symbol *)
-              let m = IntMap.singleton (List.length args) [] in
-              let handle =
-                handle_arrow_l args
-                  (handle_arrow_l remaining_args (H_leaf ty_ret))
-                |> ty_of_handle_ ~state |> handle_leaf in
-              handle, List.length args, m, chunks'
-        in
-        (* deal with remaining chunks. For each chunk we need the handle
-           returned by the previous chunks (that is, if we apply arguments
-           that come earlier, which handle type do we get?) *)
-        let _, _, _, m =
-          List.fold_left
-            (fun (prev_handle, n_args, app_l, m) chunk ->
-              (* we already applied the function to [n_args] using [app_l] *)
-              let args, remaining_args = chunk in
-              (* not the initial application: need an app symbol.
-                 type of app symbol is
-                  [handle :=  args -> (remaining_args to ty_ret)] *)
-              let handle_ret = handle_arrow_l remaining_args (H_leaf ty_ret) in
-              let args' = ty_of_handle_ ~state prev_handle :: args in
-              let app_fun = app_of_handle_ ~state args' handle_ret in
-              let n_args' = List.length args + n_args in
-              let app_l' = app_fun :: app_l in
-              let m = IntMap.add n_args' (List.rev app_l') m in
-              (* return handle_ret, because it is the type obtained by
-                 fully applying [app_fun] *)
-              handle_ret, n_args', app_l', m
-            )
-            (first_handle, n_args, [], m)
-            chunks'
-        in
-        Utils.debugf ~section 4 "@[<hv2>map %a to@ %a@]"
-          (fun k->k ID.print id pp_fun_encoding m);
-
-        state.fun_encodings <- ID.Map.add id m state.fun_encodings
-      )
-      state.arities;
-    (* obtain new declarations as a map id -> ty *)
-    let decls =
-      CCVector.fold
-        (fun m (id,ty) -> ID.Map.add id ty m)
-        ID.Map.empty state.new_decls
+     @return the fun encoding for ID *)
+  let introduce_apply_syms ~state id =
+    let {as_set=set; as_ty_args=ty_args; as_ty_ret=ty_ret; _} =
+      try ID.Map.find id state.arities
+      with Not_found -> assert false
     in
-    CCVector.clear state.new_decls;
-    decls
+    let l = IntSet.to_list set in
+    let n = List.length ty_args in
+    (* split type arguments into "blocks" *)
+    assert (List.length l <= n + 1); (* +1: arity 0 exists *)
+
+    (* encode type arguments and return type *)
+    let ty_args = List.map (encode_ty_ ~state) ty_args in
+    let ty_ret = encode_ty_ ~state ty_ret in
+
+    let chunks = split_chunks_ 0 l ty_args in
+    Utils.debugf ~section 4 "@[<2>process %a :@ `@[%a@]`@ chunks: @[%a@]@]"
+      (fun k->k
+        ID.print id P.print (U.ty_arrow_l ty_args ty_ret) pp_chunks chunks);
+
+    (* special case for first chunk, which doesn't need an application
+       symbol *)
+    let first_args, first_handle, n_args, m, chunks' =
+      match chunks with
+      | [] -> assert false
+      | (args, remaining_args) :: chunks' ->
+          (* first application: no app symbol *)
+          let m = IntMap.singleton (List.length args) [] in
+          let handle =
+            handle_arrow_l args
+              (handle_arrow_l remaining_args (H_leaf ty_ret))
+            |> ty_of_handle_ ~state |> handle_leaf in
+          args, handle, List.length args, m, chunks'
+    in
+    (* deal with remaining chunks. For each chunk we need the handle
+       returned by the previous chunks (that is, if we apply arguments
+       that come earlier, which handle type do we get?) *)
+    let _, _, _, m =
+      List.fold_left
+        (fun (prev_handle, n_args, app_l, m) chunk ->
+          (* we already applied the function to [n_args] using [app_l] *)
+          let args, remaining_args = chunk in
+          (* not the initial application: need an app symbol.
+             type of app symbol is
+              [handle :=  args -> (remaining_args to ty_ret)] *)
+          let handle_ret = handle_arrow_l remaining_args (H_leaf ty_ret) in
+          let args' = ty_of_handle_ ~state prev_handle :: args in
+          let app_fun = app_of_handle_ ~state args' handle_ret in
+          let n_args' = List.length args + n_args in
+          let app_l' = app_fun :: app_l in
+          let m = IntMap.add n_args' (List.rev app_l') m in
+          (* return handle_ret, because it is the type obtained by
+             fully applying [app_fun] *)
+          handle_ret, n_args', app_l', m
+        )
+        (first_handle, n_args, [], m)
+        chunks'
+    in
+    Utils.debugf ~section 4 "@[<hv2>map %a to@ %a@]"
+      (fun k->k ID.print id pp_fun_encoding m);
+
+    let fe = {
+      fe_stack=m;
+      fe_args=first_args;
+      fe_ret_handle=first_handle;
+    } in
+
+    state.fun_encodings <- ID.Map.add id fe state.fun_encodings;
+    fe
 
   (* apply the list of apply_fun to [l]. Arities should match. *)
   let rec apply_app_funs_ stack l =
@@ -442,7 +443,7 @@ module Make(T : TI.S) = struct
               let n = List.length l in
               let fun_encoding = ID.Map.find id state.fun_encodings in
               (* stack of application functions to use *)
-              let app_l = IntMap.find n fun_encoding in
+              let app_l = IntMap.find n fun_encoding.fe_stack in
               apply_app_funs_ app_l (f::l)
           | _ -> aux' subst t
           end
@@ -474,13 +475,27 @@ module Make(T : TI.S) = struct
     | Stmt.Decl (id,decl,ty,attrs) ->
         if ID.Map.mem id state.arities
         then (
-          (* change type, with a handle type *)
-          (*
-          try
-            let handle_ty = ID.Tbl.find state.handles
-
-          *)
-          [stmt] (* TODO *)
+          Utils.debugf ~section 3
+            "introduce application symbols and handle types for %a…"
+            (fun k->k ID.print id);
+          let fun_encoding = introduce_apply_syms ~state id in
+          let ty' = U.ty_arrow_l fun_encoding.fe_args
+            (ty_of_handle_ ~state fun_encoding.fe_ret_handle) in
+          Utils.debugf ~section 4 "@[<2>fun %a now has type `@[%a@]`@]"
+            (fun k->k ID.print id P.print ty');
+          let stmt = Stmt.mk_decl ~info id decl ty' ~attrs in
+          (* obtain new type declarations *)
+          let stmts' =
+            CCVector.map
+              (fun (app_id,app_ty) ->
+                Stmt.mk_decl ~info ~attrs:[] app_id decl app_ty)
+              state.new_decls
+            |> CCVector.to_list
+          in
+          CCVector.clear state.new_decls;
+          Utils.debugf ~section 3 "@[<2>new declarations:@ @[<v>%a@]@]"
+            (fun k->k (CCFormat.list ~start:"" ~stop:"" ~sep:"" PStmt.print) stmts');
+          stmts' @ [stmt]
         )
         else
           (* keep as is, not a partially applied fun *)
@@ -500,11 +515,6 @@ module Make(T : TI.S) = struct
       (fun k->k pp_arities arities);
     (* introduce application symbols and sorts *)
     let state = create_state ~env arities in
-    Utils.debug ~section 3 "introduce application symbols and handle types…";
-    let decls_app = introduce_apply_syms ~state in
-    Utils.debugf ~section 3 "@[<2>new declarations:@ @[<v>%a@]@]"
-      (fun k->k
-        (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_decl_) (ID.Map.to_seq decls_app));
     let pb' = Problem.flat_map_statements pb ~f:(elim_hof_statement ~state) in
     (* return new problem *)
     pb', state.decode
