@@ -44,10 +44,10 @@ module Make(T : TI.S) = struct
 
   (* print arity map *)
   let pp_arities out tbl =
-    let pp_pair out (id,set) = fpf out "@[%a → @[%a@]/%d@]"
-      ID.print id pp_arity_set set (List.length set.as_ty_args)
+    let pp_pair out (id,set) = fpf out "@[%a → @[%a@] over %d@]"
+      ID.print_full id pp_arity_set set (List.length set.as_ty_args)
     in
-    fpf out "@[<hv>%a@]"
+    fpf out "@[<v>%a@]"
       (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_pair)
       (ID.Map.to_seq tbl)
 
@@ -82,37 +82,64 @@ module Make(T : TI.S) = struct
     | Env.Copy_ty _ -> None
     | Env.Pred (_,_,_,_,_) -> assert false (* see {!inv} *)
 
+  (* is [v] an higher-order variable? *)
+  let var_is_ho_ v =
+    let _, args, _ = U.ty_unfold (Var.ty v) in
+    List.length args > 0
+
   (* compute set of arities for higher-order functions *)
   let compute_arities_term ~env m t =
-    let rec aux m t = match TM.repr t with
+    let m = ref m in
+    let rec aux t = match TM.repr t with
       | TMI.Const id ->
           begin match as_fun_ ~env id with
           | Some ([], _)
-          | None -> m  (* constant, just ignore *)
+          | None -> ()  (* constant, just ignore *)
           | Some (ty_args, ty_ret) ->
               (* function that is applied to 0 arguments (e.g. as a parameter) *)
-              add_arity_ m id 0 ty_args ty_ret
+              m := add_arity_ !m id 0 ty_args ty_ret
           end
+      | TMI.Var v when var_is_ho_ v ->
+          (* higher order variable *)
+          let tyvars, args, ret = U.ty_unfold (Var.ty v) in
+          assert (tyvars=[]); (* mono, see {!inv} *)
+          m := add_arity_ !m (Var.id v) 0 args ret
       | TMI.App (f, l) ->
+          assert (l<>[]);
           begin match TM.repr f with
           | TMI.Const id ->
-              let m = match as_fun_ ~env id with
+              begin match as_fun_ ~env id with
                 | Some ([],_) -> assert false
-                | None -> m (* not a function *)
+                | None -> ()   (* not a function *)
                 | Some (ty_args, ty_ret) ->
                     assert (List.length ty_args >= List.length l);
-                    add_arity_ m id (List.length l) ty_args ty_ret
-              in
+                    m := add_arity_ !m id (List.length l) ty_args ty_ret
+              end;
               (* explore subterms *)
-              List.fold_left aux m l
-          | _ -> aux_rec m t
+              List.iter aux l
+          | TMI.Var v ->
+              assert (var_is_ho_ v);
+              (* higher order variable applied to [l] *)
+              let tyvars, args, ret = U.ty_unfold (Var.ty v) in
+              assert (tyvars=[]); (* mono, see {!inv} *)
+              assert (List.length args >= List.length l);
+              m := add_arity_ !m (Var.id v) (List.length l) args ret
+          | _ -> aux_rec t
           end
-      | _ -> aux_rec m t
+      | _ -> aux_rec t
     (* recurse *)
-    and aux_rec m t =
-      U.fold m () t ~f:(fun m () t -> aux m t) ~bind:(fun () _v -> ())
+    and aux_rec t =
+      U.iter () t
+        ~f:(fun () t -> aux t)
+        ~bind:(fun () v ->
+          if var_is_ho_ v then (
+            (* higher order variable always has arity 0 *)
+            let _, args, ret = U.ty_unfold (Var.ty v) in
+            m := add_arity_ !m (Var.id v) 0 args ret
+          ))
     in
-    aux m t
+    aux t;
+    !m
 
   let compute_arities_stmt ~env m stmt =
     let f = compute_arities_term ~env in
@@ -225,13 +252,13 @@ module Make(T : TI.S) = struct
     env: (term, ty, 'a inv) Env.t;
       (* environment (to get signatures, etc.) *)
     arities: arity_set ID.Map.t;
-      (* set of arities for partially applied symbols *)
+      (* set of arities for partially applied symbols/variables *)
     mutable app_count: int;
       (* used for generating new names *)
     mutable app_symbols: apply_fun HandleMap.t;
       (* handle type -> corresponding apply symbol *)
     mutable fun_encodings: fun_encoding ID.Map.t;
-      (* partially applied function -> how to encode it *)
+      (* partially applied function/variable -> how to encode it *)
     mutable new_decls : (ID.t * ty) CCVector.vector;
       (* used for new declarations *)
     decode: decode_state;
@@ -340,13 +367,14 @@ module Make(T : TI.S) = struct
     let pp_pair out (a,b) = fpf out "@[(%a, remaining %a)@]" pp_tys a pp_tys b in
     fpf out "[@[%a@]]" CCFormat.(list ~start:"" ~stop:"" pp_pair)
 
+  (* TODO: also add extnsionality axioms and projection functions *)
+
   (* introduce/get required app symbols for the given ID
      and store data structure that maps [arity -> sequence of apply symbs to use].
      @return the fun encoding for ID *)
   let introduce_apply_syms ~state id =
     let {as_set=set; as_ty_args=ty_args; as_ty_ret=ty_ret; _} =
-      try ID.Map.find id state.arities
-      with Not_found -> assert false
+      ID.Map.find id state.arities
     in
     let l = IntSet.to_list set in
     let n = List.length ty_args in
@@ -412,6 +440,11 @@ module Make(T : TI.S) = struct
     state.fun_encodings <- ID.Map.add id fe state.fun_encodings;
     fe
 
+  (* obtain or compute the fun encoding for [id] *)
+  let fun_encoding_for ~state id =
+    try ID.Map.find id state.fun_encodings
+    with Not_found -> introduce_apply_syms ~state id
+
   (* apply the list of apply_fun to [l]. Arities should match. *)
   let rec apply_app_funs_ stack l =
     Utils.debugf ~section 5 "@[<2>apply_stack@ @[%a@]@ to @[%a@]@]"
@@ -437,14 +470,21 @@ module Make(T : TI.S) = struct
       | TI.TyArrow _ -> aux_ty subst t (* type: encode it *)
       | TI.App (f,l) ->
           begin match T.repr f with
-          | TI.Const id when ID.Map.mem id state.fun_encodings ->
+          | TI.Const id when ID.Map.mem id state.arities ->
               let l = List.map (aux subst) l in
               (* replace by applications symbols, based on [length l] *)
               let n = List.length l in
-              let fun_encoding = ID.Map.find id state.fun_encodings in
+              let fun_encoding = fun_encoding_for ~state id in
               (* stack of application functions to use *)
               let app_l = IntMap.find n fun_encoding.fe_stack in
               apply_app_funs_ app_l (f::l)
+          | TI.Var v when ID.Map.mem (Var.id v) state.arities ->
+              let l = List.map (aux subst) l in
+              let f' = U.var (Var.Subst.find_exn ~subst v) in
+              let fun_encoding = fun_encoding_for ~state (Var.id v) in
+              let n = List.length l in
+              let app_l = IntMap.find n fun_encoding.fe_stack in
+              apply_app_funs_ app_l (f' :: l)
           | _ -> aux' subst t
           end
       | TI.Bind _
@@ -471,7 +511,7 @@ module Make(T : TI.S) = struct
     let info = Stmt.info stmt in
     let tr_term = elim_hof_term ~state in
     let tr_type = encode_ty_ ~state in
-    match Stmt.view stmt with
+    let stmt' = match Stmt.view stmt with
     | Stmt.Decl (id,decl,ty,attrs) ->
         if ID.Map.mem id state.arities
         then (
@@ -484,18 +524,7 @@ module Make(T : TI.S) = struct
           Utils.debugf ~section 4 "@[<2>fun %a now has type `@[%a@]`@]"
             (fun k->k ID.print id P.print ty');
           let stmt = Stmt.mk_decl ~info id decl ty' ~attrs in
-          (* obtain new type declarations *)
-          let stmts' =
-            CCVector.map
-              (fun (app_id,app_ty) ->
-                Stmt.mk_decl ~info ~attrs:[] app_id decl app_ty)
-              state.new_decls
-            |> CCVector.to_list
-          in
-          CCVector.clear state.new_decls;
-          Utils.debugf ~section 3 "@[<2>new declarations:@ @[<v>%a@]@]"
-            (fun k->k (CCFormat.list ~start:"" ~stop:"" ~sep:"" PStmt.print) stmts');
-          stmts' @ [stmt]
+          [stmt]
         )
         else
           (* keep as is, not a partially applied fun *)
@@ -506,6 +535,25 @@ module Make(T : TI.S) = struct
     | Stmt.Copy _
     | Stmt.Goal _ ->
         [Stmt.map ~term:tr_term ~ty:tr_type stmt] (* TODO *)
+    in
+    (* obtain new type declarations *)
+    let new_stmts =
+      CCVector.map
+        (fun (app_id,app_ty) ->
+          let decl =
+            if U.ty_returns_Prop app_ty then Stmt.Decl_prop
+            else if U.ty_returns_Type app_ty then Stmt.Decl_type
+            else Stmt.Decl_fun
+          in
+          Stmt.mk_decl ~info ~attrs:[] app_id decl app_ty)
+        state.new_decls
+      |> CCVector.to_list
+    in
+    CCVector.clear state.new_decls;
+    if new_stmts<>[]
+    then Utils.debugf ~section 3 "@[<2>new declarations:@ @[<v>%a@]@]"
+      (fun k->k (CCFormat.list ~start:"" ~stop:"" ~sep:"" PStmt.print) new_stmts);
+    new_stmts @ stmt'
 
   let elim_hof pb =
     let env = Problem.env pb in
