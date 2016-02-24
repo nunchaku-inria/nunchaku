@@ -22,6 +22,7 @@ Library "nunchaku_core"
                     UntypedAST, Model, TypeUnify, Problem, FO, Reduce,
                     Solver_intf, Env, Signature, Statement,
                     Scheduling, CVC4, Polarity, Traversal, ProblemMetadata,
+                    TyCardinality,
                     terms/TermInner,
                     terms/TermTyped,
                     terms/TermPoly,
@@ -44,7 +45,7 @@ Library "nunchaku_core"
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.sexp, containers.iter,
-                    containers.data, sequence, unix, threads
+                    containers.data, sequence, unix, threads, zarith
 
 Library "nunchaku_parsers"
   Path:             src/parsers/
