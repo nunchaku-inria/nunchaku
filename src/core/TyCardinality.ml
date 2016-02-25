@@ -14,6 +14,7 @@ let error_ msg = raise (Error msg)
 let errorf_ msg = CCFormat.ksprintf msg ~f:error_
 
 let fpf = Format.fprintf
+let section = Utils.Section.make "ty_cardinality"
 
 let () = Printexc.register_printer
   (function
@@ -225,22 +226,25 @@ module Make(T : TI.S) = struct
 
   (* compute fixpoint of [eqns] and returns a map [lhs --> card] *)
   let fixpoint_ eqns =
-    Format.printf "@[<2>fix@ equations %a@]@." pp_equations eqns;
+    Utils.debugf ~section 5 "@[<2>fix@ equations %a@]@."
+      (fun k->k pp_equations eqns);
     let rec aux m =
       let m' =
         ID.Map.map
           (fun rhs -> Expr.eval m rhs)
           eqns.rhs
       in
-      Format.printf "@[<2>values @[%a@]@]@." (ID.Map.print ID.print Card.print) m';
+      Utils.debugf ~section 5 "@[<2>values @[%a@]@]@."
+        (fun k->k (ID.Map.print ID.print Card.print) m');
       if ID.Map.equal Card.equal m m' then m (* reached fixpoint *)
       else aux m'
     in
-    Format.printf "@[<2>values @[%a@]@]@." (ID.Map.print ID.print Card.print) eqns.cur;
+    Utils.debugf ~section 5 "@[<2>values @[%a@]@]@."
+      (fun k->k (ID.Map.print ID.print Card.print) eqns.cur);
     aux eqns.cur
 
   let solve_ cache eqns =
-    Utils.debugf 4 "@[<2>equations:@ @[%a@]@]"
+    Utils.debugf ~section 4 "@[<2>equations:@ @[%a@]@]"
       (fun k->k pp_equations eqns);
     let subst = fixpoint_ eqns in
     (* add to cache *)
