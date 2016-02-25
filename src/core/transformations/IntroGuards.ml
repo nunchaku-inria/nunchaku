@@ -299,7 +299,7 @@ end = struct
     let on_encoded = if print
       then
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after introduction of guards: %a@]@." PPb.print]
+        [Format.printf "@[<v2>@{<Yellow>after introduction of guards@}: %a@]@." PPb.print]
       else []
     in
     Transform.make1

@@ -85,7 +85,7 @@ module Make(T : TI.S) = struct
     let on_encoded = if print
       then
         let module Ppb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after elimination of copy types:@ %a@]@." Ppb.print]
+        [Format.printf "@[<v2>@{<Yellow>after elimination of copy types@}:@ %a@]@." Ppb.print]
       else []
     in
     Transform.make1

@@ -279,7 +279,7 @@ module Make(T : TI.S)
     let on_encoded = if print
       then
         let module Ppb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after Skolemization: %a@]@." Ppb.print]
+        [Format.printf "@[<v2>@{<Yellow>after Skolemization@}: %a@]@." Ppb.print]
       else []
     in
     Transform.make1

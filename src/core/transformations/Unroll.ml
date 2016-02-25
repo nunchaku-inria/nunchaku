@@ -346,7 +346,7 @@ module Make(T : TI.S) = struct
     let on_encoded = if print
       then
         let module Ppb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after unrolling:@ %a@]@." Ppb.print]
+        [Format.printf "@[<v2>@{<Yellow>after unrolling@}:@ %a@]@." Ppb.print]
       else []
     in
     Transform.make1

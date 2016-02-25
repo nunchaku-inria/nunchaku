@@ -361,7 +361,7 @@ module Make(T : TI.S) = struct
     let on_encoded = if print
       then
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after uniq equations: %a@]@." PPb.print]
+        [Format.printf "@[<v2>@{<Yellow>after uniq equations@}: %a@]@." PPb.print]
       else []
     and decode _ x = decode x in
     Transform.make1

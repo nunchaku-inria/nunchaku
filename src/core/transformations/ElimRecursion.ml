@@ -18,11 +18,12 @@ type inv1 = <ty:[`Mono]; eqn:[`Single]; ind_preds:[`Absent]>
 type inv2 = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
 
 exception Attr_abs_type of ID.t
-(** The annotated ID is an abstraction type (handle) for the given function symbol *)
 
 exception Attr_abs_projection of ID.t * int
-(** [Attr_abs_projection (handle, n)]
-    The annotated ID is the n-th projection from the given handle ID *)
+
+exception Attr_app_val
+
+exception Attr_proto_val of ID.t * int
 
 let fpf = Format.fprintf
 let spf = CCFormat.sprintf
@@ -31,6 +32,8 @@ let () = Printexc.register_printer
   (function
     | Attr_abs_type fun_id -> Some (spf "abs_type_of %a" ID.print fun_id)
     | Attr_abs_projection (ty_id,i) -> Some (spf "abs_proj_%d %a" i ID.print ty_id)
+    | Attr_app_val -> Some "app_symbol"
+    | Attr_proto_val (id, n) -> Some (spf "proto_%d_of_%a" n ID.print id)
     | _ -> None)
 
 module Make(T : TI.S) = struct
@@ -573,7 +576,7 @@ module Make(T : TI.S) = struct
     let on_encoded = if print
       then
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after elimination of recursion: %a@]@." PPb.print]
+        [Format.printf "@[<v2>@{<Yellow>after elimination of recursion@}: %a@]@." PPb.print]
       else []
     in
     Transform.make1
