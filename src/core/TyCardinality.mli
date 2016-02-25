@@ -37,14 +37,19 @@ module Make(T : TI.S) : sig
   type ('a, 'inv) env = ('a, ty, 'inv) Env.t constraint 'inv = <ty:[`Mono]; ..>
   (** We only consider monomorphic types *)
 
-  val cardinality_ty_id : (_, _) env -> ID.t -> Card.t
+  type cache
+  (** Cache for memoizing cardinality computations *)
+
+  val create_cache : unit -> cache
+
+  val cardinality_ty_id : ?cache:cache -> (_, _) env -> ID.t -> Card.t
   (** [cardinality id] computes the cardinality of the type
       named [id].
       @raise Error if [id] is not a valid type in [env]
       @raise Polymorphic if the type is polymorphic,
         or depends on polymorphic types *)
 
-  val cardinality_ty : (_, _) env -> ty -> Card.t
+  val cardinality_ty : ?cache:cache -> (_, _) env -> ty -> Card.t
   (** Same as {!cardinality_ty_id} but takes a type as argument. The
       type must be a symbol or the application of a symbol to arguments.
       @raise Error if [id] is not a valid type in [env]
