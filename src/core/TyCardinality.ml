@@ -112,10 +112,12 @@ module Expr = struct
     | (Const z, _ | _, Const z) when Card.is_zero z -> const Card.zero
     | (Const (Card.Bounded x), e
     | e, Const (Card.Bounded x)) when Z.equal x Z.one -> e
+    | (Const (Card.UnknownGEQ x), _
+    | _, Const (Card.UnknownGEQ x)) when Z.equal x Z.zero ->
+        const Card.unknown_zero (* [0,+∞]×_ = [0,+∞] *)
     | Const Card.Infinite, _
     | _, Const Card.Infinite ->
-        (* XXX: here we favor infinite over unknown, meaning there
-           is no empty uninterpreted type (i.e. unknown still > 0) *)
+        (* XXX: the cases 0 and [0,+∞] have been eliminated *)
         const Card.infinite
     | _ -> Mult (a,b)
 
