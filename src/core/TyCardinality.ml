@@ -26,54 +26,57 @@ let () = Printexc.register_printer
 module Card = struct
   type t =
     | Bounded of Z.t
-    | Unknown
+    | UnknownGEQ of Z.t (** unknown, but ≥ 0 *)
     | Infinite
 
   let (+) a b = match a, b with
-    | Unknown, (Unknown | Bounded _)
-    | Bounded _, Unknown -> Unknown
+    | UnknownGEQ a, (UnknownGEQ b | Bounded b)
+    | Bounded a, UnknownGEQ b -> UnknownGEQ Z.(a+b)
     | Bounded a, Bounded b -> Bounded Z.(a+b)
     | Infinite, _
     | _, Infinite -> Infinite (* even infinite+unknown = infinite *)
 
   let zero = Bounded Z.zero
 
-  let ( * ) a b = match a, b with
-    | Bounded x, _
-    | _, Bounded x when Z.sign x = 0 -> zero (* absorption by 0 *)
-    | Infinite, _
-    | _, Infinite ->
-        (* XXX we assume uninterpreted types are not empty, therefore
-           ∞ × unknown = ∞ *)
-        Infinite
-    | Bounded a, Bounded b -> Bounded Z.(a*b)
-    | Unknown, _
-    | _, Unknown -> Unknown  (* absorbs bounded *)
-
   let one = Bounded Z.one
   let of_int i = Bounded (Z.of_int i)
   let of_z i = Bounded i
-  let unknown = Unknown
+  let unknown_geq n = UnknownGEQ n
+  let unknown_zero = UnknownGEQ Z.zero
+  let unknown_nonzero = UnknownGEQ Z.one
   let infinite = Infinite
   let is_zero = function Bounded z -> Z.sign z = 0 | _ -> false
 
+  let ( * ) a b = match a, b with
+    | Bounded x, _
+    | _, Bounded x when Z.sign x = 0 -> zero (* absorption by 0 *)
+    | (UnknownGEQ z, _ | _, UnknownGEQ z) when Z.sign z = 0 ->
+        unknown_zero (* [0,∞] *)
+    | Infinite, _
+    | _, Infinite ->
+        (* we know the other param is not 0 and does not contain 0 *)
+        Infinite
+    | Bounded a, Bounded b -> Bounded Z.(a*b)
+    | UnknownGEQ a, (Bounded b | UnknownGEQ b)
+    | Bounded a, UnknownGEQ b -> UnknownGEQ Z.(a * b)  (* absorbs bounded *)
+
   let equal a b = match a, b with
+    | UnknownGEQ a, UnknownGEQ b
     | Bounded a, Bounded b -> Z.equal a b
-    | Unknown, _
-    | _, Unknown -> true (* heh. *)
     | Infinite, Infinite -> true
-    | Infinite, Bounded _
-    | Bounded _, Infinite -> false
+    | Infinite, _
+    | UnknownGEQ _, _
+    | Bounded _, _ -> false
 
   let hash = function
     | Bounded x -> Z.hash x
-    | Unknown -> 13
+    | UnknownGEQ z -> Hashtbl.hash (13, Z.hash z)
     | Infinite -> 17
   let hash_fun x = CCHash.int (hash x)
 
   let print out = function
     | Bounded x -> Z.pp_print out x
-    | Unknown -> CCFormat.string out "<unknown>"
+    | UnknownGEQ z -> Format.fprintf out "[%a,∞]" Z.pp_print z
     | Infinite -> CCFormat.string out "ω"
 end
 
@@ -92,8 +95,6 @@ module Expr = struct
     | Plus (a,b) -> Card.(eval subst a + eval subst b)
     | Mult (a,b) -> Card.(eval subst a * eval subst b)
 
-  let unknown = Const Card.unknown
-  let infinite = Const Card.infinite
   let const n = Const n
   let zero = const Card.zero
   let one = const Card.one
@@ -208,10 +209,12 @@ module Make(T : TI.S) = struct
               Expr.var id
           | Env.Copy_ty c ->
               begin match c.Stmt.copy_pred with
-              | Some _ -> Expr.unknown (* restriction of size? *)
+              | Some _ -> Expr.const Card.unknown_zero (* restriction of size? *)
               | None -> card_of_ty_ cache env eqns c.Stmt.copy_of (* cardinality of definition *)
               end
-          | Env.NoDef -> Expr.unknown
+          | Env.NoDef ->
+              (* TODO: check attributes *)
+              Expr.const Card.unknown_nonzero
           | Env.Cstor _
           | Env.Fun_def (_,_,_)
           | Env.Fun_spec (_,_)

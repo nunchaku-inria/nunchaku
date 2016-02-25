@@ -13,7 +13,7 @@ exception Polymorphic
 module Card : sig
   type t =
     | Bounded of Z.t
-    | Unknown
+    | UnknownGEQ of Z.t (** unknown, but ≥ 0 *)
     | Infinite
 
   val (+) : t -> t -> t
@@ -24,7 +24,9 @@ module Card : sig
   val of_z : Z.t -> t
 
   val infinite : t
-  val unknown : t
+  val unknown_geq : Z.t -> t
+  val unknown_zero : t (** anything ≥ 0 *)
+  val unknown_nonzero : t (** ≥ 1 *)
 
   include Intf.EQ with type t := t
   include Intf.HASH with type t := t
