@@ -21,6 +21,8 @@ exception Attr_abs_type of ID.t
 
 exception Attr_abs_projection of ID.t * int
 
+exception Attr_is_handle_cstor
+
 exception Attr_app_val
 
 exception Attr_proto_val of ID.t * int
@@ -33,6 +35,7 @@ let () = Printexc.register_printer
     | Attr_abs_type fun_id -> Some (spf "abs_type_of %a" ID.print fun_id)
     | Attr_abs_projection (ty_id,i) -> Some (spf "abs_proj_%d %a" i ID.print ty_id)
     | Attr_app_val -> Some "app_symbol"
+    | Attr_is_handle_cstor -> Some "handle_type"
     | Attr_proto_val (id, n) -> Some (spf "proto_%d_of_%a" n ID.print id)
     | _ -> None)
 

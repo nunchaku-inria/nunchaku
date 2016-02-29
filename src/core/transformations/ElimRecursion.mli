@@ -19,6 +19,10 @@ exception Attr_abs_projection of ID.t * int
 (** [Attr_abs_projection (handle, n)]
     The annotated ID is the n-th projection from the given handle ID *)
 
+exception Attr_is_handle_cstor
+(** [Attr_is_handle_cstor] means that the ID is the binary type symbol
+    that represents arrows for partially applied functions *)
+
 exception Attr_app_val
 (** [Attr_app_val] means that the ID being defined is an "application function"
     that is used to encode HO partial application into regular FO total

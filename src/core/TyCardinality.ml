@@ -228,7 +228,10 @@ module Make(T : TI.S) = struct
     in
     (* maybe cache *)
     begin match op with
-      | Save -> save_ cache (U.ty_const id) res
+      | Save ->
+          Utils.debugf ~section 5 "@[<2>card `@[%a@]` =@ %a@]"
+            (fun k->k ID.print id Card.print res);
+          save_ cache (U.ty_const id) res
       | Do_not_save -> ()
     end;
     res

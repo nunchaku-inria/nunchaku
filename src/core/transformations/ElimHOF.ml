@@ -277,8 +277,8 @@ module Make(T : TI.S) = struct
       (* handle type -> corresponding apply symbol *)
     mutable fun_encodings: fun_encoding ID.Map.t;
       (* partially applied function/variable -> how to encode it *)
-    mutable new_decls : (ID.t * ty) CCVector.vector;
-      (* used for new declarations *)
+    mutable new_decls : (ID.t * ty * Stmt.decl_attr list) CCVector.vector;
+      (* used for new declarations. [id, type, attribute list] *)
     decode: decode_state;
       (* bookkeeping for, later, decoding *)
   }
@@ -320,7 +320,8 @@ module Make(T : TI.S) = struct
         state.decode.dst_handle_id <- Some id;
         let ty_id = U.ty_arrow_l [U.ty_type; U.ty_type] U.ty_type in
         (* declare the symbol [to : type -> type -> type] *)
-        CCVector.push state.new_decls (id, ty_id);
+        let attrs = [Stmt.Decl_attr_exn ElimRecursion.Attr_is_handle_cstor] in
+        CCVector.push state.new_decls (id, ty_id, attrs);
         id
 
   (* encode a type parameter so it becomes first-order (replace [->] with [to]) *)
@@ -361,7 +362,8 @@ module Make(T : TI.S) = struct
       let ty_app = U.ty_arrow_l args (ty_of_handle_ ~state ret) in
       Utils.debugf ~section 5 "@[<2>declare app_sym `@[%a :@ @[%a@]@]@]`"
         (fun k->k ID.print app_id P.print ty_app);
-      CCVector.push state.new_decls (app_id, ty_app);
+      let attrs = [Stmt.Decl_attr_exn ElimRecursion.Attr_app_val] in
+      CCVector.push state.new_decls (app_id, ty_app, attrs);
       let app_fun = {
         af_id=app_id;
         af_ty=ty_app;
@@ -580,13 +582,13 @@ module Make(T : TI.S) = struct
     (* obtain new type declarations *)
     let new_stmts =
       CCVector.map
-        (fun (app_id,app_ty) ->
+        (fun (app_id,app_ty,attrs) ->
           let decl =
             if U.ty_returns_Prop app_ty then Stmt.Decl_prop
             else if U.ty_returns_Type app_ty then Stmt.Decl_type
             else Stmt.Decl_fun
           in
-          Stmt.mk_decl ~info ~attrs:[] app_id decl app_ty)
+          Stmt.mk_decl ~info ~attrs app_id decl app_ty)
         state.new_decls
       |> CCVector.to_list
     in
