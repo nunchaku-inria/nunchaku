@@ -121,7 +121,9 @@ let options =
   ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
+  ; "-i", Arg.String set_input_, " synonym for --input"
   ; "--output", Arg.String set_output_, " set output format " ^ list_outputs_ ()
+  ; "-o", Arg.String set_output_, " synonym for --output"
   ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
   ; "--version", Arg.Set version_, " print version and exit"
   ]
