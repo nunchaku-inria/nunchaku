@@ -582,6 +582,26 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
     | [] -> ()
     | l -> fpf out "@ [@[%a@]]" (pplist ~sep:"," pp_attr) l
 
+  let print_tydef out tydef =
+    let ppcstors out c =
+      fpf out "@[<hv2>%a %a@]"
+        ID.print c.cstor_name (pplist ~sep:" " Pty.print_in_app) c.cstor_args in
+    fpf out "@[<hv2>@[%a %a@] :=@ @[<hv>%a@]@]"
+      ID.print tydef.ty_id
+      (pplist ~sep:" " Var.print_full) tydef.ty_vars
+      (pplist_prefix ~first:" | " ~pre:" | " ppcstors)
+        (ID.Map.to_list tydef.ty_cstors |> List.map snd)
+
+  let print_tydefs out (k,l) =
+    fpf out "@[<hv2>%s@ "
+      (match k with `Data -> "data" | `Codata -> "codata");
+    List.iteri
+      (fun i tydef ->
+        if i>0 then fpf out "@,and ";
+        print_tydef out tydef)
+      l;
+    fpf out ".@]"
+
   let print out t = match t.view with
   | Decl (id,_,t,attrs) ->
       fpf out "@[<2>val %a@ : %a%a.@]" ID.print id Pty.print t pp_attrs attrs
@@ -596,25 +616,7 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
       let pp_wf out = function `Wf -> fpf out "[wf]" | `Not_wf -> () in
       let pp_k out = function `Pred -> fpf out "pred" | `Copred -> fpf out "copred" in
       fpf out "@[<hv>%a%a %a.@]" pp_k k pp_wf wf print_pred_defs l
-  | TyDef (k, l) ->
-      let ppcstors out c =
-        fpf out "@[<hv2>%a %a@]"
-          ID.print c.cstor_name (pplist ~sep:" " Pty.print_in_app) c.cstor_args in
-      let print_def out tydef =
-        fpf out "@[<hv2>@[%a %a@] :=@ @[<hv>%a@]@]"
-          ID.print tydef.ty_id
-          (pplist ~sep:" " Var.print_full) tydef.ty_vars
-          (pplist_prefix ~first:" | " ~pre:" | " ppcstors)
-            (ID.Map.to_list tydef.ty_cstors |> List.map snd)
-      in
-      fpf out "@[<hv2>%s@ "
-        (match k with `Data -> "data" | `Codata -> "codata");
-      List.iteri
-        (fun i tydef ->
-          if i>0 then fpf out "@,and ";
-          print_def out tydef
-        ) l;
-      fpf out ".@]"
+  | TyDef (k, l) -> print_tydefs out (k,l)
   | Copy c -> fpf out "@[<2>%a.@]" print_copy c
   | Goal t -> fpf out "@[<2>goal %a.@]" Pt.print t
 end

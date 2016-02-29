@@ -324,6 +324,8 @@ module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
   val print_pred_defs : (Pt.t, Pty.t, _) pred_def list printer
   val print_rec_def : (Pt.t, Pty.t, _) rec_def printer
   val print_rec_defs : (Pt.t, Pty.t, _) rec_def list printer
+  val print_tydef : Pty.t tydef printer
+  val print_tydefs : ([`Data | `Codata] * Pty.t tydef list) printer
   val print_copy : (Pt.t, Pty.t) copy printer
   val print : (Pt.t, Pty.t, _) t printer
 end
