@@ -562,6 +562,13 @@ module Make(T : TI.S) = struct
           (fun out (id,tup) ->
             Format.fprintf out "@[<h>%a (%a)@]" ID.print id ArgTuple.print tup))
 
+  (* some sanity checks on statements *)
+  let check_defs_ pb =
+    let module TyCard = TyCardinality.Make(T) in
+    let env = Problem.env pb in
+    let cache = TyCard.create_cache() in
+    Problem.iter_statements pb ~f:(TyCard.check_non_zero ~cache env)
+
   let monomorphize ?(depth_limit=256) pb =
     (* create the state used for monomorphization. Toplevel function
       for specializing (id,tup) is [mono_statements_for_id] *)
@@ -580,6 +587,7 @@ module Make(T : TI.S) = struct
     (* some debug *)
     Utils.debugf ~section 3 "@[<2>instances:@ @[%a@]@]"
       (fun k-> k print_tbl_ traverse#processed);
+    check_defs_ pb';
     pb', traverse#decode_state
 
   (** {6 Decoding} *)
