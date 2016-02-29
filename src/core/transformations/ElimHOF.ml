@@ -277,7 +277,7 @@ module Make(T : TI.S) = struct
       (* handle type -> corresponding apply symbol *)
     mutable fun_encodings: fun_encoding ID.Map.t;
       (* partially applied function/variable -> how to encode it *)
-    mutable new_decls : (ID.t * ty * Stmt.decl_attr list) CCVector.vector;
+    mutable new_stmts : (term, ty, 'a inv) Stmt.t CCVector.vector;
       (* used for new declarations. [id, type, attribute list] *)
     decode: decode_state;
       (* bookkeeping for, later, decoding *)
@@ -299,7 +299,7 @@ module Make(T : TI.S) = struct
     app_count=0;
     app_symbols=HandleMap.empty;
     fun_encodings=ID.Map.empty;
-    new_decls=CCVector.create();
+    new_stmts=CCVector.create();
     decode={
       dst_app_symbols=ID.Tbl.create 16;
       dst_handle_id=None;
@@ -307,11 +307,6 @@ module Make(T : TI.S) = struct
   }
 
   (** {2 Encoding} *)
-
-  (* TODO: afterwards: for each handle, find/introduce the corresponding
-     application symbol, and add the extensionality axiom
-
-     TODO: also proto symbol to express proto axiom *)
 
   let get_handle_id_ ~state = match state.decode.dst_handle_id with
     | Some i -> i
@@ -321,7 +316,8 @@ module Make(T : TI.S) = struct
         let ty_id = U.ty_arrow_l [U.ty_type; U.ty_type] U.ty_type in
         (* declare the symbol [to : type -> type -> type] *)
         let attrs = [Stmt.Decl_attr_exn ElimRecursion.Attr_is_handle_cstor] in
-        CCVector.push state.new_decls (id, ty_id, attrs);
+        let stmt = Stmt.mk_decl ~info:Stmt.info_default ~attrs id Stmt.Decl_type ty_id in
+        CCVector.push state.new_stmts stmt;
         id
 
   (* encode a type parameter so it becomes first-order (replace [->] with [to]) *)
@@ -351,6 +347,34 @@ module Make(T : TI.S) = struct
 
   let pp_decl_ out (id,ty) = fpf out "@[<2>%a :@ %a@]" ID.print id P.print ty
 
+  (* given an application function, generate the corresponding extensionality
+     axiom: `forall f g. (f = g or exists x. f x != g x)` *)
+  let extensionality_for_app_ app_fun : (_,_,_) Stmt.t =
+    let app_id = app_fun.af_id in
+    let _, args, _ = U.ty_unfold app_fun.af_ty in
+    match args with
+    | [] -> assert false
+    | handle :: args' ->
+        (* handle: the actual function type;
+           args': the actual arguments *)
+        let f = Var.make ~ty:handle ~name:"f" in
+        let g = Var.make ~ty:handle ~name:"g" in
+        let vars =
+          List.mapi
+            (fun i ty -> Var.make ~ty ~name:("x_" ^ string_of_int i)) args'
+        in
+        let app_to_vars_ f l = U.app f (List.map U.var l) in
+        let t1 = app_to_vars_ (U.const app_id) (f :: vars) in
+        let t2 = app_to_vars_ (U.const app_id) (g :: vars) in
+        let form =
+          U.forall_l [f;g]
+            (U.or_
+              [ U.eq (U.var f) (U.var g)
+              ; U.exists_l vars (U.neq t1 t2)
+              ])
+        in
+        Stmt.axiom1 ~info:Stmt.info_default form
+
   (* handle -> application symbol for this handle *)
   let app_of_handle_ ~state args ret : apply_fun =
     let h = handle_arrow_l args ret in
@@ -362,14 +386,25 @@ module Make(T : TI.S) = struct
       let ty_app = U.ty_arrow_l args (ty_of_handle_ ~state ret) in
       Utils.debugf ~section 5 "@[<2>declare app_sym `@[%a :@ @[%a@]@]@]`"
         (fun k->k ID.print app_id P.print ty_app);
-      let attrs = [Stmt.Decl_attr_exn ElimRecursion.Attr_app_val] in
-      CCVector.push state.new_decls (app_id, ty_app, attrs);
+      (* save application symbol in [app_symbols] *)
       let app_fun = {
         af_id=app_id;
         af_ty=ty_app;
         af_arity=List.length args;
       } in
       state.app_symbols <- HandleMap.add h app_fun state.app_symbols;
+      (* push declaration of [app_fun] and extensionality axiom *)
+      let attrs = [Stmt.Decl_attr_exn ElimRecursion.Attr_app_val] in
+      let stmt =
+        let decl =
+          if U.ty_returns_Prop ty_app then Stmt.Decl_prop
+          else if U.ty_returns_Type ty_app then Stmt.Decl_type
+          else Stmt.Decl_fun
+        in
+        Stmt.mk_decl ~info:Stmt.info_default ~attrs app_id decl ty_app
+      in
+      CCVector.push state.new_stmts stmt;
+      CCVector.push state.new_stmts (extensionality_for_app_ app_fun);
       app_fun
 
   (* split [l] into chunks of length given by elements of [lens] minus the
@@ -386,8 +421,6 @@ module Make(T : TI.S) = struct
     let pp_tys out = fpf out "@[%a@]" CCFormat.(list P.print) in
     let pp_pair out (a,b) = fpf out "@[(%a, remaining %a)@]" pp_tys a pp_tys b in
     fpf out "[@[%a@]]" CCFormat.(list ~start:"" ~stop:"" pp_pair)
-
-  (* TODO: also add extnsionality axioms and projection functions *)
 
   (* introduce/get required app symbols for the given ID
      and store data structure that maps [arity -> sequence of apply symbs to use].
@@ -579,20 +612,9 @@ module Make(T : TI.S) = struct
         in
         [stmt']
     in
-    (* obtain new type declarations *)
-    let new_stmts =
-      CCVector.map
-        (fun (app_id,app_ty,attrs) ->
-          let decl =
-            if U.ty_returns_Prop app_ty then Stmt.Decl_prop
-            else if U.ty_returns_Type app_ty then Stmt.Decl_type
-            else Stmt.Decl_fun
-          in
-          Stmt.mk_decl ~info ~attrs app_id decl app_ty)
-        state.new_decls
-      |> CCVector.to_list
-    in
-    CCVector.clear state.new_decls;
+    (* obtain new type declarations, new axioms, etc. *)
+    let new_stmts = state.new_stmts |> CCVector.to_list in
+    CCVector.clear state.new_stmts;
     if new_stmts<>[]
     then Utils.debugf ~section 3 "@[<2>new declarations:@ @[<v>%a@]@]"
       (fun k->k (CCFormat.list ~start:"" ~stop:"" ~sep:"" PStmt.print) new_stmts);

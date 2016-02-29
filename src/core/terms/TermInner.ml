@@ -605,6 +605,7 @@ module type UTIL = sig
   val exists : t_ var -> t_ -> t_
 
   val eq : t_ -> t_ -> t_
+  val neq : t_ -> t_ -> t_
   val equiv : t_ -> t_ -> t_
   val imply : t_ -> t_ -> t_
   val true_ : t_
@@ -869,6 +870,7 @@ module Util(T : S)
   and imply a b = app_builtin `Imply [a;b]
 
   let eq a b = builtin (`Eq (a,b))
+  let neq a b = not_ (eq a b)
   let equiv a b = builtin (`Equiv (a,b))
   let ite a b c = app_builtin (`Ite (a,b,c)) []
 
