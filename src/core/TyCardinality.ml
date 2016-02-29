@@ -10,6 +10,8 @@ exception Error of string
 
 exception Polymorphic
 
+exception EmptyData of ID.t
+
 let error_ msg = raise (Error msg)
 let errorf_ msg = CCFormat.ksprintf msg ~f:error_
 
@@ -20,251 +22,230 @@ let () = Printexc.register_printer
   (function
     | Error msg -> Some (Utils.err_sprintf "ty cardinality: %s" msg)
     | Polymorphic -> Some (Utils.err_sprintf "type is polymorphic")
+    | EmptyData id -> Some (Utils.err_sprintf "data %a is empty" ID.print id)
     | _ -> None)
 
 (** Approximation of a cardinal, including infinite cardinals *)
 module Card = struct
   type t =
-    | Bounded of Z.t
-    | UnknownGEQ of Z.t (** unknown, but ≥ 0 *)
+    | Exact of Z.t
+
+    | QuasiFiniteGEQ of Z.t
+        (** unknown, but ≥ 0. If all uninterpreted types are finite, then
+            this is finite too *)
+
     | Infinite
 
+    | Unknown
+        (** Any value, we do not know *)
+
   let (+) a b = match a, b with
-    | UnknownGEQ a, (UnknownGEQ b | Bounded b)
-    | Bounded a, UnknownGEQ b -> UnknownGEQ Z.(a+b)
-    | Bounded a, Bounded b -> Bounded Z.(a+b)
+    | Unknown, _
+    | _, Unknown -> Unknown
+    | QuasiFiniteGEQ a, (QuasiFiniteGEQ b | Exact b)
+    | Exact a, QuasiFiniteGEQ b -> QuasiFiniteGEQ Z.(a+b)
+    | Exact a, Exact b -> Exact Z.(a+b)
     | Infinite, _
     | _, Infinite -> Infinite (* even infinite+unknown = infinite *)
 
-  let zero = Bounded Z.zero
+  let zero = Exact Z.zero
 
-  let one = Bounded Z.one
-  let of_int i = Bounded (Z.of_int i)
-  let of_z i = Bounded i
-  let unknown_geq n = UnknownGEQ n
-  let unknown_zero = UnknownGEQ Z.zero
-  let unknown_nonzero = UnknownGEQ Z.one
+  let one = Exact Z.one
+  let of_int i = Exact (Z.of_int i)
+  let of_z i = Exact i
+  let quasi_finite_geq n = QuasiFiniteGEQ n
+  let quasi_finite_zero = QuasiFiniteGEQ Z.zero
+  let quasi_finite_nonzero = QuasiFiniteGEQ Z.one
   let infinite = Infinite
-  let is_zero = function Bounded z -> Z.sign z = 0 | _ -> false
+  let unknown = Unknown
+  let is_zero = function Exact z -> Z.sign z = 0 | _ -> false
+  let is_one = function Exact z -> Z.equal z Z.one | _ -> false
 
   let ( * ) a b = match a, b with
-    | Bounded x, _
-    | _, Bounded x when Z.sign x = 0 -> zero (* absorption by 0 *)
-    | (UnknownGEQ z, _ | _, UnknownGEQ z) when Z.sign z = 0 ->
-        unknown_zero (* [0,∞] *)
+    | Unknown, _
+    | _, Unknown -> Unknown
+    | Exact x, _
+    | _, Exact x when Z.sign x = 0 -> zero (* absorption by 0 *)
+    | (QuasiFiniteGEQ z, _ | _, QuasiFiniteGEQ z) when Z.sign z = 0 ->
+        quasi_finite_zero (* [0,∞] *)
     | Infinite, _
     | _, Infinite ->
         (* we know the other param is not 0 and does not contain 0 *)
         Infinite
-    | Bounded a, Bounded b -> Bounded Z.(a*b)
-    | UnknownGEQ a, (Bounded b | UnknownGEQ b)
-    | Bounded a, UnknownGEQ b -> UnknownGEQ Z.(a * b)  (* absorbs bounded *)
+    | Exact a, Exact b -> Exact Z.(a*b)
+    | QuasiFiniteGEQ a, (Exact b | QuasiFiniteGEQ b)
+    | Exact a, QuasiFiniteGEQ b -> QuasiFiniteGEQ Z.(a * b)  (* absorbs bounded *)
 
   let equal a b = match a, b with
-    | UnknownGEQ a, UnknownGEQ b
-    | Bounded a, Bounded b -> Z.equal a b
+    | Unknown, Unknown -> true
+    | QuasiFiniteGEQ a, QuasiFiniteGEQ b
+    | Exact a, Exact b -> Z.equal a b
     | Infinite, Infinite -> true
+    | Unknown, _
     | Infinite, _
-    | UnknownGEQ _, _
-    | Bounded _, _ -> false
+    | QuasiFiniteGEQ _, _
+    | Exact _, _ -> false
 
   let hash = function
-    | Bounded x -> Z.hash x
-    | UnknownGEQ z -> Hashtbl.hash (13, Z.hash z)
+    | Exact x -> Z.hash x
+    | QuasiFiniteGEQ z -> Hashtbl.hash (13, Z.hash z)
+    | Unknown -> 13
     | Infinite -> 17
   let hash_fun x = CCHash.int (hash x)
 
   let print out = function
-    | Bounded x -> Z.pp_print out x
-    | UnknownGEQ z -> Format.fprintf out "[%a,∞]" Z.pp_print z
+    | Unknown -> CCFormat.string out "<unknown>"
+    | Exact x -> Z.pp_print out x
+    | QuasiFiniteGEQ z -> Format.fprintf out "[%a,∞]" Z.pp_print z
     | Infinite -> CCFormat.string out "ω"
 end
 
-(** Symbolic expressions *)
-module Expr = struct
-  type t =
-    | Const of Card.t
-    | Var of ID.t
-    | Plus of t * t
-    | Mult of t * t
-
-  (* evaluate an expression *)
-  let rec eval subst = function
-    | Const n -> n
-    | Var id -> ID.Map.find id subst
-    | Plus (a,b) -> Card.(eval subst a + eval subst b)
-    | Mult (a,b) -> Card.(eval subst a * eval subst b)
-
-  let const n = Const n
-  let zero = const Card.zero
-  let one = const Card.one
-  let var id = Var id
-
-  let ( + ) a b = match a, b with
-    | Const a, Const b -> const Card.(a + b)
-    | Const Card.Infinite, _
-    | _, Const Card.Infinite -> const Card.infinite
-    | (Const z, e | e, Const z) when Card.is_zero z -> e
-    | _ -> Plus (a,b)
-
-  let ( * ) a b = match a, b with
-    | Const a, Const b -> const Card.(a * b)
-    | (Const z, _ | _, Const z) when Card.is_zero z -> const Card.zero
-    | (Const (Card.Bounded x), e
-    | e, Const (Card.Bounded x)) when Z.equal x Z.one -> e
-    | (Const (Card.UnknownGEQ x), _
-    | _, Const (Card.UnknownGEQ x)) when Z.equal x Z.zero ->
-        const Card.unknown_zero (* [0,+∞]×_ = [0,+∞] *)
-    | Const Card.Infinite, _
-    | _, Const Card.Infinite ->
-        (* XXX: the cases 0 and [0,+∞] have been eliminated *)
-        const Card.infinite
-    | _ -> Mult (a,b)
-
-  let rec print out = function
-    | Const c -> Card.print out c
-    | Var v -> ID.print out v
-    | Plus (a,b) -> fpf out "@[%a +@ %a@]" print_in a print_in b
-    | Mult (a,b) -> fpf out "@[%a *@ %a@]" print a print b
-  and print_in out = function
-    | Plus _ as e -> fpf out "(@[%a@])" print e
-    | e -> print out e
-end
-
 module Make(T : TI.S) = struct
-  module U = TI.UtilRepr(T)
+  module U = TI.Util(T)
   module P = TI.Print(T)
 
   type ty = T.t
   type ('a, 'inv) env = ('a, ty, 'inv) Env.t constraint 'inv = <ty:[`Mono]; ..>
 
+  module TyTbl = CCHashtbl.Make(struct
+    type t = T.t
+    let equal = U.equal
+    let hash = U.hash
+  end)
+
+  type cache_state =
+    | Cached of Card.t
+    | Assume of Card.t (* locally assume some cardinality *)
+
   (* cache: maps IDs to (fully computed) cardinalities *)
-  type cache = Card.t ID.Tbl.t
-
-  let create_cache () = ID.Tbl.create 16
-
-  let is_nullary_cstor_ c = c.Stmt.cstor_args = []
-
-  (* [d] is a well-founded data definition if it has a nullary constructor,
-     that is, a base case *)
-  let is_wf_data_ d =
-      ID.Map.exists (fun _ -> is_nullary_cstor_) d.Stmt.ty_cstors
-
-  (* system of equations:
-     map from [id] (a type symbol) to:
-       - an expr [e] such that [cardinal id = e]
-       - an approximation of the cardinal of [id] used for self-recursion
-  *)
-  type equations = {
-    rhs: Expr.t ID.Map.t; (* subset of cur, holds RHS of equations *)
-    cur: Card.t ID.Map.t; (* current value, used in fixpoint *)
+  type cache = {
+    state: cache_state TyTbl.t; (** main state *)
+    non_zero: unit ID.Tbl.t; (** types we know are non-empty data *)
   }
 
-  let pp_equations out m =
-    let pp_lhs out id = fpf out "@[%a " ID.print id in
-    let pp_rhs out e = fpf out "@[%a@]@]" Expr.print e in
-    fpf out "@[<v>%a@]"
-      (ID.Map.print ~start:"" ~stop:"" ~sep:"" ~arrow:" = " pp_lhs pp_rhs) m.rhs
+  let create_cache () = {
+    state=TyTbl.create 16;
+    non_zero=ID.Tbl.create 8;
+  }
 
-  (* find the system of equations for the type's cardinality *)
-  let rec card_of_ty_id_ cache env eqns id : Expr.t =
-    match ID.Tbl.get cache id with
-    | Some c -> Expr.const c (* I know that! *)
-    | None when ID.Map.mem id (!eqns).rhs ->
-        (* we have an equation for [id], so just use a variable *)
-        Expr.var id
-    | None ->
-        let info = Env.find_exn ~env id in
-        if not (U.ty_is_Type info.Env.ty)
-          then raise Polymorphic; (* only monomorphic! *)
-        match Env.def info with
-          | Env.Data _ when ID.Map.mem id (!eqns).cur ->
-              (* currently in a fixpoint *)
-              Expr.var id
-          | Env.Data (d,_,def) ->
-              (* there is no approximation of [card id] yet, add one *)
-              let approx =
-                if is_wf_data_ def then Card.infinite
-                else match d with
-                  | `Data -> Card.zero
-                  | `Codata -> Card.one (* at least one infinite chain *)
-              in
-              (* add to [eqns.cur] before computing RHS of equations, for
-                 termination purpose *)
-              eqns := { !eqns with cur = ID.Map.add id approx (!eqns).cur; };
-              (* now compute the equation *)
-              let eqn = ID.Map.fold
-                (fun _c_id c acc ->
-                  let n_c =
-                    List.fold_left
-                      (fun n arg ->
-                        let n_arg = card_of_ty_ cache env eqns arg in
-                        Expr.( n * n_arg))
-                      Expr.one c.Stmt.cstor_args
-                  in
-                  Expr.(n_c + acc))
-                def.Stmt.ty_cstors
-                Expr.zero
-              in
-              eqns := {!eqns with rhs = ID.Map.add id eqn (!eqns).rhs; };
-              (* still, return a variable *)
-              Expr.var id
-          | Env.Copy_ty c ->
-              begin match c.Stmt.copy_pred with
-              | Some _ -> Expr.const Card.unknown_zero (* restriction of size? *)
-              | None -> card_of_ty_ cache env eqns c.Stmt.copy_of (* cardinality of definition *)
-              end
-          | Env.NoDef ->
-              (* TODO: check attributes *)
-              Expr.const Card.unknown_nonzero
-          | Env.Cstor _
-          | Env.Fun_def (_,_,_)
-          | Env.Fun_spec (_,_)
-          | Env.Pred (_,_,_,_,_)
-          | Env.Copy_abstract _
-          | Env.Copy_concretize _ -> errorf_ "%a is not a type" ID.print id
-  (* compute the cardinality of a type *)
-  and card_of_ty_ cache env eqns ty = match T.repr ty with
-    | TI.Const id -> card_of_ty_id_ cache env eqns id
-    | TI.App (f, _) -> card_of_ty_ cache env eqns f
-    | _ -> errorf_ "cannot compute cardinality of type@ `@[%a@]`" P.print ty
+  let save_ cache ty card =
+    assert (not (TyTbl.mem cache.state ty));
+    TyTbl.add cache.state ty (Cached card)
 
-  (* compute fixpoint of [eqns] and returns a map [lhs --> card] *)
-  let fixpoint_ eqns =
-    Utils.debugf ~section 5 "@[<2>fix@ equations %a@]@."
-      (fun k->k pp_equations eqns);
-    let rec aux m =
-      let m' =
-        ID.Map.map
-          (fun rhs -> Expr.eval m rhs)
-          eqns.rhs
-      in
-      Utils.debugf ~section 5 "@[<2>values @[%a@]@]@."
-        (fun k->k (ID.Map.print ID.print Card.print) m');
-      if ID.Map.equal Card.equal m m' then m (* reached fixpoint *)
-      else aux m'
+  (* enter the given state for [ty], calling [f ()], and returns the
+     same as [f ()]. It cleans up the state afterwards *)
+  let enter_ty_ cache ty state ~f =
+    assert (not (TyTbl.mem cache.state ty));
+    TyTbl.add cache.state ty state;
+    CCFun.finally ~f ~h:(fun () -> TyTbl.remove cache.state ty)
+
+  let enter_id_ cache id state ~f = enter_ty_ cache (U.ty_const id) state ~f
+
+  let sum_ ~f l = ID.Map.fold (fun _ x acc -> Card.(acc+f x)) l Card.zero
+  let product_ ~f l = List.fold_left (fun acc x -> Card.(acc*f x)) Card.one l
+
+  type save_op =
+    | Save
+    | Do_not_save
+
+  (* evaluate the cardinality of [ty] *)
+  let rec eval_ty_
+    : save_op -> (_,_) env -> cache -> ty -> Card.t
+    = fun op env cache ty ->
+      match TyTbl.get cache.state ty with
+      | Some (Cached c)
+      | Some (Assume c) -> c
+      | None ->
+        match T.repr ty with
+        | TI.Const id -> eval_id_ op env cache id
+        | _ -> Card.quasi_finite_nonzero (* approx *)
+
+  (* compute the sum of products of cardinalities of [def]'s constructors
+     type arguments, under the assumption [assume] for [def.ty_id] *)
+  and compute_sum_ op env cache def assume =
+    let id = def.Stmt.ty_id in
+    enter_id_ cache id assume
+      ~f:(fun () ->
+        sum_ def.Stmt.ty_cstors
+          ~f:(fun cstor ->
+            product_ cstor.Stmt.cstor_args
+              ~f:(eval_ty_ op env cache)))
+
+  (* check that [d] is not an empty data.
+      @raise EmptyData otherwise *)
+  and check_non_zero_ env cache d =
+    let id = d.Stmt.ty_id in
+    if not (ID.Tbl.mem cache.non_zero id) then (
+      (* eval definition of [d] assuming its cardinal is 0. If we find 0,
+         then the type is empty and we raise *)
+      let c = compute_sum_ Do_not_save env cache d (Assume Card.zero) in
+      if Card.is_zero c then raise (EmptyData d.Stmt.ty_id);
+      (* remember for later *)
+      ID.Tbl.add cache.non_zero id ()
+    )
+
+  (* eval the cardinality of the given type *)
+  and eval_id_ op env cache id =
+    let info = Env.find_exn ~env id in
+    (* only monomorphic types are accepted *)
+    if not (U.ty_is_Type info.Env.ty) then raise Polymorphic;
+    let res = match Env.def info with
+      | Env.Data (`Data,_,def) ->
+          (* check [def] is not an empty data *)
+          check_non_zero_ env cache def;
+          compute_sum_ op env cache def (Assume Card.infinite)
+      | Env.Data (`Codata,_,def) ->
+          (* first approximation *)
+          let approx =
+            compute_sum_ Do_not_save env cache def (Assume Card.one)
+          in
+          begin match approx with
+            | Card.Exact z when Z.equal z Z.one ->
+                (* special case: unary codata, such as [stream] *)
+                Card.one
+            | Card.QuasiFiniteGEQ z when Z.compare z Z.one <= 0 ->
+                (* we do not know whether this is 0, 1 or more *)
+                Card.unknown
+            | _ ->
+                (* regular computation of the sum of products of constructors.
+                   Since cardinal is not one, we can assume it's +∞ *)
+                compute_sum_ op env cache def (Assume Card.infinite)
+          end
+      | Env.Copy_ty c ->
+          begin match c.Stmt.copy_pred with
+          | Some _ -> Card.quasi_finite_zero (* restriction of size? *)
+          | None -> eval_ty_ op env cache c.Stmt.copy_of (* cardinality of definition *)
+          end
+      | Env.NoDef ->
+          (* TODO: check attributes *)
+          Card.quasi_finite_nonzero
+      | Env.Cstor _
+      | Env.Fun_def (_,_,_)
+      | Env.Fun_spec (_,_)
+      | Env.Pred (_,_,_,_,_)
+      | Env.Copy_abstract _
+      | Env.Copy_concretize _ -> errorf_ "%a is not a type" ID.print id
     in
-    Utils.debugf ~section 5 "@[<2>values @[%a@]@]@."
-      (fun k->k (ID.Map.print ID.print Card.print) eqns.cur);
-    aux eqns.cur
-
-  let solve_ cache eqns =
-    Utils.debugf ~section 4 "@[<2>equations:@ @[%a@]@]"
-      (fun k->k pp_equations eqns);
-    let subst = fixpoint_ eqns in
-    (* add to cache *)
-    subst |> ID.Map.to_seq |> ID.Tbl.add_seq cache;
-    subst
+    (* maybe cache *)
+    begin match op with
+      | Save -> save_ cache (U.ty_const id) res
+      | Do_not_save -> ()
+    end;
+    res
 
   let cardinality_ty_id ?(cache=create_cache ()) env id =
-    let eqns = ref {cur=ID.Map.empty; rhs=ID.Map.empty; } in
-    let expr = card_of_ty_id_ cache env eqns id in
-    let subst = solve_ cache !eqns in
-    Expr.eval subst expr
+    eval_id_ Save env cache id
 
   let cardinality_ty ?(cache=create_cache()) env ty =
-    let eqns = ref {cur=ID.Map.empty; rhs=ID.Map.empty; } in
-    let expr = card_of_ty_ cache env eqns ty in
-    let subst = solve_ cache !eqns in
-    Expr.eval subst expr
+    eval_ty_ Save env cache ty
+
+  let check_non_zero ?(cache=create_cache()) env stmt =
+    match Stmt.view stmt with
+    | Stmt.TyDef (`Data, l) ->
+        Utils.debugf ~section 5 "@[<2>check well-formed:@ `@[%a@]`@]"
+          (fun k->
+            let module PStmt = Stmt.Print(P)(P) in
+            k PStmt.print_tydefs (`Data,l));
+        List.iter (check_non_zero_ env cache) l
+    | _ -> ()
 end

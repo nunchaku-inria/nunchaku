@@ -144,7 +144,7 @@ module Make(T : TI.S) = struct
   (* TODO: fix problem with missing arities (rec definitions, spec?) *)
   (* TODO: anyway changing rec (for a function [f:a_1-> ... -> a_n -> ret])
             is hard, we need to add [n] to arities of [a], and then:
-              
+
           - remove rec definition of [f] (mere declaration)
           - add some "multi_rec" statement for defining the set of application
             symbols used to defined [f], including the current definition
@@ -185,7 +185,10 @@ module Make(T : TI.S) = struct
       - introduce the handle [H] that stands for [nat->nat],
       - declare that [plus : nat -> H],
       - introduce an application symbol [app_H : H -> nat -> nat],
-      - replace any term of the form [plus x y] with [app_H (plus x) y] *)
+      - replace any term of the form [plus x y] with [app_H (plus x) y],
+      - introduce [proto] function(s) [proto_H : H -> nat]
+      - axiomatize extensionality for [H]
+      - axiomatize [proto_H]: TODO should be done in rec_elim? *)
 
   type handle =
     | H_leaf of encoded_ty (* leaf type *)
@@ -631,7 +634,6 @@ module Make(T : TI.S) = struct
   let pipe ~print =
     let decode state m = decode_model ~state m in
     pipe_with ~print ~decode
-
 end
 
 

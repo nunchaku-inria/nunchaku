@@ -285,7 +285,7 @@ module Util(T : TI.S) = struct
         let m' = rename m in
         if must_print then (
           let module P = TI.Print(T) in
-          Format.printf "@[<v2>after model renaming:@ {@,%a@]}@."
+          Format.printf "@[<v2>@{<Yellow>after model renaming@}:@ {@,%a@]}@."
             (print P.print P.print) m');
         m')
 end
