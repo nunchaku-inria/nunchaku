@@ -48,6 +48,8 @@ module Make(FO_T : FO.S) = struct
 
   type problem = (FO_T.T.t, FO_T.Ty.t) FO.Problem.t
 
+  type symbol_kind = Model.symbol_kind
+
   type decoded_sym =
     | ID of id (* regular fun *)
     | DataTest of id
@@ -63,6 +65,8 @@ module Make(FO_T : FO.S) = struct
            to know the finite domain of [ty] by asking [(fmf.card.val id)] *)
 
   type decode_state = {
+    kinds: symbol_kind ID.Map.t;
+      (* ID -> its kind *)
     id_to_name: string ID.Tbl.t;
       (* maps ID to unique names *)
     name_to_id: (string, decoded_sym) Hashtbl.t;
@@ -75,7 +79,8 @@ module Make(FO_T : FO.S) = struct
       (* type -> witness of this type *)
   }
 
-  let create_decode_state () = {
+  let create_decode_state ~kinds () = {
+    kinds;
     id_to_name=ID.Tbl.create 32;
     name_to_id=Hashtbl.create 32;
     symbols=ID.Tbl.create 32;
@@ -440,6 +445,11 @@ module Make(FO_T : FO.S) = struct
     | Q_fun _ -> assert false
     | Q_type ty -> ty
 
+  let get_kind ~decode id =
+    try ID.Map.find id decode.kinds
+    with Not_found ->
+      errorf_ "could not find kind of %a" ID.print id
+
   (* state: decode_state *)
   let parse_model_ ~decode : CCSexp.t -> _ Model.t = function
     | `Atom _ -> error_ "expected model, got atom"
@@ -450,13 +460,14 @@ module Make(FO_T : FO.S) = struct
           | `List [`Atom _ as s; term] ->
               (* regular constant, whose value we are interested in *)
               let id = parse_id_ ~decode s in
+              let kind = get_kind ~decode id in
               begin match sym_get_const_ ~decode id with
               | `Const ->
                   let t = parse_term_ ~decode term in
-                  Model.add_const m (FOBack.T.const id, t)
+                  Model.add_const m (FOBack.T.const id, t, kind)
               | `Fun n ->
                   let vars, t = parse_fun_ ~decode ~arity:n term in
-                  Model.add_fun m (FOBack.T.const id, vars, t)
+                  Model.add_fun m (FOBack.T.const id, vars, t, kind)
               end
           | `List [`List [`Atom "fmf.card.val"; (`Atom _ as s)]; n] ->
               (* finite domain *)
@@ -566,8 +577,10 @@ module Make(FO_T : FO.S) = struct
           the type's domain later)
       - compute the set of symbols for which we want the model's value *)
   let preprocess pb : processed_problem =
+    let module U = FO.Util(FO_T) in
+    let kinds = U.problem_kinds pb in
     let n = ref 0 in
-    let state = create_decode_state () in
+    let state = create_decode_state ~kinds () in
     let decl state id c = ID.Tbl.add state.symbols id c in
     let pb =
       FOI.Problem.flat_map ~meta:(FO.Problem.meta pb)

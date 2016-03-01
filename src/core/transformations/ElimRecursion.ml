@@ -455,12 +455,12 @@ module Make(T : TI.S) = struct
     let projs : proj_fun ID.Tbl.t = ID.Tbl.create 16 in
     let doms  : finite_domain ID.Tbl.t = ID.Tbl.create 16 in
     Model.iter m
-      ~constants:(fun (t,_) -> match T.repr t with
+      ~constants:(fun (t,_,_) -> match T.repr t with
         | TI.Const id ->
             (* a function should not be modeled by a constant *)
             assert (not (ID.Tbl.mem state.approx_fun id));
         | _ -> ())
-      ~funs:(fun (t,vars,body) -> match T.repr t, vars with
+      ~funs:(fun (t,vars,body,_) -> match T.repr t, vars with
         | TI.Const id, [v] ->
             (* register the model for this approximated function *)
             if ID.Tbl.mem state.approx_fun id
@@ -538,11 +538,11 @@ module Make(T : TI.S) = struct
     in
     (* now remove projections and filter recursion functions's values *)
     Model.filter_map m
-      ~constants:(fun (t,u) -> match T.repr t with
+      ~constants:(fun (t,u,k) -> match T.repr t with
         | TI.Const id when ID.Tbl.mem state.approx_fun id ->
             None (* drop approximation functions *)
-        | _ -> Some (t,u))
-      ~funs:(fun (t,vars,body) -> match T.repr t with
+        | _ -> Some (t,u,k))
+      ~funs:(fun (t,vars,body,k) -> match T.repr t with
         | TI.Const id when ID.Tbl.mem state.approx_fun id ->
             None (* drop approximation functions *)
         | TI.Const f_id when ID.Tbl.mem state.encoded_fun f_id ->
@@ -552,10 +552,10 @@ module Make(T : TI.S) = struct
               "@[<hv2>decoding of recursive fun @[%a %a@] :=@ `@[%a@]`@ is `@[%a@]`@]"
               (fun k->k ID.print f_id (CCFormat.list Var.print_full) vars
               (Model.DT.print P.print) body (Model.DT.print P.print) body');
-            Some (t, vars, body')
+            Some (t, vars, body',k)
         | _ ->
             (* keep *)
-            Some (t,vars,body))
+            Some (t,vars,body,k))
       ~finite_types:(fun ((ty,_) as pair) -> match T.repr ty with
         | TI.Const id when ID.Tbl.mem state.abstract_ty id ->
             None (* remove abstraction types *)

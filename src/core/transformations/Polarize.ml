@@ -491,7 +491,7 @@ module Make(T : TI.S) = struct
     Model.fold ID.Map.empty m
       ~constants:(fun sys _ -> sys)
       ~finite_types:(fun sys _ -> sys)
-      ~funs:(fun sys (t,_,_) ->
+      ~funs:(fun sys (t,_,_,_) ->
         match T.repr t with
         | TI.Const id when ID.is_polarized id ->
             (* rewrite into the unpolarized version *)
@@ -513,11 +513,11 @@ module Make(T : TI.S) = struct
        is defined somewhere in the model) *)
     let partial_map = ID.Tbl.create 32 in
     Model.filter_map m
-      ~constants:(fun (t,u) ->
+      ~constants:(fun (t,u,k) ->
             let u = rewrite ~subst:Subst.empty sys u in
-            Some (t,u))
+            Some (t,u,k))
       ~finite_types:(fun (t,dom) -> Some (t,dom))
-      ~funs:(fun (t,vars,dt) ->
+      ~funs:(fun (t,vars,dt,k) ->
         match T.repr t with
         | TI.Const id when ID.is_polarized id ->
             (* unpolarize. id' is the unpolarized ID. *)
@@ -538,7 +538,7 @@ module Make(T : TI.S) = struct
                   ~else_
               in
               (* emit model for [id'] *)
-              Some (U.const id', vars', new_dt)
+              Some (U.const id', vars', new_dt, k)
             with Not_found ->
               let opp_id = if is_pos then p.neg else p.pos in
               let cases = filter_dt_ ~polarized:id ~is_pos ~sys ~subst:Subst.empty dt in
@@ -554,7 +554,7 @@ module Make(T : TI.S) = struct
                    model, we can emit this function now *)
                 let else_ = U.undefined_ (U.app (U.const id') (List.map U.var vars)) in
                 let new_dt = Model.DT.test cases ~else_ in
-                Some (U.const id', vars, new_dt)
+                Some (U.const id', vars, new_dt, k)
               )
             end
         | _ ->
@@ -562,7 +562,7 @@ module Make(T : TI.S) = struct
             let dt = Model.DT.map dt
               ~term:(rewrite ~subst:Subst.empty sys)
               ~ty:CCFun.id in
-            Some (t,vars,dt))
+            Some (t,vars,dt,k))
 
   (** {6 Pipes} *)
 

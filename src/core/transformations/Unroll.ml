@@ -309,7 +309,7 @@ module Make(T : TI.S) = struct
   (* remove the additional parameter introduced by unrolling, if any *)
   let decode_model ~state m =
     Model.filter_map m
-      ~constants:(fun (t,u) ->
+      ~constants:(fun (t,u,k) ->
         match T.repr t with
         | TI.Const id
           when ID.equal id state.nat_ty.zero
@@ -317,13 +317,13 @@ module Make(T : TI.S) = struct
             None (* remove "zero" and decreasing witnesses *)
         | _ ->
             let u = rewrite ~state u in
-            Some (t,u))
+            Some (t,u,k))
       ~finite_types:(fun (t,dom) ->
         match T.repr t with
         | TI.Const id when ID.equal id state.nat_ty.nat ->
             None (* remove "nat" *)
         | _ -> Some (t,dom))
-      ~funs:(fun (t,vars,dt) ->
+      ~funs:(fun (t,vars,dt,k) ->
         match T.repr t with
         | TI.Const id when ID.equal id state.nat_ty.succ ->
             None (* remove "succ" *)
@@ -334,11 +334,11 @@ module Make(T : TI.S) = struct
               | v :: l -> v, l
             in
             let dt = filter_dt_ ~state ~removed_var dt in
-            Some (t,vars,dt)
+            Some (t,vars,dt,k)
         | _ ->
             (* simply rewrite *)
             let dt = Model.DT.map dt ~term:(rewrite ~state) ~ty:CCFun.id in
-            Some (t,vars,dt))
+            Some (t,vars,dt,k))
 
   (** {6 Pipes} *)
 

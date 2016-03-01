@@ -53,11 +53,16 @@ end
 
 (** {2 Models} *)
 
+type symbol_kind =
+  | Symbol_prop
+  | Symbol_fun
+  | Symbol_type
+
 type (+'t, +'ty) t = {
-  constants: ('t * 't) list;
+  constants: ('t * 't * symbol_kind) list;
     (* constant -> its interpretation *)
 
-  funs: ('t * 'ty Var.t list * ('t,'ty) decision_tree) list;
+  funs: ('t * 'ty Var.t list * ('t,'ty) decision_tree * symbol_kind) list;
     (* fun * var list -> body *)
 
   finite_types: ('ty * ID.t list) list;
@@ -71,34 +76,34 @@ type (+'t, +'ty) t = {
 val empty : (_,_) t
 (** Empty model *)
 
-val add_const : ('t,'ty) t -> 't * 't -> ('t,'ty) t
+val add_const : ('t,'ty) t -> 't * 't * symbol_kind -> ('t,'ty) t
 (** Add a term interpretation *)
 
-val add_fun : ('t,'ty) t -> 't * 'ty Var.t list * ('t,'ty) decision_tree -> ('t,'ty) t
+val add_fun : ('t,'ty) t -> 't * 'ty Var.t list * ('t,'ty) decision_tree * symbol_kind -> ('t,'ty) t
 (** Add a function interpretation *)
 
 val add_finite_type : ('t, 'ty) t -> 'ty -> ID.t list -> ('t, 'ty) t
 (** Map the type to its finite domain. *)
 
 val fold :
-  constants:('acc -> 'a * 'a -> 'acc) ->
-  funs:('acc -> 'a * 'b Var.t list * ('a,'b) decision_tree -> 'acc) ->
+  constants:('acc -> 'a * 'a * symbol_kind -> 'acc) ->
+  funs:('acc -> 'a * 'b Var.t list * ('a,'b) decision_tree * symbol_kind -> 'acc) ->
   finite_types:('acc -> 'b * ID.t list -> 'acc) ->
   'acc ->
   ('a,'b) t ->
   'acc
 
 val iter :
-  constants:('a * 'a -> unit) ->
-  funs:('a * 'b Var.t list * ('a,'b) decision_tree -> unit) ->
+  constants:('a * 'a * symbol_kind -> unit) ->
+  funs:('a * 'b Var.t list * ('a,'b) decision_tree * symbol_kind -> unit) ->
   finite_types:('b * ID.t list -> unit) ->
   ('a,'b) t ->
   unit
 
 val filter_map :
-  constants:('t1 * 't1 -> ('t2 * 't2) option) ->
-  funs:('t1 * 'ty1 Var.t list * ('t1,'ty1) decision_tree ->
-         ('t2 * 'ty2 Var.t list * ('t2,'ty2) decision_tree) option) ->
+  constants:('t1 * 't1 * symbol_kind -> ('t2 * 't2 * symbol_kind) option) ->
+  funs:('t1 * 'ty1 Var.t list * ('t1,'ty1) decision_tree * symbol_kind ->
+         ('t2 * 'ty2 Var.t list * ('t2,'ty2) decision_tree * symbol_kind) option) ->
   finite_types:('ty1 * ID.t list -> ('ty2 * ID.t list) option) ->
   ('t1, 'ty1) t ->
   ('t2, 'ty2) t
