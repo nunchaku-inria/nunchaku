@@ -70,6 +70,10 @@ module Subst = struct
 
   let find ~subst v = try Some (find_exn ~subst v) with Not_found -> None
 
+  let find_or ~subst ~default v =
+    try find_exn ~subst v
+    with Not_found -> default
+
   let rec deref_rec ~subst v = match find ~subst v with
     | None -> v
     | Some v' -> deref_rec ~subst v'

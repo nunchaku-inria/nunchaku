@@ -257,6 +257,8 @@ open CCError.Infix
 
 (* model mode *)
 let main_model ~output statements =
+  let module T = TI.Default in
+  let module P = TI.Print(T) in
   (* run pipeline *)
   let cpipe = make_model_pipeline() in
   if !print_pipeline_
@@ -266,13 +268,14 @@ let main_model ~output statements =
   begin match res, output with
   | `Sat m, O_nunchaku when m.Model.potentially_spurious ->
       Format.printf "@[<v>@[<v2>SAT: (potentially spurious) {@,@[<v>%a@]@]@,}@]@."
-        (Model.print UntypedAST.print_term UntypedAST.print_term) m;
+        (Model.print P.print P.print) m;
   | `Sat m, O_nunchaku ->
       Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]@."
-        (Model.print UntypedAST.print_term UntypedAST.print_term) m;
+        (Model.print P.print P.print) m;
   | `Sat m, O_tptp ->
       (* XXX: if potentially spurious, what should we print? *)
-      Format.printf "@[<v2>%a@]@,@." NunPrintTPTP.print_model m
+      let module PM = NunPrintTPTP.Make(T) in
+      Format.printf "@[<v2>%a@]@,@." PM.print_model m
   | `Unsat, O_nunchaku ->
       Format.printf "@[UNSAT@]@."
   | `Unsat, O_tptp ->
