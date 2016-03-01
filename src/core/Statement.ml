@@ -20,23 +20,23 @@ type 'ty defined = {
 }
 
 type ('t, 'ty, 'kind) equations =
-  | Eqn_linear :
-      ('ty var list (* universally quantified vars, also arguments to [f] *)
-      * 't (* right-hand side of equation *)
-      * 't list (* side conditions *)
-      ) list
-      -> ('t, 'ty, <eqn:[`Linear];..>) equations
   | Eqn_nested :
       ('ty var list (* universally quantified vars *)
       * 't list (* arguments (patterns) to the defined term *)
       * 't  (* right-hand side of equation *)
       * 't list (* additional conditions *)
       ) list
-      -> ('t, 'ty, <eqn:[`Nested];..>) equations
+      -> ('t, 'ty, <eqn:[`Nested]; ty:_; ..>) equations
   | Eqn_single :
       'ty var list (* function arguments *)
       *  't (* RHS *)
-      -> ('t, 'ty, <eqn:[`Single];..>) equations
+      -> ('t, 'ty, <eqn:[<`Single | `App]; ty:_; ..>) equations
+  | Eqn_app :
+      (ID.t list (* application symbols *)
+      * 'ty var list (* quantified vars *)
+      * 't (* LHS of equation *)
+      * 't (* RHS of equation *)
+      ) -> ('t, 'ty, <eqn:[`App]; ty:[`Mono]; ..>) equations
 
 type ('t,'ty,'kind) rec_def = {
   rec_defined: 'ty defined;
@@ -218,10 +218,12 @@ let map_defined ~f d = {
 }
 
 let map_eqns_bind
-: type acc a a1 b b1 inv.
+: type acc a a1 b b1 inv_e inv_ty.
     bind:(acc -> b Var.t -> acc * b1 Var.t) ->
     term:(acc -> a -> a1) ->
-    acc -> (a,b,<eqn:inv;..>) equations -> (a1,b1,<eqn:inv;..>) equations
+    acc ->
+    (a,b,<eqn:inv_e;ty:inv_ty;..>) equations ->
+    (a1,b1,<eqn:inv_e;ty:inv_ty;..>) equations
 = fun ~bind ~term acc eqn ->
     match eqn with
     | Eqn_nested l ->
@@ -234,15 +236,9 @@ let map_eqns_bind
               term acc rhs,
               List.map (term acc) side)
             l)
-    | Eqn_linear l ->
-        Eqn_linear
-          (List.map
-            (fun (vars,rhs,side) ->
-              let acc, vars = Utils.fold_map bind acc vars in
-              vars,
-              term acc rhs,
-              List.map (term acc) side)
-            l)
+    | Eqn_app (app_l, vars, lhs, rhs) ->
+        let acc, vars = Utils.fold_map bind acc vars in
+        Eqn_app (app_l, vars, term acc lhs, term acc rhs)
     | Eqn_single (vars,rhs) ->
         let acc, vars = Utils.fold_map bind acc vars in
         Eqn_single (vars, term acc rhs)
@@ -412,13 +408,10 @@ let fold_eqns_ (type inv) ~term ~ty acc (e:(_,_,inv) equations) =
           let acc = term acc rhs in
           List.fold_left term acc side)
         acc l
-  | Eqn_linear l ->
-      List.fold_left
-        (fun acc (vars,rhs,side) ->
-          let acc = fold_vars acc vars in
-          let acc = term acc rhs in
-          List.fold_left term acc side)
-        acc l
+  | Eqn_app (_,vars,lhs,rhs) ->
+      let acc = fold_vars acc vars in
+      let acc = term acc lhs in
+      term acc rhs
   | Eqn_single (vars,t) ->
       let acc = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc vars in
       term acc t
@@ -501,15 +494,11 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
     (* print equations *)
     let pp_eqns (type inv) id out (e:(_,_,inv) equations) =
       match e with
-      | Eqn_linear l  ->
-          pplist ~sep:";"
-            (fun out (vars,rhs,side) ->
-              if vars=[]
-              then fpf out "@[<hv>%a%a =@ %a@]" pp_sides side ID.print id Pt.print rhs
-              else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
-                (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print id
-                (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
-            ) out l
+      | Eqn_app (_, vars, lhs, rhs) ->
+          if vars=[]
+          then fpf out "@[<hv2>%a =@ %a@]" Pt.print lhs Pt.print rhs
+          else fpf out "@[<hv2>forall @[<h>%a@].@ @[%a =@ %a@]@]"
+            (pplist ~sep:" " pp_typed_var) vars Pt.print lhs Pt.print rhs
       | Eqn_nested l ->
           pplist ~sep:";"
             (fun out  (vars,args,rhs,side) ->

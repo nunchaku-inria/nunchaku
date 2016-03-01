@@ -14,7 +14,7 @@ let name = "rec_elim"
 
 let section = Utils.Section.make name
 
-type inv1 = <ty:[`Mono]; eqn:[`Single]; ind_preds:[`Absent]>
+type inv1 = <ty:[`Mono]; eqn:[`App]; ind_preds:[`Absent]>
 type inv2 = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
 
 exception Attr_abs_type of ID.t

@@ -63,11 +63,11 @@ val flat_map_statements :
 val map :
   term:('a -> 'b) ->
   ty:('tya -> 'tyb) ->
-  ('a, 'tya, <eqn:'inv;ind_preds:'inv2;..>) t ->
-  ('b, 'tyb, <eqn:'inv;ind_preds:'inv2;..>) t
+  ('a, 'tya, <eqn:'inv;ind_preds:'inv2;ty:'inv3;..>) t ->
+  ('b, 'tyb, <eqn:'inv;ind_preds:'inv2;ty:'inv3;..>) t
 
 val map_with :
-  ?before:(unit -> ('b, 'tyb, <eqn:'inv;ind_preds:'invp;..> as 'inv2) Statement.t list) ->
+  ?before:(unit -> ('b, 'tyb, <eqn:'inv;ind_preds:'invp;ty:_; ..> as 'inv2) Statement.t list) ->
   ?after:(unit -> ('b, 'tyb, 'inv2) Statement.t list) ->
   term:('a -> 'b) ->
   ty:('tya -> 'tyb) ->

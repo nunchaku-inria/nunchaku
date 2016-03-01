@@ -328,11 +328,6 @@ module Make(T : TI.S) = struct
       ~ty:(mono_type ~state ~local_state)
     in
     match eqn with
-      | Stmt.Eqn_linear l ->
-          f (Stmt.Eqn_linear
-            (List.map
-              (fun (vars, rhs, side) -> CCList.drop n vars, rhs, side)
-              l))
       | Stmt.Eqn_nested l ->
           f (Stmt.Eqn_nested
             (List.map

@@ -37,7 +37,7 @@ module type S = sig
 
   val skolemize_pb :
     state:state ->
-    (T.t, T.t, <eqn:_;ind_preds:_;..> as 'inv) Problem.t ->
+    (T.t, T.t, <eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t ->
     (T.t, T.t, 'inv) Problem.t
 
   val find_id_def : state:state -> id -> T.t option
@@ -49,7 +49,7 @@ module type S = sig
   val pipe :
     mode:mode ->
     print:bool ->
-    ((T.t,T.t,<eqn:_;ind_preds:_;..> as 'inv) Problem.t,
+    ((T.t,T.t,<eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t,
       (T.t,T.t,'inv) Problem.t,
       (T.t,T.t) Model.t, (T.t,T.t) Model.t
     ) Transform.t
@@ -62,7 +62,7 @@ module type S = sig
     mode:mode ->
     decode:(state -> 'c -> 'd) ->
     print:bool ->
-    ((T.t,T.t, <eqn:_;ind_preds:_;..> as 'inv) Problem.t,
+    ((T.t,T.t, <eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t,
       (T.t,T.t,'inv) Problem.t, 'c, 'd
     ) Transform.t
 end

@@ -58,12 +58,8 @@ module Make(T : TI.S) = struct
             term_contains_undefined rhs ||
             List.exists term_contains_undefined side)
           l
-    | Stmt.Eqn_linear l ->
-        List.exists
-          (fun (_, rhs, side) ->
-            term_contains_undefined rhs ||
-            List.exists term_contains_undefined side)
-          l
+    | Stmt.Eqn_app (_, _, lhs, rhs) ->
+        term_contains_undefined lhs || term_contains_undefined rhs
     | Stmt.Eqn_single (_,rhs) ->
         term_contains_undefined rhs
 

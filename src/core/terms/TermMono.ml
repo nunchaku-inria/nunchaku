@@ -209,12 +209,12 @@ module ToFO(T : TI.S)(F : FO.S) = struct
         [ FO.T.eq
             (FO.T.const head)
             (List.fold_right FO.T.fun_ vars (conv_term ~sigma rhs)) ]
-    | St.Eqn_linear l ->
-        List.map
-          (fun
-            (vars,rhs,side) ->
-              conv_eqn (vars, List.map (fun v -> FO.T.var (conv_var v)) vars, rhs, side)
-          ) l
+    | St.Eqn_app (_,vars,lhs,rhs) ->
+        (* [id = fun vars. rhs] *)
+        let vars = List.map conv_var vars in
+        let lhs = conv_term ~sigma lhs in
+        let rhs = conv_term ~sigma rhs in
+        [ List.fold_right FO.T.forall vars (FO.T.eq lhs rhs) ]
     | St.Eqn_nested l ->
         List.map
           (fun (vars,args,rhs,side) ->
