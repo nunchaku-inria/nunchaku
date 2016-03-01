@@ -7,15 +7,16 @@
 
 val name : string
 
-type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds: [`Absent]>
+type inv1 = <ty:[`Mono]; eqn:[`Single]; ind_preds: [`Absent]>
+type inv2 = <ty:[`Mono]; eqn:[`App]; ind_preds: [`Absent]>
 
 module Make(T : TermInner.S) : sig
   type term = T.t
   type decode_state
 
   val elim_hof :
-    (term, term, 'a inv) Problem.t ->
-    (term, term, 'a inv) Problem.t * decode_state
+    (term, term, inv1) Problem.t ->
+    (term, term, inv2) Problem.t * decode_state
 
   val decode_model :
     state:decode_state ->
@@ -25,8 +26,8 @@ module Make(T : TermInner.S) : sig
   (** Pipeline component *)
   val pipe :
     print:bool ->
-    ((term, term, 'a inv) Problem.t,
-     (term, term, 'a inv) Problem.t,
+    ((term, term, inv1) Problem.t,
+     (term, term, inv2) Problem.t,
       (term, term) Model.t,
       (term, term) Model.t) Transform.t
 
@@ -36,8 +37,8 @@ module Make(T : TermInner.S) : sig
   val pipe_with :
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
-    ((term, term, 'a inv) Problem.t,
-     (term, term, 'a inv) Problem.t,
+    ((term, term, inv1) Problem.t,
+     (term, term, inv2) Problem.t,
       'c, 'd
     ) Transform.t
 end

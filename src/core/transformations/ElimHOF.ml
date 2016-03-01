@@ -9,9 +9,20 @@ module Stmt = Statement
 let name = "elim_hof"
 let section = Utils.Section.make name
 
-type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds: [`Absent]>
+type inv1 = <ty:[`Mono]; eqn:[`Single]; ind_preds: [`Absent]>
+type inv2 = <ty:[`Mono]; eqn:[`App]; ind_preds: [`Absent]>
 
 let fpf = Format.fprintf
+
+exception Error of string
+
+let () = Printexc.register_printer
+  (function
+    | Error msg -> Some (Utils.err_sprintf "elim HOF:@ %s" msg)
+    | _ -> None)
+
+let error_ msg = raise (Error msg)
+let errorf_ msg = CCFormat.ksprintf msg ~f:error_
 
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
@@ -156,8 +167,27 @@ module Make(T : TI.S) = struct
              well-founded  properties for RecElim.
     *)
 
+  (* TODO: consider that all functions are always totally applied at least
+     once, so that the app symbol and extensionality axioms are generated.
+
+     optim: do not do that if remaining args are guaranteed to be of
+     infinite cardinality (extensionality not needed then). Problem
+     is for [unit -> unit] and the likes. *)
+
   let compute_arities_stmt ~env m stmt =
     let f = compute_arities_term ~env in
+    let m = match Stmt.view stmt with
+      | Stmt.Axiom (Stmt.Axiom_rec l) ->
+          (* function defined with "rec": always consider it fully applied *)
+          List.fold_left
+            (fun m def ->
+              let id = def.Stmt.rec_defined.Stmt.defined_head in
+              let _, args, ret = U.ty_unfold def.Stmt.rec_defined.Stmt.defined_ty in
+              let n = List.length args in
+              add_arity_ m id n args ret)
+            m l
+      | _ -> m
+    in
     Stmt.fold m stmt ~ty:f ~term:f
 
   (* arity set: function always fully applied?
@@ -266,8 +296,8 @@ module Make(T : TI.S) = struct
     fe_ret_handle: handle; (* handle type returned by the function *)
   }
 
-  type 'a state = {
-    env: (term, ty, 'a inv) Env.t;
+  type state = {
+    env: (term, ty, inv1) Env.t;
       (* environment (to get signatures, etc.) *)
     arities: arity_set ID.Map.t;
       (* set of arities for partially applied symbols/variables *)
@@ -277,7 +307,7 @@ module Make(T : TI.S) = struct
       (* handle type -> corresponding apply symbol *)
     mutable fun_encodings: fun_encoding ID.Map.t;
       (* partially applied function/variable -> how to encode it *)
-    mutable new_stmts : (term, ty, 'a inv) Stmt.t CCVector.vector;
+    mutable new_stmts : (term, ty, inv2) Stmt.t CCVector.vector;
       (* used for new declarations. [id, type, attribute list] *)
     decode: decode_state;
       (* bookkeeping for, later, decoding *)
@@ -520,12 +550,19 @@ module Make(T : TI.S) = struct
   let elim_hof_ty ~state subst ty =
     encode_ty_ ~state (U.eval_renaming ~subst ty)
 
+  (* new type of the function that has this encoding *)
+  let ty_of_fun_encoding_ ~state fe =
+    U.ty_arrow_l fe.fe_args (ty_of_handle_ ~state fe.fe_ret_handle)
+
   (* encode [v]'s type, and add it to [subst] *)
   let bind_hof_var ~state subst v =
     (* replace [v] with [v'], which has an encoded type *)
     let v' = Var.update_ty v ~f:(elim_hof_ty ~state subst) in
     let subst = Var.Subst.add ~subst v v' in
     subst, v'
+
+  let bind_hof_vars ~state subst l =
+    Utils.fold_map (bind_hof_var ~state) subst l
 
   (* traverse [t] and replace partial applications with fully applied symbols
       from state.app_symbols. Also encodes every type using [handle_id] *)
@@ -574,13 +611,75 @@ module Make(T : TI.S) = struct
     let ret = encode_ty_ ~state ret in
     U.ty_arrow_l args ret
 
+  (* OH MY.
+     safe, because we only change the invariants *)
+  let cast_stmt_unsafe_ :
+    (term, ty, inv1) Stmt.t -> (term, ty, inv2) Stmt.t = Obj.magic
+  let cast_rec_unsafe_ :
+    (term, ty, inv1) Stmt.rec_def -> (term, ty, inv2) Stmt.rec_def = Obj.magic
+
+  (* translate a "single rec" into an "app rec" *)
+  let elim_hof_rec ~info ~state (defs:(_,_,inv1) Stmt.rec_defs)
+  : (_, _, inv2) Stmt.t list
+  =
+    let elim_eqn
+      : (term,ty,inv1) Stmt.rec_def -> (term,ty,inv2) Stmt.rec_def
+      = fun def ->
+        let id = def.Stmt.rec_defined.Stmt.defined_head in
+        match def.Stmt.rec_eqns with
+        | Stmt.Eqn_single (vars, rhs) ->
+            if ID.Map.mem id state.arities then (
+              (* higher-order function *)
+              let fe = introduce_apply_syms ~state id in
+              let arity = List.length vars in
+              Utils.debugf ~section 5
+                "@[<2>transform def of %a (arity %d) into App_rec@]"
+                  (fun k->k ID.print id arity);
+              (* stack of apply function *)
+              let stack =
+                try IntMap.find arity fe.fe_stack
+                with Not_found ->
+                  errorf_ "rec-defined function %a should have full arity %d"
+                    ID.print id arity
+              in
+              let subst, vars = bind_hof_vars ~state Var.Subst.empty vars in
+              (* LHS: app (f x y) z *)
+              let lhs =
+                apply_app_funs_ stack
+                  (U.const id :: List.map U.var vars)
+              in
+              let rhs = elim_hof_term ~state subst rhs in
+              let app_l = List.map (fun a -> a.af_id) stack in
+              let eqn = Stmt.Eqn_app (app_l, vars, lhs, rhs) in
+              let defined = { Stmt.
+                defined_head=id;
+                defined_ty=ty_of_fun_encoding_ ~state fe;
+              } in
+              { def with Stmt.
+                rec_defined=defined;
+                rec_vars=vars;
+                rec_eqns=eqn;
+              }
+            ) else (
+              Utils.debugf ~section 5
+                "@[<2>keep structure of def of %a@]" (fun k->k ID.print id);
+              let tr_term = elim_hof_term ~state in
+              let tr_type _subst ty = encode_toplevel_ty ~state ty in
+              Stmt.map_rec_def_bind Var.Subst.empty def
+                ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
+              |> cast_rec_unsafe_
+            )
+    in
+    let defs = List.map elim_eqn defs in
+    [Stmt.axiom_rec ~info defs]
+
   (* eliminate partial applications in the given statement. Can return several
      statements because of the declarations of new application symbols. *)
-  let elim_hof_statement ~state stmt =
+  let elim_hof_statement ~state stmt : (_, _, inv2) Stmt.t list =
     let info = Stmt.info stmt in
     let tr_term = elim_hof_term ~state in
     let tr_type _subst ty = encode_toplevel_ty ~state ty in
-    Utils.debugf ~section 3 "@[<2>elim HOF in stmt@ `@[%a@]`@]" (fun k->k PStmt.print stmt);
+    Utils.debugf ~section 3 "@[<2>@{<cyan>> elim HOF in stmt@}@ `@[%a@]`@]" (fun k->k PStmt.print stmt);
     let stmt' = match Stmt.view stmt with
     | Stmt.Decl (id,decl,ty,attrs) ->
         if ID.Map.mem id state.arities
@@ -601,6 +700,7 @@ module Make(T : TI.S) = struct
           (* keep as is, not a partially applied fun; still have to modify type *)
           let ty = encode_toplevel_ty ~state ty in
           [Stmt.mk_decl ~info id decl ty ~attrs]
+    | Stmt.Axiom (Stmt.Axiom_rec l) -> elim_hof_rec ~state ~info l
     | Stmt.Axiom _
     | Stmt.TyDef (_,_)
     | Stmt.Pred (_,_,_)
@@ -609,6 +709,7 @@ module Make(T : TI.S) = struct
         let stmt' =
           Stmt.map_bind Var.Subst.empty stmt
             ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
+          |> cast_stmt_unsafe_ (* XXX: hack, but shorter *)
         in
         [stmt']
     in
@@ -616,8 +717,10 @@ module Make(T : TI.S) = struct
     let new_stmts = state.new_stmts |> CCVector.to_list in
     CCVector.clear state.new_stmts;
     if new_stmts<>[]
-    then Utils.debugf ~section 3 "@[<2>new declarations:@ @[<v>%a@]@]"
+    then Utils.debugf ~section 3 "@[<2>@{<cyan>< new declarations@}:@ @[<v>%a@]@]"
       (fun k->k (CCFormat.list ~start:"" ~stop:"" ~sep:"" PStmt.print) new_stmts);
+    Utils.debugf ~section 3 "@[<2>@{<cyan>< obtain stmts@}@ `[@[<hv>%a@]]`@]"
+      (fun k->k (CCFormat.list ~start:"" ~stop:"" PStmt.print) stmt');
     new_stmts @ stmt'
 
   let elim_hof pb =
