@@ -284,6 +284,10 @@ module Make(T : TI.S) = struct
     af_arity: int; (* shortcut: number of arguments *)
   }
 
+  type fun_encoding_stack_cell =
+    | SC_app of apply_fun (* use this "app" function *)
+    | SC_first_param of ID.t * int (* apply the first parameter (given its arity) *)
+
   (* how to encode a given (partially applied) function:
      for each arity the function [f] uses, map the arity
      to a list of application symbols to use.
@@ -291,7 +295,7 @@ module Make(T : TI.S) = struct
      A list [app1, app2, app3] means that [f x y z] will be
      encoded as [app3 (app2 (app1 x) y) z]. *)
   type fun_encoding = {
-    fe_stack: apply_fun list IntMap.t;
+    fe_stack: fun_encoding_stack_cell list IntMap.t; (* never empty *)
     fe_args: ty list; (* type arguments used to return the first handle *)
     fe_ret_handle: handle; (* handle type returned by the function *)
   }
@@ -316,12 +320,16 @@ module Make(T : TI.S) = struct
   let pp_apply_fun out f =
     fpf out "@[<2>%a/%d :@ `@[%a@]`@]" ID.print f.af_id f.af_arity P.print f.af_ty
 
-  let pp_app_funs out =
-    fpf out "[@[%a@]]" (CCFormat.list ~start:"" ~stop:"" ~sep:"" pp_apply_fun)
+  let pp_sc out = function
+    | SC_first_param (f,n) -> fpf out "%a (arity %d)" ID.print f n
+    | SC_app f -> pp_apply_fun out f
+
+  let pp_fe_stack out =
+    fpf out "[@[<v>%a@]]" (CCFormat.list ~start:"" ~stop:"" ~sep:"" pp_sc)
 
   let pp_fun_encoding out =
     fpf out "[@[<v>%a@]]"
-      (IntMap.print ~start:"" ~stop:"" ~sep:"" ~arrow:" -> " CCFormat.int pp_app_funs)
+      (IntMap.print ~start:"" ~stop:"" ~sep:"" ~arrow:" -> " CCFormat.int pp_fe_stack)
 
   let create_state ~env arities = {
     env;
@@ -475,17 +483,19 @@ module Make(T : TI.S) = struct
 
     (* special case for first chunk, which doesn't need an application
        symbol *)
-    let first_args, first_handle, n_args, m, chunks' =
+    let first_args, first_handle, n_args, app_l, m, chunks' =
       match chunks with
       | [] -> assert false
       | (args, remaining_args) :: chunks' ->
-          (* first application: no app symbol *)
-          let m = IntMap.singleton (List.length args) [] in
+          (* first application: no app symbol, only the function itself *)
           let handle =
-            handle_arrow_l args
-              (handle_arrow_l remaining_args (H_leaf ty_ret))
+            handle_arrow_l remaining_args (H_leaf ty_ret)
             |> ty_of_handle_ ~state |> handle_leaf in
-          args, handle, List.length args, m, chunks'
+          (* initial stack of applications *)
+          let arity = List.length args in
+          let app_l = [SC_first_param (id, arity)] in
+          let m = IntMap.singleton (List.length args) app_l in
+          args, handle, List.length args, app_l, m, chunks'
     in
     (* deal with remaining chunks. For each chunk we need the handle
        returned by the previous chunks (that is, if we apply arguments
@@ -502,13 +512,13 @@ module Make(T : TI.S) = struct
           let args' = ty_of_handle_ ~state prev_handle :: args in
           let app_fun = app_of_handle_ ~state args' handle_ret in
           let n_args' = List.length args + n_args in
-          let app_l' = app_fun :: app_l in
+          let app_l' = SC_app app_fun :: app_l in
           let m = IntMap.add n_args' (List.rev app_l') m in
           (* return handle_ret, because it is the type obtained by
              fully applying [app_fun] *)
           handle_ret, n_args', app_l', m
         )
-        (first_handle, n_args, [], m)
+        (first_handle, n_args, app_l, m)
         chunks'
     in
     Utils.debugf ~section 4 "@[<hv2>map %a to@ %a@]"
@@ -528,23 +538,34 @@ module Make(T : TI.S) = struct
     try ID.Map.find id state.fun_encodings
     with Not_found -> introduce_apply_syms ~state id
 
+  let sc_arity_ = function
+    | SC_first_param (_,n) -> n
+    | SC_app a -> a.af_arity
+
   (* apply the list of apply_fun to [l]. Arities should match. *)
   let rec apply_app_funs_ stack l =
     Utils.debugf ~section 5 "@[<2>apply_stack@ @[%a@]@ to @[%a@]@]"
-      (fun k->k pp_app_funs stack (CCFormat.list P.print) l);
+      (fun k->k pp_fe_stack stack (CCFormat.list P.print) l);
     match stack with
     | [] ->
         begin match l with
-          | [] -> assert false
-          | [f] -> f
-          | f :: l' -> U.app f l' (* apply directly *)
+        | []
+        | _::_::_ -> assert false
+        | [res] -> res
         end
     | f :: stack' ->
-        assert (f.af_arity >= 1);
-        let args, l' = CCList.take_drop f.af_arity l in
-        assert (List.length args = f.af_arity);
+        let arity = sc_arity_ f in
+        let head, (args, l') = match f, l with
+          | _, [] -> assert false
+          | SC_first_param _, f :: args' ->
+              (* first parameter on the stack = the function to apply *)
+              f, CCList.take_drop arity args'
+          | SC_app af, _ ->
+              U.const af.af_id, CCList.take_drop arity l
+        in
+        assert (List.length args = arity);
         (* compute closure, then push it on l *)
-        let closure =  U.app (U.const f.af_id) args in
+        let closure = U.app head args in
         apply_app_funs_ stack' (closure :: l')
 
   let elim_hof_ty ~state subst ty =
@@ -649,7 +670,9 @@ module Make(T : TI.S) = struct
                   (U.const id :: List.map U.var vars)
               in
               let rhs = elim_hof_term ~state subst rhs in
-              let app_l = List.map (fun a -> a.af_id) stack in
+              let app_l =
+                List.map
+                  (function SC_first_param _ -> id | SC_app  a -> a.af_id) stack in
               let eqn = Stmt.Eqn_app (app_l, vars, lhs, rhs) in
               let defined = { Stmt.
                 defined_head=id;
