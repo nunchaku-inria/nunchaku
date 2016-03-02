@@ -61,6 +61,14 @@ module Make(T : TI.S) = struct
       (* for each parameter, concretization function, as an association list *)
   }
 
+  (* symbols used to eliminate higher-order funs *)
+  type hof_elim = {
+    handle_ty : ID.t;
+      (* the symbol used to reify type arrows into atomic types *)
+    app_symbs : ID.Set.t;
+      (* set of "app" symbols *)
+  }
+
   type decode_state = {
     approx_fun : fun_encoding ID.Tbl.t;
       (* concretization_fun -> function it is used to encode *)
@@ -68,6 +76,8 @@ module Make(T : TI.S) = struct
       (* recursive function -> its encoding *)
     abstract_ty : fun_encoding ID.Tbl.t;
       (* set of abstraction types *)
+    hof: hof_elim;
+      (* data related to higher-order functions *)
   }
 
   (** {6 Encoding} *)
@@ -80,14 +90,17 @@ module Make(T : TI.S) = struct
       (* signature *)
   }
 
-  let create_state() = {
+  let create_state ~hof () = {
     decode={
       approx_fun=ID.Tbl.create 16;
       encoded_fun=ID.Tbl.create 16;
       abstract_ty=ID.Tbl.create 16;
+      hof;
     };
     sigma=Sig.empty;
   }
+
+  exception Error of string
 
   exception TranslationFailed of term * string
   (* not supposed to escape *)
@@ -100,6 +113,9 @@ module Make(T : TI.S) = struct
   let fail_decode_ ?term:t msg =
     Utils.exn_ksprintf msg ~f:(fun msg -> raise (DecodingFailed (t,msg)))
 
+  let error_ msg = raise (Error msg)
+  let errorf_ msg = CCFormat.ksprintf msg ~f:error_
+
   let () = Printexc.register_printer
     (function
       | TranslationFailed (t,msg) ->
@@ -110,10 +126,49 @@ module Make(T : TI.S) = struct
           Some (spf "@[<2>decoding of `@[%a@]` failed:@ %s@]" P.print t msg)
       | _ -> None)
 
+  let pp_hof out hof =
+    fpf out "{@[handle_cstor=`%a`,@ app_syms=@[%a@]@]}"
+      ID.print hof.handle_ty (ID.Set.print ID.print) hof.app_symbs
+
+  (* find the set of HOF-elim symbols used in [pb] *)
+  let gather_hof_ pb =
+    let is_handle_ty attrs =
+      List.exists
+        (function
+          | Stmt.Decl_attr_exn Attr_is_handle_cstor -> true
+          | _ -> false)
+        attrs
+    and is_app_ attrs =
+      List.exists
+        (function
+          | Stmt.Decl_attr_exn Attr_app_val -> true
+          | _ -> false)
+        attrs
+    in
+    let h_ty, app_m =
+      Problem.statements pb
+      |> CCVector.fold
+        (fun ((h_ty, app_m) as acc) stmt -> match Stmt.view stmt with
+          | Stmt.Decl (id, _, _, attrs) ->
+              begin match is_handle_ty attrs, is_app_ attrs, h_ty with
+              | true, _, None -> Some id, app_m (* found `to` *)
+              | true, _, Some i2 ->
+                  errorf_ "both %a and %a are handle constructors, impossible"
+                    ID.print id ID.print i2
+              | false, true, _ -> h_ty, ID.Set.add id app_m
+              | false, false, _ -> acc
+              end
+          | _ -> acc)
+        (None, ID.Set.empty)
+    in
+    match h_ty with
+    | None -> error_ "could not find the 'handle type constructor'"
+    | Some handle_ty -> { handle_ty; app_symbs=app_m; }
+
   (* list of argument types that (monomorphic) type expects *)
-  let rec ty_args_ (ty:term) = match TyM.repr ty with
-    | TyI.Builtin _ | TyI.Const _ | TyI.App (_,_) -> []
-    | TyI.Arrow (a,ty') -> a :: ty_args_ ty'
+  let ty_args_ ty =
+    let _, args, _ = U.ty_unfold ty in
+    args
 
   (* sort [fun_encoding.fun_concretization] *)
   let sort_concretization = List.sort (fun (i,_,_)(j,_,_) -> CCInt.compare i j)
@@ -376,9 +431,9 @@ module Make(T : TI.S) = struct
                 (* create a fun_encoding for [fun_id] (whose handle type is id) *)
                 let fun_encoding = {
                   fun_encoded_fun=fun_id;
-                    fun_abstract_ty_id=id;
-                    fun_abstract_ty=U.ty_const id;
-                    fun_concretization=[];
+                  fun_abstract_ty_id=id;
+                  fun_abstract_ty=U.ty_const id;
+                  fun_concretization=[];
                 } in
                 ID.Tbl.add partial id fun_encoding);
             on_proj_ attrs
@@ -399,7 +454,9 @@ module Make(T : TI.S) = struct
       partial
 
   let elim_recursion pb =
-    let state = create_state() in
+    let hof = gather_hof_ pb in
+    Utils.debugf ~section 3 "@[<2>hof info:@ %a@]" (fun k->k pp_hof hof);
+    let state = create_state ~hof () in
     populate_state ~state (Problem.statements pb);
     let pb' = Problem.flat_map_statements ~f:(tr_statement ~state) pb in
     pb', state.decode
