@@ -86,6 +86,8 @@ module Make(T : TI.S) = struct
   type state = {
     decode: decode_state;
       (* for decoding purpose *)
+    new_statements: (term, ty, inv2) Stmt.t CCVector.vector;
+      (* additional statements to be added to the result, such as declarations *)
     mutable sigma: ty Sig.t;
       (* signature *)
   }
@@ -97,6 +99,7 @@ module Make(T : TI.S) = struct
       abstract_ty=ID.Tbl.create 16;
       hof;
     };
+    new_statements=CCVector.create();
     sigma=Sig.empty;
   }
 
@@ -201,6 +204,9 @@ module Make(T : TI.S) = struct
           | Some t' -> t'
         end
     | TI.App (f,l) ->
+        (* TODO: extend [as_defined_] so it also returns info about whether
+           [f] is an 'app symbol'; in this case, later, we will add the
+           'proto' case *)
         begin match as_defined_ ~state f with
           | Some (id, fundef) ->
               (* [f] is a recursive function we are encoding *)
@@ -303,6 +309,8 @@ module Make(T : TI.S) = struct
 
   (* add an [encoding] to the state *)
   let add_encoding ~state fun_encoding =
+    Utils.debugf ~section 5 "@[<2>add fun encoding for %a@]"
+      (fun k->k ID.print fun_encoding.fun_encoded_fun);
     ID.Tbl.add state.decode.encoded_fun fun_encoding.fun_encoded_fun fun_encoding;
     ID.Tbl.add state.decode.abstract_ty fun_encoding.fun_abstract_ty_id fun_encoding;
     List.iter
@@ -311,52 +319,58 @@ module Make(T : TI.S) = struct
       fun_encoding.fun_concretization;
     ()
 
+  (* create a new function encoding for the given (function) ID, and
+     register it in state *)
+  let mk_fun_encoding_for_ ~state id =
+    (* declare abstract type + projectors first *)
+    let name = "G_" ^ ID.to_string_slug id in
+    let abs_type_id = ID.make name in
+    let abs_type = U.ty_const abs_type_id in
+    let ty = Sig.find_exn ~sigma:state.sigma id in
+    (* projection function: one per argument. It has
+      type  [abs_type -> type of arg] *)
+    let projectors =
+      List.mapi
+        (fun i ty_arg ->
+          let id' = ID.make (Printf.sprintf "proj_%s_%d" name i) in
+          let ty' = U.ty_arrow abs_type ty_arg in
+          i, id', ty')
+        (ty_args_ ty)
+    in
+    let fun_encoding = {
+      fun_encoded_fun=id;
+      fun_abstract_ty_id=abs_type_id;
+      fun_abstract_ty=abs_type;
+      fun_concretization=projectors;
+    } in
+    add_encoding ~state fun_encoding;
+    (* declare abstract type + projectors *)
+    CCVector.push state.new_statements
+      (Stmt.ty_decl ~info:Stmt.info_default abs_type_id U.ty_type
+         ~attrs:[Stmt.Decl_attr_exn (Attr_abs_type id)]);
+    List.iter
+      (fun (n,proj,ty_proj) ->
+        CCVector.push state.new_statements
+          (Stmt.decl ~info:Stmt.info_default proj ty_proj
+             ~attrs:[Stmt.Decl_attr_exn (Attr_abs_projection (abs_type_id, n))]))
+      fun_encoding.fun_concretization;
+    fun_encoding
+
+  (* transform each axiom, considering case_head as rec. defined. *)
   let tr_rec_defs ~info ~state l =
-    (* transform each axiom, considering case_head as rec. defined *)
-    let new_stmts = ref [] in
-    let add_stmt = CCList.Ref.push new_stmts in
     (* first, build and register an encoding for each defined function *)
     List.iter
       (fun def ->
         let id = def.Stmt.rec_defined.Stmt.defined_head in
-        (* declare abstract type + projectors first *)
-        let name = "G_" ^ ID.to_string_slug id in
-        let abs_type_id = ID.make name in
-        let abs_type = U.ty_const abs_type_id in
-        let ty = Sig.find_exn ~sigma:state.sigma id in
-        (* projection function: one per argument. It has
-          type  [abs_type -> type of arg] *)
-        let projectors =
-          List.mapi
-            (fun i ty_arg ->
-              let id' = ID.make (Printf.sprintf "proj_%s_%d" name i) in
-              let ty' = U.ty_arrow abs_type ty_arg in
-              i, id', ty')
-            (ty_args_ ty)
-        in
-        let fun_encoding = {
-          fun_encoded_fun=id;
-          fun_abstract_ty_id=abs_type_id;
-          fun_abstract_ty=abs_type;
-          fun_concretization=projectors;
-        } in
-        add_encoding ~state fun_encoding;
-        (* declare abstract type + projectors + the function
-           NOTE: we need to declare the function because it is no longer
-            defined, only axiomatized *)
-        add_stmt
-          (Stmt.ty_decl ~info:Stmt.info_default abs_type_id U.ty_type
-             ~attrs:[Stmt.Decl_attr_exn (Attr_abs_type id)]);
-        add_stmt
+        (* declare the function, since it is not longer "rec defined",
+           but only axiomatized *)
+        CCVector.push state.new_statements
           (Stmt.decl ~info:Stmt.info_default ~attrs:[]
-            id def.Stmt.rec_defined.Stmt.defined_ty);
-        List.iter
-          (fun (n,proj,ty_proj) ->
-            add_stmt
-              (Stmt.decl ~info:Stmt.info_default proj ty_proj
-                 ~attrs:[Stmt.Decl_attr_exn (Attr_abs_projection (abs_type_id, n))]))
-          fun_encoding.fun_concretization;
-      )
+          id def.Stmt.rec_defined.Stmt.defined_ty);
+        (* compute encoding afterwards (order matters! because symbols
+           needed for the encoding also depend on [id] being declared) *)
+        let _ = mk_fun_encoding_for_ ~state id in
+        ())
       l;
     (* then translate each definition *)
     let l' = List.map
@@ -374,15 +388,14 @@ module Make(T : TI.S) = struct
           raise e)
       l
     in
-    (* add new statements (type declarations) before l' *)
-    List.rev_append !new_stmts [Stmt.axiom ~info l']
+    [Stmt.axiom ~info l']
 
   (* translate a statement *)
   let tr_statement ~state st =
     (* update signature *)
     state.sigma <- Sig.add_statement ~sigma:state.sigma st;
     let info = Stmt.info st in
-    match Stmt.view st with
+    let stmts' = match Stmt.view st with
     | Stmt.Decl (id,k,l,attrs) ->
         [Stmt.mk_decl ~info ~attrs id k l] (* no type declaration changes *)
     | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l] (* no (co) data changes *)
@@ -405,6 +418,11 @@ module Make(T : TI.S) = struct
     | Stmt.Copy c -> [Stmt.copy ~info c]
     | Stmt.Goal g ->
         [Stmt.goal ~info (tr_form ~state g)]
+    in
+    (* add the new statements before *)
+    let stmts'' = CCVector.to_list state.new_statements in
+    CCVector.clear state.new_statements;
+    stmts'' @ stmts'
 
   (* find whether attributes contain some [abs_type_of id] *)
   let on_handle_ty_ ~f =
