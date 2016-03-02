@@ -226,14 +226,7 @@ module Make(T : TI.S) = struct
 
   and encoded_ty = ty
 
-  let handle_is_leaf = function | H_leaf _ -> true | H_arrow _ -> false
-  let handle_is_fun = function H_leaf _ -> false | H_arrow _ -> true
   let handle_leaf x = H_leaf x
-  let handle_arrow x y = H_arrow (x,y)
-
-  let rec pp_handle out = function
-    | H_leaf t -> P.print out t
-    | H_arrow (t, h') -> fpf out "@[@[%a@] ·> @[%a@]@]" P.print t pp_handle h'
 
   (* map from handles to 'a *)
   module HandleMap = struct
@@ -382,8 +375,6 @@ module Make(T : TI.S) = struct
   let rec handle_arrow_l l h = match l with
     | [] -> h
     | a :: l' -> H_arrow (a, handle_arrow_l l' h)
-
-  let pp_decl_ out (id,ty) = fpf out "@[<2>%a :@ %a@]" ID.print id P.print ty
 
   (* given an application function, generate the corresponding extensionality
      axiom: `forall f g. (f = g or exists x. f x != g x)` *)

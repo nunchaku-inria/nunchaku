@@ -267,8 +267,7 @@ module Make(T : TI.S) = struct
     tr_term_rec_ ~state subst t
 
   (* translate a top-level formula *)
-  let tr_form ~state t =
-    tr_term ~state Subst.empty t
+  let tr_form ~state t = tr_term ~state Subst.empty t
 
   (* translate equation [eqn], which is defining the function
      corresponding to [fun_encoding].
