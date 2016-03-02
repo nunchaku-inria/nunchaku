@@ -10,7 +10,7 @@ module Sig = Signature
 
 type id = ID.t
 
-let name = "rec_elim"
+let name = "elim_rec"
 
 let section = Utils.Section.make name
 
