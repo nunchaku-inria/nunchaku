@@ -127,6 +127,7 @@ module Make(T : TI.S) = struct
           Some (spf "@[<2>decoding failed:@ %s@]" msg)
       | DecodingFailed (Some t, msg) ->
           Some (spf "@[<2>decoding of `@[%a@]` failed:@ %s@]" P.print t msg)
+      | Error msg -> Some (spf "@[<2>Error in ElimRec:@ %s@]" msg)
       | _ -> None)
 
   let pp_hof out hof =
@@ -183,6 +184,11 @@ module Make(T : TI.S) = struct
         - keep same term
   *)
 
+  let find_encoding_ ~state id =
+    try ID.Tbl.find state.decode.encoded_fun id
+    with Not_found ->
+      errorf_ "could not find the fun encoding for %a" ID.print id
+
   (* if [f] is a recursively defined function that is being eliminated,
       then return [Some def_of_f] *)
   let as_defined_ ~state f = match T.repr f with
@@ -192,6 +198,8 @@ module Make(T : TI.S) = struct
         with Not_found -> None
         end
     | _ -> None
+
+  (* FIXME: deal properly with app symbols in tr_term *)
 
   (* translate term/formula recursively into a new (guarded) term. *)
   let rec tr_term_rec_ ~state subst t =
@@ -269,46 +277,13 @@ module Make(T : TI.S) = struct
   (* translate a top-level formula *)
   let tr_form ~state t = tr_term ~state Subst.empty t
 
-  (* translate equation [eqn], which is defining the function
-     corresponding to [fun_encoding].
-     It returns an axiom instead. *)
-  let tr_eqns ~state ~fun_encoding ty eqn = match eqn with
-    | Stmt.Eqn_single (vars,rhs) ->
-        let id = fun_encoding.fun_encoded_fun in
-        (* quantify over abstract variable now *)
-        let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
-        (* replace each [x_i] by [proj_i var] *)
-        assert (List.length vars = List.length fun_encoding.fun_concretization);
-        let args' =
-          fun_encoding.fun_concretization
-          |> sort_concretization
-          |> List.map (fun (_,proj,_) -> U.app (U.const proj) [U.var alpha])
-        in
-        let subst = Subst.add_list ~subst:Subst.empty vars args' in
-        (* convert right-hand side and add its side conditions *)
-        let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
-        let rhs' = tr_term ~state subst rhs in
-        (* how to connect [lhs] and [rhs]? *)
-        let connect lhs rhs = match ID.polarity id with
-          | Polarity.Pos -> U.imply lhs rhs
-          | Polarity.Neg -> U.imply rhs lhs
-          | Polarity.NoPol ->
-              if U.ty_returns_Prop ty
-              then U.equiv lhs rhs
-              else U.eq lhs rhs
-        in
-        U.forall alpha (connect lhs rhs')
-    | Stmt.Eqn_app (app_l, vars, lhs, rhs) ->
-        assert false (* TODO *)
-
-  (* transform the recursive definition (mostly, its equations) *)
-  let tr_rec_def ~state ~fun_encoding def =
-    tr_eqns ~state ~fun_encoding
-      def.Stmt.rec_defined.Stmt.defined_ty def.Stmt.rec_eqns
+  let as_var_exn_ t = match T.repr t with
+    | TI.Var v -> v
+    | _ -> fail_tr_ t "expected a variable"
 
   (* add an [encoding] to the state *)
   let add_encoding ~state fun_encoding =
-    Utils.debugf ~section 5 "@[<2>add fun encoding for %a@]"
+    Utils.debugf ~section 5 "@[<2>add fun encoding for `%a`@]"
       (fun k->k ID.print fun_encoding.fun_encoded_fun);
     ID.Tbl.add state.decode.encoded_fun fun_encoding.fun_encoded_fun fun_encoding;
     ID.Tbl.add state.decode.abstract_ty fun_encoding.fun_abstract_ty_id fun_encoding;
@@ -355,6 +330,93 @@ module Make(T : TI.S) = struct
       fun_encoding.fun_concretization;
     fun_encoding
 
+  (* be sure that [id] has an encoding *)
+  let ensure_exists_encoding_ ~state id =
+    if not (ID.Tbl.mem state.decode.encoded_fun id)
+    then ignore (mk_fun_encoding_for_ ~state id)
+
+  (* translate equation [eqn], which is defining the function
+     corresponding to [fun_encoding].
+     It returns an axiom instead. *)
+  let tr_eqns ~state ~fun_encoding ty eqn =
+    let connect pol lhs rhs = match pol with
+      | Polarity.Pos -> U.imply lhs rhs
+      | Polarity.Neg -> U.imply rhs lhs
+      | Polarity.NoPol ->
+          if U.ty_returns_Prop ty
+          then U.equiv lhs rhs
+          else U.eq lhs rhs
+    in
+    (* apply the projectors of fun_encoding to alpha
+       @param first if true, keep first argument, else remove it *)
+    let apply_projs ~keep_first fun_encoding alpha =
+      fun_encoding.fun_concretization
+      |> sort_concretization
+      |> (fun l -> if keep_first then l else List.filter (fun (i,_,_) -> i<>0) l)
+      |> List.map (fun (_,proj,_) -> U.app (U.const proj) [U.var alpha])
+    in
+    match eqn with
+    | Stmt.Eqn_single (vars,rhs) ->
+        let id = fun_encoding.fun_encoded_fun in
+        (* quantify over abstract variable now *)
+        let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
+        (* replace each [x_i] by [proj_i var] *)
+        assert (List.length vars = List.length fun_encoding.fun_concretization);
+        let args' = apply_projs ~keep_first:true fun_encoding alpha in
+        let subst = Subst.add_list ~subst:Subst.empty vars args' in
+        (* convert right-hand side and add its side conditions *)
+        let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
+        let rhs' = tr_term ~state subst rhs in
+        (* how to connect [lhs] and [rhs]? *)
+        U.forall alpha (connect (ID.polarity id) lhs rhs')
+    | Stmt.Eqn_app (app_l, _vars, lhs, rhs) ->
+        (* introduce encodings if needed *)
+        List.iter (ensure_exists_encoding_ ~state) app_l;
+        let root_fun = fun_encoding in
+        (* traverse [lhs], making an encoding *)
+        let rec traverse_lhs i subst t = match T.repr t with
+          | TI.Const _ -> t, subst, []
+          | TI.App (f, l) ->
+              begin match T.repr f, l with
+              | _, [] -> assert false
+              | TI.Const f_id, first_arg :: l' ->
+                  let fun_encoding = find_encoding_ ~state f_id in
+                  let var_name = Printf.sprintf "a_%d" i in
+                  (* variable of the abstract type of [f_id] *)
+                  let alpha = Var.make ~name:var_name ~ty:fun_encoding.fun_abstract_ty in
+                  if ID.Set.mem f_id state.decode.hof.app_symbs then (
+                    (* first case: application symbol. We need to recurse
+                       in the first argument *)
+                    let first_arg', subst, vars = traverse_lhs (i+1) subst first_arg in
+                    let l'_as_vars = List.map as_var_exn_ l' in
+                    let new_l' = apply_projs ~keep_first:false fun_encoding alpha in
+                    let subst = Var.Subst.add_list ~subst l'_as_vars new_l' in
+                    let t' = U.app f (first_arg' :: new_l') in
+                    t', subst, alpha :: vars
+                  ) else (
+                    (* regular function, should have only variables as
+                       arguments *)
+                    assert (ID.equal f_id root_fun.fun_encoded_fun);
+                    let l_as_vars = List.map as_var_exn_ l in
+                    let new_args = apply_projs ~keep_first:true fun_encoding alpha in
+                    let subst = Var.Subst.add_list ~subst l_as_vars new_args in
+                    let t' = U.app f new_args in
+                    t', subst, [alpha]
+                  )
+              | _ -> assert false (* incorrect shape *)
+              end
+          | _ -> assert false
+        in
+        let lhs', subst, vars' = traverse_lhs 0 Var.Subst.empty lhs in
+        let rhs' = tr_term ~state subst rhs in
+        let form = connect Polarity.NoPol lhs' rhs' in
+        U.forall_l vars' form
+
+  (* transform the recursive definition (mostly, its equations) *)
+  let tr_rec_def ~state ~fun_encoding def =
+    tr_eqns ~state ~fun_encoding
+      def.Stmt.rec_defined.Stmt.defined_ty def.Stmt.rec_eqns
+
   (* transform each axiom, considering case_head as rec. defined. *)
   let tr_rec_defs ~info ~state l =
     (* first, build and register an encoding for each defined function *)
@@ -376,7 +438,7 @@ module Make(T : TI.S) = struct
       (fun def ->
         try
           let id = def.Stmt.rec_defined.Stmt.defined_head in
-          let fun_encoding = ID.Tbl.find state.decode.encoded_fun id in
+          let fun_encoding = find_encoding_ ~state id in
           tr_rec_def ~state ~fun_encoding def
         with TranslationFailed (t, msg) as e ->
           (* could not translate, keep old definition *)
