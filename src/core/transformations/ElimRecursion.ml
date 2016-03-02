@@ -212,32 +212,34 @@ module Make(T : TI.S) = struct
   (* translate equation [eqn], which is defining the function
      corresponding to [fun_encoding].
      It returns an axiom instead. *)
-  let tr_eqns ~state ~fun_encoding ty eqn =
-    let Stmt.Eqn_single (vars,rhs) = eqn in
-    let id = fun_encoding.fun_encoded_fun in
-    (* quantify over abstract variable now *)
-    let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
-    (* replace each [x_i] by [proj_i var] *)
-    assert (List.length vars = List.length fun_encoding.fun_concretization);
-    let args' =
-      fun_encoding.fun_concretization
-      |> sort_concretization
-      |> List.map (fun (_,proj,_) -> U.app (U.const proj) [U.var alpha])
-    in
-    let subst = Subst.add_list ~subst:Subst.empty vars args' in
-    (* convert right-hand side and add its side conditions *)
-    let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
-    let rhs' = tr_term ~state subst rhs in
-    (* how to connect [lhs] and [rhs]? *)
-    let connect lhs rhs = match ID.polarity id with
-      | Polarity.Pos -> U.imply lhs rhs
-      | Polarity.Neg -> U.imply rhs lhs
-      | Polarity.NoPol ->
-          if U.ty_returns_Prop ty
-          then U.equiv lhs rhs
-          else U.eq lhs rhs
-    in
-    U.forall alpha (connect lhs rhs')
+  let tr_eqns ~state ~fun_encoding ty eqn = match eqn with
+    | Stmt.Eqn_single (vars,rhs) ->
+        let id = fun_encoding.fun_encoded_fun in
+        (* quantify over abstract variable now *)
+        let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
+        (* replace each [x_i] by [proj_i var] *)
+        assert (List.length vars = List.length fun_encoding.fun_concretization);
+        let args' =
+          fun_encoding.fun_concretization
+          |> sort_concretization
+          |> List.map (fun (_,proj,_) -> U.app (U.const proj) [U.var alpha])
+        in
+        let subst = Subst.add_list ~subst:Subst.empty vars args' in
+        (* convert right-hand side and add its side conditions *)
+        let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
+        let rhs' = tr_term ~state subst rhs in
+        (* how to connect [lhs] and [rhs]? *)
+        let connect lhs rhs = match ID.polarity id with
+          | Polarity.Pos -> U.imply lhs rhs
+          | Polarity.Neg -> U.imply rhs lhs
+          | Polarity.NoPol ->
+              if U.ty_returns_Prop ty
+              then U.equiv lhs rhs
+              else U.eq lhs rhs
+        in
+        U.forall alpha (connect lhs rhs')
+    | Stmt.Eqn_app (app_l, vars, lhs, rhs) ->
+        assert false (* TODO *)
 
   (* transform the recursive definition (mostly, its equations) *)
   let tr_rec_def ~state ~fun_encoding def =
@@ -253,9 +255,6 @@ module Make(T : TI.S) = struct
         ID.Tbl.add state.decode.approx_fun proj fun_encoding)
       fun_encoding.fun_concretization;
     ()
-
-  (* TODO: before creating new projectors, check whether some already
-    exist (thanks to attributes, etc.) *)
 
   let tr_rec_defs ~info ~state l =
     (* transform each axiom, considering case_head as rec. defined *)
