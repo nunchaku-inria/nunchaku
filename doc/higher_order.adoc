@@ -347,7 +347,7 @@ rec epsilon : pi a. (a -> prop) -> prop :=
 
 rec iota : pi a. (a -> prop) -> prop :=
   iota Q = iota Q asserting
-       (Q = fun x. x = iota Q)
+       Q (iota Q)
     || (Q = fun x. false)
     || (exists x y. ~ (x = y) && Q x && Q y).
 ----
@@ -366,13 +366,20 @@ for "epsilon".
 "epsilon" and "iota" would be specializable (but congruence rules would be
 necessary in general).
 
-It might be useful to define another symbol, which can be used internally
+It might be useful to define two other symbols, which can be used internally
 (e.g., to encode quotients) or by some frontend when it is certain that there
 exists at least one element satisfying "Q" (in place of "epsilon") or exactly
 one (in place of "iota").
 
 ----
-rec kappa : pi a. (a -> prop) -> prop :=
-  kappa Q = kappa Q asserting
-       Q (kappa Q)
+rec epsilon_nonempty : pi a. (a -> prop) -> prop :=
+  epsilon_nonempty Q = epsilon_nonempty Q asserting
+       Q (epsilon_nonempty Q)
+
+rec iota_nonempty : pi a. (a -> prop) -> prop :=
+  iota_nonempty Q = iota_nonempty Q asserting
+       Q (iota_nonempty Q)
 ----
+
+No congruence rules are needed for "iota_nonempty" when specializing; otherwise,
+"epsilon_nonempty" and "iota_nonempty" are identical.
