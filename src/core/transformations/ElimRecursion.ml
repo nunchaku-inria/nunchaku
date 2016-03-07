@@ -76,8 +76,8 @@ module Make(T : TI.S) = struct
       (* recursive function -> its encoding *)
     abstract_ty : fun_encoding ID.Tbl.t;
       (* set of abstraction types *)
-    hof: hof_elim;
-      (* data related to higher-order functions *)
+    hof: hof_elim option;
+      (* data related to higher-order functions, if any *)
   }
 
   (** {6 Encoding} *)
@@ -166,8 +166,11 @@ module Make(T : TI.S) = struct
         (None, ID.Set.empty)
     in
     match h_ty with
-    | None -> error_ "could not find the 'handle type constructor'"
-    | Some handle_ty -> { handle_ty; app_symbs=app_m; }
+    | None ->
+        Utils.debug ~section 1
+          "could not find the 'handle type constructor', assume absence of HOF";
+        None
+    | Some handle_ty -> Some { handle_ty; app_symbs=app_m; }
 
   (* list of argument types that (monomorphic) type expects *)
   let ty_args_ ty =
@@ -335,6 +338,10 @@ module Make(T : TI.S) = struct
     if not (ID.Tbl.mem state.decode.encoded_fun id)
     then ignore (mk_fun_encoding_for_ ~state id)
 
+  let id_is_app_fun_ ~state id = match state.decode.hof with
+    | None -> false
+    | Some h -> ID.Set.mem id h.app_symbs
+
   (* translate equation [eqn], which is defining the function
      corresponding to [fun_encoding].
      It returns an axiom instead. *)
@@ -384,7 +391,7 @@ module Make(T : TI.S) = struct
                   let var_name = Printf.sprintf "a_%d" i in
                   (* variable of the abstract type of [f_id] *)
                   let alpha = Var.make ~name:var_name ~ty:fun_encoding.fun_abstract_ty in
-                  if ID.Set.mem f_id state.decode.hof.app_symbs then (
+                  if id_is_app_fun_ ~state f_id then (
                     (* first case: application symbol. We need to recurse
                        in the first argument *)
                     let first_arg', subst, vars = traverse_lhs (i+1) subst first_arg in
@@ -534,7 +541,7 @@ module Make(T : TI.S) = struct
 
   let elim_recursion pb =
     let hof = gather_hof_ pb in
-    Utils.debugf ~section 3 "@[<2>hof info:@ %a@]" (fun k->k pp_hof hof);
+    Utils.debugf ~section 3 "@[<2>hof info:@ @[%a@]@]" (fun k->k (CCFormat.opt pp_hof) hof);
     let state = create_state ~hof () in
     populate_state ~state (Problem.statements pb);
     let pb' = Problem.flat_map_statements ~f:(tr_statement ~state) pb in
