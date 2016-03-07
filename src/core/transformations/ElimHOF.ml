@@ -98,6 +98,11 @@ module Make(T : TI.S) = struct
     let _, args, _ = U.ty_unfold (Var.ty v) in
     List.length args > 0
 
+  let add_arity_var_ m v =
+    let tyvars, args, ret = U.ty_unfold (Var.ty v) in
+    assert (tyvars=[]); (* mono, see {!inv} *)
+    add_arity_ m (Var.id v) 0 args ret
+
   (* compute set of arities for higher-order functions *)
   let compute_arities_term ~env m t =
     let m = ref m in
@@ -112,9 +117,7 @@ module Make(T : TI.S) = struct
           end
       | TMI.Var v when var_is_ho_ v ->
           (* higher order variable *)
-          let tyvars, args, ret = U.ty_unfold (Var.ty v) in
-          assert (tyvars=[]); (* mono, see {!inv} *)
-          m := add_arity_ !m (Var.id v) 0 args ret
+          m := add_arity_var_ !m v
       | TMI.App (f, l) ->
           assert (l<>[]);
           begin match TM.repr f with
@@ -152,39 +155,34 @@ module Make(T : TI.S) = struct
     aux t;
     !m
 
-  (* TODO: fix problem with missing arities (rec definitions, spec?) *)
-  (* TODO: anyway changing rec (for a function [f:a_1-> ... -> a_n -> ret])
-            is hard, we need to add [n] to arities of [a], and then:
-
-          - remove rec definition of [f] (mere declaration)
-          - add some "multi_rec" statement for defining the set of application
-            symbols used to defined [f], including the current definition
-            that becomes a definition of [app1] (where full application
-            of [f] is now [app1 (... (app_k (f a) b) ...) c])
-
-          -> need to add a statement "multi_rec" that is like "axiom"
-             (not a definition, multiple axioms ok) but still has the
-             well-founded  properties for RecElim.
-    *)
-
-  (* TODO: consider that all functions are always totally applied at least
+  (* NOTE: we consider that all functions are always totally applied at least
      once, so that the app symbol and extensionality axioms are generated.
 
-     optim: do not do that if remaining args are guaranteed to be of
-     infinite cardinality (extensionality not needed then). Problem
+     TODO: optim: do not do that if remaining args are guaranteed to be of
+     infinite cardinality (extensionality not strictly needed then). Problem
      is for [unit -> unit] and the likes. *)
 
-  let compute_arities_stmt ~env m stmt =
+  let compute_arities_stmt ~env m (stmt:(_,_,inv1) Stmt.t) =
     let f = compute_arities_term ~env in
     let m = match Stmt.view stmt with
       | Stmt.Axiom (Stmt.Axiom_rec l) ->
           (* function defined with "rec": always consider it fully applied *)
           List.fold_left
             (fun m def ->
+              (* declare defined ID with full arity *)
               let id = def.Stmt.rec_defined.Stmt.defined_head in
               let _, args, ret = U.ty_unfold def.Stmt.rec_defined.Stmt.defined_ty in
               let n = List.length args in
-              add_arity_ m id n args ret)
+              let m = add_arity_ m id n args ret in
+              (* add arity 0 to higher-order parameter variables *)
+              let m = match def.Stmt.rec_eqns with
+                | Stmt.Eqn_single (vars,_rhs) ->
+                    List.fold_left
+                      (fun m v -> if var_is_ho_ v then add_arity_var_ m v else m)
+                      m vars
+                | _ -> assert false (* by typing *)
+              in
+              m)
             m l
       | _ -> m
     in
@@ -676,7 +674,7 @@ module Make(T : TI.S) = struct
               }
             ) else (
               Utils.debugf ~section 5
-                "@[<2>keep structure of def of %a@]" (fun k->k ID.print id);
+                "@[<2>keep structure of FO def of `%a`@]" (fun k->k ID.print id);
               let tr_term = elim_hof_term ~state in
               let tr_type _subst ty = encode_toplevel_ty ~state ty in
               Stmt.map_rec_def_bind Var.Subst.empty def
