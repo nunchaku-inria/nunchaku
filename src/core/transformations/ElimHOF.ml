@@ -564,8 +564,10 @@ module Make(T : TI.S) = struct
   let ty_of_fun_encoding_ ~state fe =
     U.ty_arrow_l fe.fe_args (ty_of_handle_ ~state fe.fe_ret_handle)
 
+  type subst = (T.t, T.t Var.t) Var.Subst.t
+
   (* encode [v]'s type, and add it to [subst] *)
-  let bind_hof_var ~state subst v =
+  let bind_hof_var ~state (subst:subst) v =
     (* replace [v] with [v'], which has an encoded type *)
     let v' = Var.update_ty v ~f:(elim_hof_ty ~state subst) in
     let subst = Var.Subst.add ~subst v v' in
@@ -644,7 +646,7 @@ module Make(T : TI.S) = struct
               let arity = List.length vars in
               Utils.debugf ~section 5
                 "@[<2>transform def of %a (arity %d) into App_rec@]"
-                  (fun k->k ID.print id arity);
+                (fun k->k ID.print id arity);
               (* stack of apply function *)
               let stack =
                 try IntMap.find arity fe.fe_stack
