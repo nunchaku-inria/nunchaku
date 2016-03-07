@@ -1,270 +1,351 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(* {1 TPTP Printer} *)
+(* {1 TPTP Printer}
+
+   See http://www.cs.miami.edu/~tptp/TPTP/QuickGuide/FiniteInterpretations.html *)
 
 open Nunchaku_core
 
-module A = UntypedAST
+module TI = TermInner
 module M = Model
 
 type 'a printer = Format.formatter -> 'a -> unit
 
-type term = UntypedAST.term
-type form= UntypedAST.term
-type ty = UntypedAST.ty
-type model = (term, ty) Model.t
-
 let fpf = Format.fprintf
 let section = Utils.Section.make "print_tptp"
 
+exception Error of string
+
+let () = Printexc.register_printer
+  (function
+    | Error msg -> Some (Utils.err_sprintf "in PrintTPTP:@ @[%s@]" msg)
+    | _ -> None)
+
+let error_ m = raise (Error m)
+let errorf_ msg = CCFormat.ksprintf ~f:error_ msg
+
+type role =
+  | Role_functor
+  | Role_predicate
+  | Role_domain
+
+let pp_role out = function
+  | Role_functor -> CCFormat.string out "fi_functors"
+  | Role_predicate -> CCFormat.string out "fi_predicates"
+  | Role_domain -> CCFormat.string out "fi_domain"
+
 let pp_list ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
 
-let rec print_term out t = match A.view t with
-  | A.Var `Wildcard  -> fpf out "$_"
-  | A.Builtin b -> A.Builtin.print out b
-  | A.AtVar v
-  | A.Var (`Var v) -> print_var out v
-  | A.Fun (v,t) ->
-      fpf out "@[<2>^[%a]:@ %a@]" print_tyvar v print_inner t
-  | A.Mu _ -> Utils.not_implemented "print mu in TPTP"
-  | A.Let _ -> Utils.not_implemented "print let in TPTP"
-  | A.Match _ -> Utils.not_implemented "print match in TPTP"
-  | A.Ite (a,b,c) ->
-      fpf out "$ite_t(@[<hv>%a,@ %a,@ %a@])"
-        print_term a print_term b print_term c
-  | A.Forall (v,t) ->
-      fpf out "@[<2>![%a]:@ %a@]" print_tyvar v print_inner t
-  | A.Exists (v,t) ->
-      fpf out "@[<2>?[%a]:@ %a@]" print_tyvar v print_inner t
-  | A.TyArrow (a,b) ->
-      fpf out "@[<2>%a >@ %a@]" print_inner a print_ty b
-  | A.TyForall (v,t) ->
-      fpf out "@[<2>!>[%a]:@ %a@]" print_var v print_inner t
-  | A.App (_, []) -> assert false
-  | A.App (f, l) ->
-      begin match A.view f with
-      | A.Var _
-      | A.AtVar _ ->
-          fpf out "@[<2>%a(%a)@]"
-            print_inner f (pp_list ~sep:", " print_term) l
-      | A.Builtin b ->
-          begin match b, l with
-          | `True, [] -> fpf out "$true"
-          | `False, [] -> fpf out "$false"
-          | `Prop, [] -> fpf out "$o"
-          | `Type, [] -> fpf out "$tType"
-          | `Not, [f] -> fpf out "~ %a" print_inner f
-          | `And, _ ->
-              fpf out "@[<hv>%a@]" (pp_list ~sep:" & " print_inner) l
-          | `Or, _ ->
-              fpf out "@[<hv>%a@]" (pp_list ~sep:" | " print_inner) l
-          | `Eq, [a;b] ->
-              fpf out "@[<hv>%a =@ %a@]" print_inner a print_inner b
-          | `Imply, [a;b] ->
-              fpf out "@[<hv>%a =>@ %a@]" print_inner a print_inner b
-          | `Equiv, [a;b] ->
-              fpf out "@[<hv>%a <=>@ %a@]" print_inner a print_inner b
-          | `Prop ,_
-          | `Type ,_
-          | `Not ,_
-          | `True ,_
-          | `False ,_
-          | `Eq ,_
-          | `Equiv ,_
-          | `Undefined _, _
-          | `Imply ,_ -> assert false
-          end
-      | _ ->
-          Utils.not_implementedf "could not apply %a to arguments" print_term f
-      end
-  | A.MetaVar _ -> assert false
+module Make(T : TI.S) = struct
+  module U = TI.Util(T)
+  module P = TI.Print(T)
 
-and print_ty out t = print_term out t
-and print_form out t = print_term out t
+  type term = T.t
+  type form = T.t
+  type ty = T.t
+  type model = (term, ty) Model.t
 
-and print_inner out t = match A.view t with
-  | A.Builtin _ | A.Var _ | A.AtVar _ | A.MetaVar _
-  | A.Ite (_,_,_)
-  | A.Let (_,_,_) -> print_term out t
-  | A.App (f,_) ->
-      begin match A.view f with
-      | A.Builtin `And
-      | A.Builtin `Or
-      | A.Builtin `Imply
-      | A.Builtin `Equiv
-      | A.Builtin `Not ->
-          fpf out "(@[<hv>%a@])" print_term t
-      | _ -> print_term out t
-      end
-  | A.Fun (_,_)
-  | A.Mu _
-  | A.Match _
-  | A.Forall (_,_)
-  | A.Exists (_,_)
-  | A.TyArrow (_,_)
-  | A.TyForall (_,_) -> fpf out "(@[<2>%a@])" print_term t
+  let print_builtin print_inner out : term TI.Builtin.t -> unit = function
+    | `True -> CCFormat.string out "$true"
+    | `False -> CCFormat.string out "$false"
+    | `Eq (a,b) ->
+        fpf out "@[<hv>%a =@ %a@]" print_inner a print_inner b
+    | `Equiv (a,b) ->
+        fpf out "@[<hv>%a <=>@ %a@]" print_inner a print_inner b
+    | `Undefined (_id,t) -> print_inner out t
+    | `And
+    | `Imply
+    | `Or
+    | `Not
+    | `DataTest _
+    | `DataSelect _
+    | `Guard _
+    | `Ite _ -> assert false (* TODO *)
 
-and print_var out v = CCFormat.string out v
+  (* disambiguate IDs when printing them *)
+  let erase_state = ID.Erase.create_state()
 
-and print_tyvar out (v,tyopt) = match tyopt with
-  | None -> print_var out v
-  | Some ty -> fpf out "%a:%a" print_var v print_ty ty
+  let id_to_name id = ID.Erase.to_name erase_state id
 
-(* TODO: gather the set of constants and declare fi_domain on them *)
-(* TODO: try to flatten, apply lamdabs to variables, unroll ITE...
-  also annotate whether it's fi_functors or fi_predicates *)
+  let print_var out v = CCFormat.string out (Var.id v |> id_to_name)
 
-module StrSet = Set.Make(String)
+  let rec print_term out t = match T.repr t with
+    | TI.Var v -> print_var out v
+    | TI.Bind (`Fun,v,t) ->
+        fpf out "@[<2>^[%a]:@ %a@]" print_typed_var v print_inner t
+    | TI.Bind (`Mu,_,_) -> Utils.not_implemented "print mu in TPTP"
+    | TI.Let _ -> Utils.not_implemented "print let in TPTP"
+    | TI.Match _ -> Utils.not_implemented "print match in TPTP"
+    | TI.Builtin (`Ite (a,b,c)) ->
+        fpf out "$ite_t(@[<hv>%a,@ %a,@ %a@])"
+          print_term a print_term b print_term c
+    | TI.Bind (`Forall, v,t) ->
+        fpf out "@[<2>![%a]:@ %a@]" print_typed_var v print_inner t
+    | TI.Bind (`Exists, v,t) ->
+        fpf out "@[<2>?[%a]:@ %a@]" print_typed_var v print_inner t
+    | TI.TyArrow (a,b) ->
+        fpf out "@[<2>%a >@ %a@]" print_inner a print_ty b
+    | TI.Bind (`TyForall, v,t) ->
+        fpf out "@[<2>!>[%a]:@ %a@]" print_var v print_inner t
+    | TI.Const c -> CCFormat.string out (id_to_name c)
+    | TI.App (_, []) -> assert false
+    | TI.App (f, l) ->
+        begin match T.repr f with
+        | TI.Const _
+        | TI.Var _ ->
+            fpf out "@[<2>%a(%a)@]"
+              print_inner f (pp_list ~sep:", " print_term) l
+        | TI.Builtin b ->
+            begin match b, l with
+            | `Not, [f] -> fpf out "~ %a" print_inner f
+            | `And, _ ->
+                fpf out "@[<hv>%a@]" (pp_list ~sep:" & " print_inner) l
+            | `Or, _ ->
+                fpf out "@[<hv>%a@]" (pp_list ~sep:" | " print_inner) l
+            | `Imply, [a;b] ->
+                fpf out "@[<hv>%a =>@ %a@]" print_inner a print_inner b
+            | `True, _
+            | `False, _
+            | `Eq _ ,_
+            | `Equiv _ ,_
+            | `Ite _, _
+            | `Not ,_
+            | `Undefined _, _
+            | `DataTest _, _
+            | `DataSelect _, _
+            | `Guard _, _
+            | `Imply ,_ -> assert false
+            end
+        | _ ->
+            Utils.not_implementedf
+              "@[<2>print_model:@ could not apply `@[%a@]`@ to arguments [@[%a@]]@]"
+              print_term f (pp_list ~sep:","P.print) l
+        end
+    | TI.TyMeta _ -> assert false
+    | TI.Builtin b -> print_builtin print_inner out b
+    | TI.TyBuiltin `Type -> CCFormat.string out "$tType"
+    | TI.TyBuiltin `Kind -> error_ "cannot print `kind` in TPTP"
+    | TI.TyBuiltin `Prop -> CCFormat.string out "$o"
 
-(* state used for preprocessing of models *)
-type pre_state = {
-  pre_bound: StrSet.t; (* bound vars *)
-  pre_types: (string, unit) Hashtbl.t;  (* type constructors *)
-  pre_constants: (string, A.term) Hashtbl.t; (* unique domain constants *)
-  pre_in_ty : bool; (* in type? if yes, do not use distinct constants *)
-}
+  and print_ty out t = print_term out t
+  and print_form out t = print_term out t
 
-let pre_state_create() =
-  { pre_bound=StrSet.empty; pre_in_ty=false;
-    pre_types=Hashtbl.create 16; pre_constants=Hashtbl.create 16; }
-let pre_state_bind ~state v = {state with pre_bound=StrSet.add v state.pre_bound}
-let pre_state_enter_ty ~state = {state with pre_in_ty=true }
+  and print_inner out t = match T.repr t with
+    | TI.Var _
+    | TI.TyMeta _
+    | TI.TyBuiltin _
+    | TI.Const _
+    | TI.App (_,_)
+    | TI.Let (_,_,_) -> print_term out t
+    | TI.Builtin _
+    | TI.Bind _
+    | TI.Match _
+    | TI.TyArrow (_,_) -> fpf out "(@[<2>%a@])" print_term t
 
-(* preprocess model to make it as FO as possible, and associate it a role. *)
-let preprocess_model _m =
-  (* FIXME
-  let role_fun = "fi_functors" and _role_pred = "fi_predicates" in
-  let mk_cst v = "\"" ^ v ^ "\"" in (* a domain constant *)
+  and print_typed_var out v = fpf out "%a:%a" print_var v print_ty (Var.ty v)
+
+  type tptp_statement = {
+    role: role;
+    form: form;
+  }
+
+  (* a model: a suite of statements *)
+  type tptp_model = tptp_statement CCVector.ro_vector
+
+  (* FIXME: still useful? *)
+  (* state used for preprocessing of models *)
+  type pre_state = {
+    pre_constants: ID.t ID.Tbl.t; (* constant -> unique domain constants *)
+    pre_vars: ty Var.t ID.Tbl.t; (* var->var *)
+  }
+
+  let create_state () =
+    { pre_constants=ID.Tbl.create 16;
+      pre_vars=ID.Tbl.create 16;
+    }
+
+  (* create a domain constant *)
+  let mk_cst id =
+    ID.make ("\"" ^ ID.name id ^ "\"")
+
+  let find_var_ ~state v =
+    try ID.Tbl.find state.pre_vars (Var.id v)
+    with Not_found ->
+      errorf_ "variable %a should be in scope" Var.print v
+
+  (* preprocess terms:
+     - find and replace constants by "distinct" constants.
+     - replace lower case (bound) variables by capitalized variables *)
+  let rec preprocess_term ~state t = match T.repr t with
+    | TI.Const id ->
+        let id' =
+          try ID.Tbl.find state.pre_constants id
+          with Not_found -> id (* not a domain constant *)
+        in
+        U.const id'
+    | TI.Var v ->
+        let v' = find_var_ ~state v in
+        U.var v'
+    | TI.App (f,l) ->
+        let f = preprocess_term ~state f in
+        let l = List.map (preprocess_term ~state) l in
+        U.app f l
+    | TI.Bind (`Fun, v,t) ->
+        preprocess_typed_var ~state v
+          (fun v -> U.fun_ v (preprocess_term ~state t))
+    | TI.Let (v,t,u) ->
+        let t = preprocess_term ~state t in
+        let u = preprocess_term ~state u in
+        let v' = find_var_ ~state v in
+        U.let_ v' t u
+    | TI.Bind (`Mu, _,_) ->
+        errorf_ "cannot represent `@[%a@]`@ in TPTP" P.print t
+    | TI.Match _ -> Utils.not_implemented "replace in match"
+    | TI.Builtin (`Ite (a,b,c)) ->
+        let a = preprocess_term ~state a in
+        let b = preprocess_term ~state b in
+        let c = preprocess_term ~state c in
+        U.ite a b c
+    | TI.Bind (`Forall,v,t) ->
+        preprocess_typed_var ~state v
+          (fun v -> U.forall v (preprocess_term ~state t))
+    | TI.Bind (`Exists,v,t) ->
+        preprocess_typed_var ~state v
+          (fun v -> U.exists v (preprocess_term ~state t))
+    | TI.TyArrow (a,b) ->
+        U.ty_arrow (preprocess_ty ~state a) (preprocess_ty ~state b)
+    | TI.Bind (`TyForall,v,t) ->
+        let v' = mk_var ~state v in
+        U.ty_forall v' (preprocess_ty ~state t)
+    | TI.Builtin _ -> t
+    | TI.TyBuiltin _
+    | TI.TyMeta _ -> t
+
+  and preprocess_typed_var ~state v f =
+    assert (not(ID.Tbl.mem state.pre_vars (Var.id v)));
+    let v' = mk_var ~state v in
+    ID.Tbl.add state.pre_vars (Var.id v') v';
+    f v'
+
+  and preprocess_ty ~state t = preprocess_term ~state t
+
   (* make a valid TPTP variable *)
-  let mk_var v = match v.[0] with
-    | 'A' .. 'Z' -> v
-    | 'a' .. 'b' -> String.capitalize v
-    | _ -> "V" ^ v
-  in
-  (* find and replace constants by distinct constants.
-    Also replace lower case (bound) variables by capitalized variables *)
-  let rec find_cst_term ~state t = match A.view t with
-    | A.Var (`Var v) | A.MetaVar v | A.AtVar v ->
-        if StrSet.mem v state.pre_bound then A.var (mk_var v)
-        else if state.pre_in_ty || Hashtbl.mem state.pre_types v then (
-          Hashtbl.replace state.pre_types v (); (* remember this is a type *)
-          A.var v
-        ) else (
-          try Hashtbl.find state.pre_constants v
-          with Not_found ->
-            let v' = mk_cst v in
-            Hashtbl.add state.pre_constants v (A.var v');
-            A.var v'
-        )
-    | A.Var `Wildcard
-    | A.Builtin _ -> t
-    | A.App (f,l) ->
-        let f = find_cst_term ~state f in
-        let l = List.map (find_cst_term ~state) l in
-        A.app f l
-    | A.Fun (v,t) ->
-        aux_typed_var ~state v
-          (fun state v -> A.fun_ v (find_cst_term ~state t))
-    | A.Let (v,t,u) ->
-        let t = find_cst_term ~state t in
-        let u = find_cst_term ~state:(pre_state_bind ~state v) u in
-        A.let_ (mk_var v) t u
-    | A.Match _ -> Utils.not_implemented "replace in match"
-    | A.Ite (a,b,c) ->
-        let a = find_cst_term ~state a in
-        let b = find_cst_term ~state b in
-        let c = find_cst_term ~state c in
-        A.ite a b c
-    | A.Forall (v,t) ->
-        aux_typed_var ~state v
-          (fun state v -> A.forall v (find_cst_term ~state t))
-    | A.Exists (v,t) ->
-        aux_typed_var ~state v
-          (fun state v -> A.exists v (find_cst_term ~state t))
-    | A.TyArrow (a,b) ->
-        A.ty_arrow (aux_ty ~state a) (aux_ty ~state b)
-    | A.TyForall (v,t) ->
-        A.ty_forall (mk_var v)
-          (aux_ty ~state:(pre_state_bind ~state v) t)
-  and aux_typed_var ~state (v,tyopt) f =
-    let var = mk_var v, CCOpt.map (aux_ty ~state) tyopt in
-    f (pre_state_bind ~state v) var
-  and aux_ty ~state t =
-    let state = pre_state_enter_ty ~state in
-    find_cst_term ~state t
-  (* the domain declaration(s): forall X, (X=c1 | ... | X=cn)
-      TODO: one domain declaration per type! *)
-  and mk_domain ~state =
-    let l = Hashtbl.fold (fun _ c acc -> c::acc) state.pre_constants [] in
-    let f =
-      A.forall ("X", None)
-        (A.or_ (List.map (fun c -> A.eq (A.var "X") c) l))
+  and mk_var ~state v =
+    let name = ID.name (Var.id v) in
+    let name = match name.[0] with
+      | 'A' .. 'Z' -> name
+      | 'a' .. 'b' -> String.capitalize name
+      | _ -> "V" ^ name
     in
-    [ f, "fi_domain" ]
-  in
-  (* make formula(s) out of a pair t=u, pushing tests, quantifiers etc.
-    outside *)
-  let return x = [x]
-  and (>|=) l f = CCList.map f l
-  and (>>=) l f = CCList.flat_map f l in
-  let rec preprocess_pair ~state t u =
-    match A.view u with
-      | A.Builtin _ | A.Var _ | A.AtVar _ | A.MetaVar _
-      | A.TyArrow (_,_) | A.TyForall (_,_)
-      | A.App _ ->
-          return (A.eq t u)
-      | A.Fun ((v,_) as typed_v, u') ->
-          preprocess_pair ~state (A.app t [A.var v]) u' >|= fun f ->
-          A.forall typed_v f
-      | A.Forall (v, u') ->
-          preprocess_pair ~state t u' >|= fun f ->
-          A.forall v f
-      | A.Exists (v, u') ->
-          preprocess_pair ~state t u' >|= fun f ->
-          A.exists v f
-      | A.Let (v,u1,u2) ->
-          preprocess_pair ~state t u2 >|= fun u2 ->
-          A.let_ v u1 u2
-      | A.Ite (u1,u2,u3) ->
-          preprocess_pair ~state t u2 >>= fun u2 ->
-          preprocess_pair ~state t u3 >|= fun u3 ->
-          A.ite u1 u2 u3
-      | A.Match _ -> Utils.not_implemented "printTPTP: match"
-  in
-  let state = pre_state_create() in
-  let m' = m.Model.terms
-    >>= fun (t,u) ->
-    let u = find_cst_term ~state u in
-    preprocess_pair ~state t u
-    >|= fun form ->
-    let role = role_fun in
-    form, role
-  in
-  let prelude = mk_domain ~state in
-  prelude @ m'
-  *)
-  assert false
+    Var.make ~name ~ty:(preprocess_ty ~state (Var.ty v))
 
-(* print a model *)
-let print_model out m =
-  (* generate new names for TPTP statements *)
-  let mk_name =
-    let n = ref 0 in
-    fun s ->
-      let name = s ^ "_" ^ string_of_int !n in
-      incr n;
-      name
-  in
-  (* print a single component of the model *)
-  let pp_form out (f,role) =
-    let name = mk_name "nun_model" in
-    fpf out "@[<2>fof(%s, %s,@ @[%a@]).@]" name role print_form f
-  in
-  let header = "% --------------- begin TPTP model ------------"
-  and footer = "% --------------- end TPTP model --------------" in
-  Utils.debugf ~section 3 "preprocess model..." (fun _->());
-  let m = preprocess_model m in
-  fpf out "@[<v>%s@,%a@,%s@]"
-    header (pp_list ~sep:"" pp_form) m footer
+  let preprocess_typed_vars ~state vars f =
+    let rec aux acc vars f = match vars with
+      | [] -> f (List.rev acc)
+      | v :: vars' ->
+          preprocess_typed_var ~state v
+            (fun v' ->  aux (v'::acc) vars' f)
+    in
+    aux [] vars f
 
+  (* translate [forall vars. t = dt] into a conjunction of cases *)
+  let translate_dt kind vars t dt =
+    let mk_subst tests =
+      List.fold_left (fun subst (v,t) -> Var.Subst.add ~subst v t) Var.Subst.empty tests
+    in
+    (* turn each [test, rhs] into an equation or predicate *)
+    let forms =
+      List.rev_map
+        (fun (tests, rhs) ->
+          let subst = mk_subst tests in
+          let args =
+            List.map (fun v -> Var.Subst.find_or ~subst ~default:(U.var v) v) vars
+          in
+          let rhs = U.eval ~subst rhs in
+          let body = match kind with
+            | Model.Symbol_type -> assert false
+            | Model.Symbol_fun -> U.eq (U.app t args) rhs
+            | Model.Symbol_prop ->
+                (* propositions should become [p(x)] or [not p(x)] *)
+                match T.repr rhs with
+                | TI.Builtin `True -> U.app t args
+                | TI.Builtin `False -> U.not_ (U.app t args)
+                | _ -> U.equiv (U.app t args) rhs
+          in
+          U.forall_l vars body)
+        (([], dt.Model.DT.else_) :: dt.Model.DT.tests)
+    in
+    U.and_ (List.rev forms)
+
+  (* the domain declaration(s): [forall X:ty, (X=c1 | ... | X=cn)] where
+     the [c_i] are the elements of [l] *)
+  let mk_domain ty l =
+    let v = Var.make ~ty ~name:"X" in
+    let form =
+      U.forall v
+        (U.or_ (List.map (fun c -> U.eq (U.var v) (U.const c)) l))
+    in
+    { role=Role_domain; form; }
+
+  let role_of_kind = function
+    | Model.Symbol_prop -> Role_predicate
+    | Model.Symbol_fun -> Role_functor
+    | Model.Symbol_type -> assert false
+
+  (* preprocess model to make it as FO as possible, and associate it a role. *)
+  let preprocess_model (m:model) : tptp_model =
+    let state = create_state () in
+    let res = CCVector.create () in
+    (* finite types *)
+    Sequence.of_list m.Model.finite_types
+      |> Sequence.map
+        (fun (ty,l) ->
+          (* register domain constants *)
+          List.iter (fun id -> ID.Tbl.add state.pre_constants id (mk_cst id)) l;
+          let ty = preprocess_ty ~state ty in
+          mk_domain ty l)
+      |> CCVector.append_seq res;
+    (* constants *)
+    Sequence.of_list m.Model.constants
+      |> Sequence.map
+        (fun (t,u,k) ->
+          let t = preprocess_term ~state t in
+          let u = preprocess_term ~state u in
+          { role = role_of_kind k; form = U.eq t u; })
+      |> CCVector.append_seq res;
+    (* functions *)
+    Sequence.of_list m.Model.funs
+      |> Sequence.map
+        (fun (t,vars,dt,k) ->
+          let module DT_U = Model.DT_util(T) in
+          let form =
+            preprocess_typed_vars ~state vars
+              (fun vars -> translate_dt k vars t dt)
+          in
+          { role = role_of_kind k; form; })
+      |> CCVector.append_seq res;
+    CCVector.freeze res
+
+  (* print a model *)
+  let print_model out (m:model) =
+    (* generate new names for TPTP statements *)
+    let mk_name =
+      let n = ref 0 in
+      fun s ->
+        let name = s ^ "_" ^ string_of_int !n in
+        incr n;
+        name
+    in
+    (* print a single component of the model *)
+    let pp_stmt out {form; role; } =
+      let name = mk_name "nun_model" in
+      fpf out "@[<2>fof(%s, %a,@ @[%a@]).@]" name pp_role role print_form form
+    in
+    let header = "% --------------- begin TPTP model ------------"
+    and footer = "% --------------- end TPTP model --------------" in
+    Utils.debug ~section 3 "preprocess model...";
+    let m' = preprocess_model m in
+    fpf out "@[<v>%s@,%a@,%s@]"
+      header (CCVector.print ~start:"" ~stop:"" ~sep:"" pp_stmt) m' footer
+end

@@ -154,15 +154,6 @@ module Default : S
 val default_repr: (Default.T.t, Default.Ty.t) repr
 val default: (Default.T.t, Default.Ty.t) build
 
-(** {2 Utils} *)
-module Util(T : S) : sig
-  val dt_of_term :
-    vars:T.Ty.t Var.t list ->
-    T.T.t ->
-    (T.T.t, T.Ty.t) Model.DT.t or_error
-  (** Convert a term into a decision tree, or fail *)
-end
-
 (** {2 Problem} *)
 module Problem : sig
   type ('t, 'ty) t = {
@@ -185,6 +176,17 @@ module Problem : sig
     'acc ->
     ('t, 'ty) t ->
     'acc * ('t2, 'ty2) t
+end
+
+(** {2 Utils} *)
+module Util(T : S) : sig
+  val dt_of_term :
+    vars:T.Ty.t Var.t list ->
+    T.T.t ->
+    (T.T.t, T.Ty.t) Model.DT.t or_error
+  (** Convert a term into a decision tree, or fail *)
+
+  val problem_kinds : (_,T.Ty.t) Problem.t -> Model.symbol_kind ID.Map.t
 end
 
 (** {2 IO} *)

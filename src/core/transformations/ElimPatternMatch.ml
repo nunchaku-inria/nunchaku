@@ -84,7 +84,7 @@ module Make(T : TermInner.S) = struct
     let on_encoded =
       if print then
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after elimination of pattern-match: %a@]@." PPb.print]
+        [Format.printf "@[<v2>@{<Yellow>after elimination of pattern-match@}: %a@]@." PPb.print]
       else [] in
     let encode pb = tr_problem pb, () in
     make1 ~name

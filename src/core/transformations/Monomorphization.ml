@@ -328,11 +328,6 @@ module Make(T : TI.S) = struct
       ~ty:(mono_type ~state ~local_state)
     in
     match eqn with
-      | Stmt.Eqn_linear l ->
-          f (Stmt.Eqn_linear
-            (List.map
-              (fun (vars, rhs, side) -> CCList.drop n vars, rhs, side)
-              l))
       | Stmt.Eqn_nested l ->
           f (Stmt.Eqn_nested
             (List.map
@@ -562,6 +557,13 @@ module Make(T : TI.S) = struct
           (fun out (id,tup) ->
             Format.fprintf out "@[<h>%a (%a)@]" ID.print id ArgTuple.print tup))
 
+  (* some sanity checks on statements *)
+  let check_defs_ pb =
+    let module TyCard = TyCardinality.Make(T) in
+    let env = Problem.env pb in
+    let cache = TyCard.create_cache() in
+    Problem.iter_statements pb ~f:(TyCard.check_non_zero ~cache env)
+
   let monomorphize ?(depth_limit=256) pb =
     (* create the state used for monomorphization. Toplevel function
       for specializing (id,tup) is [mono_statements_for_id] *)
@@ -580,6 +582,7 @@ module Make(T : TI.S) = struct
     (* some debug *)
     Utils.debugf ~section 3 "@[<2>instances:@ @[%a@]@]"
       (fun k-> k print_tbl_ traverse#processed);
+    check_defs_ pb';
     pb', traverse#decode_state
 
   (** {6 Decoding} *)
@@ -616,7 +619,7 @@ module Make(T : TI.S) = struct
     let on_encoded = if print
       then
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after mono: %a@]@." PPb.print]
+        [Format.printf "@[<v2>@{<Yellow>after mono@}: %a@]@." PPb.print]
       else []
     in
     Transform.make1

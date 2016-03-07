@@ -18,23 +18,23 @@ type 'ty defined = {
 }
 
 type ('t, 'ty, 'kind) equations =
-  | Eqn_linear :
-      ('ty var list (* universally quantified vars, also arguments to [f] *)
-      * 't (* right-hand side of equation *)
-      * 't list (* side conditions *)
-      ) list
-      -> ('t, 'ty, <eqn:[`Linear];..>) equations
   | Eqn_nested :
       ('ty var list (* universally quantified vars *)
       * 't list (* arguments (patterns) to the defined term *)
       * 't  (* right-hand side of equation *)
       * 't list (* additional conditions *)
       ) list
-      -> ('t, 'ty, <eqn:[`Nested];..>) equations
+      -> ('t, 'ty, <eqn:[`Nested]; ty:_; ..>) equations
   | Eqn_single :
       'ty var list (* function arguments *)
       *  't (* RHS *)
-      -> ('t, 'ty, <eqn:[`Single];..>) equations
+      -> ('t, 'ty, <eqn:[<`Single | `App]; ty:_; ..>) equations
+  | Eqn_app :
+      (ID.t list (* application symbols *)
+      * 'ty var list (* quantified vars *)
+      * 't (* LHS of equation *)
+      * 't (* RHS of equation *)
+      ) -> ('t, 'ty, <eqn:[`App]; ty:[`Mono]; ..>) equations
 
 type ('t,'ty,'kind) rec_def = {
   rec_defined: 'ty defined;
@@ -112,6 +112,7 @@ type ('t, 'ty) copy = {
 type decl_attr =
   | Decl_attr_card_max of int (** maximal cardinality of type *)
   | Decl_attr_card_min of int (** minimal cardinality of type *)
+  | Decl_attr_exn of exn (** open case *)
 
 type ('term, 'ty, 'inv) view =
   | Decl of id * decl * 'ty * decl_attr list
@@ -220,14 +221,28 @@ val map_defined:
 val map_eqns:
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, <eqn:'inv;..>) equations ->
-  ('t2, 'ty2, <eqn:'inv;..>) equations
+  ('t, 'ty, <eqn:'inv_e; ty:'inv_ty; ..>) equations ->
+  ('t2, 'ty2, <eqn:'inv_e; ty:'inv_ty; ..>) equations
+
+val map_eqns_bind :
+  bind:('acc -> 'ty Var.t -> 'acc * 'ty1 Var.t) ->
+  term:('acc -> 'term -> 'term1) ->
+  'acc ->
+  ('term,'ty,<eqn:'inv_e;ty:'inv_ty;..>) equations ->
+  ('term1,'ty1,<eqn:'inv_e;ty:'inv_ty;..>) equations
 
 val map_clause:
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
   ('t, 'ty, <ind_preds:'inv;..>) pred_clause ->
   ('t2, 'ty2, <ind_preds:'inv;..>) pred_clause
+
+val map_clause_bind :
+  bind:('acc -> 'ty Var.t -> 'acc * 'ty1 Var.t) ->
+  term:('acc -> 'term -> 'term1) ->
+  'acc ->
+  ('term,'ty,<ind_preds:'inv;..>) pred_clause ->
+  ('term1,'ty1,<ind_preds:'inv;..>) pred_clause
 
 val cast_eqns:
   ('t, 'ty, <eqn:'inv;..>) equations ->
@@ -237,22 +252,30 @@ val cast_eqns:
 val map_rec_def :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, <eqn:'inv;..>) rec_def ->
-  ('t2, 'ty2, <eqn:'inv;..>) rec_def
+  ('t, 'ty, <eqn:'inv_e; ty:'inv_ty; ..>) rec_def ->
+  ('t2, 'ty2, <eqn:'inv_e; ty:'inv_ty; ..>) rec_def
+
+val map_rec_def_bind :
+  bind:('a -> 'b Var.t -> 'a * 'c Var.t) ->
+  term:('a -> 'd -> 'e) ->
+  ty:('a -> 'b -> 'c) ->
+  'a ->
+  ('d, 'b, <eqn:'f; ty:'g; .. >) rec_def ->
+  ('e, 'c, <eqn:'f; ty:'g; .. >) rec_def
 
 val cast_rec_def:
-  ('t, 'ty, <eqn:'inv;..>) rec_def ->
-  ('t, 'ty, <eqn:'inv;..>) rec_def
+  ('t, 'ty, <eqn:'inv_e; ty:'inv_ty; ..>) rec_def ->
+  ('t, 'ty, <eqn:'inv_e; ty:'inv_ty; ..>) rec_def
 
 val map_rec_defs :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, <eqn:'inv;..>) rec_defs ->
-  ('t2, 'ty2, <eqn:'inv;..>) rec_defs
+  ('t, 'ty, <eqn:'inv_e; ty:'inv_ty; ..>) rec_defs ->
+  ('t2, 'ty2, <eqn:'inv_e; ty:'inv_ty; ..>) rec_defs
 
 val cast_rec_defs:
-  ('t, 'ty, <eqn:'inv;..>) rec_defs ->
-  ('t, 'ty, <eqn:'inv;..>) rec_defs
+  ('t, 'ty, <eqn:'inv_e; ty:'inv_ty; ..>) rec_defs ->
+  ('t, 'ty, <eqn:'inv_e; ty:'inv_ty; ..>) rec_defs
 
 val map_ty_def :
   ty:('ty -> 'ty2) ->
@@ -269,6 +292,14 @@ val map_pred :
   term:('a -> 'a1) -> ty:('b -> 'b1) ->
   ('a,'b,<ind_preds:'inv;..>) pred_def  ->
   ('a1,'b1,<ind_preds:'inv;..>) pred_def
+
+val map_pred_bind :
+  bind:('acc -> 'ty Var.t -> 'acc * 'ty2 Var.t) ->
+  term:('acc -> 'term -> 'term2) ->
+  ty:('acc -> 'ty -> 'ty2) ->
+  'acc ->
+  ('term, 'ty, < ind_preds : 'inv; .. >) pred_def ->
+  ('term2, 'ty2, < ind_preds : 'inv; .. >) pred_def
 
 val map_preds :
   term:('a -> 'a1) -> ty:('b -> 'b1) ->
@@ -292,13 +323,28 @@ val cast_preds :
 val map :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, <eqn:'inv;ind_preds:'inv2;..>) t ->
-  ('t2, 'ty2, <eqn:'inv;ind_preds:'inv2;..>) t
+  ('t, 'ty, <eqn:'inv;ind_preds:'inv2;ty:'inv3;..>) t ->
+  ('t2, 'ty2, <eqn:'inv;ind_preds:'inv2;ty:'inv3;..>) t
+
+val map_bind :
+  bind:('b_acc -> 'ty Var.t -> 'b_acc * 'ty2 Var.t) ->
+  term:('b_acc -> 't -> 't2) ->
+  ty:('b_acc -> 'ty -> 'ty2) ->
+  'b_acc ->
+  ('t, 'ty, <eqn:'inv;ind_preds:'inv2;ty:'inv3;..>) t ->
+  ('t2, 'ty2, <eqn:'inv;ind_preds:'inv2;ty:'inv3;..>) t
+(** Similar to {!map}, but accumulating some value of type [b_acc] when
+    entering binders *)
 
 val fold :
   term:('a -> 't -> 'a) ->
   ty:('a -> 'ty -> 'a) ->
   'a -> ('t, 'ty, 'inv) t -> 'a
+
+val iter :
+  term:('t -> unit) ->
+  ty:('ty -> unit) ->
+  ('t, 'ty, 'inv) t -> unit
 
 (** {2 Print} *)
 
@@ -308,6 +354,8 @@ module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
   val print_pred_defs : (Pt.t, Pty.t, _) pred_def list printer
   val print_rec_def : (Pt.t, Pty.t, _) rec_def printer
   val print_rec_defs : (Pt.t, Pty.t, _) rec_def list printer
+  val print_tydef : Pty.t tydef printer
+  val print_tydefs : ([`Data | `Codata] * Pty.t tydef list) printer
   val print_copy : (Pt.t, Pty.t) copy printer
   val print : (Pt.t, Pty.t, _) t printer
 end

@@ -75,9 +75,9 @@ let pp_invalid_def_ out = function
 let () = Printexc.register_printer
   (function
     | InvalidDef _ as e ->
-        Some (CCFormat.sprintf "@[<2>internal error: %a@]" pp_invalid_def_ e)
+        Some (Utils.err_sprintf "env: %a" pp_invalid_def_ e)
     | UndefinedID id ->
-        Some (CCFormat.sprintf "internal error: undefined ID `%a`" ID.print id)
+        Some (Utils.err_sprintf "env: undefined ID `%a`" ID.print id)
     | _ -> None
   )
 

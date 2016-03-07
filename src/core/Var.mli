@@ -83,6 +83,7 @@ module Subst : sig
   val mem : subst:('ty,'a) t -> 'ty var -> bool
   val find : subst:('ty,'a) t -> 'ty var -> 'a option
   val find_exn : subst:('ty,'a) t -> 'ty var -> 'a  (** @raise Not_found if var not bound *)
+  val find_or : subst:('ty,'a) t -> default:'a -> 'ty var -> 'a
 
   val to_list : ('ty,'a) t -> ('ty var * 'a) list
 

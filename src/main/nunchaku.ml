@@ -32,7 +32,8 @@ let print_typed_ = ref false
 let print_skolem_ = ref false
 let print_mono_ = ref false
 let print_elim_match_ = ref false
-let print_recursion_elim_ = ref false
+let print_elim_recursion_ = ref false
+let print_elim_hof_ = ref false
 let print_elim_multi_eqns = ref false
 let print_polarize_ = ref false
 let print_unroll_ = ref false
@@ -74,6 +75,8 @@ let options_debug_ = Utils.Section.iter
       " verbosity level for " ^ (if name="" then "all messages" else name))
   |> Sequence.to_rev_list
 
+let call_with x f = Arg.Unit (fun () -> f x)
+
 let options =
   let open CCFun in
   Arg.align ?limit:None @@ List.sort Pervasives.compare @@ (
@@ -92,8 +95,11 @@ let options =
       , Arg.Set print_elim_preds_
       , " print input after elimination of (co)inductive predicates"
   ; "--print-" ^ ElimRecursion.name
-      , Arg.Set print_recursion_elim_
+      , Arg.Set print_elim_recursion_
       , " print input after elimination of recursive functions"
+  ; "--print-" ^ ElimHOF.name
+      , Arg.Set print_elim_hof_
+      , " print input after elimination of higher-order/partial functions"
   ; "--print-" ^ ElimMultipleEqns.name
       , Arg.Set print_elim_multi_eqns
       , " print input after elimination of multiple equations"
@@ -106,14 +112,18 @@ let options =
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
-  ; "--color", Arg.Bool CCFormat.set_color_default, " enable/disable color"
+  ; "--color", call_with true CCFormat.set_color_default, " enable color"
+  ; "--no-color", call_with false CCFormat.set_color_default, " disable color"
+  ; "-nc", call_with false CCFormat.set_color_default, " disable color (alias to --no-color)"
   ; "-j", Arg.Set_int j, " set parallelism level"
   ; "--polarize-rec", Arg.Set polarize_rec_, " enable polarization of rec predicates"
   ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
   ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
+  ; "-i", Arg.String set_input_, " synonym for --input"
   ; "--output", Arg.String set_output_, " set output format " ^ list_outputs_ ()
+  ; "-o", Arg.String set_output_, " synonym for --output"
   ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
   ; "--version", Arg.Set version_, " print version and exit"
   ]
@@ -161,8 +171,9 @@ module Pipes = struct
   module Step_mono = Monomorphization.Make(HO)
   module Step_ElimMultipleEqns = ElimMultipleEqns.Make(HO)
   module Step_ElimMatch = ElimPatternMatch.Make(HO)
-  module Step_elim_preds = ElimIndPreds.Make(HO)
-  module Step_rec_elim = ElimRecursion.Make(HO)
+  module Step_ElimPreds = ElimIndPreds.Make(HO)
+  module Step_ElimHOF = ElimHOF.Make(HO)
+  module Step_ElimRec = ElimRecursion.Make(HO)
   module Step_polarize = Polarize.Make(HO)
   module Step_unroll = Unroll.Make(HO)
   module Step_elim_copy = ElimCopy.Make(HO)
@@ -193,8 +204,9 @@ let make_model_pipeline () =
     @@@
     Step_unroll.pipe ~print:(!print_unroll_ || !print_all_) @@@
     Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all @@@
-    Step_elim_preds.pipe ~print:(!print_elim_preds_ || !print_all_) @@@
-    Step_rec_elim.pipe ~print:(!print_recursion_elim_ || !print_all_) @@@
+    Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) @@@
+    Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) @@@
+    Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) @@@
     Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) @@@
     Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) @@@
     Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) @@@
@@ -245,6 +257,8 @@ open CCError.Infix
 
 (* model mode *)
 let main_model ~output statements =
+  let module T = TI.Default in
+  let module P = TI.Print(T) in
   (* run pipeline *)
   let cpipe = make_model_pipeline() in
   if !print_pipeline_
@@ -254,13 +268,14 @@ let main_model ~output statements =
   begin match res, output with
   | `Sat m, O_nunchaku when m.Model.potentially_spurious ->
       Format.printf "@[<v>@[<v2>SAT: (potentially spurious) {@,@[<v>%a@]@]@,}@]@."
-        (Model.print UntypedAST.print_term UntypedAST.print_term) m;
+        (Model.print P.print P.print) m;
   | `Sat m, O_nunchaku ->
       Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]@."
-        (Model.print UntypedAST.print_term UntypedAST.print_term) m;
+        (Model.print P.print P.print) m;
   | `Sat m, O_tptp ->
       (* XXX: if potentially spurious, what should we print? *)
-      Format.printf "@[<v2>%a@]@,@." NunPrintTPTP.print_model m
+      let module PM = NunPrintTPTP.Make(T) in
+      Format.printf "@[<v2>%a@]@,@." PM.print_model m
   | `Unsat, O_nunchaku ->
       Format.printf "@[UNSAT@]@."
   | `Unsat, O_tptp ->

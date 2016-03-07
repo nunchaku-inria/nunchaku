@@ -499,4 +499,26 @@ module Util(Repr : S) = struct
       let res = aux t in
       `Ok (Ite_M.to_dt res)
     with Error msg -> `Error msg
+
+  let problem_kinds pb =
+    let module M = Model in
+    let add_stmt m = function
+      | TyDecl (id, _) -> ID.Map.add id M.Symbol_type m
+      | Decl (id, (_, ret)) ->
+          let k = match Repr.Ty.view ret with
+            | TyBuiltin `Prop -> M.Symbol_prop
+            | TyApp _ -> M.Symbol_fun
+          in
+          ID.Map.add id k m
+      | Axiom _
+      | CardBound _
+      | Goal _ -> m
+      | MutualTypes (_, tydefs) ->
+          List.fold_left
+            (fun m tydef ->
+              let m = ID.Map.add tydef.ty_name M.Symbol_type m in
+              ID.Map.fold (fun id _ m -> ID.Map.add id M.Symbol_fun m) tydef.ty_cstors m)
+            m tydefs.tys_defs
+    in
+    CCVector.fold add_stmt ID.Map.empty (Problem.statements pb)
 end

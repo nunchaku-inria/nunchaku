@@ -20,23 +20,23 @@ type 'ty defined = {
 }
 
 type ('t, 'ty, 'kind) equations =
-  | Eqn_linear :
-      ('ty var list (* universally quantified vars, also arguments to [f] *)
-      * 't (* right-hand side of equation *)
-      * 't list (* side conditions *)
-      ) list
-      -> ('t, 'ty, <eqn:[`Linear];..>) equations
   | Eqn_nested :
       ('ty var list (* universally quantified vars *)
       * 't list (* arguments (patterns) to the defined term *)
       * 't  (* right-hand side of equation *)
       * 't list (* additional conditions *)
       ) list
-      -> ('t, 'ty, <eqn:[`Nested];..>) equations
+      -> ('t, 'ty, <eqn:[`Nested]; ty:_; ..>) equations
   | Eqn_single :
       'ty var list (* function arguments *)
       *  't (* RHS *)
-      -> ('t, 'ty, <eqn:[`Single];..>) equations
+      -> ('t, 'ty, <eqn:[<`Single | `App]; ty:_; ..>) equations
+  | Eqn_app :
+      (ID.t list (* application symbols *)
+      * 'ty var list (* quantified vars *)
+      * 't (* LHS of equation *)
+      * 't (* RHS of equation *)
+      ) -> ('t, 'ty, <eqn:[`App]; ty:[`Mono]; ..>) equations
 
 type ('t,'ty,'kind) rec_def = {
   rec_defined: 'ty defined;
@@ -114,6 +114,7 @@ type ('t, 'ty) copy = {
 type decl_attr =
   | Decl_attr_card_max of int
   | Decl_attr_card_min of int
+  | Decl_attr_exn of exn (** open case *)
 
 type ('term, 'ty, 'inv) view =
   | Decl of id * decl * 'ty * decl_attr list
@@ -216,53 +217,68 @@ let map_defined ~f d = {
   defined_ty=f d.defined_ty;
 }
 
-let map_eqns
-: type a a1 b b1 inv.
-    term:(a -> a1) -> ty:(b -> b1) ->
-    (a,b,<eqn:inv;..>) equations -> (a1,b1,<eqn:inv;..>) equations
-= fun ~term ~ty eqn ->
+let map_eqns_bind
+: type acc a a1 b b1 inv_e inv_ty.
+    bind:(acc -> b Var.t -> acc * b1 Var.t) ->
+    term:(acc -> a -> a1) ->
+    acc ->
+    (a,b,<eqn:inv_e;ty:inv_ty;..>) equations ->
+    (a1,b1,<eqn:inv_e;ty:inv_ty;..>) equations
+= fun ~bind ~term acc eqn ->
     match eqn with
     | Eqn_nested l ->
         Eqn_nested
           (List.map
             (fun (vars,args,rhs,side) ->
-              List.map (Var.update_ty ~f:ty) vars,
-              List.map term args,
-              term rhs,
-              List.map term side)
+              let acc, vars = Utils.fold_map bind acc vars in
+              vars,
+              List.map (term acc) args,
+              term acc rhs,
+              List.map (term acc) side)
             l)
-    | Eqn_linear l ->
-        Eqn_linear
-          (List.map
-            (fun (vars,rhs,side) ->
-              List.map (Var.update_ty ~f:ty) vars,
-              term rhs,
-              List.map term side)
-            l)
+    | Eqn_app (app_l, vars, lhs, rhs) ->
+        let acc, vars = Utils.fold_map bind acc vars in
+        Eqn_app (app_l, vars, term acc lhs, term acc rhs)
     | Eqn_single (vars,rhs) ->
-        Eqn_single (List.map (Var.update_ty ~f:ty) vars, term rhs)
+        let acc, vars = Utils.fold_map bind acc vars in
+        Eqn_single (vars, term acc rhs)
+
+let map_eqns ~term ~ty c =
+  let bind () v = (), Var.update_ty ~f:ty v in
+  map_eqns_bind () c ~bind ~term:(fun () -> term)
+
+let map_copy_bind ~bind ~term ~ty acc c =
+  let acc', copy_vars = Utils.fold_map bind acc c.copy_vars in
+  { c with
+    copy_vars;
+    copy_of = ty acc' c.copy_of;
+    copy_ty = ty acc c.copy_ty;
+    copy_abstract_ty = ty acc' c.copy_abstract_ty;
+    copy_concretize_ty = ty acc' c.copy_concretize_ty;
+    copy_pred = CCOpt.map (term acc') c.copy_pred;
+  }
 
 let map_copy ~term ~ty c =
-  { c with
-    copy_vars = List.map (Var.update_ty ~f:ty) c.copy_vars;
-    copy_of = ty c.copy_of;
-    copy_ty = ty c.copy_ty;
-    copy_abstract_ty = ty c.copy_abstract_ty;
-    copy_concretize_ty = ty c.copy_concretize_ty;
-    copy_pred = CCOpt.map term c.copy_pred;
-  }
+  let bind () v = (), Var.update_ty ~f:ty v in
+  map_copy_bind () c ~bind ~term:(fun () -> term) ~ty:(fun () -> ty)
 
 external cast_eqns
 : ('t, 'ty, <eqn:'inv;..>) equations ->
   ('t, 'ty, <eqn:'inv;..>) equations
 = "%identity"
 
-let map_rec_def ~term ~ty t = {
-  rec_kind=t.rec_kind;
-  rec_defined=map_defined ~f:ty t.rec_defined;
-  rec_vars=List.map (Var.update_ty ~f:ty) t.rec_vars;
-  rec_eqns=map_eqns ~term ~ty t.rec_eqns;
-}
+let map_rec_def_bind ~bind ~term ~ty acc t =
+  let acc', vars = Utils.fold_map bind acc t.rec_vars in
+  {
+    rec_kind=t.rec_kind;
+    rec_defined=map_defined ~f:(ty acc) t.rec_defined;
+    rec_vars=vars;
+    rec_eqns=map_eqns_bind ~bind ~term acc' t.rec_eqns;
+  }
+
+let map_rec_def ~term ~ty t =
+  let bind () v = (), Var.update_ty v ~f:ty in
+  map_rec_def_bind ~bind ~term:(fun () -> term) ~ty:(fun () -> ty) () t
 
 external cast_rec_def
 : ('t, 'ty, <eqn:'inv;..>) rec_def ->
@@ -270,6 +286,9 @@ external cast_rec_def
 = "%identity"
 
 let map_rec_defs ~term ~ty t = List.map (map_rec_def ~term ~ty) t
+
+let map_rec_defs_bind ~bind ~term ~ty acc t =
+  List.map (map_rec_def_bind ~bind ~term ~ty acc) t
 
 external cast_rec_defs
 : ('t, 'ty, <eqn:'inv;..>) rec_defs ->
@@ -282,44 +301,63 @@ let map_spec_defs ~term ~ty t = {
   spec_axioms=List.map term t.spec_axioms;
 }
 
-let map_clause
-: type a a1 b b1 inv.
-    term:(a -> a1) -> ty:(b -> b1) ->
+let map_clause_bind
+: type acc a a1 b b1 inv.
+    bind:(acc -> b Var.t -> acc * b1 Var.t) ->
+    term:(acc -> a -> a1) ->
+    acc ->
     (a,b,<ind_preds:inv;..>) pred_clause ->
     (a1,b1,<ind_preds:inv;..>) pred_clause
-= fun ~term ~ty c ->
+= fun ~bind ~term acc c ->
   let Pred_clause c = c in
+  let acc, vars = Utils.fold_map bind acc c.clause_vars in
   Pred_clause {
-    clause_vars=List.map (Var.update_ty ~f:ty) c.clause_vars;
-    clause_guard=CCOpt.map term c.clause_guard;
-    clause_concl=term c.clause_concl;
+    clause_vars=vars;
+    clause_guard=CCOpt.map (term acc) c.clause_guard;
+    clause_concl=term acc c.clause_concl;
   }
 
-let map_pred
-= fun ~term ~ty def ->
+let map_clause ~term ~ty c =
+  let bind () v = (), Var.update_ty v ~f:ty in
+  map_clause_bind () c ~bind ~term:(fun () t -> term t)
+
+let map_pred_bind
+= fun ~bind ~term ~ty acc def ->
+  let acc, ty_vars = Utils.fold_map bind acc def.pred_tyvars in
   let def' = {
-    pred_defined=map_defined ~f:ty def.pred_defined;
-    pred_tyvars=List.map (Var.update_ty ~f:ty) def.pred_tyvars;
-    pred_clauses=List.map (map_clause ~term ~ty) def.pred_clauses;
+    pred_defined=map_defined ~f:(ty acc) def.pred_defined;
+    pred_tyvars=ty_vars;
+    pred_clauses=List.map (map_clause_bind ~bind ~term acc) def.pred_clauses;
   } in
   def'
 
+let map_pred ~term ~ty def =
+  let bind () v = (), Var.update_ty ~f:ty v in
+  map_pred_bind () def ~bind ~term:(fun () -> term) ~ty:(fun () -> ty)
+
+let map_preds_bind ~bind ~term ~ty acc l = List.map (map_pred_bind acc ~bind ~term ~ty) l
+
 let map_preds ~term ~ty l = List.map (map_pred ~term ~ty) l
 
-let map_ty_def ~ty:fty l =
+let map_ty_def_bind ~bind ~ty:fty acc l =
   List.map
     (fun tydef ->
+      let acc', ty_vars = Utils.fold_map bind acc tydef.ty_vars in
       {tydef with
-        ty_type=fty tydef.ty_type;
-        ty_vars=List.map (Var.update_ty ~f:fty) tydef.ty_vars;
+        ty_type=fty acc tydef.ty_type;
+        ty_vars;
         ty_cstors=
           ID.Map.map
             (fun c -> {c with
-              cstor_args=List.map fty c.cstor_args;
-              cstor_type=fty c.cstor_type
+              cstor_args=List.map (fty acc') c.cstor_args;
+              cstor_type=fty acc' c.cstor_type
             })
             tydef.ty_cstors;
       }) l
+
+let map_ty_def ~ty l =
+  let bind () v = (), Var.update_ty v ~f:ty in
+  map_ty_def_bind () l ~bind ~ty:(fun () -> ty)
 
 external cast_pred
 : ('t, 'ty, <ind_preds:'inv;..>) pred_def ->
@@ -331,27 +369,31 @@ external cast_preds
   ('t, 'ty, <ind_preds:'inv;..>) pred_def list
 = "%identity"
 
-let map ~term:ft ~ty:fty st =
+let map_bind ~bind ~term:ft ~ty:fty acc st =
   let info = st.info in
   match st.view with
   | Decl (id,k,t,attrs) ->
-      mk_decl ~info ~attrs id k (fty t)
+      mk_decl ~info ~attrs id k (fty acc t)
   | Axiom a ->
       begin match a with
-      | Axiom_std l -> axiom ~info (List.map ft l)
+      | Axiom_std l -> axiom ~info (List.map (ft acc) l)
       | Axiom_spec t ->
-          axiom_spec ~info (map_spec_defs ~term:ft ~ty:fty t)
+          axiom_spec ~info (map_spec_defs ~term:(ft acc) ~ty:(fty acc) t)
       | Axiom_rec t ->
-          axiom_rec ~info (map_rec_defs ~term:ft ~ty:fty t)
+          axiom_rec ~info (map_rec_defs_bind ~bind ~term:ft ~ty:fty acc t)
       end
   | TyDef (k, l) ->
-      let l = map_ty_def ~ty:fty l in
+      let l = map_ty_def_bind acc ~bind ~ty:fty l in
       mk_ty_def ~info k l
   | Pred (wf, k, preds) ->
-      let preds = map_preds ~term:ft ~ty:fty preds in
+      let preds = map_preds_bind ~bind ~term:ft ~ty:fty acc preds in
       mk_pred ~info ~wf k preds
-  | Copy c -> copy ~info (map_copy ~term:ft ~ty:fty c)
-  | Goal t -> goal ~info (ft t)
+  | Copy c -> copy ~info (map_copy_bind ~bind ~term:ft ~ty:fty acc c)
+  | Goal t -> goal ~info (ft acc t)
+
+let map ~term ~ty st =
+  let bind () v = (), Var.update_ty ~f:ty v in
+  map_bind () st ~bind ~term:(fun () -> term) ~ty:(fun () -> ty)
 
 let fold_defined ~ty acc d = ty acc d.defined_ty
 
@@ -366,13 +408,10 @@ let fold_eqns_ (type inv) ~term ~ty acc (e:(_,_,inv) equations) =
           let acc = term acc rhs in
           List.fold_left term acc side)
         acc l
-  | Eqn_linear l ->
-      List.fold_left
-        (fun acc (vars,rhs,side) ->
-          let acc = fold_vars acc vars in
-          let acc = term acc rhs in
-          List.fold_left term acc side)
-        acc l
+  | Eqn_app (_,vars,lhs,rhs) ->
+      let acc = fold_vars acc vars in
+      let acc = term acc lhs in
+      term acc rhs
   | Eqn_single (vars,t) ->
       let acc = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc vars in
       term acc t
@@ -424,6 +463,9 @@ let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
       CCOpt.fold term acc c.copy_pred
   | Goal t -> term acc t
 
+let iter ~term ~ty st =
+  fold () st ~term:(fun () t -> term t) ~ty:(fun () t -> ty t)
+
 let fpf = Format.fprintf
 let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
@@ -439,7 +481,7 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
   let pp_defined out d =
     fpf out "@[%a : %a@]" ID.print d.defined_head Pty.print d.defined_ty
   and pp_typed_var out v =
-    fpf out "@[<2>%a:%a@]" Var.print_full v Pty.print (Var.ty v)
+    fpf out "@[<2>%a:%a@]" Var.print_full v Pty.print_in_app (Var.ty v)
 
   let pp_defined_list out =
     fpf out "@[<v>%a@]" (pplist_prefix ~first:"" ~pre:" and " pp_defined)
@@ -452,15 +494,11 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
     (* print equations *)
     let pp_eqns (type inv) id out (e:(_,_,inv) equations) =
       match e with
-      | Eqn_linear l  ->
-          pplist ~sep:";"
-            (fun out (vars,rhs,side) ->
-              if vars=[]
-              then fpf out "@[<hv>%a%a =@ %a@]" pp_sides side ID.print id Pt.print rhs
-              else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
-                (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print id
-                (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
-            ) out l
+      | Eqn_app (_, vars, lhs, rhs) ->
+          if vars=[]
+          then fpf out "@[<hv2>%a =@ %a@]" Pt.print lhs Pt.print rhs
+          else fpf out "@[<hv2>forall @[<h>%a@].@ @[%a =@ %a@]@]"
+            (pplist ~sep:" " pp_typed_var) vars Pt.print lhs Pt.print rhs
       | Eqn_nested l ->
           pplist ~sep:";"
             (fun out  (vars,args,rhs,side) ->
@@ -527,10 +565,31 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
   let pp_attr out = function
     | Decl_attr_card_max i -> fpf out "max_card %d" i
     | Decl_attr_card_min i -> fpf out "min_card %d" i
+    | Decl_attr_exn e -> CCFormat.string out (Printexc.to_string e)
 
   let pp_attrs out = function
     | [] -> ()
     | l -> fpf out "@ [@[%a@]]" (pplist ~sep:"," pp_attr) l
+
+  let print_tydef out tydef =
+    let ppcstors out c =
+      fpf out "@[<hv2>%a %a@]"
+        ID.print c.cstor_name (pplist ~sep:" " Pty.print_in_app) c.cstor_args in
+    fpf out "@[<hv2>@[%a %a@] :=@ @[<hv>%a@]@]"
+      ID.print tydef.ty_id
+      (pplist ~sep:" " Var.print_full) tydef.ty_vars
+      (pplist_prefix ~first:" | " ~pre:" | " ppcstors)
+        (ID.Map.to_list tydef.ty_cstors |> List.map snd)
+
+  let print_tydefs out (k,l) =
+    fpf out "@[<hv2>%s@ "
+      (match k with `Data -> "data" | `Codata -> "codata");
+    List.iteri
+      (fun i tydef ->
+        if i>0 then fpf out "@,and ";
+        print_tydef out tydef)
+      l;
+    fpf out ".@]"
 
   let print out t = match t.view with
   | Decl (id,_,t,attrs) ->
@@ -546,25 +605,7 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
       let pp_wf out = function `Wf -> fpf out "[wf]" | `Not_wf -> () in
       let pp_k out = function `Pred -> fpf out "pred" | `Copred -> fpf out "copred" in
       fpf out "@[<hv>%a%a %a.@]" pp_k k pp_wf wf print_pred_defs l
-  | TyDef (k, l) ->
-      let ppcstors out c =
-        fpf out "@[<hv2>%a %a@]"
-          ID.print c.cstor_name (pplist ~sep:" " Pty.print_in_app) c.cstor_args in
-      let print_def out tydef =
-        fpf out "@[<hv2>@[%a %a@] :=@ @[<hv>%a@]@]"
-          ID.print tydef.ty_id
-          (pplist ~sep:" " Var.print_full) tydef.ty_vars
-          (pplist_prefix ~first:" | " ~pre:" | " ppcstors)
-            (ID.Map.to_list tydef.ty_cstors |> List.map snd)
-      in
-      fpf out "@[<hv2>%s@ "
-        (match k with `Data -> "data" | `Codata -> "codata");
-      List.iteri
-        (fun i tydef ->
-          if i>0 then fpf out "@,and ";
-          print_def out tydef
-        ) l;
-      fpf out ".@]"
+  | TyDef (k, l) -> print_tydefs out (k,l)
   | Copy c -> fpf out "@[<2>%a.@]" print_copy c
   | Goal t -> fpf out "@[<2>goal %a.@]" Pt.print t
 end

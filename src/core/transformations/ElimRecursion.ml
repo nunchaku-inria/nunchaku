@@ -10,12 +10,34 @@ module Sig = Signature
 
 type id = ID.t
 
-let name = "rec_elim"
+let name = "elim_rec"
 
 let section = Utils.Section.make name
 
-type inv1 = <ty:[`Mono]; eqn:[`Single]; ind_preds:[`Absent]>
+type inv1 = <ty:[`Mono]; eqn:[`App]; ind_preds:[`Absent]>
 type inv2 = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
+
+exception Attr_abs_type of ID.t
+
+exception Attr_abs_projection of ID.t * int
+
+exception Attr_is_handle_cstor
+
+exception Attr_app_val
+
+exception Attr_proto_val of ID.t * int
+
+let fpf = Format.fprintf
+let spf = CCFormat.sprintf
+
+let () = Printexc.register_printer
+  (function
+    | Attr_abs_type fun_id -> Some (spf "abs_type_of %a" ID.print fun_id)
+    | Attr_abs_projection (ty_id,i) -> Some (spf "abs_proj_%d %a" i ID.print ty_id)
+    | Attr_app_val -> Some "app_symbol"
+    | Attr_is_handle_cstor -> Some "handle_type"
+    | Attr_proto_val (id, n) -> Some (spf "proto_%d_of_%a" n ID.print id)
+    | _ -> None)
 
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
@@ -27,9 +49,6 @@ module Make(T : TI.S) = struct
   type term = T.t
   type ty = T.t
 
-  let fpf = Format.fprintf
-  let spf = CCFormat.sprintf
-
   (* how to encode a single recursive function/predicate *)
   type fun_encoding = {
     fun_encoded_fun: id;
@@ -38,8 +57,16 @@ module Make(T : TI.S) = struct
       (* type of abstract values for the function *)
     fun_abstract_ty_id: id;
       (* symbol corresponding to [fun_abstract_ty] *)
-    fun_concretization: (id * ty) list;
-      (* for each parameter, concretization function *)
+    fun_concretization: (int * id * ty) list;
+      (* for each parameter, concretization function, as an association list *)
+  }
+
+  (* symbols used to eliminate higher-order funs *)
+  type hof_elim = {
+    handle_ty : ID.t;
+      (* the symbol used to reify type arrows into atomic types *)
+    app_symbs : ID.Set.t;
+      (* set of "app" symbols *)
   }
 
   type decode_state = {
@@ -49,6 +76,8 @@ module Make(T : TI.S) = struct
       (* recursive function -> its encoding *)
     abstract_ty : fun_encoding ID.Tbl.t;
       (* set of abstraction types *)
+    hof: hof_elim option;
+      (* data related to higher-order functions, if any *)
   }
 
   (** {6 Encoding} *)
@@ -57,18 +86,24 @@ module Make(T : TI.S) = struct
   type state = {
     decode: decode_state;
       (* for decoding purpose *)
+    new_statements: (term, ty, inv2) Stmt.t CCVector.vector;
+      (* additional statements to be added to the result, such as declarations *)
     mutable sigma: ty Sig.t;
       (* signature *)
   }
 
-  let create_state() = {
+  let create_state ~hof () = {
     decode={
       approx_fun=ID.Tbl.create 16;
       encoded_fun=ID.Tbl.create 16;
       abstract_ty=ID.Tbl.create 16;
+      hof;
     };
+    new_statements=CCVector.create();
     sigma=Sig.empty;
   }
+
+  exception Error of string
 
   exception TranslationFailed of term * string
   (* not supposed to escape *)
@@ -81,6 +116,9 @@ module Make(T : TI.S) = struct
   let fail_decode_ ?term:t msg =
     Utils.exn_ksprintf msg ~f:(fun msg -> raise (DecodingFailed (t,msg)))
 
+  let error_ msg = raise (Error msg)
+  let errorf_ msg = CCFormat.ksprintf msg ~f:error_
+
   let () = Printexc.register_printer
     (function
       | TranslationFailed (t,msg) ->
@@ -89,12 +127,58 @@ module Make(T : TI.S) = struct
           Some (spf "@[<2>decoding failed:@ %s@]" msg)
       | DecodingFailed (Some t, msg) ->
           Some (spf "@[<2>decoding of `@[%a@]` failed:@ %s@]" P.print t msg)
+      | Error msg -> Some (spf "@[<2>Error in ElimRec:@ %s@]" msg)
       | _ -> None)
 
+  let pp_hof out hof =
+    fpf out "{@[handle_cstor=`%a`,@ app_syms=@[%a@]@]}"
+      ID.print hof.handle_ty (ID.Set.print ID.print) hof.app_symbs
+
+  (* find the set of HOF-elim symbols used in [pb] *)
+  let gather_hof_ pb =
+    let is_handle_ty attrs =
+      List.exists
+        (function
+          | Stmt.Decl_attr_exn Attr_is_handle_cstor -> true
+          | _ -> false)
+        attrs
+    and is_app_ attrs =
+      List.exists
+        (function
+          | Stmt.Decl_attr_exn Attr_app_val -> true
+          | _ -> false)
+        attrs
+    in
+    let h_ty, app_m =
+      Problem.statements pb
+      |> CCVector.fold
+        (fun ((h_ty, app_m) as acc) stmt -> match Stmt.view stmt with
+          | Stmt.Decl (id, _, _, attrs) ->
+              begin match is_handle_ty attrs, is_app_ attrs, h_ty with
+              | true, _, None -> Some id, app_m (* found `to` *)
+              | true, _, Some i2 ->
+                  errorf_ "both %a and %a are handle constructors, impossible"
+                    ID.print id ID.print i2
+              | false, true, _ -> h_ty, ID.Set.add id app_m
+              | false, false, _ -> acc
+              end
+          | _ -> acc)
+        (None, ID.Set.empty)
+    in
+    match h_ty with
+    | None ->
+        Utils.debug ~section 1
+          "could not find the 'handle type constructor', assume absence of HOF";
+        None
+    | Some handle_ty -> Some { handle_ty; app_symbs=app_m; }
+
   (* list of argument types that (monomorphic) type expects *)
-  let rec ty_args_ (ty:term) = match TyM.repr ty with
-    | TyI.Builtin _ | TyI.Const _ | TyI.App (_,_) -> []
-    | TyI.Arrow (a,ty') -> a :: ty_args_ ty'
+  let ty_args_ ty =
+    let _, args, _ = U.ty_unfold ty in
+    args
+
+  (* sort [fun_encoding.fun_concretization] *)
+  let sort_concretization = List.sort (fun (i,_,_)(j,_,_) -> CCInt.compare i j)
 
   (*
     - apply substitution eagerly (build it when we enter `forall_f x. f x = t`)
@@ -102,6 +186,11 @@ module Make(T : TI.S) = struct
         - add 1 constraint `exists alpha. And_i (proj_i alpha = t_i)`;
         - keep same term
   *)
+
+  let find_encoding_ ~state id =
+    try ID.Tbl.find state.decode.encoded_fun id
+    with Not_found ->
+      errorf_ "could not find the fun encoding for %a" ID.print id
 
   (* if [f] is a recursively defined function that is being eliminated,
       then return [Some def_of_f] *)
@@ -112,6 +201,8 @@ module Make(T : TI.S) = struct
         with Not_found -> None
         end
     | _ -> None
+
+  (* FIXME: deal properly with app symbols in tr_term *)
 
   (* translate term/formula recursively into a new (guarded) term. *)
   let rec tr_term_rec_ ~state subst t =
@@ -124,6 +215,9 @@ module Make(T : TI.S) = struct
           | Some t' -> t'
         end
     | TI.App (f,l) ->
+        (* TODO: extend [as_defined_] so it also returns info about whether
+           [f] is an 'app symbol'; in this case, later, we will add the
+           'proto' case *)
         begin match as_defined_ ~state f with
           | Some (id, fundef) ->
               (* [f] is a recursive function we are encoding *)
@@ -135,12 +229,11 @@ module Make(T : TI.S) = struct
               let alpha = Var.make ~name:"a" ~ty:fundef.fun_abstract_ty in
               let eqns = ref [] in
               let l' = List.map2
-                (fun arg (proj,_ty_proj) ->
+                (fun arg (_i, proj,_ty_proj) ->
                   let arg' = tr_term_rec_ ~state subst arg in
                   let eqn = U.eq arg' (U.app (U.const proj) [U.var alpha]) in
                   eqns := eqn :: !eqns;
-                  arg'
-                )
+                  arg')
                 l
                 fundef.fun_concretization
               in
@@ -185,29 +278,75 @@ module Make(T : TI.S) = struct
     tr_term_rec_ ~state subst t
 
   (* translate a top-level formula *)
-  let tr_form ~state t =
-    tr_term ~state Subst.empty t
+  let tr_form ~state t = tr_term ~state Subst.empty t
+
+  let as_var_exn_ t = match T.repr t with
+    | TI.Var v -> v
+    | _ -> fail_tr_ t "expected a variable"
+
+  (* add an [encoding] to the state *)
+  let add_encoding ~state fun_encoding =
+    Utils.debugf ~section 5 "@[<2>add fun encoding for `%a`@]"
+      (fun k->k ID.print fun_encoding.fun_encoded_fun);
+    ID.Tbl.add state.decode.encoded_fun fun_encoding.fun_encoded_fun fun_encoding;
+    ID.Tbl.add state.decode.abstract_ty fun_encoding.fun_abstract_ty_id fun_encoding;
+    List.iter
+      (fun (_,proj,_ty_proj) ->
+        ID.Tbl.add state.decode.approx_fun proj fun_encoding)
+      fun_encoding.fun_concretization;
+    ()
+
+  (* create a new function encoding for the given (function) ID, and
+     register it in state *)
+  let mk_fun_encoding_for_ ~state id =
+    (* declare abstract type + projectors first *)
+    let name = "G_" ^ ID.to_string_slug id in
+    let abs_type_id = ID.make name in
+    let abs_type = U.ty_const abs_type_id in
+    let ty = Sig.find_exn ~sigma:state.sigma id in
+    (* projection function: one per argument. It has
+      type  [abs_type -> type of arg] *)
+    let projectors =
+      List.mapi
+        (fun i ty_arg ->
+          let id' = ID.make (Printf.sprintf "proj_%s_%d" name i) in
+          let ty' = U.ty_arrow abs_type ty_arg in
+          i, id', ty')
+        (ty_args_ ty)
+    in
+    let fun_encoding = {
+      fun_encoded_fun=id;
+      fun_abstract_ty_id=abs_type_id;
+      fun_abstract_ty=abs_type;
+      fun_concretization=projectors;
+    } in
+    add_encoding ~state fun_encoding;
+    (* declare abstract type + projectors *)
+    CCVector.push state.new_statements
+      (Stmt.ty_decl ~info:Stmt.info_default abs_type_id U.ty_type
+         ~attrs:[Stmt.Decl_attr_exn (Attr_abs_type id)]);
+    List.iter
+      (fun (n,proj,ty_proj) ->
+        CCVector.push state.new_statements
+          (Stmt.decl ~info:Stmt.info_default proj ty_proj
+             ~attrs:[Stmt.Decl_attr_exn (Attr_abs_projection (abs_type_id, n))]))
+      fun_encoding.fun_concretization;
+    fun_encoding
+
+  (* be sure that [id] has an encoding *)
+  let ensure_exists_encoding_ ~state id =
+    if not (ID.Tbl.mem state.decode.encoded_fun id)
+    then ignore (mk_fun_encoding_for_ ~state id)
+
+  let id_is_app_fun_ ~state id = match state.decode.hof with
+    | None -> false
+    | Some h -> ID.Set.mem id h.app_symbs
 
   (* translate equation [eqn], which is defining the function
      corresponding to [fun_encoding].
      It returns an axiom instead. *)
   let tr_eqns ~state ~fun_encoding ty eqn =
-    let Stmt.Eqn_single (vars,rhs) = eqn in
-    let id = fun_encoding.fun_encoded_fun in
-    (* quantify over abstract variable now *)
-    let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
-    (* replace each [x_i] by [proj_i var] *)
-    assert (List.length vars = List.length fun_encoding.fun_concretization);
-    let args' = List.map
-      (fun (proj,_) -> U.app (U.const proj) [U.var alpha])
-      fun_encoding.fun_concretization
-    in
-    let subst = Subst.add_list ~subst:Subst.empty vars args' in
-    (* convert right-hand side and add its side conditions *)
-    let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
-    let rhs' = tr_term ~state subst rhs in
-    (* how to connect [lhs] and [rhs]? *)
-    let connect lhs rhs = match ID.polarity id with
+    let connect pol lhs rhs = match pol with
       | Polarity.Pos -> U.imply lhs rhs
       | Polarity.Neg -> U.imply rhs lhs
       | Polarity.NoPol ->
@@ -215,66 +354,98 @@ module Make(T : TI.S) = struct
           then U.equiv lhs rhs
           else U.eq lhs rhs
     in
-    U.forall alpha (connect lhs rhs')
+    (* apply the projectors of fun_encoding to alpha
+       @param first if true, keep first argument, else remove it *)
+    let apply_projs ~keep_first fun_encoding alpha =
+      fun_encoding.fun_concretization
+      |> sort_concretization
+      |> (fun l -> if keep_first then l else List.filter (fun (i,_,_) -> i<>0) l)
+      |> List.map (fun (_,proj,_) -> U.app (U.const proj) [U.var alpha])
+    in
+    match eqn with
+    | Stmt.Eqn_single (vars,rhs) ->
+        let id = fun_encoding.fun_encoded_fun in
+        (* quantify over abstract variable now *)
+        let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
+        (* replace each [x_i] by [proj_i var] *)
+        assert (List.length vars = List.length fun_encoding.fun_concretization);
+        let args' = apply_projs ~keep_first:true fun_encoding alpha in
+        let subst = Subst.add_list ~subst:Subst.empty vars args' in
+        (* convert right-hand side and add its side conditions *)
+        let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
+        let rhs' = tr_term ~state subst rhs in
+        (* how to connect [lhs] and [rhs]? *)
+        U.forall alpha (connect (ID.polarity id) lhs rhs')
+    | Stmt.Eqn_app (app_l, _vars, lhs, rhs) ->
+        (* introduce encodings if needed *)
+        List.iter (ensure_exists_encoding_ ~state) app_l;
+        let root_fun = fun_encoding in
+        (* traverse [lhs], making an encoding *)
+        let rec traverse_lhs i subst t = match T.repr t with
+          | TI.Const _ -> t, subst, []
+          | TI.App (f, l) ->
+              begin match T.repr f, l with
+              | _, [] -> assert false
+              | TI.Const f_id, first_arg :: l' ->
+                  let fun_encoding = find_encoding_ ~state f_id in
+                  let var_name = Printf.sprintf "a_%d" i in
+                  (* variable of the abstract type of [f_id] *)
+                  let alpha = Var.make ~name:var_name ~ty:fun_encoding.fun_abstract_ty in
+                  if id_is_app_fun_ ~state f_id then (
+                    (* first case: application symbol. We need to recurse
+                       in the first argument *)
+                    let first_arg', subst, vars = traverse_lhs (i+1) subst first_arg in
+                    let l'_as_vars = List.map as_var_exn_ l' in
+                    let new_l' = apply_projs ~keep_first:false fun_encoding alpha in
+                    let subst = Var.Subst.add_list ~subst l'_as_vars new_l' in
+                    let t' = U.app f (first_arg' :: new_l') in
+                    t', subst, alpha :: vars
+                  ) else (
+                    (* regular function, should have only variables as
+                       arguments *)
+                    assert (ID.equal f_id root_fun.fun_encoded_fun);
+                    let l_as_vars = List.map as_var_exn_ l in
+                    let new_args = apply_projs ~keep_first:true fun_encoding alpha in
+                    let subst = Var.Subst.add_list ~subst l_as_vars new_args in
+                    let t' = U.app f new_args in
+                    t', subst, [alpha]
+                  )
+              | _ -> assert false (* incorrect shape *)
+              end
+          | _ -> assert false
+        in
+        let lhs', subst, vars' = traverse_lhs 0 Var.Subst.empty lhs in
+        let rhs' = tr_term ~state subst rhs in
+        let form = connect Polarity.NoPol lhs' rhs' in
+        U.forall_l vars' form
 
   (* transform the recursive definition (mostly, its equations) *)
   let tr_rec_def ~state ~fun_encoding def =
     tr_eqns ~state ~fun_encoding
       def.Stmt.rec_defined.Stmt.defined_ty def.Stmt.rec_eqns
 
+  (* transform each axiom, considering case_head as rec. defined. *)
   let tr_rec_defs ~info ~state l =
-    (* transform each axiom, considering case_head as rec. defined *)
-    let new_stmts = ref [] in
-    let add_stmt = CCList.Ref.push new_stmts in
     (* first, build and register an encoding for each defined function *)
     List.iter
       (fun def ->
         let id = def.Stmt.rec_defined.Stmt.defined_head in
-        (* declare abstract type + projectors first *)
-        let name = "G_" ^ ID.to_string_slug id in
-        let abs_type_id = ID.make name in
-        let abs_type = U.ty_const abs_type_id in
-        let ty = Sig.find_exn ~sigma:state.sigma id in
-        (* projection function: one per argument. It has
-          type  [abs_type -> type of arg] *)
-        let projectors =
-          List.mapi
-            (fun i ty_arg ->
-              let id' = ID.make (Printf.sprintf "proj_%s_%d" name i) in
-              let ty' = U.ty_arrow abs_type ty_arg in
-              id', ty')
-            (ty_args_ ty)
-        in
-        let fun_encoding = {
-          fun_encoded_fun=id;
-          fun_abstract_ty_id=abs_type_id;
-          fun_abstract_ty=abs_type;
-          fun_concretization=projectors;
-        } in
-        ID.Tbl.add state.decode.encoded_fun id fun_encoding;
-        ID.Tbl.add state.decode.abstract_ty fun_encoding.fun_abstract_ty_id fun_encoding;
-        (* declare abstract type + projectors + the function
-           NOTE: we need to declare the function because it is no longer
-            defined, only axiomatized *)
-        (* TODO: add attribute for abstraction type and projections *)
-        add_stmt
-          (Stmt.ty_decl ~info:Stmt.info_default ~attrs:[] abs_type_id U.ty_type);
-        add_stmt
+        (* declare the function, since it is not longer "rec defined",
+           but only axiomatized *)
+        CCVector.push state.new_statements
           (Stmt.decl ~info:Stmt.info_default ~attrs:[]
-            id def.Stmt.rec_defined.Stmt.defined_ty);
-        List.iter
-          (fun (proj,ty_proj) ->
-            add_stmt (Stmt.decl ~info:Stmt.info_default ~attrs:[] proj ty_proj);
-            ID.Tbl.add state.decode.approx_fun proj fun_encoding)
-          fun_encoding.fun_concretization;
-      )
+          id def.Stmt.rec_defined.Stmt.defined_ty);
+        (* compute encoding afterwards (order matters! because symbols
+           needed for the encoding also depend on [id] being declared) *)
+        let _ = mk_fun_encoding_for_ ~state id in
+        ())
       l;
     (* then translate each definition *)
     let l' = List.map
       (fun def ->
         try
           let id = def.Stmt.rec_defined.Stmt.defined_head in
-          let fun_encoding = ID.Tbl.find state.decode.encoded_fun id in
+          let fun_encoding = find_encoding_ ~state id in
           tr_rec_def ~state ~fun_encoding def
         with TranslationFailed (t, msg) as e ->
           (* could not translate, keep old definition *)
@@ -285,15 +456,14 @@ module Make(T : TI.S) = struct
           raise e)
       l
     in
-    (* add new statements (type declarations) before l' *)
-    List.rev_append !new_stmts [Stmt.axiom ~info l']
+    [Stmt.axiom ~info l']
 
   (* translate a statement *)
   let tr_statement ~state st =
     (* update signature *)
     state.sigma <- Sig.add_statement ~sigma:state.sigma st;
     let info = Stmt.info st in
-    match Stmt.view st with
+    let stmts' = match Stmt.view st with
     | Stmt.Decl (id,k,l,attrs) ->
         [Stmt.mk_decl ~info ~attrs id k l] (* no type declaration changes *)
     | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l] (* no (co) data changes *)
@@ -316,9 +486,64 @@ module Make(T : TI.S) = struct
     | Stmt.Copy c -> [Stmt.copy ~info c]
     | Stmt.Goal g ->
         [Stmt.goal ~info (tr_form ~state g)]
+    in
+    (* add the new statements before *)
+    let stmts'' = CCVector.to_list state.new_statements in
+    CCVector.clear state.new_statements;
+    stmts'' @ stmts'
+
+  (* find whether attributes contain some [abs_type_of id] *)
+  let on_handle_ty_ ~f =
+    List.iter
+      (function
+        | Stmt.Decl_attr_exn (Attr_abs_type id) -> f id
+        | _ -> ())
+
+  (* find whether attributes contain some [abs_proj_n id] *)
+  let on_proj_ ~f =
+    List.iter
+      (function
+        | Stmt.Decl_attr_exn (Attr_abs_projection (ty_id,n)) -> f ty_id n
+        | _ -> ())
+
+  let populate_state ~state stmts =
+    (* table for partially filled [fun_encoding]s *)
+    let partial = ID.Tbl.create 32 in
+    CCVector.iter
+      (fun st -> match Stmt.view st with
+        | Stmt.Decl (id, _decl, ty, attrs) ->
+            on_handle_ty_ attrs
+              ~f:(fun fun_id ->
+                (* create a fun_encoding for [fun_id] (whose handle type is id) *)
+                let fun_encoding = {
+                  fun_encoded_fun=fun_id;
+                  fun_abstract_ty_id=id;
+                  fun_abstract_ty=U.ty_const id;
+                  fun_concretization=[];
+                } in
+                ID.Tbl.add partial id fun_encoding);
+            on_proj_ attrs
+              ~f:(fun ty_id n ->
+                  (* id is the n-th projection of the handle ty_id *)
+                  let fun_ = ID.Tbl.find partial ty_id in
+                  let ty_proj = ty in
+                  let fun_ =
+                    { fun_ with
+                      fun_concretization=(n,id,ty_proj) :: fun_.fun_concretization; }
+                  in
+                  ID.Tbl.replace partial ty_id fun_)
+        | _ -> ())
+      stmts;
+    (* assume all the declarations are now complete, and add them to [state] *)
+    ID.Tbl.iter
+      (fun _ fun_encoding -> add_encoding ~state fun_encoding)
+      partial
 
   let elim_recursion pb =
-    let state = create_state() in
+    let hof = gather_hof_ pb in
+    Utils.debugf ~section 3 "@[<2>hof info:@ @[%a@]@]" (fun k->k (CCFormat.opt pp_hof) hof);
+    let state = create_state ~hof () in
+    populate_state ~state (Problem.statements pb);
     let pb' = Problem.flat_map_statements ~f:(tr_statement ~state) pb in
     pb', state.decode
 
@@ -372,12 +597,12 @@ module Make(T : TI.S) = struct
     let projs : proj_fun ID.Tbl.t = ID.Tbl.create 16 in
     let doms  : finite_domain ID.Tbl.t = ID.Tbl.create 16 in
     Model.iter m
-      ~constants:(fun (t,_) -> match T.repr t with
+      ~constants:(fun (t,_,_) -> match T.repr t with
         | TI.Const id ->
             (* a function should not be modeled by a constant *)
             assert (not (ID.Tbl.mem state.approx_fun id));
         | _ -> ())
-      ~funs:(fun (t,vars,body) -> match T.repr t, vars with
+      ~funs:(fun (t,vars,body,_) -> match T.repr t, vars with
         | TI.Const id, [v] ->
             (* register the model for this approximated function *)
             if ID.Tbl.mem state.approx_fun id
@@ -401,17 +626,19 @@ module Make(T : TI.S) = struct
       (fun _ fdom ->
         List.iter
           (fun val_id ->
-            let args = List.map
-              (fun (f_id,_) ->
-                let proj =
-                  try ID.Tbl.find projs f_id
-                  with Not_found ->
-                    fail_decode_ "could not find value of projection function %a on %a"
-                      ID.print f_id ID.print val_id
-                in
-                let subst = Var.Subst.singleton proj.proj_var (U.const val_id) in
-                DT_util.eval ~subst proj.proj_tree)
+            let args =
               fdom.dom_fun.fun_concretization
+              |> sort_concretization
+              |> List.map
+                (fun (_,f_id,_) ->
+                  let proj =
+                    try ID.Tbl.find projs f_id
+                    with Not_found ->
+                      fail_decode_ "could not find value of projection function %a on %a"
+                        ID.print f_id ID.print val_id
+                  in
+                  let subst = Var.Subst.singleton proj.proj_var (U.const val_id) in
+                  DT_util.eval ~subst proj.proj_tree)
             in
             fdom.dom_args <- ID.Map.add val_id args fdom.dom_args)
           fdom.dom_dom)
@@ -453,11 +680,11 @@ module Make(T : TI.S) = struct
     in
     (* now remove projections and filter recursion functions's values *)
     Model.filter_map m
-      ~constants:(fun (t,u) -> match T.repr t with
+      ~constants:(fun (t,u,k) -> match T.repr t with
         | TI.Const id when ID.Tbl.mem state.approx_fun id ->
             None (* drop approximation functions *)
-        | _ -> Some (t,u))
-      ~funs:(fun (t,vars,body) -> match T.repr t with
+        | _ -> Some (t,u,k))
+      ~funs:(fun (t,vars,body,k) -> match T.repr t with
         | TI.Const id when ID.Tbl.mem state.approx_fun id ->
             None (* drop approximation functions *)
         | TI.Const f_id when ID.Tbl.mem state.encoded_fun f_id ->
@@ -467,10 +694,10 @@ module Make(T : TI.S) = struct
               "@[<hv2>decoding of recursive fun @[%a %a@] :=@ `@[%a@]`@ is `@[%a@]`@]"
               (fun k->k ID.print f_id (CCFormat.list Var.print_full) vars
               (Model.DT.print P.print) body (Model.DT.print P.print) body');
-            Some (t, vars, body')
+            Some (t, vars, body',k)
         | _ ->
             (* keep *)
-            Some (t,vars,body))
+            Some (t,vars,body,k))
       ~finite_types:(fun ((ty,_) as pair) -> match T.repr ty with
         | TI.Const id when ID.Tbl.mem state.abstract_ty id ->
             None (* remove abstraction types *)
@@ -494,7 +721,7 @@ module Make(T : TI.S) = struct
     let on_encoded = if print
       then
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after elimination of recursion: %a@]@." PPb.print]
+        [Format.printf "@[<v2>@{<Yellow>after elimination of recursion@}: %a@]@." PPb.print]
       else []
     in
     Transform.make1

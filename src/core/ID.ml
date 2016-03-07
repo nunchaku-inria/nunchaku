@@ -74,3 +74,35 @@ module Set = CCSet.Make(As_key)
 module Tbl = CCHashtbl.Make(As_key)
 module PerTbl = CCPersistentHashtbl.Make(As_key)
 
+module Erase = struct
+  type state = {
+    id_to_name : string Tbl.t;
+    name_to_id : (string, t) Hashtbl.t;
+  }
+
+  let create_state () = {
+    id_to_name = Tbl.create 32;
+    name_to_id = Hashtbl.create 16;
+  }
+
+  let spf = CCFormat.sprintf
+
+  (* add numeric suffix to [name] until it is an unused name *)
+  let find_unique_name_ state name0 =
+    if not (Hashtbl.mem state.name_to_id name0) then name0
+    else (
+      let n = ref 0 in
+      while Hashtbl.mem state.name_to_id (spf "%s_%d" name0 !n) do incr n done;
+      spf "%s_%d" name0 !n
+    )
+
+  let to_name state id =
+    try Tbl.find state.id_to_name id
+    with Not_found ->
+      let name = CCFormat.to_string print_name id |> find_unique_name_ state in
+      Hashtbl.add state.name_to_id name id;
+      Tbl.add state.id_to_name id name;
+      name
+
+  let of_name state n = Hashtbl.find state.name_to_id n
+end

@@ -118,6 +118,10 @@ val options_warnings_ : (Arg.key * Arg.spec * Arg.doc) list
 
 exception NotImplemented of string
 
+val pp_error_prefix : unit CCFormat.printer
+
+val err_sprintf : ('a, Format.formatter, unit, string) format4 -> 'a
+
 val not_implemented: string -> 'a
 (** Raise an exception saying the given feature is not implemented *)
 

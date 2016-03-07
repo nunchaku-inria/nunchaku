@@ -1172,7 +1172,8 @@ module Convert(Term : TermTyped.S) = struct
     List.iter
       (function
         | Stmt.Decl_attr_card_max n -> max_card := n
-        | Stmt.Decl_attr_card_min n -> min_card := n)
+        | Stmt.Decl_attr_card_min n -> min_card := n
+        | Stmt.Decl_attr_exn _ -> ())
       l;
     if !min_card > !max_card
     then ill_formedf ?loc ~kind:"attributes"
@@ -1283,12 +1284,6 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
 
   module HO2 = TermPoly.Make(T2)
 
-  let erase m =
-    (* we get back "regular" HO terms *)
-    let module Erase = TermPoly.Erase(HO2) in
-    let ctx = Erase.create () in
-    Model.map m ~term:(Erase.erase ~ctx) ~ty:(Erase.erase ~ctx)
-
   let pipe_with ~decode ~print =
     (* type inference *)
     let module Conv = Convert(T1) in
@@ -1296,7 +1291,7 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
     let module PPb = Problem.Print(P)(P) in
     let on_encoded =
       if print
-      then [Format.printf "@[<v2>after type inference: %a@]@." PPb.print]
+      then [Format.printf "@[<v2>@{<Yellow>after type inference@}: %a@]@." PPb.print]
       else []
     in
     Transform.make1
@@ -1311,6 +1306,5 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
       ()
 
   let pipe ~print =
-    let decode m = erase m in
-    pipe_with ~decode ~print
+    pipe_with ~decode:CCFun.id ~print
 end

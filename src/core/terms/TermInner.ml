@@ -420,6 +420,7 @@ module type UTIL_REPR = sig
   (** t == Prop? *)
 
   val ty_num_param : t_ -> int
+  (** Number of type variables that must be bound in the type. *)
 end
 
 (** Utils that only require a {!REPR} *)
@@ -604,6 +605,7 @@ module type UTIL = sig
   val exists : t_ var -> t_ -> t_
 
   val eq : t_ -> t_ -> t_
+  val neq : t_ -> t_ -> t_
   val equiv : t_ -> t_ -> t_
   val imply : t_ -> t_ -> t_
   val true_ : t_
@@ -656,6 +658,16 @@ module type UTIL = sig
   (** Non recursive fold.
       @param bind updates the binding accumulator with the bound variable
       @param f used to update the regular accumulator (that is returned) *)
+
+  val iter :
+    f:('b_acc -> t_ -> unit) ->
+    bind:('b_acc -> t_ Var.t -> 'b_acc) ->
+    'b_acc ->
+    t_ ->
+    unit
+  (** Non recursive iter.
+      @param bind updates the binding accumulator with the bound variable
+      @param f called on immediate subterms and on the regular accumulator *)
 
   val map :
     f:('b_acc -> t_ -> t_) ->
@@ -858,6 +870,7 @@ module Util(T : S)
   and imply a b = app_builtin `Imply [a;b]
 
   let eq a b = builtin (`Eq (a,b))
+  let neq a b = not_ (eq a b)
   let equiv a b = builtin (`Equiv (a,b))
   let ite a b c = app_builtin (`Ite (a,b,c)) []
 
@@ -1018,6 +1031,9 @@ module Util(T : S)
     | TyArrow (a,b) ->
         let acc = f acc b_acc a in
         f acc b_acc b
+
+  let iter ~f ~bind b_acc t =
+    fold () b_acc t ~bind ~f:(fun () b_acc t -> f b_acc t)
 
   let map ~f ~bind b_acc t = match T.repr t with
     | TyBuiltin _

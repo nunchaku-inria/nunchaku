@@ -111,11 +111,16 @@ end
 
 (** {2 Models} *)
 
+type symbol_kind =
+  | Symbol_prop
+  | Symbol_fun
+  | Symbol_type
+
 type (+'t, +'ty) t = {
-  constants: ('t * 't) list;
+  constants: ('t * 't * symbol_kind) list;
     (* constant -> its interpretation *)
 
-  funs: ('t * 'ty Var.t list * ('t,'ty) decision_tree) list;
+  funs: ('t * 'ty Var.t list * ('t,'ty) decision_tree * symbol_kind) list;
     (* fun * var list -> body *)
 
   finite_types: ('ty * ID.t list) list;
@@ -133,7 +138,7 @@ let empty = {
   potentially_spurious=false;
 }
 
-let add_const t pair = {t with constants = pair :: t.constants; }
+let add_const t tup = {t with constants = tup :: t.constants; }
 
 let add_fun t f = {t with funs = f :: t.funs; }
 
@@ -142,10 +147,10 @@ let add_finite_type t ty dom =
 
 let map ~term:fterm ~ty:fty m = {
   m with
-  constants=CCList.map (fun (x,y) -> fterm x, fterm y) m.constants;
+  constants=CCList.map (fun (x,y,k) -> fterm x, fterm y, k) m.constants;
   funs=CCList.map
-    (fun (t,vars,dt) ->
-      fterm t, List.map (Var.update_ty ~f:fty) vars, DT.map ~term:fterm ~ty:fty dt)
+    (fun (t,vars,dt,k) ->
+      fterm t, List.map (Var.update_ty ~f:fty) vars, DT.map ~term:fterm ~ty:fty dt, k)
     m.funs;
   finite_types=List.map (fun (ty,l) -> fty ty, l) m.finite_types;
 }
@@ -173,11 +178,11 @@ let fold ~constants ~funs ~finite_types acc m =
 
 let print pt pty out m =
   let pplist ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp in
-  let pp_pair out (t,u) = fpf out "@[<2>val %a :=@ @[%a@]@]." pt t pt u in
+  let pp_const out (t,u,_) = fpf out "@[<2>val %a :=@ @[%a@]@]." pt t pt u in
   let pp_type out (ty,dom) =
     fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
       pty ty (pplist ~sep:", " ID.print) dom
-  and pp_fun out (f,vars,dt) =
+  and pp_fun out (f,vars,dt,_) =
     fpf out "@[<2>val @[%a@]@ :=@ @[<2>@[fun %a@].@ @[%a@]@]@]."
       pt f
       (pplist ~sep:" " Var.print_full) vars
@@ -190,7 +195,7 @@ let print pt pty out m =
   in
   fpf out "@[<v>%a%a%a@]"
     (pp_nonempty_list pp_type) m.finite_types
-    (pp_nonempty_list pp_pair) m.constants
+    (pp_nonempty_list pp_const) m.constants
     (pp_nonempty_list pp_fun) m.funs
 
 module Util(T : TI.S) = struct
@@ -268,14 +273,14 @@ module Util(T : TI.S) = struct
     { m with
       finite_types;
       constants=List.map
-        (fun (t,u) -> rw_nil t, rw_nil u)
+        (fun (t,u,k) -> rw_nil t, rw_nil u, k)
         m.constants;
       funs=List.map
-        (fun (t,vars,rhs) ->
+        (fun (t,vars,rhs, k) ->
           let t = rw_nil t in
           let subst, vars = Utils.fold_map rename_copy_ Var.Subst.empty vars in
           let rw_subst t = rewrite_term_ rules subst t in
-          t, vars, DT.map ~var:(Var.Subst.find ~subst) ~term:rw_subst ~ty:rw_subst rhs)
+          t, vars, DT.map ~var:(Var.Subst.find ~subst) ~term:rw_subst ~ty:rw_subst rhs, k)
         m.funs;
     }
 
@@ -285,7 +290,7 @@ module Util(T : TI.S) = struct
         let m' = rename m in
         if must_print then (
           let module P = TI.Print(T) in
-          Format.printf "@[<v2>after model renaming:@ {@,%a@]}@."
+          Format.printf "@[<v2>@{<Yellow>after model renaming@}:@ {@,%a@]}@."
             (print P.print P.print) m');
         m')
 end

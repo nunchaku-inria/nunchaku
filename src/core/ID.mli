@@ -49,3 +49,15 @@ module Map : CCMap.S with type key = t
 module Set : CCSet.S with type elt = t
 module Tbl : CCHashtbl.S with type key = t
 module PerTbl : CCPersistentHashtbl.S with type key = t
+
+(** Map to unique names *)
+module Erase : sig
+  type state
+
+  val create_state: unit -> state
+
+  val to_name : state -> t -> string
+
+  val of_name : state -> string -> t
+  (** @raise Not_found if the name corresponds to no ID *)
+end

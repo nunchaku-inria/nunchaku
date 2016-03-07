@@ -37,7 +37,7 @@ module type S = sig
 
   val skolemize_pb :
     state:state ->
-    (T.t, T.t, <eqn:_;ind_preds:_;..> as 'inv) Problem.t ->
+    (T.t, T.t, <eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t ->
     (T.t, T.t, 'inv) Problem.t
 
   val find_id_def : state:state -> id -> T.t option
@@ -49,7 +49,7 @@ module type S = sig
   val pipe :
     mode:mode ->
     print:bool ->
-    ((T.t,T.t,<eqn:_;ind_preds:_;..> as 'inv) Problem.t,
+    ((T.t,T.t,<eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t,
       (T.t,T.t,'inv) Problem.t,
       (T.t,T.t) Model.t, (T.t,T.t) Model.t
     ) Transform.t
@@ -62,7 +62,7 @@ module type S = sig
     mode:mode ->
     decode:(state -> 'c -> 'd) ->
     print:bool ->
-    ((T.t,T.t, <eqn:_;ind_preds:_;..> as 'inv) Problem.t,
+    ((T.t,T.t, <eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t,
       (T.t,T.t,'inv) Problem.t, 'c, 'd
     ) Transform.t
 end
@@ -264,22 +264,22 @@ module Make(T : TI.S)
   let decode_model ~state m =
     Model.filter_map m
       ~finite_types:(fun (ty,dom) -> Some (ty,dom))
-      ~funs:(fun (t,vars,body) -> Some (t,vars,body))
-      ~constants:(fun (t,u) ->
+      ~funs:(fun (t,vars,body,k) -> Some (t,vars,body,k))
+      ~constants:(fun (t,u,k) ->
           match T.repr t with
           | TI.Const id ->
               begin match find_id_def ~state id with
-                | None -> Some (t, u)
-                | Some t' -> Some (t', u)
+                | None -> Some (t, u, k)
+                | Some t' -> Some (t', u, k)
               end
-          | _ -> Some (t, u)
+          | _ -> Some (t, u, k)
         )
 
   let pipe_with ~mode ~decode ~print =
     let on_encoded = if print
       then
         let module Ppb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after Skolemization: %a@]@." Ppb.print]
+        [Format.printf "@[<v2>@{<Yellow>after Skolemization@}: %a@]@." Ppb.print]
       else []
     in
     Transform.make1

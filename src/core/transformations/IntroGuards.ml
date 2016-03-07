@@ -275,6 +275,7 @@ end = struct
     l, acc
 
   let tr_root ~state t =
+    Utils.debugf ~section 5 "@[<2>intro guards in@ `@[%a@]`@]" (fun k->k P.print t);
     let pol = Pol.Pos in
     let t', g = tr_term ~state ~pol t in
     combine_polarized ~is_pos:true t' g
@@ -298,7 +299,7 @@ end = struct
     let on_encoded = if print
       then
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>after introduction of guards: %a@]@." PPb.print]
+        [Format.printf "@[<v2>@{<Yellow>after introduction of guards@}: %a@]@." PPb.print]
       else []
     in
     Transform.make1
