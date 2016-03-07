@@ -224,11 +224,25 @@ val map_eqns:
   ('t, 'ty, <eqn:'inv_e; ty:'inv_ty; ..>) equations ->
   ('t2, 'ty2, <eqn:'inv_e; ty:'inv_ty; ..>) equations
 
+val map_eqns_bind :
+  bind:('acc -> 'ty Var.t -> 'acc * 'ty1 Var.t) ->
+  term:('acc -> 'term -> 'term1) ->
+  'acc ->
+  ('term,'ty,<eqn:'inv_e;ty:'inv_ty;..>) equations ->
+  ('term1,'ty1,<eqn:'inv_e;ty:'inv_ty;..>) equations
+
 val map_clause:
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
   ('t, 'ty, <ind_preds:'inv;..>) pred_clause ->
   ('t2, 'ty2, <ind_preds:'inv;..>) pred_clause
+
+val map_clause_bind :
+  bind:('acc -> 'ty Var.t -> 'acc * 'ty1 Var.t) ->
+  term:('acc -> 'term -> 'term1) ->
+  'acc ->
+  ('term,'ty,<ind_preds:'inv;..>) pred_clause ->
+  ('term1,'ty1,<ind_preds:'inv;..>) pred_clause
 
 val cast_eqns:
   ('t, 'ty, <eqn:'inv;..>) equations ->
@@ -278,6 +292,14 @@ val map_pred :
   term:('a -> 'a1) -> ty:('b -> 'b1) ->
   ('a,'b,<ind_preds:'inv;..>) pred_def  ->
   ('a1,'b1,<ind_preds:'inv;..>) pred_def
+
+val map_pred_bind :
+  bind:('acc -> 'ty Var.t -> 'acc * 'ty2 Var.t) ->
+  term:('acc -> 'term -> 'term2) ->
+  ty:('acc -> 'ty -> 'ty2) ->
+  'acc ->
+  ('term, 'ty, < ind_preds : 'inv; .. >) pred_def ->
+  ('term2, 'ty2, < ind_preds : 'inv; .. >) pred_def
 
 val map_preds :
   term:('a -> 'a1) -> ty:('b -> 'b1) ->
