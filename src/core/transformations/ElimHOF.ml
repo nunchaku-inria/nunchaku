@@ -420,6 +420,7 @@ module Make(T : TI.S) = struct
         af_arity=List.length args;
       } in
       state.app_symbols <- HandleMap.add h app_fun state.app_symbols;
+      ID.Tbl.replace state.decode.dst_app_symbols app_id ();
       (* push declaration of [app_fun] and extensionality axiom *)
       let attrs = [Stmt.Decl_attr_exn ElimRecursion.Attr_app_val] in
       let stmt =
@@ -753,14 +754,21 @@ module Make(T : TI.S) = struct
 
   (* traverse [t], decoding the types in every variable and replacing
      [to a b] by [a -> b] *)
-  let rec decode_term_ ~state subst t = match T.repr t with
-    | TI.Var v -> Var.Subst.find_exn ~subst v |> U.var
+  let rec decode_term_ ~state subst t =
+    Format.printf "@[<2>decode `@[%a@]`@ with @[%a@]@]@." P.print t (Var.Subst.print P.print) subst;
+    match T.repr t with
+    | TI.Var v -> Var.Subst.find_exn ~subst v
     | TI.App (f, l) ->
         begin match T.repr f, state.dst_handle_id, l with
           | TI.Const id, Some id', [a;b] when ID.equal id id' ->
               U.ty_arrow
                 (decode_term_ ~state subst a)
                 (decode_term_ ~state subst b)
+          | TI.Const id, _, hd :: l' when ID.Tbl.mem state.dst_app_symbols id ->
+              (* app symbol: remove app, apply [hd] to [l'] *)
+              let hd = decode_term_ ~state subst hd in
+              let l' = List.map (decode_term_ ~state subst) l' in
+              U.app hd l'
           | _ -> decode_term' ~state subst t
         end
     | _ -> decode_term' ~state subst t
@@ -770,8 +778,9 @@ module Make(T : TI.S) = struct
       ~f:(decode_term_ ~state)
 
   and bind_decode_var_ ~state subst v =
-    let v' = Var.update_ty v ~f:(decode_term_ ~state subst) in
-    Var.Subst.add ~subst v v', v'
+    let v' = Var.fresh_copy v in
+    let v' = Var.update_ty v' ~f:(decode_term_ ~state subst) in
+    Var.Subst.add ~subst v (U.var v'), v'
 
   (* find discrimination tree for [id], from functions or constants of [m]  *)
   let find_dt_ m id =
@@ -794,9 +803,10 @@ module Make(T : TI.S) = struct
       | None -> errorf_ "could not find model for function %a" ID.print id
       | Some tup -> tup
 
-  (* filter [tests], keeping only branches where [v = c] holds.
+  (* filter [tests], keeping only branches where [v = c] holds, and replacing
+     [v] by [c] in those branches.
      @param add_tests additional tests to put into each case *)
-  let filter_tests_ ~add_tests v c tests =
+  let filter_tests_ ~state ~add_tests v c tests =
     (* does [v = c] in [eqns]? *)
     let maps_to eqns v c =
       List.exists
@@ -810,46 +820,53 @@ module Make(T : TI.S) = struct
     CCList.filter_map
       (fun (eqns, rhs) ->
          if maps_to eqns v c
-         then Some (add_tests @ remove_var v eqns, rhs) else None)
+         then
+           let subst = Var.Subst.singleton v c in
+           Some (add_tests @ remove_var v eqns, decode_term_ ~state subst rhs)
+         else None)
       tests
 
   (* [t1] is a tree returning some handle type, and [t2] is a tree whose first
      variable (the head of [vars2]) has this exact handle type *)
-  let merge_dt_ t1 vars2 t2 =
+  let merge_dt_ ~state t1 vars2 t2 =
     let module DT = Model.DT in
     match vars2 with
       | [] -> assert false
-      | v :: _ ->
+      | v :: vars2_tl ->
           (* tests resulting from each case of [t1.tests] *)
           let tests1 =
             t1.DT.tests
             |> CCList.flat_map
               (fun (eqns, rhs) ->
                  (* keep branches of [t2] that map [v] to [rhs] *)
-                 filter_tests_ ~add_tests:eqns v rhs t2.DT.tests)
+                 filter_tests_ ~state ~add_tests:eqns v rhs t2.DT.tests)
           (* tests corresponding from [t1.else_] and [t2.tests] *)
-          and tests2 = filter_tests_ ~add_tests:[] v t1.DT.else_ t2.DT.tests in
-          DT.test_flatten (tests1 @ tests2) ~else_:(DT.yield t2.DT.else_)
+          and tests2 = filter_tests_ ~state ~add_tests:[] v t1.DT.else_ t2.DT.tests in
+          vars2_tl, DT.test_flatten (tests1 @ tests2) ~else_:(DT.yield t2.DT.else_)
 
   (* Assuming [f_id = f_const] is a part of the model [m], and [f_id] is
      a function encoded using [tower], find the actual value of [f_id] in
      the model [m] by flattening/filtering discrimination trees for functions
      of [tower].
      @return set of variables, discrimination tree, function kind *)
-  let extract_subtree_ m tower =
+  let extract_subtree_ ~state m tower =
     let rec aux tower = match tower with
       | [] -> assert false
       | [TC_first_param _] -> assert false
       | [TC_app af] -> find_dt_ m af.af_id
       | TC_first_param (f,_) :: tower' -> aux2 f tower'
       | TC_app af :: tower' -> aux2 af.af_id tower'
+    (* merge DTs of [f] and [tower], where [f] used to be the top of tower *)
     and aux2 f tower =
       let vars', dt', k = aux tower in
       (* now find the model for [f] itself *)
       let vars, dt, _ = find_dt_ m f in
-      vars @ vars', merge_dt_ dt vars' dt', k
+      let vars', new_dt = merge_dt_ ~state dt vars' dt' in
+      vars @ vars', new_dt, k
     in
     aux tower
+
+  (* TODO: fix `undefined` cases that refer to app symbols (and stale variables) *)
 
   (* for every function [f], look its fun_encoding for full arity so as
      to obtain the tower. Lookup models for every app symbol involved and
@@ -859,11 +876,17 @@ module Make(T : TI.S) = struct
   let decode_model ~state m =
     Utils.debug ~section 1 "decode model…";
     let tr_term = decode_term_ ~state Var.Subst.empty in
-    let tr_var = Var.update_ty ~f:tr_term in
     let tr_dt vars dt =
+      Utils.debugf ~section 5 "@[<2>decode @[%a@] ->@ `@[%a@]`@]"
+        (fun k->k (CCFormat.list Var.print_full) vars
+            (Model.DT.print P.print) dt);
       let subst, vars = Utils.fold_map (bind_decode_var_ ~state) Var.Subst.empty vars in
       let tr_ = decode_term_ ~state subst in
-      vars, Model.DT.map dt ~var:(fun v -> Some (tr_var v)) ~term:tr_ ~ty:tr_ in
+      let dt =
+        Model.DT.map dt ~term:tr_ ~ty:tr_
+      in
+      vars, dt
+    in
     (* partially applied fun: obtain the corresponding tree from
        application symbols. *)
     let decode_partial_fun_ new_m id =
@@ -873,7 +896,7 @@ module Make(T : TI.S) = struct
         |> IntMap.max_binding
         |> snd
       in
-      let vars, dt, k = extract_subtree_ m tower in
+      let vars, dt, k = extract_subtree_ ~state m tower in
       let vars, dt = tr_dt vars dt in
       Model.add_fun new_m (U.const id, vars, dt, k)
     in
@@ -890,6 +913,8 @@ module Make(T : TI.S) = struct
               Model.add_const new_m (tr_term t, tr_term u, k))
       ~funs:(fun new_m (f,vars,dt,k) ->
         match T.repr f with
+          | TI.Const id when ID.Tbl.mem state.dst_app_symbols id ->
+              new_m (* drop application symbols from model *)
           | TI.Const id when ID.Map.mem id state.fun_encodings ->
               decode_partial_fun_ new_m id
           | _ ->
