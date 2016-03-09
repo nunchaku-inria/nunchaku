@@ -39,6 +39,9 @@
 
 %token LOGIC_TRUE
 %token LOGIC_FALSE
+%token CHOICE
+%token UCHOICE
+
 %token LOGIC_AND
 %token LOGIC_OR
 %token LOGIC_NOT
@@ -154,6 +157,16 @@ const:
     {
       let loc = L.mk_pos $startpos $endpos in
       A.builtin ~loc `False
+    }
+  | CHOICE
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.builtin ~loc `Choice
+    }
+  | UCHOICE
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.builtin ~loc `UChoice
     }
 
 %public case(TERM):

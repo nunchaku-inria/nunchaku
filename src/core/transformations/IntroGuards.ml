@@ -128,7 +128,7 @@ end = struct
             if is_prop ~state t then combine pol t' g else t', g
         end
     | TI.Builtin
-      (`True | `False | `And | `Or | `Not
+      (`True | `False | `And | `Or | `Not | `BFun (`Choice | `UChoice)
         | `Imply | `DataSelect _ | `DataTest _) ->
        (* partially applied, or constant *)
         t, empty_guard

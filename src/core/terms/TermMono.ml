@@ -147,7 +147,7 @@ module ToFO(T : TI.S)(F : FO.S) = struct
           | _ -> ()
         end;
         FO.T.eq (conv_term ~sigma a)(conv_term ~sigma b)
-    | Builtin (`And | `Or | `Not | `Imply) ->
+    | Builtin (`And | `Or | `Not | `Imply | `BFun (`Choice | `UChoice)) ->
         fail_ t "partially applied connectives"
     | App (f, l) ->
         begin match Mono.repr f, l with
@@ -161,6 +161,8 @@ module ToFO(T : TI.S)(F : FO.S) = struct
         | Builtin `Or, l -> FO.T.or_ (List.map (conv_term ~sigma) l)
         | Builtin `Imply, [a;b] ->
             FO.T.imply (conv_term ~sigma a) (conv_term ~sigma b)
+        | Builtin (`BFun (`Choice | `UChoice)), _ ->
+            fail_ t "choice/uchoice not eliminated"
         | _ -> fail_ t "application of non-constant term"
         end
     | Bind (`Fun,v,t) ->

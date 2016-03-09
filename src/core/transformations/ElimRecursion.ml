@@ -240,7 +240,7 @@ module Make(T : TI.S) = struct
               (* generic treatment *)
               tr_term_rec_' ~state subst t
         end
-    | TI.Builtin (`True | `False
+    | TI.Builtin (`True | `False | `BFun (`Choice | `UChoice)
         | `And | `Or | `Not | `Imply | `DataSelect _ | `DataTest _) ->
           t (* partially applied, or constant *)
     | TI.Builtin (`Undefined _ as b) ->

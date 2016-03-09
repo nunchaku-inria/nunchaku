@@ -51,7 +51,7 @@ module Make(T : TI.S) = struct
       match T.repr t with
       | TI.Builtin `True -> BTrue
       | TI.Builtin `False -> BFalse
-      | TI.Builtin (`Undefined _ | `Guard _) ->
+      | TI.Builtin (`Undefined _ | `Guard _ | `BFun (`Choice | `UChoice)) ->
           BPartial t (* undefined term doesn't evaluate *)
       | TI.Builtin (`Ite (_,_,_) | `DataSelect _ | `DataTest _) ->
           invalid_arg "not boolean operators"
@@ -150,6 +150,7 @@ module Make(T : TI.S) = struct
           Utils.not_implemented "evaluation of DataTest"
       | `DataSelect (_,_) ->
           Utils.not_implemented "evaluation of DataSelect"
+      | `BFun (`Choice | `UChoice)
       | `Undefined _ -> st (* no evaluation *)
 
     (* see whether [st] matches a case in [m] *)
