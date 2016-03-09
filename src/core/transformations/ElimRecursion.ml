@@ -17,10 +17,6 @@ let section = Utils.Section.make name
 type inv1 = <ty:[`Mono]; eqn:[`App]; ind_preds:[`Absent]>
 type inv2 = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
 
-exception Attr_abs_type of ID.t
-
-exception Attr_abs_projection of ID.t * int
-
 exception Attr_is_handle_cstor
 
 exception Attr_app_val
@@ -32,8 +28,6 @@ let spf = CCFormat.sprintf
 
 let () = Printexc.register_printer
   (function
-    | Attr_abs_type fun_id -> Some (spf "abs_type_of %a" ID.print fun_id)
-    | Attr_abs_projection (ty_id,i) -> Some (spf "abs_proj_%d %a" i ID.print ty_id)
     | Attr_app_val -> Some "app_symbol"
     | Attr_is_handle_cstor -> Some "handle_type"
     | Attr_proto_val (id, n) -> Some (spf "proto_%d_of_%a" n ID.print id)
@@ -88,11 +82,11 @@ module Make(T : TI.S) = struct
       (* for decoding purpose *)
     new_statements: (term, ty, inv2) Stmt.t CCVector.vector;
       (* additional statements to be added to the result, such as declarations *)
-    mutable sigma: ty Sig.t;
+    sigma: ty Sig.t;
       (* signature *)
   }
 
-  let create_state ~hof () = {
+  let create_state ~hof ~sigma () = {
     decode={
       approx_fun=ID.Tbl.create 16;
       encoded_fun=ID.Tbl.create 16;
@@ -100,7 +94,7 @@ module Make(T : TI.S) = struct
       hof;
     };
     new_statements=CCVector.create();
-    sigma=Sig.empty;
+    sigma;
   }
 
   exception Error of string
@@ -180,6 +174,11 @@ module Make(T : TI.S) = struct
   (* sort [fun_encoding.fun_concretization] *)
   let sort_concretization = List.sort (fun (i,_,_)(j,_,_) -> CCInt.compare i j)
 
+  let pop_new_stmts_ ~state =
+    let l = CCVector.to_list state.new_statements in
+    CCVector.clear state.new_statements;
+    l
+
   (*
     - apply substitution eagerly (build it when we enter `forall_f x. f x = t`)
     - when we meet `f t1...tn`:
@@ -201,8 +200,6 @@ module Make(T : TI.S) = struct
         with Not_found -> None
         end
     | _ -> None
-
-  (* FIXME: deal properly with app symbols in tr_term *)
 
   (* translate term/formula recursively into a new (guarded) term. *)
   let rec tr_term_rec_ ~state subst t =
@@ -323,13 +320,11 @@ module Make(T : TI.S) = struct
     add_encoding ~state fun_encoding;
     (* declare abstract type + projectors *)
     CCVector.push state.new_statements
-      (Stmt.ty_decl ~info:Stmt.info_default abs_type_id U.ty_type
-         ~attrs:[Stmt.Decl_attr_exn (Attr_abs_type id)]);
+      (Stmt.ty_decl ~info:Stmt.info_default abs_type_id U.ty_type ~attrs:[]);
     List.iter
-      (fun (n,proj,ty_proj) ->
+      (fun (_n,proj,ty_proj) ->
         CCVector.push state.new_statements
-          (Stmt.decl ~info:Stmt.info_default proj ty_proj
-             ~attrs:[Stmt.Decl_attr_exn (Attr_abs_projection (abs_type_id, n))]))
+          (Stmt.decl ~info:Stmt.info_default proj ty_proj ~attrs:[]))
       fun_encoding.fun_concretization;
     fun_encoding
 
@@ -427,19 +422,21 @@ module Make(T : TI.S) = struct
   (* transform each axiom, considering case_head as rec. defined. *)
   let tr_rec_defs ~info ~state l =
     (* first, build and register an encoding for each defined function *)
-    List.iter
+    let ty_decls = CCList.flat_map
       (fun def ->
         let id = def.Stmt.rec_defined.Stmt.defined_head in
         (* declare the function, since it is not longer "rec defined",
            but only axiomatized *)
-        CCVector.push state.new_statements
-          (Stmt.decl ~info:Stmt.info_default ~attrs:[]
-          id def.Stmt.rec_defined.Stmt.defined_ty);
+        let st =
+          Stmt.decl ~info:Stmt.info_default ~attrs:[]
+            id def.Stmt.rec_defined.Stmt.defined_ty in
         (* compute encoding afterwards (order matters! because symbols
            needed for the encoding also depend on [id] being declared) *)
         let _ = mk_fun_encoding_for_ ~state id in
-        ())
-      l;
+        let st_l = pop_new_stmts_ ~state in
+        st :: st_l)
+      l
+    in
     (* then translate each definition *)
     let l' = List.map
       (fun def ->
@@ -456,16 +453,17 @@ module Make(T : TI.S) = struct
           raise e)
       l
     in
-    [Stmt.axiom ~info l']
+    ty_decls @ [Stmt.axiom ~info l']
 
   (* translate a statement *)
   let tr_statement ~state st =
-    (* update signature *)
-    state.sigma <- Sig.add_statement ~sigma:state.sigma st;
     let info = Stmt.info st in
     let stmts' = match Stmt.view st with
     | Stmt.Decl (id,k,l,attrs) ->
-        [Stmt.mk_decl ~info ~attrs id k l] (* no type declaration changes *)
+        (* app symbol: needs encoding *)
+        if id_is_app_fun_ ~state id then ensure_exists_encoding_ ~state id;
+        (* in any case, no type declaration changes *)
+        Stmt.mk_decl ~info ~attrs id k l :: pop_new_stmts_ ~state
     | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l] (* no (co) data changes *)
     | Stmt.Pred _ -> assert false (* typing: should be absent *)
     | Stmt.Axiom l ->
@@ -488,62 +486,14 @@ module Make(T : TI.S) = struct
         [Stmt.goal ~info (tr_form ~state g)]
     in
     (* add the new statements before *)
-    let stmts'' = CCVector.to_list state.new_statements in
-    CCVector.clear state.new_statements;
+    let stmts'' = pop_new_stmts_ ~state in
     stmts'' @ stmts'
-
-  (* find whether attributes contain some [abs_type_of id] *)
-  let on_handle_ty_ ~f =
-    List.iter
-      (function
-        | Stmt.Decl_attr_exn (Attr_abs_type id) -> f id
-        | _ -> ())
-
-  (* find whether attributes contain some [abs_proj_n id] *)
-  let on_proj_ ~f =
-    List.iter
-      (function
-        | Stmt.Decl_attr_exn (Attr_abs_projection (ty_id,n)) -> f ty_id n
-        | _ -> ())
-
-  let populate_state ~state stmts =
-    (* table for partially filled [fun_encoding]s *)
-    let partial = ID.Tbl.create 32 in
-    CCVector.iter
-      (fun st -> match Stmt.view st with
-        | Stmt.Decl (id, _decl, ty, attrs) ->
-            on_handle_ty_ attrs
-              ~f:(fun fun_id ->
-                (* create a fun_encoding for [fun_id] (whose handle type is id) *)
-                let fun_encoding = {
-                  fun_encoded_fun=fun_id;
-                  fun_abstract_ty_id=id;
-                  fun_abstract_ty=U.ty_const id;
-                  fun_concretization=[];
-                } in
-                ID.Tbl.add partial id fun_encoding);
-            on_proj_ attrs
-              ~f:(fun ty_id n ->
-                  (* id is the n-th projection of the handle ty_id *)
-                  let fun_ = ID.Tbl.find partial ty_id in
-                  let ty_proj = ty in
-                  let fun_ =
-                    { fun_ with
-                      fun_concretization=(n,id,ty_proj) :: fun_.fun_concretization; }
-                  in
-                  ID.Tbl.replace partial ty_id fun_)
-        | _ -> ())
-      stmts;
-    (* assume all the declarations are now complete, and add them to [state] *)
-    ID.Tbl.iter
-      (fun _ fun_encoding -> add_encoding ~state fun_encoding)
-      partial
 
   let elim_recursion pb =
     let hof = gather_hof_ pb in
+    let sigma = Problem.signature pb in
     Utils.debugf ~section 3 "@[<2>hof info:@ @[%a@]@]" (fun k->k (CCFormat.opt pp_hof) hof);
-    let state = create_state ~hof () in
-    populate_state ~state (Problem.statements pb);
+    let state = create_state ~hof ~sigma () in
     let pb' = Problem.flat_map_statements ~f:(tr_statement ~state) pb in
     pb', state.decode
 

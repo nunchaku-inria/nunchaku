@@ -359,6 +359,7 @@ module Make(T : TI.S) = struct
         (fun k->k ID.print id pp_act act);
       match act with
       | `Keep ->
+          ID.Tbl.add st.St.polarized id None;
           let def =
             Stmt.map_rec_def_bind Var.Subst.empty def
               ~bind:bind_var_
@@ -383,6 +384,7 @@ module Make(T : TI.S) = struct
          (fun k->k ID.print id pp_act act);
       match act with
       | `Keep ->
+          ID.Tbl.add st.St.polarized id None;
           let def =
             Stmt.map_pred_bind Var.Subst.empty def
               ~bind:bind_var_ ~ty:(fun _ ty -> ty)

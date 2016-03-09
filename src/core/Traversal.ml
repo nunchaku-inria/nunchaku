@@ -182,7 +182,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     = fun ~depth ~loc _defs def arg ->
       let id = def.Stmt.rec_defined.Stmt.defined_head in
       Utils.debugf ~section 3
-        "@[<2>process rec case `%a` for@ (%a)@ at depth %d@]"
+        "@[<2>@{<Cyan>process rec case@} `%a` for@ (%a)@ at depth %d@]"
         (fun k -> k ID.print id Arg.print arg depth);
       let l = UF_list.make [] in
       let frame = {
@@ -229,7 +229,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     = fun ~depth ~loc wf kind _defs def arg ->
       let id = def.Stmt.pred_defined.Stmt.defined_head in
       Utils.debugf ~section 3
-        "@[<2>process pred `%a` for@ (%a %a)@ at depth %d@]"
+        "@[<2>@{<Cyan>process pred@} `%a` for@ (%a %a)@ at depth %d@]"
         (fun k -> k ID.print def.Stmt.pred_defined.Stmt.defined_head
           ID.print id Arg.print arg depth);
       let l = UF_list.make [] in

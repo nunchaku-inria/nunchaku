@@ -138,6 +138,8 @@ let empty = {
   potentially_spurious=false;
 }
 
+let empty_copy m = { empty with potentially_spurious = m.potentially_spurious; }
+
 let add_const t tup = {t with constants = tup :: t.constants; }
 
 let add_fun t f = {t with funs = f :: t.funs; }
@@ -177,15 +179,16 @@ let fold ~constants ~funs ~finite_types acc m =
   !acc
 
 let print pt pty out m =
+  let pp_tyvar out v = fpf out "@[<2>(%a : %a)@]" Var.print_full v pty (Var.ty v) in
   let pplist ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp in
   let pp_const out (t,u,_) = fpf out "@[<2>val %a :=@ @[%a@]@]." pt t pt u in
   let pp_type out (ty,dom) =
     fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
       pty ty (pplist ~sep:", " ID.print) dom
   and pp_fun out (f,vars,dt,_) =
-    fpf out "@[<2>val @[%a@]@ :=@ @[<2>@[fun %a@].@ @[%a@]@]@]."
+    fpf out "@[<2>val @[%a@]@ :=@ @[<2>@[fun @[<hv>%a@]@].@ @[%a@]@]@]."
       pt f
-      (pplist ~sep:" " Var.print_full) vars
+      (pplist ~sep:" " pp_tyvar) vars
       (DT.print pt) dt
   in
   (* only print non-empty lists *)
