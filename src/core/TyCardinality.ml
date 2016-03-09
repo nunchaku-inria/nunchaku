@@ -59,7 +59,6 @@ module Card = struct
   let infinite = Infinite
   let unknown = Unknown
   let is_zero = function Exact z -> Z.sign z = 0 | _ -> false
-  let is_one = function Exact z -> Z.equal z Z.one | _ -> false
 
   let ( * ) a b = match a, b with
     | Unknown, _

@@ -28,6 +28,8 @@ module Builtin : sig
     | `Or
     | `True
     | `False
+    | `Choice
+    | `UChoice
     | `Eq
     | `Equiv
     | `Imply
@@ -46,6 +48,8 @@ end = struct
     | `Or
     | `True
     | `False
+    | `Choice
+    | `UChoice
     | `Eq
     | `Equiv
     | `Imply
@@ -56,6 +60,8 @@ end = struct
     | `Type
     | `True
     | `False
+    | `Choice
+    | `UChoice
     | `Prop
     | `Not -> `Prefix
     | `And
@@ -73,6 +79,8 @@ end = struct
     | `Or -> "||"
     | `True -> "true"
     | `False -> "false"
+    | `Choice -> "choice"
+    | `UChoice -> "uchoice"
     | `Eq -> "="
     | `Equiv -> "="
     | `Imply -> "=>"

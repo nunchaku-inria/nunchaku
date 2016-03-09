@@ -76,6 +76,10 @@ type (+'t, +'ty) t = {
 val empty : (_,_) t
 (** Empty model *)
 
+val empty_copy : ('t, 'ty) t -> ('t, 'ty) t
+(** [empty_copy m] is a empty model that has the same additional information
+    (such as {!potentially_spurious}) as [m] *)
+
 val add_const : ('t,'ty) t -> 't * 't * symbol_kind -> ('t,'ty) t
 (** Add a term interpretation *)
 

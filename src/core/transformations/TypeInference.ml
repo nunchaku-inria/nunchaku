@@ -355,6 +355,11 @@ module Convert(Term : TermTyped.S) = struct
     in
     if missing=[] then `Ok else `Missing missing
 
+  (* type of choice operators *)
+  let ty_choice_ =
+    let a = Var.make ~ty:U.ty_type ~name:"a" in
+    U.(ty_forall a (ty_arrow (ty_arrow (var a) prop) (var a)))
+
   (* convert a parsed term into a typed/scoped term *)
   let rec convert_term_ ~stack ~env t =
     let loc = get_loc_ ~stack t in
@@ -375,6 +380,8 @@ module Convert(Term : TermTyped.S) = struct
           | `Not -> `Not, prop1
           | `True -> `True, prop
           | `False -> `False, prop
+          | `Choice -> `BFun `Choice, ty_choice_
+          | `UChoice -> `BFun `UChoice, ty_choice_
           | `Undefined _ | `Eq | `Equiv -> assert false (* dealt with earlier *)
         in
         U.builtin ?loc ~ty b
