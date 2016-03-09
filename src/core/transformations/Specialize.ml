@@ -176,16 +176,18 @@ module Make(T : TI.S) = struct
     (* can we reach [Nonvar] from [n1] following edges of [g]? *)
     let can_reach_nonvar g n1 =
       let rec aux n =
-        let c = IDIntTbl.find g n in
-        match c.cell_reaches_nonvar with
-          | R_reachable -> true
-          | R_not_reachable -> false
-          | R_not_computed ->
-              (* first, avoid looping *)
-              c.cell_reaches_nonvar <- R_not_reachable;
-              let res = List.exists aux c.cell_children in
-              if res then c.cell_reaches_nonvar <- R_reachable;
-              res
+        try
+          let c = IDIntTbl.find g n in
+          match c.cell_reaches_nonvar with
+            | R_reachable -> true
+            | R_not_reachable -> false
+            | R_not_computed ->
+                (* first, avoid looping *)
+                c.cell_reaches_nonvar <- R_not_reachable;
+                let res = List.exists aux c.cell_children in
+                if res then c.cell_reaches_nonvar <- R_reachable;
+                res
+        with Not_found -> false
       in
       aux n1
 
@@ -199,7 +201,7 @@ module Make(T : TI.S) = struct
   end
 
   (* compute the set of specializable arguments in each function of [defs] *)
-  let compute_specializable_args_ ~state defs =
+  let compute_specializable_args_ ~state (defs : (_,_,<eqn:[`Single];..>) Stmt.rec_defs) =
     let ids =
       Sequence.of_list defs
       |> Sequence.map (fun def -> def.Stmt.rec_defined.Stmt.defined_head)
@@ -207,6 +209,8 @@ module Make(T : TI.S) = struct
     in
     (* traverse term, finding calls to other definitions *)
     let cg = CallGraph.create () in
+    (* set of IDs being explored *)
+    let explored = ID.Tbl.create 8 in
     (* explore the graph of calls in [f_id args] *)
     let rec aux f_id args t = match T.repr t with
       | TI.App (g, l) ->
@@ -241,13 +245,16 @@ module Make(T : TI.S) = struct
                          if ID.equal g_id f_id
                          then CallGraph.add_nonvar cg f_id j)
                   l;
-                (* explore [g_id] if [g != f] *)
+                (* explore [g_id] if [g != f] and [g] not already explored *)
                 if not (ID.equal f_id g_id) then (
                   let def' = match Stmt.find_rec_def ~defs g_id with
                     | None -> assert false
                     | Some d -> d
                   in
-                  ignore (aux_def g_id def')
+                  if not (ID.Tbl.mem explored g_id) then (
+                    ID.Tbl.add explored g_id ();
+                    ignore (aux_def g_id def');
+                  )
                 );
                 ()
             | _ -> aux' f_id args t
@@ -278,8 +285,10 @@ module Make(T : TI.S) = struct
                 not (CallGraph.can_reach_nonvar cg (CallGraph.Arg(id,i))))
          in
          ID.Tbl.replace state.specializable_args id bv;
-         Utils.debugf ~section 5 "@[<2>can specialize %a on:@ @[%a@]@]"
-           (fun k->k ID.print id CCFormat.(array bool) bv);
+         Utils.debugf ~section 5 "@[<2>can specialize `@[%a : %a@]` on:@ @[%a@]@]"
+           (fun k->
+              let ty = def.Stmt.rec_defined.Stmt.defined_ty in
+              k ID.print id P.print ty CCFormat.(array bool) bv);
       )
       defs;
     ()
