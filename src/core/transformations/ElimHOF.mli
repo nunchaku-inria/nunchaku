@@ -35,6 +35,7 @@ module Make(T : TermInner.S) : sig
       @param decode the decode function that takes an applied [(module S)]
         in addition to the state *)
   val pipe_with :
+    ?on_decoded:(('d -> unit) list) ->
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
     ((term, term, inv1) Problem.t,

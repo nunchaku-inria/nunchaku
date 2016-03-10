@@ -806,15 +806,19 @@ module Make(T : TI.S) = struct
       | None -> errorf_ "could not find model for function %a" ID.print id
       | Some tup -> tup
 
+  let as_var_ t = match T.repr t with TI.Var v -> v | _ -> assert false
+
+  let find_as_var_ ~subst v = Var.Subst.find_exn ~subst v |> as_var_
+
   (* filter [tests], keeping only branches where [v = c] holds, and replacing
      [v] by [c] in those branches.
      @param add_tests additional tests to put into each case *)
-  let filter_tests_ ~state ~add_tests v c tests =
+  let filter_tests_ ~state ~subst ~add_tests v c tests =
     (* does [v = c] in [eqns]? *)
     let maps_to v c ~in_:eqns =
       List.exists
         (fun (v',t) ->
-           let subst = Var.Subst.singleton v c in
+           let subst = Var.Subst.add ~subst v c in
            Var.equal v v' && U.equal_with ~subst t c)
         eqns
     and remove_var v ~from:eqns =
@@ -824,14 +828,19 @@ module Make(T : TI.S) = struct
       (fun (eqns, rhs) ->
          if maps_to v c ~in_:eqns
          then
-           let subst = Var.Subst.singleton v c in
-           Some (add_tests @ remove_var v ~from:eqns, decode_term_ ~state subst rhs)
+           let subst = Var.Subst.add ~subst v c in
+           let eqns =
+             add_tests @ remove_var v ~from:eqns
+             |> List.map
+               (fun (v,t) -> find_as_var_ ~subst v, decode_term_ ~state subst t)
+           in
+           Some (eqns, decode_term_ ~state subst rhs)
          else None)
       tests
 
   (* [t1] is a tree returning some handle type, and [t2] is a tree whose first
      variable (the head of [vars2]) has this exact handle type *)
-  let merge_dt_ ~state t1 vars2 t2 =
+  let merge_dt_ ~state ~subst t1 vars2 t2 =
     let module DT = Model.DT in
     match vars2 with
       | [] -> assert false
@@ -842,19 +851,23 @@ module Make(T : TI.S) = struct
             |> CCList.flat_map
               (fun (eqns, rhs) ->
                  (* keep branches of [t2] that map [v] to [rhs] *)
-                 filter_tests_ ~state ~add_tests:eqns v rhs t2.DT.tests)
+                 filter_tests_ ~state ~subst ~add_tests:eqns v rhs t2.DT.tests)
           (* tests corresponding to [t2.tests] in the case [v = t1.else_] *)
-          and tests2 = filter_tests_ ~state ~add_tests:[] v t1.DT.else_ t2.DT.tests in
-          vars2_tl, DT.test_flatten (tests1 @ tests2) ~else_:(DT.yield t2.DT.else_)
+          and tests2 = filter_tests_ ~state ~subst ~add_tests:[] v t1.DT.else_ t2.DT.tests
+          and else_ = decode_term_ ~state subst t2.DT.else_
+          and vars2_tl = List.map (find_as_var_ ~subst) vars2_tl in
+          vars2_tl, DT.test_flatten (tests1 @ tests2) ~else_:(DT.yield else_)
 
   (* translate a DT and returns a substitution with fresh variables *)
-  let tr_dt ~state vars subst dt =
+  let tr_dt ~state ~subst vars dt =
     Utils.debugf ~section 5 "@[<2>decode @[%a@] ->@ `@[%a@]`@]"
       (fun k->k (CCFormat.list Var.print_full) vars
           (Model.DT.print P.print) dt);
     let subst, vars = Utils.fold_map (bind_decode_var_ ~state) subst vars in
     let tr_ = decode_term_ ~state subst in
-    let dt = Model.DT.map dt ~term:tr_ ~ty:tr_ in
+    let dt = Model.DT.map dt
+        ~var:(fun v -> Some (find_as_var_ ~subst v))
+        ~term:tr_ ~ty:tr_ in
     vars, subst, dt
 
   (* Assuming [f_id = f_const] is a part of the model [m], and [f_id] is
@@ -868,7 +881,7 @@ module Make(T : TI.S) = struct
       | [TC_first_param _] -> assert false
       | [TC_app af] ->
           let vars, dt, k = find_dt_ m af.af_id in
-          let vars, _, dt = tr_dt ~state vars subst dt in
+          let vars, _, dt = tr_dt ~state ~subst vars dt in
           vars, dt, k
       | TC_first_param (f,_) :: tower' -> aux2 subst f tower'
       | TC_app af :: tower' -> aux2 subst af.af_id tower'
@@ -876,10 +889,10 @@ module Make(T : TI.S) = struct
     and aux2 subst f tower =
       (* find and transform [dt] for [f] *)
       let vars, dt, _ = find_dt_ m f in
-      let vars, subst, dt = tr_dt ~state vars subst dt in
+      let vars, subst, dt = tr_dt ~state ~subst vars dt in
       (* merge with [dt] for remaining tower functions *)
       let vars', dt', k = aux subst tower in
-      let vars', new_dt = merge_dt_ ~state dt vars' dt' in
+      let vars', new_dt = merge_dt_ ~state ~subst dt vars' dt' in
       vars @ vars', new_dt, k
     in
     aux Var.Subst.empty tower
@@ -922,12 +935,12 @@ module Make(T : TI.S) = struct
           | TI.Const id when ID.Map.mem id state.fun_encodings ->
               decode_partial_fun_ new_m id
           | _ ->
-              let vars, _, dt = tr_dt ~state vars Var.Subst.empty dt in
+              let vars, _, dt = tr_dt ~state ~subst:Var.Subst.empty vars dt in
               Model.add_fun new_m (tr_term f, vars, dt, k))
 
   (** {2 Pipe} *)
 
-  let pipe_with ~decode ~print =
+  let pipe_with ?on_decoded ~decode ~print =
     let on_encoded = if print
       then
         let module PPb = Problem.Print(P)(P) in
@@ -935,6 +948,7 @@ module Make(T : TI.S) = struct
       else []
     in
     Transform.make1
+      ?on_decoded
       ~on_encoded
       ~name
       ~encode:(fun p ->
@@ -945,8 +959,14 @@ module Make(T : TI.S) = struct
       ()
 
   let pipe ~print =
+    let on_decoded = if print
+      then
+        [Format.printf "@[<2>@{<Yellow>model after elim_HOF@}:@ %a@]@."
+           (Model.print P.print P.print)]
+      else []
+    in
     let decode state m = decode_model ~state m in
-    pipe_with ~print ~decode
+    pipe_with ~on_decoded ~print ~decode
 end
 
 
