@@ -653,6 +653,7 @@ module type UTIL = sig
   val forall_l : t_ var list -> t_ -> t_
   val exists_l : t_ var list -> t_ -> t_
 
+  val hash_fun : t_ CCHash.hash_fun
   val hash : t_ -> int
   (** Hash into a positive integer *)
 
@@ -923,7 +924,7 @@ module Util(T : S)
   let forall_l = List.fold_right forall
   let exists_l = List.fold_right exists
 
-  let hash t =
+  let hash_fun t h =
     let d = ref 30 in (* number of nodes to explore *)
     let rec hash_ t h =
       if !d = 0 then h
@@ -945,7 +946,9 @@ module Util(T : S)
         | TyMeta _ -> h
       and hash_var_ v h = ID.hash_fun (Var.id v) h
     in
-    CCHash.finish (hash_ t CCHash.init)
+    hash_ t h
+
+  let hash t = CCHash.apply hash_fun t
 
   module Subst = Var.Subst
 
