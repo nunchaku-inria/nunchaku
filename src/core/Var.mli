@@ -54,7 +54,7 @@ val print_full : _ t CCFormat.printer
 module Subst : sig
   type 'a var = 'a t
 
-  type ('ty, 'a) t
+  type (+'ty, +'a) t
   (** A substitution for variables of type ['ty], to terms ['a] *)
 
   val empty : _ t
