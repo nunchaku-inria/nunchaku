@@ -47,7 +47,7 @@ module Subst = struct
 
   module M = ID.Map
 
-  type ('ty,'a) t = ('ty var * 'a) M.t
+  type (+'ty, +'a) t = ('ty var * 'a) M.t
 
   let empty = M.empty
   let is_empty = M.is_empty
