@@ -171,6 +171,8 @@ let rec declare_missing ~ctx ~state t =
           | `Type
           | `True
           | `False
+          | `Choice
+          | `UChoice
           | `Undefined _ -> t
           end
       | _ ->

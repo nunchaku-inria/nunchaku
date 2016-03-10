@@ -130,6 +130,7 @@ end = struct
           | `True -> U.builtin `True
           | `False -> U.builtin `False
           | `Imply -> U.builtin `Imply
+          | `Choice | `UChoice -> error_ t "cannot convert (u)choice"
           | `Undefined _ -> error_ t "cannot convert `undefined`"
           | `Eq | `Equiv ->
               error_ t "unapplied equality"

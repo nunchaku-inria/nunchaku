@@ -337,7 +337,7 @@ The remaining cases are:
 
 == Epsilon and Iota
 
-Predefine
+Predefine the following (or export "asserting" to users):
 
 ----
 rec epsilon : pi a. (a -> prop) -> prop :=
@@ -372,14 +372,14 @@ exists at least one element satisfying "Q" (in place of "epsilon") or exactly
 one (in place of "iota").
 
 ----
-rec epsilon_nonempty : pi a. (a -> prop) -> prop :=
-  epsilon_nonempty Q = epsilon_nonempty Q asserting
-       Q (epsilon_nonempty Q)
+rec epsilon! : pi a. (a -> prop) -> prop :=
+  epsilon! Q = epsilon! Q asserting
+       Q (epsilon! Q)
 
-rec iota_nonempty : pi a. (a -> prop) -> prop :=
-  iota_nonempty Q = iota_nonempty Q asserting
-       Q (iota_nonempty Q)
+rec iota! : pi a. (a -> prop) -> prop :=
+  iota! Q = iota! Q asserting
+       Q (iota! Q)
 ----
 
-No congruence rules are needed for "iota_nonempty" when specializing; otherwise,
-"epsilon_nonempty" and "iota_nonempty" are identical.
+No congruence rules are needed for "iota!" when specializing; otherwise,
+"epsilon!" and "iota!" are identical.

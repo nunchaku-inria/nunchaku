@@ -27,6 +27,7 @@ module Make(T : TermInner.S) : sig
 
   (** Generic Pipe Component *)
   val pipe_with :
+    ?on_decoded:(('d -> unit) list) ->
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
     ((term, term, 'a inv) Problem.t,

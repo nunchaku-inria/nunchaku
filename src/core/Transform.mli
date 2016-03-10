@@ -24,6 +24,7 @@ and ('a, 'b, 'c, 'd, 'st) inner = {
   decode : 'st -> 'c -> 'd;
   mutable on_input : ('a -> unit) list;
   mutable on_encoded : ('b -> unit) list;
+  mutable on_decoded : ('d -> unit) list;
   print_state : (Format.formatter -> 'st -> unit) option;  (** Debugging *)
 }
 
@@ -33,6 +34,7 @@ type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 val make : ?print:(Format.formatter -> 'st -> unit) ->
            ?on_input:('a -> unit) list ->
            ?on_encoded:('b -> unit) list ->
+           ?on_decoded:('d -> unit) list ->
            name:string ->
            encode:('a -> ('b * 'st) lazy_list) ->
            decode:('st -> 'c -> 'd) ->
@@ -43,6 +45,7 @@ val make : ?print:(Format.formatter -> 'st -> unit) ->
 val make1 : ?print:(Format.formatter -> 'st -> unit) ->
             ?on_input:('a -> unit) list ->
             ?on_encoded:('b -> unit) list ->
+            ?on_decoded:('d -> unit) list ->
             name:string ->
             encode:('a -> 'b * 'st) ->
             decode:('st -> 'c -> 'd) ->

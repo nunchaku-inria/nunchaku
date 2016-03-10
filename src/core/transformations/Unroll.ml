@@ -333,6 +333,8 @@ module Make(T : TI.S) = struct
               | [] -> assert false
               | v :: l -> v, l
             in
+            Utils.debugf ~section 5 "@[<2>remove var %a from DT of %a@]"
+              (fun k->k Var.print_full removed_var ID.print id);
             let dt = filter_dt_ ~state ~removed_var dt in
             Some (t,vars,dt,k)
         | _ ->
@@ -342,7 +344,7 @@ module Make(T : TI.S) = struct
 
   (** {6 Pipes} *)
 
-  let pipe_with ~decode ~print =
+  let pipe_with ?(on_decoded) ~decode ~print =
     let on_encoded = if print
       then
         let module Ppb = Problem.Print(P)(P) in
@@ -350,6 +352,7 @@ module Make(T : TI.S) = struct
       else []
     in
     Transform.make1
+      ?on_decoded
       ~name
       ~on_encoded
       ~encode:(fun pb -> unroll pb)
@@ -357,6 +360,12 @@ module Make(T : TI.S) = struct
       ()
 
   let pipe ~print =
-    pipe_with ~decode:(fun state m -> decode_model ~state m) ~print
+    let on_decoded = if print
+      then
+        [Format.printf "@[<2>@{<Yellow>model after unrolling@}:@ %a@]@."
+           (Model.print P.print P.print)]
+      else []
+    in
+    pipe_with ~on_decoded ~decode:(fun state m -> decode_model ~state m) ~print
 end
 
