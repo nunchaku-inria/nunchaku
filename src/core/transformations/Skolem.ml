@@ -264,7 +264,14 @@ module Make(T : TI.S)
   let decode_model ~state m =
     Model.filter_map m
       ~finite_types:(fun (ty,dom) -> Some (ty,dom))
-      ~funs:(fun (t,vars,body,k) -> Some (t,vars,body,k))
+      ~funs:(fun ((t,vars,body,k) as tup) ->
+        match T.repr t with
+          | TI.Const id ->
+              begin match find_id_def ~state id with
+                | None -> Some tup
+                | Some t' -> Some (t',vars,body,k)
+              end
+          | _ -> Some tup)
       ~constants:(fun (t,u,k) ->
           match T.repr t with
           | TI.Const id ->
