@@ -22,6 +22,7 @@ and ('a, 'b, 'c, 'd, 'st) inner = {
   decode : 'st -> 'c -> 'd;
   mutable on_input : ('a -> unit) list;
   mutable on_encoded : ('b -> unit) list;
+  mutable on_decoded : ('d -> unit) list;
   print_state : (Format.formatter -> 'st -> unit) option;  (** Debugging *)
 }
 
@@ -29,19 +30,20 @@ type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 (** Alias to {!t} *)
 
 let make ?print ?(on_input=[])
-?(on_encoded=[]) ~name ~encode ~decode () =
+?(on_encoded=[]) ?(on_decoded=[]) ~name ~encode ~decode () =
   Ex {
     name;
     encode;
     decode;
     on_input;
     on_encoded;
+    on_decoded;
     print_state=print;
   }
 
-let make1 ?print ?on_input ?on_encoded ~name ~encode ~decode =
+let make1 ?print ?on_input ?on_encoded ?on_decoded ~name ~encode ~decode =
   let encode x = CCKList.return (encode x) in
-  make ?print ?on_input ?on_encoded ~name ~encode ~decode
+  make ?print ?on_input ?on_encoded ?on_decoded ~name ~encode ~decode
 
 let backward ~name f =
   let decode () x = f x in
@@ -82,9 +84,8 @@ end
 (* run callbacks on [x] *)
 let callbacks_ l x =
   List.iter
-    (fun f ->
-      try f x with _ -> ()
-    ) l
+    (fun f -> try f x with _ -> ())
+    l
 
 let rec run
   : type a b c d. pipe:(a,b,c,d) Pipe.t -> a -> (b * (c -> d)) lazy_list
@@ -98,7 +99,11 @@ let rec run
       callbacks_ trans.on_encoded y;
       run ~pipe:pipe' y
       >|= fun (y', conv_back) ->
-      let conv_back' x = trans.decode st (conv_back x) in
+      let conv_back' x =
+        let res = trans.decode st (conv_back x) in
+        callbacks_ trans.on_decoded res;
+        res
+      in
       y', conv_back'
 
 (** {2 Pipe with a function at the end} *)
