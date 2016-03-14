@@ -394,6 +394,10 @@ module type UTIL_REPR = sig
   val free_meta_vars : ?init:t_ MetaVar.t ID.Map.t -> t_ -> t_ MetaVar.t ID.Map.t
   (** The free type meta-variables in [t] *)
 
+  val get_ty_arg : t_ -> int -> t_ option
+  (** [get_ty_arg ty n] gets the [n]-th argument of [ty], if [ty] is a
+      function type with at least [n] arguments. *)
+
   val ty_unfold : t_ -> t_ Var.t list * t_ list * t_
   (** [ty_unfold ty] decomposes [ty] into a list of quantified type variables,
       a list of parameters, and a return type (which is not an arrow).
@@ -563,6 +567,17 @@ module UtilRepr(T : REPR)
   let ty_returns_Prop t = match T.repr (ty_returns t) with
     | TyBuiltin `Prop -> true
     | _ -> false
+
+  let rec get_ty_arg ty i = match T.repr ty with
+    | App (_,_)
+    | TyBuiltin _
+    | Const _
+    | Var _
+    | TyMeta _ -> None
+    | TyArrow (a,b) ->
+        if i=0 then Some a else get_ty_arg b (i-1)
+    | Bind (`TyForall, _,_) -> None
+    | _ -> assert false
 
   (* number of parameters of this (polymorphic?) T.t type *)
   let rec ty_num_param ty = match T.repr ty with
@@ -1253,17 +1268,6 @@ module Util(T : S)
     let t, subst = ty_apply_full t l in
     if Subst.is_empty subst then t else eval ~subst t
 
-  let rec get_ty_arg_ ty i = match T.repr ty with
-    | App (_,_)
-    | TyBuiltin _
-    | Const _
-    | Var _
-    | TyMeta _ -> None
-    | TyArrow (a,b) ->
-        if i=0 then Some a else get_ty_arg_ b (i-1)
-    | Bind (`TyForall, _,_) -> None
-    | _ -> assert false
-
   type signature = id -> T.t option
 
   let find_ty_ ~sigma id = match sigma id with
@@ -1295,7 +1299,7 @@ module Util(T : S)
           | `DataSelect (id,n) ->
               (* id: a_1->a_2->tau, where tau inductive; select-id-i: tau->a_i*)
               let ty = find_ty_ ~sigma id in
-              begin match get_ty_arg_ ty n with
+              begin match get_ty_arg ty n with
               | Some ty_arg ->
                   ty_arrow (ty_returns ty) ty_arg
               | _ ->
