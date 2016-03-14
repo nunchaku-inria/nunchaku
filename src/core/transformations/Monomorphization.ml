@@ -615,12 +615,17 @@ module Make(T : TI.S) = struct
   let unmangle_model ~state =
     Model.map ~term:(unmangle_term ~state) ~ty:(unmangle_term ~state)
 
-  let pipe_with ~decode ~print =
-    let on_encoded = if print
-      then
-        let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after mono@}: %a@]@." PPb.print]
-      else []
+  let pipe_with ~decode ~print ~check =
+    let on_encoded =
+      Utils.singleton_if print ()
+        ~f:(fun () ->
+          let module PPb = Problem.Print(P)(P) in
+          Format.printf "@[<v2>@{<Yellow>after mono@}: %a@]@." PPb.print)
+      @
+      Utils.singleton_if check ()
+        ~f:(fun () ->
+          let module C = TypeCheck.Make(T) in
+          C.check_problem ?env:None)
     in
     Transform.make1
       ~on_encoded
@@ -633,7 +638,7 @@ module Make(T : TI.S) = struct
       ~decode
       ()
 
-  let pipe ~print =
+  let pipe ~print ~check =
     let decode state = unmangle_model ~state in
-    pipe_with ~print ~decode
+    pipe_with ~print ~decode ~check
 end

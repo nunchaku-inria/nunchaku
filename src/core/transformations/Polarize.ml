@@ -578,12 +578,15 @@ module Make(T : TI.S) = struct
 
   (** {6 Pipes} *)
 
-  let pipe_with ~decode ~polarize_rec ~print =
-    let on_encoded = if print
-      then
+  let pipe_with ~decode ~polarize_rec ~print ~check =
+    let on_encoded =
+      Utils.singleton_if print () ~f:(fun () ->
         let module Ppb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after polarization@}:@ %a@]@." Ppb.print]
-      else []
+        Format.printf "@[<v2>@{<Yellow>after polarization@}:@ %a@]@." Ppb.print)
+      @
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.check_problem ?env:None)
     in
     Transform.make1
       ~name
@@ -592,7 +595,8 @@ module Make(T : TI.S) = struct
       ~decode
       ()
 
-  let pipe ~polarize_rec ~print =
-    pipe_with ~decode:(fun state m -> decode_model ~state m) ~polarize_rec ~print
+  let pipe ~polarize_rec ~print ~check =
+    pipe_with ~decode:(fun state m -> decode_model ~state m)
+      ~polarize_rec ~print ~check
 end
 

@@ -27,6 +27,7 @@ module Make(T : TermInner.S) : sig
 
   val pipe :
     print:bool ->
+    check:bool ->
       ((term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t,
        (term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t,
       'c, 'c

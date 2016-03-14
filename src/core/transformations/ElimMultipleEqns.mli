@@ -23,6 +23,7 @@ module Make(T : TermInner.S) : sig
   val pipe :
     decode:('c -> 'd) ->
     print:bool ->
+    check:bool ->
     ((term, term, ('a,'b) inv1) Problem.t,
       (term, term, ('a,'b) inv2) Problem.t,
       'c, 'd) Transform.t

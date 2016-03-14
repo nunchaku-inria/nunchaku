@@ -63,6 +63,7 @@ module Make(T : TermInner.S) : sig
 
   val pipe :
     print:bool ->
+    check:bool ->
     ((term, term, ('a,'b) inv1) Problem.t,
      (term, term, ('a,'b) inv2) Problem.t,
       (term,term) Model.t, (term,term) Model.t
@@ -72,6 +73,7 @@ module Make(T : TermInner.S) : sig
   val pipe_with :
     decode:(unmangle_state -> 'c -> 'd) ->
     print:bool ->
+    check:bool ->
     ((term, term, ('a,'b) inv1) Problem.t,
      (term, term, ('a,'b) inv2) Problem.t, 'c, 'd
     ) Transform.t

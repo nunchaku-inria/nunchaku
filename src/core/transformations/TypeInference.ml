@@ -1311,12 +1311,12 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
   let pipe_with ~decode ~print =
     (* type inference *)
     let module Conv = Convert(T1) in
-    let module P = TI.Print(T1) in
-    let module PPb = Problem.Print(P)(P) in
     let on_encoded =
-      if print
-      then [Format.printf "@[<v2>@{<Yellow>after type inference@}: %a@]@." PPb.print]
-      else []
+      Utils.singleton_if print ()
+        ~f:(fun () ->
+          let module P = TI.Print(T1) in
+          let module PPb = Problem.Print(P)(P) in
+          Format.printf "@[<v2>@{<Yellow>after type inference@}: %a@]@." PPb.print)
     in
     Transform.make1
       ~on_encoded

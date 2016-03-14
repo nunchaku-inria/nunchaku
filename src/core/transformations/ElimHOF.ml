@@ -963,12 +963,15 @@ module Make(T : TI.S) = struct
 
   (** {2 Pipe} *)
 
-  let pipe_with ?on_decoded ~decode ~print =
-    let on_encoded = if print
-      then
+  let pipe_with ?on_decoded ~decode ~print ~check =
+    let on_encoded =
+      Utils.singleton_if print () ~f:(fun () ->
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after elimination of HOF@}: %a@]@." PPb.print]
-      else []
+        Format.printf "@[<v2>@{<Yellow>after elimination of HOF@}: %a@]@." PPb.print)
+      @
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.check_problem ?env:None)
     in
     Transform.make1
       ?on_decoded
@@ -981,7 +984,7 @@ module Make(T : TI.S) = struct
       ~decode
       ()
 
-  let pipe ~print =
+  let pipe ~print ~check =
     let on_decoded = if print
       then
         [Format.printf "@[<2>@{<Yellow>model after elim_HOF@}:@ %a@]@."
@@ -989,7 +992,7 @@ module Make(T : TI.S) = struct
       else []
     in
     let decode state m = decode_model ~state m in
-    pipe_with ~on_decoded ~print ~decode
+    pipe_with ~on_decoded ~print ~decode ~check
 end
 
 

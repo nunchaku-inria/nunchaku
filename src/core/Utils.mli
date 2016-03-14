@@ -96,6 +96,8 @@ val vec_fold_map :  ('b -> 'a -> 'b * 'c) -> 'b -> ('a,_) CCVector.t -> 'b * ('c
 
 val fold_map : ('b -> 'a -> 'b * 'c) -> 'b -> 'a list -> 'b * 'c list
 
+val singleton_if : bool -> f:('a -> 'b) -> 'a -> 'b list
+
 (** {2 Warnings} *)
 
 type warning =

@@ -174,6 +174,8 @@ let rec fold_map f acc l = match l with
       let acc, tail' = fold_map f acc tail in
       acc, y :: tail'
 
+let singleton_if check ~f x = if check then [f x] else []
+
 (** {2 Warnings} *)
 
 type warning =

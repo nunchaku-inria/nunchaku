@@ -21,6 +21,7 @@ module Make(T : TermInner.S) : sig
   (** Pipeline component *)
   val pipe :
     print:bool ->
+    check:bool ->
     ((term, term, 'a inv) Problem.t,
       (term, term, 'a inv) Problem.t,
       (term, term) Model.t, (term, term) Model.t) Transform.t
@@ -30,6 +31,7 @@ module Make(T : TermInner.S) : sig
     ?on_decoded:(('d -> unit) list) ->
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
+    check:bool ->
     ((term, term, 'a inv) Problem.t,
       (term, term, 'a inv) Problem.t,
       'c, 'd
