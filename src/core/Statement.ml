@@ -19,7 +19,7 @@ type 'ty defined = {
   defined_ty: 'ty; (* type of the head symbol *)
 }
 
-type ('t, 'ty, 'kind) equations =
+type (+'t, +'ty, 'kind) equations =
   | Eqn_nested :
       ('ty var list (* universally quantified vars *)
       * 't list (* arguments (patterns) to the defined term *)
@@ -38,23 +38,23 @@ type ('t, 'ty, 'kind) equations =
       * 't (* RHS of equation *)
       ) -> ('t, 'ty, <eqn:[`App]; ty:[`Mono]; ..>) equations
 
-type ('t,'ty,'kind) rec_def = {
+type (+'t,+'ty,'kind) rec_def = {
   rec_defined: 'ty defined;
   rec_kind: decl;
   rec_vars: 'ty var list; (* type variables in definitions *)
   rec_eqns: ('t, 'ty,'kind) equations; (* list of equations defining the term *)
 }
 
-type ('t, 'ty,'kind) rec_defs = ('t, 'ty,'kind) rec_def list
+type (+'t, +'ty,'kind) rec_defs = ('t, 'ty,'kind) rec_def list
 
-type ('t, 'ty) spec_defs = {
+type (+'t, +'ty) spec_defs = {
   spec_vars: 'ty var list; (* type variables used by defined terms *)
   spec_defined: 'ty defined list;  (* terms being specified together *)
   spec_axioms: 't list;  (* free-form axioms *)
 }
 
 (** A type constructor: name + type of arguments *)
-type 'ty ty_constructor = {
+type +'ty ty_constructor = {
   cstor_name: id; (** Name *)
   cstor_args: 'ty list; (** type arguments *)
   cstor_type: 'ty; (** type of the constructor (shortcut) *)
@@ -62,7 +62,7 @@ type 'ty ty_constructor = {
 
 (** A (co)inductive type. The type variables [ty_vars] occur freely in
     the constructors' types. *)
-type 'ty tydef = {
+type +'ty tydef = {
   ty_id : id;
   ty_vars : 'ty Var.t list;
   ty_type : 'ty; (** shortcut for [type -> type -> ... -> type] *)
@@ -70,10 +70,10 @@ type 'ty tydef = {
 }
 
 (** Mutual definitions of several types *)
-type 'ty mutual_types = 'ty tydef list
+type +'ty mutual_types = 'ty tydef list
 
 (** Flavour of axiom *)
-type ('t,'ty,'kind) axiom =
+type (+'t,+'ty,'kind) axiom =
   | Axiom_std of 't list
     (** Axiom list that can influence consistency (no assumptions) *)
   | Axiom_spec of ('t,'ty) spec_defs
@@ -81,13 +81,13 @@ type ('t,'ty,'kind) axiom =
   | Axiom_rec of ('t,'ty,'kind) rec_defs
     (** Axioms are part of an admissible (partial) definition *)
 
-type ('t, 'ty) pred_clause_cell = {
+type (+'t, +'ty) pred_clause_cell = {
   clause_vars: 'ty var list; (* universally quantified vars *)
   clause_guard: 't option;
   clause_concl: 't;
 }
 
-type (_, _, _) pred_clause =
+type (+_, +_, _) pred_clause =
   | Pred_clause :
     ('t, 'ty) pred_clause_cell ->
     ('t, 'ty, <ind_preds:[`Present];..>) pred_clause
@@ -98,7 +98,7 @@ type ('t, 'ty, 'inv) pred_def = {
   pred_clauses: ('t, 'ty, 'inv) pred_clause list;
 }
 
-type ('t, 'ty) copy = {
+type (+'t, +'ty) copy = {
   copy_id: ID.t; (* new name *)
   copy_vars: 'ty Var.t list; (* list of type variables *)
   copy_ty: 'ty;  (* type of [copy_id], of the form [type -> type -> ... -> type] *)
@@ -116,7 +116,7 @@ type decl_attr =
   | Decl_attr_card_min of int
   | Decl_attr_exn of exn (** open case *)
 
-type ('term, 'ty, 'inv) view =
+type (+'term, +'ty, 'inv) view =
   | Decl of id * decl * 'ty * decl_attr list
   | Axiom of ('term, 'ty, 'inv) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
@@ -130,7 +130,7 @@ type info = {
   name: string option;
 }
 
-type ('term, 'ty, 'inv) t = {
+type (+'term, +'ty, 'inv) t = {
   view: ('term, 'ty, 'inv) view;
   info: info;
 }
@@ -397,71 +397,80 @@ let map ~term ~ty st =
 
 let fold_defined ~ty acc d = ty acc d.defined_ty
 
-let fold_eqns_ (type inv) ~term ~ty acc (e:(_,_,inv) equations) =
-  let fold_vars acc l = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc l in
+let fold_eqns_bind (type inv) ~bind ~term ~ty b_acc acc (e:(_,_,inv) equations) =
+  let fold_vars b_acc acc l = List.fold_left (fun acc v -> ty b_acc acc (Var.ty v)) acc l in
   match e with
   | Eqn_nested l ->
       List.fold_left
         (fun acc (vars,args,rhs,side) ->
-          let acc = fold_vars acc vars in
-          let acc = List.fold_left term acc args in
-          let acc = term acc rhs in
-          List.fold_left term acc side)
+          let acc = fold_vars b_acc acc vars in
+          let b_acc = List.fold_left bind b_acc vars in
+          let acc = List.fold_left (term b_acc) acc args in
+          let acc = term b_acc acc rhs in
+          List.fold_left (term b_acc) acc side)
         acc l
   | Eqn_app (_,vars,lhs,rhs) ->
-      let acc = fold_vars acc vars in
-      let acc = term acc lhs in
-      term acc rhs
+      let acc = fold_vars b_acc acc vars in
+      let b_acc = List.fold_left bind b_acc vars in
+      let acc = term b_acc acc lhs in
+      term b_acc acc rhs
   | Eqn_single (vars,t) ->
-      let acc = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc vars in
-      term acc t
+      let acc = List.fold_left (fun acc v -> ty b_acc acc (Var.ty v)) acc vars in
+      let b_acc = List.fold_left bind b_acc vars in
+      term b_acc acc t
 
-let fold_clause (type inv) ~term ~ty acc (c:(_,_,inv) pred_clause) =
+let fold_clause_bind (type inv) ~bind ~term ~ty b_acc acc (c:(_,_,inv) pred_clause) =
   let Pred_clause c = c in
   let acc =
-    List.fold_left (fun acc v -> ty acc (Var.ty v)) acc c.clause_vars in
-  let acc = term acc c.clause_concl in
-  CCOpt.fold term acc c.clause_guard
+    List.fold_left (fun acc v -> ty b_acc acc (Var.ty v)) acc c.clause_vars in
+  let b_acc = List.fold_left bind b_acc c.clause_vars in
+  let acc = term b_acc acc c.clause_concl in
+  CCOpt.fold (term b_acc) acc c.clause_guard
 
-let fold_pred (type inv) ~term ~ty acc (def:(_,_,inv) pred_def) =
-  let acc = ty acc def.pred_defined.defined_ty in
-  List.fold_left (fold_clause ~term ~ty) acc def.pred_clauses
+let fold_pred_bind (type inv) ~bind ~term ~ty b_acc acc (def:(_,_,inv) pred_def) =
+  let acc = ty b_acc acc def.pred_defined.defined_ty in
+  let b_acc = List.fold_left bind b_acc def.pred_tyvars in
+  List.fold_left (fold_clause_bind ~term ~ty ~bind b_acc) acc def.pred_clauses
 
-let fold_preds ~term ~ty acc l =
-  List.fold_left (fold_pred ~term ~ty) acc l
+let fold_preds_bind ~bind ~term ~ty b_acc acc l =
+  List.fold_left (fold_pred_bind ~bind ~term ~ty b_acc) acc l
 
-let fold (type inv) ~term ~ty acc (st:(_,_,inv) t) =
+let fold_bind (type inv) ~bind ~term:fterm ~ty:fty b_acc acc (st:(_,_,inv) t) =
   match st.view with
-  | Decl (_, _, t, _) -> ty acc t
+  | Decl (_, _, t, _) -> fty b_acc acc t
   | Axiom a ->
       begin match a with
-      | Axiom_std l -> List.fold_left term acc l
+      | Axiom_std l -> List.fold_left (fterm b_acc) acc l
       | Axiom_spec t ->
-          let acc = List.fold_left (fold_defined ~ty) acc t.spec_defined in
-          List.fold_left term acc t.spec_axioms
+          let acc = List.fold_left (fold_defined ~ty:(fty b_acc)) acc t.spec_defined in
+          List.fold_left (fterm b_acc) acc t.spec_axioms
       | Axiom_rec t ->
           List.fold_left
             (fun acc def ->
-              let acc = fold_defined ~ty acc def.rec_defined in
-              fold_eqns_ ~term ~ty acc def.rec_eqns
-            )
+              let acc = fold_defined ~ty:(fty b_acc) acc def.rec_defined in
+              fold_eqns_bind ~bind ~term:fterm ~ty:fty b_acc acc def.rec_eqns)
             acc t
       end
-  | Pred (_, _, preds) -> fold_preds ~term ~ty acc preds
+  | Pred (_, _, preds) -> fold_preds_bind ~bind ~term:fterm ~ty:fty b_acc acc preds
   | TyDef (_, l) ->
       List.fold_left
         (fun acc tydef ->
-          let acc = ty acc tydef.ty_type in
-          ID.Map.fold (fun _ c acc -> ty acc c.cstor_type) tydef.ty_cstors acc
-        ) acc l
+          let acc = fty b_acc acc tydef.ty_type in
+          ID.Map.fold (fun _ c acc -> fty b_acc acc c.cstor_type) tydef.ty_cstors acc)
+        acc l
   | Copy c ->
-      let acc = ty acc c.copy_of in
-      let acc = ty acc c.copy_ty in
-      let acc = ty acc c.copy_abstract_ty in
-      let acc = ty acc c.copy_concretize_ty in
-      let acc = List.fold_left (fun acc v -> ty acc (Var.ty v)) acc c.copy_vars in
-      CCOpt.fold term acc c.copy_pred
-  | Goal t -> term acc t
+      let acc = List.fold_left (fun acc v -> fty b_acc acc (Var.ty v)) acc c.copy_vars in
+      let b_acc = List.fold_left bind b_acc c.copy_vars in
+      let acc = fty b_acc acc c.copy_of in
+      let acc = fty b_acc acc c.copy_ty in
+      let acc = fty b_acc acc c.copy_abstract_ty in
+      let acc = fty b_acc acc c.copy_concretize_ty in
+      CCOpt.fold (fterm b_acc) acc c.copy_pred
+  | Goal t -> fterm b_acc acc t
+
+let fold ~term:fterm ~ty:fty acc st =
+  fold_bind () acc st
+    ~bind:(fun () _ -> ()) ~term:(fun () -> fterm) ~ty:(fun () -> fty)
 
 let iter ~term ~ty st =
   fold () st ~term:(fun () t -> term t) ~ty:(fun () t -> ty t)

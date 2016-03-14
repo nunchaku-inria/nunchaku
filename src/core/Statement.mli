@@ -336,6 +336,12 @@ val map_bind :
 (** Similar to {!map}, but accumulating some value of type [b_acc] when
     entering binders *)
 
+val fold_bind :
+  bind:('b_acc -> 'ty Var.t -> 'b_acc) ->
+  term:('b_acc -> 'a -> 't -> 'a) ->
+  ty:('b_acc -> 'a -> 'ty -> 'a) ->
+  'b_acc -> 'a -> ('t, 'ty, 'inv) t -> 'a
+
 val fold :
   term:('a -> 't -> 'a) ->
   ty:('a -> 'ty -> 'a) ->
