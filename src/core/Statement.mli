@@ -17,7 +17,7 @@ type 'ty defined = {
   defined_ty: 'ty; (* type of the head symbol *)
 }
 
-type ('t, 'ty, 'kind) equations =
+type (+'t, +'ty, 'kind) equations =
   | Eqn_nested :
       ('ty var list (* universally quantified vars *)
       * 't list (* arguments (patterns) to the defined term *)
@@ -36,23 +36,23 @@ type ('t, 'ty, 'kind) equations =
       * 't (* RHS of equation *)
       ) -> ('t, 'ty, <eqn:[`App]; ty:[`Mono]; ..>) equations
 
-type ('t,'ty,'kind) rec_def = {
+type (+'t,+'ty,'kind) rec_def = {
   rec_defined: 'ty defined;
   rec_kind: decl;
   rec_vars: 'ty var list; (* type variables in definitions *)
   rec_eqns: ('t, 'ty,'kind) equations; (* list of equations defining the term *)
 }
 
-type ('t, 'ty,'kind) rec_defs = ('t, 'ty,'kind) rec_def list
+type (+'t, +'ty,'kind) rec_defs = ('t, 'ty,'kind) rec_def list
 
-type ('t, 'ty) spec_defs = {
+type (+'t, +'ty) spec_defs = {
   spec_vars: 'ty var list; (* type variables used by defined terms *)
   spec_defined: 'ty defined list;  (* terms being specified together *)
   spec_axioms: 't list;  (* free-form axioms *)
 }
 
 (** A type constructor: name + type of arguments *)
-type 'ty ty_constructor = {
+type +'ty ty_constructor = {
   cstor_name: id; (** Name *)
   cstor_args: 'ty list; (** type arguments *)
   cstor_type: 'ty; (** type of the constructor (shortcut) *)
@@ -60,7 +60,7 @@ type 'ty ty_constructor = {
 
 (** A (co)inductive type. The type variables [ty_vars] occur freely in
     the constructors' types. *)
-type 'ty tydef = {
+type +'ty tydef = {
   ty_id : id;
   ty_vars : 'ty Var.t list;
   ty_type : 'ty; (** shortcut for [type -> type -> ... -> type] *)
@@ -68,10 +68,10 @@ type 'ty tydef = {
 }
 
 (** Mutual definitions of several types *)
-type 'ty mutual_types = 'ty tydef list
+type +'ty mutual_types = 'ty tydef list
 
 (** Flavour of axiom *)
-type ('t,'ty,'kind) axiom =
+type (+'t,+'ty,'kind) axiom =
   | Axiom_std of 't list
     (** Axiom list that can influence consistency (no assumptions) *)
   | Axiom_spec of ('t,'ty) spec_defs
@@ -79,24 +79,24 @@ type ('t,'ty,'kind) axiom =
   | Axiom_rec of ('t,'ty,'kind) rec_defs
     (** Axioms are part of an admissible (partial) definition *)
 
-type ('t, 'ty) pred_clause_cell = {
+type (+'t, +'ty) pred_clause_cell = {
   clause_vars: 'ty var list; (* universally quantified vars *)
   clause_guard: 't option;
   clause_concl: 't;
 }
 
-type (_, _, _) pred_clause =
+type (+_, +_, _) pred_clause =
   | Pred_clause :
     ('t, 'ty) pred_clause_cell ->
     ('t, 'ty, <ind_preds:[`Present];..>) pred_clause
 
-type ('t, 'ty, 'inv) pred_def = {
+type (+'t, +'ty, 'inv) pred_def = {
   pred_defined: 'ty defined;
   pred_tyvars: 'ty var list;
   pred_clauses: ('t, 'ty, 'inv) pred_clause list;
 }
 
-type ('t, 'ty) copy = {
+type (+'t, +'ty) copy = {
   copy_id: ID.t; (* new name *)
   copy_vars: 'ty Var.t list; (* list of type variables *)
   copy_ty: 'ty;  (* type of [copy_id], of the form [type -> type -> ... -> type] *)
@@ -114,7 +114,7 @@ type decl_attr =
   | Decl_attr_card_min of int (** minimal cardinality of type *)
   | Decl_attr_exn of exn (** open case *)
 
-type ('term, 'ty, 'inv) view =
+type (+'term, +'ty, 'inv) view =
   | Decl of id * decl * 'ty * decl_attr list
   | Axiom of ('term, 'ty, 'inv) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
@@ -128,12 +128,12 @@ type info = {
   name: string option;
 }
 
-type ('term, 'ty, 'inv) t = private {
+type (+'term, +'ty, 'inv) t = private {
   view: ('term, 'ty, 'inv) view;
   info: info;
 }
 
-type ('t, 'ty, 'inv) statement = ('t, 'ty, 'inv) t
+type (+'t, +'ty, 'inv) statement = ('t, 'ty, 'inv) t
 
 val tydef_vars : 'ty tydef -> 'ty Var.t list
 val tydef_id : _ tydef -> id

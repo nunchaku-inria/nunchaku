@@ -11,7 +11,7 @@ type id = ID.t
 type loc = Location.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-type ('t, 'ty, 'inv) def =
+type (+'t, +'ty, 'inv) def =
   | Fun_def of
       ('t, 'ty, 'inv) Statement.rec_defs *
       ('t, 'ty, 'inv) Statement.rec_def *
@@ -54,7 +54,7 @@ type ('t, 'ty, 'inv) def =
       (** Undefined symbol *)
 
 (** All information on a given symbol *)
-type ('t, 'ty, 'inv) info = {
+type (+'t, +'ty, 'inv) info = {
   ty: 'ty; (** type of symbol *)
   decl_kind: Statement.decl;
   decl_attrs: Statement.decl_attr list;
