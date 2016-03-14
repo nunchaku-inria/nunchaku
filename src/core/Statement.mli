@@ -365,6 +365,7 @@ module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
   val print_spec_defs : (Pt.t, Pty.t) spec_defs printer
   val print_pred_def : (Pt.t, Pty.t, _) pred_def printer
   val print_pred_defs : (Pt.t, Pty.t, _) pred_def list printer
+  val print_eqns : ID.t -> (Pt.t, Pty.t, _) equations printer
   val print_rec_def : (Pt.t, Pty.t, _) rec_def printer
   val print_rec_defs : (Pt.t, Pty.t, _) rec_def list printer
   val print_tydef : Pty.t tydef printer

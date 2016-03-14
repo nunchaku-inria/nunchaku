@@ -501,37 +501,36 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
   let pp_defined_list out =
     fpf out "@[<v>%a@]" (pplist_prefix ~first:"" ~pre:" and " pp_defined)
 
-  let print_rec_def out d =
+  let print_eqns (type inv) id out (e:(_,_,inv) equations) =
     let pp_sides out l =
       if l=[] then ()
       else fpf out "@[<hv2>%a => @]@," (pplist ~sep:" && " Pt.print_in_app) l
     in
-    (* print equations *)
-    let pp_eqns (type inv) id out (e:(_,_,inv) equations) =
-      match e with
-      | Eqn_app (_, vars, lhs, rhs) ->
-          if vars=[]
-          then fpf out "@[<hv2>%a =@ %a@]" Pt.print lhs Pt.print rhs
-          else fpf out "@[<hv2>forall @[<h>%a@].@ @[%a =@ %a@]@]"
-            (pplist ~sep:" " pp_typed_var) vars Pt.print lhs Pt.print rhs
-      | Eqn_nested l ->
-          pplist ~sep:";"
-            (fun out  (vars,args,rhs,side) ->
-              if vars=[]
-              then fpf out "@[<hv>%a@[<2>%a@ %a@] =@ %a@]"
-                pp_sides side ID.print id
-                (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
-              else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
-                (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print id
-                (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
-            ) out l
-      | Eqn_single (vars,rhs) ->
-          fpf out "@[<2>%a %a =@ %a@]" ID.print id
-            (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
-    in
+    match e with
+    | Eqn_app (_, vars, lhs, rhs) ->
+        if vars=[]
+        then fpf out "@[<hv2>%a =@ %a@]" Pt.print lhs Pt.print rhs
+        else fpf out "@[<hv2>forall @[<h>%a@].@ @[%a =@ %a@]@]"
+          (pplist ~sep:" " pp_typed_var) vars Pt.print lhs Pt.print rhs
+    | Eqn_nested l ->
+        pplist ~sep:";"
+          (fun out  (vars,args,rhs,side) ->
+            if vars=[]
+            then fpf out "@[<hv>%a@[<2>%a@ %a@] =@ %a@]"
+              pp_sides side ID.print id
+              (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
+            else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
+              (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print id
+              (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
+          ) out l
+    | Eqn_single (vars,rhs) ->
+        fpf out "@[<2>%a %a =@ %a@]" ID.print id
+          (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
+
+  let print_rec_def out d =
     fpf out "@[<hv2>%a :=@ %a@]"
       pp_defined d.rec_defined
-      (pp_eqns d.rec_defined.defined_head) d.rec_eqns
+      (print_eqns d.rec_defined.defined_head) d.rec_eqns
 
   let print_rec_defs out l =
     fpf out "@[<v>rec %a.@]"
