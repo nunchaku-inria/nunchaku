@@ -13,7 +13,7 @@ AlphaFeatures: compiled_setup_ml, ocamlbuild_more_args
 
 Synopsis:    A counter-example finder for higher-order logic
 
-XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain'"
+XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain' -j 0"
 
 Library "nunchaku_core"
   Path:             src/core/
@@ -22,7 +22,7 @@ Library "nunchaku_core"
                     UntypedAST, Model, TypeUnify, Problem, FO, Reduce,
                     Solver_intf, Env, Signature, Statement,
                     Scheduling, CVC4, Polarity, Traversal, ProblemMetadata,
-                    TyCardinality,
+                    TyCardinality, Prelude,
                     terms/TermInner,
                     terms/TermTyped,
                     terms/TermPoly,

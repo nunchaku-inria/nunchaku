@@ -112,6 +112,7 @@ let close_forall t =
     | A.Fun (v,t) -> enter_ty_bvar v (fun () -> compute_fvars t)
     | A.TyArrow (a,b) -> compute_fvars a; compute_fvars b
     | A.TyForall (v,t) -> enter_bvar v (fun () -> compute_fvars t)
+    | A.Asserting _ -> assert false
   and enter_bvar v f =
     StrTbl.add bvars v (); let x = f () in StrTbl.remove bvars v; x
   and enter_bvars l f = match l with
@@ -171,8 +172,6 @@ let rec declare_missing ~ctx ~state t =
           | `Type
           | `True
           | `False
-          | `Choice
-          | `UChoice
           | `Undefined _ -> t
           end
       | _ ->
@@ -214,6 +213,7 @@ let rec declare_missing ~ctx ~state t =
       A.ty_arrow ?loc
         (declare_missing ~ctx:Ctx_ty ~state a)
         (declare_missing ~ctx:Ctx_ty ~state b)
+  | A.Asserting _ -> assert false
 
 (* "declare" a variable locally *)
 and enter_typed_var_ ~state (v,ty_opt) f =

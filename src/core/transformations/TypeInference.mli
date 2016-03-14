@@ -65,6 +65,11 @@ module Convert(T : TermTyped.S) : sig
 
   type statement = (term, term, stmt_invariant) Statement.t
 
+  val read_prelude : env:env -> statement list * env
+  (** Add the prelude to [env] and return the corresponding statements and
+      new environment.
+      Called automatically in {!convert_problem} and {!convert_problem_exn}. *)
+
   val convert_statement :
     env:env ->
     UntypedAST.statement ->

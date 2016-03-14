@@ -182,7 +182,7 @@ module Make(T : TI.S) = struct
         let t = polarize_term_rec ~state pol subst t in
         U.guard t g
     | TI.Builtin (`True | `False | `DataTest _ | `And | `Or | `Not
-                 | `BFun (`Choice | `UChoice) | `DataSelect _ | `Undefined _ | `Imply) ->
+                 | `DataSelect _ | `Undefined _ | `Imply) ->
         U.eval_renaming ~subst t
     | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
     | TI.Const id ->

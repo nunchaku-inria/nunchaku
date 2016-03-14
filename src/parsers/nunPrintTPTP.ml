@@ -54,8 +54,6 @@ module Make(T : TI.S) = struct
     | `Equiv (a,b) ->
         fpf out "@[<hv>%a <=>@ %a@]" print_inner a print_inner b
     | `Undefined (_id,t) -> print_inner out t
-    | `BFun (`Choice | `UChoice) ->
-        Utils.not_implemented "printing choice/uchoice in TPTP"
     | `And
     | `Imply
     | `Or
@@ -107,8 +105,6 @@ module Make(T : TI.S) = struct
                 fpf out "@[<hv>%a@]" (pp_list ~sep:" | " print_inner) l
             | `Imply, [a;b] ->
                 fpf out "@[<hv>%a =>@ %a@]" print_inner a print_inner b
-            | `BFun (`Choice | `UChoice), _ ->
-                Utils.not_implemented "printing choice/uchoice in TPTP"
             | `True, _
             | `False, _
             | `Eq _ ,_

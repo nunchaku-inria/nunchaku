@@ -55,11 +55,6 @@ module Builtin = struct
       asserting = List.map f g.asserting;
     }
 
-  type builtin_fun =
-    [ `Choice (** Choice operator, "indefinite description operator", or ε *)
-    | `UChoice (** Unique choice, "definite description operator", or Hilbert's ι *)
-    ]
-
   type 'a t =
     [ `True
     | `False
@@ -70,7 +65,6 @@ module Builtin = struct
     | `Equiv of 'a * 'a
     | `Ite of 'a * 'a * 'a
     | `Eq of 'a * 'a
-    | `BFun of builtin_fun
     | `DataTest of id (** Test whether [t : tau] starts with given constructor *)
     | `DataSelect of id * int (** Select n-th argument of given constructor *)
     | `Undefined of id * 'a (** Undefined case. argument=the undefined term *)
@@ -93,8 +87,6 @@ module Builtin = struct
     | `Ite (a,b,c) ->
         fpf out "@[<hv>@[<2>if@ %a@]@ @[<2>then@ %a@]@ @[<2>else@ %a@]@]"
           pterm a pterm b pterm c
-    | `BFun `Choice -> CCFormat.string out "ε"
-    | `BFun `UChoice -> CCFormat.string out "ι"
     | `DataTest id -> fpf out "is-%s" (ID.name id)
     | `DataSelect (id, n) ->
         fpf out "select-%s-%d" (ID.name id) n
@@ -126,7 +118,6 @@ module Builtin = struct
     | `Eq(a1,b1), `Eq (a2,b2) -> eqterm a1 a2 && eqterm b1 b2
     | `DataTest id, `DataTest id' -> ID.equal id id'
     | `DataSelect (id, n), `DataSelect (id', n') -> n=n' && ID.equal id id'
-    | `BFun f1, `BFun f2 -> f1=f2
     | `Undefined (a,t1), `Undefined (b,t2) -> ID.equal a b && eqterm t1 t2
     | `Guard (t1, g1), `Guard (t2, g2) ->
         List.length g1.assuming = List.length g2.assuming
@@ -134,7 +125,7 @@ module Builtin = struct
         && eqterm t1 t2
         && List.for_all2 eqterm g1.assuming g2.assuming
         && List.for_all2 eqterm g1.asserting g2.asserting
-    | `Guard _, _ | `BFun _, _
+    | `Guard _, _
     | `True, _ | `False, _ | `Ite _, _ | `Not, _
     | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> false
@@ -149,7 +140,6 @@ module Builtin = struct
     | `Eq (a,b) -> `Eq (f a, f b)
     | `Equiv (a,b) -> `Equiv (f a, f b)
     | `DataTest id -> `DataTest id
-    | `BFun f -> `BFun f
     | `Or -> `Or
     | `Not -> `Not
     | `DataSelect (c,n) -> `DataSelect (c,n)
@@ -167,7 +157,6 @@ module Builtin = struct
     | `Or
     | `DataTest _
     | `DataSelect _
-    | `BFun _
     | `Not -> acc
     | `Ite (a,b,c) -> f (f (f acc a) b) c
     | `Eq (a,b)
@@ -188,7 +177,6 @@ module Builtin = struct
     | `False, `False
     | `Not, `Not
     | `Or, `Or -> acc
-    | `BFun f1, `BFun f2 -> if f1=f2 then acc else fail()
     | `DataTest i1, `DataTest i2 -> if ID.equal i1 i2 then acc else fail()
     | `DataSelect (i1,n1), `DataSelect (i2,n2) ->
         if n1=n2 && ID.equal i1 i2 then acc else fail()
@@ -206,7 +194,7 @@ module Builtin = struct
         let acc = f acc t1 t2 in
         let acc = List.fold_left2 f acc g1.assuming g2.assuming in
         List.fold_left2 f acc g1.asserting g2.asserting
-    | `Guard _, _ | `BFun _, _
+    | `Guard _, _
     | `True, _ | `False, _ | `Ite _, _ | `Not, _
     | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> fail()
@@ -222,7 +210,6 @@ module Builtin = struct
     | `Or
     | `DataTest _
     | `DataSelect _
-    | `BFun _
     | `Not -> ()
     | `Ite (a,b,c) -> f a; f b; f c
     | `Eq (a,b)
@@ -1114,7 +1101,7 @@ module Util(T : S)
             app hd l
         end
     | Builtin
-      (`True | `False | `And | `Or | `Not | `BFun _
+      (`True | `False | `And | `Or | `Not
         | `Imply | `DataSelect _ | `DataTest _) ->
        (* partially applied, or constant *)
           t
@@ -1287,11 +1274,6 @@ module Util(T : S)
   let prop1 = ty_arrow prop prop
   let prop2 = ty_arrow prop (ty_arrow prop prop)
 
-  (* [pi a. (a -> prop) -> a] *)
-  let choice_ty_ =
-    let a = Var.make ~ty:ty_type ~name:"a" in
-    ty_forall a (ty_arrow (ty_arrow (var a) prop) (var a))
-
   let rec ty_exn ~sigma t =
     match T.repr t with
     | Const id -> find_ty_ ~sigma id
@@ -1303,7 +1285,6 @@ module Util(T : S)
           | `Not -> prop1
           | `True
           | `False -> prop
-          | `BFun (`Choice | `UChoice) -> choice_ty_
           | `Ite (_,b,_) -> ty_exn ~sigma b
           | `Equiv (_,_)
           | `Eq (_,_) -> prop

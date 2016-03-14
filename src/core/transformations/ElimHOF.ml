@@ -600,8 +600,6 @@ module Make(T : TI.S) = struct
               let n = List.length l in
               let app_l = IntMap.find n fun_encoding.fe_stack in
               apply_app_funs_ app_l (f' :: l)
-          | TI.Builtin (`BFun (`Choice | `UChoice)) ->
-              Utils.not_implemented "(u)choice should be specialized"
           | _ -> aux' subst t
           end
       | TI.Bind _

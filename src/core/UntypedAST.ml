@@ -28,8 +28,6 @@ module Builtin : sig
     | `Or
     | `True
     | `False
-    | `Choice
-    | `UChoice
     | `Eq
     | `Equiv
     | `Imply
@@ -48,20 +46,16 @@ end = struct
     | `Or
     | `True
     | `False
-    | `Choice
-    | `UChoice
     | `Eq
     | `Equiv
     | `Imply
     | `Undefined of string
     ]
 
-  let fixity = function
+  let fixity : t -> [`Infix | `Prefix] = function
     | `Type
     | `True
     | `False
-    | `Choice
-    | `UChoice
     | `Prop
     | `Not -> `Prefix
     | `And
@@ -71,7 +65,7 @@ end = struct
     | `Eq
     | `Undefined _ -> `Infix
 
-  let to_string = function
+  let to_string : t -> string = function
     | `Type -> "type"
     | `Prop -> "prop"
     | `Not -> "~"
@@ -79,8 +73,6 @@ end = struct
     | `Or -> "||"
     | `True -> "true"
     | `False -> "false"
-    | `Choice -> "choice"
-    | `UChoice -> "uchoice"
     | `Eq -> "="
     | `Equiv -> "="
     | `Imply -> "=>"
@@ -106,6 +98,7 @@ and term_node =
   | Mu of typed_var * term
   | TyArrow of ty * ty
   | TyForall of var * ty
+  | Asserting of term * term list
 
 (* we mix terms and types because it is hard to know, in
   [@cons a b c], which ones of [a, b, c] are types, and which ones
@@ -179,8 +172,15 @@ let ty_type = builtin `Type
 let true_ = builtin `True
 let false_ = builtin `False
 let not_ ?loc f = app ?loc (builtin ?loc `Not) [f]
-let and_ ?loc l = app ?loc (builtin ?loc `And) l
-let or_ ?loc l = app ?loc (builtin ?loc `Or) l
+
+(* apply [b], an infix operator, to [l], in an associative way *)
+let rec app_infix_l ?loc f l = match l with
+  | [] -> assert false
+  | [t] -> t
+  | a :: tl -> app ?loc f [a; app_infix_l ?loc f tl]
+
+let and_ ?loc l = app_infix_l ?loc (builtin ?loc `And) l
+let or_ ?loc l = app_infix_l ?loc (builtin ?loc `Or) l
 let imply ?loc a b = app ?loc (builtin ?loc `Imply) [a;b]
 let equiv ?loc a b = app ?loc (builtin ?loc `Equiv) [a;b]
 let eq ?loc a b = app ?loc (builtin ?loc `Eq) [a;b]
@@ -188,6 +188,9 @@ let neq ?loc a b = not_ ?loc (eq ?loc a b)
 let forall ?loc v t = Loc.with_loc ?loc (Forall (v, t))
 let exists ?loc v t = Loc.with_loc ?loc (Exists (v, t))
 let mu ?loc v t = Loc.with_loc ?loc (Mu (v,t))
+let asserting ?loc t l = match l with
+  | [] -> t
+  | _::_ -> Loc.with_loc ?loc (Asserting (t,l))
 let ty_arrow ?loc a b = Loc.with_loc ?loc (TyArrow (a,b))
 let ty_forall ?loc v t = Loc.with_loc ?loc (TyForall (v,t))
 
@@ -220,6 +223,7 @@ let goal ?name ?loc t = mk_stmt_ ?name ?loc (Goal t)
 
 let rec head t = match Loc.get t with
   | Var (`Var v) | AtVar v | MetaVar v -> v
+  | Asserting (f,_)
   | App (f,_) -> head f
   | Var `Wildcard | Builtin _ | TyArrow (_,_)
   | Fun (_,_) | Let _ | Match _ | Ite (_,_,_)
@@ -239,6 +243,8 @@ let rec unroll_if_ t = match Loc.get t with
       let l, last = unroll_if_ c in
       (a,b) :: l, last
   | _ -> [], t
+
+let pp_list_ ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
 
 let rec print_term out term = match Loc.get term with
   | Builtin s -> Builtin.print out s
@@ -284,13 +290,17 @@ let rec print_term out term = match Loc.get term with
       fpf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
   | Exists (v, t) ->
       fpf out "@[<2>exists %a.@ %a@]" print_typed_var v print_term t
+  | Asserting (_, []) -> assert false
+  | Asserting (t, l) ->
+      fpf out "@[<2>%a@ @[<2>asserting @[%a@]@]@]"
+        print_term_inner t (pp_list_ ~sep:" ∧ " print_term_inner) l
   | TyArrow (a, b) ->
       fpf out "@[<2>%a ->@ %a@]"
         print_term_in_arrow a print_term b
   | TyForall (v, t) ->
       fpf out "@[<2>pi %s:type.@ %a@]" v print_term t
 and print_term_inner out term = match Loc.get term with
-  | App _ | Fun _ | Let _ | Ite _ | Match _
+  | App _ | Fun _ | Let _ | Ite _ | Match _ | Asserting _
   | Forall _ | Exists _ | TyForall _ | Mu _ | TyArrow _ ->
       fpf out "(%a)" print_term term
   | Builtin _ | AtVar _ | Var _ | MetaVar _ -> print_term out term
@@ -304,14 +314,13 @@ and print_term_in_arrow out t = match Loc.get t with
   | Exists (_,_)
   | Mu _
   | Fun (_,_)
+  | Asserting _
   | TyArrow (_,_)
   | TyForall (_,_) -> fpf out "@[(%a)@]" print_term t
 
 and print_typed_var out (v,ty) = match ty with
   | None -> fpf out "%s" v
   | Some ty -> fpf out "(%s:%a)" v print_term ty
-
-let pp_list_ ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
 
 let pp_rec_defs out l =
   let ppterms = pp_list_ ~sep:";" print_term in
