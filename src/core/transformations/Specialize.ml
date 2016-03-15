@@ -122,11 +122,169 @@ module Make(T : TI.S) = struct
     let _, args, _ = U.ty_unfold ty in
     args
 
-  let free_vars_t t = U.to_seq_free_vars t |> VarSet.of_seq
+  (* Call graph: tracks recursive calls between several functions,
+     where arguments are variables. Calling a function with a non-variable
+     points to the junk state [Nonvar] *)
+  module CallGraph = struct
+    type node =
+      | Arg of ID.t * int  (* [f, n] is [n]-th argument of function [f] *)
+      | Nonvar (* an argument of non-variable form *)
+
+    let node_equal a b = match a,b with
+      | Arg (i1,n1), Arg (i2,n2) -> ID.equal i1 i2 && n1=n2
+      | Nonvar, Nonvar -> true
+      | Arg _, Nonvar
+      | Nonvar, Arg _ -> false
+
+    let node_hash = function
+      | Nonvar -> 3
+      | Arg(id,n) -> Hashtbl.hash (ID.hash id, Hashtbl.hash n)
+
+    module IDIntTbl = CCHashtbl.Make(struct
+      type t = node
+      let equal = node_equal
+      let hash = node_hash
+    end)
+
+    type reachability =
+      | R_not_computed
+      | R_reachable
+      | R_not_reachable
+
+    type cell = {
+      mutable cell_children: node list;
+      mutable cell_reaches_nonvar: reachability; (* nonvar is reachable from cell? *)
+    }
+
+    type t = cell IDIntTbl.t
+
+    let create () = IDIntTbl.create 16
+
+    (* add an arrow n1->n2 *)
+    let add g n1 n2 =
+      try
+        let c = IDIntTbl.find g n1 in
+        if not (CCList.Set.mem ~eq:node_equal n1 c.cell_children)
+        then c.cell_children <- n1 :: c.cell_children;
+      with Not_found ->
+        IDIntTbl.add g n1
+          {cell_children=[n2]; cell_reaches_nonvar=R_not_computed; }
+
+    let add_call g n1 i1 n2 i2 = add g (Arg (n1,i1)) (Arg (n2,i2))
+    let add_nonvar g n1 i1 = add g (Arg(n1,i1)) Nonvar
+
+    (* can we reach [Nonvar] from [n1] following edges of [g]? *)
+    let can_reach_nonvar g n1 =
+      let rec aux n =
+        let c = IDIntTbl.find g n in
+        match c.cell_reaches_nonvar with
+          | R_reachable -> true
+          | R_not_reachable -> false
+          | R_not_computed ->
+              (* first, avoid looping *)
+              c.cell_reaches_nonvar <- R_not_reachable;
+              let res = List.exists aux c.cell_children in
+              if res then c.cell_reaches_nonvar <- R_reachable;
+              res
+      in
+      aux n1
+
+    (* view [t] as a graph *)
+    let as_graph g =
+      let children n =
+        try IDIntTbl.find g n |> Sequence.of_list
+        with Not_found -> Sequence.empty
+      in
+      CCGraph.make_tuple children
+  end
 
   (* compute the set of specializable arguments in each function of [defs] *)
   let compute_specializable_args_ ~state defs =
-    assert false (* TODO *)
+    let ids =
+      Sequence.of_list defs
+      |> Sequence.map (fun def -> def.Stmt.rec_defined.Stmt.defined_head)
+      |> ID.Set.of_seq
+    in
+    (* traverse term, finding calls to other definitions *)
+    let cg = CallGraph.create () in
+    (* explore the graph of calls in [f_id args] *)
+    let rec aux f_id args t = match T.repr t with
+      | TI.App (g, l) ->
+          begin match T.repr g with
+            | TI.Const g_id when ID.Set.mem g_id ids ->
+                (* [t = f_id l], where [f_id] belongs to the same block
+                   of mutually recursive functions. *)
+                List.iteri
+                  (fun j arg' -> match T.repr arg' with
+                     | TI.Var v' ->
+                         (* register call in graph *)
+                         begin match
+                             CCList.find_pred
+                               (fun (_,v) -> Var.equal v v')
+                               args
+                         with
+                           | None -> ()
+                           | Some (i,_) ->
+                               (* [i]-th argument of [f] is the same
+                                  as [j]-th argument of [g]. Now, if
+                                  [f=g] but [i<>j], it means we could only
+                                  specialize if arguments [i] and [j] are the
+                                  same, which is too complicated. Therefore
+                                  we require [f<>g or i=j], otherwise
+                                  [i]-th argument of [f] is blocked *)
+                               if ID.equal f_id g_id && i<>j
+                               then CallGraph.add_nonvar cg f_id i
+                               else CallGraph.add_call cg f_id i g_id j
+                         end;
+                     | _ ->
+                         (* if self-call, then [j]-th argument is nonvar *)
+                         if ID.equal g_id f_id
+                         then CallGraph.add_nonvar cg f_id j)
+                  l;
+                (* explore [g_id] if [g != f] *)
+                if not (ID.equal f_id g_id) then (
+                  let def' = match Stmt.find_rec_def ~defs g_id with
+                    | None -> assert false
+                    | Some d -> d
+                  in
+                  ignore (aux_def g_id def')
+                );
+                ()
+            | _ -> aux' f_id args t
+          end
+      | _ -> aux' f_id args t
+    (* generic traversal *)
+    and aux' f_id args t =
+      U.iter () t ~bind:(fun () _ -> ()) ~f:(fun () t -> aux f_id args t)
+    (* process an equation *)
+    and aux_def f_id def = match def.Stmt.rec_eqns with
+      | Stmt.Eqn_single (vars, rhs) ->
+          let args = List.mapi CCPair.make vars in
+          aux f_id args rhs;
+          List.length args
+    in
+    (* process each definition *)
+    List.iter
+      (fun def ->
+         let id = def.Stmt.rec_defined.Stmt.defined_head in
+         let n = aux_def id def in
+         (* now find which arguments can be specialized, and
+            register that in [state].
+            An argument can be specialized iff, in [cg], it cannot
+            reach [Nonvar] *)
+         let bv =
+           Array.init n
+             (fun i ->
+                not (CallGraph.can_reach_nonvar cg (CallGraph.Arg(id,i))))
+         in
+         ID.Tbl.replace state.specializable_args id bv;
+         Utils.debugf ~section 5 "@[<2>can specialize %a on:@ @[%a@]@]"
+           (fun k->k ID.print id CCFormat.(array bool) bv);
+      )
+      defs;
+    ()
+
+  let free_vars_t t = U.to_seq_free_vars t |> VarSet.of_seq
 
   (* can [i]-th argument of [f] be specialized? *)
   let can_specialize_ ~state f i =
@@ -428,7 +586,17 @@ module Make(T : TI.S) = struct
     let state = create_state() in
     let trav = new traverse () in
     trav#setup;
+    (* first, compute specializable arguments *)
+    Problem.iter_statements pb
+      ~f:(fun stmt -> match Stmt.view stmt with
+        | Stmt.Axiom (Stmt.Axiom_rec defs) ->
+            compute_specializable_args_ ~state defs
+        | Stmt.Axiom (Stmt.Axiom_spec _) ->
+            assert false (* TODO!!! *)
+        | _ -> ());
+    (* then, transform *)
     Problem.iter_statements pb ~f:trav#do_stmt;
+    (* TODO: also add extensionality axioms for new functions *)
     let pb' =
       trav#output
       |> CCVector.freeze
