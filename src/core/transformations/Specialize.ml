@@ -351,11 +351,12 @@ module Make(T : TI.S) = struct
 
   (* shall we specialize the application of [f : ty] to [l], and on which
       subset of [l]? *)
-  let should_specialize ~state f ty l =
+  let decide_if_specialize ~state f ty l =
     (* apply to type arguments *)
     let info = Env.find_exn ~env:(state.get_env()) f in
     match Env.def info with
-      | Env.Fun_def (defs, def, _) ->
+      | Env.Fun_def _
+      | Env.Fun_spec _ ->
           (* only inline defined functions, not constructors or axiomatized symbols *)
           let _, ty_args, ty_ret = U.ty_unfold ty in
           (* find the subset of arguments on which to specialize *)
@@ -377,7 +378,7 @@ module Make(T : TI.S) = struct
           else (
             (* type of specialized function *)
             let new_ty = U.ty_arrow_l ty_other_args ty_ret in
-            `Yes (spec_args, other_args, def, defs, new_ty)
+            `Yes (spec_args, other_args, new_ty)
           )
       | _ -> `No
 
@@ -385,6 +386,20 @@ module Make(T : TI.S) = struct
     let v' = Var.fresh_copy v in
     let subst = Var.Subst.add ~subst v v' in
     subst, v'
+
+  let find_new_fun ~state f args =
+    (* see whether the function is already specialized on those parameters *)
+    let l = try ID.Tbl.find state.new_funs f with Not_found -> [] in
+    CCList.find_map
+      (fun (args',fun_) -> if Arg.equal args args' then Some fun_ else None)
+      l
+
+  let find_new_fun_exn ~state f args =
+    match find_new_fun ~state f args with
+      | Some res -> res
+      | None ->
+          errorf "@[<2>could not find new definition for %a on @[%a@]@]"
+            ID.print f Arg.print args
 
   (* traverse [t] and try and specialize functions at every relevant
      call site *)
@@ -398,16 +413,17 @@ module Make(T : TI.S) = struct
             let info = Env.find_exn ~env:(state.get_env ()) f_id in
             let ty = info.Env.ty in
             if Env.is_fun info
-            then match should_specialize ~state f_id ty l' with
+            then match decide_if_specialize ~state f_id ty l' with
               | `No -> U.app f l'
-              | `Yes (spec_args, other_args, def, _defs, ty) ->
+              | `Yes (spec_args, other_args, ty) ->
                   (* [spec_args] is a subset of [l'] on which we are going to
                      specialize [f].
                      [f] is defined by [def] in the mutual block [defs].
                      [other_args] are the remaining arguments *)
                   Utils.debugf ~section 5 "@[<2>specialize `@[%a@]`@ on @[%a@]@]"
                     (fun k->k P.print t Arg.print spec_args);
-                  let nf = get_new_fun ~state ~depth f_id def ty spec_args in
+                  let nf = get_new_fun ~state ~depth f_id ty spec_args in
+                  (* ensure that [nf] is defined *)
                   state.fun_ ~depth f_id spec_args;
                   U.app (U.const nf.nf_id) other_args
             else
@@ -431,8 +447,28 @@ module Make(T : TI.S) = struct
   (* TODO: nothing? *)
   and specialize_ty ~state:_ ~depth:_ ty = ty
 
+  (* find or create a new function for [f args]
+      @param new_ty the type of the new function *)
+  and get_new_fun ~state ~depth f new_ty args =
+    match find_new_fun ~state f args with
+    | Some f -> f
+    | None ->
+        (* introduce new function *)
+        let name = ID.make
+          (Printf.sprintf "%s_spec_%d" (ID.to_string_slug f) state.count) in
+        let nf = {
+          nf_specialized_from=f;
+          nf_id=name;
+          nf_ty=new_ty;
+        } in
+        (* add [nf] to the list of specialized versions of [f] *)
+        let l = ID.Tbl.get_or state.new_funs f ~or_:[] in
+        ID.Tbl.replace state.new_funs f ((args,nf) :: l);
+        state.fun_ ~depth:(depth+1) f args;
+        nf
+
   (* TODO: find/store the new ID for [d.head args] *)
-  and specialize_defined ~state d args = assert false
+  let specialize_defined ~state d args = assert false
 
   (* TODO:
     - to specialize a definition for a tuple of arguments, bind those arguments
@@ -440,37 +476,16 @@ module Make(T : TI.S) = struct
       so as to inline
   *)
 
-  (* find or create a new function for [f args]
-      @param ty the type of the new function *)
-  and get_new_fun ~state ~depth f def ty args =
-    (* see whether the function is already specialized on those parameters *)
-    let l = try ID.Tbl.find state.new_funs f with Not_found -> [] in
-    let in_cache =
-      CCList.find_map
-        (fun (args',fun_) -> if Arg.equal args args' then Some fun_ else None)
-        l
-    in
-    match in_cache with
-    | Some f -> f
-    | None ->
-        (* introduce new function *)
-        let name = ID.make
-          (Printf.sprintf "%s_spec_%d" (ID.to_string_slug f) state.count) in
-        (* TODO: compute new function *)
-        let nf = assert false in
-        ID.Tbl.replace state.new_funs f ((args,nf) :: l);
-        state.fun_ ~depth:(depth+1) f args;
-        nf
-
   (* specialize equations w.r.t. the given set of arguments (with their position) *)
   let specialize_eqns
-  : type i a. state:i state -> depth:int -> ID.t ->
-    (term,term,a) Stmt.equations -> Arg.t -> (term,term,a) Stmt.equations
-  = fun ~state ~depth id eqns arg ->
+  : state:inv state -> depth:int -> ID.t ->
+    (term,term,inv) Stmt.equations -> Arg.t -> (term,term,inv) Stmt.equations
+  = fun ~state ~depth id eqns args ->
     Utils.debugf ~section 2 "@[<2>specialize@ `@[%a@]`@ on @[%a@]@]"
-      (fun k->k (PStmt.print_eqns id) eqns Arg.print arg);
+      (fun k->k (PStmt.print_eqns id) eqns Arg.print args);
     match eqns with
     | Stmt.Eqn_single (vars, rhs) ->
+        let nf = find_new_fun_exn ~state id args in
         (* TODO: filter vars by index *)
         assert false
 
@@ -531,26 +546,8 @@ module Make(T : TI.S) = struct
       } in
       [def']
 
-    method do_pred ~depth _ _ def arg =
-      Utils.debugf ~section 5 "@[<2>specialize pred %a on @[%a@]@]"
-        (fun k->k ID.print def.Stmt.pred_defined.Stmt.defined_head Arg.print arg);
-      let clauses = assert false
-      (* FIXME
-        List.map
-          (Stmt.map_clause
-          ~term:(mono_term ~state:st ~local_state)
-          ~ty:(mono_term ~state:st ~local_state))
-        def.Stmt.pred_clauses
-         *)
-      in
-      (* new (specialized) case *)
-      let pred_defined = specialize_defined ~state:st def.Stmt.pred_defined arg in
-      let def' = {Stmt.
-        pred_tyvars=[];
-        pred_defined;
-        pred_clauses=clauses;
-      } in
-      [def']
+    (* see {!inv}: predicates should have been eliminated *)
+    method do_pred ~depth:_ _ _ _ _ = assert false
 
     (* declare a symbol that is axiomatized *)
     method decl_sym ~attrs id tup =
