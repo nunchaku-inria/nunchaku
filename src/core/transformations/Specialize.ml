@@ -74,7 +74,7 @@ module CallGraph = struct
         {cell_children=[n2]; cell_reaches_nonidentical=R_not_computed; }
 
   let add_call g n1 i1 n2 i2 = add g (Arg (n1,i1)) (Arg (n2,i2))
-  let add_nonvar g n1 i1 = add g (Arg(n1,i1)) Non_identical
+  let add_nonidentical g n1 i1 = add g (Arg(n1,i1)) Non_identical
 
   (* can we reach [Non_identical] from [n1] following edges of [g]? *)
   let can_reach_nonidentical g n1 =
@@ -229,30 +229,48 @@ module Make(T : TI.S) = struct
       | TI.App (g, l) ->
           begin match T.repr g with
             | TI.Const g_id when ID.Set.mem g_id ids ->
-                record_call f_id args g_id l
+                if ID.equal f_id g_id
+                then record_self_call f_id args l
+                else record_call f_id args g_id l
             | _ -> aux' f_id args t
           end
       | _ -> aux' f_id args t
     (* generic traversal *)
     and aux' f_id args t =
       U.iter () t ~bind:(fun () _ -> ()) ~f:(fun () t -> aux f_id args t)
+    (* [f args1] calls itself as [f args2] in its body.
+       preconditions: args1 is only variables *)
+    and record_self_call f_id args1 args2 =
+      List.iteri
+        (fun i a2 ->
+           let v = args1.(i) in
+           match T.repr a2 with
+             | TI.Var v' when Var.equal v v' -> () (* ok! *)
+             | _ ->
+                 (* if [a2] depends on some of the input variables [args1],
+                    then it potentially changes at every recursive step
+                    and cannot be specialized.
+                     XXX the "depends" is currently too difficult to track,
+                      because of local bindings (let, match), so we play it
+                      safe and ask for [a2] to be closed. *)
+                 if not (U.is_closed a2)
+                 then CallGraph.add_nonidentical cg f_id i)
+        args2
     (* [f f_args] calls [g g_args] in its body, where [g]
        belongs to the [defs] too. See how to update [cg] *)
     and record_call f_id f_args g_id g_args =
-      let self_call = ID.equal f_id g_id in
+      assert (not (ID.equal f_id g_id));
       List.iteri
         (fun j arg' -> match T.repr arg' with
            | TI.Var v' ->
                (* register call in graph *)
                begin match
-                   CCList.find_pred
-                     (fun (_,v) -> Var.equal v v')
+                   CCArray.find_idx
+                     (fun v -> Var.equal v v')
                      f_args
                  with
                    | None ->
-                       (* if self-call, then [j]-th argument is nonvar *)
-                       if ID.equal g_id f_id
-                       then CallGraph.add_nonvar cg f_id j
+                       () (* [arg'] is not a parameter of [f] *)
                    | Some (i,_) ->
                        (* [i]-th argument of [f] is the same
                           as [j]-th argument of [g]. Now, if
@@ -261,14 +279,9 @@ module Make(T : TI.S) = struct
                           same, which is too complicated. Therefore
                           we require [f<>g or i=j], otherwise
                           [i]-th argument of [f] is blocked *)
-                       if self_call && i<>j
-                       then CallGraph.add_nonvar cg f_id i
-                       else CallGraph.add_call cg f_id i g_id j
+                       CallGraph.add_call cg f_id i g_id j
                end;
-           | _ ->
-               (* if self-call, then [j]-th argument is nonvar *)
-               if self_call
-               then CallGraph.add_nonvar cg f_id j
+           | _ -> ()
         )
         g_args;
       (* explore [g_id] if [g != f] and [g] not already explored *)
@@ -286,9 +299,9 @@ module Make(T : TI.S) = struct
     (* process an equation *)
     and aux_def f_id def = match def.Stmt.rec_eqns with
       | Stmt.Eqn_single (vars, rhs) ->
-          let args = List.mapi CCPair.make vars in
+          let args = Array.of_list vars in
           aux f_id args rhs;
-          List.length args
+          Array.length args
     in
     (* process each definition *)
     List.iter

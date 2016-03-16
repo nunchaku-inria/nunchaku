@@ -391,6 +391,9 @@ module type UTIL_REPR = sig
   val to_seq_free_vars : t_ -> t_ Var.t Sequence.t
   (** Iterate on free variables. *)
 
+  val is_closed : t_ -> bool
+  (** [is_closed t] means [to_seq_free_vars t = empty] *)
+
   val free_meta_vars : ?init:t_ MetaVar.t ID.Map.t -> t_ -> t_ MetaVar.t ID.Map.t
   (** The free type meta-variables in [t] *)
 
@@ -485,6 +488,8 @@ module UtilRepr(T : REPR)
       | TyMeta _ -> ()
     in
     aux ~bound:VarSet.empty t
+
+  let is_closed t = to_seq_free_vars t |> Sequence.is_empty
 
   let to_seq_vars t =
     to_seq t
