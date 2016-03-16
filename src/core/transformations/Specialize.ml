@@ -25,6 +25,84 @@ let error_ msg = raise (Error msg)
 let errorf msg = Utils.exn_ksprintf ~f:error_ msg
 let section = Utils.Section.make name
 
+(* Call graph: tracks recursive calls between several functions,
+   where arguments are variables. Calling a function with a non-variable
+   points to the junk state [Nonvar] *)
+module CallGraph = struct
+  type node =
+    | Arg of ID.t * int  (* [f, n] is [n]-th argument of function [f] *)
+    | Nonvar (* an argument of non-variable form *)
+
+  let node_equal a b = match a,b with
+    | Arg (i1,n1), Arg (i2,n2) -> ID.equal i1 i2 && n1=n2
+    | Nonvar, Nonvar -> true
+    | Arg _, Nonvar
+    | Nonvar, Arg _ -> false
+
+  let node_hash = function
+    | Nonvar -> 3
+    | Arg(id,n) -> Hashtbl.hash (ID.hash id, Hashtbl.hash n)
+
+  module IDIntTbl = CCHashtbl.Make(struct
+    type t = node
+    let equal = node_equal
+    let hash = node_hash
+  end)
+
+  type reachability =
+    | R_not_computed
+    | R_reachable
+    | R_not_reachable
+
+  type cell = {
+    mutable cell_children: node list;
+    mutable cell_reaches_nonvar: reachability; (* nonvar is reachable from cell? *)
+  }
+
+  type t = cell IDIntTbl.t
+
+  let create () = IDIntTbl.create 16
+
+  (* add an arrow n1->n2 *)
+  let add g n1 n2 =
+    try
+      let c = IDIntTbl.find g n1 in
+      if not (CCList.Set.mem ~eq:node_equal n1 c.cell_children)
+      then c.cell_children <- n1 :: c.cell_children;
+    with Not_found ->
+      IDIntTbl.add g n1
+        {cell_children=[n2]; cell_reaches_nonvar=R_not_computed; }
+
+  let add_call g n1 i1 n2 i2 = add g (Arg (n1,i1)) (Arg (n2,i2))
+  let add_nonvar g n1 i1 = add g (Arg(n1,i1)) Nonvar
+
+  (* can we reach [Nonvar] from [n1] following edges of [g]? *)
+  let can_reach_nonvar g n1 =
+    let rec aux n =
+      try
+        let c = IDIntTbl.find g n in
+        match c.cell_reaches_nonvar with
+          | R_reachable -> true
+          | R_not_reachable -> false
+          | R_not_computed ->
+              (* first, avoid looping *)
+              c.cell_reaches_nonvar <- R_not_reachable;
+              let res = List.exists aux c.cell_children in
+              if res then c.cell_reaches_nonvar <- R_reachable;
+              res
+      with Not_found -> false
+    in
+    aux n1
+
+  (* view [t] as a graph *)
+  let as_graph g =
+    let children n =
+      try IDIntTbl.find g n |> Sequence.of_list
+      with Not_found -> Sequence.empty
+    in
+    CCGraph.make_tuple children
+end
+
 module Make(T : TI.S) = struct
   module P = TI.Print(T)
   module U = TI.Util(T)
@@ -121,84 +199,6 @@ module Make(T : TI.S) = struct
   let get_ty_args_ ty =
     let _, args, _ = U.ty_unfold ty in
     args
-
-  (* Call graph: tracks recursive calls between several functions,
-     where arguments are variables. Calling a function with a non-variable
-     points to the junk state [Nonvar] *)
-  module CallGraph = struct
-    type node =
-      | Arg of ID.t * int  (* [f, n] is [n]-th argument of function [f] *)
-      | Nonvar (* an argument of non-variable form *)
-
-    let node_equal a b = match a,b with
-      | Arg (i1,n1), Arg (i2,n2) -> ID.equal i1 i2 && n1=n2
-      | Nonvar, Nonvar -> true
-      | Arg _, Nonvar
-      | Nonvar, Arg _ -> false
-
-    let node_hash = function
-      | Nonvar -> 3
-      | Arg(id,n) -> Hashtbl.hash (ID.hash id, Hashtbl.hash n)
-
-    module IDIntTbl = CCHashtbl.Make(struct
-      type t = node
-      let equal = node_equal
-      let hash = node_hash
-    end)
-
-    type reachability =
-      | R_not_computed
-      | R_reachable
-      | R_not_reachable
-
-    type cell = {
-      mutable cell_children: node list;
-      mutable cell_reaches_nonvar: reachability; (* nonvar is reachable from cell? *)
-    }
-
-    type t = cell IDIntTbl.t
-
-    let create () = IDIntTbl.create 16
-
-    (* add an arrow n1->n2 *)
-    let add g n1 n2 =
-      try
-        let c = IDIntTbl.find g n1 in
-        if not (CCList.Set.mem ~eq:node_equal n1 c.cell_children)
-        then c.cell_children <- n1 :: c.cell_children;
-      with Not_found ->
-        IDIntTbl.add g n1
-          {cell_children=[n2]; cell_reaches_nonvar=R_not_computed; }
-
-    let add_call g n1 i1 n2 i2 = add g (Arg (n1,i1)) (Arg (n2,i2))
-    let add_nonvar g n1 i1 = add g (Arg(n1,i1)) Nonvar
-
-    (* can we reach [Nonvar] from [n1] following edges of [g]? *)
-    let can_reach_nonvar g n1 =
-      let rec aux n =
-        try
-          let c = IDIntTbl.find g n in
-          match c.cell_reaches_nonvar with
-            | R_reachable -> true
-            | R_not_reachable -> false
-            | R_not_computed ->
-                (* first, avoid looping *)
-                c.cell_reaches_nonvar <- R_not_reachable;
-                let res = List.exists aux c.cell_children in
-                if res then c.cell_reaches_nonvar <- R_reachable;
-                res
-        with Not_found -> false
-      in
-      aux n1
-
-    (* view [t] as a graph *)
-    let as_graph g =
-      let children n =
-        try IDIntTbl.find g n |> Sequence.of_list
-        with Not_found -> Sequence.empty
-      in
-      CCGraph.make_tuple children
-  end
 
   (* compute the set of specializable arguments in each function of [defs] *)
   let compute_specializable_args_ ~state (defs : (_,_,<eqn:[`Single];..>) Stmt.rec_defs) =
