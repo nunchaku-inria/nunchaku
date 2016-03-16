@@ -101,6 +101,18 @@ module CallGraph = struct
       with Not_found -> Sequence.empty
     in
     CCGraph.make_tuple children
+
+  let print out g =
+    let pp_node out = function
+      | Nonvar -> CCFormat.string out "<nonvar>"
+      | Arg (id,n) -> fpf out "arg(%a,%d)" ID.print id n
+    in
+    let pp_pair out (n,c) =
+      fpf out "@[<2>%a ->@ [@[%a@]]@]"
+        pp_node n (CCFormat.list ~start:"" ~stop:"" pp_node) c.cell_children
+    in
+    fpf out "@[<v2>graph {@,@[<v>%a@]@,}@]"
+      (CCFormat.seq ~start:"" ~stop:"" pp_pair) (IDIntTbl.to_seq g)
 end
 
 module Make(T : TI.S) = struct
@@ -285,12 +297,13 @@ module Make(T : TI.S) = struct
                 not (CallGraph.can_reach_nonvar cg (CallGraph.Arg(id,i))))
          in
          ID.Tbl.replace state.specializable_args id bv;
-         Utils.debugf ~section 5 "@[<2>can specialize `@[%a : %a@]` on:@ @[%a@]@]"
+         Utils.debugf ~section 3 "@[<2>can specialize `@[%a : %a@]` on:@ @[%a@]@]"
            (fun k->
               let ty = def.Stmt.rec_defined.Stmt.defined_ty in
               k ID.print id P.print ty CCFormat.(array bool) bv);
       )
       defs;
+    Utils.debugf ~section 5 "@[<2>call graph: @[%a@]@]" (fun k->k CallGraph.print cg);
     ()
 
   let free_vars_t t = U.to_seq_free_vars t |> VarSet.of_seq
@@ -538,7 +551,7 @@ module Make(T : TI.S) = struct
 
     (* specialize specification *)
     method do_spec ~depth ~loc id spec tup =
-      Utils.debugf ~section 5 "specialize spec for %a on %a"
+      Utils.debugf ~section 5 "@[<2>specialize spec for %a@ on @[%a@]@]"
         (fun k->k ID.print id Arg.print tup);
       assert false
       (* FIXME
