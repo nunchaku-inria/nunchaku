@@ -27,20 +27,20 @@ let section = Utils.Section.make name
 
 (* Call graph: tracks recursive calls between several functions,
    where arguments are variables. Calling a function with a non-variable
-   points to the junk state [Nonvar] *)
+   points to the junk state [Non_identical] *)
 module CallGraph = struct
   type node =
     | Arg of ID.t * int  (* [f, n] is [n]-th argument of function [f] *)
-    | Nonvar (* an argument of non-variable form *)
+    | Non_identical (* an argument of non-variable form, or another variable *)
 
   let node_equal a b = match a,b with
     | Arg (i1,n1), Arg (i2,n2) -> ID.equal i1 i2 && n1=n2
-    | Nonvar, Nonvar -> true
-    | Arg _, Nonvar
-    | Nonvar, Arg _ -> false
+    | Non_identical, Non_identical -> true
+    | Arg _, Non_identical
+    | Non_identical, Arg _ -> false
 
   let node_hash = function
-    | Nonvar -> 3
+    | Non_identical -> 3
     | Arg(id,n) -> Hashtbl.hash (ID.hash id, Hashtbl.hash n)
 
   module IDIntTbl = CCHashtbl.Make(struct
@@ -56,7 +56,7 @@ module CallGraph = struct
 
   type cell = {
     mutable cell_children: node list;
-    mutable cell_reaches_nonvar: reachability; (* nonvar is reachable from cell? *)
+    mutable cell_reaches_nonidentical: reachability; (* nonvar is reachable from cell? *)
   }
 
   type t = cell IDIntTbl.t
@@ -71,24 +71,24 @@ module CallGraph = struct
       then c.cell_children <- n1 :: c.cell_children;
     with Not_found ->
       IDIntTbl.add g n1
-        {cell_children=[n2]; cell_reaches_nonvar=R_not_computed; }
+        {cell_children=[n2]; cell_reaches_nonidentical=R_not_computed; }
 
   let add_call g n1 i1 n2 i2 = add g (Arg (n1,i1)) (Arg (n2,i2))
-  let add_nonvar g n1 i1 = add g (Arg(n1,i1)) Nonvar
+  let add_nonvar g n1 i1 = add g (Arg(n1,i1)) Non_identical
 
-  (* can we reach [Nonvar] from [n1] following edges of [g]? *)
+  (* can we reach [Non_identical] from [n1] following edges of [g]? *)
   let can_reach_nonvar g n1 =
     let rec aux n =
       try
         let c = IDIntTbl.find g n in
-        match c.cell_reaches_nonvar with
+        match c.cell_reaches_nonidentical with
           | R_reachable -> true
           | R_not_reachable -> false
           | R_not_computed ->
               (* first, avoid looping *)
-              c.cell_reaches_nonvar <- R_not_reachable;
+              c.cell_reaches_nonidentical <- R_not_reachable;
               let res = List.exists aux c.cell_children in
-              if res then c.cell_reaches_nonvar <- R_reachable;
+              if res then c.cell_reaches_nonidentical <- R_reachable;
               res
       with Not_found -> false
     in
@@ -104,7 +104,7 @@ module CallGraph = struct
 
   let print out g =
     let pp_node out = function
-      | Nonvar -> CCFormat.string out "<nonvar>"
+      | Non_identical -> CCFormat.string out "<non-identical>"
       | Arg (id,n) -> fpf out "arg(%a,%d)" ID.print id n
     in
     let pp_pair out (n,c) =
@@ -239,7 +239,10 @@ module Make(T : TI.S) = struct
                                (fun (_,v) -> Var.equal v v')
                                args
                          with
-                           | None -> ()
+                           | None ->
+                               (* if self-call, then [j]-th argument is nonvar *)
+                               if ID.equal g_id f_id
+                               then CallGraph.add_nonvar cg f_id j
                            | Some (i,_) ->
                                (* [i]-th argument of [f] is the same
                                   as [j]-th argument of [g]. Now, if
@@ -290,7 +293,7 @@ module Make(T : TI.S) = struct
          (* now find which arguments can be specialized, and
             register that in [state].
             An argument can be specialized iff, in [cg], it cannot
-            reach [Nonvar] *)
+            reach [Non_identical] *)
          let bv =
            Array.init n
              (fun i ->
