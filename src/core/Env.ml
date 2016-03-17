@@ -90,6 +90,7 @@ let ty t = t.ty
 let decl_kind t = t.decl_kind
 
 let is_fun i = match i.def with Fun_spec _ | Fun_def _ -> true | _ -> false
+let is_rec i = match i.def with Fun_def _ -> true | _ -> false
 let is_data i = match i.def with Data _ -> true | _ -> false
 let is_cstor i = match i.def with Cstor _ -> true | _ -> false
 

@@ -172,13 +172,6 @@ module Make(T : TI.S) = struct
      including `fun_id -> (fun_id * Arg.t)` to know that a function is
      another function specialized on some arguments *)
 
-  (* TODO: during direct traversal, look at "rec" definitions and compute
-     the subset of arguments which remain the same through every recursive
-     calls of the function. Those arguments are the only ones on which
-     the function can be specialized.
-
-     Then use this information during the specialization *)
-
   type 'a state = {
     specializable_args : bool array ID.Tbl.t;
       (* function -> list of argument positions that can be specialized *)
@@ -321,7 +314,7 @@ module Make(T : TI.S) = struct
          Utils.debugf ~section 3 "@[<2>can specialize `@[%a : %a@]` on:@ @[%a@]@]"
            (fun k->
               let ty = def.Stmt.rec_defined.Stmt.defined_ty in
-              k ID.print id P.print ty CCFormat.(array bool) bv);
+              k ID.print_full id P.print ty CCFormat.(array bool) bv);
       )
       defs;
     Utils.debugf ~section 5 "@[<2>call graph: @[%a@]@]" (fun k->k CallGraph.print cg);
@@ -334,7 +327,8 @@ module Make(T : TI.S) = struct
     try
       let bv = ID.Tbl.find state.specializable_args f in
       bv.(i)
-    with Not_found -> false
+    with Not_found ->
+      errorf "could not find specializable_args[%a]" ID.print_full f
 
   (* argument [a : ty] is good for specialization? *)
   let heuristic_should_specialize_arg a ty =
@@ -355,13 +349,12 @@ module Make(T : TI.S) = struct
     (* apply to type arguments *)
     let info = Env.find_exn ~env:(state.get_env()) f in
     match Env.def info with
-      | Env.Fun_def _
-      | Env.Fun_spec _ ->
+      | Env.Fun_def _ ->
           (* only inline defined functions, not constructors or axiomatized symbols *)
           let _, ty_args, ty_ret = U.ty_unfold ty in
+          let ty_args = Array.of_list ty_args in
           (* find the subset of arguments on which to specialize *)
           let spec_args, (other_args, ty_other_args) =
-            let ty_args = Array.of_list ty_args in
             l
             |> List.mapi
               (fun i arg ->
@@ -369,8 +362,9 @@ module Make(T : TI.S) = struct
                  let ty = ty_args.(i) in
                  (* can we specialize on [arg], and is it interesting? *)
                  if can_specialize_ ~state f i && heuristic_should_specialize_arg arg ty
-                 then `Left (i, arg) else `Right (arg,ty))
-            |> CCList.partition_map CCFun.id
+                 then `Specialize (i, arg) else `Keep (arg,ty))
+            |> CCList.partition_map
+               (function `Specialize x -> `Left x | `Keep y -> `Right y)
             |> (fun (a,b) -> Arg.make a, List.split b)
           in
           if Arg.is_empty spec_args
@@ -414,7 +408,7 @@ module Make(T : TI.S) = struct
         | TI.Const f_id ->
             let info = Env.find_exn ~env:(state.get_env ()) f_id in
             let ty = info.Env.ty in
-            if Env.is_fun info
+            if Env.is_rec info
             then match decide_if_specialize ~state f_id ty l' with
               | `No ->
                   (* still require [f]'s definition *)
@@ -431,8 +425,10 @@ module Make(T : TI.S) = struct
                   (* ensure that [nf] is defined *)
                   state.fun_ ~depth f_id spec_args;
                   U.app (U.const nf.nf_id) other_args
-            else
+            else (
+              state.fun_ ~depth f_id Arg.empty;
               U.app f l'
+            )
         | _ ->
             U.app (specialize_term ~state ~depth subst f) l'
         end
@@ -448,9 +444,6 @@ module Make(T : TI.S) = struct
     List.map (specialize_term ~state ~depth subst) l
   and specialize_term' ~state ~depth subst t =
     U.map subst t ~bind:bind_var_ ~f:(specialize_term ~state ~depth)
-
-  (* TODO: nothing? *)
-  and specialize_ty ~state:_ ~depth:_ ty = ty
 
   (* find or create a new function for [f args]
       @param new_ty the type of the new function *)
@@ -479,15 +472,15 @@ module Make(T : TI.S) = struct
       let nf = find_new_fun_exn ~state d.Stmt.defined_head args in
       {Stmt.defined_head=nf.nf_id; defined_ty=nf.nf_ty; }
 
-  (* TODO:
-    - to specialize a definition for a tuple of arguments, bind those arguments
-      and compute SNF of body (no def expansion, only local β reductions)
-      so as to inline
-  *)
-
   (* FIXME: gather the free variables from args and add them to [new_vars]?
-     or should it be part of Arg.t? *)
-  (* specialize equations w.r.t. the given set of arguments (with their position) *)
+     or should it be part of Arg.t?
+
+    Also, name generation? *)
+
+  (* specialize equations w.r.t. the given set of arguments (with their position)
+      to specialize a definition for a tuple of arguments, bind those arguments
+      and compute SNF of body (no def expansion, only local β reductions)
+      so as to inline *)
   let specialize_eqns
   : state:inv state -> depth:int -> ID.t ->
     (term,term,inv) Stmt.equations -> Arg.t -> (term,term,inv) Stmt.equations
@@ -527,7 +520,7 @@ module Make(T : TI.S) = struct
 
   let conf = {Traversal.
     direct_tydef=true;
-    direct_spec=false;  (* FIXME: cannot actually specialize spec? *)
+    direct_spec=true;
     direct_copy=true;
     direct_mutual_types=true;
   }
@@ -535,10 +528,10 @@ module Make(T : TI.S) = struct
   (* recursive traversal of the statement graph *)
   module Trav = Traversal.Make(T)(Arg)
 
-  class ['c] traverse ?size ?depth_limit () = object (self)
+  class ['c] traverse ?size ?depth_limit state = object (self)
     inherit [inv, inv, 'c] Trav.traverse ~conf ?size ?depth_limit ()
 
-    val st : _ state = create_state()
+    val st : _ = state
 
     method setup =
       st.fun_ <- self#do_statements_for_id;
@@ -567,45 +560,8 @@ module Make(T : TI.S) = struct
     (* see {!inv}: predicates should have been eliminated *)
     method do_pred ~depth:_ _ _ _ _ = assert false
 
-    (* specialize specification *)
-    method do_spec ~depth ~loc id spec tup =
-      Utils.debugf ~section 5 "@[<2>specialize spec for %a@ on @[%a@]@]"
-        (fun k->k ID.print id Arg.print tup);
-      assert false
-      (* FIXME
-      assert (ArgTuple.length tup = List.length spec.Stmt.spec_vars);
-      if not (self#has_processed id tup) then (
-        (* flag every symbol as specialized. We can use [tup] for every
-           specified symbol, as they all share the same set of type variables. *)
-        let subst = match_spec ~spec tup in
-        List.iter
-          (fun d ->
-            let id' = d.Stmt.defined_head in
-            let _, mangled = mangle_ ~state:st id' (ArgTuple.m_args tup) in
-            let tup' = ArgTuple.make
-              ~mangled
-              ~args:(ArgTuple.args tup)
-              ~m_args:(ArgTuple.m_args tup) in
-            Utils.debugf ~section 4 "@[<2>specialization of `@[<2>%a@ %a@]` is done@]"
-              (fun k -> k ID.print id' ArgTuple.print tup');
-            self#done_processing id' tup';
-          )
-          spec.Stmt.spec_defined;
-        (* convert axioms and defined terms *)
-        let defined = List.map
-          (fun d -> mono_defined ~state:st ~local_state:{depth; subst;} d tup)
-          spec.Stmt.spec_defined
-        and axioms = List.map
-          (fun ax -> mono_term ~state:st ~local_state:{depth; subst; } ax)
-          spec.Stmt.spec_axioms
-        in
-        let st' = Stmt.axiom_spec ~info:{Stmt.loc; name=None}
-          {Stmt.spec_axioms=axioms; spec_defined=defined; spec_vars=[]; }
-        in
-        self#push_res st';
-      );
-      ()
-         *)
+    (* should never happen, spec is fallthrough *)
+    method do_spec ~depth:_ ~loc:_ _ _ _ = assert false
 
     (* XXX direct translation of types/copy types/defs should be
        ok, because specializing doesn't remove the need for a given
@@ -624,15 +580,13 @@ module Make(T : TI.S) = struct
 
   let specialize_problem pb =
     let state = create_state() in
-    let trav = new traverse () in
+    let trav = new traverse state in
     trav#setup;
     (* first, compute specializable arguments *)
     Problem.iter_statements pb
       ~f:(fun stmt -> match Stmt.view stmt with
         | Stmt.Axiom (Stmt.Axiom_rec defs) ->
             compute_specializable_args_ ~state defs
-        | Stmt.Axiom (Stmt.Axiom_spec _) ->
-            assert false (* TODO!!! or not, since they might not be specialized? *)
         | _ -> ());
     (* then, transform *)
     Problem.iter_statements pb ~f:trav#do_stmt;
