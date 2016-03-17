@@ -144,8 +144,7 @@ module Make(T : TI.S) = struct
           | BFalse -> eval {st with head=c}
           | BPartial a' -> {st with head=U.ite a' b c}
           end
-      | `Guard _ ->
-          Utils.not_implemented "evaluation of Guard"
+      | `Guard _ -> st
       | `DataTest _ ->
           Utils.not_implemented "evaluation of DataTest"
       | `DataSelect (_,_) ->
