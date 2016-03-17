@@ -388,8 +388,14 @@ module type UTIL_REPR = sig
   val to_seq_vars : t_ -> t_ Var.t Sequence.t
   (** Iterate on variables *)
 
-  val to_seq_free_vars : t_ -> t_ Var.t Sequence.t
+  module VarSet : CCSet.S with type elt = t_ Var.t
+
+  val to_seq_free_vars : ?bound:VarSet.t -> t_ -> t_ Var.t Sequence.t
   (** Iterate on free variables. *)
+
+  val free_vars : ?bound:VarSet.t -> t_ -> VarSet.t
+  (** [free_vars t] computes the set of free variables of [t].
+      @param bound variables bound on the path *)
 
   val is_closed : t_ -> bool
   (** [is_closed t] means [to_seq_free_vars t = empty] *)
@@ -461,8 +467,9 @@ module UtilRepr(T : REPR)
     in
     aux t
 
-  let to_seq_free_vars t yield =
-    let module VarSet = Var.Set(T) in
+  module VarSet = Var.Set(T)
+
+  let to_seq_free_vars ?(bound=VarSet.empty) t yield =
     let rec aux ~bound t = match T.repr t with
       | Const _ -> ()
       | Var v ->
@@ -487,7 +494,10 @@ module UtilRepr(T : REPR)
       | TyArrow (a,b) -> aux ~bound a; aux ~bound b
       | TyMeta _ -> ()
     in
-    aux ~bound:VarSet.empty t
+    aux ~bound t
+
+  let free_vars ?bound t =
+    to_seq_free_vars ?bound t |> VarSet.of_seq
 
   let is_closed t = to_seq_free_vars t |> Sequence.is_empty
 
