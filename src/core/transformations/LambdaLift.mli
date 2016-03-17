@@ -13,9 +13,8 @@ module Make(T : TermInner.S) : sig
   type state
 
   val tr_problem :
-    state:state ->
     (T.t, T.t, inv) Problem.t ->
-    (T.t, T.t, inv) Problem.t
+    (T.t, T.t, inv) Problem.t * state
 
   val decode_model :
     state:state -> (T.t,T.t) Model.t -> (T.t,T.t) Model.t
