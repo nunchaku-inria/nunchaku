@@ -35,6 +35,7 @@ let print_mono_ = ref false
 let print_elim_match_ = ref false
 let print_elim_recursion_ = ref false
 let print_elim_hof_ = ref false
+let print_lambda_lift_ = ref false
 let print_specialize_ = ref false
 let print_elim_multi_eqns = ref false
 let print_polarize_ = ref false
@@ -102,6 +103,7 @@ let options =
   ; "--print-" ^ Specialize.name
       , Arg.Set print_specialize_
       , " print input after specialization"
+  ; "--print-" ^ LambdaLift.name, Arg.Set print_lambda_lift_, " print after λ-lifting"
   ; "--print-" ^ ElimHOF.name
       , Arg.Set print_elim_hof_
       , " print input after elimination of higher-order/partial functions"
@@ -180,6 +182,7 @@ module Pipes = struct
   module Step_ElimMatch = ElimPatternMatch.Make(HO)
   module Step_ElimPreds = ElimIndPreds.Make(HO)
   module Step_Specialize = Specialize.Make(HO)
+  module Step_LambdaLift = LambdaLift.Make(HO)
   module Step_ElimHOF = ElimHOF.Make(HO)
   module Step_ElimRec = ElimRecursion.Make(HO)
   module Step_polarize = Polarize.Make(HO)
@@ -215,6 +218,7 @@ let make_model_pipeline () =
     Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
     Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
     Step_Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check @@@
+    Step_LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
     Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
     Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
     Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@

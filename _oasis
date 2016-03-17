@@ -35,6 +35,7 @@ Library "nunchaku_core"
                     transformations/ElimPatternMatch,
                     transformations/Monomorphization,
                     transformations/Specialize,
+                    transformations/LambdaLift,
                     transformations/ElimHOF,
                     transformations/ElimRecursion,
                     transformations/ElimMultipleEqns,
