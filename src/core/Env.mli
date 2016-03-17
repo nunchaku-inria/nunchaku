@@ -162,3 +162,7 @@ val find_ty : env:('t, 'ty, _) t -> id -> 'ty option
 
 val mem : env:_ t -> id:id -> bool
 (** @return true if the symbol is at least declared *)
+
+module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
+  val print : (Pt.t, Pty.t, _) t printer
+end

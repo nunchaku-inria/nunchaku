@@ -361,6 +361,9 @@ val defined_of_spec : (_, 'ty) spec_defs -> 'ty defined Sequence.t
 
 (** {2 Print} *)
 
+val print_attr : decl_attr printer
+val print_attrs : decl_attr list printer
+
 module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
   val print_spec_defs : (Pt.t, Pty.t) spec_defs printer
   val print_pred_def : (Pt.t, Pty.t, _) pred_def printer

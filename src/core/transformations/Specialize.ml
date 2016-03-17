@@ -18,7 +18,7 @@ exception Error of string
 
 let () = Printexc.register_printer
   (function
-    | Error msg -> Some ("error in specialization: " ^ msg)
+    | Error msg -> Some (Utils.err_sprintf "in specialization: " ^ msg)
     | _ -> None)
 
 let error_ msg = raise (Error msg)
@@ -384,7 +384,7 @@ module Make(T : TI.S) = struct
 
   let bind_var_ subst v =
     let v' = Var.fresh_copy v in
-    let subst = Var.Subst.add ~subst v v' in
+    let subst = Var.Subst.add ~subst v (U.var v') in
     subst, v'
 
   let find_new_fun ~state f args =
@@ -402,10 +402,12 @@ module Make(T : TI.S) = struct
             ID.print f Arg.print args
 
   (* traverse [t] and try and specialize functions at every relevant
-     call site *)
+     call site
+      @param subst used to rename variables and, possibly, replace
+      specialized variables by the corresponding constant *)
   let rec specialize_term ~state ~depth subst t =
     match T.repr t with
-    | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
+    | TI.Var v -> Var.Subst.find_exn ~subst v
     | TI.App (f,l) ->
         let l' = specialize_term_l ~state ~depth subst l in
         begin match T.repr f with
@@ -414,7 +416,10 @@ module Make(T : TI.S) = struct
             let ty = info.Env.ty in
             if Env.is_fun info
             then match decide_if_specialize ~state f_id ty l' with
-              | `No -> U.app f l'
+              | `No ->
+                  (* still require [f]'s definition *)
+                  state.fun_ ~depth f_id Arg.empty;
+                  U.app f l'
               | `Yes (spec_args, other_args, ty) ->
                   (* [spec_args] is a subset of [l'] on which we are going to
                      specialize [f].
@@ -467,8 +472,12 @@ module Make(T : TI.S) = struct
         state.fun_ ~depth:(depth+1) f args;
         nf
 
-  (* TODO: find/store the new ID for [d.head args] *)
-  let specialize_defined ~state d args = assert false
+  let specialize_defined ~state d args =
+    if Arg.is_empty args
+    then d
+    else
+      let nf = find_new_fun_exn ~state d.Stmt.defined_head args in
+      {Stmt.defined_head=nf.nf_id; defined_ty=nf.nf_ty; }
 
   (* TODO:
     - to specialize a definition for a tuple of arguments, bind those arguments
@@ -476,6 +485,8 @@ module Make(T : TI.S) = struct
       so as to inline
   *)
 
+  (* FIXME: gather the free variables from args and add them to [new_vars]?
+     or should it be part of Arg.t? *)
   (* specialize equations w.r.t. the given set of arguments (with their position) *)
   let specialize_eqns
   : state:inv state -> depth:int -> ID.t ->
@@ -485,31 +496,38 @@ module Make(T : TI.S) = struct
       (fun k->k (PStmt.print_eqns id) eqns Arg.print args);
     match eqns with
     | Stmt.Eqn_single (vars, rhs) ->
-        let nf = find_new_fun_exn ~state id args in
-        (* TODO: filter vars by index *)
-        assert false
-
-      (* FIXME
-        state.count <- state.count + 1;
-        let defined = {Stmt.defined_head=name; defined_ty=ty; } in
-        (* make a new definition *)
-        let eqns = specialize_eqns ~state ~depth f def.Stmt.rec_eqns args in
-        let def' = { def with Stmt.
-          rec_defined=defined;
-          rec_vars=[]; (* monomorphic *)
-          rec_eqns=eqns;
-        } in
-        (* save function *)
-        ID.Tbl.replace state.new_funs f ((args,def') :: l);
-        state.fun_ ~depth:(depth+1) f args;
-        Utils.debugf ~section 4 "specialize `%a` as `%a` on `@[%a@]`"
-          (fun k ->k ID.print_name f ID.print_name name Arg.print args);
-        def'
-         *)
+        if Arg.is_empty args then (
+          (* still need to traverse [rhs] *)
+          let subst, vars = Utils.fold_map bind_var_ Var.Subst.empty vars in
+          let rhs = specialize_term ~state ~depth:(depth+1) subst rhs in
+          Stmt.Eqn_single (vars, rhs)
+        ) else (
+          state.count <- state.count + 1;
+          let subst, new_vars =
+            Utils.fold_mapi
+              (fun i subst v ->
+                 (* keep [v] if its index [i] is not in [args], otherwise
+                    replace it with the corresponding term *)
+                 try
+                   let t = List.assoc i (Arg.to_list args) in
+                   Var.Subst.add ~subst v t, None
+                 with Not_found ->
+                   let v' = Var.fresh_copy v in
+                   Var.Subst.add ~subst v (U.var v'), Some v')
+              Var.Subst.empty
+              vars
+          in
+          let new_vars = CCList.filter_map CCFun.id new_vars in
+          (* specialize the body, using the given substitution *)
+          let new_rhs = specialize_term ~state ~depth:(depth+1) subst rhs in
+          (* evaluate body with the given substitution, reducing β-redexes, etc. *)
+          let new_rhs = Red.snf new_rhs in
+          Stmt.Eqn_single (new_vars, new_rhs)
+        )
 
   let conf = {Traversal.
     direct_tydef=true;
-    direct_spec=false;
+    direct_spec=false;  (* FIXME: cannot actually specialize spec? *)
     direct_copy=true;
     direct_mutual_types=true;
   }
@@ -531,13 +549,13 @@ module Make(T : TI.S) = struct
       specialize_term ~state:st ~depth Var.Subst.empty t
 
     (* specialize mutual recursive definitions *)
-    method do_def ~depth def arg =
+    method do_def ~depth def args =
       Utils.debugf ~section 5 "@[<2>specialize def `@[%a@]`@ on `@[%a@]`@]"
-        (fun k->k ID.print def.Stmt.rec_defined.Stmt.defined_head Arg.print arg);
+        (fun k->k ID.print def.Stmt.rec_defined.Stmt.defined_head Arg.print args);
       let id = def.Stmt.rec_defined.Stmt.defined_head in
-      let eqns = specialize_eqns ~state:st ~depth id def.Stmt.rec_eqns arg in
+      let eqns = specialize_eqns ~state:st ~depth id def.Stmt.rec_eqns args in
       (* new (specialized) case *)
-      let rec_defined = specialize_defined ~state:st def.Stmt.rec_defined arg in
+      let rec_defined = specialize_defined ~state:st def.Stmt.rec_defined args in
       let def' = {Stmt.
         rec_kind=def.Stmt.rec_kind;
         rec_vars=[];
@@ -548,24 +566,6 @@ module Make(T : TI.S) = struct
 
     (* see {!inv}: predicates should have been eliminated *)
     method do_pred ~depth:_ _ _ _ _ = assert false
-
-    (* declare a symbol that is axiomatized *)
-    method decl_sym ~attrs id tup =
-      if not (self#has_declared id tup) then (
-        let env_info = Env.find_exn ~env:self#env id in
-        (* declare specialized type *)
-        let new_id = assert false in
-        let new_ty = assert false in
-        (* FIXME
-        let new_id = match Arg.mangled tup with
-          | None -> id
-          | Some x -> x
-        in
-        let ty = U.ty_apply env_info.Env.ty (Arg.args tup) in
-        let new_ty = specialize_ty ~state:st ~depth:0 ty in
-           *)
-        self#declare_sym ~attrs id tup ~as_:new_id ~ty:new_ty
-      )
 
     (* specialize specification *)
     method do_spec ~depth ~loc id spec tup =
@@ -632,7 +632,7 @@ module Make(T : TI.S) = struct
         | Stmt.Axiom (Stmt.Axiom_rec defs) ->
             compute_specializable_args_ ~state defs
         | Stmt.Axiom (Stmt.Axiom_spec _) ->
-            assert false (* TODO!!! *)
+            assert false (* TODO!!! or not, since they might not be specialized? *)
         | _ -> ());
     (* then, transform *)
     Problem.iter_statements pb ~f:trav#do_stmt;

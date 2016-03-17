@@ -492,6 +492,15 @@ let pplist_prefix ~first ~pre pp out l =
       pp out x)
     l
 
+let print_attr out = function
+  | Decl_attr_card_max i -> fpf out "max_card %d" i
+  | Decl_attr_card_min i -> fpf out "min_card %d" i
+  | Decl_attr_exn e -> CCFormat.string out (Printexc.to_string e)
+
+let print_attrs out = function
+  | [] -> ()
+  | l -> fpf out "@ [@[%a@]]" (pplist ~sep:"," print_attr) l
+
 module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
   let pp_defined out d =
     fpf out "@[%a : %a@]" ID.print d.defined_head Pty.print d.defined_ty
@@ -576,15 +585,6 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
       ID.print c.copy_concretize Pty.print c.copy_concretize_ty
       pp_pred c.copy_pred
 
-  let pp_attr out = function
-    | Decl_attr_card_max i -> fpf out "max_card %d" i
-    | Decl_attr_card_min i -> fpf out "min_card %d" i
-    | Decl_attr_exn e -> CCFormat.string out (Printexc.to_string e)
-
-  let pp_attrs out = function
-    | [] -> ()
-    | l -> fpf out "@ [@[%a@]]" (pplist ~sep:"," pp_attr) l
-
   let print_tydef out tydef =
     let ppcstors out c =
       fpf out "@[<hv2>%a %a@]"
@@ -607,7 +607,7 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
 
   let print out t = match t.view with
   | Decl (id,_,t,attrs) ->
-      fpf out "@[<2>val %a@ : %a%a.@]" ID.print id Pty.print t pp_attrs attrs
+      fpf out "@[<2>val %a@ : %a%a.@]" ID.print id Pty.print t print_attrs attrs
   | Axiom a ->
       begin match a with
       | Axiom_std l ->

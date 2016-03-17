@@ -252,3 +252,31 @@ let mem ~env ~id = ID.PerTbl.mem env.infos id
 let find_ty_exn ~env id = (find_exn ~env id).ty
 
 let find_ty ~env id = CCOpt.map (fun x -> x.ty) (find ~env id)
+
+module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) = struct
+  let fpf = Format.fprintf
+
+  let print_def out = function
+    | Fun_def _ -> CCFormat.string out "<rec>"
+    | Fun_spec _ -> CCFormat.string out "<spec>"
+    | Data _ -> CCFormat.string out "<data>"
+    | Cstor (_,_,_,{ Stmt.cstor_type; _ }) ->
+        fpf out "<cstor : `%a`>" Pty.print cstor_type
+    | Pred _ -> CCFormat.string out "<pred>"
+    | Copy_ty { Stmt.copy_of; _ } -> fpf out "<copy of `%a`>" Pty.print copy_of
+    | Copy_abstract { Stmt.copy_id; _ } ->
+        fpf out "<copy abstract of `%a`>" ID.print copy_id
+    | Copy_concretize { Stmt.copy_id; _ } ->
+        fpf out "<copy concretize of `%a`>" ID.print copy_id
+    | NoDef -> CCFormat.string out "<no def>"
+
+  let print_info out i =
+    fpf out "@[<2>%a%a@]" print_def i.def Stmt.print_attrs i.decl_attrs
+
+  let print out e =
+    let print_pair out (id,info) =
+      fpf out "@[%a @<1>→@ %a@]" ID.print id print_info info
+    in
+    fpf out "@[<v>@[<v2>env {@,@[<v>%a@]@]@,}@]"
+      (CCFormat.seq ~start:"" ~stop:"" print_pair) (ID.PerTbl.to_seq e.infos)
+end
