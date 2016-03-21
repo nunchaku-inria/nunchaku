@@ -135,6 +135,8 @@ type (+'term, +'ty, 'inv) t = private {
 
 type (+'t, +'ty, 'inv) statement = ('t, 'ty, 'inv) t
 
+val mk_defined : ID.t -> 'ty -> 'ty defined
+
 val tydef_vars : 'ty tydef -> 'ty Var.t list
 val tydef_id : _ tydef -> id
 val tydef_type : 'ty tydef -> 'ty
@@ -351,6 +353,11 @@ val iter :
   term:('t -> unit) ->
   ty:('ty -> unit) ->
   ('t, 'ty, 'inv) t -> unit
+
+val id_of_defined : _ defined -> ID.t
+val defined_of_rec : (_, 'ty, _) rec_def -> 'ty defined
+val defined_of_recs : (_, 'ty, _) rec_defs -> 'ty defined Sequence.t
+val defined_of_spec : (_, 'ty) spec_defs -> 'ty defined Sequence.t
 
 (** {2 Print} *)
 

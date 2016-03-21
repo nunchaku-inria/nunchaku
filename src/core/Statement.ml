@@ -139,6 +139,8 @@ type ('t, 'ty, 'inv) statement = ('t, 'ty, 'inv) t
 
 let info_default = { loc=None; name=None; }
 
+let mk_defined id ty = { defined_head=id; defined_ty=ty; }
+
 let tydef_vars t = t.ty_vars
 let tydef_id t = t.ty_id
 let tydef_type t = t.ty_type
@@ -474,6 +476,11 @@ let fold ~term:fterm ~ty:fty acc st =
 
 let iter ~term ~ty st =
   fold () st ~term:(fun () t -> term t) ~ty:(fun () t -> ty t)
+
+let id_of_defined d = d.defined_head
+let defined_of_rec r = r.rec_defined
+let defined_of_recs l = Sequence.of_list l |> Sequence.map defined_of_rec
+let defined_of_spec spec = Sequence.of_list spec.spec_defined
 
 let fpf = Format.fprintf
 let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
