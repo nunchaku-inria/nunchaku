@@ -272,11 +272,12 @@ module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) = struct
     | NoDef -> CCFormat.string out "<no def>"
 
   let print_info out i =
-    fpf out "@[<2>%a%a@]" print_def i.def Stmt.print_attrs i.decl_attrs
+    fpf out "@[<2>@,: `@[%a@]`@ := %a%a@]" Pty.print i.ty
+      print_def i.def Stmt.print_attrs i.decl_attrs
 
   let print out e =
     let print_pair out (id,info) =
-      fpf out "@[%a @<1>→@ %a@]" ID.print id print_info info
+      fpf out "@[%a %a@]" ID.print id print_info info
     in
     fpf out "@[<v>@[<v2>env {@,@[<v>%a@]@]@,}@]"
       (CCFormat.seq ~start:"" ~stop:"" print_pair) (ID.PerTbl.to_seq e.infos)
