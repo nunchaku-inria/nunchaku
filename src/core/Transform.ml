@@ -82,10 +82,7 @@ module Pipe = struct
 end
 
 (* run callbacks on [x] *)
-let callbacks_ l x =
-  List.iter
-    (fun f -> try f x with _ -> ())
-    l
+let callbacks_ l x = List.iter (fun f -> f x) l
 
 let rec run
   : type a b c d. pipe:(a,b,c,d) Pipe.t -> a -> (b * (c -> d)) lazy_list
@@ -132,10 +129,6 @@ let run_closed ~cpipe:(ClosedPipe.ClosedEx cpipe) a =
   |> CCKList.flat_map
     (fun (b, conv_back) ->
       cpipe.ClosedPipe.call b
-      |> CCKList.map
-        (fun res ->
-          res, conv_back
-        )
-    )
+      |> CCKList.map (fun res -> res, conv_back))
 
 
