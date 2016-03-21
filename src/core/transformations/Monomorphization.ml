@@ -311,7 +311,7 @@ module Make(T : TI.S) = struct
   end)
 
   let mono_defined ~state ~local_state d tup =
-    let ty = U.ty_apply d.Stmt.defined_ty (ArgTuple.m_args tup) in
+    let ty = U.ty_apply_mono d.Stmt.defined_ty ~tys:(ArgTuple.m_args tup) in
     let defined_ty = mono_type ~state ~local_state ty in
     let defined_head, _ = mangle_ ~state d.Stmt.defined_head (ArgTuple.m_args tup) in
     {Stmt.defined_head; defined_ty; }
@@ -412,7 +412,7 @@ module Make(T : TI.S) = struct
           | None -> id
           | Some x -> x
         in
-        let ty = U.ty_apply env_info.Env.ty (ArgTuple.args tup) in
+        let ty = U.ty_apply_mono env_info.Env.ty ~tys:(ArgTuple.args tup) in
         let new_ty = mono_type ~state:st ~local_state:{depth=0; subst=Subst.empty} ty in
         self#declare_sym ~attrs id tup ~as_:new_id ~ty:new_ty
       )
@@ -469,9 +469,10 @@ module Make(T : TI.S) = struct
           let id', mangled = mangle_ ~state:st c.Stmt.cstor_name (ArgTuple.m_args tup) in
           let tup' = {tup with ArgTuple.mangled; } in
           (* apply, then convert type. Arity should match. *)
-          let ty', subst =
-            U.ty_apply_full c.Stmt.cstor_type (ArgTuple.args tup')
+          let ty' =
+            U.ty_apply_mono c.Stmt.cstor_type ~tys:(ArgTuple.args tup')
           in
+          let subst = Var.Subst.empty in
           Utils.debugf ~section 5 "@[<hv2>monomorphize cstor %a@ : @[%a@]@ with @[%a@]@]"
             (fun k->k ID.print id' P.print ty' (Subst.print P.print) subst);
           (* convert type and substitute in it *)
@@ -509,12 +510,12 @@ module Make(T : TI.S) = struct
         let abstract', _ =
           mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
         let ty_abstract' =
-          U.ty_apply c.Stmt.copy_abstract_ty (ArgTuple.m_args tup)
+          U.ty_apply_mono c.Stmt.copy_abstract_ty ~tys:(ArgTuple.m_args tup)
           |> mono_type ~state:st ~local_state in
         let concretize', _ =
           mangle_ ~state:st c.Stmt.copy_concretize (ArgTuple.m_args tup) in
         let ty_concretize' =
-          U.ty_apply c.Stmt.copy_concretize_ty (ArgTuple.m_args tup)
+          U.ty_apply_mono c.Stmt.copy_concretize_ty ~tys:(ArgTuple.m_args tup)
           |> mono_type ~state:st ~local_state in
         let ty' = U.ty_type in
         (* create new copy type *)

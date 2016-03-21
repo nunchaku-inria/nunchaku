@@ -730,7 +730,7 @@ module type UTIL = sig
   (** [deref ~subst t] dereferences [t] as long as it is a variable
       bound in [subst]. *)
 
-  exception ApplyError of string * t_ * t_ list
+  exception ApplyError of string * t_ * t_ list * subst
   (** Raised when a type application fails *)
 
   val eval : subst:subst -> t_ -> t_
@@ -739,13 +739,20 @@ module type UTIL = sig
   val eval_renaming : subst:(t_, t_ Var.t) Var.Subst.t -> t_ -> t_
   (** Applying a variable renaming *)
 
-  val ty_apply : t_ -> t_ list -> t_
-  (** [apply t l] computes the type of [f args] where [f : t] and [args : l].
+  val ty_apply : t_ -> terms:t_ list -> tys:t_ list -> t_
+  (** [apply t ~terms ~tys] computes the type of [f terms] for some
+      function [f], where [f : t] and [terms : ty].
       @raise ApplyError if the arguments do not match *)
 
-  val ty_apply_full : t_ -> t_ list -> t_ * subst
+  val ty_apply_full : t_ -> terms:t_ list -> tys:t_ list -> t_ * subst
   (** [ty_apply_full ty l] is like [apply t l], but it returns a pair
       [ty' , subst] such that [subst ty' = apply t l].
+      @raise ApplyError if the arguments do not match *)
+
+  val ty_apply_mono : t_ -> tys:t_ list -> t_
+  (** [apply t ~tys] computes the type of [f terms] for some
+      function [f], where [f : t] and [terms : ty].
+      @raise Invalid_argument if [t] is not monomorphic (i.e. not TyForall)
       @raise ApplyError if the arguments do not match *)
 
   type signature = id -> t_ option
@@ -1225,7 +1232,7 @@ module Util(T : S)
     in
     aux subst t
 
-  exception ApplyError of string * T.t * T.t list
+  exception ApplyError of string * t_ * t_ list * subst
   (** Raised when a type application fails *)
 
   exception UnifError of string * T.t * T.t
@@ -1234,11 +1241,12 @@ module Util(T : S)
   let () =
     Printexc.register_printer
     (function
-      | ApplyError (msg, t, l) ->
+      | ApplyError (msg, t, l, subst) ->
           let module P = Print(T) in
           let msg = CCFormat.sprintf
-            "@[<hv2>type error@ when applying %a@ on @[%a@]: %s@]"
-              P.print_in_app t (CCFormat.list P.print_in_app) l msg
+            "@[<hv2>type error@ when applying %a@ on @[%a@]@ in @[%a@]: %s@]"
+            P.print_in_app t (CCFormat.list P.print_in_app) l
+            (Subst.print P.print) subst msg
           in Some msg
       | UnifError (msg, t1, t2) ->
           let module P = Print(T) in
@@ -1249,39 +1257,62 @@ module Util(T : S)
       | _ -> None
     )
 
-  let error_apply_ msg ~hd ~l = raise (ApplyError (msg, hd, l))
+  let error_apply_ msg ~hd ~l ~subst = raise (ApplyError (msg, hd, l, subst))
   let error_unif_ msg t1 t2 = raise (UnifError (msg, t1, t2))
 
-  let ty_apply_full t l =
-    let rec app_ ~subst t l = match T.repr t, l with
-      | _, [] -> t, subst
+  let ty_apply_full t ~terms:l_terms ~tys:l_tys =
+    let rec app_ ~subst t l_terms l_tys = match T.repr t, l_terms, l_tys with
+      | _, [], [] -> t, subst
+      | _, [], _ | _, _, [] -> assert false
+      | TyBuiltin _, _, _
+      | App (_,_),_, _
+      | Const _, _, _ ->
+          error_apply_ "cannot apply this type" ~hd:t ~l:l_tys ~subst
+      | Var v, _, _ ->
+          begin try
+            let t = Subst.find_exn ~subst v in
+            app_ ~subst t l_terms l_tys
+          with Not_found ->
+            error_apply_ "cannot apply this type" ~hd:t ~l:l_tys ~subst
+          end
+      | TyMeta _,_,_ -> assert false
+      | TyArrow (a, t'), _ :: l_terms', b :: l_tys' ->
+          if equal_with ~subst a b
+          then app_ ~subst t' l_terms' l_tys'
+          else error_apply_
+            "type mismatch on first argument" ~hd:t ~l:l_tys' ~subst
+      | Bind (`TyForall, v, t'), b :: l_terms', _ :: l_tys' ->
+          let subst = Subst.add ~subst v b in
+          app_ ~subst t' l_terms' l_tys'
+      | _ -> assert false
+    in
+    app_ ~subst:Subst.empty t l_terms l_tys
+
+  let ty_apply t ~terms ~tys =
+    let t, subst = ty_apply_full t ~terms ~tys in
+    if Subst.is_empty subst then t else eval ~subst t
+
+  let ty_apply_mono t ~tys:l =
+    let subst = Subst.empty in
+    let rec app_ t l = match T.repr t, l with
+      | _, [] -> t
       | TyBuiltin _, _
       | App (_,_),_
       | Const _, _ ->
-          error_apply_ "cannot apply this type" ~hd:t ~l
-      | Var v, _ ->
-          begin try
-            let t = Subst.find_exn ~subst v in
-            app_ ~subst t l
-          with Not_found ->
-            error_apply_ "cannot apply this type" ~hd:t ~l
-          end
+          error_apply_ "cannot apply this type" ~hd:t ~l ~subst
+      | Var _, _ ->
+          error_apply_ "cannot apply this type" ~hd:t ~l ~subst
       | TyMeta _,_ -> assert false
       | TyArrow (a, t'), b :: l' ->
-          if equal_with ~subst a b
-          then app_ ~subst t' l'
+          if equal a b
+          then app_ t' l'
           else error_apply_
-            "type mismatch on first argument" ~hd:t ~l
-      | Bind (`TyForall, v,t'), b :: l' ->
-          let subst = Subst.add ~subst v b in
-          app_ ~subst t' l'
+            "type mismatch on first argument" ~hd:t ~l ~subst
+      | Bind (`TyForall, _, _), _ ->
+          error_apply_ "non monomorphic type" ~hd:t ~l ~subst
       | _ -> assert false
     in
-    app_ ~subst:Subst.empty t l
-
-  let ty_apply t l =
-    let t, subst = ty_apply_full t l in
-    if Subst.is_empty subst then t else eval ~subst t
+    app_ t l
 
   type signature = id -> T.t option
 
@@ -1327,7 +1358,7 @@ module Util(T : S)
     | App (f,l) ->
         begin match T.repr f with
         | Builtin (`And | `Or) -> prop
-        | _ -> ty_apply (ty_exn ~sigma f) (List.map (ty_exn ~sigma) l)
+        | _ -> ty_apply (ty_exn ~sigma f) ~terms:l ~tys:(List.map (ty_exn ~sigma) l)
         end
     | Bind (b,v,t) ->
         begin match b with
