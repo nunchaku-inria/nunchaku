@@ -72,7 +72,7 @@ Executable run_qtest
   CompiledObject:   native
   MainIs:           run_qtest.ml
   Build$:           flag(tests)
-  BuildDepends:     nunchaku, nunchaku.parsers, oUnit, QTest2Lib
+  BuildDepends:     nunchaku, nunchaku.parsers, oUnit, qcheck
 
 Test all
   Command:      ./run_qtest.native
