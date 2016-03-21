@@ -216,7 +216,7 @@ module Make(T : TI.S) = struct
       - replace any term of the form [plus x y] with [app_H (plus x) y],
       - introduce [proto] function(s) [proto_H : H -> nat]
       - axiomatize extensionality for [H]
-      - axiomatize [proto_H]: TODO should be done in rec_elim? *)
+    *)
 
   type handle =
     | H_leaf of encoded_ty (* leaf type *)
@@ -716,8 +716,26 @@ module Make(T : TI.S) = struct
           let ty = encode_toplevel_ty ~state ty in
           [Stmt.mk_decl ~info id decl ty ~attrs]
     | Stmt.Axiom (Stmt.Axiom_rec l) -> elim_hof_rec ~state ~info l
+    | Stmt.TyDef (kind,l) ->
+        let l =
+          let open Stmt in
+          List.map
+            (fun tydef ->
+               { tydef with
+                 ty_cstors =
+                   ID.Map.map
+                     (fun c ->
+                        { c with
+                          cstor_args=List.map (encode_ty_ ~state) c.cstor_args;
+                          cstor_type=encode_toplevel_ty ~state c.cstor_type;
+                        })
+                     tydef.ty_cstors;
+                 ty_type = encode_toplevel_ty ~state tydef.ty_type;
+               })
+            l
+        in
+        [Stmt.mk_ty_def ~info kind l]
     | Stmt.Axiom _
-    | Stmt.TyDef (_,_)
     | Stmt.Pred (_,_,_)
     | Stmt.Copy _
     | Stmt.Goal _ ->
