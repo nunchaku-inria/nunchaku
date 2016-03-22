@@ -179,6 +179,15 @@ let fold_mapi f acc l =
 
 let fold_map f acc l = fold_mapi (fun _ -> f) acc l
 
+let filteri f l =
+  let rec aux i = function
+    | [] -> []
+    | x :: tl ->
+        let tl' = aux (i+1) tl in
+        if f i x then x::tl' else tl'
+  in
+  aux 0 l
+
 let singleton_if check ~f x = if check then [f x] else []
 
 (** {2 Warnings} *)

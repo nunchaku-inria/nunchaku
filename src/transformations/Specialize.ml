@@ -135,6 +135,7 @@ module Make(T : TI.S) = struct
     val empty : t
     val is_empty : t -> bool
     val length : t -> int
+    val mem : int -> t -> bool
     val to_list : t -> (int * T.t) list
     val make : (int * T.t) list -> t
   end = struct
@@ -144,6 +145,7 @@ module Make(T : TI.S) = struct
     let is_empty = function [] -> true | _::_ -> false
     let length = List.length
     let make l = List.sort (fun (i,_)(j,_) -> Pervasives.compare i j) l
+    let mem = List.mem_assoc
     let to_list l = l
 
     let rec equal l1 l2 = match l1, l2 with
@@ -353,10 +355,10 @@ module Make(T : TI.S) = struct
     match Env.def info with
       | Env.Fun_def _ ->
           (* only inline defined functions, not constructors or axiomatized symbols *)
-          let _, ty_args, ty_ret = U.ty_unfold ty in
-          let ty_args = Array.of_list ty_args in
+          let _, ty_args_l, ty_ret = U.ty_unfold ty in
+          let ty_args = Array.of_list ty_args_l in
           (* find the subset of arguments on which to specialize *)
-          let spec_args, (other_args, ty_other_args) =
+          let spec_args, other_args =
             l
             |> List.mapi
               (fun i arg ->
@@ -364,16 +366,19 @@ module Make(T : TI.S) = struct
                  let ty = ty_args.(i) in
                  (* can we specialize on [arg], and is it interesting? *)
                  if can_specialize_ ~state f i && heuristic_should_specialize_arg arg ty
-                 then `Specialize (i, arg) else `Keep (arg,ty))
+                 then `Specialize (i, arg) else `Keep arg)
             |> CCList.partition_map
                (function `Specialize x -> `Left x | `Keep y -> `Right y)
-            |> (fun (a,b) -> Arg.make a, List.split b)
+            |> (fun (a,b) -> Arg.make a, b)
           in
           if Arg.is_empty spec_args
           then `No
           else (
-            (* type of specialized function *)
-            let new_ty = U.ty_arrow_l ty_other_args ty_ret in
+            (* type of specialized function. We cannot use [other_args]
+               because [f] might be partially applied. *)
+            let ty_remaining_args =
+              Utils.filteri (fun i _ -> not (Arg.mem i spec_args)) ty_args_l in
+            let new_ty = U.ty_arrow_l ty_remaining_args ty_ret in
             `Yes (spec_args, other_args, new_ty)
           )
       | _ -> `No
@@ -416,14 +421,16 @@ module Make(T : TI.S) = struct
                   (* still require [f]'s definition *)
                   state.fun_ ~depth f_id Arg.empty;
                   U.app f l'
-              | `Yes (spec_args, other_args, ty) ->
+              | `Yes (spec_args, other_args, new_ty) ->
                   (* [spec_args] is a subset of [l'] on which we are going to
                      specialize [f].
                      [f] is defined by [def] in the mutual block [defs].
-                     [other_args] are the remaining arguments *)
-                  Utils.debugf ~section 5 "@[<2>specialize `@[%a@]`@ on @[%a@]@]"
-                    (fun k->k P.print t Arg.print spec_args);
-                  let nf = get_new_fun ~state ~depth f_id ty spec_args in
+                     [other_args] are the remaining arguments, and [ty] is
+                      the type of the specialized version of [f] *)
+                  Utils.debugf ~section 5
+                    "@[<2>@{<Cyan>specialize@} `@[%a@]`@ on @[%a@]@ with new type `@[%a@]`@]"
+                    (fun k->k P.print t Arg.print spec_args P.print new_ty);
+                  let nf = get_new_fun ~state ~depth f_id new_ty spec_args in
                   (* ensure that [nf] is defined *)
                   state.fun_ ~depth f_id spec_args;
                   U.app (U.const nf.nf_id) other_args

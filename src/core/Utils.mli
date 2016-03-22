@@ -98,6 +98,8 @@ val fold_map : ('b -> 'a -> 'b * 'c) -> 'b -> 'a list -> 'b * 'c list
 
 val fold_mapi : (int -> 'b -> 'a -> 'b * 'c) -> 'b -> 'a list -> 'b * 'c list
 
+val filteri : (int -> 'a -> bool) -> 'a list -> 'a list
+
 val singleton_if : bool -> f:('a -> 'b) -> 'a -> 'b list
 
 (** {2 Warnings} *)
