@@ -463,10 +463,9 @@ let fold_bind (type inv) ~bind ~term:fterm ~ty:fty b_acc acc (st:(_,_,inv) t) =
   | Copy c ->
       let acc = List.fold_left (fun acc v -> fty b_acc acc (Var.ty v)) acc c.copy_vars in
       let b_acc = List.fold_left bind b_acc c.copy_vars in
-      let acc = fty b_acc acc c.copy_of in
-      let acc = fty b_acc acc c.copy_ty in
-      let acc = fty b_acc acc c.copy_abstract_ty in
-      let acc = fty b_acc acc c.copy_concretize_ty in
+      let acc =
+        List.fold_left (fty b_acc) acc
+          [c.copy_of; c.copy_ty; c.copy_concretize_ty; c.copy_abstract_ty] in
       CCOpt.fold (fterm b_acc) acc c.copy_pred
   | Goal t -> fterm b_acc acc t
 
