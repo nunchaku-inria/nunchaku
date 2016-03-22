@@ -114,7 +114,7 @@ module CallGraph = struct
       fpf out "@[<2>%a ->@ [@[%a@]]@]"
         pp_node n (CCFormat.list ~start:"" ~stop:"" pp_node) c.cell_children
     in
-    fpf out "@[<v2>graph {@,@[<v>%a@]@,}@]"
+    fpf out "@[<hv>@[<hv2>graph {@,@[<v>%a@]@]@,}@]"
       (CCFormat.seq ~start:"" ~stop:"" pp_pair) (IDIntTbl.to_seq g)
 end
 
