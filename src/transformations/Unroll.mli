@@ -3,6 +3,8 @@
 
 (** {1 Unrolling of (co)inductive Predicates} *)
 
+open Nunchaku_core
+
 type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds:[`Present]>
 
 val name : string

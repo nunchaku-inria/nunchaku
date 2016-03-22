@@ -29,21 +29,7 @@ Library "nunchaku_core"
                     terms/TermMono,
                     terms/Pattern,
                     types/TypePoly,
-                    types/TypeMono,
-                    transformations/Skolem,
-                    transformations/TypeInference,
-                    transformations/ElimPatternMatch,
-                    transformations/Monomorphization,
-                    transformations/Specialize,
-                    transformations/LambdaLift,
-                    transformations/ElimHOF,
-                    transformations/ElimRecursion,
-                    transformations/ElimMultipleEqns,
-                    transformations/ElimIndPreds,
-                    transformations/ElimCopy,
-                    transformations/Polarize,
-                    transformations/Unroll,
-                    transformations/IntroGuards
+                    types/TypeMono
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.sexp, containers.iter,
@@ -59,12 +45,34 @@ Library "nunchaku_parsers"
   BuildTools:       menhir
   BuildDepends:     nunchaku
 
+Library "nunchaku_transformations"
+  Path:             src/transformations
+  Pack:             true
+  Modules:          Skolem,
+                    TypeInference,
+                    ElimPatternMatch,
+                    Monomorphization,
+                    Specialize,
+                    LambdaLift,
+                    ElimHOF,
+                    ElimRecursion,
+                    ElimMultipleEqns,
+                    ElimIndPreds,
+                    ElimCopy,
+                    Polarize,
+                    Unroll,
+                    IntroGuards
+  Install:          true
+  FindlibName:      transformations
+  FindlibParent:    nunchaku_core
+  BuildDepends:     containers, nunchaku
+
 Executable nunchaku
   Path:             src/main/
   Install:          true
   CompiledObject:   native
   MainIs:           nunchaku.ml
-  BuildDepends:     nunchaku, nunchaku.parsers
+  BuildDepends:     nunchaku, nunchaku.transformations, nunchaku.parsers
 
 PreBuildCommand:    make qtest-gen
 

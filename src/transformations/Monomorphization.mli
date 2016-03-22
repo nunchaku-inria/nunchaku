@@ -3,6 +3,8 @@
 
 (** {1 Monomorphization} *)
 
+open Nunchaku_core
+
 type id = ID.t
 
 (* summary:

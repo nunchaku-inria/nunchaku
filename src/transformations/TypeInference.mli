@@ -3,6 +3,8 @@
 
 (** {1 Scoping and Type Inference} *)
 
+open Nunchaku_core
+
 type 'a or_error = [`Ok of 'a | `Error of string]
 type id = ID.t
 type 'a var = 'a Var.t

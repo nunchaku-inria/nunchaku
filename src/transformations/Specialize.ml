@@ -3,6 +3,8 @@
 
 (** {1 Specialization} *)
 
+open Nunchaku_core
+
 module TI = TermInner
 module Stmt = Statement
 module Subst = Var.Subst

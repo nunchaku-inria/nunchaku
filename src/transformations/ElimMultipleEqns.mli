@@ -3,6 +3,8 @@
 
 (** {1 Transform a problem with multiple equations per defined Symbol into one with single equations} *)
 
+open Nunchaku_core
+
 type id = ID.t
 
 type ('a,'b) inv1 = <ty:'a; ind_preds:'b; eqn:[`Nested]>

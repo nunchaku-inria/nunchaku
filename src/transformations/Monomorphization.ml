@@ -3,6 +3,8 @@
 
 (** {1 Monomorphization} *)
 
+open Nunchaku_core
+
 module ID = ID
 module Var = Var
 module TI = TermInner

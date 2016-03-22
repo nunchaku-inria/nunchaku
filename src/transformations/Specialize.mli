@@ -26,6 +26,8 @@
   ]}
 *)
 
+open Nunchaku_core
+
 val name : string
 
 exception Error of string

@@ -5,6 +5,8 @@
 
     Remaining λ expressions are extracted as toplevel {b named} functions *)
 
+open Nunchaku_core
+
 type inv = <ty:[`Mono]; ind_preds:[`Absent]; eqn:[`Single]>
 
 val name : string

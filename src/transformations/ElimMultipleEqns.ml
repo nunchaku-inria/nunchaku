@@ -3,6 +3,8 @@
 
 (** {1 Transform a problem with multiple equations per defined Symbol into one with single equations} *)
 
+open Nunchaku_core
+
 module TI = TermInner
 module Stmt = Statement
 module Subst = Var.Subst
