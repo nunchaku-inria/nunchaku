@@ -117,21 +117,24 @@ module Make(T : TI.S) = struct
               U.ty_apply (check ~env bound f)
                 ~terms:l ~tys:(List.map (check ~env bound) l)
         end
-    | TI.Bind (b,v,t) ->
+    | TI.Bind (b,v,body) ->
         begin match b with
         | `Forall
         | `Exists
         | `Mu ->
             let bound' = check_var ~env bound v in
-            check ~env bound' t
+            check ~env bound' body
         | `Fun ->
             let bound' = check_var ~env bound v in
+            let ty_body = check ~env bound' body in
             if U.ty_returns_Type (Var.ty v)
-            then U.ty_forall v (check ~env bound' t)
-            else U.ty_arrow (Var.ty v) (check ~env bound' t)
+            then U.ty_forall v ty_body
+            else U.ty_arrow (Var.ty v) ty_body
         | `TyForall ->
-            check_ty_var ~env bound t v;
-            U.ty_type
+            (* type of [pi a:type. body] is [type],
+               and [body : type] is mandatory *)
+            check_ty_forall_var ~env bound t v;
+            check_is_ty ~env (VarSet.add v bound) body
         end
     | TI.Let (v,t',u) ->
         let ty_t' = check ~env bound t in
@@ -163,9 +166,10 @@ module Make(T : TI.S) = struct
         | `Prop -> U.ty_type
         end
     | TI.TyArrow (a,b) ->
-        check_is_ty ~env bound a;
-        check_is_ty ~env bound b;
-        U.ty_type
+        (* TODO: if a=type, then b=type is mandatory *)
+        ignore (check_is_ty_or_Type ~env bound a);
+        let ty_b = check_is_ty_or_Type ~env bound b in
+        ty_b
 
   and check_is_prop ~env bound t =
     let ty = check ~env bound t in
@@ -176,15 +180,26 @@ module Make(T : TI.S) = struct
     let _ = check ~env bound (Var.ty v) in
     VarSet.add v bound
 
-  and check_ty_var ~env bound t v =
+  (* check that [v] is a proper type var *)
+  and check_ty_forall_var ~env bound t v =
     let tyv = check ~env bound (Var.ty v) in
-    if not (U.ty_is_Type tyv) then err_ty_mismatch t U.ty_type tyv;
+    if not (U.ty_is_Type (Var.ty v)) && not (U.ty_is_Type tyv)
+    then
+      errorf_
+        "@[<2>type of `@[%a@]` in `@[%a@]`@ should be a type or `type`,@ but is `@[%a@]`@]"
+        Var.print_full v P.print t P.print tyv;
     ()
 
   and check_is_ty ~env bound t =
     let ty = check ~env bound t in
     if not (U.ty_is_Type ty) then err_ty_mismatch t U.ty_type ty;
-    ()
+    U.ty_type
+
+  and check_is_ty_or_Type ~env bound t =
+    let ty = check ~env bound t in
+    if not (U.ty_returns_Type t) && not (U.ty_returns_Type ty)
+      then err_ty_mismatch t U.ty_type ty;
+    ty
 
   let check_eqns (type a) ~env ~bound id (eqn:(_,_,a) Stmt.equations) =
     match eqn with

@@ -1243,7 +1243,7 @@ module Util(T : S)
     (function
       | ApplyError (msg, t, l, subst) ->
           let module P = Print(T) in
-          let msg = CCFormat.sprintf
+          let msg = Utils.err_sprintf
             "@[<hv2>type error@ when applying %a@ on @[%a@]@ in @[%a@]: %s@]"
             P.print_in_app t (CCFormat.list P.print_in_app) l
             (Subst.print P.print) subst msg
