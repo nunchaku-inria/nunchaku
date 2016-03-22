@@ -483,10 +483,7 @@ module Make(T : TI.S) = struct
       let nf = find_new_fun_exn ~state d.Stmt.defined_head args in
       {Stmt.defined_head=nf.nf_id; defined_ty=nf.nf_ty; }
 
-  (* FIXME: gather the free variables from args and add them to [new_vars]?
-     or should it be part of Arg.t?
-
-    Also, name generation? *)
+  (* TODO: specialization of inductive predicates *)
 
   (* specialize equations w.r.t. the given set of arguments (with their position)
       to specialize a definition for a tuple of arguments, bind those arguments
