@@ -460,9 +460,11 @@ module Make(T : TI.S) = struct
     match find_new_fun ~state f args with
     | Some f -> f
     | None ->
-        (* introduce new function *)
-        let name = ID.make
-          (Printf.sprintf "%s_spec_%d" (ID.to_string_slug f) state.count) in
+        (* introduce new function, keeping appropriate attributes *)
+        let name =
+          ID.make_full
+            ~needs_at:(ID.needs_at f) ~pol:(ID.polarity f)
+            (Printf.sprintf "%s_spec_%d" (ID.to_string_slug f) state.count) in
         let nf = {
           nf_specialized_from=f;
           nf_id=name;
