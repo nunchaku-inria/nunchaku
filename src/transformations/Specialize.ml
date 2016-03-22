@@ -136,6 +136,7 @@ module Make(T : TI.S) = struct
     val is_empty : t -> bool
     val length : t -> int
     val mem : int -> t -> bool
+    val get : int -> t -> T.t
     val to_list : t -> (int * T.t) list
     val make : (int * T.t) list -> t
   end = struct
@@ -146,6 +147,7 @@ module Make(T : TI.S) = struct
     let length = List.length
     let make l = List.sort (fun (i,_)(j,_) -> Pervasives.compare i j) l
     let mem = List.mem_assoc
+    let get = List.assoc
     let to_list l = l
 
     let rec equal l1 l2 = match l1, l2 with
@@ -168,20 +170,19 @@ module Make(T : TI.S) = struct
     nf_id: ID.t;  (* name of new function *)
     nf_ty: ty;
     nf_specialized_from: ID.t; (* source *)
-    (* TODO: also add info on which arguments have been specialized/kept *)
   }
 
-  type decode_state = term ID.Tbl.t
-  (* TODO: this should contain a bit more information,
-     including `fun_id -> (fun_id * Arg.t)` to know that a function is
+  type decode_state = (ID.t * Arg.t) ID.Tbl.t
+  (* `fun_id -> (fun_id * Arg.t)` to know that a function is
      another function specialized on some arguments *)
 
   type 'a state = {
     specializable_args : bool array ID.Tbl.t;
       (* function -> list of argument positions that can be specialized *)
-    new_funs: (Arg.t * new_fun) list ID.Tbl.t;
-      (* maps [f] to a list of [args_i, f'], where each [f'] is
-          a specialization of [f] on [args_i].
+    new_funs: [ `New of Arg.t * new_fun | `Same] list ID.Tbl.t;
+      (* maps [f] to a list of [`New (args_i, f')], where each [f'] is
+          a specialization of [f] on [args_i],
+          or to [`Same], meaning [f] is also used as-is.
           [f'] has a type that should allow it to be applied to [map snd args_i] *)
     mutable count: int;
       (* used for new names *)
@@ -392,7 +393,9 @@ module Make(T : TI.S) = struct
     (* see whether the function is already specialized on those parameters *)
     let l = try ID.Tbl.find state.new_funs f with Not_found -> [] in
     CCList.find_map
-      (fun (args',fun_) -> if Arg.equal args args' then Some fun_ else None)
+      (function
+        | `Same -> None
+        | `New (args',fun_) -> if Arg.equal args args' then Some fun_ else None)
       l
 
   let find_new_fun_exn ~state f args =
@@ -401,6 +404,16 @@ module Make(T : TI.S) = struct
       | None ->
           errorf "@[<2>could not find new definition for %a on @[%a@]@]"
             ID.print f Arg.print args
+
+  (* require [f] to be defined in the output, but without specializing
+     it on any of its arguments *)
+  let require_without_specializing ~state ~depth f =
+    state.fun_ ~depth f Arg.empty;
+    (* remember that [f] is used without specialization *)
+    let l = try ID.Tbl.find state.new_funs f with Not_found -> [] in
+    if not (List.mem `Same l)
+    then ID.Tbl.add_list state.new_funs f `Same;
+    ()
 
   (* traverse [t] and try and specialize functions at every relevant
      call site
@@ -419,7 +432,7 @@ module Make(T : TI.S) = struct
             then match decide_if_specialize ~state f_id ty l' with
               | `No ->
                   (* still require [f]'s definition *)
-                  state.fun_ ~depth f_id Arg.empty;
+                  require_without_specializing ~state ~depth f_id;
                   U.app f l'
               | `Yes (spec_args, other_args, new_ty) ->
                   (* [spec_args] is a subset of [l'] on which we are going to
@@ -471,8 +484,8 @@ module Make(T : TI.S) = struct
           nf_ty=new_ty;
         } in
         (* add [nf] to the list of specialized versions of [f] *)
-        let l = ID.Tbl.get_or state.new_funs f ~or_:[] in
-        ID.Tbl.replace state.new_funs f ((args,nf) :: l);
+        ID.Tbl.add_list state.new_funs f (`New(args,nf));
+        ID.Tbl.replace state.decode nf.nf_id (f, args);
         state.fun_ ~depth:(depth+1) f args;
         nf
 
@@ -510,7 +523,7 @@ module Make(T : TI.S) = struct
                  (* keep [v] if its index [i] is not in [args], otherwise
                     replace it with the corresponding term *)
                  try
-                   let t = List.assoc i (Arg.to_list args) in
+                   let t = Arg.get i args in
                    Var.Subst.add ~subst v t, None
                  with Not_found ->
                    let v' = Var.fresh_copy v in
@@ -586,6 +599,125 @@ module Make(T : TI.S) = struct
     method do_ty_def ?loc:_ ~attrs:_ _ _ ~ty:_ _ = assert false
   end
 
+  (* graph of subsumption relations between various instances of the same
+     function, forming a lattice ordered by generality ("f args1 < f args2"
+     iff "\exists \sigma. args2\sigma = args1") *)
+  module InstanceGraph = struct
+    type 'a arg_map = (Arg.t * 'a) list
+    (* map [arg -> 'a] *)
+
+    type vertex = {
+      v_id: ID.t; (* name of the specialized function *)
+      v_spec_of: ID.t; (* name of generic function *)
+      v_spec_on: Arg.t; (* arguments on which [v_id] is specialized *)
+      v_args: term list; (* [v_id v_spec_on = v_spec_of v_args] *)
+      v_term: term; (* [v_spec_of v_args] *)
+    }
+
+    type parent_edge = (term, ty) Subst.t * vertex
+    (* edge to a parent, that is,
+       [v1 -> sigma, v2] means [v_to_term v2\sigma = v_to_term v1] *)
+
+    type t = {
+      id: ID.t;
+        (* function that is specialized in various ways *)
+      ty_args : ty list;
+        (* type parameters of [id] *)
+      vertices: (vertex * parent_edge option) list;
+        (* list of all args used, plus their (optional) parent *)
+    }
+
+    (* [subsumes_ v1 v2] returns [Some sigma] if [sigma v1.term = v2.term], None otherwise *)
+    let subsumes_ v1 v2 = U.match_ v1.v_term v2.v_term
+
+    (* add edges to some parent for every non-root vertex in [l] *)
+    let find_parents l =
+      let find_parent v =
+        CCList.find_map
+          (fun v' ->
+             if ID.equal v.v_id v'.v_id then None
+             else CCOpt.map (fun sigma -> sigma, v') (subsumes_ v' v))
+          l
+      in
+      List.map (fun v -> v, find_parent v) l
+
+    let app_const id l = U.app (U.const id) l
+
+    let fresh_var =
+      let n = ref 0 in
+      fun ty ->
+        let name = Printf.sprintf "v_ig_%d" !n in
+        incr n;
+        Var.make ~ty ~name
+
+    let fresh_var_t ty = U.var (fresh_var ty)
+
+    (* rename variables in [t] *)
+    let rename_vars l =
+      let vars =
+        Sequence.of_list l
+        |> Sequence.flat_map (U.to_seq_free_vars ?bound:None)
+        |> VarSet.of_seq
+        |> VarSet.to_list in
+      let vars' = List.map Var.fresh_copy vars in
+      let subst = Subst.add_list ~subst:Subst.empty vars vars' in
+      List.map (U.eval_renaming ~subst) l
+
+    (* build graph from a [state.new_funs] entry corresponding to [id:ty_args -> _] *)
+    let make id ty_args l =
+      let vars = List.map fresh_var_t ty_args in
+      let vertices =
+        l
+        |> List.map
+          (function
+            | `Same ->
+                let v_args = List.map fresh_var_t ty_args in
+                let v_term = app_const id v_args in
+                {v_id=id; v_spec_of=id; v_spec_on=Arg.empty; v_args; v_term; }
+            | `New (arg,nf) ->
+                let v_args =
+                  List.mapi
+                    (fun i a ->
+                       try Arg.get i arg
+                       with Not_found -> a)
+                    vars
+                  |> rename_vars
+                in
+                let v_term = app_const nf.nf_id v_args in
+                {v_id=nf.nf_id; v_spec_of=id; v_spec_on=arg; v_args; v_term}
+          )
+        |> find_parents
+      in
+      { id; ty_args; vertices; }
+
+    (* nodes without parents *)
+    let roots g =
+      CCList.filter_map
+        (function (v,None) -> Some v | (_,Some _) -> None)
+        g.vertices
+
+    (* nodes that have a parent *)
+    let non_roots g =
+      List.filter
+        (function (_,None) -> false | (_,Some _) -> true)
+        g.vertices
+
+    let print out g =
+      let pp_vertex out v =
+        fpf out "{@[%a on %a@]}" ID.print v.v_id Arg.print v.v_spec_on in
+      let pp_edge out = function
+        | None -> ()
+        | Some (sigma,v') ->
+            fpf out " --> @[%a@] with @[%a@]" pp_vertex v' (Subst.print P.print) sigma
+      in
+      let pp_item out (v,e) = fpf out "@[<2>%a@,%a@]" pp_vertex v pp_edge e in
+      fpf out "@[<2>instance graph for %a:@ @[<v>%a@]@]" ID.print g.id
+        (CCFormat.list ~start:"" ~stop:"" pp_item) g.vertices
+  end
+
+  (* TODO: congruence axioms *)
+
+
   let specialize_problem pb =
     let state = create_state() in
     let trav = new traverse state in
@@ -598,7 +730,17 @@ module Make(T : TI.S) = struct
         | _ -> ());
     (* then, transform *)
     Problem.iter_statements pb ~f:trav#do_stmt;
-    (* TODO: also add extensionality axioms for new functions *)
+    (* add congruence axioms for specialized functions *)
+    ID.Tbl.iter
+      (fun id l ->
+         let ty = Env.find_ty_exn ~env:trav#env id in
+         let _, ty_args, _ = U.ty_unfold ty in
+         let g = InstanceGraph.make id ty_args l in
+         Utils.debugf ~section 2 "%a" (fun k->k InstanceGraph.print g);
+         (* TODO *)
+         ())
+      state.new_funs;
+    (* output new problem *)
     let pb' =
       trav#output
       |> CCVector.freeze
@@ -608,6 +750,10 @@ module Make(T : TI.S) = struct
   (* traverse the term and use reverse table to replace specialized
      functions by their definition *)
   let decode_term _state _t = _t (* TODO *)
+
+  (* TODO: merge models of specialized functions (possibly with main function) *)
+  let decode_model state m =
+    Model.map m ~term:(decode_term state) ~ty:CCFun.id
 
   let pipe_with ~decode ~print ~check =
     let on_encoded =
@@ -624,17 +770,11 @@ module Make(T : TI.S) = struct
       ~on_encoded
       ~encode:(fun pb ->
         let pb, decode = specialize_problem pb in
-        pb, decode
-      )
-      ~decode:(fun state x ->
-        decode (decode_term state) x
-      )
+        pb, decode)
+      ~decode
       ()
 
   let pipe ~print ~check =
-    let decode decode_term =
-      Model.map ~term:decode_term ~ty:decode_term
-    in
-    pipe_with ~decode ~print ~check
+    pipe_with ~decode:decode_model ~print ~check
 end
 

@@ -56,7 +56,7 @@ module Make(T : TermInner.S) : sig
     ) Transform.t
 
   val pipe_with :
-    decode:((T.t -> T.t) -> 'b -> 'c) ->
+    decode:(decode_state -> 'b -> 'c) ->
     print:bool ->
     check:bool ->
     ( (term, ty, inv) Problem.t,
