@@ -123,7 +123,7 @@ module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module PStmt = Statement.Print(P)(P)
   module Red = Reduce.Make(T)
-  module VarSet = Var.Set(T)
+  module VarSet = U.VarSet
 
   type term = T.t
   type ty = term
@@ -692,15 +692,15 @@ module Make(T : TI.S) = struct
 
     (* nodes without parents *)
     let roots g =
-      CCList.filter_map
+      Sequence.of_list g.vertices
+      |> Sequence.filter_map
         (function (v,None) -> Some v | (_,Some _) -> None)
-        g.vertices
 
     (* nodes that have a parent *)
     let non_roots g =
-      List.filter
-        (function (_,None) -> false | (_,Some _) -> true)
-        g.vertices
+      Sequence.of_list g.vertices
+      |> Sequence.filter_map
+        (function (_,None) -> None | (v1,Some v2) -> Some (v1,v2))
 
     let print out g =
       let pp_vertex out v =
@@ -715,8 +715,47 @@ module Make(T : TI.S) = struct
         (CCFormat.list ~start:"" ~stop:"" pp_item) g.vertices
   end
 
-  (* TODO: congruence axioms *)
+  let spec_term_of_vertex v =
+    let open InstanceGraph in
+    let args = Utils.filteri (fun i _ -> Arg.mem i v.v_spec_on) v.v_args in
+    U.app (U.const v.v_id) args
 
+  let mk_congruence_axiom v1 v2 =
+    let module IG = InstanceGraph in
+    assert (List.length v1.IG.v_args = List.length v2.IG.v_args);
+    let eqns = List.map2 U.eq v1.IG.v_args v2.IG.v_args in
+    let concl = U.eq (spec_term_of_vertex v1) (spec_term_of_vertex v2) in
+    let ax = U.imply_l eqns concl in
+    U.close_forall ax
+
+  (* add the congruence axioms corresponding to instance graph [g], into [push_stmt] *)
+  let add_congruence_axioms push_stmt g =
+    let module IG = InstanceGraph in
+    (* axioms between "roots" (i.e. instances of [g.IG.id]
+       that are the most general) *)
+    let roots = InstanceGraph.roots g in
+    Sequence.product roots roots
+      |> Sequence.iter
+        (fun (v1,v2) ->
+           (* only emit an axiom once for every pair of distinct vertices *)
+           if ID.compare v1.IG.v_id v2.IG.v_id < 0
+           then (
+             let ax = mk_congruence_axiom v1 v2 in
+             push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax)
+           ));
+    (* axioms between a specialized function and its parent (which is more
+       general than itself) *)
+    InstanceGraph.non_roots g
+      (fun (v1,(sigma,v2)) ->
+         (* [v2.term\sigma = v1.term], push the corresponding axiom *)
+         let ax =
+           U.eq
+             (spec_term_of_vertex v1)
+             (U.eval ~subst:sigma (spec_term_of_vertex v2))
+           |> U.close_forall
+         in
+         push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax));
+     ()
 
   let specialize_problem pb =
     let state = create_state() in
@@ -737,7 +776,7 @@ module Make(T : TI.S) = struct
          let _, ty_args, _ = U.ty_unfold ty in
          let g = InstanceGraph.make id ty_args l in
          Utils.debugf ~section 2 "%a" (fun k->k InstanceGraph.print g);
-         (* TODO *)
+         add_congruence_axioms trav#push_res g;
          ())
       state.new_funs;
     (* output new problem *)
