@@ -3,6 +3,8 @@
 
 (** {1 Unrolling of (co)inductive Predicates} *)
 
+open Nunchaku_core
+
 module TI = TermInner
 module Stmt = Statement
 module Pol = Polarity

@@ -36,6 +36,14 @@ let update_ty v ~f =
   let ty = f v.ty in
   { id=v.id; ty }
 
+let make_gen ~names =
+  let n = ref 0 in
+  fun ty ->
+    let name = Printf.sprintf names !n in
+    incr n;
+    make ~ty ~name
+
+
 let print oc v = ID.print oc v.id
 let to_string v = ID.to_string v.id
 let print_full oc v = ID.print_full oc v.id

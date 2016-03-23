@@ -14,6 +14,8 @@
   which is a decision tree understandable by CVC4
 *)
 
+open Nunchaku_core
+
 val name : string
 
 module Make(T : TermInner.S) : sig

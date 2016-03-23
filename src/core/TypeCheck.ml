@@ -4,6 +4,7 @@
 (** {1 Type Checking of a problem} *)
 
 module TI = TermInner
+module Stmt = Statement
 
 let section = Utils.Section.(make ~parent:root "ty_check")
 
@@ -112,35 +113,51 @@ module Make(T : TI.S) = struct
           | TI.Builtin (`And | `Or) ->
               List.iter (check_is_prop ~env bound) l;
               prop
-          | _ -> U.ty_apply (check ~env bound f) (List.map (check ~env bound) l)
+          | _ ->
+              U.ty_apply (check ~env bound f)
+                ~terms:l ~tys:(List.map (check ~env bound) l)
         end
-    | TI.Bind (b,v,t) ->
-        let bound' = VarSet.add v bound in
+    | TI.Bind (b,v,body) ->
         begin match b with
         | `Forall
         | `Exists
         | `Mu ->
-            check_var ~env bound v;
-            check ~env bound' t
+            let bound' = check_var ~env bound v in
+            check ~env bound' body
         | `Fun ->
-            check_var ~env bound v;
+            let bound' = check_var ~env bound v in
+            let ty_body = check ~env bound' body in
             if U.ty_returns_Type (Var.ty v)
-            then U.ty_forall v (check ~env bound' t)
-            else U.ty_arrow (Var.ty v) (check ~env bound' t)
+            then U.ty_forall v ty_body
+            else U.ty_arrow (Var.ty v) ty_body
         | `TyForall ->
-            check_ty_var ~env bound t v;
-            U.ty_type
+            (* type of [pi a:type. body] is [type],
+               and [body : type] is mandatory *)
+            check_ty_forall_var ~env bound t v;
+            check_is_ty ~env (VarSet.add v bound) body
         end
     | TI.Let (v,t',u) ->
         let ty_t' = check ~env bound t in
-        check_var ~env bound v;
+        let bound' = check_var ~env bound v in
         check_same_ (U.var v) t' (Var.ty v) ty_t';
-        let bound' = VarSet.add v bound in
         check ~env bound' u
     | TI.Match (_,m) ->
-        (* TODO : check variables and each branch *)
-        let _, (_, rhs) = ID.Map.choose m in
-        check ~env bound rhs
+        (* TODO: check that each constructor is present, and only once *)
+        let id, (vars, rhs) = ID.Map.choose m in
+        let bound' = List.fold_left (check_var ~env) bound vars in
+        (* reference type *)
+        let ty = check ~env bound' rhs in
+        (* check other branches *)
+        ID.Map.iter
+          (fun id' (vars, rhs') ->
+             if not (ID.equal id id')
+             then (
+               let bound' = List.fold_left (check_var ~env) bound vars in
+               let ty' = check ~env bound' rhs' in
+               check_same_ rhs rhs' ty ty'
+             ))
+          m;
+        ty
     | TI.TyMeta _ -> assert false
     | TI.TyBuiltin b ->
         begin match b with
@@ -149,9 +166,10 @@ module Make(T : TI.S) = struct
         | `Prop -> U.ty_type
         end
     | TI.TyArrow (a,b) ->
-        check_is_ty ~env bound a;
-        check_is_ty ~env bound b;
-        U.ty_type
+        (* TODO: if a=type, then b=type is mandatory *)
+        ignore (check_is_ty_or_Type ~env bound a);
+        let ty_b = check_is_ty_or_Type ~env bound b in
+        ty_b
 
   and check_is_prop ~env bound t =
     let ty = check ~env bound t in
@@ -160,28 +178,75 @@ module Make(T : TI.S) = struct
 
   and check_var ~env bound v =
     let _ = check ~env bound (Var.ty v) in
-    ()
+    VarSet.add v bound
 
-  and check_ty_var ~env bound t v =
+  (* check that [v] is a proper type var *)
+  and check_ty_forall_var ~env bound t v =
     let tyv = check ~env bound (Var.ty v) in
-    if not (U.ty_is_Type tyv) then err_ty_mismatch t U.ty_type tyv;
+    if not (U.ty_is_Type (Var.ty v)) && not (U.ty_is_Type tyv)
+    then
+      errorf_
+        "@[<2>type of `@[%a@]` in `@[%a@]`@ should be a type or `type`,@ but is `@[%a@]`@]"
+        Var.print_full v P.print t P.print tyv;
     ()
 
   and check_is_ty ~env bound t =
     let ty = check ~env bound t in
     if not (U.ty_is_Type ty) then err_ty_mismatch t U.ty_type ty;
-    ()
+    U.ty_type
+
+  and check_is_ty_or_Type ~env bound t =
+    let ty = check ~env bound t in
+    if not (U.ty_returns_Type t) && not (U.ty_returns_Type ty)
+      then err_ty_mismatch t U.ty_type ty;
+    ty
+
+  let check_eqns (type a) ~env ~bound id (eqn:(_,_,a) Stmt.equations) =
+    match eqn with
+      | Stmt.Eqn_single (vars, rhs) ->
+          let bound' = List.fold_left (check_var ~env) bound vars in
+          check_is_prop ~env bound'
+             (U.eq
+                (U.app (U.const id) (List.map U.var vars))
+                rhs)
+      | Stmt.Eqn_nested l ->
+          List.iter
+            (fun (vars, args, rhs, side) ->
+              let bound' = List.fold_left (check_var ~env) bound vars in
+              check_is_prop ~env bound'
+                (U.eq
+                   (U.app (U.const id) args)
+                   rhs);
+              List.iter (check_is_prop ~env bound') side)
+            l
+      | Stmt.Eqn_app (_, vars, lhs, rhs) ->
+          let bound' = List.fold_left (check_var ~env) bound vars in
+          check_is_prop ~env bound' (U.eq lhs rhs)
 
   let check_statement env st =
     Utils.debugf ~section 2 "@[<2>type check@ `@[%a@]`@]"
       (fun k-> let module PStmt = Statement.Print(P)(P) in k PStmt.print st);
     let check_top env bound () t = ignore (check ~env bound t) in
-    Statement.fold_bind VarSet.empty () st
-      ~bind:(fun set v ->
-        check_var ~env set v; VarSet.add v set)
-      ~term:(check_top env) ~ty:(check_top env);
     (* update env *)
-    Env.add_statement ~env st
+    let env = Env.add_statement ~env st in
+    (* check types *)
+    begin match Stmt.view st with
+      | Stmt.Axiom (Stmt.Axiom_rec defs) ->
+          (* special checks *)
+          List.iter
+            (fun def ->
+               let tyvars = def.Stmt.rec_vars in
+               let bound = List.fold_left (check_var ~env) VarSet.empty tyvars
+               in
+               let {Stmt.defined_head=id; _} = def.Stmt.rec_defined in
+               check_eqns ~env ~bound id def.Stmt.rec_eqns)
+            defs
+      | _ ->
+        Stmt.fold_bind VarSet.empty () st
+          ~bind:(check_var ~env)
+          ~term:(check_top env) ~ty:(check_top env);
+    end;
+    env
 
   let check_problem ?(env=empty_env ()) pb =
     let _ = CCVector.fold check_statement env (Problem.statements pb) in

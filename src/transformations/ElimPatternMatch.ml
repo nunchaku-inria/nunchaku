@@ -3,6 +3,8 @@
 
 (** {1 Eliminate pattern-matching in Equations and Terms} *)
 
+open Nunchaku_core
+
 module Stmt = Statement
 module TI = TermMono
 module TyI = TypeMono

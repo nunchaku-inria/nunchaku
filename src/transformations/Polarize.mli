@@ -7,6 +7,8 @@
   or (co)inductive specifications) depending on the call-site polarity.
 *)
 
+open Nunchaku_core
+
 type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds:[`Present]>
 
 val name : string

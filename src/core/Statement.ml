@@ -477,9 +477,12 @@ let iter ~term ~ty st =
   fold () st ~term:(fun () t -> term t) ~ty:(fun () t -> ty t)
 
 let id_of_defined d = d.defined_head
+let ty_of_defined d = d.defined_ty
 let defined_of_rec r = r.rec_defined
 let defined_of_recs l = Sequence.of_list l |> Sequence.map defined_of_rec
 let defined_of_spec spec = Sequence.of_list spec.spec_defined
+let defined_of_pred p = p.pred_defined
+let defined_of_preds l = Sequence.of_list l |> Sequence.map defined_of_pred
 
 let fpf = Format.fprintf
 let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
@@ -491,6 +494,15 @@ let pplist_prefix ~first ~pre pp out l =
       if i=0 then fpf out "%s" first else fpf out "@,%s" pre;
       pp out x)
     l
+
+let print_attr out = function
+  | Decl_attr_card_max i -> fpf out "max_card %d" i
+  | Decl_attr_card_min i -> fpf out "min_card %d" i
+  | Decl_attr_exn e -> CCFormat.string out (Printexc.to_string e)
+
+let print_attrs out = function
+  | [] -> ()
+  | l -> fpf out "@ [@[%a@]]" (pplist ~sep:"," print_attr) l
 
 module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
   let pp_defined out d =
@@ -541,24 +553,27 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
     fpf out "@[<hv2>spec %a :=@ %a@]"
       pp_defined_list d.spec_defined printerms d.spec_axioms
 
+  let print_clause (type inv) out (c:(_,_,inv) pred_clause) =
+    let Pred_clause c = c in
+    match c.clause_vars, c.clause_guard with
+    | [], None -> Pt.print out c.clause_concl
+    | [], Some g ->
+        fpf out "@[<2>@[%a@]@ => @[%a@]@]" Pt.print g Pt.print c.clause_concl
+    | _::_ as vars, None ->
+        fpf out "@[<2>forall %a.@ @[%a@]@]"
+        (pplist ~sep:" " Var.print_full) vars Pt.print c.clause_concl
+    | _::_ as vars, Some g ->
+        fpf out "@[<2>forall %a.@ @[%a@] =>@ @[%a@]@]"
+        (pplist ~sep:" " Var.print_full) vars Pt.print g Pt.print c.clause_concl
+
+  let print_clauses out l =
+    fpf out "@[<v>%a@]" (pplist ~sep:"; " print_clause) l
+
   let print_pred_def out pred =
-    let pp_clause (type inv) out (c:(_,_,inv) pred_clause) =
-      let Pred_clause c = c in
-      match c.clause_vars, c.clause_guard with
-      | [], None -> Pt.print out c.clause_concl
-      | [], Some g ->
-          fpf out "@[<2>@[%a@]@ => @[%a@]@]" Pt.print g Pt.print c.clause_concl
-      | _::_ as vars, None ->
-          fpf out "@[<2>forall %a.@ @[%a@]@]"
-          (pplist ~sep:" " Var.print_full) vars Pt.print c.clause_concl
-      | _::_ as vars, Some g ->
-          fpf out "@[<2>forall %a.@ @[%a@] =>@ @[%a@]@]"
-          (pplist ~sep:" " Var.print_full) vars Pt.print g Pt.print c.clause_concl
-    in
     fpf out "@[<hv2>@[%a@ : %a@] :=@ %a@]"
       ID.print pred.pred_defined.defined_head
       Pty.print pred.pred_defined.defined_ty
-      (pplist ~sep:"; " pp_clause) pred.pred_clauses
+      print_clauses pred.pred_clauses
 
   let print_pred_defs out preds = pplist ~sep:" and " print_pred_def out preds
 
@@ -575,15 +590,6 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
       ID.print c.copy_abstract Pty.print c.copy_abstract_ty
       ID.print c.copy_concretize Pty.print c.copy_concretize_ty
       pp_pred c.copy_pred
-
-  let pp_attr out = function
-    | Decl_attr_card_max i -> fpf out "max_card %d" i
-    | Decl_attr_card_min i -> fpf out "min_card %d" i
-    | Decl_attr_exn e -> CCFormat.string out (Printexc.to_string e)
-
-  let pp_attrs out = function
-    | [] -> ()
-    | l -> fpf out "@ [@[%a@]]" (pplist ~sep:"," pp_attr) l
 
   let print_tydef out tydef =
     let ppcstors out c =
@@ -607,7 +613,7 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
 
   let print out t = match t.view with
   | Decl (id,_,t,attrs) ->
-      fpf out "@[<2>val %a@ : %a%a.@]" ID.print id Pty.print t pp_attrs attrs
+      fpf out "@[<2>val %a@ : %a%a.@]" ID.print id Pty.print t print_attrs attrs
   | Axiom a ->
       begin match a with
       | Axiom_std l ->

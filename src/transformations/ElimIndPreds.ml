@@ -3,6 +3,8 @@
 
 (** {1 Eliminate Inductive Predicates} *)
 
+open Nunchaku_core
+
 module TI = TermInner
 module Stmt = Statement
 

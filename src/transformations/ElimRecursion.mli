@@ -7,6 +7,8 @@
     It encodes recursive functions as axioms, with a quantification over
     an uninterpreted abstraction type. *)
 
+open Nunchaku_core
+
 type inv1 = <ty:[`Mono]; eqn:[`App]; ind_preds:[`Absent]>
 type inv2 = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
 

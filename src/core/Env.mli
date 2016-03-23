@@ -79,6 +79,11 @@ val def: ('t,'ty,'inv) info -> ('t,'ty,'inv) def
 val ty: (_,'ty,_) info -> 'ty
 val decl_kind: _ info -> Statement.decl
 
+val is_fun : _ info -> bool (** spec/rec *)
+val is_rec : _ info -> bool (** rec *)
+val is_data : _ info -> bool
+val is_cstor : _ info -> bool
+
 val declare:
   ?loc:loc ->
   kind:Statement.decl ->
@@ -158,3 +163,7 @@ val find_ty : env:('t, 'ty, _) t -> id -> 'ty option
 
 val mem : env:_ t -> id:id -> bool
 (** @return true if the symbol is at least declared *)
+
+module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
+  val print : (Pt.t, Pty.t, _) t printer
+end

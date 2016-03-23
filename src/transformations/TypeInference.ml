@@ -3,6 +3,8 @@
 
 (** {1 Scoping and Type Inference} *)
 
+open Nunchaku_core
+
 module A = UntypedAST
 module E = CCError
 module ID = ID

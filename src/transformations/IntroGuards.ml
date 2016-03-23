@@ -6,6 +6,8 @@
     This transformation removes "assuming" and "asserting" constructs and
     replaces them by boolean guards and assertions *)
 
+open Nunchaku_core
+
 module TI = TermInner
 module Pol = Polarity
 module Stmt = Statement

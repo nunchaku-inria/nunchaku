@@ -3,6 +3,8 @@
 
 (** {1 Eliminate Copy Types} *)
 
+open Nunchaku_core
+
 type ('a,'b) inv = <eqn:'a; ind_preds:'b; ty:[`Mono]>
 
 val name : string

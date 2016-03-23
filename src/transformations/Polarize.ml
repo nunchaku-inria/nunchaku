@@ -3,6 +3,8 @@
 
 (** {1 Polarize} *)
 
+open Nunchaku_core
+
 module TI = TermInner
 module Stmt = Statement
 module Pol = Polarity
@@ -17,7 +19,7 @@ exception Error of string
 
 let () = Printexc.register_printer
   (function
-    | Error msg -> Some (CCFormat.sprintf "@[<2>error in polarization:@ %s@]" msg)
+    | Error msg -> Some (Utils.err_sprintf "@[<2>in polarization:@ %s@]" msg)
     | _ -> None)
 
 let error_ msg = raise (Error msg)
@@ -494,6 +496,11 @@ module Make(T : TI.S) = struct
                P.print then_)
       dt.Model.DT.tests
 
+  let find_polarized_ ~state id =
+    try ID.Tbl.find state id
+    with Not_found ->
+      errorf_ "could not find polarized symbol `%a` when decoding" ID.print id
+
   (* build a rewrite system from the given model. The rewrite system erases
      polarities and unrolling parameters.
 
@@ -507,7 +514,7 @@ module Make(T : TI.S) = struct
         match T.repr t with
         | TI.Const id when ID.is_polarized id ->
             (* rewrite into the unpolarized version *)
-            let id', _is_pos, _p = ID.Tbl.find state id in
+            let id', _is_pos, _p = find_polarized_ ~state id in
             Utils.debugf ~section 4 "@[<2>decoding:@ rewrite %a into %a@]"
               (fun k->k ID.print id ID.print id');
             ID.Map.add id id' sys
@@ -533,7 +540,7 @@ module Make(T : TI.S) = struct
         match T.repr t with
         | TI.Const id when ID.is_polarized id ->
             (* unpolarize. id' is the unpolarized ID. *)
-            let id', is_pos, p = ID.Tbl.find state id in
+            let id', is_pos, p = find_polarized_ ~state id in
             begin try
               (* if [id' in partial_map], we already met its other polarized
                  version, so we can merge the decision trees and push [id']
