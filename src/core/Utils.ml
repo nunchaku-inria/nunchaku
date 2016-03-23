@@ -167,7 +167,7 @@ let vec_fold_map f acc v =
 
 (** {2 Lists} *)
 
-let fold_mapi f acc l =
+let fold_mapi ~f ~x:acc l =
   let rec aux f acc i l = match l with
     | [] -> acc, []
     | x :: tail ->
@@ -177,7 +177,7 @@ let fold_mapi f acc l =
   in
   aux f acc 0 l
 
-let fold_map f acc l = fold_mapi (fun _ -> f) acc l
+let fold_map f acc l = fold_mapi ~f:(fun _ -> f) ~x:acc l
 
 let filteri f l =
   let rec aux i = function

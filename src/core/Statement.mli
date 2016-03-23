@@ -355,9 +355,12 @@ val iter :
   ('t, 'ty, 'inv) t -> unit
 
 val id_of_defined : _ defined -> ID.t
+val ty_of_defined : 'ty defined -> 'ty
 val defined_of_rec : (_, 'ty, _) rec_def -> 'ty defined
 val defined_of_recs : (_, 'ty, _) rec_defs -> 'ty defined Sequence.t
 val defined_of_spec : (_, 'ty) spec_defs -> 'ty defined Sequence.t
+val defined_of_pred : (_, 'ty, _) pred_def -> 'ty defined
+val defined_of_preds : (_, 'ty, _) pred_def list -> 'ty defined Sequence.t
 
 (** {2 Print} *)
 
@@ -366,6 +369,8 @@ val print_attrs : decl_attr list printer
 
 module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
   val print_spec_defs : (Pt.t, Pty.t) spec_defs printer
+  val print_clause : (Pt.t, Pty.t, _) pred_clause printer
+  val print_clauses : (Pt.t, Pty.t, _) pred_clause list printer
   val print_pred_def : (Pt.t, Pty.t, _) pred_def printer
   val print_pred_defs : (Pt.t, Pty.t, _) pred_def list printer
   val print_eqns : ID.t -> (Pt.t, Pty.t, _) equations printer
