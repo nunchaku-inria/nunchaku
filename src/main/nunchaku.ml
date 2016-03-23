@@ -209,6 +209,7 @@ let make_model_pipeline () =
     Step_ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~check
       ~print:(!print_elim_multi_eqns || !print_all_) @@@
+    Step_Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check @@@
     (if !enable_polarize_
       then Step_polarize.pipe ~print:(!print_polarize_ || !print_all_)
         ~check ~polarize_rec:!polarize_rec_
@@ -217,7 +218,6 @@ let make_model_pipeline () =
     Step_unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
     Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
     Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-    Step_Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check @@@
     Step_LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
     Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
     Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
