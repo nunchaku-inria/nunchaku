@@ -638,6 +638,7 @@ module type UTIL = sig
   val neq : t_ -> t_ -> t_
   val equiv : t_ -> t_ -> t_
   val imply : t_ -> t_ -> t_
+  val imply_l : t_ list -> t_ -> t_
   val true_ : t_
   val false_ : t_
   val and_ : t_ list -> t_
@@ -669,6 +670,9 @@ module type UTIL = sig
   val fun_l : t_ var list -> t_ -> t_
   val forall_l : t_ var list -> t_ -> t_
   val exists_l : t_ var list -> t_ -> t_
+
+  val close_forall : t_ -> t_
+  (** [close_forall t] universally quantifies over free variables of [t] *)
 
   val hash_fun : t_ CCHash.hash_fun
   val hash : t_ -> int
@@ -907,6 +911,11 @@ module Util(T : S)
   and or_ l = app_builtin `Or l
   and imply a b = app_builtin `Imply [a;b]
 
+  let rec imply_l l ret = match l with
+    | [] -> ret
+    | [a] -> imply a ret
+    | a :: l' -> imply a (imply_l l' ret)
+
   let eq a b = builtin (`Eq (a,b))
   let neq a b = not_ (eq a b)
   let equiv a b = builtin (`Equiv (a,b))
@@ -947,6 +956,10 @@ module Util(T : S)
   let fun_l = List.fold_right fun_
   let forall_l = List.fold_right forall
   let exists_l = List.fold_right exists
+
+  let close_forall t =
+    let fvars = free_vars t |> VarSet.to_list in
+    forall_l fvars t
 
   let hash_fun t h =
     let d = ref 30 in (* number of nodes to explore *)
