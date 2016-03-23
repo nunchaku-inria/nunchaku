@@ -9,9 +9,7 @@ module TI = TermInner
 module Stmt = Statement
 module Subst = Var.Subst
 
-type id = ID.t
-type 'a var = 'a Var.t
-type inv = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Absent]>
+type 'a inv = <eqn:[`Single]; ty:[`Mono]; ind_preds:'a>
 
 let name = "specialize"
 let fpf = Format.fprintf
@@ -128,8 +126,8 @@ module Make(T : TI.S) = struct
   type term = T.t
   type ty = term
 
-  (** Specialization of a function is parametrized by a set of (fixed)
-      arguments of the function *)
+  (* Specialization of a function is parametrized by a set of (fixed)
+     arguments of the function *)
   module Arg : sig
     include Traversal.ARG
     val empty : t
@@ -188,11 +186,11 @@ module Make(T : TI.S) = struct
       (* used for new names *)
     mutable fun_ : (depth:int -> ID.t -> Arg.t -> unit);
       (* the function used to specialize [id] on [arg] *)
-    mutable get_env : (unit -> (term, term, 'a) Env.t);
+    mutable get_env : (unit -> (term, term, 'a inv) Env.t);
       (* obtain the environment *)
     decode: decode_state;
       (* used for decoding new symbols *)
-    new_decls: (term, ty, inv) Stmt.t CCVector.vector;
+    new_decls: (term, ty, 'a inv) Stmt.t CCVector.vector;
       (* vector of new declarations *)
   }
 
@@ -206,115 +204,170 @@ module Make(T : TI.S) = struct
     new_decls=CCVector.create();
   }
 
-  (* obtain the list of type arguments *)
-  let get_ty_args_ ty =
-    let _, args, _ = U.ty_unfold ty in
-    args
+  (* state used for analysing the call graph of a block of mutual definitions *)
+  type 'a call_graph_analyze_state = {
+    cga_graph: CallGraph.t;
+    cga_env: (term,ty,'a inv) Env.t;
+    cga_ids: ID.Set.t; (* IDs defined in the same block of mutual definitions *)
+    cga_explored: unit ID.Tbl.t; (* explored nodes *)
+  }
+
+  let fresh_var_cg = Var.make_gen ~names:"v_cg_%d"
+
+  (* explore the graph of calls in [f_id args] *)
+  let rec record_calls_term cga f_id args t = match T.repr t with
+    | TI.App (g, l) ->
+        begin match T.repr g with
+          | TI.Const g_id when ID.Set.mem g_id cga.cga_ids ->
+              if ID.equal f_id g_id
+              then record_self_call cga f_id args l
+              else record_call cga f_id args g_id l
+          | _ -> record_calls_term' cga f_id args t
+        end
+    | _ -> record_calls_term' cga f_id args t
+  (* generic traversal *)
+  and record_calls_term' cga id args t =
+    U.iter () t ~bind:(fun () _ -> ())
+      ~f:(fun () t -> record_calls_term cga id args t)
+
+  (* [f f_args] calls itself as [f args2] in its body. *)
+  and record_self_call cga f_id f_args args2 =
+    List.iteri
+      (fun i a2 ->
+         let v = f_args.(i) in
+         match T.repr a2 with
+           | TI.Var v' when Var.equal v v' -> () (* ok! *)
+           | _ ->
+               (* if [a2] depends on some of the input variables [args1],
+                  then it potentially changes at every recursive step
+                  and cannot be specialized.
+                   XXX the "depends" is currently too difficult to track,
+                    because of local bindings (let, match), so we play it
+                    safe and ask for [a2] to be closed. *)
+               if not (U.is_closed a2)
+               then CallGraph.add_nonidentical cga.cga_graph f_id i)
+      args2
+
+  (* [f f_args] calls [g g_args] in its body, where [g]
+     belongs to the [defs] too. See how to update [cg] *)
+  and record_call cga f_id f_args g_id g_args =
+    assert (not (ID.equal f_id g_id));
+    List.iteri
+      (fun j arg' -> match T.repr arg' with
+         | TI.Var v' ->
+             (* register call in graph *)
+             begin match
+                 CCArray.find_idx (fun v -> Var.equal v v') f_args
+             with
+               | None ->
+                   () (* [arg'] is not a parameter of [f] *)
+               | Some (i,_) ->
+                   (* [i]-th argument of [f] is the same
+                      as [j]-th argument of [g]. Now, if
+                      [f=g] but [i<>j], it means we could only
+                      specialize if arguments [i] and [j] are the
+                      same, which is too complicated. Therefore
+                      we require [f<>g or i=j], otherwise
+                      [i]-th argument of [f] is blocked *)
+                   CallGraph.add_call cga.cga_graph f_id i g_id j
+             end;
+         | _ -> ()
+      )
+      g_args;
+    (* explore [g_id] if [g != f] and [g] not already explored *)
+    if not (ID.equal f_id g_id) then (
+      if not (ID.Tbl.mem cga.cga_explored g_id) then (
+        ID.Tbl.add cga.cga_explored g_id ();
+        let info = Env.find_exn ~env:cga.cga_env g_id in
+        match Env.def info with
+          | Env.Fun_def (_,d,_) -> ignore (record_calls_def cga g_id d)
+          | Env.Pred (_,_,p,_,_) -> ignore (record_calls_pred cga g_id p)
+          | _ -> assert false
+      )
+    );
+    ()
+
+  (* process an equation *)
+  and record_calls_def cga id def = match def.Stmt.rec_eqns with
+    | Stmt.Eqn_single (vars, rhs) ->
+        let args = Array.of_list vars in
+        record_calls_term cga id args rhs;
+        Array.length args
+
+  (* process one clause of a (co)inductive predicate *)
+  and record_calls_clause (type a) cga id (c:(_,_,a inv) Stmt.pred_clause) =
+    let Stmt.Pred_clause c = c in
+    match T.repr c.Stmt.clause_concl with
+      | TI.Const _ -> ()  (* no recursion is possible *)
+      | TI.App (f, l) ->
+          begin match T.repr f with
+            | TI.Const f_id ->
+                assert (ID.equal id f_id);
+                (* variables already met *)
+                let vars_seen = ref VarSet.empty in
+                (* check which arguments are "unique" variables (those
+                   which are not are directly flagged as "non-identical"
+                   and mapped to a dummy var) *)
+                let args =
+                  Array.of_list l
+                  |> Array.mapi
+                    (fun i t -> match T.repr t with
+                       | TI.Var v when not (VarSet.mem v !vars_seen) ->
+                           vars_seen := VarSet.add v !vars_seen;
+                           v
+                       | _ ->
+                           (* recursion impossible, not a variable *)
+                           CallGraph.add_nonidentical cga.cga_graph id i;
+                           let ty = U.ty_exn t
+                               ~sigma:(Env.find_ty ~env:cga.cga_env) in
+                           fresh_var_cg ty)
+                in
+                (* if present, also check the clause guard *)
+                CCOpt.iter (record_calls_term cga id args) c.Stmt.clause_guard
+            | _ -> assert false (* ill formed *)
+          end
+      | _ -> assert false (* ill-formed *)
+
+  (* process a (co)inductive predicate) *)
+  and record_calls_pred cga id pred =
+    List.iter
+      (record_calls_clause cga id)
+      pred.Stmt.pred_clauses;
+    let _, ty_args, _ =
+      pred |> Stmt.defined_of_pred |> Stmt.ty_of_defined |> U.ty_unfold in
+    List.length ty_args
+
+  let mk_cga_state ~env ids = {
+    cga_graph=CallGraph.create();
+    cga_explored=ID.Tbl.create 8;
+    cga_ids=ids;
+    cga_env=env;
+  }
+
+  (* [id] has [n] arguments, find which arguments of [id] can be specialized.
+     An argument can be specialized iff, in [cg], it cannot reach
+     [Non_identical] *)
+  let bv_of_callgraph cg id n =
+    Array.init n
+      (fun i ->
+         not
+           (CallGraph.can_reach_nonidentical cg
+              (CallGraph.Arg(id,i))))
 
   (* compute the set of specializable arguments in each function of [defs] *)
-  let compute_specializable_args_ ~state (defs : (_,_,<eqn:[`Single];..>) Stmt.rec_defs) =
+  let compute_specializable_args_def ~state (defs : (_,_,<eqn:[`Single];..>) Stmt.rec_defs) =
     let ids =
-      Sequence.of_list defs
-      |> Sequence.map (fun def -> def.Stmt.rec_defined.Stmt.defined_head)
+      Stmt.defined_of_recs defs
+      |> Sequence.map Stmt.id_of_defined
       |> ID.Set.of_seq
     in
-    (* traverse term, finding calls to other definitions *)
-    let cg = CallGraph.create () in
-    (* set of IDs being explored *)
-    let explored = ID.Tbl.create 8 in
-    (* explore the graph of calls in [f_id args] *)
-    let rec aux f_id args t = match T.repr t with
-      | TI.App (g, l) ->
-          begin match T.repr g with
-            | TI.Const g_id when ID.Set.mem g_id ids ->
-                if ID.equal f_id g_id
-                then record_self_call f_id args l
-                else record_call f_id args g_id l
-            | _ -> aux' f_id args t
-          end
-      | _ -> aux' f_id args t
-    (* generic traversal *)
-    and aux' f_id args t =
-      U.iter () t ~bind:(fun () _ -> ()) ~f:(fun () t -> aux f_id args t)
-    (* [f args1] calls itself as [f args2] in its body.
-       preconditions: args1 is only variables *)
-    and record_self_call f_id args1 args2 =
-      List.iteri
-        (fun i a2 ->
-           let v = args1.(i) in
-           match T.repr a2 with
-             | TI.Var v' when Var.equal v v' -> () (* ok! *)
-             | _ ->
-                 (* if [a2] depends on some of the input variables [args1],
-                    then it potentially changes at every recursive step
-                    and cannot be specialized.
-                     XXX the "depends" is currently too difficult to track,
-                      because of local bindings (let, match), so we play it
-                      safe and ask for [a2] to be closed. *)
-                 if not (U.is_closed a2)
-                 then CallGraph.add_nonidentical cg f_id i)
-        args2
-    (* [f f_args] calls [g g_args] in its body, where [g]
-       belongs to the [defs] too. See how to update [cg] *)
-    and record_call f_id f_args g_id g_args =
-      assert (not (ID.equal f_id g_id));
-      List.iteri
-        (fun j arg' -> match T.repr arg' with
-           | TI.Var v' ->
-               (* register call in graph *)
-               begin match
-                   CCArray.find_idx
-                     (fun v -> Var.equal v v')
-                     f_args
-                 with
-                   | None ->
-                       () (* [arg'] is not a parameter of [f] *)
-                   | Some (i,_) ->
-                       (* [i]-th argument of [f] is the same
-                          as [j]-th argument of [g]. Now, if
-                          [f=g] but [i<>j], it means we could only
-                          specialize if arguments [i] and [j] are the
-                          same, which is too complicated. Therefore
-                          we require [f<>g or i=j], otherwise
-                          [i]-th argument of [f] is blocked *)
-                       CallGraph.add_call cg f_id i g_id j
-               end;
-           | _ -> ()
-        )
-        g_args;
-      (* explore [g_id] if [g != f] and [g] not already explored *)
-      if not (ID.equal f_id g_id) then (
-        let def' = match Stmt.find_rec_def ~defs g_id with
-          | None -> assert false
-          | Some d -> d
-        in
-        if not (ID.Tbl.mem explored g_id) then (
-          ID.Tbl.add explored g_id ();
-          ignore (aux_def g_id def');
-        )
-      );
-      ()
-    (* process an equation *)
-    and aux_def f_id def = match def.Stmt.rec_eqns with
-      | Stmt.Eqn_single (vars, rhs) ->
-          let args = Array.of_list vars in
-          aux f_id args rhs;
-          Array.length args
-    in
+    let cga = mk_cga_state ~env:(state.get_env ()) ids in
     (* process each definition *)
     List.iter
       (fun def ->
          let id = def.Stmt.rec_defined.Stmt.defined_head in
-         let n = aux_def id def in
-         (* now find which arguments can be specialized, and
-            register that in [state].
-            An argument can be specialized iff, in [cg], it cannot
-            reach [Non_identical] *)
-         let bv =
-           Array.init n
-             (fun i ->
-                not (CallGraph.can_reach_nonidentical cg (CallGraph.Arg(id,i))))
-         in
+         let n = record_calls_def cga id def in
+         let bv = bv_of_callgraph cga.cga_graph id n in
          ID.Tbl.replace state.specializable_args id bv;
          Utils.debugf ~section 3 "@[<2>can specialize `@[%a : %a@]` on:@ @[%a@]@]"
            (fun k->
@@ -322,10 +375,36 @@ module Make(T : TI.S) = struct
               k ID.print_full id P.print ty CCFormat.(array bool) bv);
       )
       defs;
-    Utils.debugf ~section 5 "@[<2>call graph: @[%a@]@]" (fun k->k CallGraph.print cg);
+    Utils.debugf ~section 5 "@[<2>call graph: @[%a@]@]"
+      (fun k->k CallGraph.print cga.cga_graph);
     ()
 
-  let free_vars_t t = U.to_seq_free_vars t |> VarSet.of_seq
+  (* similar to {!compute_specializable_args_def} *)
+  let compute_specializable_args_pred ~state (preds : (_,_,_ inv) Stmt.pred_def list) =
+    let ids =
+      Stmt.defined_of_preds preds
+      |> Sequence.map Stmt.id_of_defined
+      |> ID.Set.of_seq
+    in
+    let cga = mk_cga_state ~env:(state.get_env ()) ids in
+    (* process each definition *)
+    List.iter
+      (fun pred ->
+         let id = pred.Stmt.pred_defined.Stmt.defined_head in
+         let n = record_calls_pred cga id pred in
+         (* now find which arguments can be specialized, and
+            register that in [state]. *)
+         let bv = bv_of_callgraph cga.cga_graph id n in
+         ID.Tbl.replace state.specializable_args id bv;
+         Utils.debugf ~section 3 "@[<2>can specialize `@[%a : %a@]` on:@ @[%a@]@]"
+           (fun k->
+              let ty = pred.Stmt.pred_defined.Stmt.defined_ty in
+              k ID.print_full id P.print ty CCFormat.(array bool) bv);
+      )
+      preds;
+    Utils.debugf ~section 5 "@[<2>call graph: @[%a@]@]"
+      (fun k->k CallGraph.print cga.cga_graph);
+    ()
 
   (* can [i]-th argument of [f] be specialized? *)
   let can_specialize_ ~state f i =
@@ -496,15 +575,13 @@ module Make(T : TI.S) = struct
       let nf = find_new_fun_exn ~state d.Stmt.defined_head args in
       {Stmt.defined_head=nf.nf_id; defined_ty=nf.nf_ty; }
 
-  (* TODO: specialization of inductive predicates *)
-
   (* specialize equations w.r.t. the given set of arguments (with their position)
       to specialize a definition for a tuple of arguments, bind those arguments
       and compute SNF of body (no def expansion, only local β reductions)
       so as to inline *)
   let specialize_eqns
-  : state:inv state -> depth:int -> ID.t ->
-    (term,term,inv) Stmt.equations -> Arg.t -> (term,term,inv) Stmt.equations
+  : type a. state:a state -> depth:int -> ID.t ->
+    (term,term,a inv) Stmt.equations -> Arg.t -> (term,term,a inv) Stmt.equations
   = fun ~state ~depth id eqns args ->
     Utils.debugf ~section 2 "@[<2>specialize@ `@[%a@]`@ on @[%a@]@]"
       (fun k->k (PStmt.print_eqns id) eqns Arg.print args);
@@ -518,18 +595,16 @@ module Make(T : TI.S) = struct
         ) else (
           state.count <- state.count + 1;
           let subst, new_vars =
-            Utils.fold_mapi
-              (fun i subst v ->
+            Utils.fold_mapi vars ~x:Subst.empty
+              ~f:(fun i subst v ->
                  (* keep [v] if its index [i] is not in [args], otherwise
                     replace it with the corresponding term *)
                  try
                    let t = Arg.get i args in
-                   Var.Subst.add ~subst v t, None
+                   Subst.add ~subst v t, None
                  with Not_found ->
                    let v' = Var.fresh_copy v in
-                   Var.Subst.add ~subst v (U.var v'), Some v')
-              Var.Subst.empty
-              vars
+                   Subst.add ~subst v (U.var v'), Some v')
           in
           let new_vars = CCList.filter_map CCFun.id new_vars in
           (* specialize the body, using the given substitution *)
@@ -538,6 +613,63 @@ module Make(T : TI.S) = struct
           let new_rhs = Red.snf new_rhs in
           Stmt.Eqn_single (new_vars, new_rhs)
         )
+
+  let specialize_clause
+  : type a. state:a state -> depth:int -> ID.t ->
+    (term,term,a inv) Stmt.pred_clause -> Arg.t -> (term,term,a inv) Stmt.pred_clause
+  = fun ~state ~depth id c args ->
+    Utils.debugf ~section 2 "@[<2>specialize@ `@[%a@]`@ on @[%a@]@]"
+      (fun k->k PStmt.print_clause c Arg.print args);
+    let (Stmt.Pred_clause c) = c in
+    if Arg.is_empty args then (
+      (* still need to traverse the clause *)
+      let subst, vars = Utils.fold_map bind_var_ Subst.empty c.Stmt.clause_vars in
+      let spec_term = specialize_term ~state ~depth:(depth+1) subst in
+      let clause_guard = CCOpt.map spec_term c.Stmt.clause_guard in
+      let clause_concl = spec_term c.Stmt.clause_concl in
+      Stmt.Pred_clause {Stmt.clause_vars=vars; clause_guard; clause_concl}
+    ) else (
+      (* specialize. Since we are allowed to do it, it means that positions
+         of [args] designate arguments in the clause that are variables. *)
+      state.count <- state.count + 1;
+      let subst, clause_concl = match T.repr c.Stmt.clause_concl with
+        | TI.App (f, l) ->
+            assert (List.length l >= Arg.length args);
+            assert (match T.repr f with TI.Const f_id -> ID.equal f_id id | _ -> false);
+            (* now remove the specialized arguments *)
+            let subst, l' =
+              Utils.fold_mapi l ~x:Subst.empty
+                ~f:(fun i subst arg_i ->
+                   try
+                     let new_arg = Arg.get i args in
+                     let v = match T.repr arg_i with
+                       | TI.Var v -> v
+                       | _ -> assert false (* should not have been allowed to specialize *)
+                     in
+                     Subst.add ~subst v new_arg, None
+                   with Not_found ->
+                     (* keep argument *)
+                     subst, Some arg_i)
+            in
+            let l' = CCList.filter_map CCFun.id l' in
+            subst, U.app f l'
+        | _ -> assert false
+      in
+      (* if there is a guard, specialize it and β-reduce *)
+      let clause_guard =
+        CCOpt.map
+          (fun t ->
+             let t' = specialize_term ~state ~depth:(depth+1) subst t in
+             Red.snf t')
+          c.Stmt.clause_guard in
+      (* compute new set of free variables *)
+      let new_vars =
+        let v1 = U.free_vars clause_concl in
+        CCOpt.map_or ~default:v1 (fun t -> VarSet.union (U.free_vars t) v1) clause_guard
+        |> VarSet.to_list
+      in
+      Stmt.Pred_clause {Stmt.clause_guard; clause_concl; clause_vars=new_vars}
+    )
 
   let conf = {Traversal.
     direct_tydef=true;
@@ -549,8 +681,8 @@ module Make(T : TI.S) = struct
   (* recursive traversal of the statement graph *)
   module Trav = Traversal.Make(T)(Arg)
 
-  class ['c] traverse ?size ?depth_limit state = object (self)
-    inherit [inv, inv, 'c] Trav.traverse ~conf ?size ?depth_limit ()
+  class ['a, 'c] traverse ?size ?depth_limit state = object (self)
+    inherit ['a inv, 'a inv, 'c] Trav.traverse ~conf ?size ?depth_limit ()
 
     val st : _ = state
 
@@ -560,7 +692,7 @@ module Make(T : TI.S) = struct
       ()
 
     method do_term ~depth t =
-      specialize_term ~state:st ~depth Var.Subst.empty t
+      specialize_term ~state:st ~depth Subst.empty t
 
     (* specialize mutual recursive definitions *)
     method do_def ~depth def args =
@@ -578,8 +710,24 @@ module Make(T : TI.S) = struct
       } in
       [def']
 
-    (* see {!inv}: predicates should have been eliminated *)
-    method do_pred ~depth:_ _ _ _ _ = assert false
+    (* specialize (co)inductive predicates *)
+    method do_pred ~depth _wf _kind pred args =
+      Utils.debugf ~section 5 "@[<2>specialize pred `@[%a@]`@ on `@[%a@]`@]"
+        (fun k->k ID.print pred.Stmt.pred_defined.Stmt.defined_head Arg.print args);
+      assert (pred.Stmt.pred_tyvars=[]);
+      let id = pred.Stmt.pred_defined.Stmt.defined_head in
+      let clauses =
+        List.map
+          (fun c -> specialize_clause ~state:st ~depth id c args)
+          pred.Stmt.pred_clauses in
+      (* new (specialized) case *)
+      let pred_defined = specialize_defined ~state:st pred.Stmt.pred_defined args in
+      let pred' = {Stmt.
+        pred_defined;
+        pred_clauses=clauses;
+        pred_tyvars=[];
+      } in
+      [pred']
 
     (* should never happen, spec is fallthrough *)
     method do_spec ~depth:_ ~loc:_ _ _ _ = assert false
@@ -643,13 +791,7 @@ module Make(T : TI.S) = struct
 
     let app_const id l = U.app (U.const id) l
 
-    let fresh_var =
-      let n = ref 0 in
-      fun ty ->
-        let name = Printf.sprintf "v_ig_%d" !n in
-        incr n;
-        Var.make ~ty ~name
-
+    let fresh_var = Var.make_gen ~names:"v_ig_%d"
     let fresh_var_t ty = U.var (fresh_var ty)
 
     (* rename variables in [t] *)
@@ -765,7 +907,9 @@ module Make(T : TI.S) = struct
     Problem.iter_statements pb
       ~f:(fun stmt -> match Stmt.view stmt with
         | Stmt.Axiom (Stmt.Axiom_rec defs) ->
-            compute_specializable_args_ ~state defs
+            compute_specializable_args_def ~state defs
+        | Stmt.Pred (_,_,preds) ->
+            compute_specializable_args_pred ~state preds
         | _ -> ());
     (* then, transform *)
     Problem.iter_statements pb ~f:trav#do_stmt;

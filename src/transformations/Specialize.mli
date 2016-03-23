@@ -32,7 +32,7 @@ val name : string
 
 exception Error of string
 
-type inv = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Absent]>
+type 'a inv = <eqn:[`Single]; ty:[`Mono]; ind_preds:'a>
 
 module Make(T : TermInner.S) : sig
   type term = T.t
@@ -42,16 +42,16 @@ module Make(T : TermInner.S) : sig
   (** Used to decode *)
 
   val specialize_problem :
-    (T.t, T.t, inv) Problem.t ->
-    (T.t, T.t, inv) Problem.t * decode_state
+    (T.t, T.t, 'a inv) Problem.t ->
+    (T.t, T.t, 'a inv) Problem.t * decode_state
 
   val decode_term : decode_state -> T.t -> T.t
 
   val pipe :
     print:bool ->
     check:bool ->
-    ( (term, ty, inv) Problem.t,
-      (term, ty, inv) Problem.t,
+    ( (term, ty, 'a inv) Problem.t,
+      (term, ty, 'a inv) Problem.t,
       (term, ty) Model.t, (term, ty) Model.t
     ) Transform.t
 
@@ -59,8 +59,8 @@ module Make(T : TermInner.S) : sig
     decode:(decode_state -> 'b -> 'c) ->
     print:bool ->
     check:bool ->
-    ( (term, ty, inv) Problem.t,
-      (term, ty, inv) Problem.t,
+    ( (term, ty, 'a inv) Problem.t,
+      (term, ty, 'a inv) Problem.t,
       'b, 'c
     ) Transform.t
 end
