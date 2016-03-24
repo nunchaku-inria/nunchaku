@@ -12,7 +12,7 @@ exception Error of string
 
 let () = Printexc.register_printer
     (function
-      | Error msg -> Some (Utils.err_sprintf "@[<2>broken invariant:@ %s@]" msg)
+      | Error msg -> Some (Utils.err_sprintf "@[broken invariant:@ %s@]" msg)
       | _ -> None)
 
 let error_ msg = raise (Error msg)
