@@ -516,6 +516,9 @@ module Make(T : TI.S) = struct
   let rec specialize_term ~state ~depth subst t =
     match T.repr t with
     | TI.Var v -> Var.Subst.find_exn ~subst v
+    | TI.Const f_id ->
+        require_without_specializing ~state ~depth f_id;
+        t
     | TI.App (f,l) ->
         let l' = specialize_term_l ~state ~depth subst l in
         begin match T.repr f with
@@ -549,7 +552,6 @@ module Make(T : TI.S) = struct
             U.app (specialize_term ~state ~depth subst f) l'
         end
     | TI.TyBuiltin _
-    | TI.Const _
     | TI.Bind _
     | TI.Let _
     | TI.Builtin _
