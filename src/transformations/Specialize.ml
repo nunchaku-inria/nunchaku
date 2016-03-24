@@ -1010,33 +1010,88 @@ module Make(T : TI.S) = struct
 
   let is_spec_fun state id = ID.Tbl.mem state id
 
+  let find_spec state id =
+    try ID.Tbl.find state id
+    with Not_found -> errorf "could not find the decoding data for %a" ID.print id
+
+  (* each element [i, t] of [args] is inserted in position [i] in [l]
+     preconds:
+     - [l] is large enough for every index of [arg]
+     - [arg] is sorted by increasing index *)
+  let insert_pos l args =
+    let rec aux i l args = match l, args with
+      | [], [] -> []
+      | [], _::_ -> assert false
+      | _, [] -> l (* no more args *)
+      | _, (j,arg) :: args' when i=j ->
+          arg :: aux (i+1) l args' (* insert here *)
+      | (x :: l'), _ ->
+          x :: aux (i+1) l' args (* later *)
+    in
+    aux 0 l args
+
+  let pp_dsf out dsf =
+    fpf out "@[(spec %a on @[%a@])@]" ID.print dsf.dsf_spec_of Arg.print dsf.dsf_arg
+
   (* traverse the term and use reverse table to replace specialized
      functions by their definition *)
   let rec decode_term_rec (state:decode_state) subst t =
     match T.repr t with
       | TI.Const f_id when is_spec_fun state f_id ->
-          assert false (* TODO *)
+          let dsf = find_spec state f_id in
+          Utils.debugf ~section 5 "@[<2>decode `@[%a@]` from %a@]"
+            (fun k->k P.print t pp_dsf dsf);
+          (* must be a totally specialized function, over closed terms,
+             otherwise there would be closure parameters.
+             Just apply the old function to the set of its arguments.  *)
+          assert (Arg.vars dsf.dsf_arg = []);
+          let args = dsf.dsf_arg |> Arg.to_list |> List.map snd in
+          U.app (U.const dsf.dsf_spec_of) args
       | TI.App (f, l) ->
           begin match T.repr f with
             | TI.Const f_id when is_spec_fun state f_id ->
-                assert false
-                (* TODO: translate [l], insert arguments after substitution *)
+                let dsf = find_spec state f_id in
+                Utils.debugf ~section 5 "@[<2>decode `@[%a@]` from %a@]"
+                  (fun k->k P.print t pp_dsf dsf);
+                let closure_vars = Arg.vars dsf.dsf_arg in
+                (* decode arguments *)
+                let l = List.map (decode_term_rec state subst) l in
+                (* split the (prefix) arguments corresponding to closure
+                   variables from the non-specialized arguments *)
+                let closure_args, other_args =
+                  CCList.take_drop (List.length closure_vars) l
+                in
+                (* evaluate specialized args, using [closure_args].
+                   Example: we specialized over argument [f (succ x)],
+                   so [x \in closure_vars]; if we now find out that [x=41],
+                   the specialized argument we need to insert is [succ 41] *)
+                let subst = Subst.add_list ~subst:Subst.empty closure_vars closure_args in
+                let args =
+                  Arg.to_list dsf.dsf_arg
+                  |> List.map (fun (i,t) -> i, U.eval ~subst t)
+                in
+                (* glue together specialized args and other args *)
+                let new_args = insert_pos other_args args in
+                U.app (U.const dsf.dsf_spec_of) new_args
             | _ -> decode_term_rec' state subst t
           end
       | _ -> decode_term_rec' state subst t
-  
+
   and decode_term_rec' state subst t =
     U.map subst t ~bind:bind_var_ ~f:(decode_term_rec state)
 
   let decode_term state t = decode_term_rec state Subst.empty t
 
-  (* TODO: merge models of specialized functions (possibly with main function) *)
+  (* TODO:
+     -merge models of specialized functions (possibly with main function)
+     - remove specialized functions from the model
+  *)
   let decode_model state m =
     Model.map m ~term:(decode_term state) ~ty:CCFun.id
 
   (** {6 Integration in Transform} *)
 
-  let pipe_with ~decode ~print ~check =
+  let pipe_with ?on_decoded ~decode ~print ~check =
     let on_encoded =
       Utils.singleton_if print () ~f:(fun () ->
         let module P = Problem.Print(P)(P) in
@@ -1048,7 +1103,7 @@ module Make(T : TI.S) = struct
     in
     Transform.make1
       ~name
-      ~on_encoded
+      ~on_encoded ?on_decoded
       ~encode:(fun pb ->
         let pb, decode = specialize_problem pb in
         pb, decode)
@@ -1056,6 +1111,12 @@ module Make(T : TI.S) = struct
       ()
 
   let pipe ~print ~check =
-    pipe_with ~decode:decode_model ~print ~check
+    let on_decoded = if print
+      then
+        [Format.printf "@[<2>@{<Yellow>model after specialize@}:@ %a@]@."
+           (Model.print P.print P.print)]
+      else []
+    in
+    pipe_with ~on_decoded ~decode:decode_model ~print ~check
 end
 

@@ -56,6 +56,7 @@ module Make(T : TermInner.S) : sig
     ) Transform.t
 
   val pipe_with :
+    ?on_decoded:('c -> unit) list ->
     decode:(decode_state -> 'b -> 'c) ->
     print:bool ->
     check:bool ->
