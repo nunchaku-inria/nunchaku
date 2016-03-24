@@ -136,30 +136,45 @@ module Make(T : TI.S) = struct
     val mem : int -> t -> bool
     val get : int -> t -> T.t
     val to_list : t -> (int * T.t) list
+    val vars : t -> ty Var.t list
     val make : (int * T.t) list -> t
   end = struct
-    type t = (int * T.t) list (* sorted *)
+    type t = {
+      terms: (int * T.t) list; (* sorted *)
+      vars: ty Var.t list;
+    }
 
-    let empty = []
-    let is_empty = function [] -> true | _::_ -> false
-    let length = List.length
-    let make l = List.sort (fun (i,_)(j,_) -> Pervasives.compare i j) l
-    let mem = List.mem_assoc
-    let get = List.assoc
-    let to_list l = l
+    let empty = {terms=[]; vars=[]}
+    let is_empty = function {terms=[];_} -> true | _ -> false
+    let length a = List.length a.terms
+    let make l =
+      let terms = List.sort (fun (i,_)(j,_) -> Pervasives.compare i j) l in
+      let vars =
+        Sequence.of_list l
+        |> Sequence.map snd
+        |> Sequence.flat_map (U.to_seq_free_vars ?bound:None)
+        |> VarSet.of_seq |> VarSet.to_list
+      in
+      {terms; vars}
+    let mem i a = List.mem_assoc i a.terms
+    let get i a = List.assoc i a.terms
+    let to_list a = a.terms
+    let vars a = a.vars
 
-    let rec equal l1 l2 = match l1, l2 with
+    let rec equal_l l1 l2 = match l1, l2 with
       | [], [] -> true
       | [], _ | _, [] -> false
       | (i1,t1) :: l1', (i2,t2) :: l2' ->
-          i1 = i2 && U.equal t1 t2 && equal l1' l2'
+          i1 = i2 && U.equal t1 t2 && equal_l l1' l2'
 
-    let hash_fun = CCHash.(list (pair int U.hash_fun))
+    let equal a b = equal_l a.terms b.terms
+
+    let hash_fun a h = CCHash.(list (pair int U.hash_fun)) a.terms h
     let hash = CCHash.apply hash_fun
 
-    let print out l =
+    let print out a =
       let pp_pair out (i,t) = fpf out "@[%d -> %a@]" i P.print t in
-      fpf out "[@[<hv>%a@]]" (CCFormat.list ~start:"" ~stop:"" pp_pair) l
+      fpf out "[@[<hv>%a@]]" (CCFormat.list ~start:"" ~stop:"" pp_pair) a.terms
     let section = section
     let fail = errorf
   end
@@ -170,9 +185,13 @@ module Make(T : TI.S) = struct
     nf_specialized_from: ID.t; (* source *)
   }
 
-  type decode_state = (ID.t * Arg.t) ID.Tbl.t
-  (* `fun_id -> (fun_id * Arg.t)` to know that a function is
-     another function specialized on some arguments *)
+  (* decoding state for one function *)
+  type decode_state_fun = {
+    dsf_spec_of: ID.t; (* what was the original function, before spec? *)
+    dsf_arg: Arg.t; (* specialization tuple *)
+  }
+
+  type decode_state = decode_state_fun ID.Tbl.t
 
   type 'a state = {
     specializable_args : bool array ID.Tbl.t;
@@ -442,6 +461,8 @@ module Make(T : TI.S) = struct
     in
     is_fun_ty ty || is_bool_const_ a
 
+  (* FIXME: specialize on non-closed terms *)
+
   (* shall we specialize the application of [f : ty] to [l], and on which
       subset of [l]? *)
   let decide_if_specialize ~state f ty l =
@@ -472,8 +493,10 @@ module Make(T : TI.S) = struct
             (* type of specialized function. We cannot use [other_args]
                because [f] might be partially applied. *)
             let ty_remaining_args =
-              Utils.filteri (fun i _ -> not (Arg.mem i spec_args)) ty_args_l in
-            let new_ty = U.ty_arrow_l ty_remaining_args ty_ret in
+              Utils.filteri (fun i _ -> not (Arg.mem i spec_args)) ty_args_l
+            (* new arguments: types of free variables of [spec_args] *)
+            and ty_new_args = Arg.vars spec_args |> List.map Var.ty in
+            let new_ty = U.ty_arrow_l (ty_remaining_args @ ty_new_args) ty_ret in
             `Yes (spec_args, other_args, new_ty)
           )
       | _ -> `No
@@ -535,15 +558,18 @@ module Make(T : TI.S) = struct
                   (* [spec_args] is a subset of [l'] on which we are going to
                      specialize [f].
                      [f] is defined by [def] in the mutual block [defs].
-                     [other_args] are the remaining arguments, and [ty] is
-                      the type of the specialized version of [f] *)
+                     [other_args] are the remaining arguments, [ty] is
+                      the type of the specialized version of [f], and
+                     [closure_args] is the free variables of [spec_args]
+                     that need to be passed to the specialized function *)
                   Utils.debugf ~section 5
                     "@[<2>@{<Cyan>specialize@} `@[%a@]`@ on @[%a@]@ with new type `@[%a@]`@]"
                     (fun k->k P.print t Arg.print spec_args P.print new_ty);
                   let nf = get_new_fun ~state ~depth f_id new_ty spec_args in
+                  let closure_args = Arg.vars spec_args |> List.map U.var in
                   (* ensure that [nf] is defined *)
                   state.fun_ ~depth f_id spec_args;
-                  U.app (U.const nf.nf_id) other_args
+                  U.app (U.const nf.nf_id) (other_args @ closure_args)
             else (
               state.fun_ ~depth f_id Arg.empty;
               U.app f l'
@@ -581,7 +607,11 @@ module Make(T : TI.S) = struct
         } in
         (* add [nf] to the list of specialized versions of [f] *)
         ID.Tbl.add_list state.new_funs f (`New(args,nf));
-        ID.Tbl.replace state.decode nf.nf_id (f, args);
+        let dsf = {
+          dsf_spec_of=f;
+          dsf_arg=args;
+        } in
+        ID.Tbl.replace state.decode nf.nf_id dsf;
         state.fun_ ~depth:(depth+1) f args;
         nf
 
@@ -611,24 +641,33 @@ module Make(T : TI.S) = struct
           Stmt.Eqn_single (vars, rhs)
         ) else (
           state.count <- state.count + 1;
+          let subst = Subst.empty in
+          (* rename the "closure variables", i.e. the free variables in [args] *)
+          let subst, closure_vars =
+            Utils.fold_map bind_var_ subst (Arg.vars args) in
+          (* bind variables whose position corresponds to a member of [args] *)
           let subst, new_vars =
-            Utils.fold_mapi vars ~x:Subst.empty
+            Utils.fold_mapi vars ~x:subst
               ~f:(fun i subst v ->
                  (* keep [v] if its index [i] is not in [args], otherwise
-                    replace it with the corresponding term *)
+                    replace it with the corresponding term [t], after
+                    renaming of its free variables
+                 *)
                  try
-                   let t = Arg.get i args in
+                   let t = Arg.get i args |> U.eval ~subst in
                    Subst.add ~subst v t, None
                  with Not_found ->
                    let v' = Var.fresh_copy v in
                    Subst.add ~subst v (U.var v'), Some v')
           in
           let new_vars = CCList.filter_map CCFun.id new_vars in
-          (* specialize the body, using the given substitution *)
-          let new_rhs = specialize_term ~state ~depth:(depth+1) subst rhs in
-          (* evaluate body with the given substitution, reducing β-redexes, etc. *)
-          let new_rhs = Red.snf new_rhs in
-          Stmt.Eqn_single (new_vars, new_rhs)
+          (* specialize the body, using the given substitution;
+             then reduce newly introduced β-redexes, etc. *)
+          let new_rhs =
+            specialize_term ~state ~depth:(depth+1) subst rhs
+            |> Red.snf
+          in
+          Stmt.Eqn_single (new_vars @ closure_vars, new_rhs)
         )
 
   let specialize_clause
@@ -649,13 +688,17 @@ module Make(T : TI.S) = struct
       (* specialize. Since we are allowed to do it, it means that positions
          of [args] designate arguments in the clause that are variables. *)
       state.count <- state.count + 1;
+      let subst = Subst.empty in
+      (* rename variables captured in closure *)
+      let subst, closure_vars = Utils.fold_map bind_var_ subst (Arg.vars args) in
+      (* bind variables corresponding to specialized positions *)
       let subst, clause_concl = match T.repr c.Stmt.clause_concl with
         | TI.App (f, l) ->
             assert (List.length l >= Arg.length args);
             assert (match T.repr f with TI.Const f_id -> ID.equal f_id id | _ -> false);
             (* now remove the specialized arguments *)
             let subst, l' =
-              Utils.fold_mapi l ~x:Subst.empty
+              Utils.fold_mapi l ~x:subst
                 ~f:(fun i subst arg_i ->
                    try
                      let new_arg = Arg.get i args in
@@ -669,7 +712,7 @@ module Make(T : TI.S) = struct
                      subst, Some arg_i)
             in
             let l' = CCList.filter_map CCFun.id l' in
-            subst, U.app f l'
+            subst, U.app f (l' @ List.map U.var closure_vars)
         | _ -> assert false
       in
       (* if there is a guard, specialize it and β-reduce *)
@@ -678,7 +721,8 @@ module Make(T : TI.S) = struct
           (fun t ->
              let t' = specialize_term ~state ~depth:(depth+1) subst t in
              Red.snf t')
-          c.Stmt.clause_guard in
+          c.Stmt.clause_guard
+      in
       (* compute new set of free variables *)
       let new_vars =
         let v1 = U.free_vars clause_concl in
@@ -964,9 +1008,27 @@ module Make(T : TI.S) = struct
       Decoding the model, that is, glue together the valuations of specialized
       functions to obtain the model of the function *)
 
+  let is_spec_fun state id = ID.Tbl.mem state id
+
   (* traverse the term and use reverse table to replace specialized
      functions by their definition *)
-  let decode_term _state _t = _t (* TODO *)
+  let rec decode_term_rec (state:decode_state) subst t =
+    match T.repr t with
+      | TI.Const f_id when is_spec_fun state f_id ->
+          assert false (* TODO *)
+      | TI.App (f, l) ->
+          begin match T.repr f with
+            | TI.Const f_id when is_spec_fun state f_id ->
+                assert false
+                (* TODO: translate [l], insert arguments after substitution *)
+            | _ -> decode_term_rec' state subst t
+          end
+      | _ -> decode_term_rec' state subst t
+  
+  and decode_term_rec' state subst t =
+    U.map subst t ~bind:bind_var_ ~f:(decode_term_rec state)
+
+  let decode_term state t = decode_term_rec state Subst.empty t
 
   (* TODO: merge models of specialized functions (possibly with main function) *)
   let decode_model state m =
