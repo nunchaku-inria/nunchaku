@@ -204,6 +204,16 @@ module Make(T : TI.S) = struct
     new_decls=CCVector.create();
   }
 
+  (** {6 Analysis of Call Graph}
+
+      We need to know which arguments of a function are eligible for
+      specialization: those that will not require to unroll the function
+      over each recursive call. In other words, those are the arguments
+      that are given "as is" to the recursive calls.
+      Examples:
+      - [f] in [List.map f l]
+      - [R] in [transitive_closure R x y] *)
+
   (* state used for analysing the call graph of a block of mutual definitions *)
   type 'a call_graph_analyze_state = {
     cga_graph: CallGraph.t;
@@ -413,6 +423,11 @@ module Make(T : TI.S) = struct
       bv.(i)
     with Not_found ->
       errorf "could not find specializable_args[%a]" ID.print_full f
+
+  (** {6 Specialization}
+
+      The part where terms are traversed, and function calls specialized
+      (or not), according to heuristics and call graphs computed above. *)
 
   (* argument [a : ty] is good for specialization? *)
   let heuristic_should_specialize_arg a ty =
@@ -756,6 +771,15 @@ module Make(T : TI.S) = struct
         | _ -> ()
   end
 
+  (** {6 Generation of Congruence Axioms}
+
+      If [f x y] is specialized as [f1 x ≡ f x a], and [f2 y = f b y],
+      and [f] is also used unspecialized, we need to make sure that:
+      - [f1 b = f2 a = f a b]
+      - [f1 x = f x a]
+      - [f2 y = f b y]
+      this part generates the required axioms. *)
+
   (* graph of subsumption relations between various instances of the same
      function, forming a lattice ordered by generality ("f args1 < f args2"
      iff "\exists \sigma. args2\sigma = args1") *)
@@ -908,6 +932,8 @@ module Make(T : TI.S) = struct
          push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax));
      ()
 
+  (** {6 Main Encoding} *)
+
   let specialize_problem pb =
     let state = create_state() in
     let trav = new traverse state in
@@ -931,6 +957,11 @@ module Make(T : TI.S) = struct
       |> Problem.make ~meta:(Problem.metadata pb)  in
     pb', state.decode
 
+  (** {2 Decoding}
+
+      Decoding the model, that is, glue together the valuations of specialized
+      functions to obtain the model of the function *)
+
   (* traverse the term and use reverse table to replace specialized
      functions by their definition *)
   let decode_term _state _t = _t (* TODO *)
@@ -938,6 +969,8 @@ module Make(T : TI.S) = struct
   (* TODO: merge models of specialized functions (possibly with main function) *)
   let decode_model state m =
     Model.map m ~term:(decode_term state) ~ty:CCFun.id
+
+  (** {6 Integration in Transform} *)
 
   let pipe_with ~decode ~print ~check =
     let on_encoded =
