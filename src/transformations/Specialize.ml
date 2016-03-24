@@ -589,7 +589,7 @@ module Make(T : TI.S) = struct
     | Stmt.Eqn_single (vars, rhs) ->
         if Arg.is_empty args then (
           (* still need to traverse [rhs] *)
-          let subst, vars = Utils.fold_map bind_var_ Var.Subst.empty vars in
+          let subst, vars = Utils.fold_map bind_var_ Subst.empty vars in
           let rhs = specialize_term ~state ~depth:(depth+1) subst rhs in
           Stmt.Eqn_single (vars, rhs)
         ) else (
@@ -745,6 +745,15 @@ module Make(T : TI.S) = struct
 
     (* direct translation *)
     method do_ty_def ?loc:_ ~attrs:_ _ _ ~ty:_ _ = assert false
+
+    (* before processing a statement, analyse the call graph *)
+    method! before_do_stmt stmt =
+      match Stmt.view stmt with
+        | Stmt.Axiom (Stmt.Axiom_rec defs) ->
+            compute_specializable_args_def ~state defs
+        | Stmt.Pred (_,_,preds) ->
+            compute_specializable_args_pred ~state preds
+        | _ -> ()
   end
 
   (* graph of subsumption relations between various instances of the same
@@ -903,15 +912,7 @@ module Make(T : TI.S) = struct
     let state = create_state() in
     let trav = new traverse state in
     trav#setup;
-    (* first, compute specializable arguments *)
-    Problem.iter_statements pb
-      ~f:(fun stmt -> match Stmt.view stmt with
-        | Stmt.Axiom (Stmt.Axiom_rec defs) ->
-            compute_specializable_args_def ~state defs
-        | Stmt.Pred (_,_,preds) ->
-            compute_specializable_args_pred ~state preds
-        | _ -> ());
-    (* then, transform *)
+    (* transform *)
     Problem.iter_statements pb ~f:trav#do_stmt;
     (* add congruence axioms for specialized functions *)
     ID.Tbl.iter
