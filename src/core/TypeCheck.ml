@@ -12,7 +12,7 @@ exception Error of string
 
 let () = Printexc.register_printer
     (function
-      | Error msg -> Some (Utils.err_sprintf "broken invariant: %s" msg)
+      | Error msg -> Some (Utils.err_sprintf "@[<2>broken invariant:@ %s@]" msg)
       | _ -> None)
 
 let error_ msg = raise (Error msg)
@@ -137,7 +137,7 @@ module Make(T : TI.S) = struct
             check_is_ty ~env (VarSet.add v bound) body
         end
     | TI.Let (v,t',u) ->
-        let ty_t' = check ~env bound t in
+        let ty_t' = check ~env bound t' in
         let bound' = check_var ~env bound v in
         check_same_ (U.var v) t' (Var.ty v) ty_t';
         check ~env bound' u
@@ -208,10 +208,11 @@ module Make(T : TI.S) = struct
           let free_rhs = U.free_vars ~bound rhs in
           let diff = VarSet.diff free_rhs (VarSet.of_list vars) in
           if not (VarSet.is_empty diff)
-          then
+          then (
             let module PStmt = Statement.Print(P)(P) in
-            errorf_ "@[<2>in equation `@[%a@]`,@ variables @[%a@]@ occur in RHS-term but are not bound@]"
-              (PStmt.print_eqns id) eqn (VarSet.print Var.print_full) diff;
+            errorf_ "in equation `@[%a@]`,@ variables @[%a@]@ occur in RHS-term but are not bound"
+              (PStmt.print_eqns id) eqn (VarSet.print Var.print_full) diff
+          );
           let bound' = List.fold_left (check_var ~env) bound vars in
           check_is_prop ~env bound'
              (U.eq
