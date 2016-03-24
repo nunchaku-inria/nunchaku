@@ -496,7 +496,7 @@ module Make(T : TI.S) = struct
               Utils.filteri (fun i _ -> not (Arg.mem i spec_args)) ty_args_l
             (* new arguments: types of free variables of [spec_args] *)
             and ty_new_args = Arg.vars spec_args |> List.map Var.ty in
-            let new_ty = U.ty_arrow_l (ty_remaining_args @ ty_new_args) ty_ret in
+            let new_ty = U.ty_arrow_l (ty_new_args @ ty_remaining_args) ty_ret in
             `Yes (spec_args, other_args, new_ty)
           )
       | _ -> `No
@@ -569,7 +569,7 @@ module Make(T : TI.S) = struct
                   let closure_args = Arg.vars spec_args |> List.map U.var in
                   (* ensure that [nf] is defined *)
                   state.fun_ ~depth f_id spec_args;
-                  U.app (U.const nf.nf_id) (other_args @ closure_args)
+                  U.app (U.const nf.nf_id) (closure_args @ other_args)
             else (
               state.fun_ ~depth f_id Arg.empty;
               U.app f l'
@@ -667,7 +667,7 @@ module Make(T : TI.S) = struct
             specialize_term ~state ~depth:(depth+1) subst rhs
             |> Red.snf
           in
-          Stmt.Eqn_single (new_vars @ closure_vars, new_rhs)
+          Stmt.Eqn_single (closure_vars @ new_vars, new_rhs)
         )
 
   let specialize_clause
@@ -712,7 +712,7 @@ module Make(T : TI.S) = struct
                      subst, Some arg_i)
             in
             let l' = CCList.filter_map CCFun.id l' in
-            subst, U.app f (l' @ List.map U.var closure_vars)
+            subst, U.app f (List.map U.var closure_vars @ l')
         | _ -> assert false
       in
       (* if there is a guard, specialize it and β-reduce *)
