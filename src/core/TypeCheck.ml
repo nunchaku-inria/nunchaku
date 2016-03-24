@@ -53,7 +53,7 @@ module Make(T : TI.S) = struct
         P.print a P.print ty_a P.print b P.print ty_b;
     ()
 
-  module VarSet = Var.Set(T)
+  module VarSet = U.VarSet
 
   (* check invariants recursively, return type of term *)
   let rec check ~env bound t =
@@ -204,6 +204,14 @@ module Make(T : TI.S) = struct
   let check_eqns (type a) ~env ~bound id (eqn:(_,_,a) Stmt.equations) =
     match eqn with
       | Stmt.Eqn_single (vars, rhs) ->
+          (* check that [freevars rhs ⊆ vars] *)
+          let free_rhs = U.free_vars ~bound rhs in
+          let diff = VarSet.diff free_rhs (VarSet.of_list vars) in
+          if not (VarSet.is_empty diff)
+          then
+            let module PStmt = Statement.Print(P)(P) in
+            errorf_ "@[<2>in equation `@[%a@]`,@ variables @[%a@]@ occur in RHS-term but are not bound@]"
+              (PStmt.print_eqns id) eqn (VarSet.print Var.print_full) diff;
           let bound' = List.fold_left (check_var ~env) bound vars in
           check_is_prop ~env bound'
              (U.eq
