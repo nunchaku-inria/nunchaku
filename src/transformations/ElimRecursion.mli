@@ -7,6 +7,8 @@
     It encodes recursive functions as axioms, with a quantification over
     an uninterpreted abstraction type. *)
 
+open Nunchaku_core
+
 type inv1 = <ty:[`Mono]; eqn:[`App]; ind_preds:[`Absent]>
 type inv2 = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
 
@@ -43,6 +45,7 @@ module Make(T : TermInner.S) : sig
   (** Pipeline component *)
   val pipe :
     print:bool ->
+    check:bool ->
     ((term, term, inv1) Problem.t,
       (term, term, inv2) Problem.t,
       (term, term) Model.t,
@@ -54,6 +57,7 @@ module Make(T : TermInner.S) : sig
   val pipe_with :
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
+    check:bool ->
     ((term, term, inv1) Problem.t,
       (term, term, inv2) Problem.t,
       'c, 'd

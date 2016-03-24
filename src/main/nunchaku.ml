@@ -24,6 +24,7 @@ let list_outputs_ () = "(available choices: nunchaku tptp)"
 
 let input_ = ref I_nunchaku
 let output_ = ref O_nunchaku
+let check_all_ = ref false
 let polarize_rec_ = ref true
 let print_ = ref false
 let print_all_ = ref false
@@ -34,6 +35,8 @@ let print_mono_ = ref false
 let print_elim_match_ = ref false
 let print_elim_recursion_ = ref false
 let print_elim_hof_ = ref false
+let print_lambda_lift_ = ref false
+let print_specialize_ = ref false
 let print_elim_multi_eqns = ref false
 let print_polarize_ = ref false
 let print_unroll_ = ref false
@@ -97,6 +100,10 @@ let options =
   ; "--print-" ^ ElimRecursion.name
       , Arg.Set print_elim_recursion_
       , " print input after elimination of recursive functions"
+  ; "--print-" ^ Specialize.name
+      , Arg.Set print_specialize_
+      , " print input after specialization"
+  ; "--print-" ^ LambdaLift.name, Arg.Set print_lambda_lift_, " print after λ-lifting"
   ; "--print-" ^ ElimHOF.name
       , Arg.Set print_elim_hof_
       , " print input after elimination of higher-order/partial functions"
@@ -112,6 +119,8 @@ let options =
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
+  ; "--checks", Arg.Set check_all_, " check invariants after each pass"
+  ; "--no-checks", Arg.Clear check_all_, " disable checking invariants after each pass"
   ; "--color", call_with true CCFormat.set_color_default, " enable color"
   ; "--no-color", call_with false CCFormat.set_color_default, " disable color"
   ; "-nc", call_with false CCFormat.set_color_default, " disable color (alias to --no-color)"
@@ -172,6 +181,8 @@ module Pipes = struct
   module Step_ElimMultipleEqns = ElimMultipleEqns.Make(HO)
   module Step_ElimMatch = ElimPatternMatch.Make(HO)
   module Step_ElimPreds = ElimIndPreds.Make(HO)
+  module Step_Specialize = Specialize.Make(HO)
+  module Step_LambdaLift = LambdaLift.Make(HO)
   module Step_ElimHOF = ElimHOF.Make(HO)
   module Step_ElimRec = ElimRecursion.Make(HO)
   module Step_polarize = Polarize.Make(HO)
@@ -189,27 +200,30 @@ let make_model_pipeline () =
   let open Transform.Pipe in
   let open Pipes in
   (* setup pipeline *)
+  let check = !check_all_ in
   let pipe =
     Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
     Step_conv_ty.pipe () @@@
-    Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_types @@@
-    Step_mono.pipe ~print:(!print_mono_ || !print_all_) @@@
+    Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~check ~mode:`Sk_types @@@
+    Step_mono.pipe ~print:(!print_mono_ || !print_all_) ~check @@@
     Step_ElimMultipleEqns.pipe
-      ~decode:(fun x->x)
+      ~decode:(fun x->x) ~check
       ~print:(!print_elim_multi_eqns || !print_all_) @@@
+    Step_Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check @@@
     (if !enable_polarize_
       then Step_polarize.pipe ~print:(!print_polarize_ || !print_all_)
-        ~polarize_rec:!polarize_rec_
+        ~check ~polarize_rec:!polarize_rec_
       else Transform.nop ())
     @@@
-    Step_unroll.pipe ~print:(!print_unroll_ || !print_all_) @@@
-    Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all @@@
-    Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) @@@
-    Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) @@@
-    Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) @@@
-    Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) @@@
-    Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) @@@
-    Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) @@@
+    Step_unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+    Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+    Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Step_LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+    Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+    Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
+    Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
+    Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
+    Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
     Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
     Step_tofo.pipe () @@@
     id

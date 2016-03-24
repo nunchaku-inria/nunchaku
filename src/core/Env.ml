@@ -89,6 +89,11 @@ let def t = t.def
 let ty t = t.ty
 let decl_kind t = t.decl_kind
 
+let is_fun i = match i.def with Fun_spec _ | Fun_def _ -> true | _ -> false
+let is_rec i = match i.def with Fun_def _ -> true | _ -> false
+let is_data i = match i.def with Data _ -> true | _ -> false
+let is_cstor i = match i.def with Cstor _ -> true | _ -> false
+
 let create ?(size=64) () = {infos=ID.PerTbl.create size}
 
 let check_not_defined_ t ~id ~fail_msg =
@@ -248,3 +253,32 @@ let mem ~env ~id = ID.PerTbl.mem env.infos id
 let find_ty_exn ~env id = (find_exn ~env id).ty
 
 let find_ty ~env id = CCOpt.map (fun x -> x.ty) (find ~env id)
+
+module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) = struct
+  let fpf = Format.fprintf
+
+  let print_def out = function
+    | Fun_def _ -> CCFormat.string out "<rec>"
+    | Fun_spec _ -> CCFormat.string out "<spec>"
+    | Data _ -> CCFormat.string out "<data>"
+    | Cstor (_,_,_,{ Stmt.cstor_type; _ }) ->
+        fpf out "<cstor : `%a`>" Pty.print cstor_type
+    | Pred _ -> CCFormat.string out "<pred>"
+    | Copy_ty { Stmt.copy_of; _ } -> fpf out "<copy of `%a`>" Pty.print copy_of
+    | Copy_abstract { Stmt.copy_id; _ } ->
+        fpf out "<copy abstract of `%a`>" ID.print copy_id
+    | Copy_concretize { Stmt.copy_id; _ } ->
+        fpf out "<copy concretize of `%a`>" ID.print copy_id
+    | NoDef -> CCFormat.string out "<no def>"
+
+  let print_info out i =
+    fpf out "@[<2>@,: `@[%a@]`@ := %a%a@]" Pty.print i.ty
+      print_def i.def Stmt.print_attrs i.decl_attrs
+
+  let print out e =
+    let print_pair out (id,info) =
+      fpf out "@[%a %a@]" ID.print id print_info info
+    in
+    fpf out "@[<v>@[<v2>env {@,@[<v>%a@]@]@,}@]"
+      (CCFormat.seq ~start:"" ~stop:"" print_pair) (ID.PerTbl.to_seq e.infos)
+end

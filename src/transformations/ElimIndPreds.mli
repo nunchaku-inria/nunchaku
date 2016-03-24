@@ -7,6 +7,8 @@
   https://github.com/nunchaku-inria/nunchaku/issues/4
 *)
 
+open Nunchaku_core
+
 type inv1 = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Present]>
 type inv2 = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Absent]>
 
@@ -25,6 +27,7 @@ module Make(T : TermInner.S) : sig
   (** Pipeline component *)
   val pipe :
     print:bool ->
+    check:bool ->
     ((term, term, inv1) Problem.t,
       (term, term, inv2) Problem.t,
       (term,term) Model.t, (term,term) Model.t) Transform.t
@@ -35,6 +38,7 @@ module Make(T : TermInner.S) : sig
   val pipe_with :
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
+    check:bool ->
     ((term, term, inv1) Problem.t,
       (term, term, inv2) Problem.t,
       'c, 'd

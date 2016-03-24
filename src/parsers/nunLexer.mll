@@ -72,8 +72,6 @@ rule token = parse
   | "and" { AND }
   | "true" { LOGIC_TRUE }
   | "false" { LOGIC_FALSE }
-  | "choice" { CHOICE }
-  | "uchoice" { UCHOICE }
   | "pi" { PI }
   | "data" { DATA }
   | "codata" { CODATA }

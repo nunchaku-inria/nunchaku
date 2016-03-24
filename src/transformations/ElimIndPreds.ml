@@ -3,6 +3,8 @@
 
 (** {1 Eliminate Inductive Predicates} *)
 
+open Nunchaku_core
+
 module TI = TermInner
 module Stmt = Statement
 
@@ -215,12 +217,15 @@ module Make(T : TI.S) = struct
 
   let decode_model ~state:_ m = m
 
-  let pipe_with ~decode ~print =
-    let on_encoded = if print
-      then
+  let pipe_with ~decode ~print ~check =
+    let on_encoded =
+      Utils.singleton_if print () ~f:(fun () ->
         let module Ppb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after elimination of inductive predicates@}:@ %a@]@." Ppb.print]
-      else []
+        Format.printf "@[<v2>@{<Yellow>after elimination of inductive predicates@}:@ %a@]@." Ppb.print)
+      @
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.check_problem ?env:None)
     in
     Transform.make1
       ~name
@@ -229,6 +234,6 @@ module Make(T : TI.S) = struct
       ~decode
       ()
 
-  let pipe ~print =
-    pipe_with ~decode:(fun state m -> decode_model ~state m) ~print
+  let pipe ~print ~check =
+    pipe_with ~decode:(fun state m -> decode_model ~state m) ~print ~check
 end

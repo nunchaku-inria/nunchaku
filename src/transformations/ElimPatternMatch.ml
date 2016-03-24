@@ -3,6 +3,8 @@
 
 (** {1 Eliminate pattern-matching in Equations and Terms} *)
 
+open Nunchaku_core
+
 module Stmt = Statement
 module TI = TermMono
 module TyI = TypeMono
@@ -79,13 +81,17 @@ module Make(T : TermInner.S) = struct
       ~term:elim_match
       ~ty:elim_match
 
-  let pipe ~print =
+  let pipe ~print ~check =
     let open Transform in
     let on_encoded =
-      if print then
+      Utils.singleton_if print () ~f:(fun () ->
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after elimination of pattern-match@}: %a@]@." PPb.print]
-      else [] in
+        Format.printf "@[<v2>@{<Yellow>after elimination of pattern-match@}: %a@]@." PPb.print)
+      @
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.check_problem ?env:None)
+    in
     let encode pb = tr_problem pb, () in
     make1 ~name
       ~encode

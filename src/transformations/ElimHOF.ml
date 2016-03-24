@@ -3,6 +3,8 @@
 
 (** {1 Elimination of Higher-Order Functions} *)
 
+open Nunchaku_core
+
 module TI = TermInner
 module Stmt = Statement
 
@@ -216,7 +218,7 @@ module Make(T : TI.S) = struct
       - replace any term of the form [plus x y] with [app_H (plus x) y],
       - introduce [proto] function(s) [proto_H : H -> nat]
       - axiomatize extensionality for [H]
-      - axiomatize [proto_H]: TODO should be done in rec_elim? *)
+    *)
 
   type handle =
     | H_leaf of encoded_ty (* leaf type *)
@@ -600,8 +602,6 @@ module Make(T : TI.S) = struct
               let n = List.length l in
               let app_l = IntMap.find n fun_encoding.fe_stack in
               apply_app_funs_ app_l (f' :: l)
-          | TI.Builtin (`BFun (`Choice | `UChoice)) ->
-              Utils.not_implemented "(u)choice should be specialized"
           | _ -> aux' subst t
           end
       | TI.Bind _
@@ -718,8 +718,26 @@ module Make(T : TI.S) = struct
           let ty = encode_toplevel_ty ~state ty in
           [Stmt.mk_decl ~info id decl ty ~attrs]
     | Stmt.Axiom (Stmt.Axiom_rec l) -> elim_hof_rec ~state ~info l
+    | Stmt.TyDef (kind,l) ->
+        let l =
+          let open Stmt in
+          List.map
+            (fun tydef ->
+               { tydef with
+                 ty_cstors =
+                   ID.Map.map
+                     (fun c ->
+                        { c with
+                          cstor_args=List.map (encode_ty_ ~state) c.cstor_args;
+                          cstor_type=encode_toplevel_ty ~state c.cstor_type;
+                        })
+                     tydef.ty_cstors;
+                 ty_type = encode_toplevel_ty ~state tydef.ty_type;
+               })
+            l
+        in
+        [Stmt.mk_ty_def ~info kind l]
     | Stmt.Axiom _
-    | Stmt.TyDef (_,_)
     | Stmt.Pred (_,_,_)
     | Stmt.Copy _
     | Stmt.Goal _ ->
@@ -965,12 +983,15 @@ module Make(T : TI.S) = struct
 
   (** {2 Pipe} *)
 
-  let pipe_with ?on_decoded ~decode ~print =
-    let on_encoded = if print
-      then
+  let pipe_with ?on_decoded ~decode ~print ~check =
+    let on_encoded =
+      Utils.singleton_if print () ~f:(fun () ->
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after elimination of HOF@}: %a@]@." PPb.print]
-      else []
+        Format.printf "@[<v2>@{<Yellow>after elimination of HOF@}: %a@]@." PPb.print)
+      @
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.check_problem ?env:None)
     in
     Transform.make1
       ?on_decoded
@@ -983,7 +1004,7 @@ module Make(T : TI.S) = struct
       ~decode
       ()
 
-  let pipe ~print =
+  let pipe ~print ~check =
     let on_decoded = if print
       then
         [Format.printf "@[<2>@{<Yellow>model after elim_HOF@}:@ %a@]@."
@@ -991,7 +1012,7 @@ module Make(T : TI.S) = struct
       else []
     in
     let decode state m = decode_model ~state m in
-    pipe_with ~on_decoded ~print ~decode
+    pipe_with ~on_decoded ~print ~decode ~check
 end
 
 

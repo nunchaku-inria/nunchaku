@@ -44,6 +44,10 @@ val update_ty : 'a t -> f:('a -> 'b) -> 'b t
 val fresh_update_ty : 'a t -> f:('a -> 'b) -> 'b t
 (** Update the type, and make a new variable with it with a fresh ID. *)
 
+val make_gen : names:(int -> string, unit, string) format -> 'a -> 'a t
+(** [make_gen ~names] creates a new generator of fresh variables
+    whose names follow the naming scheme [names] (a formatter with one "%d") *)
+
 val print : _ t CCFormat.printer
 val to_string : _ t -> string
 

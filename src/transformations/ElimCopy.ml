@@ -3,6 +3,8 @@
 
 (** {1 Eliminate Copy Types} *)
 
+open Nunchaku_core
+
 module TI = TermInner
 module Stmt = Statement
 
@@ -81,12 +83,15 @@ module Make(T : TI.S) = struct
           let f = rewrite_term ~env Var.Subst.empty in
           [Stmt.map ~term:f ~ty:f st])
 
-  let pipe ~print =
-    let on_encoded = if print
-      then
+  let pipe ~print ~check =
+    let on_encoded =
+      Utils.singleton_if print () ~f:(fun () ->
         let module Ppb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after elimination of copy types@}:@ %a@]@." Ppb.print]
-      else []
+        Format.printf "@[<v2>@{<Yellow>after elimination of copy types@}:@ %a@]@." Ppb.print)
+      @
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.check_problem ?env:None)
     in
     Transform.make1
       ~name

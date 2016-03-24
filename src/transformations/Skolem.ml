@@ -3,6 +3,8 @@
 
 (** {1 Skolemization} *)
 
+open Nunchaku_core
+
 module ID = ID
 module TI = TermInner
 module Pol = Polarity
@@ -49,6 +51,7 @@ module type S = sig
   val pipe :
     mode:mode ->
     print:bool ->
+    check:bool ->
     ((T.t,T.t,<eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t,
       (T.t,T.t,'inv) Problem.t,
       (T.t,T.t) Model.t, (T.t,T.t) Model.t
@@ -56,12 +59,15 @@ module type S = sig
 
   (** Similar to {!pipe} but with a generic decode function.
       @param mode determines which variables are skolemized
+      @param print if true, prints problem after skolemization
+      @param check if true, check the invariants on the result
       @param decode is given [find_id_def], which maps Skolemized
         constants to the formula they define *)
   val pipe_with :
     mode:mode ->
     decode:(state -> 'c -> 'd) ->
     print:bool ->
+    check:bool ->
     ((T.t,T.t, <eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t,
       (T.t,T.t,'inv) Problem.t, 'c, 'd
     ) Transform.t
@@ -264,7 +270,14 @@ module Make(T : TI.S)
   let decode_model ~state m =
     Model.filter_map m
       ~finite_types:(fun (ty,dom) -> Some (ty,dom))
-      ~funs:(fun (t,vars,body,k) -> Some (t,vars,body,k))
+      ~funs:(fun ((t,vars,body,k) as tup) ->
+        match T.repr t with
+          | TI.Const id ->
+              begin match find_id_def ~state id with
+                | None -> Some tup
+                | Some t' -> Some (t',vars,body,k)
+              end
+          | _ -> Some tup)
       ~constants:(fun (t,u,k) ->
           match T.repr t with
           | TI.Const id ->
@@ -275,12 +288,17 @@ module Make(T : TI.S)
           | _ -> Some (t, u, k)
         )
 
-  let pipe_with ~mode ~decode ~print =
-    let on_encoded = if print
-      then
-        let module Ppb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after Skolemization@}: %a@]@." Ppb.print]
-      else []
+  let pipe_with ~mode ~decode ~print ~check =
+    let on_encoded =
+      Utils.singleton_if print ()
+        ~f:(fun () ->
+          let module Ppb = Problem.Print(P)(P) in
+          Format.printf "@[<v2>@{<Yellow>after Skolemization@}: %a@]@." Ppb.print)
+      @
+      Utils.singleton_if check ()
+        ~f:(fun () ->
+           let module C = TypeCheck.Make(T) in
+           C.check_problem ?env:None)
     in
     Transform.make1
       ~name
@@ -294,6 +312,6 @@ module Make(T : TI.S)
       ~decode
       ()
 
-  let pipe ~mode ~print =
-    pipe_with ~mode ~decode:(fun state m -> decode_model ~state m) ~print
+  let pipe ~mode ~print ~check =
+    pipe_with ~check ~mode ~decode:(fun state m -> decode_model ~state m) ~print
 end

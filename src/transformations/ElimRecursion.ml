@@ -1,6 +1,8 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
+open Nunchaku_core
+
 module ID = ID
 module Var = Var
 module TI = TermInner
@@ -240,7 +242,7 @@ module Make(T : TI.S) = struct
               (* generic treatment *)
               tr_term_rec_' ~state subst t
         end
-    | TI.Builtin (`True | `False | `BFun (`Choice | `UChoice)
+    | TI.Builtin (`True | `False
         | `And | `Or | `Not | `Imply | `DataSelect _ | `DataTest _) ->
           t (* partially applied, or constant *)
     | TI.Builtin (`Undefined _ as b) ->
@@ -667,12 +669,15 @@ module Make(T : TI.S) = struct
 
   (** {6 Pipe} *)
 
-  let pipe_with ~decode ~print =
-    let on_encoded = if print
-      then
+  let pipe_with ~decode ~print ~check =
+    let on_encoded =
+      Utils.singleton_if print () ~f:(fun () ->
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after elimination of recursion@}: %a@]@." PPb.print]
-      else []
+        Format.printf "@[<v2>@{<Yellow>after elimination of recursion@}: %a@]@." PPb.print)
+      @
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.check_problem ?env:None)
     in
     Transform.make1
       ~on_encoded
@@ -684,7 +689,7 @@ module Make(T : TI.S) = struct
       ~decode
       ()
 
-  let pipe ~print =
+  let pipe ~print ~check =
     let decode state m = decode_model ~state m in
-    pipe_with ~print ~decode
+    pipe_with ~print ~decode ~check
 end

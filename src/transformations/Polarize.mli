@@ -7,6 +7,8 @@
   or (co)inductive specifications) depending on the call-site polarity.
 *)
 
+open Nunchaku_core
+
 type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds:[`Present]>
 
 val name : string
@@ -30,6 +32,7 @@ module Make(T : TermInner.S) : sig
   val pipe :
     polarize_rec:bool ->
     print:bool ->
+    check:bool ->
     ((term, term, 'a inv) Problem.t,
       (term, term, 'a inv) Problem.t,
       (term, term) Model.t, (term, term) Model.t) Transform.t
@@ -41,6 +44,7 @@ module Make(T : TermInner.S) : sig
     decode:(decode_state -> 'c -> 'd) ->
     polarize_rec:bool ->
     print:bool ->
+    check:bool ->
     ((term, term, 'a inv) Problem.t,
       (term, term, 'a inv) Problem.t,
       'c, 'd

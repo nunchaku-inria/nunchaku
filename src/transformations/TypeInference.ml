@@ -3,6 +3,8 @@
 
 (** {1 Scoping and Type Inference} *)
 
+open Nunchaku_core
+
 module A = UntypedAST
 module E = CCError
 module ID = ID
@@ -242,6 +244,7 @@ module Convert(Term : TermTyped.S) = struct
           let var = Var.make ~ty:U.ty_type ~name:v in
           let env = TyEnv.add_var ~env v ~var in
           U.ty_forall ?loc var (convert_ty_ ~stack ~env t)
+      | A.Asserting _ -> ill_formed ?loc "no `asserting` in types"
       | A.Mu _ -> ill_formed ?loc "no mu-binders in types"
       | A.Fun (_,_) -> ill_formed ?loc "no functions in types"
       | A.Let (_,_,_) -> ill_formed ?loc "no let in types"
@@ -355,11 +358,6 @@ module Convert(Term : TermTyped.S) = struct
     in
     if missing=[] then `Ok else `Missing missing
 
-  (* type of choice operators *)
-  let ty_choice_ =
-    let a = Var.make ~ty:U.ty_type ~name:"a" in
-    U.(ty_forall a (ty_arrow (ty_arrow (var a) prop) (var a)))
-
   (* convert a parsed term into a typed/scoped term *)
   let rec convert_term_ ~stack ~env t =
     let loc = get_loc_ ~stack t in
@@ -380,8 +378,6 @@ module Convert(Term : TermTyped.S) = struct
           | `Not -> `Not, prop1
           | `True -> `True, prop
           | `False -> `False, prop
-          | `Choice -> `BFun `Choice, ty_choice_
-          | `UChoice -> `BFun `UChoice, ty_choice_
           | `Undefined _ | `Eq | `Equiv -> assert false (* dealt with earlier *)
         in
         U.builtin ?loc ~ty b
@@ -528,6 +524,13 @@ module Convert(Term : TermTyped.S) = struct
         unify_in_ctx_ ~stack (U.ty_exn a) prop;
         unify_in_ctx_ ~stack (U.ty_exn b) (U.ty_exn c);
         U.ite ?loc a b c
+    | A.Asserting (_, []) -> assert false
+    | A.Asserting (t, l) ->
+        let t = convert_term_ ~stack ~env t in
+        let l = List.map (convert_term_ ~stack ~env) l in
+        (* [l] is composed of propositions *)
+        List.iter (fun p -> unify_in_ctx_ ~stack (U.ty_exn p) prop) l;
+        U.asserting ?loc t l
     | A.Var `Wildcard ->
         (* TODO: generate fresh variable with new type?
             but then we need to quantify over it! *)
@@ -549,8 +552,9 @@ module Convert(Term : TermTyped.S) = struct
     | TyI.Const _, _
     | TyI.Builtin _,_ ->
         type_errorf ~stack
-          "@[term of type @[%a@] cannot accept argument,@ but was given @[<hv>%a@]@]"
-          P.print ty (CCFormat.list A.print_term) l
+          "@[<2>term of type @[%a@] cannot accept argument(s),@ \
+            but was given [@[<hv>%a@]]@]"
+          P.print ty (CCFormat.list ~start:"" ~stop:"" A.print_term) l
     | TyI.Meta var, b :: l' ->
         (* must be an arrow type. We do not infer forall types *)
         assert (MetaVar.can_bind var);
@@ -1190,7 +1194,7 @@ module Convert(Term : TermTyped.S) = struct
     let name = st.A.stmt_name in
     let loc = st.A.stmt_loc in
     let info = {Stmt.name; loc; } in
-    Utils.debugf ~section 2 "@[<hv2>infer types in@ %a@ at %a@]"
+    Utils.debugf ~section 2 "@[<hv2>infer types in@ `@[%a@]`@ at %a@]"
       (fun k-> k A.print_statement st Loc.print_opt loc);
     let st', env = match st.A.stmt_value with
     | A.Include _ ->
@@ -1257,7 +1261,7 @@ module Convert(Term : TermTyped.S) = struct
         check_prenex_types_ ?loc t;
         Stmt.goal ~info t, env
     in
-    Utils.debugf ~section 2 "@[<2>checked statement@ %a@]"
+    Utils.debugf ~section 2 "@[<2>checked statement@ `@[%a@]`@]"
       (fun k-> k PStmt.print st');
     st', env
 
@@ -1265,10 +1269,25 @@ module Convert(Term : TermTyped.S) = struct
     try E.return (convert_statement_exn ~env st)
     with e -> E.of_exn e
 
+  let read_prelude ~env =
+    let st, l =
+      Utils.fold_map
+        (fun env st ->
+           let st, env = convert_statement_exn ~env st in
+           TyEnv.reset_metas ~env;
+           env, st)
+        env Prelude.decls
+    in
+    l, st
+
   type problem = (term, term, stmt_invariant) Problem.t
 
   let convert_problem_exn ~env l =
     let res = CCVector.create() in
+    (* read prelude *)
+    let prelude, env = read_prelude ~env in
+    CCVector.append_list res prelude;
+    (* read statements *)
     let env = CCVector.fold
       (fun env st ->
         let st, env = convert_statement_exn ~env st in
@@ -1294,12 +1313,12 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
   let pipe_with ~decode ~print =
     (* type inference *)
     let module Conv = Convert(T1) in
-    let module P = TI.Print(T1) in
-    let module PPb = Problem.Print(P)(P) in
     let on_encoded =
-      if print
-      then [Format.printf "@[<v2>@{<Yellow>after type inference@}: %a@]@." PPb.print]
-      else []
+      Utils.singleton_if print ()
+        ~f:(fun () ->
+          let module P = TI.Print(T1) in
+          let module PPb = Problem.Print(P)(P) in
+          Format.printf "@[<v2>@{<Yellow>after type inference@}: %a@]@." PPb.print)
     in
     Transform.make1
       ~on_encoded

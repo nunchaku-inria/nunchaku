@@ -130,7 +130,6 @@ end = struct
           | `True -> U.builtin `True
           | `False -> U.builtin `False
           | `Imply -> U.builtin `Imply
-          | `Choice | `UChoice -> error_ t "cannot convert (u)choice"
           | `Undefined _ -> error_ t "cannot convert `undefined`"
           | `Eq | `Equiv ->
               error_ t "unapplied equality"
@@ -169,6 +168,10 @@ end = struct
       | A.TyForall (v,t) ->
           enter_var_ ~ty:(A.builtin `Type) v
             (fun v -> U.ty_forall v (aux t))
+      | A.Asserting (t, l) ->
+          let t = aux t in
+          let l = List.map aux l in
+          U.asserting t l
 
     (* enter scope of [s] *)
     and enter_var_ s ~ty f =

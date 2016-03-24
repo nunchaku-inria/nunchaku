@@ -14,6 +14,8 @@
   which is a decision tree understandable by CVC4
 *)
 
+open Nunchaku_core
+
 val name : string
 
 module Make(T : TermInner.S) : sig
@@ -27,6 +29,7 @@ module Make(T : TermInner.S) : sig
 
   val pipe :
     print:bool ->
+    check:bool ->
       ((term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t,
        (term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t,
       'c, 'c

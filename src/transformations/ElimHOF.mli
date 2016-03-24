@@ -5,6 +5,8 @@
 
     Encode partial applications and higher-order applications *)
 
+open Nunchaku_core
+
 val name : string
 
 type inv1 = <ty:[`Mono]; eqn:[`Single]; ind_preds: [`Absent]>
@@ -26,6 +28,7 @@ module Make(T : TermInner.S) : sig
   (** Pipeline component *)
   val pipe :
     print:bool ->
+    check:bool ->
     ((term, term, inv1) Problem.t,
      (term, term, inv2) Problem.t,
       (term, term) Model.t,
@@ -38,6 +41,7 @@ module Make(T : TermInner.S) : sig
     ?on_decoded:(('d -> unit) list) ->
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
+    check:bool ->
     ((term, term, inv1) Problem.t,
      (term, term, inv2) Problem.t,
       'c, 'd

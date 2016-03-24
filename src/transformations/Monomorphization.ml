@@ -3,6 +3,8 @@
 
 (** {1 Monomorphization} *)
 
+open Nunchaku_core
+
 module ID = ID
 module Var = Var
 module TI = TermInner
@@ -83,6 +85,12 @@ module Make(T : TI.S) = struct
 
     let equal tup1 tup2 =
       CCList.equal ty_ground_eq_ tup1.args tup2.args
+
+    (* [app_poly_ty ty arg] applies polymorphic type [ty] to type parameters [arg] *)
+    let app_poly_ty ty arg =
+      let tys = List.map (fun _ -> U.ty_type) arg.m_args in
+      let ty, subst = U.ty_apply_full ty ~terms:arg.m_args ~tys in
+      U.eval ~subst ty, subst
 
     let print out tup =
       let pp_mangled out = function
@@ -311,7 +319,7 @@ module Make(T : TI.S) = struct
   end)
 
   let mono_defined ~state ~local_state d tup =
-    let ty = U.ty_apply d.Stmt.defined_ty (ArgTuple.m_args tup) in
+    let ty, _ = ArgTuple.app_poly_ty d.Stmt.defined_ty tup in
     let defined_ty = mono_type ~state ~local_state ty in
     let defined_head, _ = mangle_ ~state d.Stmt.defined_head (ArgTuple.m_args tup) in
     {Stmt.defined_head; defined_ty; }
@@ -412,8 +420,8 @@ module Make(T : TI.S) = struct
           | None -> id
           | Some x -> x
         in
-        let ty = U.ty_apply env_info.Env.ty (ArgTuple.args tup) in
-        let new_ty = mono_type ~state:st ~local_state:{depth=0; subst=Subst.empty} ty in
+        let ty, subst = ArgTuple.app_poly_ty env_info.Env.ty tup in
+        let new_ty = mono_type ~state:st ~local_state:{depth=0; subst} ty in
         self#declare_sym ~attrs id tup ~as_:new_id ~ty:new_ty
       )
 
@@ -469,10 +477,8 @@ module Make(T : TI.S) = struct
           let id', mangled = mangle_ ~state:st c.Stmt.cstor_name (ArgTuple.m_args tup) in
           let tup' = {tup with ArgTuple.mangled; } in
           (* apply, then convert type. Arity should match. *)
-          let ty', subst =
-            U.ty_apply_full c.Stmt.cstor_type (ArgTuple.args tup')
-          in
-          Utils.debugf ~section 5 "@[<hv2>monomorphize cstor %a@ : @[%a@]@ with @[%a@]@]"
+          let ty', subst = ArgTuple.app_poly_ty c.Stmt.cstor_type tup' in
+          Utils.debugf ~section 5 "@[<hv2>monomorphize cstor `@[%a@ : %a@]`@ with @[%a@]@]"
             (fun k->k ID.print id' P.print ty' (Subst.print P.print) subst);
           (* convert type and substitute in it *)
           let local_state = {depth=depth+1; subst} in
@@ -509,12 +515,14 @@ module Make(T : TI.S) = struct
         let abstract', _ =
           mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
         let ty_abstract' =
-          U.ty_apply c.Stmt.copy_abstract_ty (ArgTuple.m_args tup)
+          ArgTuple.app_poly_ty c.Stmt.copy_abstract_ty tup
+          |> fst
           |> mono_type ~state:st ~local_state in
         let concretize', _ =
           mangle_ ~state:st c.Stmt.copy_concretize (ArgTuple.m_args tup) in
         let ty_concretize' =
-          U.ty_apply c.Stmt.copy_concretize_ty (ArgTuple.m_args tup)
+          ArgTuple.app_poly_ty c.Stmt.copy_concretize_ty tup
+          |> fst
           |> mono_type ~state:st ~local_state in
         let ty' = U.ty_type in
         (* create new copy type *)
@@ -615,12 +623,17 @@ module Make(T : TI.S) = struct
   let unmangle_model ~state =
     Model.map ~term:(unmangle_term ~state) ~ty:(unmangle_term ~state)
 
-  let pipe_with ~decode ~print =
-    let on_encoded = if print
-      then
-        let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after mono@}: %a@]@." PPb.print]
-      else []
+  let pipe_with ~decode ~print ~check =
+    let on_encoded =
+      Utils.singleton_if print ()
+        ~f:(fun () ->
+          let module PPb = Problem.Print(P)(P) in
+          Format.printf "@[<v2>@{<Yellow>after mono@}: %a@]@." PPb.print)
+      @
+      Utils.singleton_if check ()
+        ~f:(fun () ->
+          let module C = TypeCheck.Make(T) in
+          C.check_problem ?env:None)
     in
     Transform.make1
       ~on_encoded
@@ -633,7 +646,7 @@ module Make(T : TI.S) = struct
       ~decode
       ()
 
-  let pipe ~print =
+  let pipe ~print ~check =
     let decode state = unmangle_model ~state in
-    pipe_with ~print ~decode
+    pipe_with ~print ~decode ~check
 end

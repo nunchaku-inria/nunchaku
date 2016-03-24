@@ -11,7 +11,7 @@ type id = ID.t
 type loc = Location.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-type ('t, 'ty, 'inv) def =
+type (+'t, +'ty, 'inv) def =
   | Fun_def of
       ('t, 'ty, 'inv) Statement.rec_defs *
       ('t, 'ty, 'inv) Statement.rec_def *
@@ -54,7 +54,7 @@ type ('t, 'ty, 'inv) def =
       (** Undefined symbol *)
 
 (** All information on a given symbol *)
-type ('t, 'ty, 'inv) info = {
+type (+'t, +'ty, 'inv) info = {
   ty: 'ty; (** type of symbol *)
   decl_kind: Statement.decl;
   decl_attrs: Statement.decl_attr list;
@@ -78,6 +78,11 @@ val loc: _ info -> loc option
 val def: ('t,'ty,'inv) info -> ('t,'ty,'inv) def
 val ty: (_,'ty,_) info -> 'ty
 val decl_kind: _ info -> Statement.decl
+
+val is_fun : _ info -> bool (** spec/rec *)
+val is_rec : _ info -> bool (** rec *)
+val is_data : _ info -> bool
+val is_cstor : _ info -> bool
 
 val declare:
   ?loc:loc ->
@@ -158,3 +163,7 @@ val find_ty : env:('t, 'ty, _) t -> id -> 'ty option
 
 val mem : env:_ t -> id:id -> bool
 (** @return true if the symbol is at least declared *)
+
+module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
+  val print : (Pt.t, Pty.t, _) t printer
+end

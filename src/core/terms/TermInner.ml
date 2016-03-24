@@ -55,11 +55,6 @@ module Builtin = struct
       asserting = List.map f g.asserting;
     }
 
-  type builtin_fun =
-    [ `Choice (** Choice operator, "indefinite description operator", or ε *)
-    | `UChoice (** Unique choice, "definite description operator", or Hilbert's ι *)
-    ]
-
   type 'a t =
     [ `True
     | `False
@@ -70,7 +65,6 @@ module Builtin = struct
     | `Equiv of 'a * 'a
     | `Ite of 'a * 'a * 'a
     | `Eq of 'a * 'a
-    | `BFun of builtin_fun
     | `DataTest of id (** Test whether [t : tau] starts with given constructor *)
     | `DataSelect of id * int (** Select n-th argument of given constructor *)
     | `Undefined of id * 'a (** Undefined case. argument=the undefined term *)
@@ -93,8 +87,6 @@ module Builtin = struct
     | `Ite (a,b,c) ->
         fpf out "@[<hv>@[<2>if@ %a@]@ @[<2>then@ %a@]@ @[<2>else@ %a@]@]"
           pterm a pterm b pterm c
-    | `BFun `Choice -> CCFormat.string out "ε"
-    | `BFun `UChoice -> CCFormat.string out "ι"
     | `DataTest id -> fpf out "is-%s" (ID.name id)
     | `DataSelect (id, n) ->
         fpf out "select-%s-%d" (ID.name id) n
@@ -126,7 +118,6 @@ module Builtin = struct
     | `Eq(a1,b1), `Eq (a2,b2) -> eqterm a1 a2 && eqterm b1 b2
     | `DataTest id, `DataTest id' -> ID.equal id id'
     | `DataSelect (id, n), `DataSelect (id', n') -> n=n' && ID.equal id id'
-    | `BFun f1, `BFun f2 -> f1=f2
     | `Undefined (a,t1), `Undefined (b,t2) -> ID.equal a b && eqterm t1 t2
     | `Guard (t1, g1), `Guard (t2, g2) ->
         List.length g1.assuming = List.length g2.assuming
@@ -134,7 +125,7 @@ module Builtin = struct
         && eqterm t1 t2
         && List.for_all2 eqterm g1.assuming g2.assuming
         && List.for_all2 eqterm g1.asserting g2.asserting
-    | `Guard _, _ | `BFun _, _
+    | `Guard _, _
     | `True, _ | `False, _ | `Ite _, _ | `Not, _
     | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> false
@@ -149,7 +140,6 @@ module Builtin = struct
     | `Eq (a,b) -> `Eq (f a, f b)
     | `Equiv (a,b) -> `Equiv (f a, f b)
     | `DataTest id -> `DataTest id
-    | `BFun f -> `BFun f
     | `Or -> `Or
     | `Not -> `Not
     | `DataSelect (c,n) -> `DataSelect (c,n)
@@ -167,7 +157,6 @@ module Builtin = struct
     | `Or
     | `DataTest _
     | `DataSelect _
-    | `BFun _
     | `Not -> acc
     | `Ite (a,b,c) -> f (f (f acc a) b) c
     | `Eq (a,b)
@@ -188,7 +177,6 @@ module Builtin = struct
     | `False, `False
     | `Not, `Not
     | `Or, `Or -> acc
-    | `BFun f1, `BFun f2 -> if f1=f2 then acc else fail()
     | `DataTest i1, `DataTest i2 -> if ID.equal i1 i2 then acc else fail()
     | `DataSelect (i1,n1), `DataSelect (i2,n2) ->
         if n1=n2 && ID.equal i1 i2 then acc else fail()
@@ -206,7 +194,7 @@ module Builtin = struct
         let acc = f acc t1 t2 in
         let acc = List.fold_left2 f acc g1.assuming g2.assuming in
         List.fold_left2 f acc g1.asserting g2.asserting
-    | `Guard _, _ | `BFun _, _
+    | `Guard _, _
     | `True, _ | `False, _ | `Ite _, _ | `Not, _
     | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> fail()
@@ -222,7 +210,6 @@ module Builtin = struct
     | `Or
     | `DataTest _
     | `DataSelect _
-    | `BFun _
     | `Not -> ()
     | `Ite (a,b,c) -> f a; f b; f c
     | `Eq (a,b)
@@ -401,11 +388,24 @@ module type UTIL_REPR = sig
   val to_seq_vars : t_ -> t_ Var.t Sequence.t
   (** Iterate on variables *)
 
-  val to_seq_free_vars : t_ -> t_ Var.t Sequence.t
+  module VarSet : CCSet.S with type elt = t_ Var.t
+
+  val to_seq_free_vars : ?bound:VarSet.t -> t_ -> t_ Var.t Sequence.t
   (** Iterate on free variables. *)
+
+  val free_vars : ?bound:VarSet.t -> t_ -> VarSet.t
+  (** [free_vars t] computes the set of free variables of [t].
+      @param bound variables bound on the path *)
+
+  val is_closed : t_ -> bool
+  (** [is_closed t] means [to_seq_free_vars t = empty] *)
 
   val free_meta_vars : ?init:t_ MetaVar.t ID.Map.t -> t_ -> t_ MetaVar.t ID.Map.t
   (** The free type meta-variables in [t] *)
+
+  val get_ty_arg : t_ -> int -> t_ option
+  (** [get_ty_arg ty n] gets the [n]-th argument of [ty], if [ty] is a
+      function type with at least [n] arguments. *)
 
   val ty_unfold : t_ -> t_ Var.t list * t_ list * t_
   (** [ty_unfold ty] decomposes [ty] into a list of quantified type variables,
@@ -467,8 +467,9 @@ module UtilRepr(T : REPR)
     in
     aux t
 
-  let to_seq_free_vars t yield =
-    let module VarSet = Var.Set(T) in
+  module VarSet = Var.Set(T)
+
+  let to_seq_free_vars ?(bound=VarSet.empty) t yield =
     let rec aux ~bound t = match T.repr t with
       | Const _ -> ()
       | Var v ->
@@ -493,7 +494,12 @@ module UtilRepr(T : REPR)
       | TyArrow (a,b) -> aux ~bound a; aux ~bound b
       | TyMeta _ -> ()
     in
-    aux ~bound:VarSet.empty t
+    aux ~bound t
+
+  let free_vars ?bound t =
+    to_seq_free_vars ?bound t |> VarSet.of_seq
+
+  let is_closed t = to_seq_free_vars t |> Sequence.is_empty
 
   let to_seq_vars t =
     to_seq t
@@ -577,6 +583,17 @@ module UtilRepr(T : REPR)
     | TyBuiltin `Prop -> true
     | _ -> false
 
+  let rec get_ty_arg ty i = match T.repr ty with
+    | App (_,_)
+    | TyBuiltin _
+    | Const _
+    | Var _
+    | TyMeta _ -> None
+    | TyArrow (a,b) ->
+        if i=0 then Some a else get_ty_arg b (i-1)
+    | Bind (`TyForall, _,_) -> None
+    | _ -> assert false
+
   (* number of parameters of this (polymorphic?) T.t type *)
   let rec ty_num_param ty = match T.repr ty with
     | TyMeta _ -> 0
@@ -621,6 +638,7 @@ module type UTIL = sig
   val neq : t_ -> t_ -> t_
   val equiv : t_ -> t_ -> t_
   val imply : t_ -> t_ -> t_
+  val imply_l : t_ list -> t_ -> t_
   val true_ : t_
   val false_ : t_
   val and_ : t_ list -> t_
@@ -652,6 +670,9 @@ module type UTIL = sig
   val fun_l : t_ var list -> t_ -> t_
   val forall_l : t_ var list -> t_ -> t_
   val exists_l : t_ var list -> t_ -> t_
+
+  val close_forall : t_ -> t_
+  (** [close_forall t] universally quantifies over free variables of [t] *)
 
   val hash_fun : t_ CCHash.hash_fun
   val hash : t_ -> int
@@ -713,7 +734,7 @@ module type UTIL = sig
   (** [deref ~subst t] dereferences [t] as long as it is a variable
       bound in [subst]. *)
 
-  exception ApplyError of string * t_ * t_ list
+  exception ApplyError of string * t_ * t_ list * subst
   (** Raised when a type application fails *)
 
   val eval : subst:subst -> t_ -> t_
@@ -722,13 +743,20 @@ module type UTIL = sig
   val eval_renaming : subst:(t_, t_ Var.t) Var.Subst.t -> t_ -> t_
   (** Applying a variable renaming *)
 
-  val ty_apply : t_ -> t_ list -> t_
-  (** [apply t l] computes the type of [f args] where [f : t] and [args : l].
+  val ty_apply : t_ -> terms:t_ list -> tys:t_ list -> t_
+  (** [apply t ~terms ~tys] computes the type of [f terms] for some
+      function [f], where [f : t] and [terms : ty].
       @raise ApplyError if the arguments do not match *)
 
-  val ty_apply_full : t_ -> t_ list -> t_ * subst
+  val ty_apply_full : t_ -> terms:t_ list -> tys:t_ list -> t_ * subst
   (** [ty_apply_full ty l] is like [apply t l], but it returns a pair
       [ty' , subst] such that [subst ty' = apply t l].
+      @raise ApplyError if the arguments do not match *)
+
+  val ty_apply_mono : t_ -> tys:t_ list -> t_
+  (** [apply t ~tys] computes the type of [f terms] for some
+      function [f], where [f : t] and [terms : ty].
+      @raise Invalid_argument if [t] is not monomorphic (i.e. not TyForall)
       @raise ApplyError if the arguments do not match *)
 
   type signature = id -> t_ option
@@ -883,6 +911,11 @@ module Util(T : S)
   and or_ l = app_builtin `Or l
   and imply a b = app_builtin `Imply [a;b]
 
+  let rec imply_l l ret = match l with
+    | [] -> ret
+    | [a] -> imply a ret
+    | a :: l' -> imply a (imply_l l' ret)
+
   let eq a b = builtin (`Eq (a,b))
   let neq a b = not_ (eq a b)
   let equiv a b = builtin (`Equiv (a,b))
@@ -923,6 +956,10 @@ module Util(T : S)
   let fun_l = List.fold_right fun_
   let forall_l = List.fold_right forall
   let exists_l = List.fold_right exists
+
+  let close_forall t =
+    let fvars = free_vars t |> VarSet.to_list in
+    forall_l fvars t
 
   let hash_fun t h =
     let d = ref 30 in (* number of nodes to explore *)
@@ -1114,7 +1151,7 @@ module Util(T : S)
             app hd l
         end
     | Builtin
-      (`True | `False | `And | `Or | `Not | `BFun _
+      (`True | `False | `And | `Or | `Not
         | `Imply | `DataSelect _ | `DataTest _) ->
        (* partially applied, or constant *)
           t
@@ -1208,7 +1245,7 @@ module Util(T : S)
     in
     aux subst t
 
-  exception ApplyError of string * T.t * T.t list
+  exception ApplyError of string * t_ * t_ list * subst
   (** Raised when a type application fails *)
 
   exception UnifError of string * T.t * T.t
@@ -1217,11 +1254,12 @@ module Util(T : S)
   let () =
     Printexc.register_printer
     (function
-      | ApplyError (msg, t, l) ->
+      | ApplyError (msg, t, l, subst) ->
           let module P = Print(T) in
-          let msg = CCFormat.sprintf
-            "@[<hv2>type error@ when applying %a@ on @[%a@]: %s@]"
-              P.print_in_app t (CCFormat.list P.print_in_app) l msg
+          let msg = Utils.err_sprintf
+            "@[<hv2>type error@ when applying %a@ on @[%a@]@ in @[%a@]: %s@]"
+            P.print_in_app t (CCFormat.list P.print_in_app) l
+            (Subst.print P.print) subst msg
           in Some msg
       | UnifError (msg, t1, t2) ->
           let module P = Print(T) in
@@ -1232,50 +1270,62 @@ module Util(T : S)
       | _ -> None
     )
 
-  let error_apply_ msg ~hd ~l = raise (ApplyError (msg, hd, l))
+  let error_apply_ msg ~hd ~l ~subst = raise (ApplyError (msg, hd, l, subst))
   let error_unif_ msg t1 t2 = raise (UnifError (msg, t1, t2))
 
-  let ty_apply_full t l =
-    let rec app_ ~subst t l = match T.repr t, l with
-      | _, [] -> t, subst
+  let ty_apply_full t ~terms:l_terms ~tys:l_tys =
+    let rec app_ ~subst t l_terms l_tys = match T.repr t, l_terms, l_tys with
+      | _, [], [] -> t, subst
+      | _, [], _ | _, _, [] -> assert false
+      | TyBuiltin _, _, _
+      | App (_,_),_, _
+      | Const _, _, _ ->
+          error_apply_ "cannot apply this type" ~hd:t ~l:l_tys ~subst
+      | Var v, _, _ ->
+          begin try
+            let t = Subst.find_exn ~subst v in
+            app_ ~subst t l_terms l_tys
+          with Not_found ->
+            error_apply_ "cannot apply this type" ~hd:t ~l:l_tys ~subst
+          end
+      | TyMeta _,_,_ -> assert false
+      | TyArrow (a, t'), _ :: l_terms', b :: l_tys' ->
+          if equal_with ~subst a b
+          then app_ ~subst t' l_terms' l_tys'
+          else error_apply_
+            "type mismatch on first argument" ~hd:t ~l:l_tys' ~subst
+      | Bind (`TyForall, v, t'), b :: l_terms', _ :: l_tys' ->
+          let subst = Subst.add ~subst v b in
+          app_ ~subst t' l_terms' l_tys'
+      | _ -> assert false
+    in
+    app_ ~subst:Subst.empty t l_terms l_tys
+
+  let ty_apply t ~terms ~tys =
+    let t, subst = ty_apply_full t ~terms ~tys in
+    if Subst.is_empty subst then t else eval ~subst t
+
+  let ty_apply_mono t ~tys:l =
+    let subst = Subst.empty in
+    let rec app_ t l = match T.repr t, l with
+      | _, [] -> t
       | TyBuiltin _, _
       | App (_,_),_
       | Const _, _ ->
-          error_apply_ "cannot apply this type" ~hd:t ~l
-      | Var v, _ ->
-          begin try
-            let t = Subst.find_exn ~subst v in
-            app_ ~subst t l
-          with Not_found ->
-            error_apply_ "cannot apply this type" ~hd:t ~l
-          end
+          error_apply_ "cannot apply this type" ~hd:t ~l ~subst
+      | Var _, _ ->
+          error_apply_ "cannot apply this type" ~hd:t ~l ~subst
       | TyMeta _,_ -> assert false
       | TyArrow (a, t'), b :: l' ->
-          if equal_with ~subst a b
-          then app_ ~subst t' l'
+          if equal a b
+          then app_ t' l'
           else error_apply_
-            "type mismatch on first argument" ~hd:t ~l
-      | Bind (`TyForall, v,t'), b :: l' ->
-          let subst = Subst.add ~subst v b in
-          app_ ~subst t' l'
+            "type mismatch on first argument" ~hd:t ~l ~subst
+      | Bind (`TyForall, _, _), _ ->
+          error_apply_ "non monomorphic type" ~hd:t ~l ~subst
       | _ -> assert false
     in
-    app_ ~subst:Subst.empty t l
-
-  let ty_apply t l =
-    let t, subst = ty_apply_full t l in
-    if Subst.is_empty subst then t else eval ~subst t
-
-  let rec get_ty_arg_ ty i = match T.repr ty with
-    | App (_,_)
-    | TyBuiltin _
-    | Const _
-    | Var _
-    | TyMeta _ -> None
-    | TyArrow (a,b) ->
-        if i=0 then Some a else get_ty_arg_ b (i-1)
-    | Bind (`TyForall, _,_) -> None
-    | _ -> assert false
+    app_ t l
 
   type signature = id -> T.t option
 
@@ -1286,11 +1336,6 @@ module Util(T : S)
   let prop = ty_prop
   let prop1 = ty_arrow prop prop
   let prop2 = ty_arrow prop (ty_arrow prop prop)
-
-  (* [pi a. (a -> prop) -> a] *)
-  let choice_ty_ =
-    let a = Var.make ~ty:ty_type ~name:"a" in
-    ty_forall a (ty_arrow (ty_arrow (var a) prop) (var a))
 
   let rec ty_exn ~sigma t =
     match T.repr t with
@@ -1303,7 +1348,6 @@ module Util(T : S)
           | `Not -> prop1
           | `True
           | `False -> prop
-          | `BFun (`Choice | `UChoice) -> choice_ty_
           | `Ite (_,b,_) -> ty_exn ~sigma b
           | `Equiv (_,_)
           | `Eq (_,_) -> prop
@@ -1314,7 +1358,7 @@ module Util(T : S)
           | `DataSelect (id,n) ->
               (* id: a_1->a_2->tau, where tau inductive; select-id-i: tau->a_i*)
               let ty = find_ty_ ~sigma id in
-              begin match get_ty_arg_ ty n with
+              begin match get_ty_arg ty n with
               | Some ty_arg ->
                   ty_arrow (ty_returns ty) ty_arg
               | _ ->
@@ -1327,7 +1371,7 @@ module Util(T : S)
     | App (f,l) ->
         begin match T.repr f with
         | Builtin (`And | `Or) -> prop
-        | _ -> ty_apply (ty_exn ~sigma f) (List.map (ty_exn ~sigma) l)
+        | _ -> ty_apply (ty_exn ~sigma f) ~terms:l ~tys:(List.map (ty_exn ~sigma) l)
         end
     | Bind (b,v,t) ->
         begin match b with

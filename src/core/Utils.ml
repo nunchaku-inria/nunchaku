@@ -167,12 +167,28 @@ let vec_fold_map f acc v =
 
 (** {2 Lists} *)
 
-let rec fold_map f acc l = match l with
-  | [] -> acc, []
-  | x :: tail ->
-      let acc, y = f acc x in
-      let acc, tail' = fold_map f acc tail in
-      acc, y :: tail'
+let fold_mapi ~f ~x:acc l =
+  let rec aux f acc i l = match l with
+    | [] -> acc, []
+    | x :: tail ->
+        let acc, y = f i acc x in
+        let acc, tail' = aux f acc (i+1) tail in
+        acc, y :: tail'
+  in
+  aux f acc 0 l
+
+let fold_map f acc l = fold_mapi ~f:(fun _ -> f) ~x:acc l
+
+let filteri f l =
+  let rec aux i = function
+    | [] -> []
+    | x :: tl ->
+        let tl' = aux (i+1) tl in
+        if f i x then x::tl' else tl'
+  in
+  aux 0 l
+
+let singleton_if check ~f x = if check then [f x] else []
 
 (** {2 Warnings} *)
 

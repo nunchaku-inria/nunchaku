@@ -3,6 +3,8 @@
 
 (** {1 Transform a problem with multiple equations per defined Symbol into one with single equations} *)
 
+open Nunchaku_core
+
 type id = ID.t
 
 type ('a,'b) inv1 = <ty:'a; ind_preds:'b; eqn:[`Nested]>
@@ -23,6 +25,7 @@ module Make(T : TermInner.S) : sig
   val pipe :
     decode:('c -> 'd) ->
     print:bool ->
+    check:bool ->
     ((term, term, ('a,'b) inv1) Problem.t,
       (term, term, ('a,'b) inv2) Problem.t,
       'c, 'd) Transform.t

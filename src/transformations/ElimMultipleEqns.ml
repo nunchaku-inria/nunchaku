@@ -3,6 +3,8 @@
 
 (** {1 Transform a problem with multiple equations per defined Symbol into one with single equations} *)
 
+open Nunchaku_core
+
 module TI = TermInner
 module Stmt = Statement
 module Subst = Var.Subst
@@ -357,12 +359,15 @@ module Make(T : TI.S) = struct
       ~f:uniq_eqn_st ~x:(Env.create()) in
     pb'
 
-  let pipe ~decode ~print =
-    let on_encoded = if print
-      then
+  let pipe ~decode ~print ~check =
+    let on_encoded =
+      Utils.singleton_if print () ~f:(fun () ->
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after uniq equations@}: %a@]@." PPb.print]
-      else []
+        Format.printf "@[<v2>@{<Yellow>after uniq equations@}: %a@]@." PPb.print)
+      @
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.check_problem ?env:None)
     and decode _ x = decode x in
     Transform.make1
       ~on_encoded

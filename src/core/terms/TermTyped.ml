@@ -67,6 +67,7 @@ module Util(T : S)
   val exists : ?loc:loc -> t var -> t -> t
   val eq : ?loc:loc -> t -> t -> t
   val equiv : ?loc:loc -> t -> t -> t
+  val asserting : ?loc:loc -> t -> t list -> t
 
   val mk_bind :
     ?loc:loc ->
@@ -147,6 +148,12 @@ end = struct
 
   let equiv ?loc a b =
     builtin ?loc ~ty:ty_prop (`Equiv (a,b))
+
+  let asserting ?loc t l = match l with
+    | [] -> t
+    | _::_ ->
+        let g = {TI.Builtin.asserting=l; assuming=[];} in
+        builtin ?loc ~ty:(ty_exn t) (`Guard (t, g))
 
   let ty_builtin ?loc b =
     build ?loc ~ty:ty_type (TI.TyBuiltin b)

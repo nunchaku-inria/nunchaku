@@ -3,6 +3,8 @@
 
 (** {1 Eliminate Copy Types} *)
 
+open Nunchaku_core
+
 type ('a,'b) inv = <eqn:'a; ind_preds:'b; ty:[`Mono]>
 
 val name : string
@@ -16,6 +18,7 @@ module Make(T : TermInner.S) : sig
 
   val pipe :
     print:bool ->
+    check:bool ->
     ((term, term, ('a, 'b) inv) Problem.t,
      (term, term, ('a, 'b) inv) Problem.t,
      'c, 'c) Transform.t

@@ -10,7 +10,7 @@ true: safe_string
 <src/parsers/nunTPTPParser.*>: warn(-20)
 
 # more warnings
-<src/**/*.ml>: warn(+a), warn(-4), warn(-44), warn(-50)
+<src/**/*.ml>: warn(+a-4-44-50-29)
 
 <src/core/Utils.cm*>: inline(15)
 

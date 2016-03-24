@@ -6,6 +6,8 @@
     This transformation removes "assuming" and "asserting" constructs and
     replaces them by boolean guards and assertions *)
 
+open Nunchaku_core
+
 module TI = TermInner
 module Pol = Polarity
 module Stmt = Statement
@@ -23,6 +25,7 @@ module Make(T : TI.S) : sig
   (** Pipeline component *)
   val pipe :
     print:bool ->
+    check:bool ->
     ((term, term, inv) Problem.t,
       (term, term, inv) Problem.t,
       'ret, 'ret) Transform.t
@@ -128,7 +131,7 @@ end = struct
             if is_prop ~state t then combine pol t' g else t', g
         end
     | TI.Builtin
-      (`True | `False | `And | `Or | `Not | `BFun (`Choice | `UChoice)
+      (`True | `False | `And | `Or | `Not
         | `Imply | `DataSelect _ | `DataTest _) ->
        (* partially applied, or constant *)
         t, empty_guard
@@ -295,12 +298,15 @@ end = struct
       then Utils.debug ~section 1 "lost precision, now UNSAT means UNKNOWN";
     Problem.add_unsat_means_unknown state.lost_precision pb'
 
-  let pipe ~print =
-    let on_encoded = if print
-      then
+  let pipe ~print ~check =
+    let on_encoded =
+      Utils.singleton_if print () ~f:(fun () ->
         let module PPb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after introduction of guards@}: %a@]@." PPb.print]
-      else []
+        Format.printf "@[<v2>@{<Yellow>after introduction of guards@}: %a@]@." PPb.print)
+      @
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.check_problem ?env:None)
     in
     Transform.make1
       ~on_encoded

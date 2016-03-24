@@ -3,6 +3,8 @@
 
 (** {1 Scoping and Type Inference} *)
 
+open Nunchaku_core
+
 type 'a or_error = [`Ok of 'a | `Error of string]
 type id = ID.t
 type 'a var = 'a Var.t
@@ -64,6 +66,11 @@ module Convert(T : TermTyped.S) : sig
         or [t'] is [forall vars t], or [t'] contains [vars] *)
 
   type statement = (term, term, stmt_invariant) Statement.t
+
+  val read_prelude : env:env -> statement list * env
+  (** Add the prelude to [env] and return the corresponding statements and
+      new environment.
+      Called automatically in {!convert_problem} and {!convert_problem_exn}. *)
 
   val convert_statement :
     env:env ->

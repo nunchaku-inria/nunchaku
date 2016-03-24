@@ -3,6 +3,8 @@
 
 (** {1 Unrolling of (co)inductive Predicates} *)
 
+open Nunchaku_core
+
 module TI = TermInner
 module Stmt = Statement
 module Pol = Polarity
@@ -344,12 +346,15 @@ module Make(T : TI.S) = struct
 
   (** {6 Pipes} *)
 
-  let pipe_with ?(on_decoded) ~decode ~print =
-    let on_encoded = if print
-      then
+  let pipe_with ?(on_decoded) ~decode ~print ~check =
+    let on_encoded =
+      Utils.singleton_if print () ~f:(fun () ->
         let module Ppb = Problem.Print(P)(P) in
-        [Format.printf "@[<v2>@{<Yellow>after unrolling@}:@ %a@]@." Ppb.print]
-      else []
+        Format.printf "@[<v2>@{<Yellow>after unrolling@}:@ %a@]@." Ppb.print)
+      @
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.check_problem ?env:None)
     in
     Transform.make1
       ?on_decoded
@@ -359,13 +364,14 @@ module Make(T : TI.S) = struct
       ~decode
       ()
 
-  let pipe ~print =
+  let pipe ~print ~check =
     let on_decoded = if print
       then
         [Format.printf "@[<2>@{<Yellow>model after unrolling@}:@ %a@]@."
            (Model.print P.print P.print)]
       else []
     in
-    pipe_with ~on_decoded ~decode:(fun state m -> decode_model ~state m) ~print
+    pipe_with ~on_decoded ~decode:(fun state m -> decode_model ~state m)
+      ~print ~check
 end
 

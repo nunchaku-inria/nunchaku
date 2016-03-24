@@ -24,6 +24,7 @@ Monomorphization
 Pattern
 Polarity
 Polarize
+Prelude
 Problem
 ProblemMetadata
 Reduce
@@ -38,6 +39,8 @@ TermPoly
 TermTyped
 Transform
 Traversal
+TyCardinality
+TypeCheck
 TypeInference
 TypeMono
 TypePoly

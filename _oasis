@@ -13,7 +13,7 @@ AlphaFeatures: compiled_setup_ml, ocamlbuild_more_args
 
 Synopsis:    A counter-example finder for higher-order logic
 
-XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain'"
+XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain' -j 0"
 
 Library "nunchaku_core"
   Path:             src/core/
@@ -22,26 +22,14 @@ Library "nunchaku_core"
                     UntypedAST, Model, TypeUnify, Problem, FO, Reduce,
                     Solver_intf, Env, Signature, Statement,
                     Scheduling, CVC4, Polarity, Traversal, ProblemMetadata,
-                    TyCardinality,
+                    TyCardinality, Prelude, TypeCheck,
                     terms/TermInner,
                     terms/TermTyped,
                     terms/TermPoly,
                     terms/TermMono,
                     terms/Pattern,
                     types/TypePoly,
-                    types/TypeMono,
-                    transformations/Skolem,
-                    transformations/TypeInference,
-                    transformations/ElimPatternMatch,
-                    transformations/Monomorphization,
-                    transformations/ElimHOF,
-                    transformations/ElimRecursion,
-                    transformations/ElimMultipleEqns,
-                    transformations/ElimIndPreds,
-                    transformations/ElimCopy,
-                    transformations/Polarize,
-                    transformations/Unroll,
-                    transformations/IntroGuards
+                    types/TypeMono
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.sexp, containers.iter,
@@ -57,12 +45,34 @@ Library "nunchaku_parsers"
   BuildTools:       menhir
   BuildDepends:     nunchaku
 
+Library "nunchaku_transformations"
+  Path:             src/transformations
+  Pack:             true
+  Modules:          Skolem,
+                    TypeInference,
+                    ElimPatternMatch,
+                    Monomorphization,
+                    Specialize,
+                    LambdaLift,
+                    ElimHOF,
+                    ElimRecursion,
+                    ElimMultipleEqns,
+                    ElimIndPreds,
+                    ElimCopy,
+                    Polarize,
+                    Unroll,
+                    IntroGuards
+  Install:          true
+  FindlibName:      transformations
+  FindlibParent:    nunchaku_core
+  BuildDepends:     containers, nunchaku
+
 Executable nunchaku
   Path:             src/main/
   Install:          true
   CompiledObject:   native
   MainIs:           nunchaku.ml
-  BuildDepends:     nunchaku, nunchaku.parsers
+  BuildDepends:     nunchaku, nunchaku.transformations, nunchaku.parsers
 
 PreBuildCommand:    make qtest-gen
 
@@ -72,7 +82,7 @@ Executable run_qtest
   CompiledObject:   native
   MainIs:           run_qtest.ml
   Build$:           flag(tests)
-  BuildDepends:     nunchaku, nunchaku.parsers, oUnit, QTest2Lib
+  BuildDepends:     nunchaku, nunchaku.parsers, oUnit, qcheck
 
 Test all
   Command:      ./run_qtest.native
