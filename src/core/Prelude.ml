@@ -4,7 +4,8 @@
 module A = UntypedAST
 
 let choice = ID.make "choice"
-let uchoice = ID.make "uchoice"
+let unique = ID.make "unique"
+let unique_unsafe = ID.make "unique_unsafe"
 
 exception Parse_error of string
 
@@ -76,23 +77,35 @@ let decl_choice =
   in
   A.Rec [ ID.name choice, ty_choice_, [ax] ] |> mk_stmt
 
-let decl_uchoice =
+let decl_unique =
   let ax = p_term
     "(forall p
        (=
-        (uchoice p)
+        (unique p)
         (asserting
-         (uchoice p)
+         (unique p)
          (or
-           (= p (fun x (= x (uchoice p))))
+           (= p (fun x (= x (unique p))))
            (= p (fun x false))
            (exists x (exists y (and (!= x y) (p x) (p y)))))))))"
   in
-  A.Rec [ ID.name uchoice, ty_choice_, [ax] ] |> mk_stmt
+  A.Rec [ ID.name unique, ty_choice_, [ax] ] |> mk_stmt
+
+let decl_unique_unsafe =
+  let ax = p_term
+    "(forall p
+       (=
+        (unique_unsafe p)
+        (asserting
+         (unique_unsafe p)
+         (p (unique_unsafe p)))))"
+  in
+  A.Rec [ ID.name unique_unsafe, ty_choice_, [ax] ] |> mk_stmt
 
 let decls =
   [ decl_choice
-  ; decl_uchoice
+  ; decl_unique
+  ; decl_unique_unsafe
   ]
 
 
