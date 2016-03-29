@@ -293,6 +293,36 @@ module Make(T : TI.S) = struct
   let snf t =
     let st = Full.snf_ {Full.subst=Subst.empty; head=t; args=[]} in
     Full.term_of_state st
+
+  (* if [t = f x1...xn var], this returns [Some (f x1...xn)] *)
+  let as_app_to_ ~var:v t = match T.repr t with
+    | TI.App (f, l) ->
+        begin match List.rev l with
+          | last :: l' ->
+              (* sequence of free variables in [f (rev l')] *)
+              let fvars =
+                Sequence.of_list (f :: l')
+                |> Sequence.flat_map (U.to_seq_free_vars ?bound:None)
+              in
+              begin match T.repr last with
+                | TI.Var v' when Var.equal v v'
+                              && not (Sequence.mem ~eq:Var.equal v fvars)  ->
+                    (* so, [t = f (rev l' @ [v])], and neither [f] nor [l']
+                       contain [v], so we can reduce to [f (rev l')] *)
+                    Some (U.app f (List.rev l'))
+                | _ -> None
+              end
+          | [] -> assert false
+        end
+    | _ -> None
+
+  let rec eta_reduce t = match T.repr t with
+    | TI.Bind (`Fun, v, body) ->
+        begin match as_app_to_ ~var:v body with
+          | None -> t
+          | Some t' -> eta_reduce t'
+        end
+    | _ -> t
 end
 
 

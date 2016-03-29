@@ -313,6 +313,17 @@ module Print(T : REPR)
         (a,b) :: l, last
     | _ -> [], t
 
+  let rec unroll_binder b t = match T.repr t with
+    | Bind (b', v, t') when b=b' ->
+        let vars, body = unroll_binder b t' in
+        v :: vars, body
+    | _ -> [], t
+
+  let is_atomic_ t = match T.repr t with
+    | Builtin b -> not (Builtin.is_infix b)
+    | TyBuiltin _ | Const _ | TyMeta _ | Var _ | Match _ -> true
+    | App (_,_) | Let _ | Bind _ | TyArrow _ -> false
+
   let rec print out t = match T.repr t with
     | TyBuiltin b -> CCFormat.string out (TyBuiltin.to_string b)
     | Const id -> ID.print out id
@@ -347,15 +358,17 @@ module Print(T : REPR)
         in
         fpf out "@[<hv>@[<hv2>match @[%a@] with@ %a@]@ end@]"
           print t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
-    | Bind (b, v, t) ->
+    | Bind (b, _, _) ->
         let s = Binder.to_string b in
-        fpf out "@[<2>%s %a:%a.@ %a@]" s Var.print_full v print_in_app (Var.ty v) print t
+        let vars, body = unroll_binder b t in
+        fpf out "@[<2>%s @[<hv>%a@].@ %a@]" s
+          (pp_list_ ~sep:" " pp_typed_var) vars print body
     | TyArrow (a,b) ->
         fpf out "@[<2>%a ->@ %a@]" print_in_binder a print b
-  and print_in_app out t = match T.repr t with
-    | Builtin b when not (Builtin.is_infix b) -> print out t
-    | TyBuiltin _ | Const _ | TyMeta _ | Var _ | Match _ -> print out t
-    | App (_,_) | Builtin _ | Let _ | Bind _ | TyArrow _ -> fpf out "(@[%a@])" print t
+  and print_in_app out t =
+    if is_atomic_ t
+    then print out t
+    else fpf out "(@[%a@])" print t
   and print_in_binder out t = match T.repr t with
     | TyBuiltin _ | Const _ | App _ | Builtin _ | Match _ ->
         print out t
@@ -369,6 +382,11 @@ module Print(T : REPR)
     | t :: l' ->
         fpf out "@[%a@]@ @[%a@] %a"
           print_in_app t (Builtin.pp print_in_app) b (print_infix_list b) l'
+  and pp_typed_var out v =
+    let ty = Var.ty v in
+    if is_atomic_ ty
+    then fpf out "@[%a:%a@]" Var.print_full v print ty
+    else fpf out "(@[%a:@,@[%a@]@])" Var.print_full v print ty
 end
 
 type 'a print = (module PRINT with type t = 'a)

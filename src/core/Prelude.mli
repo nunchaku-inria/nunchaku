@@ -7,7 +7,8 @@
     with some builtin functions *)
 
 val choice : ID.t
-val uchoice : ID.t
+val unique : ID.t
+val unique_unsafe : ID.t
 
 val decls : UntypedAST.statement list
 
