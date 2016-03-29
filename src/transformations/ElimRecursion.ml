@@ -669,7 +669,7 @@ module Make(T : TI.S) = struct
 
   (** {6 Pipe} *)
 
-  let pipe_with ~decode ~print ~check =
+  let pipe_with ?on_decoded ~decode ~print ~check =
     let on_encoded =
       Utils.singleton_if print () ~f:(fun () ->
         let module PPb = Problem.Print(P)(P) in
@@ -680,7 +680,7 @@ module Make(T : TI.S) = struct
         C.check_problem ?env:None)
     in
     Transform.make1
-      ~on_encoded
+      ~on_encoded ?on_decoded
       ~name
       ~encode:(fun p ->
         let p, state = elim_recursion p in
@@ -690,6 +690,12 @@ module Make(T : TI.S) = struct
       ()
 
   let pipe ~print ~check =
+    let on_decoded = if print
+      then
+        [Format.printf "@[<2>@{<Yellow>model after elim_rec@}:@ %a@]@."
+           (Model.print P.print P.print)]
+      else []
+    in
     let decode state m = decode_model ~state m in
-    pipe_with ~print ~decode ~check
+    pipe_with ~on_decoded ~print ~decode ~check
 end
