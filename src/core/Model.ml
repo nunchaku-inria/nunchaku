@@ -208,11 +208,18 @@ module Util(T : TI.S) = struct
   module Ty = TypeMono.Make(T)
   module Red = Reduce.Make(T)
 
+  (* a kind of flat-form printing of [t] *)
+  let rec flatten_ty out t = match T.repr t with
+    | TI.App (f,l) ->
+        fpf out "%a_%a"
+          flatten_ty f
+          CCFormat.(list ~start:"" ~stop:"" ~sep:"_" flatten_ty) l
+    | TI.Const id -> ID.print_name out id
+    | TI.TyBuiltin b -> CCFormat.string out (TI.TyBuiltin.to_string b)
+    | _ -> ()
+
   (* return a prefix for constants in the domain of this given type *)
-  let pick_prefix_ ty =
-    (* TODO: improve, to avoid collisions *)
-    let id = U.head_sym ty in
-    ID.name id
+  let pick_prefix_ ty = CCFormat.sprintf "@[<h>%a@]" flatten_ty ty
 
   (* compute a set of renaming rules for the model [m] *)
   let renaming_rules_of_model_ m =
