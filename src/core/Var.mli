@@ -73,6 +73,9 @@ module Subst : sig
   (** [add_list ~subst v t] add each binding [v_i -> t_i] to the subst.
       @raise Invalid_argument if [List.length v <> List.length t] *)
 
+  val of_list : 'ty var list -> 'a list -> ('ty,'a) t
+  (** [of_list vars l = add_list ~subst:empty vars l] *)
+
   val remove : subst:('ty,'a) t -> 'ty var -> ('ty,'a) t
   (** Remove binding for this variable.
       {b careful} if other bindings depend on this variable's binding... *)
@@ -88,6 +91,8 @@ module Subst : sig
   val find : subst:('ty,'a) t -> 'ty var -> 'a option
   val find_exn : subst:('ty,'a) t -> 'ty var -> 'a  (** @raise Not_found if var not bound *)
   val find_or : subst:('ty,'a) t -> default:'a -> 'ty var -> 'a
+
+  val map : f:('a -> 'b) -> ('ty,'a) t -> ('ty,'b) t
 
   val to_list : ('ty,'a) t -> ('ty var * 'a) list
 

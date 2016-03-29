@@ -346,7 +346,7 @@ module Make(T : TI.S) = struct
 
   (** {6 Pipes} *)
 
-  let pipe_with ?(on_decoded) ~decode ~print ~check =
+  let pipe_with ?on_decoded ~decode ~print ~check =
     let on_encoded =
       Utils.singleton_if print () ~f:(fun () ->
         let module Ppb = Problem.Print(P)(P) in

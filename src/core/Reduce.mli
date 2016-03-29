@@ -12,11 +12,12 @@ module Make(T : TermInner.S) : sig
   val snf : T.t -> T.t
   (** Strong Normal Form (reduce under functions) *)
 
+  type subst = (T.t,T.t) Var.Subst.t
+
+  val app_whnf : ?subst:subst -> T.t -> T.t list -> T.t
+  (** [app_whnf f l] applies [f] to [l], then computes the weak head normal form *)
+
   module Full : sig
-    type subst = (T.t,T.t) Var.Subst.t
-
-    (* TODO: expose the internal "state" record? *)
-
     val whnf : ?subst:subst-> T.t -> T.t list -> (T.t * T.t list * subst)
   end
 end

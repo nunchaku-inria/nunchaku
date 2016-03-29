@@ -585,7 +585,7 @@ module Make(T : TI.S) = struct
 
   (** {6 Pipes} *)
 
-  let pipe_with ~decode ~polarize_rec ~print ~check =
+  let pipe_with ?on_decoded ~decode ~polarize_rec ~print ~check =
     let on_encoded =
       Utils.singleton_if print () ~f:(fun () ->
         let module Ppb = Problem.Print(P)(P) in
@@ -597,13 +597,19 @@ module Make(T : TI.S) = struct
     in
     Transform.make1
       ~name
-      ~on_encoded
+      ~on_encoded ?on_decoded
       ~encode:(fun pb -> polarize ~polarize_rec pb)
       ~decode
       ()
 
   let pipe ~polarize_rec ~print ~check =
+    let on_decoded = if print
+      then
+        [Format.printf "@[<2>@{<Yellow>model after polarize@}:@ %a@]@."
+           (Model.print P.print P.print)]
+      else []
+    in
     pipe_with ~decode:(fun state m -> decode_model ~state m)
-      ~polarize_rec ~print ~check
+      ~on_decoded ~polarize_rec ~print ~check
 end
 

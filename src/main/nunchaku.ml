@@ -257,15 +257,14 @@ let negate_goal stmts =
   CCVector.map
     (fun st -> match st.A.stmt_value with
       | A.Goal f -> {st with A.stmt_value=A.Goal (A.not_ f); }
-      | _ -> st
-    ) stmts
+      | _ -> st)
+    stmts
 
 (* additional printers *)
 let () = Printexc.register_printer
   (function
     | Failure msg -> Some ("failure: " ^ msg)
-    | _ -> None
-  )
+    | _ -> None)
 
 open CCError.Infix
 

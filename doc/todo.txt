@@ -18,6 +18,3 @@
 2016-01-06 make And/Or parametrized builtins @design
 (B) 2016-01-18 deal with empty sorts
 (B) 2016-01-21 compute type cardinalities to approximate exists/forall with top/bot in non polarized cases
-(B) 2016-03-07 optional type-checking fence after each step
-(A) 2015-11-30 finish specialization (emit extensionality axioms) @feature
-(A) 2016-03-22 make specialize handle ind. preds.

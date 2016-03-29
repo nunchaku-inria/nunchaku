@@ -12,9 +12,9 @@ module Subst = Var.Subst
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
 
-  module Full = struct
-    type subst = (T.t, T.t) Subst.t
+  type subst = (T.t, T.t) Subst.t
 
+  module Full = struct
     (* head applied to args, in environment subst *)
     type state = {
       head: T.t;
@@ -284,6 +284,10 @@ module Make(T : TI.S) = struct
 
   let whnf t =
     let st = Full.whnf_ {Full.subst=Subst.empty; head=t; args=[]} in
+    Full.term_of_state st
+
+  let app_whnf ?(subst=Subst.empty) f l =
+    let st = Full.whnf_ {Full.subst; head=f; args=l} in
     Full.term_of_state st
 
   let snf t =

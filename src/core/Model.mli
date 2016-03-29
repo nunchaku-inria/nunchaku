@@ -12,8 +12,9 @@ type 'a printer = Format.formatter -> 'a -> unit
 module DT : sig
   type ('t, 'ty) test = 'ty Var.t * 't (** Equation var=term *)
 
-  val print_test : 't CCFormat.printer -> ('t, _) test CCFormat.printer
-  val print_tests : 't CCFormat.printer -> ('t, _) test list CCFormat.printer
+  val print_test : 't printer -> ('t, _) test printer
+  val print_tests : 't printer -> ('t, _) test list printer
+  val print_case : 't printer -> (('t,_) test list * 't) printer
 
   type (+'t, +'ty) t = private {
     tests: (('t, 'ty) test list * 't) list;

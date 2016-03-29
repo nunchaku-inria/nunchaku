@@ -604,8 +604,10 @@ module Make(T : TI.S) = struct
               apply_app_funs_ app_l (f' :: l)
           | _ -> aux' subst t
           end
+      | TI.Let _ ->
+          (* TODO: expand `let` if its parameter is HO, then SNF of body (new β redexes) *)
+          aux' subst t
       | TI.Bind _
-      | TI.Let _
       | TI.Match _
       | TI.Const _
       | TI.Builtin _
