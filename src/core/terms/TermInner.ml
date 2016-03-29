@@ -743,6 +743,8 @@ module type UTIL = sig
   val eval_renaming : subst:(t_, t_ Var.t) Var.Subst.t -> t_ -> t_
   (** Applying a variable renaming *)
 
+  val renaming_to_subst : (t_, t_ Var.t) Var.Subst.t -> (t_, t_) Var.Subst.t
+
   val ty_apply : t_ -> terms:t_ list -> tys:t_ list -> t_
   (** [apply t ~terms ~tys] computes the type of [f terms] for some
       function [f], where [f : t] and [terms : ty].
@@ -1228,7 +1230,7 @@ module Util(T : S)
               let v' = Var.fresh_copy v in
               Var.Subst.add ~subst v (var v'), v')
     in
-    aux subst t
+    if Subst.is_empty subst then t else aux subst t
 
   let eval_renaming ~subst t =
     let rec aux subst t = match T.repr t with
@@ -1243,7 +1245,9 @@ module Util(T : S)
               let v' = Var.fresh_copy v in
               Var.Subst.add ~subst v v', v')
     in
-    aux subst t
+    if Subst.is_empty subst then t else aux subst t
+
+  let renaming_to_subst subst = Var.Subst.map ~f:var subst
 
   exception ApplyError of string * t_ * t_ list * subst
   (** Raised when a type application fails *)

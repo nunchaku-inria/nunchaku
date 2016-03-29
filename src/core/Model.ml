@@ -57,6 +57,8 @@ module DT = struct
 
   let print_test pp out (v,t) = fpf out "@[<2>%a@ = @[%a@]@]" Var.print_full v pp t
   let print_tests pp = CCFormat.list ~start:"" ~stop:"" ~sep:" && " (print_test pp)
+  let print_case pp out (eqns,t) =
+    fpf out "@[<2>if @[%a@]@ then @[%a@]@]" (print_tests pp) eqns pp t
 
   let print pp out t =
     let pp_eqns = print_tests pp in

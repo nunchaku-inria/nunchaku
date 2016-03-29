@@ -70,6 +70,8 @@ module Subst = struct
     | _, [] -> invalid_arg "Subst.add_list"
     | v :: v', t :: t' -> add_list ~subst:(add ~subst v t) v' t'
 
+  let of_list v t = add_list ~subst:empty v t
+
   let remove ~subst v = M.remove v.id subst
 
   let mem ~subst v = M.mem v.id subst
@@ -89,6 +91,8 @@ module Subst = struct
   let find_deref_rec ~subst v = match find ~subst v with
     | None -> None
     | Some v' -> Some (deref_rec ~subst v')
+
+  let map ~f s = M.map (fun (v,t) -> v, f t) s
 
   let to_list s = M.fold (fun _ (v,x) acc -> (v,x)::acc) s []
 
