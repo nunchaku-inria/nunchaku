@@ -95,6 +95,7 @@ module CallGraph = struct
     in
     aux n1
 
+  (*
   (* view [t] as a graph *)
   let as_graph g =
     let children n =
@@ -102,6 +103,7 @@ module CallGraph = struct
       with Not_found -> Sequence.empty
     in
     CCGraph.make_tuple children
+     *)
 
   let print out g =
     let pp_node out = function
@@ -832,9 +834,6 @@ module Make(T : TI.S) = struct
      function, forming a lattice ordered by generality ("f args1 < f args2"
      iff "\exists \sigma. args2\sigma = args1") *)
   module InstanceGraph = struct
-    type 'a arg_map = (Arg.t * 'a) list
-    (* map [arg -> 'a] *)
-
     type vertex = {
       v_id: ID.t; (* name of the specialized function *)
       v_spec_of: ID.t; (* name of generic function *)
@@ -1027,6 +1026,7 @@ module Make(T : TI.S) = struct
   let insert_pos l args =
     let rec aux i l args = match l, args with
       | [], [] -> []
+      | [], (j,a)::args' when i=j -> a :: aux (i+1) [] args'
       | [], _::_ -> assert false
       | _, [] -> l (* no more args *)
       | _, (j,arg) :: args' when i=j ->
@@ -1090,7 +1090,7 @@ module Make(T : TI.S) = struct
                 (* decode arguments *)
                 let l = List.map (decode_term_rec state subst) l in
                 let f' = dsf_to_fun dsf in
-                Red.app_whnf ~subst f' l
+                Red.app_whnf ~subst f' l |> Red.eta_reduce
             | _ -> decode_term_rec' state subst t
           end
       | _ -> decode_term_rec' state subst t
@@ -1105,7 +1105,20 @@ module Make(T : TI.S) = struct
   (* gather models of specialized functions *)
   let gather_spec_funs state m =
     Model.fold ID.Map.empty m
-      ~constants:(fun map _ -> map)
+      ~constants:(fun map (t,u,kind) ->
+        match T.repr t with
+          | TI.Const f_id when is_spec_fun state f_id ->
+              (* add model of [f_id] into the list of partial models of the
+                  function it was specialized from.
+                  Here the discrimination tree is simply a constant. *)
+              let dsf = find_spec state f_id in
+              let id = dsf.dsf_spec_of in
+              let kind, ty, l =
+                ID.Map.get_or id map
+                  ~or_:(kind,dsf.dsf_ty_of,[])
+              in
+              ID.Map.add id (kind,ty,([],Model.DT.yield u,dsf)::l) map
+          | _ -> map)
       ~finite_types:(fun map _ -> map)
       ~funs:(fun map (f,vars,dt,kind) ->
         match T.repr f with
@@ -1130,7 +1143,7 @@ module Make(T : TI.S) = struct
      - converting else_ case *)
   let dt_of_spec_dt state vars (dt_vars,dt,dsf) =
     Utils.debugf ~section 5
-      "@[<2>generalize dt@ `@[%a@]`@ on vars @[%a]@]"
+      "@[<2>generalize dt@ `@[%a@]`@ on vars @[%a@]@]"
       (fun k->k (Model.DT.print P.print) dt (CCFormat.list Var.print_full) vars);
     let n_closure_vars = List.length (Arg.vars dsf.dsf_arg) in
     assert (List.length dt_vars
@@ -1160,7 +1173,7 @@ module Make(T : TI.S) = struct
     (* the new list of tests *)
     let then_ =
       dt.Model.DT.tests
-      |> List.map
+      |> List.rev_map
         (fun (eqns, then_) ->
            let subst, eqns' =
              CCList.fold_flat_map
@@ -1177,13 +1190,13 @@ module Make(T : TI.S) = struct
            (* translate a term and apply substitution on the fly *)
            let tr_term = decode_term_rec state subst in
            List.map (fun (v,t) -> v, tr_term t) eqns', tr_term then_)
+    and else_ =
+      base_eqns, decode_term state dt.Model.DT.else_
     in
+    let res = List.rev_append then_ [else_] in
     Utils.debugf ~section 5 "@[<2>... obtaining@ `@[<v>%a@]`@]"
-      (fun k->k CCFormat.(list (Model.DT.print_case P.print)) then_);
-    (* XXX: throw away the "else_", it's probably "undefined" and we do
-       not know how to combine them...?
-       issue is, how to *)
-    then_
+      (fun k->k CCFormat.(list (Model.DT.print_case P.print)) res);
+    res
 
   let merge_dts f_id vars l =
     let else_ = U.undefined_ (U.app (U.const f_id) (List.map U.var vars)) in
@@ -1200,10 +1213,10 @@ module Make(T : TI.S) = struct
       Model.filter_map m
       ~finite_types:(fun tup -> Some tup)
       ~constants:(fun (t,u,kind) ->
-        (* [t] should not be a specialized fun? *)
-        assert (not (is_spec_const state t));
-        (* translate terms *)
-        Some (decode_term state t, decode_term state u, kind))
+        if is_spec_const state t
+        then None
+        else (* simply translate terms *)
+          Some (decode_term state t, decode_term state u, kind))
       ~funs:(fun ((f,_,_,_) as tup) ->
         match T.repr f with
           | TI.Const f_id when is_spec_fun state f_id ->
