@@ -979,6 +979,10 @@ module Make(T : TI.S) = struct
          push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax));
      ()
 
+  (* XXX: if we have a "total" annotation on functions (including [unique_unsafe])
+     or Coq functions, we can avoid generating congruence axioms for those
+     functions *)
+
   (** {6 Main Encoding} *)
 
   let specialize_problem pb =
