@@ -1239,7 +1239,10 @@ module Make(T : TI.S) = struct
     (* remove specialized functions from model *)
     let m' =
       Model.filter_map m
-      ~finite_types:(fun tup -> Some tup)
+      ~finite_types:(fun (t,l) ->
+        match T.repr t with
+          | TI.TyArrow (_,_) -> None (* remove arrow types, not finite types anymore *)
+          | _ -> Some (t,l))
       ~constants:(fun (t,u,kind) ->
         if is_spec_const state t
         then None
