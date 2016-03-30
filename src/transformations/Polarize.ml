@@ -164,11 +164,6 @@ module Make(T : TI.S) = struct
 
   type subst = (T.t, T.t Var.t) Var.Subst.t
 
-  let bind_var_ subst v =
-    let v' = Var.fresh_copy v in
-    let subst = Var.Subst.add ~subst v v' in
-    subst, v'
-
   (* traverse [t], replacing some symbols by their polarized version,
      @return the term with more internal guards and polarized symbols *)
   let rec polarize_term_rec
@@ -277,7 +272,7 @@ module Make(T : TI.S) = struct
   = fun ~state pol subst t ->
     U.map_pol subst pol t
       ~f:(fun subst pol -> polarize_term_rec ~state pol subst)
-      ~bind:(fun subst _pol v -> bind_var_ subst v)
+      ~bind:(fun subst _pol v -> Subst.rename_var subst v)
 
   (* [p] is the polarization of the function defined by [def]; *)
   let define_rec
@@ -293,7 +288,7 @@ module Make(T : TI.S) = struct
     Utils.debugf ~section 5 "@[<2>polarize def `@[%a@]`@ on %B@]"
       (fun k->k PStmt.print_rec_def def is_pos);
     let rec_eqns = map_eqns_bind Var.Subst.empty def.rec_eqns
-      ~bind:bind_var_
+      ~bind:Subst.rename_var
       ~term:(polarize_term_rec ~state (if is_pos then Pol.Pos else Pol.Neg))
     in
     { def with
@@ -327,7 +322,7 @@ module Make(T : TI.S) = struct
            [concl <-> exists... guard] which, in positive polarity, will become
            [concl+ => exists... guard], making guard positive too *)
         map_clause_bind Var.Subst.empty clause
-          ~bind:bind_var_ ~term:(polarize_term_rec ~state pol)
+          ~bind:Subst.rename_var ~term:(polarize_term_rec ~state pol)
     in
     let pred_clauses = List.map tr_clause def.pred_clauses in
     { def with
@@ -364,7 +359,7 @@ module Make(T : TI.S) = struct
           ID.Tbl.add st.St.polarized id None;
           let def =
             Stmt.map_rec_def_bind Var.Subst.empty def
-              ~bind:bind_var_
+              ~bind:Subst.rename_var
               ~ty:(fun _ ty -> ty)
               ~term:(polarize_term ~state:st) in
           [def]
@@ -389,7 +384,7 @@ module Make(T : TI.S) = struct
           ID.Tbl.add st.St.polarized id None;
           let def =
             Stmt.map_pred_bind Var.Subst.empty def
-              ~bind:bind_var_ ~ty:(fun _ ty -> ty)
+              ~bind:Subst.rename_var ~ty:(fun _ ty -> ty)
               ~term:(polarize_term_rec ~state:st Pol.Pos) in
           [def]
       | `Polarize is_pos ->

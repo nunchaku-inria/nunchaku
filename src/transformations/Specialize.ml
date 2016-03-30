@@ -504,11 +504,6 @@ module Make(T : TI.S) = struct
           )
       | _ -> `No
 
-  let bind_var_ subst v =
-    let v' = Var.fresh_copy v in
-    let subst = Var.Subst.add ~subst v (U.var v') in
-    subst, v'
-
   let find_new_fun ~state f args =
     (* see whether the function is already specialized on those parameters *)
     let l = try ID.Tbl.find state.new_funs f with Not_found -> [] in
@@ -590,7 +585,7 @@ module Make(T : TI.S) = struct
   and specialize_term_l ~state ~depth subst l =
     List.map (specialize_term ~state ~depth subst) l
   and specialize_term' ~state ~depth subst t =
-    U.map subst t ~bind:bind_var_ ~f:(specialize_term ~state ~depth)
+    U.map subst t ~bind:U.rename_var ~f:(specialize_term ~state ~depth)
 
   (* find or create a new function for [f args]
       @param new_ty the type of the new function *)
@@ -640,7 +635,7 @@ module Make(T : TI.S) = struct
     | Stmt.Eqn_single (vars, rhs) ->
         if Arg.is_empty args then (
           (* still need to traverse [rhs] *)
-          let subst, vars = Utils.fold_map bind_var_ Subst.empty vars in
+          let subst, vars = Utils.fold_map U.rename_var Subst.empty vars in
           let rhs = specialize_term ~state ~depth:(depth+1) subst rhs in
           Stmt.Eqn_single (vars, rhs)
         ) else (
@@ -648,7 +643,7 @@ module Make(T : TI.S) = struct
           let subst = Subst.empty in
           (* rename the "closure variables", i.e. the free variables in [args] *)
           let subst, closure_vars =
-            Utils.fold_map bind_var_ subst (Arg.vars args) in
+            Utils.fold_map U.rename_var subst (Arg.vars args) in
           (* bind variables whose position corresponds to a member of [args] *)
           let subst, new_vars =
             Utils.fold_mapi vars ~x:subst
@@ -683,7 +678,7 @@ module Make(T : TI.S) = struct
     let (Stmt.Pred_clause c) = c in
     if Arg.is_empty args then (
       (* still need to traverse the clause *)
-      let subst, vars = Utils.fold_map bind_var_ Subst.empty c.Stmt.clause_vars in
+      let subst, vars = Utils.fold_map U.rename_var Subst.empty c.Stmt.clause_vars in
       let spec_term = specialize_term ~state ~depth:(depth+1) subst in
       let clause_guard = CCOpt.map spec_term c.Stmt.clause_guard in
       let clause_concl = spec_term c.Stmt.clause_concl in
@@ -694,7 +689,7 @@ module Make(T : TI.S) = struct
       state.count <- state.count + 1;
       let subst = Subst.empty in
       (* rename variables captured in closure *)
-      let subst, closure_vars = Utils.fold_map bind_var_ subst (Arg.vars args) in
+      let subst, closure_vars = Utils.fold_map U.rename_var subst (Arg.vars args) in
       (* bind variables corresponding to specialized positions *)
       let subst, clause_concl = match T.repr c.Stmt.clause_concl with
         | TI.App (f, l) ->
@@ -1106,7 +1101,7 @@ module Make(T : TI.S) = struct
       | _ -> decode_term_rec' state subst t
 
   and decode_term_rec' state subst t =
-    U.map subst t ~bind:bind_var_ ~f:(decode_term_rec state)
+    U.map subst t ~bind:U.rename_var ~f:(decode_term_rec state)
 
   let decode_term state t =
     let t' = decode_term_rec state Subst.empty t in

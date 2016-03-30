@@ -134,6 +134,8 @@ module Make(T : TI.S)
   (* TODO: maybe transform nested `C[if exists x.p[x] then a else b]` where `a`
      is not of type prop, into `exists x.p[x] => C[a] & ¬ exists x.p[x] => C[b]` *)
 
+  (* TODO: ignore let-bound variables in skolem symbols *)
+
   (* shall we skolemize the existential variable [v]? *)
   let should_skolemize_ ~state v =
     let ty = Var.ty v in

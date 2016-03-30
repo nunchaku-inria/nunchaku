@@ -265,11 +265,7 @@ module Make(T : TI.S) = struct
   and tr_term_rec_' ~state subst t =
     U.map subst t
       ~f:(tr_term_rec_ ~state)
-      ~bind:(fun subst v ->
-        (* rename [v] *)
-        let v' = Var.fresh_copy v in
-        let subst = Subst.add ~subst v (U.var v') in
-        subst, v')
+      ~bind:U.rename_var
 
   let tr_term ~state subst t =
     Utils.debugf ~section 4
