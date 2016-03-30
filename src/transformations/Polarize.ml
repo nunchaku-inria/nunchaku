@@ -545,7 +545,7 @@ module Make(T : TI.S) = struct
               let subst = Subst.add_list ~subst:Subst.empty vars vars' in
               let cases = filter_dt_ ~polarized:id ~is_pos ~sys ~subst dt in
               (* merge the two partial decision trees — they should not overlap *)
-              let else_ = U.undefined_ (U.app (U.const id') (List.map U.var vars)) in
+              let else_ = U.undefined_ (U.app (U.const id') (List.map U.var vars')) in
               let new_dt =
                 Model.DT.test
                   (List.rev_append cases cases')
