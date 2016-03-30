@@ -116,7 +116,8 @@ end
 type symbol_kind =
   | Symbol_prop
   | Symbol_fun
-  | Symbol_type
+  | Symbol_utype
+  | Symbol_data
 
 type (+'t, +'ty) t = {
   constants: ('t * 't * symbol_kind) list;

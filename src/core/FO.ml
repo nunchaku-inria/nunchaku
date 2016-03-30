@@ -503,7 +503,7 @@ module Util(Repr : S) = struct
   let problem_kinds pb =
     let module M = Model in
     let add_stmt m = function
-      | TyDecl (id, _) -> ID.Map.add id M.Symbol_type m
+      | TyDecl (id, _) -> ID.Map.add id M.Symbol_utype m
       | Decl (id, (_, ret)) ->
           let k = match Repr.Ty.view ret with
             | TyBuiltin `Prop -> M.Symbol_prop
@@ -516,7 +516,7 @@ module Util(Repr : S) = struct
       | MutualTypes (_, tydefs) ->
           List.fold_left
             (fun m tydef ->
-              let m = ID.Map.add tydef.ty_name M.Symbol_type m in
+              let m = ID.Map.add tydef.ty_name M.Symbol_data m in
               ID.Map.fold (fun id _ m -> ID.Map.add id M.Symbol_fun m) tydef.ty_cstors m)
             m tydefs.tys_defs
     in

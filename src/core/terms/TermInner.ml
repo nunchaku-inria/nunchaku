@@ -418,6 +418,8 @@ module type UTIL_REPR = sig
   val is_closed : t_ -> bool
   (** [is_closed t] means [to_seq_free_vars t = empty] *)
 
+  val is_undefined : t_ -> bool
+
   val free_meta_vars : ?init:t_ MetaVar.t ID.Map.t -> t_ -> t_ MetaVar.t ID.Map.t
   (** The free type meta-variables in [t] *)
 
@@ -518,6 +520,8 @@ module UtilRepr(T : REPR)
     to_seq_free_vars ?bound t |> VarSet.of_seq
 
   let is_closed t = to_seq_free_vars t |> Sequence.is_empty
+
+  let is_undefined t = match T.repr t with Builtin (`Undefined _) -> true | _ -> false
 
   let to_seq_vars t =
     to_seq t

@@ -1195,9 +1195,10 @@ module Make(T : TI.S) = struct
            let tr_term = decode_term_rec state subst in
            List.map (fun (v,t) -> v, tr_term t) eqns', tr_term then_)
     and else_ =
-      base_eqns, decode_term state dt.Model.DT.else_
+      if U.is_undefined dt.Model.DT.else_ then []
+      else [base_eqns, decode_term state dt.Model.DT.else_]
     in
-    let res = List.rev_append then_ [else_] in
+    let res = List.rev_append then_ else_ in
     Utils.debugf ~section 5 "@[<2>... obtaining@ `@[<v>%a@]`@]"
       (fun k->k CCFormat.(list (Model.DT.print_case P.print)) res);
     res

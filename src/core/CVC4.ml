@@ -627,8 +627,17 @@ module Make(FO_T : FO.S) = struct
      read back from the model, and type witnesses *)
   type processed_problem = decode_state * problem
 
+  (* is [ty] a finite (uninterpreted) type? *)
+  let is_finite_ decode ty = match Ty.view ty with
+    | FOI.TyApp (id, _) ->
+        begin match get_kind ~decode id with
+          | Model.Symbol_utype -> true
+          | Model.Symbol_data | Model.Symbol_fun | Model.Symbol_prop -> false
+        end
+    | _ -> false
+
   (* does two things:
-      - add some dummy constants for non-parametrized types (for asking for
+      - add some dummy constants for uninterpreted types (for asking for
           the type's domain later)
       - compute the set of symbols for which we want the model's value *)
   let preprocess pb : processed_problem =
@@ -641,8 +650,9 @@ module Make(FO_T : FO.S) = struct
     let add_ty_witnesses stmt l =
       List.fold_left
         (fun acc gty ->
-          if gty_map_mem state.witnesses gty
-          then acc (* already declared a witness for [gty] *)
+          if gty_map_mem state.witnesses gty || not (is_finite_ state gty)
+          then acc (* already declared a witness for [gty], or [gty] is not
+                      a finite type *)
           else (
             (* add a dummy constant *)
             let c = ID.make (CCFormat.sprintf "__nun_card_witness_%d" !n) in
