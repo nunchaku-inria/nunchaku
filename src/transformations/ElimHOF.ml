@@ -7,6 +7,7 @@ open Nunchaku_core
 
 module TI = TermInner
 module Stmt = Statement
+module Subst = Var.Subst
 
 let name = "elim_hof"
 let section = Utils.Section.make name
@@ -32,6 +33,7 @@ module Make(T : TI.S) = struct
   module PStmt = Stmt.Print(P)(P)
   module TM = TermMono.Make(T)
   module TMI = TermMono
+  module Red = Reduce.Make(T)
 
   type term = T.t
   type ty = T.t
@@ -567,13 +569,13 @@ module Make(T : TI.S) = struct
   let ty_of_fun_encoding_ ~state fe =
     U.ty_arrow_l fe.fe_args (ty_of_handle_ ~state fe.fe_ret_handle)
 
-  type renaming_subst = (T.t, T.t Var.t) Var.Subst.t
+  type renaming_subst = (T.t, T.t Var.t) Subst.t
 
   (* encode [v]'s type, and add it to [subst] *)
   let bind_hof_var ~state (subst:renaming_subst) v =
     (* replace [v] with [v'], which has an encoded type *)
     let v' = Var.update_ty v ~f:(elim_hof_ty ~state subst) in
-    let subst = Var.Subst.add ~subst v v' in
+    let subst = Subst.add ~subst v v' in
     subst, v'
 
   let bind_hof_vars ~state subst l =
@@ -583,7 +585,7 @@ module Make(T : TI.S) = struct
       from state.app_symbols. Also encodes every type using [handle_id] *)
   let elim_hof_term ~state subst t =
     let rec aux subst t = match T.repr t with
-      | TI.Var v -> Var.Subst.find_exn ~subst v |> U.var
+      | TI.Var v -> Subst.find_exn ~subst v |> U.var
       | TI.TyArrow _ -> aux_ty subst t (* type: encode it *)
       | TI.App (f,l) ->
           begin match T.repr f with
@@ -597,7 +599,7 @@ module Make(T : TI.S) = struct
               apply_app_funs_ app_l (f::l)
           | TI.Var v when ID.Map.mem (Var.id v) state.arities ->
               let l = List.map (aux subst) l in
-              let f' = U.var (Var.Subst.find_exn ~subst v) in
+              let f' = U.var (Subst.find_exn ~subst v) in
               let fun_encoding = fun_encoding_for ~state (Var.id v) in
               let n = List.length l in
               let app_l = IntMap.find n fun_encoding.fe_stack in
@@ -659,7 +661,7 @@ module Make(T : TI.S) = struct
                   errorf_ "rec-defined function %a should have full arity %d"
                     ID.print id arity
               in
-              let subst, vars = bind_hof_vars ~state Var.Subst.empty vars in
+              let subst, vars = bind_hof_vars ~state Subst.empty vars in
               (* LHS: app (f x y) z *)
               let lhs =
                 apply_app_funs_ stack
@@ -684,7 +686,7 @@ module Make(T : TI.S) = struct
                 "@[<2>keep structure of FO def of `%a`@]" (fun k->k ID.print id);
               let tr_term = elim_hof_term ~state in
               let tr_type _subst ty = encode_toplevel_ty ~state ty in
-              Stmt.map_rec_def_bind Var.Subst.empty def
+              Stmt.map_rec_def_bind Subst.empty def
                 ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
               |> cast_rec_unsafe_
             )
@@ -744,7 +746,7 @@ module Make(T : TI.S) = struct
     | Stmt.Copy _
     | Stmt.Goal _ ->
         let stmt' =
-          Stmt.map_bind Var.Subst.empty stmt
+          Stmt.map_bind Subst.empty stmt
             ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
           |> cast_stmt_unsafe_ (* XXX: hack, but shorter *)
         in
@@ -791,9 +793,9 @@ module Make(T : TI.S) = struct
      [to a b] by [a -> b] *)
   let rec decode_term_ ~state subst t =
     Utils.debugf ~section 5 "@[<2>decode_term `@[%a@]`@ with @[%a@]@]"
-      (fun k->k P.print t (Var.Subst.print DecTerm.print) subst);
+      (fun k->k P.print t (Subst.print DecTerm.print) subst);
     match T.repr t with
-    | TI.Var v -> Var.Subst.find_exn ~subst v |> DecTerm.get
+    | TI.Var v -> Subst.find_exn ~subst v |> DecTerm.get
     | TI.App (f, l) ->
         begin match T.repr f, state.dst_handle_id, l with
           | TI.Const id, Some id', [a;b] when ID.equal id id' ->
@@ -801,10 +803,10 @@ module Make(T : TI.S) = struct
                 (decode_term_ ~state subst a)
                 (decode_term_ ~state subst b)
           | TI.Const id, _, hd :: l' when ID.Tbl.mem state.dst_app_symbols id ->
-              (* app symbol: remove app, apply [hd] to [l'] *)
+              (* app symbol: remove app, apply [hd] to [l'] and evaluate *)
               let hd = decode_term_ ~state subst hd in
               let l' = List.map (decode_term_ ~state subst) l' in
-              U.app hd l'
+              Red.app_whnf hd l'
           | _ -> decode_term' ~state subst t
         end
     | _ -> decode_term' ~state subst t
@@ -816,7 +818,7 @@ module Make(T : TI.S) = struct
   and bind_decode_var_ ~state subst v =
     let v' = Var.fresh_copy v in
     let v' = Var.update_ty v' ~f:(decode_term_ ~state subst) in
-    Var.Subst.add ~subst v (U.var v' |> DecTerm.make), v'
+    Subst.add ~subst v (U.var v' |> DecTerm.make), v'
 
   let decode_term ~state subst t = DecTerm.make (decode_term_ ~state subst t)
 
@@ -841,15 +843,15 @@ module Make(T : TI.S) = struct
       | None -> errorf_ "could not find model for function %a" ID.print id
       | Some tup -> tup
 
-  type decode_subst = (T.t, DecTerm.t) Var.Subst.t
+  type decode_subst = (T.t, DecTerm.t) Subst.t
 
   let as_var_ t = match T.repr (DecTerm.get t) with TI.Var v -> v | _ -> assert false
 
   let find_as_var_ ~subst v =
-    try Var.Subst.find_exn ~subst v |> as_var_
+    try Subst.find_exn ~subst v |> as_var_
     with Not_found ->
       errorf_ "@[<2>could not find var %a in @[%a@]@ when decoding@]"
-        Var.print_full v (Var.Subst.print DecTerm.print) subst
+        Var.print_full v (Subst.print DecTerm.print) subst
 
   (* filter [tests], keeping only branches where [v = c] holds, and replacing
      [v] by [c] in those branches.
@@ -857,10 +859,10 @@ module Make(T : TI.S) = struct
   let filter_tests_ ~subst ~add_tests v c tests =
     (* does [v = c] in [eqns]? *)
     let maps_to v c ~in_:eqns =
+      let subst = Subst.add ~subst v c in
       List.exists
         (fun (v',t) ->
-           let subst = Var.Subst.add ~subst v c in
-           let subst = (subst : decode_subst :> (T.t, T.t) Var.Subst.t) in
+           let subst = (subst : decode_subst :> (T.t, T.t) Subst.t) in
            Var.equal v v' && U.equal_with ~subst (DecTerm.get t) (DecTerm.get c))
         eqns
     and remove_var v ~from:eqns =
@@ -879,37 +881,37 @@ module Make(T : TI.S) = struct
     List.map (fun (v,t) -> find_as_var_ ~subst v, decode_term ~state subst t)
 
   (* [t1] is a tree returning some handle type, and [t2] is a tree whose first
-     variable (the head of [vars2]) has this exact handle type *)
-  let merge_dt_ ~state ~(subst:decode_subst) t1 vars2 t2 =
+     variable ([remove_var]) has this exact handle type *)
+  let merge_dt_ ~state ~(subst:decode_subst) ~remove_var:v t1 vars2 t2 =
     let module DT = Model.DT in
-    match vars2 with
-      | [] -> assert false
-      | v :: vars2_tl ->
-          (* tests resulting from each case of [t1.tests] *)
-          let tests1 =
-            t1.DT.tests
-            |> CCList.flat_map
-              (fun (eqns, rhs) ->
-                 (* keep branches of [t2] that map [v] to [rhs] *)
-                 let eqns = tr_eqns ~state ~subst eqns in
-                 let rhs = decode_term ~state subst rhs in
-                 filter_tests_ ~subst ~add_tests:eqns v rhs t2.DT.tests)
-          (* tests corresponding to [t2.tests] in the case [v = t1.else_] *)
-          and tests2 =
-            filter_tests_ ~subst ~add_tests:[] v
-              (decode_term ~state subst t1.DT.else_) t2.DT.tests
-          in
-          vars2_tl, DT.test_flatten (tests1 @ tests2) ~else_:(DT.yield t2.DT.else_)
+    (* tests resulting from each case of [t1.tests] *)
+    let tests1 =
+      t1.DT.tests
+      |> CCList.flat_map
+        (fun (eqns, rhs) ->
+           (* keep branches of [t2] that map [v] to [rhs] *)
+           let eqns = tr_eqns ~state ~subst eqns in
+           let rhs = decode_term ~state subst rhs in
+           filter_tests_ ~subst ~add_tests:eqns v rhs t2.DT.tests)
+    (* tests corresponding to [t2.tests] in the case [v = t1.else_] *)
+    and tests2 =
+      filter_tests_ ~subst ~add_tests:[] v
+        (decode_term ~state subst t1.DT.else_) t2.DT.tests
+    in
+    vars2, DT.test_flatten (tests1 @ tests2) ~else_:(DT.yield t2.DT.else_)
 
   (* translate a DT and returns a substitution with fresh variables *)
-  let tr_dt ~state ~(subst:decode_subst) vars dt =
-    Utils.debugf ~section 5 "@[<2>decode @[%a@] ->@ `@[%a@]`@]"
+  let tr_dt ~state ~(subst:decode_subst) ?remove_var vars dt =
+    Utils.debugf ~section 5 "@[<2>decode @[%a@] ->@ `@[%a@]`@ in @[%a@]@]"
       (fun k->k (CCFormat.list Var.print_full) vars
-          (Model.DT.print P.print) dt);
+          (Model.DT.print P.print) dt (Subst.print DecTerm.print) subst);
     let subst, vars = Utils.fold_map (bind_decode_var_ ~state) subst vars in
     let tr_ = decode_term ~state subst in
-    let dt = Model.DT.map dt
-        ~var:(fun v -> Some (find_as_var_ ~subst v))
+    let dt =
+      Model.DT.map dt
+        ~var:(fun v -> match remove_var with
+          | Some v' when Var.equal v v' -> None
+          | _ -> Some (find_as_var_ ~subst v))
         ~term:tr_ ~ty:(decode_term_ ~state subst) in
     vars, subst, dt
 
@@ -919,26 +921,48 @@ module Make(T : TI.S) = struct
      of [tower].
      @return set of variables, discrimination tree, function kind *)
   let extract_subtree_ ~state m tower =
-    let rec aux subst tower = match tower with
+    (* @param hd: first parameter, that is, the partial function being applied *)
+    let rec aux subst hd tower = match tower with
       | [] -> assert false
-      | [TC_first_param _] -> assert false
+      | TC_first_param _ :: _ -> assert false
       | [TC_app af] ->
-          let vars, dt, k = find_dt_ m af.af_id in
-          let vars, _, dt = tr_dt ~state ~subst vars dt in
-          vars, dt, k
-      | TC_first_param (f,_) :: tower' -> aux2 subst f tower'
-      | TC_app af :: tower' -> aux2 subst af.af_id tower'
-    (* merge DTs of [f] and [tower], where [f] used to be the top of tower *)
-    and aux2 subst f tower =
-      (* find and transform [dt] for [f] *)
-      let vars, dt, _ = find_dt_ m f in
-      let subst, vars = Utils.fold_map (bind_decode_var_ ~state) subst vars in
-      (* merge with [dt] for remaining tower functions *)
-      let vars', dt', k = aux subst tower in
-      let vars', new_dt = merge_dt_ ~state ~subst dt vars' dt' in
-      vars @ vars', new_dt, k
+          begin match find_dt_ m af.af_id with
+            | [], _, _ -> assert false  (* af: must be a function *)
+            | v::vars, dt, k ->
+                (* [v]: the function that is applied by [af] *)
+                let subst = Subst.add ~subst v hd in
+                let vars, _, dt = tr_dt ~remove_var:v ~state ~subst vars dt in
+                v, vars, dt, k
+          end
+      | TC_app af :: tower' ->
+          (* find and transform [dt] for [f] *)
+          let vars, dt, _ = find_dt_ m af.af_id in
+          (* first variable, [v], is replaced by [hd] *)
+          let v, vars = match vars with a::b ->a,b | [] -> assert false in
+          let subst = Subst.add ~subst v hd in
+          let subst, vars = Utils.fold_map (bind_decode_var_ ~state) subst vars in
+          let hd =
+            DecTerm.get hd
+            |> (fun hd->U.app hd (List.map U.var vars))
+            |> DecTerm.make
+          in
+          (* merge with [dt] for remaining tower functions *)
+          let _, vars', dt', k = aux subst hd tower' in
+          let vars', new_dt = merge_dt_ ~remove_var:v ~state ~subst dt vars' dt' in
+          v, vars @ vars', new_dt, k
     in
-    aux Var.Subst.empty tower
+    match tower with
+      | []
+      | TC_app _ ::_ -> assert false
+      | TC_first_param (f,_) :: tower' ->
+          let vars, dt, _ = find_dt_ m f in
+          let subst, vars = Utils.fold_map (bind_decode_var_ ~state) Subst.empty vars in
+          (* in the surrounding application symbols, replace first arg with [hd] *)
+          let hd = U.app (U.const f) (List.map U.var vars) |> DecTerm.make in
+          (* merge with rest of DT *)
+          let v, vars', dt', k = aux subst hd tower' in
+          let vars', new_dt = merge_dt_ ~state ~subst ~remove_var:v dt vars' dt' in
+          vars @ vars', new_dt, k
 
   (* for every function [f], look its fun_encoding for full arity so as
      to obtain the tower. Lookup models for every app symbol involved and
@@ -947,7 +971,7 @@ module Make(T : TI.S) = struct
      model of its callers can refer to it. *)
   let decode_model ~state m =
     Utils.debug ~section 1 "decode model…";
-    let tr_term = decode_term_ ~state Var.Subst.empty in
+    let tr_term = decode_term_ ~state Subst.empty in
     (* partially applied fun: obtain the corresponding tree from
        application symbols. *)
     let decode_partial_fun_ new_m id =
@@ -979,7 +1003,7 @@ module Make(T : TI.S) = struct
           | TI.Const id when ID.Map.mem id state.fun_encodings ->
               decode_partial_fun_ new_m id
           | _ ->
-              let vars, _, dt = tr_dt ~state ~subst:Var.Subst.empty vars dt in
+              let vars, _, dt = tr_dt ~state ~subst:Subst.empty vars dt in
               let dt = (dt : (DecTerm.t,_) Model.DT.t :> (T.t,T.t) Model.DT.t) in
               Model.add_fun new_m (tr_term f, vars, dt, k))
 
