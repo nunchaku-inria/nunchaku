@@ -6,31 +6,21 @@ TODO explain there are libraries and the core
 
 {!modules:
 CVC4
-ElimCopy
-ElimHOF
-ElimIndPreds
-ElimMultipleEqns
-ElimPatternMatch
-ElimRecursion
 Env
 FO
 ID
 Intf
-IntroGuards
 Location
 MetaVar
 Model
-Monomorphization
 Pattern
 Polarity
-Polarize
 Prelude
 Problem
 ProblemMetadata
 Reduce
 Scheduling
 Signature
-Skolem
 Solver_intf
 Statement
 TermInner
@@ -41,14 +31,28 @@ Transform
 Traversal
 TyCardinality
 TypeCheck
-TypeInference
 TypeMono
 TypePoly
 TypeUnify
-Unroll
 UntypedAST
 Utils
 Var
+}
+
+{2 Transformations}
+{!modules:
+ElimCopy
+ElimHOF
+ElimIndPreds
+ElimMultipleEqns
+ElimPatternMatch
+ElimRecursion
+IntroGuards
+Monomorphization
+Polarize
+Skolem
+TypeInference
+Unroll
 }
 
 {2 Parsers}

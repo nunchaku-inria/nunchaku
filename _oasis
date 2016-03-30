@@ -99,5 +99,5 @@ Document nunchaku
   XOCamlbuildExtraArgs:
     "-docflags '-colorize-code -short-functors -charset utf-8'"
   XOCamlbuildLibraries:
-    nunchaku, nunchaku.parsers
+    nunchaku, nunchaku.parsers, nunchaku.transformations
 
