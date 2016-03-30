@@ -663,9 +663,7 @@ module Make(T : TI.S) = struct
           (* specialize the body, using the given substitution;
              then reduce newly introduced β-redexes, etc. *)
           let new_rhs =
-            specialize_term ~state ~depth:(depth+1) subst rhs
-            |> Red.snf
-          in
+            Red.snf (specialize_term ~state ~depth:(depth+1) subst rhs) in
           Stmt.Eqn_single (closure_vars @ new_vars, new_rhs)
         )
 
@@ -1076,9 +1074,8 @@ module Make(T : TI.S) = struct
   let rec decode_term_rec (state:decode_state) subst t =
     match T.repr t with
       | TI.Var v ->
-          begin try Subst.find_exn ~subst v |> U.eval ~subst
-            with Not_found -> errorf "could not find var %a" Var.print_full v
-          end
+          (* variable might not be bound, e.g. in skolem [_witness_of ...] *)
+          Subst.find_or ~default:t ~subst v |> U.eval ~subst
       | TI.Const f_id when is_spec_fun state f_id ->
           let dsf = find_spec state f_id in
           Utils.debugf ~section 5 "@[<2>decode `@[%a@]` from %a@]"
