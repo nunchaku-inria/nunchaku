@@ -72,19 +72,26 @@ module Make(FO_T : FO.S) = struct
 
   let gty_map_empty : _ gty_map = ID.Map.empty
 
-  let gty_head_exn ty =
-    match Ty.view ty with FOI.TyApp (id,_) -> id | FOI.TyBuiltin _ -> assert false
+  let gty_head ty =
+    match Ty.view ty with
+      | FOI.TyApp (id,_) -> Some id
+      | FOI.TyBuiltin _ -> None
 
   let gty_map_add m g x =
-    let id = gty_head_exn g in
-    let l = ID.Map.get_or id m ~or_:[] in
-    if CCList.Assoc.mem ~eq:gty_equal l g
-    then m
-    else ID.Map.add id ((g,x) :: l) m
+    match gty_head g with
+    | None -> assert false
+    | Some id ->
+        let l = ID.Map.get_or id m ~or_:[] in
+        if CCList.Assoc.mem ~eq:gty_equal l g
+        then m
+        else ID.Map.add id ((g,x) :: l) m
 
   let gty_map_find_exn m g =
-    let l = ID.Map.find (gty_head_exn g) m in
-    CCList.Assoc.get_exn ~eq:gty_equal l g
+    match gty_head g with
+      | None -> raise Not_found
+      | Some id ->
+          let l = ID.Map.find id m in
+          CCList.Assoc.get_exn ~eq:gty_equal l g
 
   let gty_map_mem m g = try ignore (gty_map_find_exn m g); true with Not_found -> false
 
@@ -650,7 +657,7 @@ module Make(FO_T : FO.S) = struct
     let add_ty_witnesses stmt l =
       List.fold_left
         (fun acc gty ->
-          if gty_map_mem state.witnesses gty || not (is_finite_ state gty)
+          if not (is_finite_ state gty) || gty_map_mem state.witnesses gty
           then acc (* already declared a witness for [gty], or [gty] is not
                       a finite type *)
           else (
