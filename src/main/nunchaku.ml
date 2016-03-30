@@ -129,6 +129,7 @@ let options =
   ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
   ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
+  ; "-t", Arg.Set_int timeout_, " alias to --timeout"
   ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
   ; "-i", Arg.String set_input_, " synonym for --input"
   ; "--output", Arg.String set_output_, " set output format " ^ list_outputs_ ()
