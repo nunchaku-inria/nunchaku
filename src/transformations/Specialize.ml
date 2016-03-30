@@ -1168,18 +1168,17 @@ module Make(T : TI.S) = struct
       let spec_args = Arg.to_list dsf.dsf_arg |> List.map (fun (i,_) -> i, `Spec) in
       let l = List.map (fun v -> `Var v) non_spec_vars in
       let l = insert_pos l spec_args in
-      CCList.Idx.foldi
+      let subst =
+        CCList.Idx.foldi
         (fun subst i -> function
            | `Spec -> subst
            | `Var v -> Subst.add ~subst v (List.nth vars i))
         Subst.empty l
+      in
+      Subst.add_list ~subst (Arg.vars dsf.dsf_arg) closure_vars
     in
     (* base substitution, valid in all branches *)
-    let subst0 =
-      let s = renaming in
-      let s = Subst.add_list ~subst:s (Arg.vars dsf.dsf_arg) closure_vars in
-      U.renaming_to_subst s
-    in
+    let subst0 = U.renaming_to_subst renaming in
     (* condition that holds for this whole DT: [subset of vars = specialized args] *)
     let base_eqns =
       CCList.Idx.foldi
@@ -1253,9 +1252,11 @@ module Make(T : TI.S) = struct
           | TI.Const f_id when is_spec_fun state f_id ->
               None (* drop models of specialized funs *)
           | _ ->
-              let subst, vars = Utils.fold_map bind_var_ Subst.empty vars in
+              let renaming, vars = Utils.fold_map Subst.rename_var Subst.empty vars in
+              let subst = U.renaming_to_subst renaming in
               let dt =
                 Model.DT.map dt
+                  ~var:(fun v -> Some (Subst.find_exn ~subst:renaming v))
                   ~ty:CCFun.id ~term:(decode_term_rec state subst) in
               Some (f, vars, dt, kind))
     in
