@@ -1203,17 +1203,23 @@ module Make(T : TI.S) = struct
                     (* test on closure var [v=t]: replace [v] with [t]
                        in this branch *)
                     Subst.add ~subst v t, []
-                  else subst, [Subst.find_exn ~subst:renaming v,t])
+                  else subst, [v,t])
                subst0
                eqns
            in
+           (* all "closure vars" should be bound in subst, for they should
+              occur in test? *)
+           assert (List.for_all (fun v -> Subst.mem ~subst v) closure_vars);
            let eqns' = base_eqns @ eqns' in
            (* translate a term and apply substitution on the fly *)
            let tr_term = decode_term_rec state subst in
-           List.map (fun (v,t) -> v, tr_term t) eqns', tr_term then_)
+           List.map
+             (fun (v,t) -> Subst.find_or ~default:v ~subst:renaming v, tr_term t)
+             eqns',
+           tr_term then_)
     and else_ =
       if U.is_undefined dt.Model.DT.else_ then []
-      else [base_eqns, decode_term state dt.Model.DT.else_]
+      else [base_eqns, decode_term_rec state subst0 dt.Model.DT.else_]
     in
     let res = List.rev_append then_ else_ in
     Utils.debugf ~section 5 "@[<2>... obtaining@ `@[<v>%a@]`@]"
