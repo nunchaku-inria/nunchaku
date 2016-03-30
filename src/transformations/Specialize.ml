@@ -1249,6 +1249,9 @@ module Make(T : TI.S) = struct
           | _ ->
               let renaming, vars = Utils.fold_map Subst.rename_var Subst.empty vars in
               let subst = U.renaming_to_subst renaming in
+              Utils.debugf ~section 5
+                "@[<2>decode DT `@[%a@]`@ with @[%a@]@]"
+                (fun k->k (Model.DT.print P.print) dt (Subst.print P.print) subst);
               let dt =
                 Model.DT.map dt
                   ~var:(fun v -> Some (Subst.find_exn ~subst:renaming v))

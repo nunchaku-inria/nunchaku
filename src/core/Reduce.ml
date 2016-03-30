@@ -282,16 +282,16 @@ module Make(T : TI.S) = struct
 
   (** {6 Reduction State} *)
 
-  let whnf t =
-    let st = Full.whnf_ {Full.subst=Subst.empty; head=t; args=[]} in
+  let whnf ?(subst=Subst.empty) t =
+    let st = Full.whnf_ {Full.subst; head=t; args=[]} in
     Full.term_of_state st
 
   let app_whnf ?(subst=Subst.empty) f l =
     let st = Full.whnf_ {Full.subst; head=f; args=l} in
     Full.term_of_state st
 
-  let snf t =
-    let st = Full.snf_ {Full.subst=Subst.empty; head=t; args=[]} in
+  let snf ?(subst=Subst.empty) t =
+    let st = Full.snf_ {Full.subst; head=t; args=[]} in
     Full.term_of_state st
 
   (* if [t = f x1...xn var], this returns [Some (f x1...xn)] *)
