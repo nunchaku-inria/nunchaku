@@ -189,7 +189,7 @@ let print pt pty out m =
     fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
       pty ty (pplist ~sep:", " ID.print) dom
   and pp_fun out (f,vars,dt,_) =
-    fpf out "@[<2>val @[%a@]@ :=@ @[<2>@[fun @[<hv>%a@]@].@ @[%a@]@]@]."
+    fpf out "@[<2>val @[%a@]@ :=@ @[<v2>@[fun @[<hv>%a@]@].@ @[%a@]@]@]."
       pt f
       (pplist ~sep:" " pp_tyvar) vars
       (DT.print pt) dt
