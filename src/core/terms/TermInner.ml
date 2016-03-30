@@ -748,6 +748,7 @@ module type UTIL = sig
   (** {6 Substitution Utils} *)
 
   type subst = (t_, t_) Var.Subst.t
+  type renaming = (t_, t_ Var.t) Var.Subst.t
 
   val equal_with : subst:subst -> t_ -> t_ -> bool
   (** Equality modulo substitution *)
@@ -756,16 +757,19 @@ module type UTIL = sig
   (** [deref ~subst t] dereferences [t] as long as it is a variable
       bound in [subst]. *)
 
+  val rename_var : subst -> t_ Var.t -> subst * t_ Var.t
+  (** Same as {!Subst.rename_var} but wraps the renamed var in a term *)
+
   exception ApplyError of string * t_ * t_ list * subst
   (** Raised when a type application fails *)
 
   val eval : subst:subst -> t_ -> t_
   (** Applying a substitution *)
 
-  val eval_renaming : subst:(t_, t_ Var.t) Var.Subst.t -> t_ -> t_
+  val eval_renaming : subst:renaming -> t_ -> t_
   (** Applying a variable renaming *)
 
-  val renaming_to_subst : (t_, t_ Var.t) Var.Subst.t -> (t_, t_) Var.Subst.t
+  val renaming_to_subst : renaming -> subst
 
   val ty_apply : t_ -> terms:t_ list -> tys:t_ list -> t_
   (** [apply t ~terms ~tys] computes the type of [f terms] for some
@@ -1014,6 +1018,11 @@ module Util(T : S)
   module Subst = Var.Subst
 
   type subst = (T.t, T.t) Subst.t
+  type renaming = (t_, t_ Var.t) Var.Subst.t
+
+  let rename_var subst v =
+    let v' = Var.fresh_copy v in
+    Subst.add ~subst v (var v'), v'
 
   let rec equal_with ~subst ty1 ty2 =
     match T.repr ty1, T.repr ty2 with

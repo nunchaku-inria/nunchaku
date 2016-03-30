@@ -94,6 +94,10 @@ module Subst = struct
 
   let map ~f s = M.map (fun (v,t) -> v, f t) s
 
+  let rename_var subst v =
+    let v' = fresh_copy v in
+    add ~subst v v', v'
+
   let to_list s = M.fold (fun _ (v,x) acc -> (v,x)::acc) s []
 
   let print pt out s =
