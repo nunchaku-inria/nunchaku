@@ -307,7 +307,7 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
     | Forall (v,f) ->
         fpf out "(@[forall %a@ %a@])" Var.print_full v print_term f
     | Exists (v,f) ->
-        fpf out "(@[forall %a@ %a@])" Var.print_full v print_term f
+        fpf out "(@[exists %a@ %a@])" Var.print_full v print_term f
 
   let print_model out m =
     let pp_pair out (t,u) = fpf out "@[%a -> %a@]" print_term t print_term u in
