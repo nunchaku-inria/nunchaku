@@ -53,6 +53,13 @@ module Make(T : TI.S) = struct
         P.print a P.print ty_a P.print b P.print ty_b;
     ()
 
+  let check_same_ty ty_a ty_b =
+    if not (U.equal ty_a ty_b)
+    then errorf_
+        "@[<2>types `@[%a@]` and `@[%a@]` should be the same@]"
+        P.print ty_a P.print ty_b;
+    ()
+
   module VarSet = U.VarSet
 
   (* check invariants recursively, return type of term *)
@@ -238,6 +245,12 @@ module Make(T : TI.S) = struct
     let check_top env bound () t = ignore (check ~env bound t) in
     (* update env *)
     let env = Env.add_statement ~env st in
+    (* basic check *)
+    let default_check st =
+      Stmt.fold_bind VarSet.empty () st
+        ~bind:(check_var ~env)
+        ~term:(check_top env) ~ty:(check_top env)
+    in
     (* check types *)
     begin match Stmt.view st with
       | Stmt.Axiom (Stmt.Axiom_rec defs) ->
@@ -250,10 +263,17 @@ module Make(T : TI.S) = struct
                let {Stmt.defined_head=id; _} = def.Stmt.rec_defined in
                check_eqns ~env ~bound id def.Stmt.rec_eqns)
             defs
-      | _ ->
-        Stmt.fold_bind VarSet.empty () st
-          ~bind:(check_var ~env)
-          ~term:(check_top env) ~ty:(check_top env);
+      | Stmt.Copy c ->
+          default_check st;
+          (* check additional invariants *)
+          check_same_ty
+            c.Stmt.copy_to
+            (U.ty_app (U.ty_const c.Stmt.copy_id) (List.map U.ty_var c.Stmt.copy_vars));
+          check_same_ty
+            c.Stmt.copy_abstract_ty (U.ty_arrow c.Stmt.copy_of c.Stmt.copy_to);
+          check_same_ty
+            c.Stmt.copy_concrete_ty (U.ty_arrow c.Stmt.copy_to c.Stmt.copy_of);
+      | _ -> default_check st
     end;
     env
 

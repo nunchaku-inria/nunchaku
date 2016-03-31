@@ -1158,7 +1158,7 @@ module Convert(Term : TermTyped.S) = struct
     let env =
       TyEnv.add_decl ~env c.A.concrete ~id:concrete ty_concrete in
     let c = Stmt.mk_copy
-      ~of_:ty_of ~vars ~ty:ty_id
+      ~of_:ty_of ~to_:ty_new ~vars ~ty:ty_id
       ~abstract:(abstract,ty_abstract)
       ~concrete:(concrete,ty_concrete) id in
     env, c

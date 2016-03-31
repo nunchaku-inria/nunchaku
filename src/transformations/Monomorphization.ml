@@ -512,22 +512,17 @@ module Make(T : TI.S) = struct
         let id', _ = mangle_ ~state:st c.Stmt.copy_id (ArgTuple.m_args tup) in
         let local_state = {depth; subst} in
         let of_' = mono_type ~state:st ~local_state c.Stmt.copy_of in
+        let to_' = mono_type ~state:st ~local_state c.Stmt.copy_to in
         let abstract', _ =
           mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
-        let ty_abstract' =
-          ArgTuple.app_poly_ty c.Stmt.copy_abstract_ty tup
-          |> fst
-          |> mono_type ~state:st ~local_state in
         let concrete', _ =
           mangle_ ~state:st c.Stmt.copy_concrete (ArgTuple.m_args tup) in
-        let ty_concrete' =
-          ArgTuple.app_poly_ty c.Stmt.copy_concrete_ty tup
-          |> fst
-          |> mono_type ~state:st ~local_state in
+        let ty_abstract' = U.ty_arrow of_' to_' in
+        let ty_concrete' = U.ty_arrow to_' of_' in
         let ty' = U.ty_type in
         (* create new copy type *)
         let c' = Stmt.mk_copy
-          ~of_:of_' ~ty:ty' ~vars:[]
+          ~of_:of_' ~to_:to_' ~ty:ty' ~vars:[]
           ~abstract:(abstract', ty_abstract')
           ~concrete:(concrete', ty_concrete')
           id'
