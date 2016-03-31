@@ -168,6 +168,17 @@ module Make(T : TI.S) = struct
 
   let compute_arities_stmt ~env m (stmt:(_,_,inv1) Stmt.t) =
     let f = compute_arities_term ~env in
+    (* declare  that [id : ty] is fully applied *)
+    let add_full_arity id ty m =
+      let _, args, ret = U.ty_unfold ty in
+      let n = List.length args in
+      add_arity_ m id n args ret
+    (* declare that [id : arg -> ret] is used with arity 1 *)
+    and add_arity1 id ty m =
+      let _, args, ret = U.ty_unfold ty in
+      assert (args <> []);
+      add_arity_ m id 1 args ret
+    in
     let m = match Stmt.view stmt with
       | Stmt.Axiom (Stmt.Axiom_rec l) ->
           (* function defined with "rec": always consider it fully applied *)
@@ -175,9 +186,7 @@ module Make(T : TI.S) = struct
             (fun m def ->
               (* declare defined ID with full arity *)
               let id = def.Stmt.rec_defined.Stmt.defined_head in
-              let _, args, ret = U.ty_unfold def.Stmt.rec_defined.Stmt.defined_ty in
-              let n = List.length args in
-              let m = add_arity_ m id n args ret in
+              let m = add_full_arity id def.Stmt.rec_defined.Stmt.defined_ty m in
               (* add arity 0 to higher-order parameter variables *)
               let m = match def.Stmt.rec_eqns with
                 | Stmt.Eqn_single (vars,_rhs) ->
@@ -188,6 +197,13 @@ module Make(T : TI.S) = struct
               in
               m)
             m l
+      | Stmt.Copy c ->
+          (* consider the abstract/concrete functions are applied to 1 arg *)
+          m
+          |> add_full_arity c.Stmt.copy_abstract c.Stmt.copy_abstract_ty
+          |> add_arity1 c.Stmt.copy_abstract c.Stmt.copy_abstract_ty
+          |> add_full_arity c.Stmt.copy_concrete c.Stmt.copy_concrete_ty
+          |> add_arity1 c.Stmt.copy_concrete c.Stmt.copy_concrete_ty
       | _ -> m
     in
     Stmt.fold m stmt ~ty:f ~term:f
@@ -741,9 +757,22 @@ module Make(T : TI.S) = struct
             l
         in
         [Stmt.mk_ty_def ~info kind l]
+    | Stmt.Copy c ->
+        let subst, copy_vars = bind_hof_vars ~state Subst.empty c.Stmt.copy_vars in
+        let copy_of = encode_ty_ ~state c.Stmt.copy_of in
+        let copy_to = encode_ty_ ~state c.Stmt.copy_to in
+        let c' = {
+          c with Stmt.
+            copy_pred = CCOpt.map (tr_term subst) c.Stmt.copy_pred;
+            copy_vars;
+            copy_of;
+            copy_to;
+            copy_abstract_ty=U.ty_arrow copy_of copy_to;
+            copy_concrete_ty=U.ty_arrow copy_to copy_of;
+        } in
+        [Stmt.copy ~info c']
     | Stmt.Axiom _
     | Stmt.Pred (_,_,_)
-    | Stmt.Copy _
     | Stmt.Goal _ ->
         let stmt' =
           Stmt.map_bind Subst.empty stmt
