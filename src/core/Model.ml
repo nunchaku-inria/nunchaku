@@ -229,7 +229,7 @@ module Util(T : TI.S) = struct
         let prefix = pick_prefix_ t in
         CCList.Idx.foldi
           (fun acc i id ->
-            let name = CCFormat.sprintf "%s_%d" prefix i in
+            let name = CCFormat.sprintf "$%s_%d" prefix i in
             let rhs = ID.make name in
             ID.Map.add id rhs acc)
           acc dom)
