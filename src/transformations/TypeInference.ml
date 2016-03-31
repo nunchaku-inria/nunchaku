@@ -353,10 +353,14 @@ module Convert(Term : TermTyped.S) = struct
     let cstors = TyEnv.find_datatype ?loc ~env (U.head_sym ty) in
     let missing = ID.Map.fold
       (fun id _ acc ->
-        if ID.Map.mem id m then acc else id::acc
-      ) cstors []
+        if ID.Map.mem id m then acc else id::acc)
+      cstors []
     in
     if missing=[] then `Ok else `Missing missing
+
+  let check_prop_ ~stack t =
+    unify_in_ctx_ ~stack (U.ty_exn t) U.ty_prop;
+    t
 
   (* convert a parsed term into a typed/scoped term *)
   let rec convert_term_ ~stack ~env t =
@@ -367,15 +371,10 @@ module Convert(Term : TermTyped.S) = struct
         ill_formed ~kind:"term" ?loc "equality must be fully applied"
     | A.Builtin s ->
         (* only some symbols correspond to terms *)
-        let prop1 = U.ty_arrow prop prop in
-        let prop2 = arrow_list [prop; prop] prop in
         let b, ty = match s with
-          | `Imply -> `Imply, prop2
-          | `Or -> `Or, prop2
-          | `And -> `And, prop2
+          | `Imply | `Or | `And | `Not -> ill_formed ?loc "partially applied connective"
           | `Prop -> ill_formed ?loc "`prop` is not a term, but a type"
           | `Type -> ill_formed ?loc "`type` is not a term"
-          | `Not -> `Not, prop1
           | `True -> `True, prop
           | `False -> `False, prop
           | `Undefined _ | `Eq | `Equiv -> assert false (* dealt with earlier *)
@@ -397,20 +396,38 @@ module Convert(Term : TermTyped.S) = struct
         unify_in_ctx_ ~stack ty (U.ty_exn b);
         if U.ty_is_Prop ty then U.equiv ?loc a b else U.eq ?loc a b
     | A.App (f, l) ->
-        (* infer type of [f] *)
-        let f' = convert_term_ ~stack ~env f in
-        let ty_f = U.ty_exn f' in
-        (* complete with implicit arguments, if needed *)
-        let l = match Loc.get f with
-          | A.AtVar _ -> l (* all arguments explicit *)
-          | _ ->
-              fill_implicit_ ?loc ty_f l
-        in
-        (* now, convert elements of [l] depending on what is
-           expected by the type of [f] *)
-        let ty, l' = convert_arguments_following_ty ty_f l
-          ~stack ~env ~subst:Subst.empty in
-        U.app ?loc ~ty f' l'
+        begin match Loc.get f, l with
+        | A.Builtin `Imply, [a;b] ->
+          let a = convert_term_ ~stack ~env a |> check_prop_ ~stack in
+          let b = convert_term_ ~stack ~env b |> check_prop_ ~stack in
+          U.builtin ~ty:prop (`Imply (a,b))
+        | A.Builtin `Imply, _ -> ill_formed ?loc "wrong arity for `=>`"
+        | A.Builtin `Or, _ ->
+          let l = List.map (fun t -> convert_term_ ~stack ~env t |> check_prop_ ~stack) l in
+          U.builtin ~ty:prop (`Or l)
+        | A.Builtin `And, _ ->
+          let l = List.map (fun t -> convert_term_ ~stack ~env t |> check_prop_ ~stack) l in
+          U.builtin ~ty:prop (`And l)
+        | A.Builtin `Not, [a] ->
+          let a = convert_term_ ~stack ~env a |> check_prop_ ~stack in
+          U.builtin ~ty:prop (`Not a)
+        | A.Builtin `Not, _ -> ill_formed ?loc "wrong arity for `~`"
+        | _ ->
+          (* infer type of [f] *)
+          let f' = convert_term_ ~stack ~env f in
+          let ty_f = U.ty_exn f' in
+          (* complete with implicit arguments, if needed *)
+          let l = match Loc.get f with
+            | A.AtVar _ -> l (* all arguments explicit *)
+            | _ ->
+                fill_implicit_ ?loc ty_f l
+          in
+          (* now, convert elements of [l] depending on what is
+             expected by the type of [f] *)
+          let ty, l' = convert_arguments_following_ty ty_f l
+              ~stack ~env ~subst:Subst.empty in
+          U.app ?loc ~ty f' l'
+        end
     | A.Var (`Var v) ->
         (* a variable might be applied, too *)
         let head, ty_head = match TyEnv.find_var ?loc ~env v with
@@ -878,13 +895,12 @@ module Convert(Term : TermTyped.S) = struct
 
   (* extract [forall vars. guard => f args] from a prop *)
   let rec extract_clause ~f t =
-    let is_imply_ i = match Term.repr i with TI.Builtin `Imply -> true | _ -> false in
     match Term.repr t with
     | TI.Bind (`Forall, v, t') ->
         CCOpt.map
           (fun (vars, g, t) -> v::vars,g,t)
           (extract_clause ~f t')
-    | TI.App (i, [a;b]) when is_imply_ i ->
+    | TI.Builtin (`Imply (a,b)) ->
         begin try
           if ID.equal (U.head_sym b) f then Some ([], Some a, b) else None
         with Not_found -> None

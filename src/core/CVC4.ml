@@ -492,7 +492,10 @@ module Make(FO_T : FO.S) = struct
     (* change the shape of [body] so it looks more like a decision tree *)
     let module U = FO.Util(FOBack) in
     match U.dt_of_term ~vars body with
-    | `Ok dt -> vars, dt
+    | `Ok dt ->
+        Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
+          (fun k->k P.print_term body (Model.DT.print P.print_term) dt);
+        vars, dt
     | `Error msg ->
         errorf_ "expected decision tree,@ but %s" msg
 

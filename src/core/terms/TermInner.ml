@@ -58,10 +58,10 @@ module Builtin = struct
   type 'a t =
     [ `True
     | `False
-    | `Not
-    | `Or
-    | `And
-    | `Imply
+    | `Not of 'a
+    | `Or of 'a list
+    | `And of 'a list
+    | `Imply of 'a * 'a
     | `Equiv of 'a * 'a
     | `Ite of 'a * 'a * 'a
     | `Eq of 'a * 'a
@@ -72,16 +72,25 @@ module Builtin = struct
     ]
 
   let is_infix : _ t -> bool = function
-    | `Eq _ | `Or | `And | `Equiv _ | `Imply | `Guard _ -> true
+    | `Eq _ | `Or _ | `And _ | `Equiv _ | `Imply _ | `Guard _ -> true
     | _ -> false
+
+  let rec print_infix_list pterm s out l = match l with
+    | [] -> assert false
+    | [t] -> pterm out t
+    | t :: l' ->
+        fpf out "@[%a@]@ %s %a"
+          pterm t s (print_infix_list pterm s) l'
 
   let pp pterm out : _ t -> unit = function
     | `True -> CCFormat.string out "true"
     | `False -> CCFormat.string out "false"
-    | `Not -> CCFormat.string out "~"
-    | `Or -> CCFormat.string out "||"
-    | `And -> CCFormat.string out "&&"
-    | `Imply -> CCFormat.string out "=>"
+    | `Not x -> fpf out "@[<2>~@ %a@]" pterm x
+    | `Or l ->
+        fpf out "@[<hv>%a@]" (print_infix_list pterm "||") l
+    | `And l ->
+        fpf out "@[<hv>%a@]" (print_infix_list pterm "&&") l
+    | `Imply (a,b) -> fpf out "@[@[%a@]@ @[<2>=>@ @[%a@]@]@]" pterm a pterm b
     | `Equiv (a,b) | `Eq (a,b) ->
         fpf out "@[<hv>%a@ @[<hv>=@ %a@]@]" pterm a pterm b
     | `Ite (a,b,c) ->
@@ -107,11 +116,11 @@ module Builtin = struct
   : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
   = fun eqterm a b -> match a, b with
     | `True, `True
-    | `False, `False
-    | `Not, `Not
-    | `Or, `Or
-    | `And, `And
-    | `Imply, `Imply -> true
+    | `False, `False -> true
+    | `Not a, `Not b -> eqterm a b
+    | `Imply (a1,b1), `Imply (a2,b2) -> eqterm a1 a2 && eqterm b1 b2
+    | `Or l1, `Or l2 -> CCList.equal eqterm l1 l2
+    | `And l1, `And l2 -> CCList.equal eqterm l1 l2
     | `Ite(a1,b1,c1), `Ite(a2,b2,c2) ->
         eqterm a1 a2 && eqterm b1 b2 && eqterm c1 c2
     | `Equiv (a1,b1), `Equiv(a2,b2)
@@ -126,22 +135,22 @@ module Builtin = struct
         && List.for_all2 eqterm g1.assuming g2.assuming
         && List.for_all2 eqterm g1.asserting g2.asserting
     | `Guard _, _
-    | `True, _ | `False, _ | `Ite _, _ | `Not, _
-    | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
+    | `True, _ | `False, _ | `Ite _, _ | `Not _, _
+    | `Eq _, _ | `Or _, _ | `And _, _ | `Equiv _, _ | `Imply _, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> false
 
   let map : f:('a -> 'b) -> 'a t -> 'b t
   = fun ~f b -> match b with
     | `True -> `True
     | `False -> `False
-    | `And -> `And
-    | `Imply -> `Imply
+    | `And l -> `And (List.map f l)
+    | `Imply (a,b) -> `Imply (f a, f b)
     | `Ite (a,b,c) -> `Ite (f a, f b, f c)
     | `Eq (a,b) -> `Eq (f a, f b)
     | `Equiv (a,b) -> `Equiv (f a, f b)
     | `DataTest id -> `DataTest id
-    | `Or -> `Or
-    | `Not -> `Not
+    | `Or l -> `Or (List.map f l)
+    | `Not t -> `Not (f t)
     | `DataSelect (c,n) -> `DataSelect (c,n)
     | `Undefined (id, t) -> `Undefined (id, f t)
     | `Guard (t, g) ->
@@ -151,13 +160,13 @@ module Builtin = struct
   let fold : f:('acc -> 'a -> 'acc) -> x:'acc -> 'a t -> 'acc
   = fun ~f ~x:acc b -> match b with
     | `True
-    | `And
-    | `Imply
     | `False
-    | `Or
     | `DataTest _
-    | `DataSelect _
-    | `Not -> acc
+    | `DataSelect _ -> acc
+    | `Imply (a,b) -> f (f acc a) b
+    | `Not t -> f acc t
+    | `Or l
+    | `And l -> List.fold_left f acc l
     | `Ite (a,b,c) -> f (f (f acc a) b) c
     | `Eq (a,b)
     | `Equiv (a,b) -> f (f acc a) b
@@ -167,16 +176,22 @@ module Builtin = struct
         let acc = List.fold_left f acc g.assuming in
         List.fold_left f acc g.asserting
 
+  let fold2_l ~f ~fail ~x l1 l2 =
+    if List.length l1=List.length l2
+    then List.fold_left2 f x l1 l2
+    else fail ()
+
   let fold2 :
       f:('acc -> 'a -> 'b -> 'acc) -> fail:(unit -> 'acc) ->
         x:'acc -> 'a t -> 'b t -> 'acc
   = fun ~f ~fail ~x:acc b1 b2 -> match b1, b2 with
     | `True, `True
-    | `And, `And
-    | `Imply, `Imply
-    | `False, `False
-    | `Not, `Not
-    | `Or, `Or -> acc
+    | `False, `False -> acc
+    | `Imply (a1,b1), `Imply (a2,b2) ->
+        let acc = f acc a1 a2 in f acc b1 b2
+    | `Not a, `Not b -> f acc a b
+    | `And l1, `And l2 -> fold2_l ~f ~fail ~x:acc l1 l2
+    | `Or l1, `Or l2 -> fold2_l ~f ~fail ~x:acc l1 l2
     | `DataTest i1, `DataTest i2 -> if ID.equal i1 i2 then acc else fail()
     | `DataSelect (i1,n1), `DataSelect (i2,n2) ->
         if n1=n2 && ID.equal i1 i2 then acc else fail()
@@ -195,22 +210,21 @@ module Builtin = struct
         let acc = List.fold_left2 f acc g1.assuming g2.assuming in
         List.fold_left2 f acc g1.asserting g2.asserting
     | `Guard _, _
-    | `True, _ | `False, _ | `Ite _, _ | `Not, _
-    | `Eq _, _ | `Or, _ | `And, _ | `Equiv _, _ | `Imply, _
+    | `True, _ | `False, _ | `Ite _, _ | `Not _, _
+    | `Eq _, _ | `Or _, _ | `And _, _ | `Equiv _, _ | `Imply _, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> fail()
-
 
 
   let iter : ('a -> unit) -> 'a t -> unit
   = fun f b -> match b with
     | `True
-    | `And
-    | `Imply
     | `False
-    | `Or
     | `DataTest _
-    | `DataSelect _
-    | `Not -> ()
+    | `DataSelect _ -> ()
+    | `Imply (a,b) -> f a; f b
+    | `Not t -> f t
+    | `And l
+    | `Or l -> List.iter f l
     | `Ite (a,b,c) -> f a; f b; f c
     | `Eq (a,b)
     | `Equiv (a,b) -> f a; f b
@@ -342,13 +356,8 @@ module Print(T : REPR)
           print last
     | Builtin b -> Builtin.pp print_in_app out b
     | App (f,l) ->
-        begin match T.repr f with
-        | Builtin b when Builtin.is_infix b ->
-            fpf out "@[<hv>%a@]" (print_infix_list b) l
-        | _ ->
-            fpf out "@[<2>%a@ %a@]" print_in_app f
-              (pp_list_ ~sep:" " print_in_app) l
-        end
+        fpf out "@[<2>%a@ %a@]" print_in_app f
+          (pp_list_ ~sep:" " print_in_app) l
     | Let (v,t,u) ->
         fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print_full v print t print u
     | Match (t,l) ->
@@ -376,12 +385,6 @@ module Print(T : REPR)
     | TyMeta _ -> print out t
     | Bind _ -> fpf out "(@[%a@])" print t
     | Let _ | TyArrow (_,_) -> fpf out "(@[%a@])" print t
-  and print_infix_list b out l = match l with
-    | [] -> assert false
-    | [t] -> print_in_app out t
-    | t :: l' ->
-        fpf out "@[%a@]@ @[%a@] %a"
-          print_in_app t (Builtin.pp print_in_app) b (print_infix_list b) l'
   and pp_typed_var out v =
     let ty = Var.ty v in
     if is_atomic_ ty
@@ -855,12 +858,8 @@ module Util(T : S)
           | Builtin `True when b=`Or -> raise (FlattenExit t) (* shortcut *)
           | Builtin `False when b=`Or -> []
           | Builtin `False when b=`And -> raise (FlattenExit t)
-          | App (f, l') ->
-              begin match T.repr f with
-              | Builtin `Or when b=`Or -> l'
-              | Builtin `And when b=`And -> l'
-              | _ -> [t]
-              end
+          | Builtin (`And l') when b=`And -> l'
+          | Builtin (`Or l') when b=`Or -> l'
           | _ -> [t])
         l
     with FlattenExit t ->
@@ -895,49 +894,45 @@ module Util(T : S)
         | _, Builtin `False -> not_ a
         | _ -> builtin_ arg
         end
-    | _ -> builtin_ arg
-
-  and app_builtin arg l = match arg, l with
-    | `And, _ ->
+    | `And l ->
         begin match flatten `And l with
         | [] -> true_
         | [x] -> x
-        | l -> app_builtin_ `And l
+        | l -> builtin_ (`And l)
         end
-    | `Or, _ ->
+    | `Or l ->
         begin match flatten `Or l with
         | [] -> false_
         | [x] -> x
-        | l -> app_builtin_ `Or l
+        | l -> builtin_ (`Or l)
         end
-    | `Not, [t] ->
+    | `Not t ->
         begin match T.repr t with
         | Builtin `True -> false_
         | Builtin `False -> true_
-        | App (f, l) ->
-            begin match T.repr f, l with
-            | Builtin `And, _ -> or_ (List.map not_ l)
-            | Builtin `Or, _ -> and_ (List.map not_ l)
-            | Builtin `Not, [t] -> t
-            | _ -> app_builtin_ `Not [t]
-            end
-        | _ -> app_builtin_ `Not [t]
+        | Builtin (`And l) -> or_ (List.map not_ l)
+        | Builtin (`Or l) -> and_ (List.map not_ l)
+        | Builtin (`Not t) -> t
+        | _ -> builtin_ (`Not t)
         end
-    | `Imply, [a;b] ->
+    | `Imply (a,b) ->
         begin match T.repr a, T.repr b with
         | Builtin `True, _ -> b
         | Builtin `False, _ -> true_
         | _, Builtin `True -> true_
         | _, Builtin `False -> not_ a
-        | _ -> app_builtin_ arg l
+        | _ -> builtin_ (`Imply (a,b))
         end
+    | _ -> builtin_ arg
+
+  and app_builtin arg l = match arg, l with
     | (`Ite _ | `Eq _ | `Equiv _), [] -> builtin arg
     | _ -> app_builtin_ arg l
 
-  and not_ t = app_builtin `Not [t]
-  and and_ l = app_builtin `And l
-  and or_ l = app_builtin `Or l
-  and imply a b = app_builtin `Imply [a;b]
+  and not_ t = builtin (`Not t)
+  and and_ l = builtin (`And l)
+  and or_ l = builtin (`Or l)
+  and imply a b = builtin (`Imply (a,b))
 
   let rec imply_l l ret = match l with
     | [] -> ret
@@ -1165,16 +1160,6 @@ module Util(T : S)
     | Var v -> var (Var.update_ty ~f:(f b_acc P.NoPol) v)
     | App (hd,l) ->
         begin match T.repr hd, l with
-        | Builtin `Not, [t] ->
-            let t = f b_acc (P.inv pol) t in
-            not_ t
-        | Builtin ((`Or | `And) as b), l ->
-            let l = List.map (f b_acc pol) l in
-            app_builtin b l
-        | Builtin `Imply, [a;b] ->
-            let a = f b_acc (P.inv pol) a in
-            let b = f b_acc pol b in
-            imply a b
         | Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
             let t = f b_acc pol t in
             app_builtin b [t]
@@ -1183,9 +1168,20 @@ module Util(T : S)
             let l = List.map (f b_acc P.NoPol) l in
             app hd l
         end
-    | Builtin
-      (`True | `False | `And | `Or | `Not
-        | `Imply | `DataSelect _ | `DataTest _) ->
+    | Builtin (`Not t) ->
+        let t = f b_acc (P.inv pol) t in
+        not_ t
+    | Builtin (`Or l) ->
+        let l = List.map (f b_acc pol) l in
+        or_ l
+    | Builtin (`And l) ->
+        let l = List.map (f b_acc pol) l in
+        and_ l
+    | Builtin (`Imply (a,b)) ->
+        let a = f b_acc (P.inv pol) a in
+        let b = f b_acc pol b in
+        imply a b
+    | Builtin (`True | `False | `DataSelect _ | `DataTest _) ->
        (* partially applied, or constant *)
           t
     | Builtin (`Undefined _ as b) -> builtin b
@@ -1369,18 +1365,16 @@ module Util(T : S)
     | None -> raise (Undefined id)
 
   let prop = ty_prop
-  let prop1 = ty_arrow prop prop
-  let prop2 = ty_arrow prop (ty_arrow prop prop)
 
   let rec ty_exn ~sigma t =
     match T.repr t with
     | Const id -> find_ty_ ~sigma id
     | Builtin b ->
         begin match b with
-          | `Imply -> prop2
-          | `Or
-          | `And -> assert false (* should be handled below *)
-          | `Not -> prop1
+          | `Imply (_,_)
+          | `Or _
+          | `And _
+          | `Not _ -> prop
           | `True
           | `False -> prop
           | `Ite (_,b,_) -> ty_exn ~sigma b
@@ -1404,10 +1398,7 @@ module Util(T : S)
         end
     | Var v -> Var.ty v
     | App (f,l) ->
-        begin match T.repr f with
-        | Builtin (`And | `Or) -> prop
-        | _ -> ty_apply (ty_exn ~sigma f) ~terms:l ~tys:(List.map (ty_exn ~sigma) l)
-        end
+        ty_apply (ty_exn ~sigma f) ~terms:l ~tys:(List.map (ty_exn ~sigma) l)
     | Bind (b,v,t) ->
         begin match b with
         | `Forall

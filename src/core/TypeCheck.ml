@@ -27,8 +27,6 @@ module Make(T : TI.S) = struct
   let empty_env () = Env.create ()
 
   let prop = U.ty_prop
-  let prop1 = U.ty_arrow prop prop
-  let prop2 = U.ty_arrow prop (U.ty_arrow prop prop)
 
   let find_ty_ ~env id =
     try Env.find_ty_exn ~env id
@@ -68,10 +66,22 @@ module Make(T : TI.S) = struct
     | TI.Const id -> find_ty_ ~env id
     | TI.Builtin b ->
         begin match b with
-          | `Imply -> prop2
-          | `Or
-          | `And -> assert false (* should be handled below *)
-          | `Not -> prop1
+          | `Imply (a,b) ->
+              let tya = check ~env bound a in
+              let tyb = check ~env bound b in
+              check_prop a tya;
+              check_prop b tyb;
+              prop
+          | `Or l
+          | `And l ->
+              List.iter
+                (fun t -> let tyt = check ~env bound t in check_prop t tyt)
+                l;
+              prop
+          | `Not f ->
+              let tyf = check ~env bound f in
+              check_prop f tyf;
+              prop
           | `True
           | `False -> prop
           | `Ite (a,b,c) ->
@@ -116,14 +126,8 @@ module Make(T : TI.S) = struct
         then errorf_ "variable %a not bound in scope" Var.print_full v;
         Var.ty v
     | TI.App (f,l) ->
-        begin match T.repr f with
-          | TI.Builtin (`And | `Or) ->
-              List.iter (check_is_prop ~env bound) l;
-              prop
-          | _ ->
-              U.ty_apply (check ~env bound f)
-                ~terms:l ~tys:(List.map (check ~env bound) l)
-        end
+        U.ty_apply (check ~env bound f)
+          ~terms:l ~tys:(List.map (check ~env bound) l)
     | TI.Bind (b,v,body) ->
         begin match b with
         | `Forall

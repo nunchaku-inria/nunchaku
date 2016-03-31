@@ -29,6 +29,7 @@ module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
   module PStmt = Stmt.Print(P)(P)
+  module Red = Reduce.Make(T)
 
   type term = T.t
 
@@ -178,8 +179,8 @@ module Make(T : TI.S) = struct
         } in
         let t = polarize_term_rec ~state pol subst t in
         U.guard t g
-    | TI.Builtin (`True | `False | `DataTest _ | `And | `Or | `Not
-                 | `DataSelect _ | `Undefined _ | `Imply) ->
+    | TI.Builtin (`True | `False | `DataTest _
+                 | `DataSelect _ | `Undefined _) ->
         U.eval_renaming ~subst t
     | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
     | TI.Const id ->
@@ -257,7 +258,7 @@ module Make(T : TI.S) = struct
           only obtain a non-polarized one. *)
         polarize_term_rec ~state pol subst (U.and_ [U.imply a b; U.imply b a])
     | TI.Bind ((`Forall | `Exists | `Fun | `Mu), _, _)
-    | TI.Builtin (`Ite _ | `Eq _ | `Equiv _)
+    | TI.Builtin (`Ite _ | `Eq _ | `Equiv _  | `And _ | `Or _ | `Not _  | `Imply _)
     | TI.Let _
     | TI.Match _ ->
         (* generic treatment *)
@@ -458,8 +459,6 @@ module Make(T : TI.S) = struct
       ~f:(fun subst t -> rewrite ~subst sys t)
       ~bind:(fun s v -> s, v)
 
-  module Red = Reduce.Make(T)
-
   (* filter [dt], the decision tree for [polarized], returning
      only the cases that return [true] (if [is_pos]) or [false] (if [not is_pos]) *)
   let filter_dt_ ~is_pos ~polarized ~sys ~subst dt =
@@ -486,9 +485,7 @@ module Make(T : TI.S) = struct
             errorf_
               "@[<2>expected decision tree for %a@ to yield only true/false@ \
                but branch `@[%a@]`@ yields `@[%a@]`@]"
-               ID.print polarized
-               (Model.DT.print_tests P.print) eqns
-               P.print then_)
+               ID.print polarized (Model.DT.print_tests P.print) eqns P.print then_)
       dt.Model.DT.tests
 
   let find_polarized_ ~state id =

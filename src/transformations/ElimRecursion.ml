@@ -242,8 +242,7 @@ module Make(T : TI.S) = struct
               (* generic treatment *)
               tr_term_rec_' ~state subst t
         end
-    | TI.Builtin (`True | `False
-        | `And | `Or | `Not | `Imply | `DataSelect _ | `DataTest _) ->
+    | TI.Builtin (`True | `False | `DataSelect _ | `DataTest _) ->
           t (* partially applied, or constant *)
     | TI.Builtin (`Undefined _ as b) ->
         U.builtin (TI.Builtin.map b ~f:(tr_term_rec_ ~state subst))
@@ -252,7 +251,7 @@ module Make(T : TI.S) = struct
         let g' = TI.Builtin.map_guard (tr_term_rec_ ~state subst) g in
         U.guard t g'
     | TI.Bind (`Fun,_,_) -> fail_tr_ t "translation of λ impossible"
-    | TI.Builtin (`Equiv _ | `Eq _ | `Ite _)
+    | TI.Builtin (`Equiv _ | `Eq _ | `Ite _ | `And _ | `Or _ | `Not _ | `Imply _)
     | TI.Bind ((`Forall | `Exists | `Mu), _, _)
     | TI.Match _
     | TI.Let _ ->

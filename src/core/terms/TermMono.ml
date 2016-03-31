@@ -147,8 +147,11 @@ module ToFO(T : TI.S)(F : FO.S) = struct
           | _ -> ()
         end;
         FO.T.eq (conv_term ~sigma a)(conv_term ~sigma b)
-    | Builtin (`And | `Or | `Not | `Imply) ->
-        fail_ t "partially applied connectives"
+    | Builtin (`Not t) -> FO.T.not_ (conv_term ~sigma t)
+    | Builtin (`And l) -> FO.T.and_ (List.map (conv_term ~sigma) l)
+    | Builtin (`Or l) -> FO.T.or_ (List.map (conv_term ~sigma) l)
+    | Builtin (`Imply (a,b)) ->
+        FO.T.imply (conv_term ~sigma a) (conv_term ~sigma b)
     | App (f, l) ->
         begin match Mono.repr f, l with
         | Const id, _ -> FO.T.app id (List.map (conv_term ~sigma) l)
@@ -156,11 +159,6 @@ module ToFO(T : TI.S)(F : FO.S) = struct
             FO.T.data_test c (conv_term ~sigma t)
         | Builtin (`DataSelect (c,n)), [t] ->
             FO.T.data_select c n (conv_term ~sigma t)
-        | Builtin `Not, [t] -> FO.T.not_ (conv_term ~sigma t)
-        | Builtin `And, l -> FO.T.and_ (List.map (conv_term ~sigma) l)
-        | Builtin `Or, l -> FO.T.or_ (List.map (conv_term ~sigma) l)
-        | Builtin `Imply, [a;b] ->
-            FO.T.imply (conv_term ~sigma a) (conv_term ~sigma b)
         | _ -> fail_ t "application of non-constant term"
         end
     | Bind (`Fun,v,t) ->

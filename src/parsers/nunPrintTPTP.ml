@@ -54,10 +54,13 @@ module Make(T : TI.S) = struct
     | `Equiv (a,b) ->
         fpf out "@[<hv>%a <=>@ %a@]" print_inner a print_inner b
     | `Undefined (_id,t) -> print_inner out t
-    | `And
-    | `Imply
-    | `Or
-    | `Not
+    | `Not f -> fpf out "~ %a" print_inner f
+    | `And l ->
+        fpf out "@[<hv>%a@]" (pp_list ~sep:" & " print_inner) l
+    | `Or l ->
+        fpf out "@[<hv>%a@]" (pp_list ~sep:" | " print_inner) l
+    | `Imply (a,b) ->
+        fpf out "@[<hv>%a =>@ %a@]" print_inner a print_inner b
     | `DataTest _
     | `DataSelect _
     | `Guard _
@@ -96,27 +99,7 @@ module Make(T : TI.S) = struct
         | TI.Var _ ->
             fpf out "@[<2>%a(%a)@]"
               print_inner f (pp_list ~sep:", " print_term) l
-        | TI.Builtin b ->
-            begin match b, l with
-            | `Not, [f] -> fpf out "~ %a" print_inner f
-            | `And, _ ->
-                fpf out "@[<hv>%a@]" (pp_list ~sep:" & " print_inner) l
-            | `Or, _ ->
-                fpf out "@[<hv>%a@]" (pp_list ~sep:" | " print_inner) l
-            | `Imply, [a;b] ->
-                fpf out "@[<hv>%a =>@ %a@]" print_inner a print_inner b
-            | `True, _
-            | `False, _
-            | `Eq _ ,_
-            | `Equiv _ ,_
-            | `Ite _, _
-            | `Not ,_
-            | `Undefined _, _
-            | `DataTest _, _
-            | `DataSelect _, _
-            | `Guard _, _
-            | `Imply ,_ -> assert false
-            end
+        | TI.Builtin _ -> assert false
         | _ ->
             Utils.not_implementedf
               "@[<2>print_model:@ could not apply `@[%a@]`@ to arguments [@[%a@]]@]"

@@ -109,16 +109,6 @@ end = struct
     | TI.Var _ -> t, empty_guard
     | TI.App (f,l) ->
         begin match T.repr f, l with
-        | TI.Builtin `Not, [t] ->
-            let t, g = tr_term ~state ~pol:(Pol.inv pol) t in
-            combine pol (U.not_ t) g
-        | TI.Builtin ((`Or | `And) as b), l ->
-            let l, g = tr_list ~state ~pol ~acc:empty_guard l in
-            combine pol (U.app_builtin b l) g
-        | TI.Builtin `Imply, [a;b] ->
-            let a, g_a = tr_term ~state ~pol:(Pol.inv pol) a in
-            let b, g_b = tr_term ~state ~pol b in
-            combine pol (U.imply a b) (combine_guard g_a g_b)
         | TI.Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
             let t', conds = tr_term ~state ~pol t in
             U.app_builtin b [t'], conds
@@ -130,9 +120,21 @@ end = struct
             let t' = U.app f l in
             if is_prop ~state t then combine pol t' g else t', g
         end
+    | TI.Builtin (`Not t) ->
+        let t, g = tr_term ~state ~pol:(Pol.inv pol) t in
+        combine pol (U.not_ t) g
+    | TI.Builtin (`Or l) ->
+        let l, g = tr_list ~state ~pol ~acc:empty_guard l in
+        combine pol (U.or_ l) g
+    | TI.Builtin (`And l) ->
+        let l, g = tr_list ~state ~pol ~acc:empty_guard l in
+        combine pol (U.and_ l) g
+    | TI.Builtin (`Imply (a,b)) ->
+        let a, g_a = tr_term ~state ~pol:(Pol.inv pol) a in
+        let b, g_b = tr_term ~state ~pol b in
+        combine pol (U.imply a b) (combine_guard g_a g_b)
     | TI.Builtin
-      (`True | `False | `And | `Or | `Not
-        | `Imply | `DataSelect _ | `DataTest _) ->
+      (`True | `False | `DataSelect _ | `DataTest _) ->
        (* partially applied, or constant *)
         t, empty_guard
     | TI.Builtin (`Undefined _ as b) ->
