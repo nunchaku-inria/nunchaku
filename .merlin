@@ -4,6 +4,7 @@ S src/core/types
 S src/transformations/
 S src/main/
 S src/parsers/
+S src/random/
 B _build/src/**
 PKG containers
 PKG containers.iter
@@ -11,5 +12,6 @@ PKG containers.data
 PKG sequence
 PKG unix
 PKG zarith
+PKG qcheck
 B +threads
 FLG -w +a-4-44-29

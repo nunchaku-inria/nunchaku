@@ -15,6 +15,10 @@ Synopsis:    A counter-example finder for higher-order logic
 
 XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain' -j 0"
 
+Flag "random"
+  Description:      enable the library for generating random data
+  Default:          true
+
 Library "nunchaku_core"
   Path:             src/core/
   Pack:             true
@@ -66,6 +70,16 @@ Library "nunchaku_transformations"
   FindlibName:      transformations
   FindlibParent:    nunchaku_core
   BuildDepends:     containers, nunchaku
+
+Library "nunchaku_random"
+  Path:             src/random
+  Pack:             true
+  Modules:          Term_random
+  Install$:         flag(random)
+  Build$:           flag(random)
+  FindlibParent:    nunchaku_core
+  FindlibName:      random
+  BuildDepends:     nunchaku, qcheck
 
 Executable nunchaku
   Path:             src/main/

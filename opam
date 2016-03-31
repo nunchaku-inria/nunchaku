@@ -6,6 +6,7 @@ maintainer: "simon.cruanes@inria.fr"
 build: [
     ["./configure"
         "--prefix" prefix
+        "--%{qtest:enable}%-random"
         "--enable-docs"
     ]
     [make "build"]
@@ -28,6 +29,9 @@ depends: [
     "zarith"
     "oasis" {build}
     "ocamlbuild" {build}
+]
+depopts: [
+    "qtest"
 ]
 homepage: "https://github.com/nunchaku-inria/nunchaku/"
 available: [ocaml-version >= "4.00.0"]
