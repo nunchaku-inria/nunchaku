@@ -335,4 +335,34 @@ module Make(T : TI.S) = struct
     | _ -> t
 end
 
+(*$inject
+  module T = Term_random.T
+  module U = TermInner.Util(T)
+  module Red = Make(T)
+*)
+
+(* idempotence of WHNF *)
+(*$QR
+  Term_random.arbitrary
+    (fun t ->
+      let t' = Red.whnf t in
+      U.equal t' (Red.whnf t'))
+*)
+
+(* WHNF/SNF type is identity *)
+(*$Q
+  Term_random.arbitrary_ty (fun ty -> U.equal ty (Red.whnf ty))
+  Term_random.arbitrary_ty (fun ty -> U.equal ty (Red.snf ty))
+*)
+
+
+(* idempotence of SNF *)
+(*$QR
+  Term_random.arbitrary
+    (fun t ->
+      let t' = Red.snf t in
+      U.equal t' (Red.snf t'))
+*)
+
+
 

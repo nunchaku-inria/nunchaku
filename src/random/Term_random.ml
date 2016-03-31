@@ -69,7 +69,7 @@ let base_sig =
     ; a2, U.ty_const a
     ; f_a, U.(ty_arrow_l [U.ty_const a; U.ty_const b] (U.ty_const a))
     ; g_a, U.(ty_arrow_l [U.ty_const a] (U.ty_const a))
-    ; g_a, U.(ty_arrow_l [app_const_ list [U.ty_const a]] (U.ty_const a))
+    ; h_a, U.(ty_arrow_l [app_const_ list [U.ty_const a]] (U.ty_const a))
     ; b0, U.ty_const b
     ; b1, U.ty_const b
     ; b2, U.ty_const b
@@ -95,19 +95,10 @@ let base_sig =
       U.(ty_forall alpha (app_const_ list [U.var alpha]))
     ]
 
-type id_plus =
-  | I of ID.t
-  | Prop
-
-let compare_id_plus i1 i2 = match i1, i2 with
-  | Prop, Prop -> 0
-  | I i1, I i2 -> ID.compare i1 i2
-  | I _, Prop -> 1
-  | Prop, I _ -> -1
-
 type build_rule =
   | AppID of ID.t
   | AppBuiltin of (term list -> term)
+  | AppVar of ty Var.t
 
 (* rule to build some type:
    to build [target], need to create arguments [args]. All variables occuring
@@ -122,6 +113,7 @@ type backward_rule = {
 let pp_build_rule out = function
   | AppID id -> ID.print out id
   | AppBuiltin _ -> CCFormat.string out "<builtin>"
+  | AppVar v -> Var.print_full out v
 
 let pp_rule out r =
   Format.fprintf out "(@[<2>%a :-@ @[<hv>%a@]@ using %a@])"
@@ -153,6 +145,8 @@ let builtin_rules =
   ; {target=U.ty_prop; goals=[U.ty_prop]; vars=[]; build=AppBuiltin mk_not}
   ; {target=U.ty_prop; goals=[U.ty_prop; U.ty_prop]; vars=[]; build=AppBuiltin U.and_}
   ; {target=U.ty_prop; goals=[U.ty_prop; U.ty_prop]; vars=[]; build=AppBuiltin U.or_}
+  ; {target=U.ty_prop; goals=[]; vars=[]; build=AppBuiltin (fun _ -> U.true_)}
+  ; {target=U.ty_prop; goals=[]; vars=[]; build=AppBuiltin (fun _ -> U.false_)}
   ]
 
 (* rename a rule with fresh variables *)
@@ -189,9 +183,6 @@ let sized' g = G.(3 -- 50 >>= g)
 
 (* TODO: polymorphism? *)
 
-(* TODO: generate function types
-   - to build a, build (b -> a) and b
-   - to build the term we need a set of bound variables to use *)
 let ty =
   let base = G.oneofl [U.const S.a; U.const S.b; U.ty_prop] in
   let pair' a b = app_const_ S.pair [a;b] in
@@ -213,8 +204,31 @@ let ty =
             ])
   |> sized'
 
-(* recursive generation of a term of type [ty] *)
-let rec gen_ rules ty subst size =
+let mk_fresh_var_ = Var.make_gen ~names:"v_%d"
+
+let rule_of_var v =
+  let _, args, ret = U.ty_unfold (Var.ty v) in
+  {build=AppVar v; target=ret; goals=args; vars=[]}
+
+(* recursive generation of a term of type [ty].
+   @param subst substitution so far
+   @param vars set of bound variables on the path *)
+let rec gen_ rules ty subst vars size =
+  let ty = U.eval ~subst ty in
+  let _, args, ret = U.ty_unfold ty in
+  if args=[] then gen_atom_ rules ty subst vars size
+  else
+    let (>|=) = G.(>|=) in
+    (* generate fresh variables for the arguments*)
+    let vars' = List.map mk_fresh_var_ args in
+    let vars = U.VarSet.add_list vars vars' in
+    (* also add the variables to the set of rules *)
+    let rules = List.map rule_of_var vars' @ rules in
+    (* now generate the body and build a function *)
+    gen_atom_ rules ret subst vars size >|= fun body ->
+    U.fun_l vars' body
+
+and gen_atom_ rules ty subst vars size =
   let possible_rules =
     CCList.filter_map
       (fun r ->
@@ -232,28 +246,32 @@ let rec gen_ rules ty subst size =
              Some (freq, (subst, r)))
       rules
   in
-  assert (possible_rules <> []);
+  if possible_rules=[] then (
+    Format.printf "no rule applies for @[%a@]@." P.print ty;
+    assert false;
+  );
   let open G in
   (* pick a rule randomly *)
   frequencyl possible_rules >>= fun (subst, r) ->
   (* generate a term for each goal type *)
   let size' = size - 2 * List.length r.goals in
-  gen_l_ rules r.goals subst size' >|= fun l ->
+  gen_l_ rules r.goals subst vars size' >|= fun l ->
   (* apply [r.id] to the terms *)
   match r.build with
     | AppID id -> app_const_ id l
     | AppBuiltin f -> f l
+    | AppVar v -> U.app (U.var v) l
 
 (* generate a list of terms of types [ty_l] *)
-and gen_l_ rules ty_l subst size = match ty_l with
+and gen_l_ rules ty_l subst vars size = match ty_l with
   | [] -> G.return []
   | ty :: ty_tail ->
     let open G in
-    gen_ rules ty subst size >>= fun t ->
-    gen_l_ rules ty_tail subst size >|= fun tail ->
+    gen_ rules ty subst vars size >>= fun t ->
+    gen_l_ rules ty_tail subst vars size >|= fun tail ->
     t :: tail
 
-let of_ty ty = sized' (gen_ rules ty Subst.empty)
+let of_ty ty = sized' (gen_ rules ty Subst.empty U.VarSet.empty)
 
 let prop = of_ty U.ty_prop
 
@@ -261,7 +279,7 @@ let random = G.(ty >>= of_ty)
 
 let mk_arbitrary_ g =
   QCheck.make
-    ~print:(CCFormat.to_string print_term)
+    ~print:(CCFormat.sprintf "@[<4>%a@]" print_term)
     ~small:U.size
     g
 
