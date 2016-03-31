@@ -1242,7 +1242,11 @@ module Util(T : S)
 
   let size t =
     let n = ref 0 in
-    iter () t ~bind:(fun () _ -> ()) ~f:(fun () _ -> incr n);
+    let rec aux t =
+      incr n;
+      iter () t ~bind:(fun () _ -> ()) ~f:(fun () t' -> aux t')
+    in
+    aux t;
     !n
 
   let rec deref ~subst t = match T.repr t with
