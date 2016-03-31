@@ -207,7 +207,7 @@ module Make(T : TI.S) = struct
             | Env.Data (_,_,_)
             | Env.Cstor (_,_,_,_)
             | Env.Copy_abstract _
-            | Env.Copy_concretize _
+            | Env.Copy_concrete _
             | Env.Copy_ty _
             | Env.Fun_spec _ ->
                 (* do not polarize *)

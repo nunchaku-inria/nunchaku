@@ -223,7 +223,7 @@ module Make(T : TI.S) = struct
       | Env.Fun_spec (_,_)
       | Env.Pred (_,_,_,_,_)
       | Env.Copy_abstract _
-      | Env.Copy_concretize _ -> errorf_ "%a is not a type" ID.print id
+      | Env.Copy_concrete _ -> errorf_ "%a is not a type" ID.print id
     in
     (* maybe cache *)
     begin match op with

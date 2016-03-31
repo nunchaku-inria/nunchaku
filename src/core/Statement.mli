@@ -103,8 +103,8 @@ type (+'t, +'ty) copy = {
   copy_of: 'ty; (* [id vars] is a copy of [of_]. Set of variables = vars *)
   copy_abstract: ID.t; (* [of_ -> id vars] *)
   copy_abstract_ty: 'ty;
-  copy_concretize: ID.t; (* [id vars -> of] *)
-  copy_concretize_ty: 'ty;
+  copy_concrete: ID.t; (* [id vars -> of] *)
+  copy_concrete_ty: 'ty;
   copy_pred: 't option; (* invariant (prop) *)
 }
 
@@ -204,7 +204,7 @@ val mk_copy :
   of_:'ty ->
   ty:'ty ->
   abstract:(ID.t * 'ty) ->
-  concretize:(ID.t * 'ty) ->
+  concrete:(ID.t * 'ty) ->
   vars:'ty Var.t list ->
   ID.t ->
   ('t, 'ty) copy

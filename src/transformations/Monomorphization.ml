@@ -173,7 +173,7 @@ module Make(T : TI.S) = struct
     match Env.find_exn ~env id with
     | {Env.def=(Env.Fun_def _ | Env.Fun_spec _ |
                 Env.Cstor _ | Env.Data _ | Env.Pred _ |
-                Env.Copy_abstract _ | Env.Copy_concretize _ |
+                Env.Copy_abstract _ | Env.Copy_concrete _ |
                 Env.Copy_ty _); _} ->
         true (* defined objects: mangle *)
     | {Env.def=Env.NoDef; decl_kind=(Stmt.Decl_fun | Stmt.Decl_prop); _} ->
@@ -518,10 +518,10 @@ module Make(T : TI.S) = struct
           ArgTuple.app_poly_ty c.Stmt.copy_abstract_ty tup
           |> fst
           |> mono_type ~state:st ~local_state in
-        let concretize', _ =
-          mangle_ ~state:st c.Stmt.copy_concretize (ArgTuple.m_args tup) in
-        let ty_concretize' =
-          ArgTuple.app_poly_ty c.Stmt.copy_concretize_ty tup
+        let concrete', _ =
+          mangle_ ~state:st c.Stmt.copy_concrete (ArgTuple.m_args tup) in
+        let ty_concrete' =
+          ArgTuple.app_poly_ty c.Stmt.copy_concrete_ty tup
           |> fst
           |> mono_type ~state:st ~local_state in
         let ty' = U.ty_type in
@@ -529,7 +529,7 @@ module Make(T : TI.S) = struct
         let c' = Stmt.mk_copy
           ~of_:of_' ~ty:ty' ~vars:[]
           ~abstract:(abstract', ty_abstract')
-          ~concretize:(concretize', ty_concretize')
+          ~concrete:(concrete', ty_concrete')
           id'
         in
         self#push_res (Stmt.copy ~info:{Stmt.name=None; loc;} c')

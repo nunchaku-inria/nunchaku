@@ -105,8 +105,8 @@ type (+'t, +'ty) copy = {
   copy_of: 'ty; (* [id vars] is a copy of [of_]. Set of variables = vars *)
   copy_abstract: ID.t; (* [of -> id vars] *)
   copy_abstract_ty: 'ty;
-  copy_concretize: ID.t; (* [id vars -> of] *)
-  copy_concretize_ty: 'ty;
+  copy_concrete: ID.t; (* [id vars -> of] *)
+  copy_concrete_ty: 'ty;
   copy_pred: 't option; (* invariant (prop) *)
 }
 
@@ -182,17 +182,17 @@ let mk_mutual_ty id ~ty_vars ~cstors ~ty =
   in
   {ty_id=id; ty_type=ty; ty_vars; ty_cstors; }
 
-let mk_copy ?pred ~of_ ~ty ~abstract ~concretize ~vars id =
+let mk_copy ?pred ~of_ ~ty ~abstract ~concrete ~vars id =
   let copy_abstract, copy_abstract_ty = abstract in
-  let copy_concretize, copy_concretize_ty = concretize in
+  let copy_concrete, copy_concrete_ty = concrete in
   { copy_id=id;
     copy_vars=vars;
     copy_ty=ty;
     copy_of=of_;
     copy_abstract;
     copy_abstract_ty;
-    copy_concretize;
-    copy_concretize_ty;
+    copy_concrete;
+    copy_concrete_ty;
     copy_pred=pred;
   }
 
@@ -256,7 +256,7 @@ let map_copy_bind ~bind ~term ~ty acc c =
     copy_of = ty acc' c.copy_of;
     copy_ty = ty acc c.copy_ty;
     copy_abstract_ty = ty acc' c.copy_abstract_ty;
-    copy_concretize_ty = ty acc' c.copy_concretize_ty;
+    copy_concrete_ty = ty acc' c.copy_concrete_ty;
     copy_pred = CCOpt.map (term acc') c.copy_pred;
   }
 
@@ -465,7 +465,7 @@ let fold_bind (type inv) ~bind ~term:fterm ~ty:fty b_acc acc (st:(_,_,inv) t) =
       let b_acc = List.fold_left bind b_acc c.copy_vars in
       let acc =
         List.fold_left (fty b_acc) acc
-          [c.copy_of; c.copy_ty; c.copy_concretize_ty; c.copy_abstract_ty] in
+          [c.copy_of; c.copy_ty; c.copy_concrete_ty; c.copy_abstract_ty] in
       CCOpt.fold (fterm b_acc) acc c.copy_pred
   | Goal t -> fterm b_acc acc t
 
@@ -583,12 +583,12 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
       | Some p -> fpf out "@,@[<2>pred@ @[%a@]@]" Pt.print p
     in
     fpf out
-      "@[<v2>copy @[%a %a :=@ @[%a@]@]@ abstract %a : %a@ concretize %a : %a%a@]"
+      "@[<v2>copy @[%a %a :=@ @[%a@]@]@ abstract %a : %a@ concrete %a : %a%a@]"
       ID.print c.copy_id
       (CCFormat.list ~start:"" ~stop:"" ~sep:" " Var.print_full) c.copy_vars
       Pty.print c.copy_of
       ID.print c.copy_abstract Pty.print c.copy_abstract_ty
-      ID.print c.copy_concretize Pty.print c.copy_concretize_ty
+      ID.print c.copy_concrete Pty.print c.copy_concrete_ty
       pp_pred c.copy_pred
 
   let print_tydef out tydef =

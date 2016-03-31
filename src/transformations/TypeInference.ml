@@ -1149,18 +1149,18 @@ module Convert(Term : TermTyped.S) = struct
     end;
     let abstract = ID.make_full ~needs_at:(vars<>[]) c.A.abstract in
     let ty_abstract = ty_forall_l_ vars (U.ty_arrow ty_of ty_new) in
-    let concretize = ID.make_full ~needs_at:(vars<>[]) c.A.concretize in
-    let ty_concretize = ty_forall_l_ vars (U.ty_arrow ty_new ty_of) in
-    (* declare abstract and concretize *)
+    let concrete = ID.make_full ~needs_at:(vars<>[]) c.A.concrete in
+    let ty_concrete = ty_forall_l_ vars (U.ty_arrow ty_new ty_of) in
+    (* declare abstract and concrete *)
     let env = TyEnv.add_decl ~env name ~id ty_id in
     let env =
       TyEnv.add_decl ~env c.A.abstract ~id:abstract ty_abstract in
     let env =
-      TyEnv.add_decl ~env c.A.concretize ~id:concretize ty_concretize in
+      TyEnv.add_decl ~env c.A.concrete ~id:concrete ty_concrete in
     let c = Stmt.mk_copy
       ~of_:ty_of ~vars ~ty:ty_id
       ~abstract:(abstract,ty_abstract)
-      ~concretize:(concretize,ty_concretize) id in
+      ~concrete:(concrete,ty_concrete) id in
     env, c
 
   module PStmt = Stmt.Print(P)(P)

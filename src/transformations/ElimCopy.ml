@@ -27,7 +27,7 @@ module Make(T : TI.S) = struct
     let info = Env.find_exn ~env id in
     match Env.def info with
     | Env.Copy_abstract c -> `Abs c
-    | Env.Copy_concretize c -> `Conc c
+    | Env.Copy_concrete c -> `Conc c
     | Env.Copy_ty c -> `Ty c
     | _ -> `Not_copy
 

@@ -87,7 +87,7 @@ module Make(T : TI.S) = struct
     | Env.Fun_def _
     | Env.Fun_spec _
     | Env.Copy_abstract _
-    | Env.Copy_concretize _
+    | Env.Copy_concrete _
     | Env.NoDef ->
         let tyvars, args, ret = U.ty_unfold info.Env.ty in
         assert (tyvars=[]); (* mono, see {!inv} *)
@@ -845,7 +845,9 @@ module Make(T : TI.S) = struct
 
   type decode_subst = (T.t, DecTerm.t) Subst.t
 
-  let as_var_ t = match T.repr (DecTerm.get t) with TI.Var v -> v | _ -> assert false
+  let as_var_ t = match T.repr (DecTerm.get t) with
+    | TI.Var v -> v
+    | _ -> errorf_ "@[expected var, got term `@[%a@]`@]" DecTerm.print t
 
   let find_as_var_ ~subst v =
     try Subst.find_exn ~subst v |> as_var_

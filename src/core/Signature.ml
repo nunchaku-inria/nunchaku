@@ -43,7 +43,7 @@ let add_statement ~sigma st = match Stmt.view st with
   | Stmt.Copy c ->
       let sigma = declare ~sigma c.Stmt.copy_id c.Stmt.copy_ty in
       let sigma = declare ~sigma c.Stmt.copy_abstract c.Stmt.copy_abstract_ty in
-      let sigma = declare ~sigma c.Stmt.copy_concretize c.Stmt.copy_concretize_ty in
+      let sigma = declare ~sigma c.Stmt.copy_concrete c.Stmt.copy_concrete_ty in
       sigma
   | Stmt.TyDef (_,l) ->
       List.fold_left

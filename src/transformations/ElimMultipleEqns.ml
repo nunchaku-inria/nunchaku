@@ -149,7 +149,7 @@ module Make(T : TI.S) = struct
             | Env.Fun_spec _
             | Env.Pred _
             | Env.Copy_abstract _
-            | Env.Copy_concretize _
+            | Env.Copy_concrete _
             | Env.Cstor (_,_,_,_) ->
                 errorf_ "@[%a is not a type.@]" ID.print ty_id
             | Env.Copy_ty _

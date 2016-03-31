@@ -47,7 +47,7 @@ type (+'t, +'ty, 'inv) def =
   | Copy_abstract of ('t, 'ty) Statement.copy
     (** ID is the abstraction function *)
 
-  | Copy_concretize of ('t, 'ty) Statement.copy
+  | Copy_concrete of ('t, 'ty) Statement.copy
     (** ID is the concretization function *)
 
   | NoDef
