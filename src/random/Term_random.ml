@@ -259,7 +259,7 @@ and gen_atom_ rules ty subst vars size =
   (* apply [r.id] to the terms *)
   match r.build with
     | AppID id -> app_const_ id l
-    | AppBuiltin f -> f l
+    | AppBuiltin f -> f (List.map U.var r.vars @ l)
     | AppVar v -> U.app (U.var v) l
 
 (* generate a list of terms of types [ty_l] *)
@@ -287,10 +287,33 @@ let arbitrary = mk_arbitrary_ random
 let arbitrary_ty = mk_arbitrary_ ty
 let arbitrary_prop = mk_arbitrary_ prop
 
-let generate rand g = g rand
-
 let mk_rand() = Random.State.make_self_init ()
+
+let generate ?(rand=mk_rand()) g = g rand
 
 let generate_l ?n ?(rand=mk_rand()) g =
   let n = CCOpt.get_lazy (fun () -> G.(1 -- 50) rand) n in
   G.list_repeat n g rand
+
+
+(* test the random generator itself *)
+
+(*$inject
+  module U = TermInner.Util(T)
+  *)
+
+(*$QR & ~count:300
+  arbitrary_prop
+    (fun t -> match U.ty t ~sigma:(Signature.find ~sigma:base_sig) with
+      | `Ok ty -> U.ty_is_Prop ty
+      | `Error _ -> false)
+*)
+
+(*$QR & ~count:300
+  arbitrary
+    (fun t ->
+        (* just  see if it typechecks *)
+      match U.ty t ~sigma:(Signature.find ~sigma:base_sig) with
+      | `Ok _ ->  true
+      | `Error _ -> false)
+*)

@@ -96,7 +96,8 @@ Executable run_qtest
   CompiledObject:   native
   MainIs:           run_qtest.ml
   Build$:           flag(tests)
-  BuildDepends:     nunchaku, nunchaku.parsers, nunchaku.random, oUnit, qcheck
+  BuildDepends:     nunchaku, nunchaku.parsers, nunchaku.transformations,
+                    nunchaku.random, oUnit, qcheck
 
 Test all
   Command:      ./run_qtest.native

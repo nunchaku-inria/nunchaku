@@ -38,7 +38,7 @@ val arbitrary_ty : term QCheck.arbitrary
 
 val arbitrary_prop : term QCheck.arbitrary
 
-val generate : rstate -> 'a rgen -> 'a
+val generate : ?rand:rstate -> 'a rgen -> 'a
 
 val generate_l : ?n:int -> ?rand:rstate -> 'a rgen -> 'a list
 
