@@ -32,6 +32,12 @@ val prop : term rgen
 val random : term rgen
 (** Random term of any type *)
 
+val arbitrary : term QCheck.arbitrary
+
+val arbitrary_ty : term QCheck.arbitrary
+
+val arbitrary_prop : term QCheck.arbitrary
+
 val generate : rstate -> 'a rgen -> 'a
 
 val generate_l : ?n:int -> ?rand:rstate -> 'a rgen -> 'a list

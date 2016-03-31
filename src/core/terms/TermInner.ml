@@ -749,6 +749,9 @@ module type UTIL = sig
     t_
   (** Similar to {!map} but also keeping the subterm polarity *)
 
+  val size : t_ -> int
+  (** Number of AST nodes *)
+
   (** {6 Substitution Utils} *)
 
   type subst = (t_, t_) Var.Subst.t
@@ -1236,6 +1239,11 @@ module Util(T : S)
         let a = f b_acc pol a in
         let b = f b_acc pol b in
         ty_arrow a b
+
+  let size t =
+    let n = ref 0 in
+    iter () t ~bind:(fun () _ -> ()) ~f:(fun () _ -> incr n);
+    !n
 
   let rec deref ~subst t = match T.repr t with
     | Var v ->

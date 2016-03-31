@@ -259,6 +259,16 @@ let prop = of_ty U.ty_prop
 
 let random = G.(ty >>= of_ty)
 
+let mk_arbitrary_ g =
+  QCheck.make
+    ~print:(CCFormat.to_string print_term)
+    ~small:U.size
+    g
+
+let arbitrary = mk_arbitrary_ random
+let arbitrary_ty = mk_arbitrary_ ty
+let arbitrary_prop = mk_arbitrary_ prop
+
 let generate rand g = g rand
 
 let mk_rand() = Random.State.make_self_init ()
