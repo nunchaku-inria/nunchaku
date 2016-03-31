@@ -73,6 +73,9 @@ module Subst : sig
   (** [add_list ~subst v t] add each binding [v_i -> t_i] to the subst.
       @raise Invalid_argument if [List.length v <> List.length t] *)
 
+  val concat : ('ty,'a) t -> into:('ty,'a) t -> ('ty,'a) t
+  (** [concat s ~into:s2] adds every binding of [s] into [s2] *)
+
   val of_list : 'ty var list -> 'a list -> ('ty,'a) t
   (** [of_list vars l = add_list ~subst:empty vars l] *)
 

@@ -72,6 +72,8 @@ module Subst = struct
 
   let of_list v t = add_list ~subst:empty v t
 
+  let concat s ~into:s2 = M.add_seq s2 (M.to_seq s)
+
   let remove ~subst v = M.remove v.id subst
 
   let mem ~subst v = M.mem v.id subst

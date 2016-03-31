@@ -17,6 +17,11 @@ let find ~sigma id =
 
 let declare ~sigma id ty = ID.Map.add id ty sigma
 
+let add_list ~sigma l =
+  List.fold_left (fun sigma (id,ty) -> declare ~sigma id ty) sigma l
+
+let of_list l = add_list ~sigma:empty l
+
 let add_pred (type inv) ~sigma (pred:(_,_,inv) Stmt.pred_def) =
   let d = pred.Stmt.pred_defined in
   declare ~sigma d.Stmt.defined_head d.Stmt.defined_ty

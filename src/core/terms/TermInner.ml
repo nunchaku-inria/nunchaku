@@ -695,6 +695,7 @@ module type UTIL = sig
   val fun_l : t_ var list -> t_ -> t_
   val forall_l : t_ var list -> t_ -> t_
   val exists_l : t_ var list -> t_ -> t_
+  val ty_forall_l : t_ var list -> t_ -> t_
 
   val close_forall : t_ -> t_
   (** [close_forall t] universally quantifies over free variables of [t] *)
@@ -979,6 +980,7 @@ module Util(T : S)
   let fun_l = List.fold_right fun_
   let forall_l = List.fold_right forall
   let exists_l = List.fold_right exists
+  let ty_forall_l = List.fold_right ty_forall
 
   let close_forall t =
     let fvars = free_vars t |> VarSet.to_list in
