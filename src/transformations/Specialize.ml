@@ -484,7 +484,9 @@ module Make(T : TI.S) = struct
                  assert (i<Array.length ty_args);
                  let ty = ty_args.(i) in
                  (* can we specialize on [arg], and is it interesting? *)
-                 if can_specialize_ ~state f i && heuristic_should_specialize_arg arg ty
+                 if can_specialize_ ~state f i
+                 && not (U.is_var arg)
+                 && heuristic_should_specialize_arg arg ty
                  then `Specialize (i, arg) else `Keep arg)
             |> CCList.partition_map
                (function `Specialize x -> `Left x | `Keep y -> `Right y)

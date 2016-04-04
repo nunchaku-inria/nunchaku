@@ -418,6 +418,8 @@ module type UTIL_REPR = sig
   (** [free_vars t] computes the set of free variables of [t].
       @param bound variables bound on the path *)
 
+  val is_var : t_ -> bool
+
   val is_closed : t_ -> bool
   (** [is_closed t] means [to_seq_free_vars t = empty] *)
 
@@ -521,6 +523,8 @@ module UtilRepr(T : REPR)
 
   let free_vars ?bound t =
     to_seq_free_vars ?bound t |> VarSet.of_seq
+
+  let is_var t = match T.repr t with Var _ -> true | _ -> false
 
   let is_closed t = to_seq_free_vars t |> Sequence.is_empty
 
