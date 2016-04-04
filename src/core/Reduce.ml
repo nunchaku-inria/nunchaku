@@ -62,7 +62,7 @@ module Make(T : TI.S) = struct
       | _ -> BPartial t
 
     let rec eval_and_l ~eval ~subst ~acc l = match l with
-      | [] -> U.and_ acc
+      | [] -> U.and_ (List.rev acc)
       | t :: l' ->
           match eval ~subst t |> as_bool_ with
           | BTrue -> eval_and_l ~eval ~subst ~acc l'
@@ -70,7 +70,7 @@ module Make(T : TI.S) = struct
           | BPartial t' -> eval_and_l ~eval ~subst ~acc:(t'::acc) l'
 
     let rec eval_or_l ~eval ~subst ~acc l = match l with
-      | [] -> U.or_ acc
+      | [] -> U.or_ (List.rev acc)
       | t :: l' ->
           match eval ~subst t |> as_bool_ with
           | BTrue -> U.true_
@@ -339,14 +339,13 @@ end
   module T = Term_random.T
   module U = TermInner.Util(T)
   module Red = Make(T)
+  module P = TermInner.Print(T)
 *)
 
 (* idempotence of WHNF *)
 (*$QR
-  Term_random.arbitrary
-    (fun t ->
-      let t' = Red.whnf t in
-      U.equal t' (Red.whnf t'))
+  (Q.map_keep_input ~print:P.to_string Red.whnf Term_random.arbitrary)
+    (fun (t, t') -> U.equal t' (Red.whnf t'))
 *)
 
 (* WHNF/SNF type is identity *)
@@ -358,10 +357,9 @@ end
 
 (* idempotence of SNF *)
 (*$QR
-  Term_random.arbitrary
-    (fun t ->
-      let t' = Red.snf t in
-      U.equal t' (Red.snf t'))
+  (Q.map_keep_input ~print:P.to_string Red.snf Term_random.arbitrary)
+    (fun (t, t_norm) ->
+      U.equal t_norm (Red.snf t_norm))
 *)
 
 

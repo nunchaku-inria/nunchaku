@@ -291,12 +291,14 @@ let random = G.(ty >>= of_ty)
 
 let rec shrink t = match T.repr t with
   | TI.Bind (b, v, t') ->
+    (* need to keep the term closed, if it was *)
     Sequence.map (U.mk_bind b v) (shrink t')
   | TI.App (f, l) ->
     Sequence.cons f (Sequence.of_list l)
   | TI.Builtin (`Not f) -> Sequence.singleton f
   | TI.Builtin (`Imply (a,b) | `Eq (a,b) | `Equiv (a,b)) -> Sequence.doubleton a b
   | TI.Builtin (`And l | `Or l) -> Sequence.of_list l
+  | TI.Builtin (`Ite (a,b,c)) -> Sequence.of_list [a;b;c]
   | _ -> Sequence.empty
 
 let mk_arbitrary_ g =

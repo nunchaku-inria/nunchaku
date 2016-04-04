@@ -314,6 +314,7 @@ module type PRINT = sig
   val print : t printer
   val print_in_app : t printer
   val print_in_binder : t printer
+  val to_string : t -> string
 end
 
 module Print(T : REPR)
@@ -397,6 +398,8 @@ module Print(T : REPR)
     if is_atomic_ ty
     then fpf out "@[%a:%a@]" Var.print_full v print ty
     else fpf out "(@[%a:@,@[%a@]@])" Var.print_full v print ty
+
+  let to_string = CCFormat.to_string print
 end
 
 type 'a print = (module PRINT with type t = 'a)
