@@ -14,6 +14,10 @@ type 'a printer = Format.formatter -> 'a -> unit
 
 let fpf = Format.fprintf
 
+let print_undefined_id : bool ref = ref false
+(** global option affecting printing: if true, undefined values will
+    be displayed as "undefined_42" rather than "?__" *)
+
 module Binder = struct
   type t =
     [ `Forall
@@ -99,7 +103,10 @@ module Builtin = struct
     | `DataTest id -> fpf out "is-%s" (ID.name id)
     | `DataSelect (id, n) ->
         fpf out "select-%s-%d" (ID.name id) n
-    | `Undefined (id,t) -> fpf out "undefined_%d %a" (ID.id id) pterm t
+    | `Undefined (id,t) ->
+        if !print_undefined_id
+        then fpf out "undefined_%d %a" (ID.id id) pterm t
+        else fpf out "?__ %a" pterm t
     | `Guard (t, o) ->
         let pp_case name out l = match l with
           | [] -> ()

@@ -119,6 +119,7 @@ let options =
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
+  ; "--print-undefined", Arg.Set TermInner.print_undefined_id, " print unique IDs of `undefined` terms"
   ; "--checks", Arg.Set check_all_, " check invariants after each pass"
   ; "--no-checks", Arg.Clear check_all_, " disable checking invariants after each pass"
   ; "--color", call_with true CCFormat.set_color_default, " enable color"
