@@ -289,9 +289,20 @@ let prop = of_ty U.ty_prop
 
 let random = G.(ty >>= of_ty)
 
+let rec shrink t = match T.repr t with
+  | TI.Bind (b, v, t') ->
+    Sequence.map (U.mk_bind b v) (shrink t')
+  | TI.App (f, l) ->
+    Sequence.cons f (Sequence.of_list l)
+  | TI.Builtin (`Not f) -> Sequence.singleton f
+  | TI.Builtin (`Imply (a,b) | `Eq (a,b) | `Equiv (a,b)) -> Sequence.doubleton a b
+  | TI.Builtin (`And l | `Or l) -> Sequence.of_list l
+  | _ -> Sequence.empty
+
 let mk_arbitrary_ g =
   QCheck.make
     ~print:(CCFormat.sprintf "@[<4>%a@]" print_term)
+    ~shrink
     ~small:U.size
     g
 
