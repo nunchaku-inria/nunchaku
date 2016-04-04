@@ -81,7 +81,7 @@ let base_sig =
     ; p2, U.ty_prop
     ; f_p, U.(ty_arrow_l [U.ty_const b; U.ty_prop] U.ty_prop)
     ; g_p, U.(ty_arrow_l [U.ty_const a] U.ty_prop)
-    ; h_p, U.(ty_arrow_l [app_const_ list [U.ty_prop]] (U.ty_const b))
+    ; h_p, U.(ty_arrow_l [app_const_ pair [U.ty_const a; U.ty_prop]] (U.ty_const b))
     ; mk_pair, U.(
         ty_forall_l [alpha; beta]
           (ty_arrow_l
@@ -116,9 +116,9 @@ let pp_build_rule out = function
   | AppVar v -> Var.print_full out v
 
 let pp_rule out r =
-  Format.fprintf out "(@[<2>%a :-@ @[<hv>%a@]@ using %a@])"
+  Format.fprintf out "(@[<2>%a :-@ {@[<hv>%a@]}@ using %a, vars @[%a@]@])"
     P.print r.target (CCFormat.list ~start:"" ~stop:"" P.print) r.goals
-    pp_build_rule r.build
+    pp_build_rule r.build (CCFormat.list Var.print_full) r.vars
 
 type backward_rules = backward_rule list
 
@@ -162,6 +162,7 @@ let rename_rule r =
 let mk_rules sigma : backward_rules =
   ID.Map.fold
     (fun id ty acc ->
+       assert (U.is_closed ty);
        let vars, args, ret = U.ty_unfold ty in
        assert (List.for_all (fun a -> U.ty_is_Type (Var.ty a)) vars);
        let r = { build=AppID id; vars; target=ret; goals=args} in
@@ -194,20 +195,24 @@ let ty =
      (fun self n ->
         if n=0
         then base
-        else
+        else (
+          (* for generating functions, take small type arguments *)
+          let small = min 3 (n-1) in
           frequency
             [ 3, base
             ; 1, return list' <*> self (n-1)
             ; 1, return pair' <*> self (n-1) <*> self (n-1)
-            ; 1, return fun1 <*> self (n-1) <*> self (n-1)
-            ; 1, return fun2 <*> self (n-1) <*> self (n-1) <*> self (n-1)
-            ])
+            ; 1, return fun1 <*> self small <*> self small
+            ; 1, return fun2 <*> self small <*> self small <*> self (n-1)
+            ]
+        ))
   |> sized'
 
 let mk_fresh_var_ = Var.make_gen ~names:"v_%d"
 
 let rule_of_var v =
-  let _, args, ret = U.ty_unfold (Var.ty v) in
+  let ty_vars, args, ret = U.ty_unfold (Var.ty v) in
+  assert (ty_vars=[]);
   {build=AppVar v; target=ret; goals=args; vars=[]}
 
 (* recursive generation of a term of type [ty].
@@ -217,7 +222,7 @@ let rec gen_ rules ty subst vars size =
   let ty = U.eval ~subst ty in
   let _, args, ret = U.ty_unfold ty in
   if args=[] then gen_atom_ rules ty subst vars size
-  else
+  else (
     let (>|=) = G.(>|=) in
     (* generate fresh variables for the arguments*)
     let vars' = List.map mk_fresh_var_ args in
@@ -227,15 +232,18 @@ let rec gen_ rules ty subst vars size =
     (* now generate the body and build a function *)
     gen_atom_ rules ret subst vars size >|= fun body ->
     U.fun_l vars' body
+  )
 
 and gen_atom_ rules ty subst vars size =
   let possible_rules =
     CCList.filter_map
       (fun r ->
-         (* avoid variable collision *)
-         let r = rename_rule r in
+         (* avoid variable collision... except when the
+            rule is a (bound) variable *)
+         let r =
+           if U.is_var r.target then r else rename_rule r
+         in
          match U.match_ ~subst2:subst r.target ty with
-           | None -> None
            | Some subst' ->
              let subst = Subst.concat subst' ~into:subst in
              let freq = match r.goals with
@@ -243,7 +251,9 @@ and gen_atom_ rules ty subst vars size =
                | [_] -> if size<3 then 1 else 5
                | _ -> if size<3 then 1 else 8
              in
-             Some (freq, (subst, r)))
+             Some (freq, (subst, r))
+           | None -> None
+      )
       rules
   in
   if possible_rules=[] then (
@@ -256,10 +266,12 @@ and gen_atom_ rules ty subst vars size =
   (* generate a term for each goal type *)
   let size' = size - 2 * List.length r.goals in
   gen_l_ rules r.goals subst vars size' >|= fun l ->
+  (* also apply to bound variables *)
+  let l = List.map (fun v -> U.eval ~subst (U.var v)) r.vars @ l in
   (* apply [r.id] to the terms *)
   match r.build with
     | AppID id -> app_const_ id l
-    | AppBuiltin f -> f (List.map U.var r.vars @ l)
+    | AppBuiltin f -> f l
     | AppVar v -> U.app (U.var v) l
 
 (* generate a list of terms of types [ty_l] *)
@@ -295,6 +307,9 @@ let generate_l ?n ?(rand=mk_rand()) g =
   let n = CCOpt.get_lazy (fun () -> G.(1 -- 50) rand) n in
   G.list_repeat n g rand
 
+let print_rules() =
+  Format.printf "rules:@ @[<v>%a@]@."
+    (CCFormat.list ~start:"" ~stop:"" pp_rule) rules
 
 (* test the random generator itself *)
 

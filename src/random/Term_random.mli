@@ -42,3 +42,7 @@ val generate : ?rand:rstate -> 'a rgen -> 'a
 
 val generate_l : ?n:int -> ?rand:rstate -> 'a rgen -> 'a list
 
+(**/**)
+val print_rules : unit -> unit
+(**/**)
+
