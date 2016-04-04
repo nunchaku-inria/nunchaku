@@ -87,7 +87,7 @@ let options =
   Utils.options_warnings_ @
   [ "--print-input", Arg.Set print_, " print input"
   ; "--print-all", Arg.Set print_all_, " print every step of the pipeline"
-  ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline"
+  ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline and exit"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
   ; "--print-" ^ Skolem.name, Arg.Set print_skolem_, " print input after Skolemization"
   ; "--print-" ^ Monomorphization.name, Arg.Set print_mono_, " print input after monomorphization"
@@ -306,6 +306,11 @@ let main () =
   CCFormat.set_color_default true; (* default: enable colors *)
   Arg.parse options set_file "usage: nunchaku [options] file";
   print_version_if_needed ();
+  if !print_pipeline_ then (
+    let cpipe = make_model_pipeline() in
+    Format.printf "@[Pipeline: %a@]@." Transform.ClosedPipe.print cpipe;
+    exit 0
+  );
   (* parse *)
   parse_file ~input:!input_ ()
   >>= fun statements ->
