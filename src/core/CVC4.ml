@@ -14,7 +14,6 @@ type id = ID.t
 let section = Utils.Section.make "cvc4"
 
 let fpf = Format.fprintf
-let spf = CCFormat.sprintf
 
 type model_term = FO.Default.T.t
 type model_ty = FO.Default.Ty.t
@@ -33,8 +32,8 @@ let errorf_ fmt = CCFormat.ksprintf fmt ~f:error_
 
 let () = Printexc.register_printer
   (function
-    | Error msg -> Some (spf "@[Error in the interface to CVC4:@ %s@]" msg)
-    | CVC4_error msg -> Some (spf "@[Error in CVC4:@ %s@]" msg)
+    | Error msg -> Some (Utils.err_sprintf "@[in the interface to CVC4:@ %s@]" msg)
+    | CVC4_error msg -> Some (Utils.err_sprintf "@[in CVC4:@ %s@]" msg)
     | _ -> None)
 
 module Make(FO_T : FO.S) = struct
@@ -184,8 +183,11 @@ module Make(FO_T : FO.S) = struct
     if not (Hashtbl.mem decode.name_to_id name0) then name0
     else (
       let n = ref 0 in
-      while Hashtbl.mem decode.name_to_id (spf "%s_%d" name0 !n) do incr n done;
-      spf "%s_%d" name0 !n
+      while
+        Hashtbl.mem decode.name_to_id (Printf.sprintf "%s_%d" name0 !n)
+      do incr n
+      done;
+      Printf.sprintf "%s_%d" name0 !n
     )
 
   (* injection from ID to string *)
@@ -497,7 +499,7 @@ module Make(FO_T : FO.S) = struct
           (fun k->k P.print_term body (Model.DT.print P.print_term) dt);
         vars, dt
     | `Error msg ->
-        errorf_ "expected decision tree,@ but %s" msg
+        errorf_ "while trying to parse decision tree:@ %s" msg
 
   let sym_get_const_ ~decode id = match ID.Tbl.find decode.symbols id with
     | Q_const -> `Const
