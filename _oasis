@@ -26,7 +26,7 @@ Library "nunchaku_core"
                     UntypedAST, Model, TypeUnify, Problem, FO, Reduce,
                     Solver_intf, Env, Signature, Statement,
                     Scheduling, CVC4, Polarity, Traversal, ProblemMetadata,
-                    TyCardinality, Prelude, TypeCheck,
+                    AnalyzeType, Prelude, TypeCheck,
                     terms/TermInner,
                     terms/TermTyped,
                     terms/TermPoly,

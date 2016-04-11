@@ -562,7 +562,7 @@ module Make(T : TI.S) = struct
 
   (* some sanity checks on statements *)
   let check_defs_ pb =
-    let module TyCard = TyCardinality.Make(T) in
+    let module TyCard = AnalyzeType.Make(T) in
     let env = Problem.env pb in
     let cache = TyCard.create_cache() in
     Problem.iter_statements pb ~f:(TyCard.check_non_zero ~cache env)
