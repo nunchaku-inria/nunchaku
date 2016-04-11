@@ -36,9 +36,9 @@ end = struct
 
   type term = T.t
 
-  type state = {
+  type 'inv state = {
     mutable lost_precision: bool;
-    sigma: term Signature.t;
+    env: (T.t, T.t, 'inv) Env.t;
   }
 
   type +'a guard = 'a TI.Builtin.guard = {
@@ -97,7 +97,7 @@ end = struct
 
   (* is [t] of type prop? *)
   let is_prop ~state t =
-    let ty = U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) t in
+    let ty = U.ty_exn ~sigma:(Env.find_ty ~env:state.env) t in
     U.ty_is_Prop ty
 
   (* Translate term/formula recursively by removing asserting/assuming
@@ -286,8 +286,8 @@ end = struct
     combine_polarized ~is_pos:true t' g
 
   let encode_pb pb =
-    let sigma = Problem.signature pb in
-    let state = { lost_precision=false; sigma; } in
+    let env = Problem.env pb in
+    let state = { lost_precision=false; env; } in
     (* all polarities are positive at root, because we don't have [rec/pred]
        anymore thanks to {!inv} *)
     let pb' = Problem.map pb
