@@ -364,7 +364,10 @@ module Make(T : TI.S) = struct
         state.decode.dst_handle_id <- Some id;
         let ty_id = U.ty_arrow_l [U.ty_type; U.ty_type] U.ty_type in
         (* declare the symbol [to : type -> type -> type] *)
-        let attrs = [Stmt.Decl_attr_exn ElimRecursion.Attr_is_handle_cstor] in
+        let attrs =
+          [ Stmt.Decl_attr_exn ElimRecursion.Attr_is_handle_cstor
+          ; Stmt.Decl_attr_incomplete
+          ] in
         let stmt = Stmt.mk_decl ~info:Stmt.info_default ~attrs id Stmt.Decl_type ty_id in
         CCVector.push state.new_stmts stmt;
         id
