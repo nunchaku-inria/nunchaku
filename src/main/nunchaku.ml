@@ -220,11 +220,11 @@ let make_model_pipeline () =
     Step_unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
     Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
     Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
     Step_LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
     Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
     Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
     Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
-    Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
     Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
     Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
     Step_tofo.pipe () @@@
