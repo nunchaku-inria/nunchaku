@@ -232,8 +232,6 @@ let rec head t = match Loc.get t with
 
 let fpf = Format.fprintf
 
-let pp_list_ ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
-
 let pp_var_or_wildcard out = function
   | `Var v -> CCFormat.string out v
   | `Wildcard -> CCFormat.string out "_"

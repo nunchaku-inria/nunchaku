@@ -72,6 +72,7 @@ module Builtin = struct
     | `DataTest of id (** Test whether [t : tau] starts with given constructor *)
     | `DataSelect of id * int (** Select n-th argument of given constructor *)
     | `Undefined of id * 'a (** Undefined case. argument=the undefined term *)
+    | `Unparsable of 'a (** could not parse model properly. Param=ty *)
     | `Guard of 'a * 'a guard (** term + some boolean conditions *)
     ]
 
@@ -107,6 +108,7 @@ module Builtin = struct
         if !print_undefined_id
         then fpf out "undefined_%d %a" (ID.id id) pterm t
         else fpf out "?__ %a" pterm t
+    | `Unparsable ty -> fpf out "@[<2>?__unparsable@ @[%a@]@]" pterm ty
     | `Guard (t, o) ->
         let pp_case name out l = match l with
           | [] -> ()
@@ -135,6 +137,7 @@ module Builtin = struct
     | `DataTest id, `DataTest id' -> ID.equal id id'
     | `DataSelect (id, n), `DataSelect (id', n') -> n=n' && ID.equal id id'
     | `Undefined (a,t1), `Undefined (b,t2) -> ID.equal a b && eqterm t1 t2
+    | `Unparsable t1, `Unparsable t2 -> eqterm t1 t2
     | `Guard (t1, g1), `Guard (t2, g2) ->
         List.length g1.assuming = List.length g2.assuming
         && List.length g1.asserting = List.length g2.asserting
@@ -142,7 +145,7 @@ module Builtin = struct
         && List.for_all2 eqterm g1.assuming g2.assuming
         && List.for_all2 eqterm g1.asserting g2.asserting
     | `Guard _, _
-    | `True, _ | `False, _ | `Ite _, _ | `Not _, _
+    | `True, _ | `False, _ | `Ite _, _ | `Not _, _ | `Unparsable _, _
     | `Eq _, _ | `Or _, _ | `And _, _ | `Equiv _, _ | `Imply _, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> false
 
@@ -160,6 +163,7 @@ module Builtin = struct
     | `Not t -> `Not (f t)
     | `DataSelect (c,n) -> `DataSelect (c,n)
     | `Undefined (id, t) -> `Undefined (id, f t)
+    | `Unparsable t -> `Unparsable (f t)
     | `Guard (t, g) ->
         let g' = map_guard f g in
         `Guard (f t, g')
@@ -177,6 +181,7 @@ module Builtin = struct
     | `Ite (a,b,c) -> f (f (f acc a) b) c
     | `Eq (a,b)
     | `Equiv (a,b) -> f (f acc a) b
+    | `Unparsable t
     | `Undefined (_,t) -> f acc t
     | `Guard (t, g) ->
         let acc = f acc t in
@@ -210,6 +215,7 @@ module Builtin = struct
     | `Equiv (a1,b1), `Equiv (a2,b2) -> let acc = f acc a1 a2 in f acc b1 b2
     | `Undefined (i1,t1), `Undefined (i2,t2) ->
         if ID.equal i1 i2 then f acc t1 t2 else fail()
+    | `Unparsable t1, `Unparsable t2 -> f acc t1 t2
     | `Guard (t1, g1), `Guard (t2, g2)
       when List.length g1.asserting=List.length g2.asserting
       && List.length g1.assuming = List.length g2.assuming ->
@@ -217,7 +223,7 @@ module Builtin = struct
         let acc = List.fold_left2 f acc g1.assuming g2.assuming in
         List.fold_left2 f acc g1.asserting g2.asserting
     | `Guard _, _
-    | `True, _ | `False, _ | `Ite _, _ | `Not _, _
+    | `True, _ | `False, _ | `Ite _, _ | `Not _, _ | `Unparsable _, _
     | `Eq _, _ | `Or _, _ | `And _, _ | `Equiv _, _ | `Imply _, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> fail()
 
@@ -235,6 +241,7 @@ module Builtin = struct
     | `Ite (a,b,c) -> f a; f b; f c
     | `Eq (a,b)
     | `Equiv (a,b) -> f a; f b
+    | `Unparsable t
     | `Undefined (_,t) -> f t
     | `Guard (t,g) ->
         f t;
@@ -686,6 +693,7 @@ module type UTIL = sig
   val undefined_ : t_ -> t_ (** fresh undefined term *)
   val data_test : ID.t -> t_ -> t_
   val data_select : ID.t -> int -> t_ -> t_
+  val unparsable : ty:t_ -> t_
 
   val asserting : t_ -> t_ list -> t_
   val assuming : t_ -> t_ list -> t_
@@ -968,6 +976,7 @@ module Util(T : S)
 
   let data_test c t = app_builtin (`DataTest c) [t]
   let data_select c i t = app_builtin (`DataSelect (c,i)) [t]
+  let unparsable ~ty = builtin (`Unparsable ty)
 
   let guard t g =
     let open Builtin in
@@ -1187,6 +1196,7 @@ module Util(T : S)
             let l = List.map (f b_acc P.NoPol) l in
             app hd l
         end
+    | Builtin (`Unparsable t) -> unparsable ~ty:(f b_acc (P.NoPol) t)
     | Builtin (`Not t) ->
         let t = f b_acc (P.inv pol) t in
         not_ t
@@ -1405,6 +1415,7 @@ module Util(T : S)
           | `Not _ -> prop
           | `True
           | `False -> prop
+          | `Unparsable ty -> ty
           | `Ite (_,b,_) -> ty_exn ~sigma b
           | `Equiv (_,_)
           | `Eq (_,_) -> prop

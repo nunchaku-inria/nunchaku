@@ -134,6 +134,7 @@ module ToFO(T : TI.S)(F : FO.S) = struct
           (conv_term ~sigma a) (conv_term ~sigma b) (conv_term ~sigma c)
     | Builtin (`Undefined (c,t)) ->
         FO.T.undefined c (conv_term ~sigma t)
+    | Builtin (`Unparsable ty) -> FO.T.unparsable (conv_ty ty)
     | Builtin `True -> FO.T.true_
     | Builtin `False -> FO.T.false_
     | Builtin (`Equiv (a,b)) ->
@@ -359,6 +360,8 @@ module OfFO(T:TI.S)(F : FO.VIEW) = struct
         U.var (Var.update_ty v ~f:(convert_ty))
     | FO.Undefined (c,t) ->
         U.builtin (`Undefined (c,convert_term t))
+    | FO.Unparsable ty ->
+        U.unparsable ~ty:(convert_ty ty)
     | FO.App (f,l) ->
         let l = List.map convert_term l in
         U.app (U.const f) l

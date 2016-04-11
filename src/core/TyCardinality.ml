@@ -15,7 +15,6 @@ exception EmptyData of ID.t
 let error_ msg = raise (Error msg)
 let errorf_ msg = CCFormat.ksprintf msg ~f:error_
 
-let fpf = Format.fprintf
 let section = Utils.Section.make "ty_cardinality"
 
 let () = Printexc.register_printer

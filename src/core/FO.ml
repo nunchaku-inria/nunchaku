@@ -36,6 +36,7 @@ type ('t, 'ty) view =
   | DataTest of id * 't
   | DataSelect of id * int * 't
   | Undefined of id * 't (** ['t] is not defined here *)
+  | Unparsable of 'ty (** could not parse term *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Mu of 'ty var * 't   (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
@@ -123,6 +124,7 @@ module type S = sig
     val data_test : id -> t -> t
     val data_select : id -> int -> t -> t
     val undefined : id -> t -> t
+    val unparsable : Ty.t -> t
     val var : Ty.t var -> t
     val let_ : Ty.t var -> t -> t -> t
     val fun_ : Ty.t var -> t -> t
@@ -176,6 +178,7 @@ module Default : S = struct
     let data_test c t = make_ (DataTest (c,t))
     let data_select c n t = make_ (DataSelect (c,n,t))
     let undefined c t = make_ (Undefined (c,t))
+    let unparsable ty = make_ (Unparsable ty)
     let let_ v t u = make_ (Let(v,t,u))
     let fun_ v t = make_ (Fun (v,t))
     let mu v t = make_ (Mu (v,t))
@@ -290,6 +293,8 @@ module Print(FO : VIEW) : PRINT with module FO = FO = struct
         fpf out "(@[<2>select-%a-%d@ %a@])" ID.print c n print_term t
     | Undefined (c,t) ->
         fpf out "(@[<2>undefined-%a@ %a@])" ID.print c print_term t
+    | Unparsable ty ->
+        fpf out "(@[<2>unparsable ty:%a@])" print_ty ty
     | Let (v,t,u) ->
         fpf out "(@[<2>let@ %a =@ %a in@ %a@])"
           Var.print_full v print_term t print_term u
@@ -356,19 +361,22 @@ end
 (** {2 Utils} *)
 module Util(Repr : S) = struct
   module T = Repr.T
+  module Ty = Repr.Ty
   module P = Print(Repr)
 
-  (* internal error *)
-  exception Error of string
-  let error_ msg = raise (Error msg)
-  let errorf_ msg = CCFormat.ksprintf msg ~f:error_
+  exception Parse_err of unit lazy_t
+  (* evaluate the lazy -> print a warning *)
 
   (* split [t] into a list of equations [var = t'] where [var in vars] *)
   let rec get_eqns ~vars t =
     Utils.debugf 5 "get_eqns @[%a@]" (fun k->k P.print_term t);
     let fail() =
-      errorf_ "expected a test <var = term>@ with var among @[%a@],@ but got @[%a@]@]"
+      let msg = lazy (
+        Utils.warningf Utils.Warn_model_parsing_error
+        "expected a test <var = term>@ with <var> among @[%a@],@ but got `@[%a@]`@]"
         (CCFormat.list Var.print_full) vars P.print_term t
+      ) in
+      raise (Parse_err msg)
     in
     match T.view t with
     | And l -> CCList.flat_map (get_eqns ~vars) l
@@ -383,8 +391,12 @@ module Util(Repr : S) = struct
     | Var v when List.exists (Var.equal v) vars ->
         [v, T.true_] (* boolean variable *)
     | Var _ ->
-        errorf_ "expected a boolean variable among @[%a@],@ but got @[%a@]@]"
-          (CCFormat.list Var.print_full) vars P.print_term t
+        let msg = lazy (
+          Utils.warningf Utils.Warn_model_parsing_error
+            "expected a boolean variable among @[%a@],@ but got @[%a@]@]"
+            (CCFormat.list Var.print_full) vars P.print_term t
+        ) in
+        raise (Parse_err msg)
     | _ -> fail()
 
   type cond = Repr.Ty.t Var.t * T.t
@@ -443,6 +455,7 @@ module Util(Repr : S) = struct
       | DataTest (_,_)
       | DataSelect (_,_,_)
       | Undefined (_,_)
+      | Unparsable _
       | Mu (_,_)
       | True
       | False
@@ -459,7 +472,7 @@ module Util(Repr : S) = struct
             (* yield true if equality holds, false otherwise *)
             let cond = get_eqns ~vars t in
             guard cond T.true_ T.false_
-          with Error _ ->
+          with Parse_err _ ->
             aux a >>= fun a ->
             aux b >|= fun b -> T.eq a b
           end
@@ -469,7 +482,7 @@ module Util(Repr : S) = struct
             let cond = get_eqns ~vars a in
             aux b >>= fun b ->
             guard cond b T.false_
-          with Error _ ->
+          with Parse_err _ ->
             aux a >>= fun a ->
             aux b >|= fun b ->
             T.imply a b
@@ -483,7 +496,7 @@ module Util(Repr : S) = struct
           begin try
             let cond = get_eqns ~vars t in
             guard cond T.true_ T.false_
-          with Error _ ->
+          with Parse_err _ ->
             aux_l l >|= T.and_
           end
       | Or l -> aux_l l >|= T.or_
@@ -497,8 +510,11 @@ module Util(Repr : S) = struct
     in
     try
       let res = aux t in
-      `Ok (Ite_M.to_dt res)
-    with Error msg -> `Error msg
+      Ite_M.to_dt res
+    with Parse_err msg ->
+      (* return "unparsable" *)
+      Lazy.force msg;
+      DT.yield (T.unparsable (Ty.builtin `Prop))
 
   let problem_kinds pb =
     let module M = Model in

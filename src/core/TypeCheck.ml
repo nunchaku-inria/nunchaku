@@ -115,6 +115,8 @@ module Make(T : TI.S) = struct
               | _ ->
                   error_ "cannot infer type, wrong argument to DataSelect"
               end
+          | `Unparsable ty ->
+              ignore (check_is_ty ~env bound ty); ty
           | `Undefined (_,t) -> check ~env bound t
           | `Guard (t, g) ->
               List.iter (check_is_prop ~env bound) g.TI.Builtin.asserting;

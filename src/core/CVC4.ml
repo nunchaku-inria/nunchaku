@@ -270,7 +270,8 @@ module Make(FO_T : FO.S) = struct
           fpf out "(@[%a@ %a@])" print_tester c print_term t
       | FOI.DataSelect (c,n,t) ->
           fpf out "(@[%a@ %a@])" print_select (c,n) print_term t
-      | FOI.Undefined (_,t) -> print_term out t
+      | FOI.Undefined (_,t) -> print_term out t (* tailcall, probably *)
+      | FOI.Unparsable _ -> errorf_ "cannot print `unparsable` in SMTlib"
       | FOI.Fun (v,t) ->
           fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
             Var.print_full v print_ty (Var.ty v) print_term t
@@ -493,13 +494,10 @@ module Make(FO_T : FO.S) = struct
     let vars, body = get_args t n in
     (* change the shape of [body] so it looks more like a decision tree *)
     let module U = FO.Util(FOBack) in
-    match U.dt_of_term ~vars body with
-    | `Ok dt ->
-        Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
-          (fun k->k P.print_term body (Model.DT.print P.print_term) dt);
-        vars, dt
-    | `Error msg ->
-        errorf_ "while trying to parse decision tree:@ %s" msg
+    let dt = U.dt_of_term ~vars body in
+    Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
+      (fun k->k P.print_term body (Model.DT.print P.print_term) dt);
+    vars, dt
 
   let sym_get_const_ ~decode id = match ID.Tbl.find decode.symbols id with
     | Q_const -> `Const

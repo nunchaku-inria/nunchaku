@@ -137,7 +137,7 @@ end = struct
       (`True | `False | `DataSelect _ | `DataTest _) ->
        (* partially applied, or constant *)
         t, empty_guard
-    | TI.Builtin (`Undefined _ as b) ->
+    | TI.Builtin ((`Unparsable _ | `Undefined _) as b) ->
         let t' =
           U.builtin (TI.Builtin.map b ~f:(fun t-> fst(tr_term ~state ~pol t)))
         in

@@ -64,6 +64,7 @@ module Make(T : TI.S) = struct
     | `DataTest _
     | `DataSelect _
     | `Guard _
+    | `Unparsable _
     | `Ite _ -> assert false (* TODO *)
 
   (* disambiguate IDs when printing them *)
@@ -80,6 +81,7 @@ module Make(T : TI.S) = struct
     | TI.Bind (`Mu,_,_) -> Utils.not_implemented "print mu in TPTP"
     | TI.Let _ -> Utils.not_implemented "print let in TPTP"
     | TI.Match _ -> Utils.not_implemented "print match in TPTP"
+    | TI.Builtin (`Unparsable _) -> error_ "cannot print `unparsable` in TPTP"
     | TI.Builtin (`Ite (a,b,c)) ->
         fpf out "$ite_t(@[<hv>%a,@ %a,@ %a@])"
           print_term a print_term b print_term c

@@ -79,11 +79,11 @@ module Make(T : TI.S) = struct
 
     (* Evaluate boolean operators [app_builtin b].
        Subterms are evaluated with [eval] *)
-    let eval_bool_builtin ~eval ~subst b =
+    let eval_bool_builtin ~eval ~subst (b : _ TI.Builtin.t) =
       match b with
       | `True -> U.true_
       | `False -> U.false_
-      | `Undefined _ | `Guard _ ->
+      | `Unparsable _ | `Undefined _ | `Guard _ ->
           U.builtin b (* undefined term doesn't evaluate *)
       | `Ite (_,_,_) | `DataSelect _ | `DataTest _ ->
           invalid_arg "not boolean operators"
@@ -162,6 +162,7 @@ module Make(T : TI.S) = struct
           Utils.not_implemented "evaluation of DataTest"
       | `DataSelect (_,_) ->
           Utils.not_implemented "evaluation of DataSelect"
+      | `Unparsable _
       | `Undefined _
       | `Guard _ ->
           (* no evaluation *)
