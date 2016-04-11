@@ -241,6 +241,8 @@ module ToFO(T : TI.S)(F : FO.S) = struct
             (function
               | St.Decl_attr_card_max n -> Some (FOI.CardBound (id, `Max, n))
               | St.Decl_attr_card_min n -> Some (FOI.CardBound (id, `Min, n))
+              | St.Decl_attr_abstract
+              | St.Decl_attr_incomplete
               | St.Decl_attr_exn _ -> None)
             attrs
         in

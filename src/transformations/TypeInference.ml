@@ -1200,6 +1200,8 @@ module Convert(Term : TermTyped.S) = struct
       (function
         | Stmt.Decl_attr_card_max n -> max_card := n
         | Stmt.Decl_attr_card_min n -> min_card := n
+        | Stmt.Decl_attr_incomplete
+        | Stmt.Decl_attr_abstract
         | Stmt.Decl_attr_exn _ -> ())
       l;
     if !min_card > !max_card

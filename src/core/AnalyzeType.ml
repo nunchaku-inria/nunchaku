@@ -249,4 +249,17 @@ module Make(T : TI.S) = struct
             k PStmt.print_tydefs (`Data,l));
         List.iter (check_non_zero_ env cache) l
     | _ -> ()
+
+  let rec is_incomplete env ty = match T.repr ty with
+    | TI.Const id ->
+      let info = Env.find_exn ~env id in
+      Env.is_incomplete info
+    | _ ->
+      (* "or" on subtypes *)
+      U.fold false () ty ~bind:(fun () _ -> ())
+        ~f:(fun b () ty -> b || is_incomplete env ty)
+
+  (* TODO *)
+  let is_abstract _ _ =
+    Utils.not_implemented "AnalyzeType.is_abstract"
 end

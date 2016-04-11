@@ -1,7 +1,7 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(** {1 Compute the cardinality of Types} *)
+(** {1 Analyze Types : Cardinalities, Abstract, Incomplete} *)
 
 module TI = TermInner
 
@@ -73,4 +73,12 @@ module Make(T : TI.S) : sig
     ?cache:cache -> ('a, 'inv) env -> ('a, ty, 'inv) Statement.t -> unit
   (** [check_non_zero env stmt] checks that [stmt] is not a definition of
       an empty datatype *)
+
+  val is_incomplete : (_, _) env -> ty -> bool
+  (** Is the type incomplete, that is, some values from the input type
+      are not present in this encoding? *)
+
+  val is_abstract : (_, _) env -> ty -> bool
+  (** Is the type a quotient over the input types (i.e. several distinct
+      values of the input types are encoded as one value)? *)
 end

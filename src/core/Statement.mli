@@ -113,6 +113,8 @@ type (+'t, +'ty) copy = {
 type decl_attr =
   | Decl_attr_card_max of int (** maximal cardinality of type *)
   | Decl_attr_card_min of int (** minimal cardinality of type *)
+  | Decl_attr_incomplete (** encoding of some type with some values removed *)
+  | Decl_attr_abstract (** encoding of some type where some values are conflated *)
   | Decl_attr_exn of exn (** open case *)
 
 type (+'term, +'ty, 'inv) view =

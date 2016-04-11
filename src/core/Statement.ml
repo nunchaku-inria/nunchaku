@@ -115,6 +115,8 @@ type (+'t, +'ty) copy = {
 type decl_attr =
   | Decl_attr_card_max of int
   | Decl_attr_card_min of int
+  | Decl_attr_incomplete (** encoding of some type with some values removed *)
+  | Decl_attr_abstract (** encoding of some type where some values are conflated *)
   | Decl_attr_exn of exn (** open case *)
 
 type (+'term, +'ty, 'inv) view =
@@ -501,6 +503,8 @@ let pplist_prefix ~first ~pre pp out l =
 let print_attr out = function
   | Decl_attr_card_max i -> fpf out "max_card %d" i
   | Decl_attr_card_min i -> fpf out "min_card %d" i
+  | Decl_attr_incomplete -> CCFormat.string out "incomplete"
+  | Decl_attr_abstract -> CCFormat.string out "abstract"
   | Decl_attr_exn e -> CCFormat.string out (Printexc.to_string e)
 
 let print_attrs out = function

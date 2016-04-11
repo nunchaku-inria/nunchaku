@@ -84,6 +84,9 @@ val is_rec : _ info -> bool (** rec *)
 val is_data : _ info -> bool
 val is_cstor : _ info -> bool
 
+val is_incomplete : _ info -> bool
+val is_abstract : _ info -> bool
+
 val declare:
   ?loc:loc ->
   kind:Statement.decl ->
