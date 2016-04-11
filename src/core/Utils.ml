@@ -194,12 +194,16 @@ let singleton_if check ~f x = if check then [f x] else []
 
 type warning =
   | Warn_overlapping_match
+  | Warn_model_parsing_error
 
 let pp_warn out = function
   | Warn_overlapping_match -> CCFormat.string out "overlapping pattern-match"
+  | Warn_model_parsing_error -> CCFormat.string out "error when parsing model"
 
 (* list of enabled warnings *)
-let warnings_ = ref []
+let warnings_ =
+  ref
+    [ Warn_model_parsing_error ]
 
 let is_warning_enabled w = List.mem w !warnings_
 
@@ -224,14 +228,16 @@ let warningf w msg =
 let warning b msg = warningf b "%s" msg
 
 let enable_warn_ w () = toggle_warning w true
-
 let options_warnings_ =
   [ "--warn-overlapping-match"
       , Arg.Unit (enable_warn_ Warn_overlapping_match)
       , " enable warning on overlapping cases of pattern-matching"
   ; "-W1"
-      , Arg.Unit (enable_warn_ Warn_overlapping_match)
-      , " shortcut for --warn-overlapping-match"
+      , Arg.Bool (toggle_warning Warn_overlapping_match)
+      , " <bool>: enable/disable --warn-overlapping-match"
+  ; "-W2"
+      , Arg.Bool (toggle_warning Warn_model_parsing_error)
+      , " <bool>: enable/disable warnings on model parsing errors"
   ]
 
 (** {2 Misc} *)

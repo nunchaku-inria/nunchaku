@@ -106,6 +106,7 @@ val singleton_if : bool -> f:('a -> 'b) -> 'a -> 'b list
 
 type warning =
   | Warn_overlapping_match
+  | Warn_model_parsing_error
 
 val toggle_warning : warning -> bool -> unit
 (** Enable/disable the given warning *)
