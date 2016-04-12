@@ -15,7 +15,6 @@ exception EmptyData of ID.t
 let error_ msg = raise (Error msg)
 let errorf_ msg = CCFormat.ksprintf msg ~f:error_
 
-let fpf = Format.fprintf
 let section = Utils.Section.make "ty_cardinality"
 
 let () = Printexc.register_printer
@@ -223,7 +222,7 @@ module Make(T : TI.S) = struct
       | Env.Fun_spec (_,_)
       | Env.Pred (_,_,_,_,_)
       | Env.Copy_abstract _
-      | Env.Copy_concretize _ -> errorf_ "%a is not a type" ID.print id
+      | Env.Copy_concrete _ -> errorf_ "%a is not a type" ID.print id
     in
     (* maybe cache *)
     begin match op with
@@ -250,4 +249,17 @@ module Make(T : TI.S) = struct
             k PStmt.print_tydefs (`Data,l));
         List.iter (check_non_zero_ env cache) l
     | _ -> ()
+
+  let rec is_incomplete env ty = match T.repr ty with
+    | TI.Const id ->
+      let info = Env.find_exn ~env id in
+      Env.is_incomplete info
+    | _ ->
+      (* "or" on subtypes *)
+      U.fold false () ty ~bind:(fun () _ -> ())
+        ~f:(fun b () ty -> b || is_incomplete env ty)
+
+  (* TODO *)
+  let is_abstract _ _ =
+    Utils.not_implemented "AnalyzeType.is_abstract"
 end

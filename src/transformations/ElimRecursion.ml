@@ -242,17 +242,16 @@ module Make(T : TI.S) = struct
               (* generic treatment *)
               tr_term_rec_' ~state subst t
         end
-    | TI.Builtin (`True | `False
-        | `And | `Or | `Not | `Imply | `DataSelect _ | `DataTest _) ->
+    | TI.Builtin (`True | `False | `DataSelect _ | `DataTest _) ->
           t (* partially applied, or constant *)
-    | TI.Builtin (`Undefined _ as b) ->
+    | TI.Builtin ((`Undefined _ | `Unparsable _) as b) ->
         U.builtin (TI.Builtin.map b ~f:(tr_term_rec_ ~state subst))
     | TI.Builtin (`Guard (t, g)) ->
         let t = tr_term_rec_ ~state subst t in
         let g' = TI.Builtin.map_guard (tr_term_rec_ ~state subst) g in
         U.guard t g'
     | TI.Bind (`Fun,_,_) -> fail_tr_ t "translation of λ impossible"
-    | TI.Builtin (`Equiv _ | `Eq _ | `Ite _)
+    | TI.Builtin (`Equiv _ | `Eq _ | `Ite _ | `And _ | `Or _ | `Not _ | `Imply _)
     | TI.Bind ((`Forall | `Exists | `Mu), _, _)
     | TI.Match _
     | TI.Let _ ->
@@ -265,11 +264,7 @@ module Make(T : TI.S) = struct
   and tr_term_rec_' ~state subst t =
     U.map subst t
       ~f:(tr_term_rec_ ~state)
-      ~bind:(fun subst v ->
-        (* rename [v] *)
-        let v' = Var.fresh_copy v in
-        let subst = Subst.add ~subst v (U.var v') in
-        subst, v')
+      ~bind:U.rename_var
 
   let tr_term ~state subst t =
     Utils.debugf ~section 4
@@ -669,7 +664,7 @@ module Make(T : TI.S) = struct
 
   (** {6 Pipe} *)
 
-  let pipe_with ~decode ~print ~check =
+  let pipe_with ?on_decoded ~decode ~print ~check =
     let on_encoded =
       Utils.singleton_if print () ~f:(fun () ->
         let module PPb = Problem.Print(P)(P) in
@@ -680,7 +675,7 @@ module Make(T : TI.S) = struct
         C.check_problem ?env:None)
     in
     Transform.make1
-      ~on_encoded
+      ~on_encoded ?on_decoded
       ~name
       ~encode:(fun p ->
         let p, state = elim_recursion p in
@@ -690,6 +685,12 @@ module Make(T : TI.S) = struct
       ()
 
   let pipe ~print ~check =
+    let on_decoded = if print
+      then
+        [Format.printf "@[<2>@{<Yellow>model after elim_rec@}:@ %a@]@."
+           (Model.print P.print P.print)]
+      else []
+    in
     let decode state m = decode_model ~state m in
-    pipe_with ~print ~decode ~check
+    pipe_with ~on_decoded ~print ~decode ~check
 end

@@ -36,9 +36,9 @@ end = struct
 
   type term = T.t
 
-  type state = {
+  type 'inv state = {
     mutable lost_precision: bool;
-    sigma: term Signature.t;
+    env: (T.t, T.t, 'inv) Env.t;
   }
 
   type +'a guard = 'a TI.Builtin.guard = {
@@ -97,7 +97,7 @@ end = struct
 
   (* is [t] of type prop? *)
   let is_prop ~state t =
-    let ty = U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) t in
+    let ty = U.ty_exn ~sigma:(Env.find_ty ~env:state.env) t in
     U.ty_is_Prop ty
 
   (* Translate term/formula recursively by removing asserting/assuming
@@ -109,16 +109,6 @@ end = struct
     | TI.Var _ -> t, empty_guard
     | TI.App (f,l) ->
         begin match T.repr f, l with
-        | TI.Builtin `Not, [t] ->
-            let t, g = tr_term ~state ~pol:(Pol.inv pol) t in
-            combine pol (U.not_ t) g
-        | TI.Builtin ((`Or | `And) as b), l ->
-            let l, g = tr_list ~state ~pol ~acc:empty_guard l in
-            combine pol (U.app_builtin b l) g
-        | TI.Builtin `Imply, [a;b] ->
-            let a, g_a = tr_term ~state ~pol:(Pol.inv pol) a in
-            let b, g_b = tr_term ~state ~pol b in
-            combine pol (U.imply a b) (combine_guard g_a g_b)
         | TI.Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
             let t', conds = tr_term ~state ~pol t in
             U.app_builtin b [t'], conds
@@ -130,12 +120,24 @@ end = struct
             let t' = U.app f l in
             if is_prop ~state t then combine pol t' g else t', g
         end
+    | TI.Builtin (`Not t) ->
+        let t, g = tr_term ~state ~pol:(Pol.inv pol) t in
+        combine pol (U.not_ t) g
+    | TI.Builtin (`Or l) ->
+        let l, g = tr_list ~state ~pol ~acc:empty_guard l in
+        combine pol (U.or_ l) g
+    | TI.Builtin (`And l) ->
+        let l, g = tr_list ~state ~pol ~acc:empty_guard l in
+        combine pol (U.and_ l) g
+    | TI.Builtin (`Imply (a,b)) ->
+        let a, g_a = tr_term ~state ~pol:(Pol.inv pol) a in
+        let b, g_b = tr_term ~state ~pol b in
+        combine pol (U.imply a b) (combine_guard g_a g_b)
     | TI.Builtin
-      (`True | `False | `And | `Or | `Not
-        | `Imply | `DataSelect _ | `DataTest _) ->
+      (`True | `False | `DataSelect _ | `DataTest _) ->
        (* partially applied, or constant *)
         t, empty_guard
-    | TI.Builtin (`Undefined _ as b) ->
+    | TI.Builtin ((`Unparsable _ | `Undefined _) as b) ->
         let t' =
           U.builtin (TI.Builtin.map b ~f:(fun t-> fst(tr_term ~state ~pol t)))
         in
@@ -284,8 +286,8 @@ end = struct
     combine_polarized ~is_pos:true t' g
 
   let encode_pb pb =
-    let sigma = Problem.signature pb in
-    let state = { lost_precision=false; sigma; } in
+    let env = Problem.env pb in
+    let state = { lost_precision=false; env; } in
     (* all polarities are positive at root, because we don't have [rec/pred]
        anymore thanks to {!inv} *)
     let pb' = Problem.map pb

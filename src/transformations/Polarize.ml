@@ -29,6 +29,7 @@ module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
   module PStmt = Stmt.Print(P)(P)
+  module Red = Reduce.Make(T)
 
   type term = T.t
 
@@ -164,11 +165,6 @@ module Make(T : TI.S) = struct
 
   type subst = (T.t, T.t Var.t) Var.Subst.t
 
-  let bind_var_ subst v =
-    let v' = Var.fresh_copy v in
-    let subst = Var.Subst.add ~subst v v' in
-    subst, v'
-
   (* traverse [t], replacing some symbols by their polarized version,
      @return the term with more internal guards and polarized symbols *)
   let rec polarize_term_rec
@@ -183,8 +179,8 @@ module Make(T : TI.S) = struct
         } in
         let t = polarize_term_rec ~state pol subst t in
         U.guard t g
-    | TI.Builtin (`True | `False | `DataTest _ | `And | `Or | `Not
-                 | `DataSelect _ | `Undefined _ | `Imply) ->
+    | TI.Builtin (`True | `False | `DataTest _ | `Unparsable _
+                 | `DataSelect _ | `Undefined _) ->
         U.eval_renaming ~subst t
     | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
     | TI.Const id ->
@@ -212,7 +208,7 @@ module Make(T : TI.S) = struct
             | Env.Data (_,_,_)
             | Env.Cstor (_,_,_,_)
             | Env.Copy_abstract _
-            | Env.Copy_concretize _
+            | Env.Copy_concrete _
             | Env.Copy_ty _
             | Env.Fun_spec _ ->
                 (* do not polarize *)
@@ -262,7 +258,7 @@ module Make(T : TI.S) = struct
           only obtain a non-polarized one. *)
         polarize_term_rec ~state pol subst (U.and_ [U.imply a b; U.imply b a])
     | TI.Bind ((`Forall | `Exists | `Fun | `Mu), _, _)
-    | TI.Builtin (`Ite _ | `Eq _ | `Equiv _)
+    | TI.Builtin (`Ite _ | `Eq _ | `Equiv _  | `And _ | `Or _ | `Not _  | `Imply _)
     | TI.Let _
     | TI.Match _ ->
         (* generic treatment *)
@@ -277,7 +273,7 @@ module Make(T : TI.S) = struct
   = fun ~state pol subst t ->
     U.map_pol subst pol t
       ~f:(fun subst pol -> polarize_term_rec ~state pol subst)
-      ~bind:(fun subst _pol v -> bind_var_ subst v)
+      ~bind:(fun subst _pol v -> Subst.rename_var subst v)
 
   (* [p] is the polarization of the function defined by [def]; *)
   let define_rec
@@ -293,7 +289,7 @@ module Make(T : TI.S) = struct
     Utils.debugf ~section 5 "@[<2>polarize def `@[%a@]`@ on %B@]"
       (fun k->k PStmt.print_rec_def def is_pos);
     let rec_eqns = map_eqns_bind Var.Subst.empty def.rec_eqns
-      ~bind:bind_var_
+      ~bind:Subst.rename_var
       ~term:(polarize_term_rec ~state (if is_pos then Pol.Pos else Pol.Neg))
     in
     { def with
@@ -327,7 +323,7 @@ module Make(T : TI.S) = struct
            [concl <-> exists... guard] which, in positive polarity, will become
            [concl+ => exists... guard], making guard positive too *)
         map_clause_bind Var.Subst.empty clause
-          ~bind:bind_var_ ~term:(polarize_term_rec ~state pol)
+          ~bind:Subst.rename_var ~term:(polarize_term_rec ~state pol)
     in
     let pred_clauses = List.map tr_clause def.pred_clauses in
     { def with
@@ -364,7 +360,7 @@ module Make(T : TI.S) = struct
           ID.Tbl.add st.St.polarized id None;
           let def =
             Stmt.map_rec_def_bind Var.Subst.empty def
-              ~bind:bind_var_
+              ~bind:Subst.rename_var
               ~ty:(fun _ ty -> ty)
               ~term:(polarize_term ~state:st) in
           [def]
@@ -389,7 +385,7 @@ module Make(T : TI.S) = struct
           ID.Tbl.add st.St.polarized id None;
           let def =
             Stmt.map_pred_bind Var.Subst.empty def
-              ~bind:bind_var_ ~ty:(fun _ ty -> ty)
+              ~bind:Subst.rename_var ~ty:(fun _ ty -> ty)
               ~term:(polarize_term_rec ~state:st Pol.Pos) in
           [def]
       | `Polarize is_pos ->
@@ -463,8 +459,6 @@ module Make(T : TI.S) = struct
       ~f:(fun subst t -> rewrite ~subst sys t)
       ~bind:(fun s v -> s, v)
 
-  module Red = Reduce.Make(T)
-
   (* filter [dt], the decision tree for [polarized], returning
      only the cases that return [true] (if [is_pos]) or [false] (if [not is_pos]) *)
   let filter_dt_ ~is_pos ~polarized ~sys ~subst dt =
@@ -491,9 +485,7 @@ module Make(T : TI.S) = struct
             errorf_
               "@[<2>expected decision tree for %a@ to yield only true/false@ \
                but branch `@[%a@]`@ yields `@[%a@]`@]"
-               ID.print polarized
-               (Model.DT.print_tests P.print) eqns
-               P.print then_)
+               ID.print polarized (Model.DT.print_tests P.print) eqns P.print then_)
       dt.Model.DT.tests
 
   let find_polarized_ ~state id =
@@ -550,7 +542,7 @@ module Make(T : TI.S) = struct
               let subst = Subst.add_list ~subst:Subst.empty vars vars' in
               let cases = filter_dt_ ~polarized:id ~is_pos ~sys ~subst dt in
               (* merge the two partial decision trees — they should not overlap *)
-              let else_ = U.undefined_ (U.app (U.const id') (List.map U.var vars)) in
+              let else_ = U.undefined_ (U.app (U.const id') (List.map U.var vars')) in
               let new_dt =
                 Model.DT.test
                   (List.rev_append cases cases')

@@ -13,9 +13,9 @@ type 'a lazy_list = unit -> [`Nil | `Cons of 'a * 'a lazy_list]
 (** Transformation of ['a] to ['b]. The transformation make choices by
     lazily returning several values. It is also allowed to store data
     in a internal "state" type, to be able to transform back later. *)
-(** Transformation with explicit hidden state *)
 type ('a, 'b, 'c, 'd) t = Ex : ('a, 'b, 'c, 'd, 'st) inner -> ('a, 'b, 'c, 'd) t
 
+(** Transformation with explicit hidden state *)
 and ('a, 'b, 'c, 'd, 'st) inner = {
   name : string; (** name for the transformation, used for debug, CLI options, etc. *)
   encode : 'a -> ('b * 'st) lazy_list;

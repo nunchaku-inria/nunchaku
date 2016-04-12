@@ -129,7 +129,7 @@ type copy = {
   copy_vars: var list; (* type variables *)
   of_: term; (* the definition *)
   abstract: var; (* abstract function *)
-  concretize: var; (* concretize function *)
+  concrete: var; (* concrete function *)
 }
 
 type attribute = string list
@@ -217,8 +217,8 @@ let data ?name ?loc l = mk_stmt_ ?name ?loc (Data l)
 let codata ?name ?loc l = mk_stmt_ ?name ?loc (Codata l)
 let pred ?name ?loc ~wf l = mk_stmt_ ?name ?loc (Pred (wf, l))
 let copred ?name ?loc ~wf l = mk_stmt_ ?name ?loc (Copred (wf, l))
-let copy ?name ?loc ~of_ ~abstract ~concretize id vars =
-  mk_stmt_ ?name ?loc (Copy {id; copy_vars=vars; of_; abstract; concretize; })
+let copy ?name ?loc ~of_ ~abstract ~concrete id vars =
+  mk_stmt_ ?name ?loc (Copy {id; copy_vars=vars; of_; abstract; concrete; })
 let goal ?name ?loc t = mk_stmt_ ?name ?loc (Goal t)
 
 let rec head t = match Loc.get t with
@@ -231,8 +231,6 @@ let rec head t = match Loc.get t with
       invalid_arg "untypedAST.head"
 
 let fpf = Format.fprintf
-
-let pp_list_ ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
 let pp_var_or_wildcard out = function
   | `Var v -> CCFormat.string out v
@@ -377,9 +375,9 @@ let print_statement out st = match st.stmt_value with
   | Goal t -> fpf out "@[goal %a.@]" print_term t
   | Pred (k, preds) -> fpf out "@[pred%a %a.@]" pp_wf k pp_mutual_preds preds
   | Copy c ->
-      fpf out "@[<v2>@[copy @[%s%a@] :=@ @[%a@]@]@,abstract = %s@,concretize = %s@]"
+      fpf out "@[<v2>@[copy @[%s%a@] :=@ @[%a@]@]@,abstract = %s@,concrete = %s@]"
         c.id (pp_list_ ~sep:" " CCFormat.string) c.copy_vars
-        print_term c.of_ c.abstract c.concretize
+        print_term c.of_ c.abstract c.concrete
   | Copred (k, preds) -> fpf out "@[copred%a %a.@]" pp_wf k pp_mutual_preds preds
 
 let print_statement_list out l =

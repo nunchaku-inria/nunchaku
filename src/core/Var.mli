@@ -73,6 +73,9 @@ module Subst : sig
   (** [add_list ~subst v t] add each binding [v_i -> t_i] to the subst.
       @raise Invalid_argument if [List.length v <> List.length t] *)
 
+  val concat : ('ty,'a) t -> into:('ty,'a) t -> ('ty,'a) t
+  (** [concat s ~into:s2] adds every binding of [s] into [s2] *)
+
   val of_list : 'ty var list -> 'a list -> ('ty,'a) t
   (** [of_list vars l = add_list ~subst:empty vars l] *)
 
@@ -86,6 +89,10 @@ module Subst : sig
   val find_deref_rec : subst:('ty, 'ty var) t -> 'ty var -> 'ty var option
   (** [find_deref_rec ~subst v] returns [Some (deref_rec subst v')] if [v]
       is bound, or [None] otherwise *)
+
+  val rename_var : ('a, 'a var) t -> 'a var -> ('a, 'a var) t * 'a var
+  (** [rename_var subst v] returns [subst', v'] where [v'] is
+      a fresh copy of [v], and [subst' = add v v' subst] *)
 
   val mem : subst:('ty,'a) t -> 'ty var -> bool
   val find : subst:('ty,'a) t -> 'ty var -> 'a option

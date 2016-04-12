@@ -484,7 +484,9 @@ module Make(T : TI.S) = struct
                  assert (i<Array.length ty_args);
                  let ty = ty_args.(i) in
                  (* can we specialize on [arg], and is it interesting? *)
-                 if can_specialize_ ~state f i && heuristic_should_specialize_arg arg ty
+                 if can_specialize_ ~state f i
+                 && not (U.is_var arg)
+                 && heuristic_should_specialize_arg arg ty
                  then `Specialize (i, arg) else `Keep arg)
             |> CCList.partition_map
                (function `Specialize x -> `Left x | `Keep y -> `Right y)
@@ -503,11 +505,6 @@ module Make(T : TI.S) = struct
             `Yes (spec_args, other_args, new_ty)
           )
       | _ -> `No
-
-  let bind_var_ subst v =
-    let v' = Var.fresh_copy v in
-    let subst = Var.Subst.add ~subst v (U.var v') in
-    subst, v'
 
   let find_new_fun ~state f args =
     (* see whether the function is already specialized on those parameters *)
@@ -590,7 +587,7 @@ module Make(T : TI.S) = struct
   and specialize_term_l ~state ~depth subst l =
     List.map (specialize_term ~state ~depth subst) l
   and specialize_term' ~state ~depth subst t =
-    U.map subst t ~bind:bind_var_ ~f:(specialize_term ~state ~depth)
+    U.map subst t ~bind:U.rename_var ~f:(specialize_term ~state ~depth)
 
   (* find or create a new function for [f args]
       @param new_ty the type of the new function *)
@@ -640,7 +637,7 @@ module Make(T : TI.S) = struct
     | Stmt.Eqn_single (vars, rhs) ->
         if Arg.is_empty args then (
           (* still need to traverse [rhs] *)
-          let subst, vars = Utils.fold_map bind_var_ Subst.empty vars in
+          let subst, vars = Utils.fold_map U.rename_var Subst.empty vars in
           let rhs = specialize_term ~state ~depth:(depth+1) subst rhs in
           Stmt.Eqn_single (vars, rhs)
         ) else (
@@ -648,7 +645,7 @@ module Make(T : TI.S) = struct
           let subst = Subst.empty in
           (* rename the "closure variables", i.e. the free variables in [args] *)
           let subst, closure_vars =
-            Utils.fold_map bind_var_ subst (Arg.vars args) in
+            Utils.fold_map U.rename_var subst (Arg.vars args) in
           (* bind variables whose position corresponds to a member of [args] *)
           let subst, new_vars =
             Utils.fold_mapi vars ~x:subst
@@ -668,9 +665,7 @@ module Make(T : TI.S) = struct
           (* specialize the body, using the given substitution;
              then reduce newly introduced β-redexes, etc. *)
           let new_rhs =
-            specialize_term ~state ~depth:(depth+1) subst rhs
-            |> Red.snf
-          in
+            Red.snf (specialize_term ~state ~depth:(depth+1) subst rhs) in
           Stmt.Eqn_single (closure_vars @ new_vars, new_rhs)
         )
 
@@ -683,7 +678,7 @@ module Make(T : TI.S) = struct
     let (Stmt.Pred_clause c) = c in
     if Arg.is_empty args then (
       (* still need to traverse the clause *)
-      let subst, vars = Utils.fold_map bind_var_ Subst.empty c.Stmt.clause_vars in
+      let subst, vars = Utils.fold_map U.rename_var Subst.empty c.Stmt.clause_vars in
       let spec_term = specialize_term ~state ~depth:(depth+1) subst in
       let clause_guard = CCOpt.map spec_term c.Stmt.clause_guard in
       let clause_concl = spec_term c.Stmt.clause_concl in
@@ -694,7 +689,7 @@ module Make(T : TI.S) = struct
       state.count <- state.count + 1;
       let subst = Subst.empty in
       (* rename variables captured in closure *)
-      let subst, closure_vars = Utils.fold_map bind_var_ subst (Arg.vars args) in
+      let subst, closure_vars = Utils.fold_map U.rename_var subst (Arg.vars args) in
       (* bind variables corresponding to specialized positions *)
       let subst, clause_concl = match T.repr c.Stmt.clause_concl with
         | TI.App (f, l) ->
@@ -979,6 +974,10 @@ module Make(T : TI.S) = struct
          push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax));
      ()
 
+  (* XXX: if we have a "total" annotation on functions (including [unique_unsafe])
+     or Coq functions, we can avoid generating congruence axioms for those
+     functions *)
+
   (** {6 Main Encoding} *)
 
   let specialize_problem pb =
@@ -1076,6 +1075,9 @@ module Make(T : TI.S) = struct
      functions by their definition *)
   let rec decode_term_rec (state:decode_state) subst t =
     match T.repr t with
+      | TI.Var v ->
+          (* variable might not be bound, e.g. in skolem [_witness_of ...] *)
+          Subst.find_or ~default:t ~subst v |> U.eval ~subst
       | TI.Const f_id when is_spec_fun state f_id ->
           let dsf = find_spec state f_id in
           Utils.debugf ~section 5 "@[<2>decode `@[%a@]` from %a@]"
@@ -1087,20 +1089,24 @@ module Make(T : TI.S) = struct
                 let dsf = find_spec state f_id in
                 Utils.debugf ~section 5 "@[<2>decode `@[%a@]` from %a@]"
                   (fun k->k P.print t pp_dsf dsf);
-                (* decode arguments *)
-                let l = List.map (decode_term_rec state subst) l in
-                let f' = dsf_to_fun dsf in
-                Red.app_whnf ~subst f' l |> Red.eta_reduce
+                (* decode arguments, and decode specialized function *)
+                let l' = List.map (decode_term_rec state subst) l in
+                let f' =
+                  dsf_to_fun dsf
+                  |> decode_term_rec state subst in
+                Red.app_whnf ~subst f' l' |> Red.eta_reduce
             | _ -> decode_term_rec' state subst t
           end
       | _ -> decode_term_rec' state subst t
 
   and decode_term_rec' state subst t =
-    U.map subst t ~bind:bind_var_ ~f:(decode_term_rec state)
+    U.map subst t ~bind:U.rename_var ~f:(decode_term_rec state)
 
   let decode_term state t =
-    Utils.debugf ~section 5 "@[<2>decode_term `@[%a@]`@]" (fun k->k P.print t);
-    decode_term_rec state Subst.empty t
+    let t' = decode_term_rec state Subst.empty t in
+    Utils.debugf ~section 5
+      "@[<2>decode_term `@[%a@]`@ into `@[%a@]`@]" (fun k->k P.print t P.print t');
+    t'
 
   (* gather models of specialized functions *)
   let gather_spec_funs state m =
@@ -1143,8 +1149,10 @@ module Make(T : TI.S) = struct
      - converting else_ case *)
   let dt_of_spec_dt state vars (dt_vars,dt,dsf) =
     Utils.debugf ~section 5
-      "@[<2>generalize dt@ `@[%a@]`@ on vars @[%a@]@]"
-      (fun k->k (Model.DT.print P.print) dt (CCFormat.list Var.print_full) vars);
+      "@[<2>generalize dt@ `@[<2>%a ->@ @[%a@]@]`@ on vars @[%a@]@ with arg %a@]"
+      (fun k->k (CCFormat.list Var.print_full) dt_vars
+          (Model.DT.print P.print) dt
+          (CCFormat.list Var.print_full) vars Arg.print dsf.dsf_arg);
     let n_closure_vars = List.length (Arg.vars dsf.dsf_arg) in
     assert (List.length dt_vars
       = List.length vars - Arg.length dsf.dsf_arg + n_closure_vars);
@@ -1154,12 +1162,17 @@ module Make(T : TI.S) = struct
       let spec_args = Arg.to_list dsf.dsf_arg |> List.map (fun (i,_) -> i, `Spec) in
       let l = List.map (fun v -> `Var v) non_spec_vars in
       let l = insert_pos l spec_args in
-      CCList.Idx.foldi
+      let subst =
+        CCList.Idx.foldi
         (fun subst i -> function
            | `Spec -> subst
            | `Var v -> Subst.add ~subst v (List.nth vars i))
         Subst.empty l
+      in
+      Subst.add_list ~subst (Arg.vars dsf.dsf_arg) closure_vars
     in
+    (* base substitution, valid in all branches *)
+    let subst0 = U.renaming_to_subst renaming in
     (* condition that holds for this whole DT: [subset of vars = specialized args] *)
     let base_eqns =
       CCList.Idx.foldi
@@ -1180,20 +1193,28 @@ module Make(T : TI.S) = struct
                (fun subst (v,t) ->
                   if CCList.Set.mem ~eq:Var.equal v closure_vars
                   then
-                    let t' = decode_term_rec state subst t in
-                    Subst.add ~subst v t', []
-                  else subst, [Subst.find_exn ~subst:renaming v,t])
-               (U.renaming_to_subst renaming)
+                    (* test on closure var [v=t]: replace [v] with [t]
+                       in this branch *)
+                    Subst.add ~subst v t, []
+                  else subst, [v,t])
+               subst0
                eqns
            in
+           (* all "closure vars" should be bound in subst, for they should
+              occur in test? *)
+           assert (List.for_all (fun v -> Subst.mem ~subst v) closure_vars);
            let eqns' = base_eqns @ eqns' in
            (* translate a term and apply substitution on the fly *)
            let tr_term = decode_term_rec state subst in
-           List.map (fun (v,t) -> v, tr_term t) eqns', tr_term then_)
+           List.map
+             (fun (v,t) -> Subst.find_or ~default:v ~subst:renaming v, tr_term t)
+             eqns',
+           tr_term then_)
     and else_ =
-      base_eqns, decode_term state dt.Model.DT.else_
+      if U.is_undefined dt.Model.DT.else_ then []
+      else [base_eqns, decode_term_rec state subst0 dt.Model.DT.else_]
     in
-    let res = List.rev_append then_ [else_] in
+    let res = List.rev_append then_ else_ in
     Utils.debugf ~section 5 "@[<2>... obtaining@ `@[<v>%a@]`@]"
       (fun k->k CCFormat.(list (Model.DT.print_case P.print)) res);
     res
@@ -1211,17 +1232,30 @@ module Make(T : TI.S) = struct
     (* remove specialized functions from model *)
     let m' =
       Model.filter_map m
-      ~finite_types:(fun tup -> Some tup)
+      ~finite_types:(fun (t,l) ->
+        match T.repr t with
+          | TI.TyArrow (_,_) -> None (* remove arrow types, not finite types anymore *)
+          | _ -> Some (t,l))
       ~constants:(fun (t,u,kind) ->
         if is_spec_const state t
         then None
         else (* simply translate terms *)
           Some (decode_term state t, decode_term state u, kind))
-      ~funs:(fun ((f,_,_,_) as tup) ->
+      ~funs:(fun (f,vars,dt,kind) ->
         match T.repr f with
           | TI.Const f_id when is_spec_fun state f_id ->
               None (* drop models of specialized funs *)
-          | _ -> Some tup)
+          | _ ->
+              let renaming, vars = Utils.fold_map Subst.rename_var Subst.empty vars in
+              let subst = U.renaming_to_subst renaming in
+              Utils.debugf ~section 5
+                "@[<2>decode DT `@[%a@]`@ with @[%a@]@]"
+                (fun k->k (Model.DT.print P.print) dt (Subst.print P.print) subst);
+              let dt =
+                Model.DT.map dt
+                  ~var:(fun v -> Some (Subst.find_exn ~subst:renaming v))
+                  ~ty:CCFun.id ~term:(decode_term_rec state subst) in
+              Some (f, vars, dt, kind))
     in
     (* add functions that were specialized, after recombining their
        partial models *)

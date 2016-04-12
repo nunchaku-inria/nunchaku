@@ -15,6 +15,10 @@ Synopsis:    A counter-example finder for higher-order logic
 
 XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain' -j 0"
 
+Flag "random"
+  Description:      enable the library for generating random data
+  Default:          true
+
 Library "nunchaku_core"
   Path:             src/core/
   Pack:             true
@@ -22,7 +26,7 @@ Library "nunchaku_core"
                     UntypedAST, Model, TypeUnify, Problem, FO, Reduce,
                     Solver_intf, Env, Signature, Statement,
                     Scheduling, CVC4, Polarity, Traversal, ProblemMetadata,
-                    TyCardinality, Prelude, TypeCheck,
+                    AnalyzeType, Prelude, TypeCheck,
                     terms/TermInner,
                     terms/TermTyped,
                     terms/TermPoly,
@@ -67,6 +71,16 @@ Library "nunchaku_transformations"
   FindlibParent:    nunchaku_core
   BuildDepends:     containers, nunchaku
 
+Library "nunchaku_random"
+  Path:             src/random
+  Pack:             true
+  Modules:          Term_random
+  Install$:         flag(random)
+  Build$:           flag(random)
+  FindlibParent:    nunchaku_core
+  FindlibName:      random
+  BuildDepends:     nunchaku, qcheck
+
 Executable nunchaku
   Path:             src/main/
   Install:          true
@@ -82,7 +96,8 @@ Executable run_qtest
   CompiledObject:   native
   MainIs:           run_qtest.ml
   Build$:           flag(tests)
-  BuildDepends:     nunchaku, nunchaku.parsers, oUnit, qcheck
+  BuildDepends:     nunchaku, nunchaku.parsers, nunchaku.transformations,
+                    nunchaku.random, oUnit, qcheck
 
 Test all
   Command:      ./run_qtest.native
@@ -99,5 +114,5 @@ Document nunchaku
   XOCamlbuildExtraArgs:
     "-docflags '-colorize-code -short-functors -charset utf-8'"
   XOCamlbuildLibraries:
-    nunchaku, nunchaku.parsers
+    nunchaku, nunchaku.parsers, nunchaku.transformations
 

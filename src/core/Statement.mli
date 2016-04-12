@@ -101,10 +101,11 @@ type (+'t, +'ty) copy = {
   copy_vars: 'ty Var.t list; (* list of type variables *)
   copy_ty: 'ty;  (* type of [copy_id], of the form [type -> type -> ... -> type] *)
   copy_of: 'ty; (* [id vars] is a copy of [of_]. Set of variables = vars *)
-  copy_abstract: ID.t; (* [of_ -> id vars] *)
+  copy_to: 'ty; (* [id vars] *)
+  copy_abstract: ID.t; (* [of -> id vars] *)
   copy_abstract_ty: 'ty;
-  copy_concretize: ID.t; (* [id vars -> of] *)
-  copy_concretize_ty: 'ty;
+  copy_concrete: ID.t; (* [id vars -> of] *)
+  copy_concrete_ty: 'ty;
   copy_pred: 't option; (* invariant (prop) *)
 }
 
@@ -112,6 +113,8 @@ type (+'t, +'ty) copy = {
 type decl_attr =
   | Decl_attr_card_max of int (** maximal cardinality of type *)
   | Decl_attr_card_min of int (** minimal cardinality of type *)
+  | Decl_attr_incomplete (** encoding of some type with some values removed *)
+  | Decl_attr_abstract (** encoding of some type where some values are conflated *)
   | Decl_attr_exn of exn (** open case *)
 
 type (+'term, +'ty, 'inv) view =
@@ -202,12 +205,17 @@ val mk_mutual_ty:
 val mk_copy :
   ?pred:'t ->
   of_:'ty ->
+  to_:'ty ->
   ty:'ty ->
   abstract:(ID.t * 'ty) ->
-  concretize:(ID.t * 'ty) ->
+  concrete:(ID.t * 'ty) ->
   vars:'ty Var.t list ->
   ID.t ->
   ('t, 'ty) copy
+(** Invariants:
+    [to_ = app id vars]
+    [snd abstract = of_ -> to_]
+    [snd concrete = to_ -> of_] *)
 
 val find_rec_def : defs:('a, 'b, 'c) rec_def list -> ID.t -> ('a, 'b, 'c) rec_def option
 

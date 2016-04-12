@@ -8,10 +8,10 @@
 module Make(T : TermInner.S) : sig
   type subst = (T.t,T.t) Var.Subst.t
 
-  val whnf : T.t -> T.t
+  val whnf : ?subst:subst -> T.t -> T.t
   (** Weak Head Normal Form *)
 
-  val snf : T.t -> T.t
+  val snf : ?subst:subst -> T.t -> T.t
   (** Strong Normal Form (reduce under functions) *)
 
   val app_whnf : ?subst:subst -> T.t -> T.t list -> T.t

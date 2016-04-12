@@ -38,6 +38,7 @@ type ('t, 'ty) view =
   | DataTest of id * 't
   | DataSelect of id * int * 't
   | Undefined of id * 't (** ['t] is not defined here *)
+  | Unparsable of 'ty (** could not parse term *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Mu of 'ty var * 't   (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
@@ -125,6 +126,7 @@ module type S = sig
     val data_test : id -> t -> t
     val data_select : id -> int -> t -> t
     val undefined : id -> t -> t
+    val unparsable : Ty.t -> t
     val var : Ty.t var -> t
     val let_ : Ty.t var -> t -> t -> t
     val fun_ : Ty.t var -> t -> t
@@ -183,8 +185,9 @@ module Util(T : S) : sig
   val dt_of_term :
     vars:T.Ty.t Var.t list ->
     T.T.t ->
-    (T.T.t, T.Ty.t) Model.DT.t or_error
-  (** Convert a term into a decision tree, or fail *)
+    (T.T.t, T.Ty.t) Model.DT.t
+  (** Convert a term into a decision tree, or emit a warning and
+      return a trivial tree with "unparsable" inside *)
 
   val problem_kinds : (_,T.Ty.t) Problem.t -> Model.symbol_kind ID.Map.t
 end

@@ -134,6 +134,7 @@ module ToFO(T : TI.S)(F : FO.S) = struct
           (conv_term ~sigma a) (conv_term ~sigma b) (conv_term ~sigma c)
     | Builtin (`Undefined (c,t)) ->
         FO.T.undefined c (conv_term ~sigma t)
+    | Builtin (`Unparsable ty) -> FO.T.unparsable (conv_ty ty)
     | Builtin `True -> FO.T.true_
     | Builtin `False -> FO.T.false_
     | Builtin (`Equiv (a,b)) ->
@@ -147,8 +148,11 @@ module ToFO(T : TI.S)(F : FO.S) = struct
           | _ -> ()
         end;
         FO.T.eq (conv_term ~sigma a)(conv_term ~sigma b)
-    | Builtin (`And | `Or | `Not | `Imply) ->
-        fail_ t "partially applied connectives"
+    | Builtin (`Not t) -> FO.T.not_ (conv_term ~sigma t)
+    | Builtin (`And l) -> FO.T.and_ (List.map (conv_term ~sigma) l)
+    | Builtin (`Or l) -> FO.T.or_ (List.map (conv_term ~sigma) l)
+    | Builtin (`Imply (a,b)) ->
+        FO.T.imply (conv_term ~sigma a) (conv_term ~sigma b)
     | App (f, l) ->
         begin match Mono.repr f, l with
         | Const id, _ -> FO.T.app id (List.map (conv_term ~sigma) l)
@@ -156,11 +160,6 @@ module ToFO(T : TI.S)(F : FO.S) = struct
             FO.T.data_test c (conv_term ~sigma t)
         | Builtin (`DataSelect (c,n)), [t] ->
             FO.T.data_select c n (conv_term ~sigma t)
-        | Builtin `Not, [t] -> FO.T.not_ (conv_term ~sigma t)
-        | Builtin `And, l -> FO.T.and_ (List.map (conv_term ~sigma) l)
-        | Builtin `Or, l -> FO.T.or_ (List.map (conv_term ~sigma) l)
-        | Builtin `Imply, [a;b] ->
-            FO.T.imply (conv_term ~sigma a) (conv_term ~sigma b)
         | _ -> fail_ t "application of non-constant term"
         end
     | Bind (`Fun,v,t) ->
@@ -242,6 +241,8 @@ module ToFO(T : TI.S)(F : FO.S) = struct
             (function
               | St.Decl_attr_card_max n -> Some (FOI.CardBound (id, `Max, n))
               | St.Decl_attr_card_min n -> Some (FOI.CardBound (id, `Min, n))
+              | St.Decl_attr_abstract
+              | St.Decl_attr_incomplete
               | St.Decl_attr_exn _ -> None)
             attrs
         in
@@ -361,6 +362,8 @@ module OfFO(T:TI.S)(F : FO.VIEW) = struct
         U.var (Var.update_ty v ~f:(convert_ty))
     | FO.Undefined (c,t) ->
         U.builtin (`Undefined (c,convert_term t))
+    | FO.Unparsable ty ->
+        U.unparsable ~ty:(convert_ty ty)
     | FO.App (f,l) ->
         let l = List.map convert_term l in
         U.app (U.const f) l

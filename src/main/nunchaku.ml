@@ -87,7 +87,7 @@ let options =
   Utils.options_warnings_ @
   [ "--print-input", Arg.Set print_, " print input"
   ; "--print-all", Arg.Set print_all_, " print every step of the pipeline"
-  ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline"
+  ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline and exit"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
   ; "--print-" ^ Skolem.name, Arg.Set print_skolem_, " print input after Skolemization"
   ; "--print-" ^ Monomorphization.name, Arg.Set print_mono_, " print input after monomorphization"
@@ -119,6 +119,7 @@ let options =
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
+  ; "--print-undefined", Arg.Set TermInner.print_undefined_id, " print unique IDs of `undefined` terms"
   ; "--checks", Arg.Set check_all_, " check invariants after each pass"
   ; "--no-checks", Arg.Clear check_all_, " disable checking invariants after each pass"
   ; "--color", call_with true CCFormat.set_color_default, " enable color"
@@ -129,6 +130,7 @@ let options =
   ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
   ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
+  ; "-t", Arg.Set_int timeout_, " alias to --timeout"
   ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
   ; "-i", Arg.String set_input_, " synonym for --input"
   ; "--output", Arg.String set_output_, " set output format " ^ list_outputs_ ()
@@ -218,11 +220,11 @@ let make_model_pipeline () =
     Step_unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
     Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
     Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
     Step_LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
     Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
     Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
     Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
-    Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
     Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
     Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
     Step_tofo.pipe () @@@
@@ -306,6 +308,11 @@ let main () =
   let _ = Unix.alarm (!timeout_ + 2) in (* die after a while *)
   Arg.parse options set_file "usage: nunchaku [options] file";
   print_version_if_needed ();
+  if !print_pipeline_ then (
+    let cpipe = make_model_pipeline() in
+    Format.printf "@[Pipeline: %a@]@." Transform.ClosedPipe.print cpipe;
+    exit 0
+  );
   (* parse *)
   parse_file ~input:!input_ ()
   >>= fun statements ->

@@ -47,7 +47,7 @@ type (+'t, +'ty, 'inv) def =
   | Copy_abstract of ('t, 'ty) Statement.copy
     (** ID is the abstraction function *)
 
-  | Copy_concretize of ('t, 'ty) Statement.copy
+  | Copy_concrete of ('t, 'ty) Statement.copy
     (** ID is the concretization function *)
 
   | NoDef
@@ -83,6 +83,9 @@ val is_fun : _ info -> bool (** spec/rec *)
 val is_rec : _ info -> bool (** rec *)
 val is_data : _ info -> bool
 val is_cstor : _ info -> bool
+
+val is_incomplete : _ info -> bool
+val is_abstract : _ info -> bool
 
 val declare:
   ?loc:loc ->

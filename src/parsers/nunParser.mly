@@ -65,7 +65,7 @@
 %token GOAL
 %token COPY
 %token ABSTRACT
-%token CONCRETIZE
+%token CONCRETE
 
 %token INCLUDE
 %token<string> FILEPATH
@@ -374,11 +374,13 @@ statement:
     }
   | COPY id=raw_var vars=raw_var* EQDEF u=term
     ABSTRACT abs=raw_var
-    CONCRETIZE conc=raw_var
+    CONCRETE conc=raw_var
     DOT
     {
+      (* TODO: instead, parse list of "fields" and validate after parsing?
+         better once we get more possible (optional) fields, in random order *)
       let loc = L.mk_pos $startpos $endpos in
-      A.copy ~loc ~of_:u ~abstract:abs ~concretize:conc id vars
+      A.copy ~loc ~of_:u ~abstract:abs ~concrete:conc id vars
     }
   | error
     {

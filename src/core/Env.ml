@@ -44,7 +44,7 @@ type ('t, 'ty, 'inv) def =
   | Copy_abstract of ('t, 'ty) Statement.copy
     (** ID is the abstraction function *)
 
-  | Copy_concretize of ('t, 'ty) Statement.copy
+  | Copy_concrete of ('t, 'ty) Statement.copy
     (** ID is the concretization function *)
 
   | NoDef
@@ -93,6 +93,11 @@ let is_fun i = match i.def with Fun_spec _ | Fun_def _ -> true | _ -> false
 let is_rec i = match i.def with Fun_def _ -> true | _ -> false
 let is_data i = match i.def with Data _ -> true | _ -> false
 let is_cstor i = match i.def with Cstor _ -> true | _ -> false
+
+let is_incomplete i =
+  List.exists (function Stmt.Decl_attr_incomplete -> true | _ -> false) i.decl_attrs
+let is_abstract i =
+  List.exists (function Stmt.Decl_attr_abstract -> true | _ -> false) i.decl_attrs
 
 let create ?(size=64) () = {infos=ID.PerTbl.create size}
 
@@ -220,9 +225,9 @@ let add_copy ?loc ~env c =
       {loc; decl_kind=Stmt.Decl_fun; decl_attrs=[];
        ty=c.Stmt.copy_abstract_ty; def=Copy_abstract c; } in
   let infos =
-    ID.PerTbl.replace infos c.Stmt.copy_concretize
+    ID.PerTbl.replace infos c.Stmt.copy_concrete
       {loc; decl_kind=Stmt.Decl_fun; decl_attrs=[];
-       ty=c.Stmt.copy_concretize_ty; def=Copy_concretize c; } in
+       ty=c.Stmt.copy_concrete_ty; def=Copy_concrete c; } in
   {infos; }
 
 let add_statement
@@ -267,8 +272,8 @@ module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) = struct
     | Copy_ty { Stmt.copy_of; _ } -> fpf out "<copy of `%a`>" Pty.print copy_of
     | Copy_abstract { Stmt.copy_id; _ } ->
         fpf out "<copy abstract of `%a`>" ID.print copy_id
-    | Copy_concretize { Stmt.copy_id; _ } ->
-        fpf out "<copy concretize of `%a`>" ID.print copy_id
+    | Copy_concrete { Stmt.copy_id; _ } ->
+        fpf out "<copy concrete of `%a`>" ID.print copy_id
     | NoDef -> CCFormat.string out "<no def>"
 
   let print_info out i =

@@ -27,7 +27,7 @@ module Make(T : TI.S) = struct
     let info = Env.find_exn ~env id in
     match Env.def info with
     | Env.Copy_abstract c -> `Abs c
-    | Env.Copy_concretize c -> `Conc c
+    | Env.Copy_concrete c -> `Conc c
     | Env.Copy_ty c -> `Ty c
     | _ -> `Not_copy
 
@@ -55,8 +55,8 @@ module Make(T : TI.S) = struct
         begin match T.repr f with
         | TI.Const id ->
             begin match as_copy_ ~env id, l with
-            | (`Abs _ | `Conc _), [x] -> x (* erase *)
-            | (`Abs _ | `Conc _), ([] | _::_::_) -> assert false
+            | _, [] -> assert false
+            | (`Abs _ | `Conc _), f :: l -> U.app f l (* erase *)
             | `Ty _, _ -> assert false
             | `Not_copy, _ -> rewrite_rec_ ~env subst t
             end

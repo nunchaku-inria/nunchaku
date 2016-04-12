@@ -173,7 +173,7 @@ module Make(T : TI.S) = struct
     match Env.find_exn ~env id with
     | {Env.def=(Env.Fun_def _ | Env.Fun_spec _ |
                 Env.Cstor _ | Env.Data _ | Env.Pred _ |
-                Env.Copy_abstract _ | Env.Copy_concretize _ |
+                Env.Copy_abstract _ | Env.Copy_concrete _ |
                 Env.Copy_ty _); _} ->
         true (* defined objects: mangle *)
     | {Env.def=Env.NoDef; decl_kind=(Stmt.Decl_fun | Stmt.Decl_prop); _} ->
@@ -512,24 +512,19 @@ module Make(T : TI.S) = struct
         let id', _ = mangle_ ~state:st c.Stmt.copy_id (ArgTuple.m_args tup) in
         let local_state = {depth; subst} in
         let of_' = mono_type ~state:st ~local_state c.Stmt.copy_of in
+        let to_' = mono_type ~state:st ~local_state c.Stmt.copy_to in
         let abstract', _ =
           mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
-        let ty_abstract' =
-          ArgTuple.app_poly_ty c.Stmt.copy_abstract_ty tup
-          |> fst
-          |> mono_type ~state:st ~local_state in
-        let concretize', _ =
-          mangle_ ~state:st c.Stmt.copy_concretize (ArgTuple.m_args tup) in
-        let ty_concretize' =
-          ArgTuple.app_poly_ty c.Stmt.copy_concretize_ty tup
-          |> fst
-          |> mono_type ~state:st ~local_state in
+        let concrete', _ =
+          mangle_ ~state:st c.Stmt.copy_concrete (ArgTuple.m_args tup) in
+        let ty_abstract' = U.ty_arrow of_' to_' in
+        let ty_concrete' = U.ty_arrow to_' of_' in
         let ty' = U.ty_type in
         (* create new copy type *)
         let c' = Stmt.mk_copy
-          ~of_:of_' ~ty:ty' ~vars:[]
+          ~of_:of_' ~to_:to_' ~ty:ty' ~vars:[]
           ~abstract:(abstract', ty_abstract')
-          ~concretize:(concretize', ty_concretize')
+          ~concrete:(concrete', ty_concrete')
           id'
         in
         self#push_res (Stmt.copy ~info:{Stmt.name=None; loc;} c')
@@ -567,7 +562,7 @@ module Make(T : TI.S) = struct
 
   (* some sanity checks on statements *)
   let check_defs_ pb =
-    let module TyCard = TyCardinality.Make(T) in
+    let module TyCard = AnalyzeType.Make(T) in
     let env = Problem.env pb in
     let cache = TyCard.create_cache() in
     Problem.iter_statements pb ~f:(TyCard.check_non_zero ~cache env)

@@ -118,21 +118,24 @@ end = struct
     let env = Hashtbl.create 32 in
     let rec aux t = match Loc.get t with
       | A.App (f, l) ->
-          U.app (aux f) (List.map aux l)
+          begin match Loc.get f, l with
+            | A.Builtin `Not, [t] -> U.not_ (aux t)
+            | A.Builtin `And, _ -> U.and_ (List.map aux l)
+            | A.Builtin `Or, _-> U.or_ (List.map aux l)
+            | A.Builtin `Imply, [a;b] -> U.imply (aux a) (aux b)
+            | A.Builtin (`Not | `Imply), _ -> error_ t "partially applied builtin"
+            | _ -> U.app (aux f) (List.map aux l)
+          end
       | A.Var `Wildcard -> error_ t "wildcard not supported"
       | A.Builtin b ->
           begin match b with
           | `Prop -> U.ty_prop
           | `Type -> U.ty_type
-          | `Not -> U.ty_builtin `Prop
-          | `And -> U.builtin `And
-          | `Or -> U.builtin `Or
           | `True -> U.builtin `True
           | `False -> U.builtin `False
-          | `Imply -> U.builtin `Imply
           | `Undefined _ -> error_ t "cannot convert `undefined`"
-          | `Eq | `Equiv ->
-              error_ t "unapplied equality"
+          | `Eq | `Equiv | `Not | `And | `Or | `Imply ->
+              error_ t "partially applied builtin"
           end
       | A.AtVar s
       | A.Var (`Var s) ->

@@ -72,6 +72,8 @@ module Subst = struct
 
   let of_list v t = add_list ~subst:empty v t
 
+  let concat s ~into:s2 = M.add_seq s2 (M.to_seq s)
+
   let remove ~subst v = M.remove v.id subst
 
   let mem ~subst v = M.mem v.id subst
@@ -93,6 +95,10 @@ module Subst = struct
     | Some v' -> Some (deref_rec ~subst v')
 
   let map ~f s = M.map (fun (v,t) -> v, f t) s
+
+  let rename_var subst v =
+    let v' = fresh_copy v in
+    add ~subst v v', v'
 
   let to_list s = M.fold (fun _ (v,x) acc -> (v,x)::acc) s []
 

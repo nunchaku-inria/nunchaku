@@ -403,7 +403,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
             self#do_mutual_types_rec ~depth ~loc k tydefs tydef arg;
             assert (self#has_processed id arg);
         | Env.Copy_abstract c
-        | Env.Copy_concretize c
+        | Env.Copy_concrete c
         | Env.Copy_ty c ->
             if not conf.direct_copy then (
               self#do_copy ~depth ~loc c arg;

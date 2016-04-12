@@ -80,7 +80,7 @@ rule token = parse
   | "include" { INCLUDE }
   | "copy" { COPY }
   | "abstract" { ABSTRACT }
-  | "concretize" { CONCRETIZE }
+  | "concrete" { CONCRETE }
   | "wf" { WF_ATTRIBUTE }
   | "&&" { LOGIC_AND }
   | "||" { LOGIC_OR }

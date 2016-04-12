@@ -14,7 +14,6 @@ type id = ID.t
 let section = Utils.Section.make "cvc4"
 
 let fpf = Format.fprintf
-let spf = CCFormat.sprintf
 
 type model_term = FO.Default.T.t
 type model_ty = FO.Default.Ty.t
@@ -33,8 +32,8 @@ let errorf_ fmt = CCFormat.ksprintf fmt ~f:error_
 
 let () = Printexc.register_printer
   (function
-    | Error msg -> Some (spf "@[Error in the interface to CVC4:@ %s@]" msg)
-    | CVC4_error msg -> Some (spf "@[Error in CVC4:@ %s@]" msg)
+    | Error msg -> Some (Utils.err_sprintf "@[in the interface to CVC4:@ %s@]" msg)
+    | CVC4_error msg -> Some (Utils.err_sprintf "@[in CVC4:@ %s@]" msg)
     | _ -> None)
 
 module Make(FO_T : FO.S) = struct
@@ -55,12 +54,57 @@ module Make(FO_T : FO.S) = struct
     | DataTest of id
     | DataSelect of id * int
 
+  (* a ground type, such as [to a (list b)] *)
+  type ground_ty = Ty.t
+
+  let gty_make = Ty.app
+  let gty_const id = gty_make id []
+
+  let rec gty_equal a b = match Ty.view a, Ty.view b with
+    | FOI.TyBuiltin a, FOI.TyBuiltin b -> a=b
+    | FOI.TyApp (hd_a, l_a), FOI.TyApp (hd_b, l_b) ->
+        ID.equal hd_a hd_b
+        && CCList.equal gty_equal l_a l_b
+    | FOI.TyBuiltin _, _ | FOI.TyApp _, _ -> false
+
+  type 'a gty_map = (ground_ty * 'a) list ID.Map.t
+
+  let gty_map_empty : _ gty_map = ID.Map.empty
+
+  let gty_head ty =
+    match Ty.view ty with
+      | FOI.TyApp (id,_) -> Some id
+      | FOI.TyBuiltin _ -> None
+
+  let gty_map_add m g x =
+    match gty_head g with
+    | None -> assert false
+    | Some id ->
+        let l = ID.Map.get_or id m ~or_:[] in
+        if CCList.Assoc.mem ~eq:gty_equal l g
+        then m
+        else ID.Map.add id ((g,x) :: l) m
+
+  let gty_map_find_exn m g =
+    match gty_head g with
+      | None -> raise Not_found
+      | Some id ->
+          let l = ID.Map.find id m in
+          CCList.Assoc.get_exn ~eq:gty_equal l g
+
+  let gty_map_mem m g = try ignore (gty_map_find_exn m g); true with Not_found -> false
+
+  let rec fobackty_of_ground_ty g = match Ty.view g with
+    | FOI.TyApp (id,l) ->
+        FOBack.Ty.app id (List.map fobackty_of_ground_ty l)
+    | FOI.TyBuiltin b -> FOBack.Ty.builtin b
+
   type model_query =
     | Q_const
         (* we want to know the value of this constant *)
     | Q_fun of int
         (* we want to know the value of this function (int: arity) *)
-    | Q_type of ID.t
+    | Q_type of ground_ty
         (* [id -> ty] means that [id : ty] is a dummy value, and we  want
            to know the finite domain of [ty] by asking [(fmf.card.val id)] *)
 
@@ -75,7 +119,7 @@ module Make(FO_T : FO.S) = struct
       (* set of symbols to ask values for in the model *)
     vars: FOBack.Ty.t Var.t ID.Tbl.t;
       (* variables in scope *)
-    witnesses : ID.t ID.Tbl.t;
+    mutable witnesses : ID.t gty_map;
       (* type -> witness of this type *)
   }
 
@@ -85,7 +129,7 @@ module Make(FO_T : FO.S) = struct
     name_to_id=Hashtbl.create 32;
     symbols=ID.Tbl.create 32;
     vars=ID.Tbl.create 32;
-    witnesses=ID.Tbl.create 32;
+    witnesses=gty_map_empty;
   }
 
   (* the solver is dealt with through stdin/stdout *)
@@ -132,15 +176,18 @@ module Make(FO_T : FO.S) = struct
     Gc.finalise close s; (* close on finalize *)
     s
 
-  let pp_list ?(start="") ?(stop="") pp = CCFormat.list ~sep:" " ~start ~stop pp
+  let pp_list ?(sep=" ") ?(start="") ?(stop="") pp = CCFormat.list ~sep ~start ~stop pp
 
   (* add numeric suffix to [name] until it is an unused name *)
   let find_unique_name_ ~decode name0 =
     if not (Hashtbl.mem decode.name_to_id name0) then name0
     else (
       let n = ref 0 in
-      while Hashtbl.mem decode.name_to_id (spf "%s_%d" name0 !n) do incr n done;
-      spf "%s_%d" name0 !n
+      while
+        Hashtbl.mem decode.name_to_id (Printf.sprintf "%s_%d" name0 !n)
+      do incr n
+      done;
+      Printf.sprintf "%s_%d" name0 !n
     )
 
   (* injection from ID to string *)
@@ -156,6 +203,25 @@ module Make(FO_T : FO.S) = struct
       Hashtbl.add decode.name_to_id name (ID id);
       ID.Tbl.add decode.id_to_name id name;
       name
+
+  let pp_builtin_cvc4 out = function
+    | `Prop -> CCFormat.string out "Bool"
+
+  (* print ground type using CVC4's escaping rules *)
+  let rec pp_gty ~decode out g =
+    let normalize_str =
+      String.map
+        (fun c -> match c with
+           | 'a'..'z' | 'A'..'Z' | '0'..'9' -> c
+           | _ -> '_')
+    in
+    match Ty.view g with
+    | FOI.TyBuiltin b -> pp_builtin_cvc4 out b
+    | FOI.TyApp (id, []) ->
+        CCFormat.string out (id_to_name ~decode id |> normalize_str)
+    | FOI.TyApp (id,l) ->
+        fpf out "_%s_%a_" (id_to_name ~decode id |> normalize_str)
+          (pp_list ~sep:"_" (pp_gty ~decode)) l
 
   (* print processed problem *)
   let print_problem out (decode, pb) =
@@ -179,10 +245,7 @@ module Make(FO_T : FO.S) = struct
 
     (* print type (a monomorphic type) in SMT *)
     and print_ty out ty = match Ty.view ty with
-      | FOI.TyBuiltin b ->
-          begin match b with
-          | `Prop -> CCFormat.string out "Bool"
-          end
+      | FOI.TyBuiltin b -> pp_builtin_cvc4 out b
       | FOI.TyApp (f, []) -> print_id out f
       | FOI.TyApp (f, l) ->
           fpf out "@[(%a@ %a)@]"
@@ -207,7 +270,8 @@ module Make(FO_T : FO.S) = struct
           fpf out "(@[%a@ %a@])" print_tester c print_term t
       | FOI.DataSelect (c,n,t) ->
           fpf out "(@[%a@ %a@])" print_select (c,n) print_term t
-      | FOI.Undefined (_,t) -> print_term out t
+      | FOI.Undefined (_,t) -> print_term out t (* tailcall, probably *)
+      | FOI.Unparsable _ -> errorf_ "cannot print `unparsable` in SMTlib"
       | FOI.Fun (v,t) ->
           fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
             Var.print_full v print_ty (Var.ty v) print_term t
@@ -254,7 +318,7 @@ module Make(FO_T : FO.S) = struct
           fpf out "(@[assert@ %a@])" print_term t
       | FOI.CardBound (ty_id, which, n) ->
           let witness =
-            try ID.Tbl.find decode.witnesses ty_id
+            try gty_map_find_exn decode.witnesses (gty_const ty_id)
             with Not_found ->
               errorf_ "no witness declared for cardinality bound on %a" ID.print ty_id
           in
@@ -430,10 +494,10 @@ module Make(FO_T : FO.S) = struct
     let vars, body = get_args t n in
     (* change the shape of [body] so it looks more like a decision tree *)
     let module U = FO.Util(FOBack) in
-    match U.dt_of_term ~vars body with
-    | `Ok dt -> vars, dt
-    | `Error msg ->
-        errorf_ "expected decision tree,@ but %s" msg
+    let dt = U.dt_of_term ~vars body in
+    Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
+      (fun k->k P.print_term body (Model.DT.print P.print_term) dt);
+    vars, dt
 
   let sym_get_const_ ~decode id = match ID.Tbl.find decode.symbols id with
     | Q_const -> `Const
@@ -473,14 +537,15 @@ module Make(FO_T : FO.S) = struct
               (* finite domain *)
               let id = parse_id_ ~decode s in
               (* which type? *)
-              let ty_id = sym_get_ty_ ~decode id in
-              let ty = FOBack.Ty.const ty_id in
+              let gty = sym_get_ty_ ~decode id in
+              let ty = fobackty_of_ground_ty gty in
               (* read cardinal *)
               let n = parse_int_ n in
               let terms = Sequence.(0 -- (n-1)
                 |> map
                   (fun i ->
-                    let name = CCFormat.sprintf "@uc_%a__%d" ID.print_name ty_id i in
+                    let name =
+                      CCFormat.sprintf "@[<h>@uc_%a_%d@]" (pp_gty ~decode) gty i in
                     let id = match find_atom_ ~decode name with
                       | ID id -> id
                       | _ -> assert false
@@ -572,8 +637,17 @@ module Make(FO_T : FO.S) = struct
      read back from the model, and type witnesses *)
   type processed_problem = decode_state * problem
 
+  (* is [ty] a finite (uninterpreted) type? *)
+  let is_finite_ decode ty = match Ty.view ty with
+    | FOI.TyApp (id, _) ->
+        begin match get_kind ~decode id with
+          | Model.Symbol_utype -> true
+          | Model.Symbol_data | Model.Symbol_fun | Model.Symbol_prop -> false
+        end
+    | _ -> false
+
   (* does two things:
-      - add some dummy constants for non-parametrized types (for asking for
+      - add some dummy constants for uninterpreted types (for asking for
           the type's domain later)
       - compute the set of symbols for which we want the model's value *)
   let preprocess pb : processed_problem =
@@ -582,6 +656,26 @@ module Make(FO_T : FO.S) = struct
     let n = ref 0 in
     let state = create_decode_state ~kinds () in
     let decl state id c = ID.Tbl.add state.symbols id c in
+    (* if some types in [l] do not have a witness, add them to [[stmt]] *)
+    let add_ty_witnesses stmt l =
+      List.fold_left
+        (fun acc gty ->
+          if not (is_finite_ state gty) || gty_map_mem state.witnesses gty
+          then acc (* already declared a witness for [gty], or [gty] is not
+                      a finite type *)
+          else (
+            (* add a dummy constant *)
+            let c = ID.make (CCFormat.sprintf "__nun_card_witness_%d" !n) in
+            incr n;
+            (* declare [c] *)
+            let ty_c = [], gty in
+            decl state c (Q_type gty);
+            state.witnesses <- gty_map_add state.witnesses gty c;
+            FOI.Decl (c, ty_c) :: acc
+          ))
+        [stmt] l
+      |> List.rev
+    in
     let pb =
       FOI.Problem.flat_map ~meta:(FO.Problem.meta pb)
       (fun stmt -> match stmt with
@@ -591,21 +685,11 @@ module Make(FO_T : FO.S) = struct
               then decl state id Q_const
               else decl state id (Q_fun len)
             end;
-            [stmt]
+            (* if args contains composite types, add witnesses for them *)
+            add_ty_witnesses stmt args
         | FOI.CardBound (id,_,_)
         | FOI.TyDecl (id,0) ->
-            if ID.Tbl.mem state.witnesses id
-            then [stmt] (* already declared a witness for [id] *)
-            else (
-              (* add a dummy constant *)
-              let c = ID.make (CCFormat.sprintf "__nun_card_witness_%d" !n) in
-              incr n;
-              (* declare [c] *)
-              let ty_c = [], FO_T.Ty.const id in
-              decl state c (Q_type id);
-              ID.Tbl.add state.witnesses id c;
-              [stmt; FOI.Decl (c, ty_c)]
-            )
+            add_ty_witnesses stmt [gty_const id]
         | FOI.TyDecl _
         | FOI.Axiom _
         | FOI.Goal _

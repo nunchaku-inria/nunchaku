@@ -81,6 +81,9 @@ module Make(T : TI.S) = struct
     let def = mk_new_rec kind f ty vars body in
     Stmt.axiom_rec ~info:Stmt.info_default [def]
 
+  (* TODO: expand `let` if its parameter is HO, and
+     compute WHNF in case [var args] (new β redexes) *)
+
   (* traverse [t] recursively, replacing lambda terms by new named functions *)
   let rec tr_term ~state local_state t = match T.repr t with
     | TI.Bind (`Fun, v, body) ->

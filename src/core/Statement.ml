@@ -103,10 +103,11 @@ type (+'t, +'ty) copy = {
   copy_vars: 'ty Var.t list; (* list of type variables *)
   copy_ty: 'ty;  (* type of [copy_id], of the form [type -> type -> ... -> type] *)
   copy_of: 'ty; (* [id vars] is a copy of [of_]. Set of variables = vars *)
+  copy_to: 'ty; (* [id vars] *)
   copy_abstract: ID.t; (* [of -> id vars] *)
   copy_abstract_ty: 'ty;
-  copy_concretize: ID.t; (* [id vars -> of] *)
-  copy_concretize_ty: 'ty;
+  copy_concrete: ID.t; (* [id vars -> of] *)
+  copy_concrete_ty: 'ty;
   copy_pred: 't option; (* invariant (prop) *)
 }
 
@@ -114,6 +115,8 @@ type (+'t, +'ty) copy = {
 type decl_attr =
   | Decl_attr_card_max of int
   | Decl_attr_card_min of int
+  | Decl_attr_incomplete (** encoding of some type with some values removed *)
+  | Decl_attr_abstract (** encoding of some type where some values are conflated *)
   | Decl_attr_exn of exn (** open case *)
 
 type (+'term, +'ty, 'inv) view =
@@ -182,17 +185,18 @@ let mk_mutual_ty id ~ty_vars ~cstors ~ty =
   in
   {ty_id=id; ty_type=ty; ty_vars; ty_cstors; }
 
-let mk_copy ?pred ~of_ ~ty ~abstract ~concretize ~vars id =
+let mk_copy ?pred ~of_ ~to_ ~ty ~abstract ~concrete ~vars id =
   let copy_abstract, copy_abstract_ty = abstract in
-  let copy_concretize, copy_concretize_ty = concretize in
+  let copy_concrete, copy_concrete_ty = concrete in
   { copy_id=id;
     copy_vars=vars;
     copy_ty=ty;
     copy_of=of_;
+    copy_to=to_;
     copy_abstract;
     copy_abstract_ty;
-    copy_concretize;
-    copy_concretize_ty;
+    copy_concrete;
+    copy_concrete_ty;
     copy_pred=pred;
   }
 
@@ -254,9 +258,10 @@ let map_copy_bind ~bind ~term ~ty acc c =
   { c with
     copy_vars;
     copy_of = ty acc' c.copy_of;
+    copy_to = ty acc' c.copy_to;
     copy_ty = ty acc c.copy_ty;
     copy_abstract_ty = ty acc' c.copy_abstract_ty;
-    copy_concretize_ty = ty acc' c.copy_concretize_ty;
+    copy_concrete_ty = ty acc' c.copy_concrete_ty;
     copy_pred = CCOpt.map (term acc') c.copy_pred;
   }
 
@@ -465,7 +470,7 @@ let fold_bind (type inv) ~bind ~term:fterm ~ty:fty b_acc acc (st:(_,_,inv) t) =
       let b_acc = List.fold_left bind b_acc c.copy_vars in
       let acc =
         List.fold_left (fty b_acc) acc
-          [c.copy_of; c.copy_ty; c.copy_concretize_ty; c.copy_abstract_ty] in
+          [c.copy_of; c.copy_ty; c.copy_to] in
       CCOpt.fold (fterm b_acc) acc c.copy_pred
   | Goal t -> fterm b_acc acc t
 
@@ -498,6 +503,8 @@ let pplist_prefix ~first ~pre pp out l =
 let print_attr out = function
   | Decl_attr_card_max i -> fpf out "max_card %d" i
   | Decl_attr_card_min i -> fpf out "min_card %d" i
+  | Decl_attr_incomplete -> CCFormat.string out "incomplete"
+  | Decl_attr_abstract -> CCFormat.string out "abstract"
   | Decl_attr_exn e -> CCFormat.string out (Printexc.to_string e)
 
 let print_attrs out = function
@@ -583,12 +590,13 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
       | Some p -> fpf out "@,@[<2>pred@ @[%a@]@]" Pt.print p
     in
     fpf out
-      "@[<v2>copy @[%a %a :=@ @[%a@]@]@ abstract %a : %a@ concretize %a : %a%a@]"
+      "@[<v2>copy @[%a %a :=@ @[%a@]@]@ @[abstract %a : @[%a -> %a@]@]@ \
+        @[concrete %a : @[%a -> %a@]@]%a@]"
       ID.print c.copy_id
       (CCFormat.list ~start:"" ~stop:"" ~sep:" " Var.print_full) c.copy_vars
       Pty.print c.copy_of
-      ID.print c.copy_abstract Pty.print c.copy_abstract_ty
-      ID.print c.copy_concretize Pty.print c.copy_concretize_ty
+      ID.print c.copy_abstract Pty.print c.copy_of Pty.print c.copy_to
+      ID.print c.copy_concrete Pty.print c.copy_to Pty.print c.copy_of
       pp_pred c.copy_pred
 
   let print_tydef out tydef =

@@ -65,13 +65,13 @@ module DT = struct
     match t.tests with
     | [] -> fpf out "@[%a@]" pp t.else_
     | [a,b] ->
-        fpf out "@[@[<2>if@ @[<hv>%a@]@]@ @[<2>then@ %a@]@ @[<2>else@ %a@]@]"
+        fpf out "@[@[<v2>@[<2>if@ @[<hv>%a@]@]@ @[<2>then@ %a@]@]@ @[<2>else@ %a@]@]"
           pp_eqns a pp b pp t.else_
     | (a,b) :: l ->
         let pp_pair out (a,b) =
-          fpf out "@[<2>else if@ @[<hv>%a@]@]@ @[<2>then@ %a@]" pp_eqns a pp b in
+          fpf out "@[<v2>@[<2>else if@ @[<hv>%a@]@]@ @[<2>then@ %a@]@]" pp_eqns a pp b in
         let pp_elif = CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_pair in
-        fpf out "@[<hv>@[<2>if@ %a@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
+        fpf out "@[<hv>@[<v2>@[<2>if@ %a@]@ @[<2>then@ %a@]@]@ %a@ @[<2>else@ %a@]@]"
           pp_eqns a pp b pp_elif l pp t.else_
 end
 
@@ -116,7 +116,8 @@ end
 type symbol_kind =
   | Symbol_prop
   | Symbol_fun
-  | Symbol_type
+  | Symbol_utype
+  | Symbol_data
 
 type (+'t, +'ty) t = {
   constants: ('t * 't * symbol_kind) list;
@@ -188,7 +189,7 @@ let print pt pty out m =
     fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
       pty ty (pplist ~sep:", " ID.print) dom
   and pp_fun out (f,vars,dt,_) =
-    fpf out "@[<2>val @[%a@]@ :=@ @[<2>@[fun @[<hv>%a@]@].@ @[%a@]@]@]."
+    fpf out "@[<2>val @[%a@]@ :=@ @[<v2>@[fun @[<hv>%a@]@].@ @[%a@]@]@]."
       pt f
       (pplist ~sep:" " pp_tyvar) vars
       (DT.print pt) dt
@@ -208,11 +209,18 @@ module Util(T : TI.S) = struct
   module Ty = TypeMono.Make(T)
   module Red = Reduce.Make(T)
 
+  (* a kind of flat-form printing of [t] *)
+  let rec flatten_ty out t = match T.repr t with
+    | TI.App (f,l) ->
+        fpf out "%a_%a"
+          flatten_ty f
+          CCFormat.(list ~start:"" ~stop:"" ~sep:"_" flatten_ty) l
+    | TI.Const id -> ID.print_name out id
+    | TI.TyBuiltin b -> CCFormat.string out (TI.TyBuiltin.to_string b)
+    | _ -> ()
+
   (* return a prefix for constants in the domain of this given type *)
-  let pick_prefix_ ty =
-    (* TODO: improve, to avoid collisions *)
-    let id = U.head_sym ty in
-    ID.name id
+  let pick_prefix_ ty = CCFormat.sprintf "@[<h>%a@]" flatten_ty ty
 
   (* compute a set of renaming rules for the model [m] *)
   let renaming_rules_of_model_ m =
@@ -221,7 +229,7 @@ module Util(T : TI.S) = struct
         let prefix = pick_prefix_ t in
         CCList.Idx.foldi
           (fun acc i id ->
-            let name = CCFormat.sprintf "%s_%d" prefix i in
+            let name = CCFormat.sprintf "$%s_%d" prefix i in
             let rhs = ID.make name in
             ID.Map.add id rhs acc)
           acc dom)

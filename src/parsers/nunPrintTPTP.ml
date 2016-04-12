@@ -54,13 +54,17 @@ module Make(T : TI.S) = struct
     | `Equiv (a,b) ->
         fpf out "@[<hv>%a <=>@ %a@]" print_inner a print_inner b
     | `Undefined (_id,t) -> print_inner out t
-    | `And
-    | `Imply
-    | `Or
-    | `Not
+    | `Not f -> fpf out "~ %a" print_inner f
+    | `And l ->
+        fpf out "@[<hv>%a@]" (pp_list ~sep:" & " print_inner) l
+    | `Or l ->
+        fpf out "@[<hv>%a@]" (pp_list ~sep:" | " print_inner) l
+    | `Imply (a,b) ->
+        fpf out "@[<hv>%a =>@ %a@]" print_inner a print_inner b
     | `DataTest _
     | `DataSelect _
     | `Guard _
+    | `Unparsable _
     | `Ite _ -> assert false (* TODO *)
 
   (* disambiguate IDs when printing them *)
@@ -77,6 +81,7 @@ module Make(T : TI.S) = struct
     | TI.Bind (`Mu,_,_) -> Utils.not_implemented "print mu in TPTP"
     | TI.Let _ -> Utils.not_implemented "print let in TPTP"
     | TI.Match _ -> Utils.not_implemented "print match in TPTP"
+    | TI.Builtin (`Unparsable _) -> error_ "cannot print `unparsable` in TPTP"
     | TI.Builtin (`Ite (a,b,c)) ->
         fpf out "$ite_t(@[<hv>%a,@ %a,@ %a@])"
           print_term a print_term b print_term c
@@ -96,27 +101,7 @@ module Make(T : TI.S) = struct
         | TI.Var _ ->
             fpf out "@[<2>%a(%a)@]"
               print_inner f (pp_list ~sep:", " print_term) l
-        | TI.Builtin b ->
-            begin match b, l with
-            | `Not, [f] -> fpf out "~ %a" print_inner f
-            | `And, _ ->
-                fpf out "@[<hv>%a@]" (pp_list ~sep:" & " print_inner) l
-            | `Or, _ ->
-                fpf out "@[<hv>%a@]" (pp_list ~sep:" | " print_inner) l
-            | `Imply, [a;b] ->
-                fpf out "@[<hv>%a =>@ %a@]" print_inner a print_inner b
-            | `True, _
-            | `False, _
-            | `Eq _ ,_
-            | `Equiv _ ,_
-            | `Ite _, _
-            | `Not ,_
-            | `Undefined _, _
-            | `DataTest _, _
-            | `DataSelect _, _
-            | `Guard _, _
-            | `Imply ,_ -> assert false
-            end
+        | TI.Builtin _ -> assert false
         | _ ->
             Utils.not_implementedf
               "@[<2>print_model:@ could not apply `@[%a@]`@ to arguments [@[%a@]]@]"
@@ -264,7 +249,7 @@ module Make(T : TI.S) = struct
           in
           let rhs = U.eval ~subst rhs in
           let body = match kind with
-            | Model.Symbol_type -> assert false
+            | Model.Symbol_utype | Model.Symbol_data -> assert false
             | Model.Symbol_fun -> U.eq (U.app t args) rhs
             | Model.Symbol_prop ->
                 (* propositions should become [p(x)] or [not p(x)] *)
@@ -291,7 +276,7 @@ module Make(T : TI.S) = struct
   let role_of_kind = function
     | Model.Symbol_prop -> Role_predicate
     | Model.Symbol_fun -> Role_functor
-    | Model.Symbol_type -> assert false
+    | Model.Symbol_utype | Model.Symbol_data -> assert false
 
   (* preprocess model to make it as FO as possible, and associate it a role. *)
   let preprocess_model (m:model) : tptp_model =
