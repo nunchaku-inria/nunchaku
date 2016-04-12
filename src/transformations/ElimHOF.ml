@@ -8,6 +8,7 @@ open Nunchaku_core
 module TI = TermInner
 module Stmt = Statement
 module Subst = Var.Subst
+module Pol = Polarity
 
 let name = "elim_hof"
 let section = Utils.Section.make name
@@ -602,14 +603,14 @@ module Make(T : TI.S) = struct
 
   (* traverse [t] and replace partial applications with fully applied symbols
       from state.app_symbols. Also encodes every type using [handle_id] *)
-  let elim_hof_term ~state subst t =
-    let rec aux subst t = match T.repr t with
+  let elim_hof_term ~state subst pol t =
+    let rec aux subst pol t = match T.repr t with
       | TI.Var v -> Subst.find_exn ~subst v |> U.var
       | TI.TyArrow _ -> aux_ty subst t (* type: encode it *)
       | TI.App (f,l) ->
           begin match T.repr f with
           | TI.Const id when ID.Map.mem id state.arities ->
-              let l = List.map (aux subst) l in
+              let l = List.map (aux subst Pol.NoPol) l in
               (* replace by applications symbols, based on [length l] *)
               let n = List.length l in
               let fun_encoding = fun_encoding_for ~state id in
@@ -617,28 +618,51 @@ module Make(T : TI.S) = struct
               let app_l = IntMap.find n fun_encoding.fe_stack in
               apply_app_funs_ app_l (f::l)
           | TI.Var v when ID.Map.mem (Var.id v) state.arities ->
-              let l = List.map (aux subst) l in
+              let l = List.map (aux subst Pol.NoPol) l in
               let f' = U.var (Subst.find_exn ~subst v) in
               let fun_encoding = fun_encoding_for ~state (Var.id v) in
               let n = List.length l in
               let app_l = IntMap.find n fun_encoding.fe_stack in
               apply_app_funs_ app_l (f' :: l)
-          | _ -> aux' subst t
+          | _ -> aux' subst pol t
           end
-      | TI.Let _ ->
-          (* TODO: expand `let` if its parameter is HO, then SNF of body (new β redexes) *)
-          aux' subst t
+      | TI.Bind ((`Forall | `Exists) as b, v, _) when var_is_ho_ v ->
+        begin match b, pol with
+          | `Forall, Pol.Neg
+          | `Exists, Pol.Pos -> aux' subst pol t  (* ok *)
+          | _, Pol.NoPol ->
+            (* aww. no idea, just avoid this branch if possible *)
+            Utils.debugf ~section 3
+              "@[<2>encode `@[%a@]`@ as `?__ asserting false`,@ \
+               quantifying over type `@[%a@]@]"
+              (fun k->k P.print t P.print (Var.ty v));
+            (* TODO: mark incompleteness *)
+            U.asserting (U.undefined_ t) [U.false_]
+          | `Forall, Pol.Pos
+          | `Exists, Pol.Neg ->
+            (* approximation required: we can never evaluate `forall v. t` *)
+            Utils.debugf ~section 3
+              "@[<2>encode `@[%a@]`@ as `false asserting false`,@ quantifying over type `@[%a@]@]"
+              (fun k->k P.print t P.print (Var.ty v));
+            (* TODO: mark incompleteness *)
+            U.asserting U.false_ [U.false_]
+        end
+      | TI.Let _
       | TI.Bind _
       | TI.Match _
       | TI.Const _
       | TI.Builtin _
       | TI.TyBuiltin _
-      | TI.TyMeta _ -> aux' subst t
+      | TI.TyMeta _ -> aux' subst pol t
     (* traverse subterms of [t] *)
-    and aux' subst t =
-      U.map subst t ~f:aux ~bind:(bind_hof_var ~state)
-    and aux_ty subst ty = encode_ty_ ~state (U.eval_renaming ~subst ty) in
-    aux subst t
+    and aux' subst pol t =
+      U.map_pol subst pol t
+        ~f:aux
+        ~bind:(fun subst _ -> bind_hof_var ~state subst)
+    and aux_ty subst ty =
+      encode_ty_ ~state (U.eval_renaming ~subst ty)
+    in
+    aux subst pol t
 
   (* given a (function) type, encode its arguments and return type but
      keeps the toplevel arrows *)
@@ -686,7 +710,7 @@ module Make(T : TI.S) = struct
                 apply_app_funs_ stack
                   (U.const id :: List.map U.var vars)
               in
-              let rhs = elim_hof_term ~state subst rhs in
+              let rhs = elim_hof_term ~state subst (ID.polarity id) rhs in
               let app_l =
                 List.map
                   (function TC_first_param _ -> id | TC_app  a -> a.af_id) stack in
@@ -703,7 +727,7 @@ module Make(T : TI.S) = struct
             ) else (
               Utils.debugf ~section 5
                 "@[<2>keep structure of FO def of `%a`@]" (fun k->k ID.print id);
-              let tr_term = elim_hof_term ~state in
+              let tr_term subst = elim_hof_term ~state subst (ID.polarity id) in
               let tr_type _subst ty = encode_toplevel_ty ~state ty in
               Stmt.map_rec_def_bind Subst.empty def
                 ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
@@ -717,7 +741,7 @@ module Make(T : TI.S) = struct
      statements because of the declarations of new application symbols. *)
   let elim_hof_statement ~state stmt : (_, _, inv2) Stmt.t list =
     let info = Stmt.info stmt in
-    let tr_term = elim_hof_term ~state in
+    let tr_term pol subst = elim_hof_term ~state subst pol in
     let tr_type _subst ty = encode_toplevel_ty ~state ty in
     Utils.debugf ~section 3 "@[<2>@{<cyan>> elim HOF in stmt@}@ `@[%a@]`@]" (fun k->k PStmt.print stmt);
     let stmt' = match Stmt.view stmt with
@@ -766,7 +790,7 @@ module Make(T : TI.S) = struct
         let copy_to = encode_ty_ ~state c.Stmt.copy_to in
         let c' = {
           c with Stmt.
-            copy_pred = CCOpt.map (tr_term subst) c.Stmt.copy_pred;
+            copy_pred = CCOpt.map (tr_term Pol.NoPol subst) c.Stmt.copy_pred;
             copy_vars;
             copy_of;
             copy_to;
@@ -779,7 +803,7 @@ module Make(T : TI.S) = struct
     | Stmt.Goal _ ->
         let stmt' =
           Stmt.map_bind Subst.empty stmt
-            ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
+            ~bind:(bind_hof_var ~state) ~term:(tr_term Pol.Pos) ~ty:tr_type
           |> cast_stmt_unsafe_ (* XXX: hack, but shorter *)
         in
         [stmt']
