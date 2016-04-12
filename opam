@@ -6,7 +6,8 @@ maintainer: "simon.cruanes@inria.fr"
 build: [
     ["./configure"
         "--prefix" prefix
-        "--%{qtest:enable}%-random"
+        "--disable-random"
+        # "--%{qtest:enable}%-random"
         "--disable-tests"
         "--enable-docs"
     ]
