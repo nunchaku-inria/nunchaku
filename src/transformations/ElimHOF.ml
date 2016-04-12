@@ -327,6 +327,8 @@ module Make(T : TI.S) = struct
       (* handle type -> corresponding apply symbol *)
     mutable new_stmts : (term, ty, inv2) Stmt.t CCVector.vector;
       (* used for new declarations. [id, type, attribute list] *)
+    mutable lost_completeness: bool;
+      (* did we have to do some approximation? *)
     decode: decode_state;
       (* bookkeeping for, later, decoding *)
   }
@@ -351,6 +353,7 @@ module Make(T : TI.S) = struct
     app_count=0;
     app_symbols=HandleMap.empty;
     new_stmts=CCVector.create();
+    lost_completeness=false;
     decode={
       dst_app_symbols=ID.Tbl.create 16;
       dst_handle_id=None;
@@ -642,8 +645,8 @@ module Make(T : TI.S) = struct
               "@[<2>encode `@[%a@]`@ as `@[%a@]``,@ \
                quantifying over type `@[%a@]@]"
               (fun k->k P.print t P.print res P.print (Var.ty v));
+            state.lost_completeness <- true;
             res
-            (* TODO: mark incompleteness *)
           | `Forall, Pol.Pos
           | `Exists, Pol.Neg ->
             (* approximation required: we can never evaluate `forall v. t` *)
@@ -651,8 +654,8 @@ module Make(T : TI.S) = struct
             Utils.debugf ~section 3
               "@[<2>encode `@[%a@]`@ as `@[%a@]`,@ quantifying over type `@[%a@]@]"
               (fun k->k P.print t P.print res P.print (Var.ty v));
+            state.lost_completeness <- true;
             res
-            (* TODO: mark incompleteness *)
         end
       | TI.Builtin (`Eq (a,_)) when ty_is_ho_ (ty_term_ ~state a) ->
         (* higher-order comparison --> requires approximation *)
@@ -664,6 +667,7 @@ module Make(T : TI.S) = struct
             Utils.debugf ~section 3
               "@[<2>encode HO equality `@[%a@]`@ as `@[%a@]`@]"
               (fun k->k P.print t P.print res);
+            state.lost_completeness <- true;
             res
           | Pol.Pos ->
             (* [a = b && has_proto a] *)
@@ -671,6 +675,7 @@ module Make(T : TI.S) = struct
             Utils.debugf ~section 3
               "@[<2>encode HO equality `@[%a@]`@ as `@[%a@]`@]"
               (fun k->k P.print t P.print res);
+            state.lost_completeness <- true;
             res
         end
       | TI.Let _
@@ -853,6 +858,11 @@ module Make(T : TI.S) = struct
     (* introduce application symbols and sorts *)
     let state = create_state ~env arities in
     let pb' = Problem.flat_map_statements pb ~f:(elim_hof_statement ~state) in
+    let pb' =
+      if state.lost_completeness
+      then Problem.set_unsat_means_unknown pb'
+      else pb'
+    in
     (* return new problem *)
     pb', state.decode
 
