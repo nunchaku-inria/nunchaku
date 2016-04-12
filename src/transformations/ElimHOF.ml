@@ -98,10 +98,12 @@ module Make(T : TI.S) = struct
     | Env.Copy_ty _ -> None
     | Env.Pred (_,_,_,_,_) -> assert false (* see {!inv} *)
 
-  (* is [v] an higher-order variable? *)
-  let var_is_ho_ v =
-    let _, args, _ = U.ty_unfold (Var.ty v) in
+  let ty_is_ho_ ty =
+    let _, args, _ = U.ty_unfold ty in
     List.length args > 0
+
+  (* is [v] an higher-order variable? *)
+  let var_is_ho_ v = ty_is_ho_ (Var.ty v)
 
   let add_arity_var_ m v =
     let tyvars, args, ret = U.ty_unfold (Var.ty v) in
@@ -589,6 +591,9 @@ module Make(T : TI.S) = struct
   let ty_of_fun_encoding_ ~state fe =
     U.ty_arrow_l fe.fe_args (ty_of_handle_ ~state fe.fe_ret_handle)
 
+  let ty_term_ ~state t =
+    U.ty_exn ~sigma:(Env.find_ty ~env:state.env) t
+
   type renaming_subst = (T.t, T.t Var.t) Subst.t
 
   (* encode [v]'s type, and add it to [subst] *)
@@ -632,20 +637,41 @@ module Make(T : TI.S) = struct
           | `Exists, Pol.Pos -> aux' subst pol t  (* ok *)
           | _, Pol.NoPol ->
             (* aww. no idea, just avoid this branch if possible *)
+            let res = U.asserting U.false_ [U.false_] in
             Utils.debugf ~section 3
-              "@[<2>encode `@[%a@]`@ as `?__ asserting false`,@ \
+              "@[<2>encode `@[%a@]`@ as `@[%a@]``,@ \
                quantifying over type `@[%a@]@]"
-              (fun k->k P.print t P.print (Var.ty v));
+              (fun k->k P.print t P.print res P.print (Var.ty v));
+            res
             (* TODO: mark incompleteness *)
-            U.asserting (U.undefined_ t) [U.false_]
           | `Forall, Pol.Pos
           | `Exists, Pol.Neg ->
             (* approximation required: we can never evaluate `forall v. t` *)
+            let res = U.false_ in
             Utils.debugf ~section 3
-              "@[<2>encode `@[%a@]`@ as `false asserting false`,@ quantifying over type `@[%a@]@]"
-              (fun k->k P.print t P.print (Var.ty v));
+              "@[<2>encode `@[%a@]`@ as `@[%a@]`,@ quantifying over type `@[%a@]@]"
+              (fun k->k P.print t P.print res P.print (Var.ty v));
+            res
             (* TODO: mark incompleteness *)
-            U.asserting U.false_ [U.false_]
+        end
+      | TI.Builtin (`Eq (a,_)) when ty_is_ho_ (ty_term_ ~state a) ->
+        (* higher-order comparison --> requires approximation *)
+        begin match pol with
+          | Pol.Neg -> aux' subst pol t (* fine *)
+          | Pol.NoPol ->
+            (* [a = b asserting has_proto a] *)
+            let res = U.asserting t [U.false_] in
+            Utils.debugf ~section 3
+              "@[<2>encode HO equality `@[%a@]`@ as `@[%a@]`@]"
+              (fun k->k P.print t P.print res);
+            res
+          | Pol.Pos ->
+            (* [a = b && has_proto a] *)
+            let res = U.false_ in
+            Utils.debugf ~section 3
+              "@[<2>encode HO equality `@[%a@]`@ as `@[%a@]`@]"
+              (fun k->k P.print t P.print res);
+            res
         end
       | TI.Let _
       | TI.Bind _
