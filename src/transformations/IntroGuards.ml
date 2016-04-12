@@ -33,7 +33,6 @@ end = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
   module PPb = Problem.Print(P)(P)
-  module AnTy = AnalyzeType.Make(T)
 
   type term = T.t
 
@@ -197,16 +196,7 @@ end = struct
           in
           U.ite a b c, {assuming; asserting;}
         )
-    | TI.Bind (`Forall, v, _) when AnTy.is_incomplete state.env (Var.ty v) && pol=Pol.Pos  ->
-        (* [forall v. t] in positive polarity, where [v] is incomplete --> false *)
-        Utils.debugf ~section 3
-          "@[<2>encode `@[%a@]`@ as [false],@ quantifying over incomplete type `@[%a@]@]"
-          (fun k->k P.print t P.print (Var.ty v));
-        state.lost_precision <- true;
-        U.false_, empty_guard
     | TI.Bind ((`Forall | `Exists) as b, v, t) ->
-        (* TODO: if [v:ty] where [ty] is incomplete, and pol=Pos,replace by
-           [false asserting false] *)
         let t, g = tr_term ~state ~pol t in
         begin match pol with
         | Pol.Pos ->
