@@ -643,7 +643,7 @@ module Make(T : TI.S) = struct
             let res = U.asserting U.false_ [U.false_] in
             Utils.debugf ~section 3
               "@[<2>encode `@[%a@]`@ as `@[%a@]``,@ \
-               quantifying over type `@[%a@]@]"
+               quantifying over type `@[%a@]`@]"
               (fun k->k P.print t P.print res P.print (Var.ty v));
             state.lost_completeness <- true;
             res
@@ -652,7 +652,7 @@ module Make(T : TI.S) = struct
             (* approximation required: we can never evaluate `forall v. t` *)
             let res = U.false_ in
             Utils.debugf ~section 3
-              "@[<2>encode `@[%a@]`@ as `@[%a@]`,@ quantifying over type `@[%a@]@]"
+              "@[<2>encode `@[%a@]`@ as `@[%a@]`,@ quantifying over type `@[%a@]`@]"
               (fun k->k P.print t P.print res P.print (Var.ty v));
             state.lost_completeness <- true;
             res
