@@ -7,6 +7,7 @@ build: [
     ["./configure"
         "--prefix" prefix
         "--%{qtest:enable}%-random"
+        "--disable-tests"
         "--enable-docs"
     ]
     [make "build"]
