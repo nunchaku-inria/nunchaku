@@ -69,6 +69,8 @@ module Util(T : S)
   val equiv : ?loc:loc -> t -> t -> t
   val asserting : ?loc:loc -> t -> t list -> t
 
+  val true_ : t
+
   val mk_bind :
     ?loc:loc ->
     ty:t ->
@@ -112,6 +114,8 @@ end = struct
 
   let const ?loc ~ty id =
     build ?loc ~ty (TI.Const id)
+
+  let true_ = builtin ~ty:ty_prop `True
 
   let var ?loc v = build ?loc ~ty:(Var.ty v) (TI.Var v)
 
