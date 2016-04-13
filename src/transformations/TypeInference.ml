@@ -891,6 +891,13 @@ module Convert(Term : TermTyped.S) = struct
             end
         | _ -> None
         end
+    | TI.App (f', l) ->
+        (* forall v1..vn. p *)
+        begin match Term.repr f' with
+          | TI.Const f' when ID.equal f f' ->
+            Some ([], l, U.true_)
+          | _ -> None
+        end
     | _ -> None
 
   (* extract [forall vars. guard => f args] from a prop *)
