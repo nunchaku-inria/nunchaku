@@ -12,6 +12,7 @@ build: [
         "--enable-docs"
     ]
     [make "build"]
+    ["strip" "nunchaku.native"]
 ]
 install: [
     [make "install"]
