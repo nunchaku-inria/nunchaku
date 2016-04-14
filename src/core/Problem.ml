@@ -156,10 +156,10 @@ module Res = struct
   let fpf = Format.fprintf
 
   let print pt pty out = function
-    | Unsat -> fpf out "unsat"
-    | Timeout -> fpf out "timeout"
-    | Error e -> fpf out "error %s" (Printexc.to_string e)
-    | Unknown -> fpf out "unknown"
+    | Unsat -> fpf out "UNSAT"
+    | Timeout -> fpf out "TIMEOUT"
+    | Error e -> fpf out "ERROR %s" (Printexc.to_string e)
+    | Unknown -> fpf out "UNKNOWN"
     | Sat m ->
-        fpf out "@[<hv>@[<v2>sat {@,@[<v>%a@]@]@,}@]" (Model.print pt pty) m
+        fpf out "@[<hv>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]" (Model.print pt pty) m
 end
