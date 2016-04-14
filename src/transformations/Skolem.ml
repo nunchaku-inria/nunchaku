@@ -5,10 +5,8 @@
 
 open Nunchaku_core
 
-module ID = ID
 module TI = TermInner
 module Pol = Polarity
-module Var = Var
 
 type id = ID.t
 
@@ -54,7 +52,7 @@ module type S = sig
     check:bool ->
     ((T.t,T.t,<eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t,
       (T.t,T.t,'inv) Problem.t,
-      (T.t,T.t) Model.t, (T.t,T.t) Model.t
+      (T.t,T.t) Problem.Res.t, (T.t,T.t) Problem.Res.t
     ) Transform.t
 
   (** Similar to {!pipe} but with a generic decode function.
@@ -302,7 +300,7 @@ module Make(T : TI.S)
            let module C = TypeCheck.Make(T) in
            C.check_problem ?env:None)
     in
-    Transform.make1
+    Transform.make
       ~name
       ~on_encoded
       ~print:print_state
@@ -315,5 +313,6 @@ module Make(T : TI.S)
       ()
 
   let pipe ~mode ~print ~check =
-    pipe_with ~check ~mode ~decode:(fun state m -> decode_model ~state m) ~print
+    pipe_with ~check ~mode ~print
+      ~decode:(fun state -> Problem.Res.map_m ~f:(decode_model ~state))
 end

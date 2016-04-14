@@ -630,7 +630,7 @@ module Make(T : TI.S) = struct
           let module C = TypeCheck.Make(T) in
           C.check_problem ?env:None)
     in
-    Transform.make1
+    Transform.make
       ~on_encoded
       ~name
       ~encode:(fun p ->
@@ -642,6 +642,6 @@ module Make(T : TI.S) = struct
       ()
 
   let pipe ~print ~check =
-    let decode state = unmangle_model ~state in
+    let decode state = Problem.Res.map_m ~f:(unmangle_model ~state) in
     pipe_with ~print ~decode ~check
 end

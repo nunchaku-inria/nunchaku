@@ -1287,7 +1287,7 @@ module Make(T : TI.S) = struct
         let module C = TypeCheck.Make(T) in
         C.check_problem ?env:None)
     in
-    Transform.make1
+    Transform.make
       ~name
       ~on_encoded ?on_decoded
       ~encode:(fun pb ->
@@ -1299,10 +1299,11 @@ module Make(T : TI.S) = struct
   let pipe ~print ~check =
     let on_decoded = if print
       then
-        [Format.printf "@[<2>@{<Yellow>model after specialize@}:@ %a@]@."
-           (Model.print P.print P.print)]
+        [Format.printf "@[<2>@{<Yellow>res after specialize@}:@ %a@]@."
+           (Problem.Res.print P.print P.print)]
       else []
     in
-    pipe_with ~on_decoded ~decode:decode_model ~print ~check
+    let decode state = Problem.Res.map_m ~f:(decode_model state) in
+    pipe_with ~on_decoded ~decode ~print ~check
 end
 

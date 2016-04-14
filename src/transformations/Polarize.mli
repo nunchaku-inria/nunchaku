@@ -35,7 +35,8 @@ module Make(T : TermInner.S) : sig
     check:bool ->
     ((term, term, 'a inv) Problem.t,
       (term, term, 'a inv) Problem.t,
-      (term, term) Model.t, (term, term) Model.t) Transform.t
+     (term, term) Problem.Res.t,
+     (term, term) Problem.Res.t) Transform.t
 
   (** Generic Pipe Component
       @param decode the decode function that takes an applied [(module S)]

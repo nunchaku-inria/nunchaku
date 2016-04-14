@@ -369,7 +369,7 @@ module Make(T : TI.S) = struct
         let module C = TypeCheck.Make(T) in
         C.check_problem ?env:None)
     and decode _ x = decode x in
-    Transform.make1
+    Transform.make
       ~on_encoded
       ~name
       ~encode:(fun p ->

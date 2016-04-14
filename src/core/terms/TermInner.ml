@@ -1578,7 +1578,7 @@ end = struct
   and aux_meta v = MetaVar.update ~f:convert v
 
   let pipe () =
-    Transform.make1 ~name:"convert"
+    Transform.make ~name:"convert"
       ~encode:(fun t -> convert t, ())
       ~decode:(fun () x -> x)
       ()

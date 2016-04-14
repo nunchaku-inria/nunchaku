@@ -65,7 +65,8 @@ Library "nunchaku_transformations"
                     ElimCopy,
                     Polarize,
                     Unroll,
-                    IntroGuards
+                    IntroGuards,
+                    Model_rename
   Install:          true
   FindlibName:      transformations
   FindlibParent:    nunchaku_core
