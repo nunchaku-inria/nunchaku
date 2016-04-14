@@ -556,19 +556,18 @@ module Make(T : TI.S) = struct
                   U.app f l'
               | `Yes (spec_args, other_args, new_ty) ->
                   (* [spec_args] is a subset of [l'] on which we are going to
-                     specialize [f].
-                     [f] is defined by [def] in the mutual block [defs].
-                     [other_args] are the remaining arguments, [ty] is
-                      the type of the specialized version of [f], and
-                     [closure_args] is the free variables of [spec_args]
-                     that need to be passed to the specialized function *)
+                       specialize [f].
+                     [other_args] are the remaining arguments,
+                     [new_ty] is the type of the specialized version of [f] *)
                   Utils.debugf ~section 5
                     "@[<2>@{<Cyan>specialize@} `@[%a@]`@ on @[%a@]@ with new type `@[%a@]`@]"
                     (fun k->k P.print t Arg.print spec_args P.print new_ty);
                   let nf = get_new_fun ~state ~depth f_id ~old_ty:ty ~new_ty spec_args in
-                  let closure_args = Arg.vars spec_args |> List.map U.var in
                   (* ensure that [nf] is defined *)
                   state.fun_ ~depth f_id spec_args;
+                  (* apply newly specialized function to both the captured
+                     variables [closure_args] and the non-specialized arguments. *)
+                  let closure_args = List.map U.var (Arg.vars spec_args) in
                   U.app (U.const nf.nf_id) (closure_args @ other_args)
             else (
               state.fun_ ~depth f_id Arg.empty;
@@ -648,7 +647,7 @@ module Make(T : TI.S) = struct
              because it induces a loop in specialization:
              in the body, we might want to specialize on the same function
              but it is a different term after renaming, so Traversal doesn't
-             detect the loop *)
+             detect the loop. *)
           let closure_vars = Arg.vars args in
           (* bind variables whose position corresponds to a member of [args] *)
           let subst, new_vars =
@@ -656,8 +655,7 @@ module Make(T : TI.S) = struct
               ~f:(fun i subst v ->
                  (* keep [v] if its index [i] is not in [args], otherwise
                     replace it with the corresponding term [t], after
-                    renaming of its free variables
-                 *)
+                    renaming of its free variables *)
                  try
                    let t = Arg.get i args |> U.eval ~subst in
                    Subst.add ~subst v t, None
@@ -692,8 +690,8 @@ module Make(T : TI.S) = struct
          of [args] designate arguments in the clause that are variables. *)
       state.count <- state.count + 1;
       let subst = Subst.empty in
-      (* rename variables captured in closure *)
-      let subst, closure_vars = Utils.fold_map U.rename_var subst (Arg.vars args) in
+      (* variables captured in closure (do not rename, see {!specialize_eqns})  *)
+      let closure_vars = Arg.vars args in
       (* bind variables corresponding to specialized positions *)
       let subst, clause_concl = match T.repr c.Stmt.clause_concl with
         | TI.App (f, l) ->
