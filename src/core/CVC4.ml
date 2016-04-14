@@ -6,12 +6,13 @@
 module E = CCError
 module Var = Var
 module ID = ID
-module Sol = Solver_intf
 module FOI = FO
+module Res = Problem.Res
 
 type id = ID.t
 
-let section = Utils.Section.make "cvc4"
+let name = "cvc4"
+let section = Utils.Section.make name
 
 let fpf = Format.fprintf
 
@@ -140,7 +141,7 @@ module Make(FO_T : FO.S) = struct
     decode: decode_state;
     mutable sexp : DSexp.t;
     mutable closed : bool;
-    mutable res : (FOBack.T.t, FOBack.Ty.t) Sol.Res.t option;
+    mutable res : (FOBack.T.t, FOBack.Ty.t) Problem.Res.t option;
   }
 
   let name = "cvc4"
@@ -582,7 +583,7 @@ module Make(FO_T : FO.S) = struct
     | `Error e -> error_ e
     | `End -> error_ "unexpected end of input from CVC4: expected model"
     | `Ok sexp ->
-        if !Sol.print_model_
+        if !Solver_intf.print_model_
           then Format.eprintf "@[raw model:@ @[<hv>%a@]@]@." CCSexpM.print sexp;
         let m = parse_model_ ~decode sexp in
         (* check all symbols are defined *)
@@ -601,34 +602,34 @@ module Make(FO_T : FO.S) = struct
     match DSexp.next s.sexp with
     | `Ok (`Atom "unsat") ->
         Utils.debug ~section 5 "CVC4 returned `unsat`";
-        Sol.Res.Unsat
+        Res.Unsat
     | `Ok (`Atom "sat") ->
         Utils.debug ~section 5 "CVC4 returned `sat`";
         let m = if ID.Tbl.length decode.symbols = 0
           then Model.empty
           else get_model_ ~decode s
         in
-        Sol.Res.Sat m
+        Res.Sat m
     | `Ok (`Atom "unknown") ->
         Utils.debug ~section 5 "CVC4 returned `unknown`";
-        Sol.Res.Unknown
+        Res.Unknown
     | `Ok (`List [`Atom "error"; `Atom s]) ->
         Utils.debugf ~section 5 "@[<2>CVC4 returned `error %s`@]" (fun k->k s);
-        Sol.Res.Error (CVC4_error s)
+        Res.Error (CVC4_error s)
     | `Ok sexp ->
         let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ %a@]"
           CCSexpM.print sexp
         in
-        Sol.Res.Error (Error msg)
-    | `Error e -> Sol.Res.Error (Error e)
-    | `End -> Sol.Res.Error (Error "no answer from the solver")
+        Res.Error (Error msg)
+    | `Error e -> Res.Error (Error e)
+    | `End -> Res.Error (Error "no answer from the solver")
 
   let res t = match t.res with
     | Some r -> r
     | None ->
         let r =
           try read_res_ ~decode:t.decode t
-          with e -> Sol.Res.Error e
+          with e -> Res.Error e
         in
         t.res <- Some r;
         r
@@ -707,67 +708,46 @@ module Make(FO_T : FO.S) = struct
        --uf-ss-fair-monotone --no-condense-function-values %s"
       timeout_hard timeout_ms options
 
-  let solve ?(options="") ?(timeout=30.) ?(print=false) problem =
-    let decode, problem' = preprocess problem in
-    if print
+  module S = Scheduling
+
+  let do_solve_ options deadline print pb =
+    let now = Unix.gettimeofday() in
+    let deadline = match deadline with Some s -> s | None -> now +. 30. in
+    (* enough time remaining? *)
+    if deadline +. 0.1 < now
+    then Res.Timeout, S.No_shortcut
+    else (
+      let decode, problem' = preprocess pb in
+      if print
       then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem (decode, problem');
-    if timeout < 0. then invalid_arg "CVC4.create: wrong timeout";
-    let cmd = mk_cvc4_cmd_ timeout options in
-    Utils.debugf ~section 2 "@[<2>run command@ `%s`@]" (fun k->k cmd);
-    let ic, oc = Unix.open_process cmd in
-    let s = create_ ~decode (ic,oc) in
-    send_ s problem';
-    s
+      let timeout = deadline -. now in
+      let cmd = mk_cvc4_cmd_ timeout options in
+      Utils.debugf ~lock:true ~section 2 "@[<2>run command@ `%s`@]" (fun k->k cmd);
+      let ic, oc = Unix.open_process cmd in
+      let s = create_ ~decode (ic,oc) in
+      send_ s problem';
+      let r = res s in
+      Utils.debugf ~lock:true ~section 3 "@[<2>result: %a@]"
+        (fun k->k (Res.print P.print_term P.print_ty) r);
+      match r with
+        | Res.Sat _ -> r, S.Shortcut
+        | Res.Unsat ->
+          (* beware, this "unsat" might be wrong *)
+          if pb.FO.Problem.meta.ProblemMetadata.unsat_means_unknown
+          then Res.Unknown, S.No_shortcut
+          else Res.Unsat, S.Shortcut
+        | Res.Timeout
+        | Res.Unknown -> r, S.No_shortcut
+        | Res.Error e ->
+          Utils.debugf ~lock:true ~section 1
+            "@[<2>error while running CVC4@ with `%s`:@ @[%s@]@]"
+            (fun k->k cmd (Printexc.to_string e));
+          raise e
+    )
 
-  exception Timeout
-
-  let solve_par ?(j=3) ?(options=[""]) ?(timeout=30.) ?(print=false) problem =
-    let unsat_means_unknown =
-      problem.FO.Problem.meta.ProblemMetadata.unsat_means_unknown in
-    let decode, problem' = preprocess problem in
-    if print
-      then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem (decode,problem');
-    (* deadline: the instant we run out of time and must return *)
-    let deadline = Unix.gettimeofday() +. timeout in
-    let cmd options =
-      let timeout = deadline -. Unix.gettimeofday() in
-      if timeout < 0.1 then raise Timeout;
-      mk_cvc4_cmd_ timeout options
-    in
-    let res = Scheduling.run options ~j ~cmd
-      ~f:(fun cmd (ic,oc) ->
-          (* the [t] instance *)
-          let solver = create_ ~decode (ic,oc) in
-          send_ solver problem';
-          let r = res solver in
-          Utils.debugf ~section 3 "@[<2>result: %a@]" (fun k->k Sol.Res.pp r);
-          match r with
-          | Sol.Res.Sat m -> Scheduling.Return_shortcut (Sol.Res.Sat m)
-          | Sol.Res.Unsat ->
-              (* beware, this "unsat" might be wrong *)
-              if unsat_means_unknown
-              then Scheduling.Return Sol.Res.Unknown
-              else Scheduling.Return_shortcut Sol.Res.Unsat
-          | Sol.Res.Timeout
-          | Sol.Res.Unknown -> Scheduling.Return r
-          | Sol.Res.Error e ->
-              Utils.debugf ~section 1
-                "@[<2>error while running CVC4@ with `%s`:@ @[%s@]@]"
-                (fun k->k cmd (Printexc.to_string e));
-              raise e
-        )
-    in
-    match res with
-      | Scheduling.Return_shortcut x -> x
-      | Scheduling.Return l ->
-          if List.mem Sol.Res.Unsat l then Sol.Res.Unsat
-          else if List.mem Sol.Res.Timeout l then Sol.Res.Timeout
-          else (
-            assert (List.for_all ((=) Sol.Res.Unknown) l);
-            Sol.Res.Unknown
-          )
-      | Scheduling.Fail Timeout -> Sol.Res.Timeout
-      | Scheduling.Fail e -> Sol.Res.Error e
+  let solve ?(options="") ?deadline ?(print=false) pb =
+    S.Fut.make
+      (fun () -> do_solve_ options deadline print pb)
 end
 
 let options_l =
@@ -783,31 +763,27 @@ let options_l =
 (* solve problem using CVC4 before [deadline] *)
 let call (type t)(type ty)
 (module F : FO.S with type T.t=t and type Ty.t=ty)
-?(options=[""]) ?j ~print ~print_smt ~deadline problem =
-  if options=[] then invalid_arg "CVC4.call: empty list of options";
+?(options="") ?deadline ?prio ~print ~print_smt problem
+  =
   let module FOBack = FO.Default in
   let module P = FO.Print(F) in
-  let module Sol = Solver_intf in
   let module Res = Problem.Res in
   let module CVC4 = Make(F) in
   if print
-    then Format.printf "@[<v2>FO problem:@ %a@]@." P.print_problem problem;
-  let timeout = deadline -. Unix.gettimeofday() in
-  let res = CVC4.solve_par ?j ~options ~timeout ~print:print_smt problem in
-  match res with
-    | Sol.Res.Sat m -> Res.Sat m
-    | Sol.Res.Unsat -> Res.Unsat
-    | Sol.Res.Timeout -> Res.Timeout
-    | Sol.Res.Unknown -> Res.Unknown
-    | Sol.Res.Error e -> raise e
+  then Format.printf "@[<v2>FO problem:@ %a@]@." P.print_problem problem;
+  Scheduling.Task.make ?prio
+    (fun () -> CVC4.solve ~options ?deadline ~print:print_smt problem)
 
-(* close a pipeline with CVC4 *)
-let close_pipe (type t)(type ty)
-(module F : FO.S with type T.t=t and type Ty.t=ty)
-?options ?j ~pipe ~print ~print_smt ~deadline
-=
-  let module FOBack = FO.Default in
-  let module P = FO.Print(FOBack) in
-  Transform.ClosedPipe.make1
-    ~pipe
-    ~f:(call (module F) ?options ?j ~deadline ~print ~print_smt)
+let pipes fo ?(options=[""]) ?deadline ~print ~print_smt () =
+  let encode pb =
+    List.mapi
+      (fun i options ->
+         (* only print for the first task *)
+         let print = print && i=0 in
+         let print_smt = print_smt && i=0 in
+         let prio = 30 + 10 * i in
+         call fo ~options ?deadline ~prio ~print ~print_smt pb)
+    options, ()
+  in
+  Transform.make ~name ~encode ~decode:(fun _ x -> x) ()
+

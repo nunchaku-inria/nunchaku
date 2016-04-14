@@ -121,15 +121,3 @@ val map :
   ('t2, 'ty2) t
 
 val print : 't printer -> 'ty printer -> ('t,'ty) t printer
-
-module Util(T : TermInner.S) : sig
-  val rename : (T.t, T.t) t -> (T.t, T.t) t
-  (** [rename m] performs a renaming of domain constants and bound variables
-      that should be regular and readable.
-      Assumes the types that have finite domains are ground types.
-      @raise Invalid_argument if some assumption is invalidated *)
-
-  val pipe_rename :
-    print:bool ->
-    ('a, 'a, (T.t, T.t) t, (T.t, T.t) t) Transform.t
-end
