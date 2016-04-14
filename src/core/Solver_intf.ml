@@ -9,22 +9,6 @@ module Var = Var
 type id = ID.t
 type 'a var = 'a Var.t
 
-module Res = struct
-  type ('t, 'ty) t =
-    | Sat of ('t,'ty) Model.t
-    | Unsat
-    | Timeout
-    | Unknown
-    | Error of exn
-
-  let pp out = function
-    | Sat _ -> CCFormat.string out "sat"
-    | Unsat -> CCFormat.string out "unsat"
-    | Timeout -> CCFormat.string out "timeout"
-    | Unknown -> CCFormat.string out "unknown"
-    | Error _ -> CCFormat.string out "error"
-end
-
 exception SolverClosed
 (** Raised when the solver has been stopped (see {!S.close}) and some
     function is invoked on it *)
@@ -42,10 +26,10 @@ module type S = sig
   val name : string
   (** Name of the solver *)
 
-  val res : t -> (FOBack.T.t, FOBack.Ty.t) Res.t
+  val res : t -> (FOBack.T.t, FOBack.Ty.t) Problem.Res.t
   (** [res s] blocks until the result of [s] is available, then return it *)
 
-  val peek_res : t -> (FOBack.T.t, FOBack.Ty.t) Res.t option
+  val peek_res : t -> (FOBack.T.t, FOBack.Ty.t) Problem.Res.t option
   (** [peek_res s] checks whether the result of [s] is already available *)
 
   val solve : ?options:string -> ?timeout:float -> ?print:bool -> problem -> t
@@ -68,6 +52,20 @@ module type S = sig
       In particular it might not be possible to use the model obtained
       from [s] after calling [close s]. *)
 end
+
+(* FIXME: put this combination of results somewhere
+    match res with
+      | Scheduling.Return_shortcut x -> x
+      | Scheduling.Return l ->
+          if List.mem Sol.Res.Unsat l then Sol.Res.Unsat
+          else if List.mem Sol.Res.Timeout l then Sol.Res.Timeout
+          else (
+            assert (List.for_all ((=) Sol.Res.Unknown) l);
+            Sol.Res.Unknown
+          )
+      | Scheduling.Fail Timeout -> Sol.Res.Timeout
+      | Scheduling.Fail e -> Sol.Res.Error e
+   *)
 
 
 (**/**)

@@ -52,7 +52,7 @@ module Make(T : TermInner.S) : sig
     check:bool ->
     ( (term, ty, 'a inv) Problem.t,
       (term, ty, 'a inv) Problem.t,
-      (term, ty) Model.t, (term, ty) Model.t
+      (term, ty) Problem.Res.t, (term, ty) Problem.Res.t
     ) Transform.t
 
   val pipe_with :

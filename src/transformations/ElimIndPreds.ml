@@ -227,7 +227,7 @@ module Make(T : TI.S) = struct
         let module C = TypeCheck.Make(T) in
         C.check_problem ?env:None)
     in
-    Transform.make1
+    Transform.make
       ~name
       ~on_encoded
       ~encode:(fun pb -> elim_ind_preds pb)
@@ -235,5 +235,6 @@ module Make(T : TI.S) = struct
       ()
 
   let pipe ~print ~check =
-    pipe_with ~decode:(fun state m -> decode_model ~state m) ~print ~check
+    pipe_with ~print ~check
+      ~decode:(fun state -> Problem.Res.map_m ~f:(decode_model ~state))
 end

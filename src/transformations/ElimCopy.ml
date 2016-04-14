@@ -93,7 +93,7 @@ module Make(T : TI.S) = struct
         let module C = TypeCheck.Make(T) in
         C.check_problem ?env:None)
     in
-    Transform.make1
+    Transform.make
       ~name
       ~on_encoded
       ~encode:(fun pb -> elim pb, ())

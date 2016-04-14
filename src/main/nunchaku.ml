@@ -194,8 +194,13 @@ module Pipes = struct
   (* conversion to FO *)
   module Step_tofo = TermMono.TransFO(HO)(FO.Default)
   (* renaming in model *)
-  module Step_rename_model = Model.Util(HO)
+  module Step_rename_model = Model_rename.Make(HO)
 end
+
+let close_task p =
+  Transform.Pipe.close p
+    ~f:(fun task ret ->
+       Scheduling.Task.map ~f:ret task, CCFun.id)
 
 (* build a pipeline, depending on options *)
 let make_model_pipeline () =
@@ -203,6 +208,14 @@ let make_model_pipeline () =
   let open Pipes in
   (* setup pipeline *)
   let check = !check_all_ in
+  let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
+  let cvc4 =
+    CVC4.pipes FO.default
+       ~options:CVC4.options_l
+       ~print:!print_all_
+       ~print_smt:(!print_all_ || !print_smt_) ~deadline ()
+    @@@ id
+  in
   let pipe =
     Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
     Step_conv_ty.pipe () @@@
@@ -227,31 +240,35 @@ let make_model_pipeline () =
     Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
     Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
     Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
-    Step_tofo.pipe () @@@
-    id
+    close_task (
+      Step_tofo.pipe () @@@
+      Transform.Pipe.flatten cvc4
+    )
   in
-  let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  CVC4.close_pipe FO.default ~options:CVC4.options_l ~j:!j
-    ~pipe ~deadline
-      ~print:(!print_fo_ || !print_all_)
-      ~print_smt:(!print_smt_ || !print_all_)
+  pipe
 
-(* search for results *)
-let rec find_model_ ~found_unsat l =
+(* run the pipeline on this problem, then run tasks, and return the
+   result *)
+let run_tasks ~j pipe pb =
   let module Res = Problem.Res in
-  try
-  match l() with
-    | `Nil ->
-        E.return (if found_unsat then `Unsat else `Unknown)
-    | `Cons ((res, conv_back), tail) ->
-        match res with
-        | Res.Timeout -> E.return `Timeout
-        | Res.Unknown -> find_model_ ~found_unsat tail
-        | Res.Unsat -> find_model_ ~found_unsat:true tail
-        | Res.Sat m ->
-            let m = conv_back m in
-            E.return (`Sat m)
-  with e -> Utils.err_of_exn e
+  let tasks =
+    Transform.run ~pipe pb
+    |> Lazy_list.map ~f:(fun (task,ret) -> Scheduling.Task.map ~f:ret task)
+    |> Lazy_list.to_list
+  in
+  let res = Scheduling.run ~j tasks in
+  match res with
+  | Scheduling.Res_fail e -> E.fail (Printexc.to_string e)
+  | Scheduling.Res_list [] -> E.fail "no task succeeded"
+  | Scheduling.Res_list l ->
+    assert
+      (List.for_all
+         (function
+           | Res.Timeout | Res.Unknown -> true
+           | Res.Error _ | Res.Sat _ | Res.Unsat -> false)
+         l);
+    E.return (List.hd l)
+  | Scheduling.Res_one r -> E.return r
 
 (* negate the goal *)
 let negate_goal stmts =
@@ -268,49 +285,50 @@ let () = Printexc.register_printer
     | Failure msg -> Some ("failure: " ^ msg)
     | _ -> None)
 
-open CCError.Infix
-
 (* model mode *)
 let main_model ~output statements =
+  let open CCError.Infix in
   let module T = TI.Default in
   let module P = TI.Print(T) in
+  let module Res = Problem.Res in
   (* run pipeline *)
-  let cpipe = make_model_pipeline() in
+  let pipe = make_model_pipeline() in
   if !print_pipeline_
-    then Format.printf "@[Pipeline: %a@]@." Transform.ClosedPipe.print cpipe;
-  Transform.run_closed ~cpipe statements |> find_model_ ~found_unsat:false
+    then Format.printf "@[Pipeline: %a@]@." Transform.Pipe.print pipe;
+  run_tasks ~j:!j pipe statements
   >|= fun res ->
-  begin match res, output with
-  | `Sat m, O_nunchaku when m.Model.potentially_spurious ->
+  match res, output with
+  | Res.Sat m, O_nunchaku when m.Model.potentially_spurious ->
       Format.printf "@[<v>@[<v2>SAT: (potentially spurious) {@,@[<v>%a@]@]@,}@]@."
         (Model.print P.print P.print) m;
-  | `Sat m, O_nunchaku ->
+  | Res.Sat m, O_nunchaku ->
       Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]@."
         (Model.print P.print P.print) m;
-  | `Sat m, O_tptp ->
+  | Res.Sat m, O_tptp ->
       (* XXX: if potentially spurious, what should we print? *)
       let module PM = NunPrintTPTP.Make(T) in
       Format.printf "@[<v2>%a@]@,@." PM.print_model m
-  | `Unsat, O_nunchaku ->
+  | Res.Unsat, O_nunchaku ->
       Format.printf "@[UNSAT@]@."
-  | `Unsat, O_tptp ->
+  | Res.Unsat, O_tptp ->
       Format.printf "@[SZS Status: Unsatisfiable@]@."
-  | `Unknown, _ ->
+  | Res.Unknown, _ ->
       Format.printf "@[UNKNOWN@]@."
-  | `Timeout, _ ->
+  | Res.Timeout, _ ->
       Format.printf "@[TIMEOUT@]@."
-  end;
-  ()
+  | Res.Error e, _ ->
+      raise e
 
 (* main *)
 let main () =
+  let open CCError.Infix in
   CCFormat.set_color_default true; (* default: enable colors *)
   let _ = Unix.alarm (!timeout_ + 2) in (* die after a while *)
   Arg.parse options set_file "usage: nunchaku [options] file";
   print_version_if_needed ();
   if !print_pipeline_ then (
-    let cpipe = make_model_pipeline() in
-    Format.printf "@[Pipeline: %a@]@." Transform.ClosedPipe.print cpipe;
+    let pipe = make_model_pipeline() in
+    Format.printf "@[Pipeline: %a@]@." Transform.Pipe.print pipe;
     exit 0
   );
   (* parse *)

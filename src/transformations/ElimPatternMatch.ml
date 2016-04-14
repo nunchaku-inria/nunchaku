@@ -93,7 +93,7 @@ module Make(T : TermInner.S) = struct
         C.check_problem ?env:None)
     in
     let encode pb = tr_problem pb, () in
-    make1 ~name
+    make ~name
       ~encode
       ~on_encoded
       ~decode:(fun () x -> x)

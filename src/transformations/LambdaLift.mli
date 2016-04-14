@@ -26,7 +26,7 @@ module Make(T : TermInner.S) : sig
     check:bool ->
     ((T.t,T.t,inv) Problem.t,
       (T.t,T.t,inv) Problem.t,
-      (T.t,T.t) Model.t, (T.t,T.t) Model.t
+      (T.t,T.t) Problem.Res.t, (T.t,T.t) Problem.Res.t
     ) Transform.t
 
   (** Similar to {!pipe} but with a generic decode function.

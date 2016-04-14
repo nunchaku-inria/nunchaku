@@ -123,8 +123,14 @@ module Res : sig
     | Sat of ('t,'ty) Model.t
     | Unknown
     | Timeout
+    | Error of exn
 
   val map : term:('t1 -> 't2) -> ty:('ty1 -> 'ty2) -> ('t1,'ty1) t -> ('t2, 'ty2) t
+
+  val map_m :
+    f:(('t1,'ty1) Model.t -> ('t2,'ty2) Model.t) ->
+    ('t1, 'ty1) t ->
+    ('t2, 'ty2) t
 
   val print : 't printer -> 'ty printer -> ('t,'ty) t printer
 end

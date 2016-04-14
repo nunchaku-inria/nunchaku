@@ -5,9 +5,6 @@
 
 type 'a printer = 'a CCFormat.printer
 
-type 'a lazy_list = unit -> [`Nil | `Cons of 'a * 'a lazy_list]
-(** A lazy list of values of type ['a] *)
-
 (** {2 Single Transformation} *)
 
 (** Transformation of ['a] to ['b], with reverse transformation from ['c]
@@ -20,7 +17,7 @@ type ('a, 'b, 'c, 'd) t = Ex : ('a, 'b, 'c, 'd, 'st) inner -> ('a, 'b, 'c, 'd) t
 (** Transformation with explicit hidden state *)
 and ('a, 'b, 'c, 'd, 'st) inner = {
   name : string; (** name for the transformation, used for debug, CLI options, etc. *)
-  encode : 'a -> ('b * 'st) lazy_list;
+  encode : 'a -> ('b * 'st);
   decode : 'st -> 'c -> 'd;
   mutable on_input : ('a -> unit) list;
   mutable on_encoded : ('b -> unit) list;
@@ -31,27 +28,17 @@ and ('a, 'b, 'c, 'd, 'st) inner = {
 type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 (** Alias to {!t} *)
 
-val make : ?print:(Format.formatter -> 'st -> unit) ->
-           ?on_input:('a -> unit) list ->
-           ?on_encoded:('b -> unit) list ->
-           ?on_decoded:('d -> unit) list ->
-           name:string ->
-           encode:('a -> ('b * 'st) lazy_list) ->
-           decode:('st -> 'c -> 'd) ->
-           unit ->
-           ('a, 'b, 'c, 'd) t
+val make :
+  ?print:(Format.formatter -> 'st -> unit) ->
+  ?on_input:('a -> unit) list ->
+  ?on_encoded:('b -> unit) list ->
+  ?on_decoded:('d -> unit) list ->
+  name:string ->
+  encode:('a -> ('b * 'st)) ->
+  decode:('st -> 'c -> 'd) ->
+  unit ->
+  ('a, 'b, 'c, 'd) t
 (** Constructor *)
-
-val make1 : ?print:(Format.formatter -> 'st -> unit) ->
-            ?on_input:('a -> unit) list ->
-            ?on_encoded:('b -> unit) list ->
-            ?on_decoded:('d -> unit) list ->
-            name:string ->
-            encode:('a -> 'b * 'st) ->
-            decode:('st -> 'c -> 'd) ->
-            unit ->
-            ('a, 'b, 'c, 'd) t
-(** Constructor when [encode] returns exactly one solution *)
 
 val backward :
   name:string ->
@@ -77,10 +64,36 @@ module Pipe : sig
   (** Composite transformation from ['a] to ['b], with a reverse transformation
       from ['c] to ['d] *)
   type ('a, 'b, 'c, 'd) t =
-    | Id : ('a, 'a, 'c, 'c) t  (** no transformation *)
-    | Comp : ('a, 'b, 'd, 'e) transformation * ('b, 'b2, 'c, 'd) t -> ('a, 'b2, 'c, 'e) t
+    | Id : ('a, 'a, 'c, 'c) t (** no transformation *)
+    | Fail : ('a, 'b, 'c, 'd) t (** yields empty list *)
+    | Flatten :
+        ('a, 'b list, 'c, 'd) t ->
+        ('a, 'b, 'c, 'd) t
+    | Close :
+        ('b1 -> ('c1 -> 'd) -> 'b2 * ('c2 -> 'd)) *
+        ('a, 'b1, 'c1, 'd) t ->
+        ('a, 'b2, 'c2, 'd) t
+    | Comp :
+        ('a, 'b, 'e, 'f) transformation *
+        ('b, 'c, 'd, 'e) t ->
+        ('a, 'c, 'd, 'f) t
+    | Fork :
+        ('a, 'b, 'c, 'd) t *
+        ('a, 'b, 'c, 'd) t ->
+        ('a, 'b, 'c, 'd) t
 
   val id : ('a, 'a, 'c, 'c) t
+
+  val fail : ('a, 'b, 'c, 'd) t
+
+  val flatten :
+    ('a, 'b list, 'c, 'd) t ->
+    ('a, 'b, 'c, 'd) t
+
+  val close :
+    f:('b1 -> ('c1 -> 'd) -> 'b2 * ('c2 -> 'd)) ->
+    ('a, 'b1, 'c1, 'd) t ->
+    ('a, 'b2, 'c2, 'd) t
 
   val compose :
     ('a, 'b, 'd1, 'e) transformation ->
@@ -90,48 +103,24 @@ module Pipe : sig
     ('a, 'b, 'd1, 'e) transformation ->
     ('b, 'b2, 'c, 'd1) t -> ('a, 'b2, 'c, 'e) t
 
+  val fork :
+    ('a, 'b, 'c, 'd) t ->
+    ('a, 'b, 'c, 'd) t ->
+    ('a, 'b, 'c, 'd) t
+
+  val fork_l :
+    ('a, 'b, 'c, 'd) t list ->
+    ('a, 'b, 'c, 'd) t
+
+  val fork_comp :
+    ('a, 'b, 'd1, 'e) transformation list ->
+    ('b, 'b2, 'c, 'd1) t -> ('a, 'b2, 'c, 'e) t
+
   val print : _ t printer
 end
 
 val run : pipe:('a, 'b, 'c, 'd) Pipe.t ->
           'a ->
-          ('b * ('c -> 'd)) lazy_list
+          ('b * ('c -> 'd)) Lazy_list.t
 (** [run ~pipe x] runs [x] through the pipe [pipe], in a lazy way,
     and yields values of type ['b] along with a conversion function back *)
-
-(** {2 Pipe with a function at the end}
-
-  Same as composing a {!Pipe.t} with a function that consumes it and
-  returns values to be converted back *)
-module ClosedPipe : sig
-  type ('a, 'c, 'd, 'res) t =
-    | ClosedEx : ('a, 'b, 'c, 'd, 'res) inner -> ('a, 'c, 'd, 'res) t
-  (** A machine that consumes ['a] using a pipeline, and calls some function
-      to obtain a result ['res] and something that can be converted back
-      to ['d] using the pipeline again *)
-
-  and ('a, 'b, 'c, 'd, 'res) inner = {
-    pipe: ('a, 'b, 'c, 'd) Pipe.t;
-    call: ('b -> 'res lazy_list);
-  }
-
-  val make :
-    pipe: ('a, 'b, 'c, 'd) Pipe.t ->
-    f:('b -> 'res lazy_list) ->
-    ('a, 'c, 'd, 'res) t
-
-  val make1 :
-    pipe: ('a, 'b, 'c, 'd) Pipe.t ->
-    f:('b -> 'res) ->
-    ('a, 'c, 'd, 'res) t
-  (** Same as {!make}, but the function always returns exactly one element *)
-
-  val print : _ t printer
-end
-
-val run_closed :
-  cpipe:('a, 'c, 'd, 'res) ClosedPipe.t ->
-  'a ->
-  ('res * ('c -> 'd)) lazy_list
-(** Run the value through [pipe] *)
-

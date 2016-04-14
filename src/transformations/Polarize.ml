@@ -587,7 +587,7 @@ module Make(T : TI.S) = struct
         let module C = TypeCheck.Make(T) in
         C.check_problem ?env:None)
     in
-    Transform.make1
+    Transform.make
       ~name
       ~on_encoded ?on_decoded
       ~encode:(fun pb -> polarize ~polarize_rec pb)
@@ -598,10 +598,10 @@ module Make(T : TI.S) = struct
     let on_decoded = if print
       then
         [Format.printf "@[<2>@{<Yellow>model after polarize@}:@ %a@]@."
-           (Model.print P.print P.print)]
+           (Problem.Res.print P.print P.print)]
       else []
     in
-    pipe_with ~decode:(fun state m -> decode_model ~state m)
-      ~on_decoded ~polarize_rec ~print ~check
+    let decode state = Problem.Res.map_m ~f:(decode_model ~state) in
+    pipe_with ~decode ~on_decoded ~polarize_rec ~print ~check
 end
 

@@ -1345,7 +1345,7 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
           let module PPb = Problem.Print(P)(P) in
           Format.printf "@[<v2>@{<Yellow>after type inference@}: %a@]@." PPb.print)
     in
-    Transform.make1
+    Transform.make
       ~on_encoded
       ~name
       ~encode:(fun l ->

@@ -14,10 +14,14 @@ module Make(F : FO.S) : sig
 
   val print_problem : Format.formatter -> processed_problem -> unit
 
-  val solve_par :
-    ?j:int -> ?options:string list -> ?timeout:float -> ?print:bool ->
-    problem -> (FOBack.T.t, FOBack.Ty.t) Solver_intf.Res.t
-  (** Version of {!solve} that tries different sets of options in parallel *)
+  val solve :
+    ?options:string ->
+    ?deadline:float ->
+    ?print:bool ->
+    problem ->
+    ((FOBack.T.t, FOBack.Ty.t) Problem.Res.t * Scheduling.shortcut) Scheduling.Fut.t
+  (** [solve pb] returns a {b task} that, when executed, will return
+      a model or UNSAT (see {!Solver_intf.Res.t}). *)
 end
 
 type model_term = FO.Default.T.t
@@ -29,42 +33,36 @@ exception Error of string
 (** Error from CVC4 itself *)
 exception CVC4_error of string
 
-(** list of different available options *)
+(** list of different available options, starting with "" *)
 val options_l : string list
 
-(** Call CVC4 on a problem and obtain a result
-  @param options: flags to pass the solver. If several strings are passed,
-    they are tried one by one until the deadline is reached or the solver
-    returns "SAT"
-  @raise Invalid_argument if options=[]
-  @param j number of processes to run in parallel
+(** Task for running CVC4 on a problem, with a set of options
+  @return a tasks
+  @param options: flags to pass the solver (default "").
+  @param deadline absolute timestamp at which the process must have finished
+  @param prio priority of the task
   @raise CVC4_error if the solver failed with an error
 *)
 val call :
   (module FO.S with type T.t = 't and type Ty.t = 'ty) ->
-  ?options:string list ->
-  ?j:int ->
+  ?options:string ->
+  ?deadline:float ->
+  ?prio:int ->
   print:bool ->
   print_smt:bool ->
-  deadline:float ->
   ('t, 'ty) FO.Problem.t ->
-  (model_term, model_ty) Problem.Res.t
+  (model_term, model_ty) Problem.Res.t Scheduling.Task.t
 
-(** Close a pipeline by calling CVC4
-  @param print if true, print the input problem
-  @param print_smt if true, print the SMT problem sent to the prover
-  @param deadline absolute time at which the solver should stop (even without an answer)
-  @param options list of options to try. IF several options are provided,
-    the deadline will still be respected.
-  @param j number of processes to run in parallel
-  @raise CVC4_error if the solver failed with an error
-*)
-val close_pipe :
+val pipes :
   (module FO.S with type T.t = 't and type Ty.t = 'ty) ->
   ?options:string list ->
-  ?j:int ->
-  pipe:('d, ('t, 'ty) FO.Problem.t, 'e, 'f) Transform.Pipe.t ->
+  ?deadline:float ->
   print:bool ->
   print_smt:bool ->
-  deadline:float ->
-  ('d, 'e, 'f, (model_term, model_ty) Problem.Res.t) Transform.ClosedPipe.t
+  unit ->
+  ( ('t, 'ty) FO.Problem.t,
+    (model_term, model_ty) Problem.Res.t Scheduling.Task.t list,
+    'c, 'c) Transform.transformation
+(** Transformation corresponding to calling CVC4 on
+    the input problem, with each set of option in [options] *)
+

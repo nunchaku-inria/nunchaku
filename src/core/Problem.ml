@@ -88,7 +88,7 @@ module Convert(T1 : TermInner.REPR)(T2 : TermInner.BUILD) = struct
   let convert pb = map ~term:C.convert ~ty:C.convert pb
 
   let pipe () =
-    Transform.make1
+    Transform.make
       ~name:"convert"
       ~encode:(fun pb -> convert pb, ())
       ~decode:(fun () x -> x)
@@ -141,19 +141,25 @@ module Res = struct
     | Sat of ('t,'ty) Model.t
     | Unknown
     | Timeout
+    | Error of exn
 
-  let map ~term ~ty t = match t with
+  let map_m ~f t =  match t with
     | Unsat -> Unsat
     | Timeout -> Timeout
+    | Error e -> Error e
     | Unknown -> Unknown
-    | Sat model -> Sat (Model.map ~term ~ty model)
+    | Sat m -> Sat (f m)
+
+  let map ~term ~ty t =
+    map_m t ~f:(Model.map ~term ~ty)
 
   let fpf = Format.fprintf
 
   let print pt pty out = function
-    | Unsat -> fpf out "unsat"
-    | Timeout -> fpf out "timeout"
-    | Unknown -> fpf out "unknown"
+    | Unsat -> fpf out "UNSAT"
+    | Timeout -> fpf out "TIMEOUT"
+    | Error e -> fpf out "ERROR %s" (Printexc.to_string e)
+    | Unknown -> fpf out "UNKNOWN"
     | Sat m ->
-        fpf out "@[<hv>@[<v2>sat {@,@[<v>%a@]@]@,}@]" (Model.print pt pty) m
+        fpf out "@[<hv>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]" (Model.print pt pty) m
 end

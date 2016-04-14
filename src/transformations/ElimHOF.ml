@@ -1113,7 +1113,7 @@ module Make(T : TI.S) = struct
         let module C = TypeCheck.Make(T) in
         C.check_problem ?env:None)
     in
-    Transform.make1
+    Transform.make
       ?on_decoded
       ~on_encoded
       ~name
@@ -1127,11 +1127,11 @@ module Make(T : TI.S) = struct
   let pipe ~print ~check =
     let on_decoded = if print
       then
-        [Format.printf "@[<2>@{<Yellow>model after elim_HOF@}:@ %a@]@."
-           (Model.print P.print P.print)]
+        [Format.printf "@[<2>@{<Yellow>res after elim_HOF@}:@ %a@]@."
+           (Problem.Res.print P.print P.print)]
       else []
     in
-    let decode state m = decode_model ~state m in
+    let decode state = Problem.Res.map_m ~f:(decode_model ~state) in
     pipe_with ~on_decoded ~print ~decode ~check
 end
 

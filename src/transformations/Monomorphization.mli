@@ -68,7 +68,7 @@ module Make(T : TermInner.S) : sig
     check:bool ->
     ((term, term, ('a,'b) inv1) Problem.t,
      (term, term, ('a,'b) inv2) Problem.t,
-      (term,term) Model.t, (term,term) Model.t
+      (term,term) Problem.Res.t, (term,term) Problem.Res.t
     ) Transform.t
   (** Pipeline component *)
 

@@ -390,23 +390,17 @@ module TransFO(T1 : TI.S)(T2 : FO.S) = struct
   module Conv = ToFO(T1)(T2)
   module ConvBack = OfFO(T1)(T2)
 
-  let pipe () =
-    Transform.make1
+  let pipe_with ~decode =
+    Transform.make
     ~name:"to_fo"
     ~encode:(fun pb ->
       let pb' = Conv.convert_problem pb in
       pb', ()
     )
-    ~decode:(fun _st m -> ConvBack.convert_model m)
+    ~decode
     ()
 
-  let pipe_with ~decode =
-    Transform.make1
-    ~name:"to_fo"
-    ~encode:(fun pb ->
-      let pb' = Conv.convert_problem pb in
-      pb', ()
-    )
-    ~decode:(fun _ x -> decode x)
-    ()
+  let pipe () =
+    pipe_with
+      ~decode:(fun _st -> Problem.Res.map_m ~f:ConvBack.convert_model)
 end
