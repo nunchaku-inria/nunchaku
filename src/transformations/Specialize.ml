@@ -643,9 +643,13 @@ module Make(T : TI.S) = struct
         ) else (
           state.count <- state.count + 1;
           let subst = Subst.empty in
-          (* rename the "closure variables", i.e. the free variables in [args] *)
-          let subst, closure_vars =
-            Utils.fold_map U.rename_var subst (Arg.vars args) in
+          (* XXX: do not rename the "closure variables"
+             (i.e. the free variables in [args])
+             because it induces a loop in specialization:
+             in the body, we might want to specialize on the same function
+             but it is a different term after renaming, so Traversal doesn't
+             detect the loop *)
+          let closure_vars = Arg.vars args in
           (* bind variables whose position corresponds to a member of [args] *)
           let subst, new_vars =
             Utils.fold_mapi vars ~x:subst
@@ -1080,14 +1084,14 @@ module Make(T : TI.S) = struct
           Subst.find_or ~default:t ~subst v |> U.eval ~subst
       | TI.Const f_id when is_spec_fun state f_id ->
           let dsf = find_spec state f_id in
-          Utils.debugf ~section 5 "@[<2>decode `@[%a@]` from %a@]"
+          Utils.debugf ~section 5 "@[<2>decode `@[%a@]`@ from %a@]"
             (fun k->k P.print t pp_dsf dsf);
           dsf_to_fun dsf
       | TI.App (f, l) ->
           begin match T.repr f with
             | TI.Const f_id when is_spec_fun state f_id ->
                 let dsf = find_spec state f_id in
-                Utils.debugf ~section 5 "@[<2>decode `@[%a@]` from %a@]"
+                Utils.debugf ~section 5 "@[<2>decode `@[%a@]`@ from %a@]"
                   (fun k->k P.print t pp_dsf dsf);
                 (* decode arguments, and decode specialized function *)
                 let l' = List.map (decode_term_rec state subst) l in
