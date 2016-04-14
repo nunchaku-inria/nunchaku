@@ -20,8 +20,8 @@ module Make(T : TermInner.S) = struct
 
   type term = T.t
 
-  let mk_select_ c i t = U.app_builtin (`DataSelect(c,i)) [t]
-  let mk_test_ c t = U.app_builtin (`DataTest c) [t]
+  let mk_select_ = U.data_select
+  let mk_test_ = U.data_test
 
   (* apply substitution [ctx.subst] in [t], and also replace pattern matching
      with [`DataSelect] and [`DataTest] *)

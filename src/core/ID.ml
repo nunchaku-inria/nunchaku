@@ -20,6 +20,8 @@ let make_full =
 
 let make n = make_full ~needs_at:false n
 
+let make_f msg = CCFormat.ksprintf msg ~f:make
+
 let fresh_copy v = make_full ~needs_at:v.needs_at ~pol:v.pol v.name
 
 let name v = v.name

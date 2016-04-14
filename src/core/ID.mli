@@ -11,6 +11,8 @@ include Intf.HASH with type t := t
 
 val make : string -> t
 
+val make_f : ('a, Format.formatter, unit, t) format4 -> 'a
+
 val make_full : ?pol:Polarity.t -> needs_at:bool -> string -> t
 
 val fresh_copy : t -> t
