@@ -98,23 +98,25 @@ let set_debug = Section.set_debug Section.root
 let get_debug () = Section.root.Section.level
 
 let debug_fmt_ = Format.err_formatter
+let debug_lock_ = Mutex.create()
 
-let debugf_real section msg k =
+let debugf_real lock section msg k =
+  if lock then Mutex.lock debug_lock_;
   let now = Time.total () in
   if section == Section.root
   then Format.fprintf debug_fmt_ "@[<hov 3>@{<Black>%.3f[]@}@ " now
   else Format.fprintf debug_fmt_ "@[<hov 3>@{<Black>%.3f[%s]@}@ "
     now section.Section.full_name;
   k (Format.kfprintf
-      (fun fmt -> Format.fprintf fmt "@]@.")
+      (fun fmt -> Format.fprintf fmt "@]@."; if lock then Mutex.unlock debug_lock_)
       debug_fmt_ msg)
 
 (* inlinable function *)
-let debugf ?(section=Section.root) l msg k =
+let debugf ?(lock=false) ?(section=Section.root) l msg k =
   if l <= Section.cur_level section
-  then debugf_real section msg k
+  then debugf_real lock section msg k
 
-let debug ?section l msg = debugf ?section l "%s" (fun k->k msg)
+let debug ?lock ?section l msg = debugf ?lock ?section l "%s" (fun k->k msg)
 
 module Callback = struct
   type callback_id = int

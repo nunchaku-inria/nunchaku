@@ -54,12 +54,12 @@ end
 val set_debug : int -> unit     (** Set debug level of [Section.root] *)
 val get_debug : unit -> int     (** Current debug level for [Section.root] *)
 
-val debugf : ?section:Section.t -> int ->
+val debugf : ?lock:bool -> ?section:Section.t -> int ->
             ('a, Format.formatter, unit, unit) format4 -> ('a -> unit) -> unit
 (** Print a debug message, with the given section and verbosity level.
     The message might be dropped if its level is too high. *)
 
-val debug : ?section:Section.t -> int -> string -> unit
+val debug : ?lock:bool -> ?section:Section.t -> int -> string -> unit
 
 (** {2 Callbacks} *)
 
