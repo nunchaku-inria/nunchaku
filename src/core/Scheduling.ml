@@ -25,7 +25,7 @@ module Fut = struct
   let set_res ~idempotent t res =
     with_ t
       ~f:(fun () -> match t.state with
-        | Some Stopped
+        | Some Stopped -> ()
         | Some _ when idempotent -> ()
         | Some _ -> failwith "future already done"
         | None ->
@@ -41,11 +41,13 @@ module Fut = struct
 
   let get t =
     with_ t
-      ~f:(fun () ->
-        Condition.wait t.cond t.lock;
-        match t.state with
-          | None -> assert false
-          | Some s -> s)
+      ~f:(fun () -> match t.state with
+        | Some s -> s
+        | None ->
+          Condition.wait t.cond t.lock;
+          match t.state with
+            | None -> assert false
+            | Some s -> s)
 
   let is_done t = with_ t ~f:(fun () -> t.state <> None)
 
@@ -80,6 +82,25 @@ module Fut = struct
     let _ = Thread.create do_it () in
     fut
 end
+
+(*$=
+  (Fut.Done 42) ( \
+    let t = Fut.make (fun () -> Thread.delay 0.2; 42) in \
+    Fut.get t)
+*)
+
+(*$=
+  Fut.Stopped ( \
+    let t = Fut.make (fun () -> Thread.delay 0.2; 42) in \
+    Fut.stop t; \
+    Fut.get t)
+*)
+
+(*$=
+  (Fut.Fail Pervasives.Exit) ( \
+    let t = Fut.make (fun () -> Thread.delay 0.2; raise Pervasives.Exit) in \
+    Fut.get t)
+*)
 
 (* create a new active process by running [cmd] and applying [f] on it *)
 let popen ?(on_res=[]) cmd ~f =
@@ -126,8 +147,10 @@ module Task = struct
   type 'res t =
     | Task : ('a, 'res) inner -> 'res t
 
-  let make ?(prio=50) f =
+  let of_fut ?(prio=50) f =
     Task { prio; f; post=CCFun.id; }
+
+  let make ?prio f = of_fut ?prio (fun () -> Fut.make f)
 
   let compare_prio (Task t1) (Task t2) = Pervasives.compare t1.prio t2.prio
 
@@ -164,37 +187,46 @@ let with_ p ~f =
   Mutex.lock p.lock;
   CCFun.finally ~h:(fun () -> Mutex.unlock p.lock) ~f
 
+(* remove running task by its ID *)
+let rec remove_rtask_ id l = match l with
+  | [] -> []
+  | R_task (id', _, _) :: tl when id=id' -> tl
+  | t :: tl -> t :: remove_rtask_ id tl
+
 (* return a running task.
-   precondition: p is locked *)
+   precondition: p is locked
+   postcondition: new task is started, added to p, and p is unlocked *)
 let start_task p t =
   let id = p.task_id in
   p.task_id <- id + 1;
-  match t with
-    | Task.Task t_inner ->
-      let fut = t_inner.Task.f () in
-      let r_task = R_task (id, t_inner, fut) in
-      p.active <- r_task :: p.active;
-      (* ensure that after completion, the task is removed *)
-      Fut.on_res fut
-        ~f:(fun res ->
-          with_ p
-            ~f:(fun () ->
-              begin match res, p.pool_state with
-                | Fut.Done (x, No_shortcut), Res_list l ->
-                  let x = t_inner.Task.post x in
-                  p.pool_state <- Res_list (x::l)
-                | Fut.Done (x, Shortcut), Res_list _ ->
-                  let x = t_inner.Task.post x in
-                  p.pool_state <- Res_one x;
-                | Fut.Fail e, Res_list _ ->
-                  p.pool_state <- Res_fail e;
-                | Fut.Stopped, _
-                | _, (Res_one _ | Res_fail _) -> ()
-              end;
-              (* awake the main thread, if required *)
-              Condition.broadcast p.cond)
-        );
-      ()
+  let (Task.Task t_inner) = t in
+  let fut = t_inner.Task.f () in
+  let r_task = R_task (id, t_inner, fut) in
+  p.active <- r_task :: p.active;
+  Mutex.unlock p.lock;
+  (* ensure that after completion, the task is removed and the pool's
+     state is updated *)
+  Fut.on_res fut
+    ~f:(fun res ->
+      with_ p
+        ~f:(fun () ->
+          p.active <- remove_rtask_ id p.active;
+          begin match res, p.pool_state with
+            | Fut.Done (x, No_shortcut), Res_list l ->
+              let x = t_inner.Task.post x in
+              p.pool_state <- Res_list (x::l)
+            | Fut.Done (x, Shortcut), Res_list _ ->
+              let x = t_inner.Task.post x in
+              p.pool_state <- Res_one x;
+            | Fut.Fail e, Res_list _ ->
+              p.pool_state <- Res_fail e;
+            | Fut.Stopped, _
+            | _, (Res_one _ | Res_fail _) -> ()
+          end;
+          (* awake the main thread, if required *)
+          Condition.broadcast p.cond)
+    );
+  ()
 
 (* main function for running threads *)
 let rec run_pool pool =
@@ -218,15 +250,15 @@ let rec run_pool pool =
             (fun k->k (List.length pool.active) pool.j (List.length todo_tl));
           (* run new task *)
           pool.todo <- todo_tl;
-          start_task pool task;
+          start_task pool task; (* releases lock *)
         ) else (
           (* wait for something to happen *)
           Utils.debugf ~lock:true ~section 2
             "waiting (max number of active tasks / todo: %d)..."
             (fun k->k (1+List.length todo_tl));
           Condition.wait pool.cond pool.lock;
+          Mutex.unlock pool.lock;
         );
-        Mutex.unlock pool.lock;
         run_pool pool
     | [], _::_, Res_list _ ->
         (* wait for something to happen *)
@@ -250,3 +282,30 @@ let run ~j tasks =
     cond=Condition.create();
   } in
   run_pool pool
+
+(*$=
+  (Res_one 5) ( \
+    let mk i = Task.make (fun () -> if i=5 then i, Shortcut else i, No_shortcut) in \
+    run ~j:3 CCList.(1 -- 10 |> map mk))
+*)
+
+(*$=
+  (Res_one 5) ( \
+    let mk i = Task.make \
+      (fun () -> Thread.delay (float i *. 0.1); \
+                 if i=5 then i, Shortcut else i, No_shortcut) in \
+    run ~j:3 CCList.(1 -- 10 |> map mk))
+*)
+
+(*$=
+  (Res_fail Exit) ( \
+    let mk i = Task.make (fun () -> if i=5 then raise Exit else i, No_shortcut) in \
+    run ~j:3 CCList.(1 -- 10 |> map mk))
+*)
+
+(*$=
+  (Res_list CCList.(1--10)) ( \
+    let mk i = Task.make (fun () -> i, No_shortcut) in \
+    let res = run ~j:3 CCList.(1 -- 10 |> map mk) in \
+    match res with Res_list l -> Res_list (List.sort Pervasives.compare l) | x->x)
+*)
