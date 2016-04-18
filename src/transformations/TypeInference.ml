@@ -1028,11 +1028,15 @@ module Convert(Term : TermTyped.S) = struct
     in
     env', l'
 
-  let check_base_case ?loc l =
+  let check_base_case ?loc ids_being_defined l =
     let has_base =
       List.exists
-        (fun (Stmt.Pred_clause c) ->
-           CCOpt.is_none c.Stmt.clause_guard)
+        (fun (Stmt.Pred_clause c) -> match c.Stmt.clause_guard with
+           | None -> true
+           | Some t ->
+             U.to_seq_consts t
+             |> Sequence.for_all (fun id -> not (ID.Set.mem id ids_being_defined))
+        )
         l
     in
     if not has_base
@@ -1043,6 +1047,7 @@ module Convert(Term : TermTyped.S) = struct
     (* first, build new variables for the defined terms,
         and build [env'] in which the defined identifiers are bound to constants *)
     let env', l' = prepare_defs ~env l in
+    let ids = List.fold_left (fun acc (id,_,_,_) -> ID.Set.add id acc) ID.Set.empty l' in
     (* convert the equations *)
     let l' = List.map
       (fun (id,ty,ty_vars,l) ->
@@ -1078,7 +1083,7 @@ module Convert(Term : TermTyped.S) = struct
                 })
           l
         in
-        if kind=`Pred then check_base_case ?loc pred_clauses;
+        if kind=`Pred then check_base_case ?loc ids pred_clauses;
         {Stmt.
           pred_defined=defined; pred_tyvars=ty_vars;
           pred_clauses;
