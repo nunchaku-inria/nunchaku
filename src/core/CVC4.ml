@@ -714,7 +714,7 @@ module Make(FO_T : FO.S) = struct
     let now = Unix.gettimeofday() in
     let deadline = match deadline with Some s -> s | None -> now +. 30. in
     (* enough time remaining? *)
-    if deadline +. 0.1 < now
+    if now +. 0.1 > deadline
     then Res.Timeout, S.No_shortcut
     else (
       let decode, problem' = preprocess pb in
