@@ -25,7 +25,7 @@ module Fut = struct
   let set_res ~idempotent t res =
     with_ t
       ~f:(fun () -> match t.state with
-        | Some Stopped
+        | Some Stopped -> ()
         | Some _ when idempotent -> ()
         | Some _ -> failwith "future already done"
         | None ->
@@ -41,11 +41,13 @@ module Fut = struct
 
   let get t =
     with_ t
-      ~f:(fun () ->
-        Condition.wait t.cond t.lock;
-        match t.state with
-          | None -> assert false
-          | Some s -> s)
+      ~f:(fun () -> match t.state with
+        | Some s -> s
+        | None ->
+          Condition.wait t.cond t.lock;
+          match t.state with
+            | None -> assert false
+            | Some s -> s)
 
   let is_done t = with_ t ~f:(fun () -> t.state <> None)
 
@@ -80,6 +82,25 @@ module Fut = struct
     let _ = Thread.create do_it () in
     fut
 end
+
+(*$=
+  (Fut.Done 42) ( \
+    let t = Fut.make (fun () -> Thread.delay 0.2; 42) in \
+    Fut.get t)
+*)
+
+(*$=
+  Fut.Stopped ( \
+    let t = Fut.make (fun () -> Thread.delay 0.2; 42) in \
+    Fut.stop t; \
+    Fut.get t)
+*)
+
+(*$=
+  (Fut.Fail Pervasives.Exit) ( \
+    let t = Fut.make (fun () -> Thread.delay 0.2; raise Pervasives.Exit) in \
+    Fut.get t)
+*)
 
 (* create a new active process by running [cmd] and applying [f] on it *)
 let popen ?(on_res=[]) cmd ~f =
