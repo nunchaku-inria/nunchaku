@@ -712,14 +712,16 @@ module Make(FO_T : FO.S) = struct
   let do_solve_ options deadline print pb =
     let now = Unix.gettimeofday() in
     let deadline = match deadline with Some s -> s | None -> now +. 30. in
+    (* preprocess first *)
+    let decode, problem' = preprocess pb in
+    if print
+    then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem (decode, problem');
     (* enough time remaining? *)
     if now +. 0.1 > deadline
     then Res.Timeout, S.No_shortcut
     else (
-      let decode, problem' = preprocess pb in
-      if print
-      then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem (decode, problem');
       let timeout = deadline -. now in
+      assert (timeout > 0.);
       let cmd = mk_cvc4_cmd_ timeout options in
       Utils.debugf ~lock:true ~section 2 "@[<2>run command@ `%s`@]" (fun k->k cmd);
       let ic, oc = Unix.open_process cmd in
