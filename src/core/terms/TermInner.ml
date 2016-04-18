@@ -426,6 +426,9 @@ module type UTIL_REPR = sig
   val to_seq_vars : t_ -> t_ Var.t Sequence.t
   (** Iterate on variables *)
 
+  val to_seq_consts : t_ -> ID.t Sequence.t
+  (** IDs occurring as {!Const} *)
+
   module VarSet : CCSet.S with type elt = t_ Var.t
 
   val to_seq_free_vars : ?bound:VarSet.t -> t_ -> t_ Var.t Sequence.t
@@ -537,6 +540,13 @@ module UtilRepr(T : REPR)
       | TyMeta _ -> ()
     in
     aux ~bound t
+
+  let to_seq_consts t =
+    to_seq t
+    |> Sequence.filter_map
+      (fun t -> match T.repr t with
+         | Const id -> Some id
+         | _ -> None)
 
   let free_vars ?bound t =
     to_seq_free_vars ?bound t |> VarSet.of_seq
