@@ -61,11 +61,18 @@ module Task : sig
 
   val make :
     ?prio:int ->
-    (unit -> ('a * shortcut) Fut.t) ->
+    (unit -> 'a * shortcut) ->
     'a t
-  (** [make f] creates a new task that will execute [f].
+  (** [make f] creates a new task that will execute [f] in a separate thread.
       @param prio the priority (default 50); the lower, the more important
       @param post post-processing of the value *)
+
+  val of_fut :
+    ?prio:int ->
+    (unit -> ('a * shortcut) Fut.t) ->
+    'a t
+  (** [of_fut f] is similar to {!make}, but [f] produces a future, not a direct
+      result *)
 
   val map : f:('a -> 'b) -> 'a t -> 'b t
   (** Map the result *)

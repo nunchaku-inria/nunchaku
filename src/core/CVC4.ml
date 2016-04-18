@@ -771,7 +771,7 @@ let call (type t)(type ty)
   let module CVC4 = Make(F) in
   if print
   then Format.printf "@[<v2>FO problem:@ %a@]@." P.print_problem problem;
-  Scheduling.Task.make ?prio
+  Scheduling.Task.of_fut ?prio
     (fun () -> CVC4.solve ~options ?deadline ~print:print_smt problem)
 
 let pipes fo ?(options=[""]) ?deadline ~print ~print_smt () =
