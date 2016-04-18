@@ -290,6 +290,14 @@ let run ~j tasks =
 *)
 
 (*$=
+  (Res_one 5) ( \
+    let mk i = Task.make \
+      (fun () -> Thread.delay (float i *. 0.1); \
+                 if i=5 then i, Shortcut else i, No_shortcut) in \
+    run ~j:3 CCList.(1 -- 10 |> map mk))
+*)
+
+(*$=
   (Res_fail Exit) ( \
     let mk i = Task.make (fun () -> if i=5 then raise Exit else i, No_shortcut) in \
     run ~j:3 CCList.(1 -- 10 |> map mk))
