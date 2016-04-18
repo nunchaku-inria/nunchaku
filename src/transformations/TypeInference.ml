@@ -1028,7 +1028,18 @@ module Convert(Term : TermTyped.S) = struct
     in
     env', l'
 
-  let convert_preds ?loc ~env l =
+  let check_base_case ?loc l =
+    let has_base =
+      List.exists
+        (fun (Stmt.Pred_clause c) ->
+           CCOpt.is_none c.Stmt.clause_guard)
+        l
+    in
+    if not has_base
+    then ill_formedf ?loc "@[<2>inductive predicate requires at least one base case@]";
+    ()
+
+  let convert_preds ?loc ~env kind l =
     (* first, build new variables for the defined terms,
         and build [env'] in which the defined identifiers are bound to constants *)
     let env', l' = prepare_defs ~env l in
@@ -1067,6 +1078,7 @@ module Convert(Term : TermTyped.S) = struct
                 })
           l
         in
+        if kind=`Pred then check_base_case ?loc pred_clauses;
         {Stmt.
           pred_defined=defined; pred_tyvars=ty_vars;
           pred_clauses;
@@ -1269,10 +1281,10 @@ module Convert(Term : TermTyped.S) = struct
         let env, l = convert_tydef ?loc ~env l in
         Stmt.codata ~info l, env
     | A.Pred (wf, l) ->
-        let env, l = convert_preds ?loc ~env l in
+        let env, l = convert_preds ?loc ~env `Pred l in
         Stmt.pred ~info ~wf l, env
     | A.Copred (wf, l) ->
-        let env, l = convert_preds ?loc ~env l in
+        let env, l = convert_preds ?loc ~env `Copred l in
         Stmt.copred ~info ~wf l, env
     | A.Copy c ->
         let env, c = convert_copy ?loc ~env c in
