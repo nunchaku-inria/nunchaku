@@ -121,7 +121,7 @@ end = struct
         let res' = Problem.Res.map_m ~f:rename res in
         if must_print then (
           let module P = TI.Print(T) in
-          Format.printf "@[<v2>@{<Yellow>after model renaming@}:@ {@,%a@]}@."
+          Format.printf "@[<v2>@{<Yellow>after model renaming@}:@ %a@]@."
             (Problem.Res.print P.print P.print) res');
         res')
 end

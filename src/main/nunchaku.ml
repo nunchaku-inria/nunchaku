@@ -267,7 +267,8 @@ let run_tasks ~j pipe pb =
            | Res.Timeout | Res.Unknown -> true
            | Res.Error _ | Res.Sat _ | Res.Unsat -> false)
          l);
-    E.return (List.hd l)
+    let res = if List.mem Res.Timeout l then Res.Timeout else Res.Unknown in
+    E.return res
   | Scheduling.Res_one r -> E.return r
 
 (* negate the goal *)
