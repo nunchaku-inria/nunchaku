@@ -46,6 +46,7 @@ let print_copy_ = ref false
 let print_intro_guards_ = ref false
 let print_fo_ = ref false
 let print_smt_ = ref false
+let print_raw_model_ = ref false
 let print_model_ = ref false
 let enable_polarize_ = ref true
 let timeout_ = ref 30
@@ -118,7 +119,7 @@ let options =
       " print input after introduction of guards"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
-  ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
+  ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
   ; "--print-undefined", Arg.Set TermInner.print_undefined_id, " print unique IDs of `undefined` terms"
   ; "--checks", Arg.Set check_all_, " check invariants after each pass"
@@ -195,7 +196,7 @@ module Pipes = struct
   module Step_elim_copy = ElimCopy.Make(HO)
   module Step_intro_guards = IntroGuards.Make(HO)
   (* conversion to FO *)
-  module Step_tofo = TermMono.TransFO(HO)(FO.Default)
+  module Step_tofo = TermMono.TransFO(HO)
   (* renaming in model *)
   module Step_rename_model = Model_rename.Make(HO)
 end
@@ -213,11 +214,16 @@ let make_model_pipeline () =
   let check = !check_all_ in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   let cvc4 =
-    CVC4.pipes FO.default
-       ~options:CVC4.options_l
-       ~print:!print_all_
-       ~print_smt:(!print_all_ || !print_smt_) ~deadline ()
-    @@@ id
+    if CVC4.is_available ()
+    then
+      CVC4.pipes
+        ~options:CVC4.options_l
+        ~print:!print_all_
+        ~print_smt:(!print_all_ || !print_smt_)
+        ~print_model:(!print_all_ || !print_raw_model_)
+        ~deadline ()
+      @@@ id
+    else Fail
   in
   let pipe =
     Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@

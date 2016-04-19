@@ -65,9 +65,7 @@ module Make(T : TI.REPR)
     | TI.TyArrow (a,b) -> TyArrow(a,b)
 end
 
-module ToFO(T : TI.S)(F : FO.S) = struct
-  module FOI = FO
-  module FO = F
+module ToFO(T : TI.S) = struct
   module Subst = Var.Subst
   module P = TI.Print(T)
   module U = TI.Util(T)
@@ -226,20 +224,20 @@ module ToFO(T : TI.S)(F : FO.S) = struct
         let st' = match k with
         | St.Decl_type ->
             let n = U.ty_num_param ty in
-            FOI.TyDecl (id, n)
+            FO.TyDecl (id, n)
         | St.Decl_fun ->
             let ty = conv_top_ty ty in
-            FOI.Decl (id, ty)
+            FO.Decl (id, ty)
         | St.Decl_prop ->
             let ty = conv_top_ty ty in
-            FOI.Decl (id, ty)
+            FO.Decl (id, ty)
         in
         (* additional statements, obtained from attributes *)
         let others =
           CCList.filter_map
             (function
-              | St.Decl_attr_card_max n -> Some (FOI.CardBound (id, `Max, n))
-              | St.Decl_attr_card_min n -> Some (FOI.CardBound (id, `Min, n))
+              | St.Decl_attr_card_max n -> Some (FO.CardBound (id, `Max, n))
+              | St.Decl_attr_card_min n -> Some (FO.CardBound (id, `Min, n))
               | St.Decl_attr_abstract
               | St.Decl_attr_incomplete
               | St.Decl_attr_exn _ -> None)
@@ -247,7 +245,7 @@ module ToFO(T : TI.S)(F : FO.S) = struct
         in
         st' :: others
     | St.Axiom a ->
-        let mk_ax x = FOI.Axiom x in
+        let mk_ax x = FO.Axiom x in
         begin match a with
         | St.Axiom_std l ->
             List.map (fun ax -> conv_form  ~sigma ax |> mk_ax) l
@@ -257,7 +255,7 @@ module ToFO(T : TI.S)(F : FO.S) = struct
               (fun def ->
                 let ty = conv_top_ty def.St.defined_ty in
                 let head = def.St.defined_head in
-                FOI.Decl (head, ty))
+                FO.Decl (head, ty))
               s.St.spec_defined
             and ax = List.map
               (fun ax -> ax |> conv_form ~sigma |> mk_ax)
@@ -273,7 +271,7 @@ module ToFO(T : TI.S)(F : FO.S) = struct
                   let d = def.St.rec_defined in
                   let ty = conv_top_ty d.St.defined_ty in
                   let head = d.St.defined_head in
-                  FOI.Decl (head, ty))
+                  FO.Decl (head, ty))
                 s
             and axioms =
               CCList.flat_map
@@ -287,12 +285,12 @@ module ToFO(T : TI.S)(F : FO.S) = struct
             List.rev_append decls axioms
         end
     | St.Goal f ->
-        [ FOI.Goal (conv_form ~sigma f) ]
+        [ FO.Goal (conv_form ~sigma f) ]
     | St.Copy _ -> assert false
     | St.Pred _ -> assert false
     | St.TyDef (k, l) ->
         let convert_cstor c =
-          {FOI.
+          {FO.
             cstor_name=c.St.cstor_name;
             cstor_args=List.map conv_ty c.St.cstor_args;
           }
@@ -305,11 +303,11 @@ module ToFO(T : TI.S)(F : FO.S) = struct
           (fun tydef ->
             let id = tydef.St.ty_id in
             let cstors = ID.Map.map convert_cstor tydef.St.ty_cstors in
-            {FOI.ty_name=id; ty_cstors=cstors; }
+            {FO.ty_name=id; ty_cstors=cstors; }
           ) l
         in
-        let l = {FOI.tys_vars; tys_defs; } in
-        [ FOI.MutualTypes (k, l) ]
+        let l = {FO.tys_vars; tys_defs; } in
+        [ FO.MutualTypes (k, l) ]
 
   let convert_problem p =
     let meta = Problem.metadata p in
@@ -319,14 +317,14 @@ module ToFO(T : TI.S)(F : FO.S) = struct
         (convert_statement ~sigma)
         (Problem.statements p)
     in
-    FOI.Problem.make ~meta res
+    FO.Problem.make ~meta res
 end
 
-module OfFO(T:TI.S)(F : FO.VIEW) = struct
+module OfFO(T:TI.S) = struct
   module U = TI.Util(T)
   type t = T.t
 
-  let rec convert_ty t = match F.Ty.view t with
+  let rec convert_ty t = match FO.Ty.view t with
     | FO.TyBuiltin b ->
         let b = match b with
           | `Prop -> `Prop
@@ -336,7 +334,7 @@ module OfFO(T:TI.S)(F : FO.VIEW) = struct
         U.ty_app (U.ty_const f) l
 
   let rec convert_term t =
-    match F.T.view t with
+    match FO.T.view t with
     | FO.Builtin b ->
         let b = match b with
           | `Int _ -> Utils.not_implemented "conversion from int"
@@ -384,9 +382,9 @@ module OfFO(T:TI.S)(F : FO.VIEW) = struct
   let convert_model m = Model.map m ~term:convert_term ~ty:convert_ty
 end
 
-module TransFO(T1 : TI.S)(T2 : FO.S) = struct
-  module Conv = ToFO(T1)(T2)
-  module ConvBack = OfFO(T1)(T2)
+module TransFO(T1 : TI.S) = struct
+  module Conv = ToFO(T1)
+  module ConvBack = OfFO(T1)
 
   let pipe_with ~print ~decode =
     let on_encoded =

@@ -86,75 +86,48 @@ type ('t, 'ty) statement =
   | MutualTypes of [`Data | `Codata] * 'ty mutual_types
   | Goal of 't
 
-(** {2 Read-Only View} *)
-module type VIEW = sig
-  module Ty : sig
-    type t
-    type toplevel_ty = t list * t
-    val view : t -> t ty_view
-  end
-
-  module T : sig
-    type t
-    val view : t -> (t, Ty.t) view
-    (** Observe the structure of the term *)
-  end
-end
-
 (** {2 View and Build Formulas, Terms, Types} *)
-module type S = sig
-  module Ty : sig
-    type t
-    type toplevel_ty = t list * t
 
-    val view : t -> t ty_view
+module Ty : sig
+  type t
+  type toplevel_ty = t list * t
 
-    val const : id -> t
-    val app : id -> t list -> t
-    val builtin : TyBuiltin.t -> t
-    val arrow : t list -> t -> toplevel_ty
-  end
+  val view : t -> t ty_view
 
-  module T : sig
-    type t
-    val view : t -> (t, Ty.t) view
-    (** Observe the structure of the term *)
-
-    val builtin : Builtin.t -> t
-    val const : id -> t
-    val app : id -> t list -> t
-    val data_test : id -> t -> t
-    val data_select : id -> int -> t -> t
-    val undefined : id -> t -> t
-    val unparsable : Ty.t -> t
-    val var : Ty.t var -> t
-    val let_ : Ty.t var -> t -> t -> t
-    val fun_ : Ty.t var -> t -> t
-    val mu : Ty.t var -> t -> t
-    val ite : t -> t -> t -> t
-    val true_ : t
-    val false_ : t
-    val eq : t -> t -> t
-    val and_ : t list -> t
-    val or_ : t list -> t
-    val not_ : t -> t
-    val imply : t -> t -> t
-    val equiv : t -> t -> t
-    val forall : Ty.t var -> t -> t
-    val exists : Ty.t var -> t -> t
-  end
+  val const : id -> t
+  val app : id -> t list -> t
+  val builtin : TyBuiltin.t -> t
+  val arrow : t list -> t -> toplevel_ty
 end
 
-type ('t, 'ty) repr =
-  (module VIEW with type T.t = 't and type Ty.t = 'ty)
+module T : sig
+  type t
+  val view : t -> (t, Ty.t) view
+  (** Observe the structure of the term *)
 
-type ('t, 'ty) build =
-  (module S with type T.t = 't and type Ty.t = 'ty)
-
-module Default : S
-
-val default_repr: (Default.T.t, Default.Ty.t) repr
-val default: (Default.T.t, Default.Ty.t) build
+  val builtin : Builtin.t -> t
+  val const : id -> t
+  val app : id -> t list -> t
+  val data_test : id -> t -> t
+  val data_select : id -> int -> t -> t
+  val undefined : id -> t -> t
+  val unparsable : Ty.t -> t
+  val var : Ty.t var -> t
+  val let_ : Ty.t var -> t -> t -> t
+  val fun_ : Ty.t var -> t -> t
+  val mu : Ty.t var -> t -> t
+  val ite : t -> t -> t -> t
+  val true_ : t
+  val false_ : t
+  val eq : t -> t -> t
+  val and_ : t list -> t
+  val or_ : t list -> t
+  val not_ : t -> t
+  val imply : t -> t -> t
+  val equiv : t -> t -> t
+  val forall : Ty.t var -> t -> t
+  val exists : Ty.t var -> t -> t
+end
 
 (** {2 Problem} *)
 module Problem : sig
@@ -181,28 +154,22 @@ module Problem : sig
 end
 
 (** {2 Utils} *)
-module Util(T : S) : sig
+module Util : sig
   val dt_of_term :
-    vars:T.Ty.t Var.t list ->
-    T.T.t ->
-    (T.T.t, T.Ty.t) Model.DT.t
+    vars:Ty.t Var.t list ->
+    T.t ->
+    (T.t, Ty.t) Model.DT.t
   (** Convert a term into a decision tree, or emit a warning and
       return a trivial tree with "unparsable" inside *)
 
-  val problem_kinds : (_,T.Ty.t) Problem.t -> Model.symbol_kind ID.Map.t
+  val problem_kinds : (_,Ty.t) Problem.t -> Model.symbol_kind ID.Map.t
 end
 
 (** {2 IO} *)
 
-module type PRINT = sig
-  module FO : VIEW
-
-  val print_ty : FO.Ty.t printer
-  val print_toplevel_ty : FO.Ty.toplevel_ty printer
-  val print_term : FO.T.t printer
-  val print_statement : (FO.T.t, FO.Ty.t) statement printer
-  val print_model : (FO.T.t * FO.T.t) list printer
-  val print_problem : (FO.T.t, FO.Ty.t) Problem.t printer
-end
-
-module Print(FO : VIEW) : PRINT with module FO = FO
+val print_ty : Ty.t printer
+val print_toplevel_ty : Ty.toplevel_ty printer
+val print_term : T.t printer
+val print_statement : (T.t, Ty.t) statement printer
+val print_model : (T.t * T.t) list printer
+val print_problem : (T.t, Ty.t) Problem.t printer
