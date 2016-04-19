@@ -80,10 +80,9 @@ module ToFO(T : TI.S)(F : FO.S) = struct
   let () = Printexc.register_printer
     (function
       | NotInFO (msg, t) ->
-          Some(CCFormat.sprintf
+          Some(Utils.err_sprintf
             "@[<2>term `@[%a@]` is not in the first-order fragment:@ %s@]"
-              P.print t msg
-          )
+              P.print t msg)
       | _ -> None
     )
 
@@ -314,14 +313,13 @@ module ToFO(T : TI.S)(F : FO.S) = struct
 
   let convert_problem p =
     let meta = Problem.metadata p in
-    let res = CCVector.create() in
     let sigma = Problem.signature p in
-    CCVector.iter
-      (fun st ->
-        let l = convert_statement ~sigma st in
-        CCVector.append_seq res (Sequence.of_list l))
-      (Problem.statements p);
-    res |> CCVector.freeze |> FOI.Problem.make ~meta
+    let res =
+      CCVector.flat_map_list
+        (convert_statement ~sigma)
+        (Problem.statements p)
+    in
+    FOI.Problem.make ~meta res
 end
 
 module OfFO(T:TI.S)(F : FO.VIEW) = struct
