@@ -8,14 +8,15 @@ open Nunchaku_core
 module T = FO.T
 module Ty = FO.Ty
 
-type problem = (T.t, Ty.t) FO.Problem.t
+type problem = FO_rel.problem
+type res = (FO_rel.expr, FO_rel.expr) Problem.Res.t
 
 val call :
   ?options:string ->
   ?timeout:float ->
   ?print:bool ->
   problem ->
-  ((T.t, Ty.t) Problem.Res.t * Scheduling.shortcut) Scheduling.Fut.t
+  (res * Scheduling.shortcut) Scheduling.Fut.t
 (** [solve pb] returns a {b task} that, when executed, will return
     a model or UNSAT (see {!Solver_intf.Res.t}). *)
 
@@ -24,11 +25,11 @@ val is_available : unit -> bool
       installed, or the binary in the path) *)
 
 val pipe :
-  ?deadline:float ->
+  ?print_model:bool ->
   print:bool ->
   unit ->
   ( problem,
-    (T.t, Ty.t) Problem.Res.t Scheduling.Task.t,
+    res Scheduling.Task.t,
     'c, 'c) Transform.transformation
 (** Transformation corresponding to calling Kodkod on
     the input problem *)

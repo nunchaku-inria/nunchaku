@@ -66,6 +66,7 @@ let print_elim_ite_ = ref false
 let print_elim_prop_args_ = ref false
 let print_elim_types_ = ref false
 let print_fo_ = ref false
+let print_fo_to_rel_ = ref false
 let print_smt_ = ref false
 let print_raw_model_ = ref false
 let print_model_ = ref false
@@ -166,6 +167,7 @@ let options =
   ; "--print-" ^ Tr.ElimTypes.name, Arg.Set print_elim_types_,
       " print input after elimination of types"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
+  ; "--print-fo-to-rel", Arg.Set print_fo_to_rel_, " print first-order relational problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
@@ -280,6 +282,17 @@ let make_paradox () =
     @@@ id
   else fail
 
+let make_kodkod () =
+  let open Transform.Pipe in
+  if List.mem S_kodkod !solvers && Backends.Kodkod.is_available ()
+  then
+    Backends.Kodkod.pipe
+      ~print:!print_all_
+      ~print_model:(!print_all_ || !print_raw_model_)
+      ()
+    @@@ id
+  else fail
+
 (* build a pipeline, depending on options *)
 let make_model_pipeline () =
   let open Transform.Pipe in
@@ -289,6 +302,7 @@ let make_model_pipeline () =
   (* solvers *)
   let cvc4 = make_cvc4 ~j:!j () in
   let paradox = make_paradox () in
+  let kodkod = make_kodkod () in
   let pipe =
     Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
     Step_conv_ty.pipe () @@@
@@ -323,17 +337,27 @@ let make_model_pipeline () =
         Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
         Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
-        Tr.Elim_prop_args.pipe ~print:(!print_elim_prop_args_ || !print_all_) ~check @@@
-        Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
-        Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
-        close_task (
-          Step_tofo.pipe ~print:!print_all_ () @@@
-          Tr.Elim_ite.pipe ~print:(!print_elim_ite_ || !print_all_) @@@
-          FO.pipe_tptp @@@
-          paradox
-        ))
-      (
-        Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+        fork
+        ( Tr.Elim_prop_args.pipe ~print:(!print_elim_prop_args_ || !print_all_) ~check @@@
+          Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
+          Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
+          close_task (
+            Step_tofo.pipe ~print:!print_all_ () @@@
+            Tr.Elim_ite.pipe ~print:(!print_elim_ite_ || !print_all_) @@@
+            FO.pipe_tptp @@@
+            paradox
+          )
+        )
+        (
+          Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
+          close_task (
+            Step_tofo.pipe ~print:!print_all_ () @@@
+            Tr.FoToRelational.pipe ~print:(!print_fo_to_rel_ || !print_all_) @@@
+            kodkod
+          ))
+      )
+      ( Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+        Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
         Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
         Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
@@ -343,7 +367,8 @@ let make_model_pipeline () =
         close_task (
           Step_tofo.pipe ~print:!print_all_ () @@@
           Transform.Pipe.flatten cvc4
-        ))
+        )
+      )
   in
   pipe
 

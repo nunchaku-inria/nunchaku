@@ -11,7 +11,8 @@ module Ty = FO.Ty
 
 let name = "kodkod"
 
-type problem = (T.t, Ty.t) FO.Problem.t
+type problem = FO_rel.problem
+type res = (FO_rel.expr, FO_rel.expr) Problem.Res.t
 
 type t = unit
 (* TODO *)
@@ -32,10 +33,10 @@ let call ?options ?timeout ?print pb =
   assert false (* TODO *)
 
 let is_available () =
-  try Sys.command "which kodkodki" = 0
+  try Sys.command "which kodkodi" = 0
   with Sys_error _ -> false
 
-let pipe ?deadline ~print () =
+let pipe ?(print_model=false) ~print () =
   (* TODO: deadline *)
   let encode pb = call ~print pb in
   Transform.make

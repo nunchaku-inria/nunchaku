@@ -89,5 +89,5 @@ val print_tuple : tuple CCFormat.printer
 val print_expr : expr CCFormat.printer
 val print_form : form CCFormat.printer
 val print_decl : decl CCFormat.printer
-val print_pb : problem CCFormat.printer
+val print_problem : problem CCFormat.printer
 

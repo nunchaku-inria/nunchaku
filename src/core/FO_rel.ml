@@ -167,7 +167,7 @@ let print_decl out d =
     ID.print d.decl_id d.decl_arity
     print_tuple d.decl_low print_tuple d.decl_high
 
-let print_pb out pb =
+let print_problem out pb =
   fpf out "@[<v2>problem {@,univ=%a@,decls=@[<v>%a@]@,goal=%a@,@]}"
     print_tuple pb.pb_univ
     (CCVector.print print_decl) pb.pb_decls

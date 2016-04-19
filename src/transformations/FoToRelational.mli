@@ -5,27 +5,34 @@
 
 open Nunchaku_core
 
+type problem1 = (FO.T.t, FO.Ty.t) FO.Problem.t
+type model1 = (FO.T.t, FO.Ty.t) Model.t
+
+type problem2 = FO_rel.problem
+type model2 = (FO_rel.expr, FO_rel.expr) Model.t
+
+(** {2 Encoding} *)
+
 type state
 
-val encode_pb :
-  (FO.T.t, FO.Ty.t) FO.Problem.t ->
-  (FO.T.t, FO.Ty.t) FO.Problem.t * state
+val encode_pb : problem1 -> problem2 * state
 
-val decode : state -> (FO.T.t, FO.Ty.t) Model.t -> (FO.T.t, FO.Ty.t) Model.t
+(** {2 Decoding} *)
+
+val decode : state -> model2 -> model1
+
+(** {2 Pipes} *)
 
 val pipe_with :
   decode:(state -> 'a -> 'b) ->
   print:bool ->
-  ( (FO.T.t, FO.Ty.t) FO.Problem.t,
-    (FO.T.t, FO.Ty.t) FO.Problem.t,
-    'a, 'b
-  ) Transform.t
+  (problem1, problem2, 'a, 'b) Transform.t
 
 val pipe :
   print:bool ->
-  ( (FO.T.t, FO.Ty.t) FO.Problem.t,
-    (FO.T.t, FO.Ty.t) FO.Problem.t,
-    (FO.T.t, FO.Ty.t) Problem.Res.t,
+  ( problem1,
+    problem2,
+    (FO_rel.expr, FO_rel.expr) Problem.Res.t,
     (FO.T.t, FO.Ty.t) Problem.Res.t
   ) Transform.t
 
