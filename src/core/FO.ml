@@ -209,7 +209,6 @@ module Problem = struct
     acc', pb'
 end
 
-(* TODO: use it in CVC4? or too specific, this is not SMT specific *)
 
 let fpf = Format.fprintf
 

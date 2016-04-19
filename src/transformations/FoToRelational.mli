@@ -7,6 +7,12 @@ open Nunchaku_core
 
 type state
 
+val encode_pb :
+  (FO.T.t, FO.Ty.t) FO.Problem.t ->
+  (FO.T.t, FO.Ty.t) FO.Problem.t * state
+
+val decode : state -> (FO.T.t, FO.Ty.t) Model.t -> (FO.T.t, FO.Ty.t) Model.t
+
 val pipe_with :
   decode:(state -> 'a -> 'b) ->
   print:bool ->
