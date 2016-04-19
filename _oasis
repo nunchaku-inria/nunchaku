@@ -82,7 +82,8 @@ Library "nunchaku_transformations"
                     ElimTypes,
                     Elim_prop_args,
                     Elim_ite,
-                    Elim_infinite
+                    Elim_infinite,
+                    FoToRelational
   Install:          true
   FindlibName:      transformations
   FindlibParent:    nunchaku_core
