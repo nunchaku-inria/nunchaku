@@ -7,6 +7,7 @@ module E = CCError
 module A = UntypedAST
 module Utils = Utils
 module TI = TermInner
+module CVC4 = Nunchaku_backends.CVC4
 
 type input =
   | I_nunchaku

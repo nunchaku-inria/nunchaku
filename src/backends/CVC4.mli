@@ -3,6 +3,8 @@
 
 (** {1 Interface to CVC4} *)
 
+open Nunchaku_core
+
 module Make(F : FO.S) : sig
   include Solver_intf.S
   with module FO_T = F
@@ -26,6 +28,10 @@ end
 
 type model_term = FO.Default.T.t
 type model_ty = FO.Default.Ty.t
+
+val is_available : unit -> bool
+(** test whether the solver is available (e.g. if the library is
+      installed, or the binary in the path) *)
 
 (** Error in the interface to CVC4 *)
 exception Error of string

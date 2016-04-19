@@ -3,6 +3,8 @@
 
 (** {1 Interface to CVC4} *)
 
+open Nunchaku_core
+
 module E = CCError
 module Var = Var
 module ID = ID
@@ -753,6 +755,13 @@ module Make(FO_T : FO.S) = struct
     S.Fut.make
       (fun () -> do_solve_ options deadline print pb)
 end
+
+let is_available () =
+  try
+    let res = Sys.command "which cvc4" = 0 in
+    if res then Utils.debug ~section 3 "CVC4 is available";
+    res
+  with Sys_error _ -> false
 
 let options_l =
   [ ""

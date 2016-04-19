@@ -25,7 +25,7 @@ Library "nunchaku_core"
   Modules:          ID, Var, MetaVar, Location, Intf, Utils, Transform,
                     UntypedAST, Model, TypeUnify, Problem, FO, Reduce,
                     Solver_intf, Env, Signature, Statement,
-                    Scheduling, CVC4, Polarity, Traversal, ProblemMetadata,
+                    Scheduling, Polarity, Traversal, ProblemMetadata,
                     AnalyzeType, Prelude, TypeCheck, Lazy_list,
                     terms/TermInner,
                     terms/TermTyped,
@@ -36,8 +36,8 @@ Library "nunchaku_core"
                     types/TypeMono
   Install:          true
   FindlibName:      nunchaku
-  BuildDepends:     containers, containers.sexp, containers.iter,
-                    containers.data, sequence, unix, threads, zarith
+  BuildDepends:     containers, containers.data, containers.sexp, sequence,
+                    zarith, unix, threads
 
 Library "nunchaku_parsers"
   Path:             src/parsers/
@@ -48,6 +48,15 @@ Library "nunchaku_parsers"
   FindlibParent:    nunchaku_core
   BuildTools:       menhir
   BuildDepends:     nunchaku
+
+Library "nunchaku_backends"
+  Path:             src/backends
+  Pack:             true
+  Modules:          CVC4, Kodkod
+  Install:          true
+  FindlibName:      backends
+  FindlibParent:    nunchaku_core
+  BuildDepends:     nunchaku, containers.sexp
 
 Library "nunchaku_transformations"
   Path:             src/transformations
@@ -88,7 +97,8 @@ Executable nunchaku
   Install:          true
   CompiledObject:   native
   MainIs:           nunchaku.ml
-  BuildDepends:     nunchaku, nunchaku.transformations, nunchaku.parsers
+  BuildDepends:     nunchaku, nunchaku.transformations, nunchaku.parsers,
+                    nunchaku.backends
 
 PreBuildCommand:    make qtest-gen
 
