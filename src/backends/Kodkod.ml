@@ -33,7 +33,7 @@ let call ?options ?timeout ?print pb =
   assert false (* TODO *)
 
 let is_available () =
-  try Sys.command "which kodkodi" = 0
+  try Sys.command "which kodkodi > /dev/null" = 0
   with Sys_error _ -> false
 
 let pipe ?(print_model=false) ~print () =
