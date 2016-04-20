@@ -324,7 +324,6 @@ let main_model ~output statements =
 let main () =
   let open CCError.Infix in
   CCFormat.set_color_default true; (* default: enable colors *)
-  let _ = Unix.alarm (!timeout_ + 2) in (* die after a while *)
   Arg.parse options set_file "usage: nunchaku [options] file";
   print_version_if_needed ();
   if !print_pipeline_ then (
