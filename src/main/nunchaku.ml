@@ -338,7 +338,7 @@ let main () =
   main_model ~output:!output_ statements
 
 let () =
-  E.catch (main ())
+  E.catch (E.guard_str main |> CCError.join)
   ~ok:(fun () -> exit 0)
   ~err:(fun msg ->
     Format.eprintf "%s@." msg;

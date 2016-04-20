@@ -28,10 +28,10 @@ type ('a,'b) inv2 = <ty:[`Mono]; eqn:'a; ind_preds:'b>
 
 val name : string
 
+exception InvalidProblem of string
+
 module Make(T : TermInner.S) : sig
   type term = T.t
-
-  exception InvalidProblem of string
 
   type unmangle_state
   (** State used to un-mangle specialized symbols *)

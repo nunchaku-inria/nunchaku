@@ -425,8 +425,8 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
 
     (* translation of toplevel goal or axiom (default is {!do_term}) *)
     method do_goal_or_axiom
-    : term -> term
-    = self#do_term ~depth:0
+    : [`Goal | `Axiom] -> term -> term
+    = fun _ t -> self#do_term ~depth:0 t
 
     (* register the statement into the state's [env], so that next statements
       can refer to it. Some statements are automatically kept (goal and axiom) *)
@@ -449,11 +449,11 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
             self#push_res (Stmt.mk_decl ~attrs ~info id k ty)
       | Stmt.Goal g ->
           (* convert goal *)
-          let g = self#do_goal_or_axiom g in
+          let g = self#do_goal_or_axiom `Goal g in
           self#push_res (Stmt.goal ~info g)
       | Stmt.Axiom (Stmt.Axiom_std l) ->
           (* keep axioms *)
-          let l = List.map self#do_goal_or_axiom l in
+          let l = List.map (self#do_goal_or_axiom `Axiom) l in
           self#push_res (Stmt.axiom ~info l)
       | Stmt.Pred _
       | Stmt.Axiom (Stmt.Axiom_rec _) ->
@@ -472,5 +472,4 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
             self#push_res (Stmt.mk_ty_def ~info k l)
       end
   end
-
 end

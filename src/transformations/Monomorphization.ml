@@ -21,6 +21,20 @@ let section = Utils.Section.make name
 type ('a,'b) inv1 = <ty:[`Poly]; eqn:'a; ind_preds:'b>
 type ('a,'b) inv2 = <ty:[`Mono]; eqn:'a; ind_preds:'b>
 
+exception InvalidProblem of string
+
+let fpf = Format.fprintf
+
+let () = Printexc.register_printer
+  (function
+    | InvalidProblem msg ->
+        Some (Utils.err_sprintf "monomorphization:@ invalid problem:@ %s" msg)
+    | _ -> None
+  )
+
+let fail_ msg = raise (InvalidProblem msg)
+let failf_ msg = Utils.exn_ksprintf msg ~f:fail_
+
 module Make(T : TI.S) = struct
   module T = T
   module U = TI.Util(T)
@@ -36,23 +50,8 @@ module Make(T : TI.S) = struct
   (* substitution *)
   module Red = Reduce.Make(T)
 
-  exception InvalidProblem of string
-
   let print_ty = P.print
   let print_term = P.print
-
-  let fpf = Format.fprintf
-  let spf = CCFormat.sprintf
-
-  let () = Printexc.register_printer
-    (function
-      | InvalidProblem msg ->
-          Some (spf "@[<2>monomorphization:@ invalid problem:@ %s@]" msg)
-      | _ -> None
-    )
-
-  let fail_ msg = raise (InvalidProblem msg)
-  let failf_ msg = Utils.exn_ksprintf msg ~f:fail_
 
   (* A tuple of arguments that a given function symbol should be
      instantiated with *)
@@ -308,6 +307,11 @@ module Make(T : TI.S) = struct
         U.eval ~subst:local_state.subst t
         :: take_n_ground_atomic_types_ ~state ~local_state (n-1) l'
 
+  (* some type variable? *)
+  let term_has_ty_vars t =
+    U.to_seq_vars t
+    |> Sequence.exists (fun v -> U.ty_is_Type (Var.ty v))
+
   (* use the generic traversal *)
   module Trav = Traversal.Make(T)(struct
     type t = ArgTuple.t
@@ -353,7 +357,7 @@ module Make(T : TI.S) = struct
   }
 
   class ['inv1, 'inv2, 'c] mono_traverse ?size ?depth_limit () = object (self)
-    inherit ['inv1, 'inv2, 'c] Trav.traverse ~conf ?size ?depth_limit ()
+    inherit ['inv1, 'inv2, 'c] Trav.traverse ~conf ?size ?depth_limit () as super
 
     val st : (_, _) St.t = St.create ()
 
@@ -549,6 +553,15 @@ module Make(T : TI.S) = struct
       | Stmt.Decl_fun
       | Stmt.Decl_prop -> self#decl_sym ~attrs id tup
       end
+
+    method! do_goal_or_axiom g t =
+      begin match g with
+        | `Goal ->
+          if term_has_ty_vars t
+          then failf_ "goal `@[%a@]` contains type variables" P.print t
+        | `Axiom -> ()
+      end;
+      super#do_goal_or_axiom g t
   end
 
   (* TODO: gather by ID first *)
