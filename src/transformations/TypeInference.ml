@@ -1027,26 +1027,72 @@ module Convert(Term : TermTyped.S) = struct
     in
     env', l'
 
-  let check_base_case ?loc ids_being_defined l =
-    let has_base =
-      List.exists
-        (fun (Stmt.Pred_clause c) -> match c.Stmt.clause_guard with
-           | None -> true
-           | Some t ->
-             U.to_seq_consts t
-             |> Sequence.for_all (fun id -> not (ID.Set.mem id ids_being_defined))
-        )
-        l
+  (* graph from predicate to a list of, for each case,
+       set of mutually recursive predicates it depends on *)
+  type cases_graph_cell = {
+    cgc_cases: ID.Set.t list;
+      (* for each clause, the set of IDs that need be well founded for
+         the clause to be a base case *)
+    mutable cgc_has_base_case: bool option;
+      (* does this predicate have a base case? None means "not computed" *)
+  }
+
+  type cases_graph = cases_graph_cell ID.Map.t
+
+  (* given list of (co)predicates, compute it cases graph *)
+  let compute_cg l : cases_graph =
+    let mutual_ids =
+      List.fold_left
+        (fun acc p -> ID.Set.add (Stmt.defined_of_pred p |> Stmt.id_of_defined) acc)
+        ID.Set.empty l
     in
-    if not has_base
-    then ill_formedf ?loc "@[<2>inductive predicate requires at least one base case@]";
-    ()
+    List.fold_left
+      (fun cg p ->
+         let id = Stmt.id_of_defined (Stmt.defined_of_pred p) in
+         let cases =
+           p.Stmt.pred_clauses
+           |> List.map
+             (fun (Stmt.Pred_clause c) -> match c.Stmt.clause_guard with
+                | None -> ID.Set.empty
+                | Some t ->
+                  U.to_seq_consts t
+                |> Sequence.filter (fun id' -> ID.Set.mem id' mutual_ids)
+                |> ID.Set.of_seq)
+         in
+         let c = {cgc_cases=cases; cgc_has_base_case=None} in
+         ID.Map.add id c cg)
+      ID.Map.empty l
+
+  (* check that each element of [cg] has a base case, or depends on IDs that do *)
+  let check_base_case ?loc cg =
+    (* recursive traversal of graph *)
+    let rec check id =
+      let c = ID.Map.find id cg in
+      match c.cgc_has_base_case with
+        | Some res -> res
+        | None ->
+          (* avoid cycles *)
+          c.cgc_has_base_case <- Some false;
+          let res =
+            List.exists (ID.Set.for_all check) c.cgc_cases
+          in
+          c.cgc_has_base_case <- Some res;
+          res
+    in
+    let bad =
+      ID.Map.keys cg
+      |> Sequence.find (fun id -> if check id then None else Some id)
+    in
+    match bad with
+      | None -> ()
+      | Some id ->
+        ill_formedf ?loc
+          "@[<2>inductive predicate `%a` requires at least one base case@]" ID.print id
 
   let convert_preds ?loc ~env kind l =
     (* first, build new variables for the defined terms,
         and build [env'] in which the defined identifiers are bound to constants *)
     let env', l' = prepare_defs ~env l in
-    let ids = List.fold_left (fun acc (id,_,_,_) -> ID.Set.add id acc) ID.Set.empty l' in
     (* convert the equations *)
     let l' = List.map
       (fun (id,ty,ty_vars,l) ->
@@ -1082,13 +1128,17 @@ module Convert(Term : TermTyped.S) = struct
                 })
           l
         in
-        if kind=`Pred then check_base_case ?loc ids pred_clauses;
         {Stmt.
           pred_defined=defined; pred_tyvars=ty_vars;
           pred_clauses;
         })
       l'
     in
+    (* basic check that predicate is well-founded *)
+    if kind=`Pred then (
+      let cg = compute_cg l' in
+      check_base_case ?loc cg;
+    );
     env', l'
 
   let ty_forall_l_ = List.fold_right (fun v t -> U.ty_forall v t)
