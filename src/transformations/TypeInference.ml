@@ -22,7 +22,6 @@ type 'a var = 'a Var.t
 type loc = Loc.t
 
 let fpf = Format.fprintf
-let spf = CCFormat.sprintf
 
 let name = "ty_infer"
 let section = Utils.Section.make name
@@ -46,13 +45,13 @@ let print_stack out st =
 let () = Printexc.register_printer
   (function
     | ScopingError (v, msg, loc) ->
-        Some (spf "@[scoping error for var %s:@ %s@ at %a@]"
+        Some (Utils.err_sprintf "@[scoping for var %s:@ %s@ at %a@]"
           v msg Loc.print_opt loc)
     | IllFormed(what, msg, loc) ->
-        Some (spf "@[<2>ill-formed %s:@ %s@ at %a@]"
+        Some (Utils.err_sprintf "@[<2>ill-formed %s:@ %s@ at %a@]"
           what msg Loc.print_opt loc)
     | TypeError (msg, stack) ->
-        Some (spf "@[<2>type error:@ %s@ %a@]" msg print_stack stack)
+        Some (Utils.err_sprintf "@[<2>type error:@ %s@ %a@]" msg print_stack stack)
     | _ -> None
   )
 
@@ -640,7 +639,7 @@ module Convert(Term : TermTyped.S) = struct
   let () = Printexc.register_printer
     (function
       | InvalidTerm (t, msg) ->
-          Some (spf "@[<2>invalid term `@[%a@]`:@ %s@]" P.print t msg)
+          Some (Utils.err_sprintf "@[<2>invalid term `@[%a@]`:@ %s@]" P.print t msg)
       | _ -> None)
 
   let invalid_term_ t msg = raise (InvalidTerm (t,msg))
@@ -805,7 +804,7 @@ module Convert(Term : TermTyped.S) = struct
           (* generate fresh type variables *)
           let n = num_implicit_ ty in
           let vars = CCList.init n
-            (fun i -> Var.make ~ty:U.ty_type ~name:(spf "a_%d" i)) in
+            (fun i -> Var.make ~ty:U.ty_type ~name:(CCFormat.sprintf "a_%d" i)) in
           let t_vars = List.map (U.ty_var ?loc:None) vars in
           let defined = {Stmt.defined_head=id; defined_ty=ty;} in
           (* locally, ensure that [v] refers to the defined term *)
@@ -969,7 +968,7 @@ module Convert(Term : TermTyped.S) = struct
         (* set of allowed type variables in the definitions of [v] *)
         let n  = num_implicit_ ty in
         let vars = CCList.init n
-          (fun i -> Var.make ~ty:U.ty_type ~name:(spf "a_%d" i)) in
+          (fun i -> Var.make ~ty:U.ty_type ~name:(CCFormat.sprintf "a_%d" i)) in
         Utils.debugf ~section 4 "@[<2>locally define %s as `@[%a@]`@]"
           (fun k -> k v P.print v_as_t);
         (* declare [v] in the scope of equations *)
