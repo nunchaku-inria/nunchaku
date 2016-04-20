@@ -7,7 +7,7 @@
 
 (** {2 Types} *)
 
-type tuple = ID.Set.t
+type tuple = ID.t list
 
 type unop =
   | Flip (** flip p x y <=> p y x *)
@@ -44,14 +44,15 @@ and form =
 type decl = {
   decl_id: ID.t;
   decl_arity: int;
-  decl_low: tuple; (* lower bound *)
-  decl_high: tuple; (* higher bound *)
+  decl_low: tuple list; (* lower bound *)
+  decl_high: tuple list; (* higher bound *)
 }
 
 type problem = {
   pb_univ: ID.Set.t;
   pb_decls: decl CCVector.ro_vector;
   pb_goal: form;
+  pb_meta: ProblemMetadata.t;
 }
 
 (** {2 Helpers} *)
@@ -80,11 +81,16 @@ val and_ : form -> form -> form
 val and_l : form list -> form
 val or_ : form -> form -> form
 val or_l : form list -> form
+val imply : form -> form -> form
+val equiv : form -> form -> form
 val for_all : expr Var.t -> form -> form
+val for_all_l : expr Var.t list -> form -> form
 val exists : expr Var.t -> form -> form
+val exists_l : expr Var.t list -> form -> form
 
 (** {2 IO} *)
 
+val print_set : ID.Set.t CCFormat.printer
 val print_tuple : tuple CCFormat.printer
 val print_expr : expr CCFormat.printer
 val print_form : form CCFormat.printer
