@@ -390,9 +390,15 @@ module TransFO(T1 : TI.S)(T2 : FO.S) = struct
   module Conv = ToFO(T1)(T2)
   module ConvBack = OfFO(T1)(T2)
 
-  let pipe_with ~decode =
+  let pipe_with ~print ~decode =
+    let on_encoded =
+      Utils.singleton_if print ()
+        ~f:(fun () ->
+          Format.printf "@[<2>@{<Yellow>after to_fo@}:@ @[%a@]@]@." FO.print_problem)
+    in
     Transform.make
     ~name:"to_fo"
+    ~on_encoded
     ~encode:(fun pb ->
       let pb' = Conv.convert_problem pb in
       pb', ()
@@ -400,7 +406,7 @@ module TransFO(T1 : TI.S)(T2 : FO.S) = struct
     ~decode
     ()
 
-  let pipe () =
-    pipe_with
+  let pipe ~print () =
+    pipe_with ~print
       ~decode:(fun _st -> Problem.Res.map_m ~f:ConvBack.convert_model)
 end

@@ -241,7 +241,7 @@ let make_model_pipeline () =
     Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
     Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
     close_task (
-      Step_tofo.pipe () @@@
+      Step_tofo.pipe ~print:!print_all_ () @@@
       Transform.Pipe.flatten cvc4
     )
   in
