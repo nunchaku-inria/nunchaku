@@ -400,7 +400,7 @@ module Make(T : TI.S) = struct
 
     method do_term ~depth:_ t = polarize_term ~state:st Var.Subst.empty t
 
-    method! do_goal_or_axiom t = polarize_term_rec ~state:st Pol.Pos Var.Subst.empty t
+    method! do_goal_or_axiom _ t = polarize_term_rec ~state:st Pol.Pos Var.Subst.empty t
 
     method do_spec ~depth:_ ~loc:_ _ _ = assert false
 
