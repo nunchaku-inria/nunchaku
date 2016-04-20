@@ -1295,12 +1295,8 @@ module Convert(Term : TermTyped.S) = struct
         let env, c = convert_copy ?loc ~env c in
         Stmt.copy ~info c, env
     | A.Goal t ->
-        (* infer type for t *)
-        let t = convert_term_exn ~env t in
-        (* be sure it's a proposition
-           XXX: for narrowing, could be of any type? *)
-        unify_in_ctx_ ~stack:[] (U.ty_exn t) prop;
-        check_prenex_types_ ?loc t;
+        (* same as axiom, convert to prop *)
+        let t = convert_prop_ ~env t in
         Stmt.goal ~info t, env
     in
     Utils.debugf ~section 2 "@[<2>checked statement@ `@[%a@]`@]"
