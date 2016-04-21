@@ -8,6 +8,7 @@ module Var = Var
 module ID = ID
 module FOI = FO
 module Res = Problem.Res
+module S = Scheduling
 
 type id = ID.t
 
@@ -36,6 +37,9 @@ let () = Printexc.register_printer
     | Error msg -> Some (Utils.err_sprintf "@[in the interface to CVC4:@ %s@]" msg)
     | CVC4_error msg -> Some (Utils.err_sprintf "@[in CVC4:@ %s@]" msg)
     | _ -> None)
+
+(* TODO: simplify internals (no more "solver" type exposed, just a future)
+   -> no explicit "close", use MVar *)
 
 module Make(FO_T : FO.S) = struct
   module FO_T = FO_T
@@ -701,14 +705,12 @@ module Make(FO_T : FO.S) = struct
 
   (* the command line to invoke CVC4 *)
   let mk_cvc4_cmd_ timeout options =
-    let timeout_hard = int_of_float (timeout +. 1.) in
+    let timeout_hard = int_of_float (timeout +. 2.) in
     let timeout_ms = int_of_float (timeout *. 1000.) in
     Printf.sprintf
       "ulimit -t %d; exec cvc4 --tlimit-per=%d --lang smt --finite-model-find \
        --uf-ss-fair-monotone --no-condense-function-values %s"
       timeout_hard timeout_ms options
-
-  module S = Scheduling
 
   let do_solve_ options deadline print pb =
     let now = Unix.gettimeofday() in
