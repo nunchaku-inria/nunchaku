@@ -54,7 +54,7 @@ module Make(T : TI.S) = struct
   let check_same_ty ty_a ty_b =
     if not (U.equal ty_a ty_b)
     then errorf_
-        "@[<2>types `@[%a@]` and `@[%a@]` should be the same@]"
+        "@[types@ `@[%a@]`@ and `@[%a@]`@ should be the same@]"
         P.print ty_a P.print ty_b;
     ()
 
@@ -276,9 +276,13 @@ module Make(T : TI.S) = struct
             c.Stmt.copy_to
             (U.ty_app (U.ty_const c.Stmt.copy_id) (List.map U.ty_var c.Stmt.copy_vars));
           check_same_ty
-            c.Stmt.copy_abstract_ty (U.ty_arrow c.Stmt.copy_of c.Stmt.copy_to);
+            c.Stmt.copy_abstract_ty
+              (U.ty_forall_l c.Stmt.copy_vars
+                 (U.ty_arrow c.Stmt.copy_of c.Stmt.copy_to));
           check_same_ty
-            c.Stmt.copy_concrete_ty (U.ty_arrow c.Stmt.copy_to c.Stmt.copy_of);
+            c.Stmt.copy_concrete_ty
+              (U.ty_forall_l c.Stmt.copy_vars
+                 (U.ty_arrow c.Stmt.copy_to c.Stmt.copy_of));
       | _ -> default_check st
     end;
     env
