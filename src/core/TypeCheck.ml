@@ -264,11 +264,17 @@ module Make(T : TI.S) = struct
           List.iter
             (fun def ->
                let tyvars = def.Stmt.rec_vars in
-               let bound = List.fold_left (check_var ~env) VarSet.empty tyvars
-               in
+               let bound = List.fold_left (check_var ~env) VarSet.empty tyvars in
                let {Stmt.defined_head=id; _} = def.Stmt.rec_defined in
                check_eqns ~env ~bound id def.Stmt.rec_eqns)
             defs
+      | Stmt.Axiom (Stmt.Axiom_spec spec) ->
+          let bound = VarSet.empty in
+          Stmt.defined_of_spec spec
+            |> Sequence.map Stmt.ty_of_defined
+            |> Sequence.iter (fun ty -> ignore (check_is_ty ~env bound ty));
+          let bound = List.fold_left (check_var ~env) bound spec.Stmt.spec_vars in
+          List.iter (check_is_prop ~env bound) spec.Stmt.spec_axioms
       | Stmt.Copy c ->
           default_check st;
           (* check additional invariants *)
