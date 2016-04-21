@@ -7,6 +7,18 @@
   options. This module provides a clean interface to do that.
 *)
 
+(** {2 MVar}
+
+    A MVar is a value that is only accessed atomically *)
+
+module MVar : sig
+  type 'a t
+  val make : 'a -> 'a t
+  val get : 'a t -> 'a
+  val set : 'a t -> 'a -> unit
+  val update : f:('a -> 'a * 'b) -> 'a t -> 'b
+end
+
 (** {2 Futures}
 
     A future runs in a newly created thread. *)
