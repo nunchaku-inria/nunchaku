@@ -54,7 +54,7 @@ module Make(T : TI.S) = struct
   let check_same_ty ty_a ty_b =
     if not (U.equal ty_a ty_b)
     then errorf_
-        "@[<2>types `@[%a@]` and `@[%a@]` should be the same@]"
+        "@[types@ `@[%a@]`@ and `@[%a@]`@ should be the same@]"
         P.print ty_a P.print ty_b;
     ()
 
@@ -248,9 +248,9 @@ module Make(T : TI.S) = struct
   let check_statement env st =
     Utils.debugf ~section 2 "@[<2>type check@ `@[%a@]`@]"
       (fun k-> let module PStmt = Statement.Print(P)(P) in k PStmt.print st);
-    let check_top env bound () t = ignore (check ~env bound t) in
     (* update env *)
     let env = Env.add_statement ~env st in
+    let check_top env bound () t = ignore (check ~env bound t) in
     (* basic check *)
     let default_check st =
       Stmt.fold_bind VarSet.empty () st
@@ -264,11 +264,17 @@ module Make(T : TI.S) = struct
           List.iter
             (fun def ->
                let tyvars = def.Stmt.rec_vars in
-               let bound = List.fold_left (check_var ~env) VarSet.empty tyvars
-               in
+               let bound = List.fold_left (check_var ~env) VarSet.empty tyvars in
                let {Stmt.defined_head=id; _} = def.Stmt.rec_defined in
                check_eqns ~env ~bound id def.Stmt.rec_eqns)
             defs
+      | Stmt.Axiom (Stmt.Axiom_spec spec) ->
+          let bound = VarSet.empty in
+          Stmt.defined_of_spec spec
+            |> Sequence.map Stmt.ty_of_defined
+            |> Sequence.iter (fun ty -> ignore (check_is_ty ~env bound ty));
+          let bound = List.fold_left (check_var ~env) bound spec.Stmt.spec_vars in
+          List.iter (check_is_prop ~env bound) spec.Stmt.spec_axioms
       | Stmt.Copy c ->
           default_check st;
           (* check additional invariants *)
@@ -276,9 +282,13 @@ module Make(T : TI.S) = struct
             c.Stmt.copy_to
             (U.ty_app (U.ty_const c.Stmt.copy_id) (List.map U.ty_var c.Stmt.copy_vars));
           check_same_ty
-            c.Stmt.copy_abstract_ty (U.ty_arrow c.Stmt.copy_of c.Stmt.copy_to);
+            c.Stmt.copy_abstract_ty
+              (U.ty_forall_l c.Stmt.copy_vars
+                 (U.ty_arrow c.Stmt.copy_of c.Stmt.copy_to));
           check_same_ty
-            c.Stmt.copy_concrete_ty (U.ty_arrow c.Stmt.copy_to c.Stmt.copy_of);
+            c.Stmt.copy_concrete_ty
+              (U.ty_forall_l c.Stmt.copy_vars
+                 (U.ty_arrow c.Stmt.copy_to c.Stmt.copy_of));
       | _ -> default_check st
     end;
     env

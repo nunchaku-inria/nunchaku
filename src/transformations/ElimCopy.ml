@@ -63,15 +63,16 @@ module Make(T : TI.S) = struct
         | _ -> rewrite_rec_ ~env subst t
         end
     | _ -> rewrite_rec_ ~env subst t
+
   and rewrite_rec_ ~env subst t =
-    U.map subst t
-      ~bind:(fun subst v ->
-        (* maybe the type of [v] contains occurrences of copy types *)
-        let ty = Var.ty v in
-        let ty = rewrite_term ~env subst ty in
-        let v' = Var.make ~name:(Var.name v) ~ty in
-        Var.Subst.add ~subst v v', v')
-      ~f:(rewrite_term ~env)
+    U.map subst t ~bind:(bind_var ~env) ~f:(rewrite_term ~env)
+
+  and bind_var ~env subst v =
+    (* maybe the type of [v] contains occurrences of copy types *)
+    let ty = Var.ty v in
+    let ty = rewrite_term ~env subst ty in
+    let v' = Var.make ~name:(Var.name v) ~ty in
+    Var.Subst.add ~subst v v', v'
 
   let elim pb =
     let env = Problem.env pb in
@@ -80,8 +81,8 @@ module Make(T : TI.S) = struct
       match Stmt.view st with
       | Stmt.Copy _ -> [] (* remove *)
       |_ ->
-          let f = rewrite_term ~env Var.Subst.empty in
-          [Stmt.map ~term:f ~ty:f st])
+          let f = rewrite_term ~env in
+          [Stmt.map_bind Var.Subst.empty st ~bind:(bind_var ~env) ~term:f ~ty:f ])
 
   let pipe ~print ~check =
     let on_encoded =
