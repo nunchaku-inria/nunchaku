@@ -5,6 +5,25 @@
 
 let section = Utils.Section.make "scheduling"
 
+module MVar = struct
+  type 'a t = {
+    mutable v: 'a;
+    lock: Mutex.t;
+  }
+  let make v = {v; lock=Mutex.create(); }
+  let with_ v ~f =
+    Mutex.lock v.lock;
+    CCFun.finally ~f ~h:(fun () -> Mutex.unlock v.lock)
+  let get v = with_ v ~f:(fun () -> v.v)
+  let set v x = with_ v ~f:(fun () -> v.v <- x)
+  let update ~f v =
+    with_ v
+      ~f:(fun () ->
+        let x, res = f v.v in
+        v.v <- x;
+        res)
+end
+
 module Fut = struct
   type 'a final_state =
     | Stopped
