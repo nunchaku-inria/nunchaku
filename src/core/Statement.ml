@@ -590,13 +590,14 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
       | Some p -> fpf out "@,@[<2>pred@ @[%a@]@]" Pt.print p
     in
     fpf out
-      "@[<v2>copy @[%a %a :=@ @[%a@]@]@ @[abstract %a : @[%a -> %a@]@]@ \
-        @[concrete %a : @[%a -> %a@]@]%a@]"
+      "@[<v2>copy @[%a %a :=@ @[%a@]@]@ \
+        @[abstract %a : @[%a@]@]@ \
+        @[concrete %a : @[%a@]@]%a@]"
       ID.print c.copy_id
       (CCFormat.list ~start:"" ~stop:"" ~sep:" " Var.print_full) c.copy_vars
       Pty.print c.copy_of
-      ID.print c.copy_abstract Pty.print c.copy_of Pty.print c.copy_to
-      ID.print c.copy_concrete Pty.print c.copy_to Pty.print c.copy_of
+      ID.print c.copy_abstract Pty.print c.copy_abstract_ty
+      ID.print c.copy_concrete Pty.print c.copy_concrete_ty
       pp_pred c.copy_pred
 
   let print_tydef out tydef =
