@@ -248,9 +248,9 @@ module Make(T : TI.S) = struct
   let check_statement env st =
     Utils.debugf ~section 2 "@[<2>type check@ `@[%a@]`@]"
       (fun k-> let module PStmt = Statement.Print(P)(P) in k PStmt.print st);
-    let check_top env bound () t = ignore (check ~env bound t) in
     (* update env *)
     let env = Env.add_statement ~env st in
+    let check_top env bound () t = ignore (check ~env bound t) in
     (* basic check *)
     let default_check st =
       Stmt.fold_bind VarSet.empty () st
