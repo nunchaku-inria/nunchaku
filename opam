@@ -33,7 +33,7 @@ depends: [
     "ocamlbuild" {build}
 ]
 depopts: [
-    "qtest"
+    "qtest" {test}
 ]
 homepage: "https://github.com/nunchaku-inria/nunchaku/"
 available: [ocaml-version >= "4.00.0"]
