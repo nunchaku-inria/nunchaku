@@ -30,9 +30,12 @@ type expr =
   | Var of expr Var.t
   | Unop of unop * expr
   | Binop of binop * expr * expr
+  | If of form * expr * expr
   | Comprehension of expr Var.t * form
 
 and form =
+  | True
+  | False
   | In of expr * expr
   | Mult of mult * expr
   | Not of form
@@ -70,8 +73,11 @@ val inter : expr -> expr -> expr
 val diff : expr -> expr -> expr
 val join : expr -> expr -> expr
 val concat : expr -> expr -> expr
+val if_ : form -> expr -> expr -> expr
 val comprehension : expr Var.t -> form -> expr
 
+val true_ : form
+val false_ : form
 val in_ : expr -> expr -> form
 val no : expr -> form (** expr has no tuples *)
 val one : expr -> form (** expr has exactly one tuple *)

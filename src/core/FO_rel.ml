@@ -28,9 +28,12 @@ type expr =
   | Var of expr Var.t
   | Unop of unop * expr
   | Binop of binop * expr * expr
+  | If of form * expr * expr
   | Comprehension of expr Var.t * form
 
 and form =
+  | True
+  | False
   | In of expr * expr
   | Mult of mult * expr
   | Not of form
@@ -68,8 +71,11 @@ let inter = binop Inter
 let diff = binop Diff
 let join = binop Join
 let concat = binop Concat
+let if_ a b c = If (a,b,c)
 let comprehension v f = Comprehension (v,f)
 
+let true_ = True
+let false_ = False
 let in_ a b = In (a,b)
 let no = mult M_no
 let one = mult M_one
@@ -165,10 +171,15 @@ let rec print_expr_rec p out = function
       (print_expr_rec (P_binop o)) a
       print_binop o
       (print_expr_rec (P_binop o)) b
+  | If (a,b,c) ->
+    fpf out "@[<hv2>if @[%a@]@ then @[%a@]@ else @[%a@]@]"
+      (print_form_rec P_top) a (print_expr_rec P_top) b (print_expr_rec P_top) c
   | Comprehension (v, f) ->
     fpf out "{@[<2> %a@ | %a@]}" print_typed_var v (print_form_rec P_top) f
 
 and print_form_rec p out = function
+  | True -> CCFormat.string out "true"
+  | False -> CCFormat.string out "false"
   | In (a,b) ->
     fpf out "@[@[%a@]@ @[<2>in@ @[%a@]@]@]"
       (print_expr_rec P_top) a (print_expr_rec P_top) b

@@ -52,8 +52,6 @@ type state = {
     (* atomic type -> domain *)
   mutable univ: ID.Set.t;
     (* the whoooooole universe *)
-  true_: ID.t;
-    (* "true" constant *)
   funs: fun_ ID.Tbl.t;
     (* function -> relation *)
 }
@@ -64,16 +62,8 @@ let create_state ~size () =
     domain_size=size;
     domains=ID.Tbl.create 16;
     univ=ID.Set.singleton true_;
-    true_;
     funs=ID.Tbl.create 16;
   } in
-  (* declare [true] *)
-  ID.Tbl.add state.funs true_
-    { fun_ty_args=[];
-      fun_low=[[true_]];
-      fun_high=[[true_]];
-      fun_is_pred=true;
-    };
   state
 
 (* ensure the type is declared *)
@@ -97,8 +87,8 @@ let domain_of_ty state ty =
     | FO.TyApp (id,[]) ->
       domain_of_ty_id state id
     | FO.TyApp (_, _::_) -> assert false (* TODO *)
-    | FO.TyBuiltin `Prop ->
-      ID.Set.singleton state.true_
+    | FO.TyBuiltin `Prop -> assert false (* TODO *)
+    | FO.TyBuiltin `Unitype -> assert false (* TODO *)
 
 let declare_fun state id f =
   Utils.debugf ~section 3 "@[<2>declare function@ `@[%a@]`@]"
@@ -131,7 +121,8 @@ let rec encode_term state t : FO_rel.expr =
     | FO.Fun (_,_) ->
       errorf "cannot translate function `@[%a@]` to FO_rel" FO.print_term t
     | FO.Let (_,_,_) -> assert false (* TODO: expand *)
-    | FO.Ite (_,_,_) -> assert false (* TODO: *)
+    | FO.Ite (a,b,c) ->
+      FO_rel.if_ (encode_form state a) (encode_term state b) (encode_term state c)
     | FO.True
     | FO.False
     | FO.Eq (_,_)
@@ -144,6 +135,7 @@ let rec encode_term state t : FO_rel.expr =
     | FO.Exists (_,_) ->
       errorf "expected term,@ but `@[%a@]` is a formula" FO.print_term t
     | FO.Mu (_,_)
+    | FO.Undefined_atom _
     | FO.Unparsable _ -> assert false
 
 and encode_form state t : FO_rel.form =
@@ -161,8 +153,8 @@ and encode_form state t : FO_rel.form =
       let a = encode_term state a in
       let b = encode_term state b in
       FO_rel.and_ (FO_rel.in_ a b) (FO_rel.in_ b a)
-    | FO.True -> FO_rel.some (FO_rel.const state.true_)
-    | FO.False -> FO_rel.no (FO_rel.const state.true_)
+    | FO.True -> FO_rel.true_
+    | FO.False -> FO_rel.false_
     | FO.And l -> FO_rel.and_l (List.map (encode_form state) l)
     | FO.Or l -> FO_rel.or_l (List.map (encode_form state) l)
     | FO.Not f -> FO_rel.not_ (encode_form state f)
@@ -181,6 +173,7 @@ and encode_form state t : FO_rel.form =
     | FO.Builtin _
     | FO.Var _
     | FO.Mu (_,_)
+    | FO.Undefined_atom _
     | FO.Unparsable _
     | FO.DataTest (_,_)
     | FO.DataSelect (_,_,_)
@@ -196,6 +189,7 @@ and encode_var state v =
 and encode_ty state ty : FO_rel.expr =
   match FO.Ty.view ty with
     | FO.TyBuiltin `Prop -> assert false
+    | FO.TyBuiltin `Unitype -> assert false
     | FO.TyApp (id, []) ->
       assert (ty_is_declared state id);
       FO_rel.const id
@@ -223,6 +217,7 @@ let encode_statement state st =
       assert (not (fun_is_declared state id));
       (* encoding differs for relations and functions *)
       begin match FO.Ty.view ty_ret with
+        | FO.TyBuiltin `Unitype -> assert false
         | FO.TyBuiltin `Prop ->
           (* encode predicate as itself *)
           let fun_ty_args = List.map (domain_of_ty state) ty_args in
@@ -256,7 +251,7 @@ let encode_statement state st =
           let ax =
             let vars =
               List.mapi
-                (fun i ty -> Var.make_f ~ty:(encode_ty state ty) "x_%d" i)
+                (fun i ty -> Var.makef ~ty:(encode_ty state ty) "x_%d" i)
                 ty_args
             in
             FO_rel.for_all_l vars
