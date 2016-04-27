@@ -7,7 +7,9 @@ open Nunchaku_core
 
 module TI = TermInner
 
-type inv = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Absent]>
+type inv = <eqn:[`Absent]; ty:[`Mono]; ind_preds:[`Absent]>
+
+val name : string
 
 module Make(T : TI.S) : sig
   type state
