@@ -28,10 +28,21 @@ module type S = sig
   val is_ty : T.t -> bool
 
   val repr : T.t -> T.t view
+  (** [repr t] returns the view of [t] as a type.
+      precondition: [is_ty t]
+      @raise some exception otherwise *)
+
+  val as_ty : T.t -> T.t view option
+  (** [as_ty t] returns [Some view] if [is_ty t, repr t = view], and
+      returns [None] otherwise *)
 
   val repr_with : subst:(T.t,T.t) Subst.t -> T.t -> T.t view
   (** representation that follows the substitution. Will
       fail on a variable, except if it is bound *)
+
+  module Map : CCMap.S with type key = T.t
+  (** A map on terms that only accepts terms
+      satisfying [is_ty] as keys *)
 end
 
 module Make(T : TI.REPR)
@@ -63,6 +74,8 @@ module Make(T : TI.REPR)
     | TI.Let _
     | TI.Bind _ -> assert false
 
+  let as_ty t = try Some (repr t) with Assert_failure _ -> None
+
   let rec repr_with ~subst t = match T.repr t with
     | TI.TyBuiltin b -> Builtin b
     | TI.Const id -> Const id
@@ -78,6 +91,26 @@ module Make(T : TI.REPR)
     | TI.Match _
     | TI.Let _
     | TI.Bind _ -> assert false
+
+  let to_int_ = function
+    | Builtin _ -> 0
+    | Const _ -> 1
+    | App _ -> 2
+    | Arrow _ -> 3
+
+  let rec cmp_ty a b = match repr a, repr b with
+    | Const id1, Const id2 -> ID.compare id1 id2
+    | Builtin b1, Builtin b2 -> Builtin.compare b1 b2
+    | App (c1,l1), App (c2,l2) ->
+      CCOrd.( cmp_ty c1 c2 <?> (list_ cmp_ty, l1, l2))
+    | Arrow (l1,r1), Arrow (l2,r2) -> CCOrd.( cmp_ty l1 l2 <?> (cmp_ty, r1, r2))
+    | Const _, _ | App _, _ | Arrow _, _ | Builtin _, _ ->
+      Pervasives.compare (to_int_ (repr a)) (to_int_ (repr b))
+
+  module Map = CCMap.Make(struct
+      type t = T.t
+      let compare = cmp_ty
+    end)
 end
 
 let default =

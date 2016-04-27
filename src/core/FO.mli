@@ -19,6 +19,7 @@ module TyBuiltin : sig
     [ `Prop
     ]
   val equal : t -> t -> bool
+  val compare : t -> t -> int
   val print : Format.formatter -> t -> unit
 end
 
@@ -27,6 +28,7 @@ module Builtin : sig
     [ `Int of int (* TODO use zarith *)
     ]
   val equal : t -> t -> bool
+  val compare : t -> t -> int
   val print : Format.formatter -> t -> unit
 end
 
@@ -98,6 +100,9 @@ module Ty : sig
   val app : id -> t list -> t
   val builtin : TyBuiltin.t -> t
   val arrow : t list -> t -> toplevel_ty
+
+  val equal : t -> t -> bool
+  val compare : t -> t -> int
 end
 
 module T : sig

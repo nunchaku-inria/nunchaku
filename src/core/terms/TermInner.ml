@@ -40,12 +40,15 @@ module TyBuiltin = struct
     [ `Kind
     | `Type
     | `Prop
+    | `Unitype (** when there is only one type *)
     ]
   let equal = (=)
+  let compare = Pervasives.compare
   let to_string = function
     | `Prop -> "prop"
     | `Kind -> "kind"
     | `Type -> "type"
+    | `Unitype -> "unitype"
 end
 
 module Builtin = struct
@@ -682,6 +685,7 @@ module type UTIL = sig
   val app_builtin : t_ Builtin.t -> t_ list -> t_
   val var : t_ var -> t_
   val app : t_ -> t_ list -> t_
+  val app_const : ID.t -> t_ list -> t_
   val fun_ : t_ var -> t_ -> t_
   val mu : t_ var -> t_ -> t_
   val let_ : t_ var -> t_ -> t_ -> t_
@@ -868,6 +872,7 @@ module Util(T : S)
   let const id = T.build (Const id)
   let var v = T.build (Var v)
   let app t l = T.build (App(t,l))
+  let app_const id l = app (const id) l
   let mk_bind b v t = T.build (Bind (b, v, t))
   let fun_ v t = T.build (Bind (`Fun, v, t))
   let mu v t = T.build (Bind (`Mu, v, t))
@@ -1468,7 +1473,8 @@ module Util(T : S)
         begin match b with
         | `Kind -> failwith "Term_ho.ty: kind has no type"
         | `Type -> ty_kind
-        | `Prop -> ty_type
+        | `Prop
+        | `Unitype -> ty_type
         end
     | TyArrow (_,_) -> ty_type
 

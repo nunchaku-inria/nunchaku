@@ -36,6 +36,8 @@ let update_ty v ~f =
   let ty = f v.ty in
   { id=v.id; ty }
 
+let set_ty v ~ty = { v with ty }
+
 let make_gen ~names =
   let n = ref 0 in
   fun ty ->

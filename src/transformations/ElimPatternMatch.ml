@@ -7,7 +7,6 @@ open Nunchaku_core
 
 module Stmt = Statement
 module TI = TermMono
-module TyI = TypeMono
 module Subst = Var.Subst
 
 let name = "elim_match"
@@ -16,7 +15,6 @@ module Make(T : TermInner.S) = struct
   module U = TermInner.Util(T)
   module P = TermInner.Print(T)
   module TMono = TermMono.Make(T)
-  module TyMono = TypeMono.Make(T)
 
   type term = T.t
 

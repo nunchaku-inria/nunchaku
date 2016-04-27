@@ -15,6 +15,7 @@ module TyBuiltin = struct
     [ `Prop
     ]
   let equal = (=)
+  let compare = Pervasives.compare
   let print out = function
     | `Prop -> CCFormat.string out "prop"
 end
@@ -24,6 +25,7 @@ module Builtin = struct
     [ `Int of int
     ]
   let equal = (=)
+  let compare = Pervasives.compare
   let print out = function
     | `Int n -> CCFormat.int out n
 end
@@ -88,6 +90,7 @@ module Ty = struct
   type t = {
     view: t ty_view;
   }
+  type _t = t
   type toplevel_ty = t list * t
 
   let view t = t.view
@@ -97,6 +100,20 @@ module Ty = struct
   let app id l = make_ (TyApp (id, l))
   let builtin b = make_ (TyBuiltin b)
   let arrow a l = a,l
+
+  let to_int_ = function
+    | TyBuiltin _ -> 0
+    | TyApp _ -> 1
+
+  let rec compare_ty t1 t2 = match t1.view, t2.view with
+    | TyBuiltin b1, TyBuiltin b2 -> TyBuiltin.compare b1 b2
+    | TyApp (c1,l1), TyApp (c2,l2) ->
+      CCOrd.( ID.compare c1 c2 <?> (list_ compare_ty, l1, l2))
+    | TyApp _, _
+    | TyBuiltin _, _ -> Pervasives.compare (to_int_ t1.view) (to_int_ t2.view)
+
+  let compare = compare_ty
+  let equal a b = compare a b = 0
 end
 
 module T = struct

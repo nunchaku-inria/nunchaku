@@ -5,11 +5,8 @@
 
 open Nunchaku_core
 
-module ID = ID
-module Var = Var
 module TI = TermInner
 module Stmt = Statement
-module Env = Env
 module Callback = Utils.Callback
 module Subst = Var.Subst
 

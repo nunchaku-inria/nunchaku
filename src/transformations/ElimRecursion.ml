@@ -6,7 +6,6 @@ open Nunchaku_core
 module ID = ID
 module Var = Var
 module TI = TermInner
-module TyI = TypeMono
 module Stmt = Statement
 module Sig = Signature
 
@@ -40,7 +39,6 @@ module Make(T : TI.S) = struct
   module P = TI.Print(T)
   module PStmt = Stmt.Print(P)(P)
   module Subst = Var.Subst
-  module TyM = TypeMono.Make(T)
 
   type term = T.t
   type ty = T.t
