@@ -34,6 +34,8 @@ type statement = {
   st_form: form;
 }
 
+(** {2 Basics} *)
+
 let app id l = App (id,l)
 let const id = app id []
 let var v = Var v
@@ -61,6 +63,22 @@ let forall v f = Forall (v,f)
 let exists v f = Exists (v,f)
 let forall_l = List.fold_right forall
 let exists_l = List.fold_right exists
+
+(* fresh, imaginative name *)
+let mk_name_ =
+  let n = ref 0 in
+  fun () ->
+    let x = Printf.sprintf "stmt_%d" !n in
+    incr n;
+    x
+
+let axiom ?(name=mk_name_()) f =
+  { st_name=name; st_role=R_axiom; st_form=f }
+
+let conjecture ?(name=mk_name_()) f =
+  { st_name=name; st_role=R_conjecture; st_form=f }
+
+(** {2 IO} *)
 
 module E = ID.Erase
 

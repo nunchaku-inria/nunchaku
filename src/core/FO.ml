@@ -13,10 +13,12 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 module TyBuiltin = struct
   type t =
     [ `Prop
+    | `Unitype
     ]
   let equal = (=)
   let compare = Pervasives.compare
   let print out = function
+    | `Unitype -> CCFormat.string out "unitype"
     | `Prop -> CCFormat.string out "prop"
 end
 
@@ -457,4 +459,97 @@ module Util = struct
             m tydefs.tys_defs
     in
     CCVector.fold add_stmt ID.Map.empty (Problem.statements pb)
+end
+
+(** {2 Conversion} *)
+
+module To_tptp = struct
+  module TT = FO_tptp
+
+  exception Error of string
+  let () = Printexc.register_printer
+      (function
+        | (Error e) -> Some (Utils.err_sprintf "conversion to TPTP: %s" e)
+        | _ -> None)
+
+  let error_ msg = raise (Error msg)
+  let errorf_ msg = Utils.exn_ksprintf ~f:error_ msg
+
+  let is_unitype_ ty = match Ty.view ty with
+    | TyBuiltin `Unitype ->  true
+    | _ -> false
+
+  (* check the type of [v] *)
+  let conv_var v =
+    if is_unitype_ (Var.ty v)
+    then Var.set_ty v ~ty:TT.Unitype
+    else errorf_ "variable `%a` does not have type `unitype`" Var.print_full v
+
+  (* intermediate structure, for having only one conversion into terms and
+     into formulas *)
+  type term_or_form =
+    | T of TT.term
+    | F of TT.form
+
+  (* convert term *)
+  let rec conv_rec subst t : term_or_form = match T.view t with
+    | Builtin _ -> assert false (* TODO *)
+    | Var v ->
+      begin match Var.Subst.find ~subst v with
+        | Some t -> T t
+        | None -> T (TT.var (conv_var v))
+      end
+    | App (f,l) -> T (TT.app f (List.map (conv_as_term subst) l))
+    | Mu (_,_)
+    | DataTest (_,_)
+    | DataSelect (_,_,_)
+    | Undefined (_,_)
+    | Unparsable _ ->
+      errorf_ "cannot convert `@[%a@]` to TPTP" print_term t
+    | Fun (_,_) -> errorf_ "cannot convert function `@[%a@]` to TPTP" print_term t
+    | Let (v,t,u) ->
+      (* expand `let` *)
+      let t = conv_as_term subst t in
+      let subst = Var.Subst.add ~subst v t in
+      conv_rec subst u
+    | Ite (_,_,_) -> assert false (* TODO: transmit through context *)
+    | True -> F TT.true_
+    | False -> F TT.false_
+    | Eq (a,b) -> F (TT.eq (conv_as_term subst a) (conv_as_term subst b))
+    | And l -> F (TT.and_ (List.map (conv_as_form subst) l))
+    | Or l -> F (TT.or_ (List.map (conv_as_form subst) l))
+    | Not f -> F (TT.not_ (conv_as_form subst f))
+    | Imply (a,b) -> F (TT.imply (conv_as_form subst a) (conv_as_form subst b))
+    | Equiv (a,b) -> F (TT.equiv (conv_as_form subst a) (conv_as_form subst b))
+    | Forall (v,f) ->
+      let v' = conv_var v in
+      let subst = Var.Subst.add v (TT.var v') ~subst in
+      F (TT.forall v' (conv_as_form subst f))
+    | Exists (v,f) ->
+      let v' = conv_var v in
+      let subst = Var.Subst.add v (TT.var v') ~subst in
+      F (TT.exists v' (conv_as_form subst f))
+
+  and conv_as_term subst t = match conv_rec subst t with
+    | T t -> t
+    | F _ -> errorf_ "@[expected term,@ but `@[%a@]` is a formula@]" print_term t
+
+  and conv_as_form subst t = match conv_rec subst t with
+    | F t -> t
+    | T t -> TT.atom t
+
+  let conv_form = conv_as_form Var.Subst.empty
+
+  let conv_statement st = match st with
+    | TyDecl _
+    | Decl _ -> None
+    | MutualTypes _ -> errorf_ "@[cannot convert@ statement `@[%a@]`@]" print_statement st
+    | CardBound _ -> assert false (* TODO warning? *)
+    | Axiom f -> Some (TT.axiom (conv_form f))
+    | Goal f -> Some (TT.conjecture (conv_form f))
+end
+
+module Of_tptp = struct
+  let conv_term _ = assert false (* TODO *)
+  let conv_form _ = assert false (* TODO *)
 end

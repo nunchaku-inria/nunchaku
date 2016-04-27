@@ -36,6 +36,8 @@ type statement = {
   st_form: form;
 }
 
+(** {2 Basics} *)
+
 val const : ID.t -> term
 val app : ID.t -> term list -> term
 val var : var -> term
@@ -54,6 +56,11 @@ val forall : var -> form -> form
 val forall_l : var list -> form -> form
 val exists : var -> form -> form
 val exists_l : var list -> form -> form
+
+val axiom : ?name:string -> form -> statement
+val conjecture : ?name:string -> form -> statement
+
+(** {2 IO} *)
 
 val erase : ID.Erase.state
 (** Used to map IDs to names during printing *)

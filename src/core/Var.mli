@@ -41,7 +41,7 @@ val update_ty : 'a t -> f:('a -> 'b) -> 'b t
 (** Update the type, and make a new variable with it with {b THE SAME ID}.
     Careful not to break invariants. *)
 
-val set_ty : 'a t -> ty:'a -> 'a t
+val set_ty : 'a t -> ty:'b -> 'b t
 (** Change the type of the variable *)
 
 val fresh_update_ty : 'a t -> f:('a -> 'b) -> 'b t

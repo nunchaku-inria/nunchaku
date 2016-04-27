@@ -17,6 +17,7 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 module TyBuiltin : sig
   type t =
     [ `Prop
+    | `Unitype
     ]
   val equal : t -> t -> bool
   val compare : t -> t -> int
@@ -178,3 +179,24 @@ val print_term : T.t printer
 val print_statement : (T.t, Ty.t) statement printer
 val print_model : (T.t * T.t) list printer
 val print_problem : (T.t, Ty.t) Problem.t printer
+
+(** {2 Conversion} *)
+
+(** Assume there are no types (other than `Unitype), no datatypes, no
+    pattern match... *)
+module To_tptp : sig
+  exception Error of string
+
+  val conv_form : T.t -> FO_tptp.form
+  (** @raise Error if conversion failed *)
+
+  val conv_statement : (T.t, Ty.t) statement -> FO_tptp.statement option
+  (** convert the statement. Some statements will just disappear (mostly,
+      declarations).
+      @raise Error if conversion failed *)
+end
+
+module Of_tptp : sig
+  val conv_term : FO_tptp.term -> T.t
+  val conv_form : FO_tptp.form -> T.t
+end

@@ -204,6 +204,7 @@ let id_to_name ~decode id =
     name
 
 let pp_builtin_cvc4 out = function
+  | `Unitype -> assert false
   | `Prop -> CCFormat.string out "Bool"
 
 (* print ground type using CVC4's escaping rules *)
