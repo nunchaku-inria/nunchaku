@@ -7,7 +7,7 @@ module E = CCError
 module A = UntypedAST
 module Utils = Utils
 module TI = TermInner
-module CVC4 = Nunchaku_backends.CVC4
+module Backends = Nunchaku_backends
 
 type input =
   | I_nunchaku
@@ -20,6 +20,13 @@ type output =
   | O_tptp
 
 let list_outputs_ () = "(available choices: nunchaku tptp)"
+
+type solver =
+  | S_CVC4
+  | S_kodkod
+  | S_paradox
+
+let list_solvers_ () = "(available choices: cvc4 kodkod paradox)"
 
 (** {2 Options} *)
 
@@ -42,8 +49,10 @@ let print_elim_multi_eqns = ref false
 let print_polarize_ = ref false
 let print_unroll_ = ref false
 let print_elim_preds_ = ref false
+let print_elim_data_ = ref false
 let print_copy_ = ref false
 let print_intro_guards_ = ref false
+let print_elim_types_ = ref false
 let print_fo_ = ref false
 let print_smt_ = ref false
 let print_raw_model_ = ref false
@@ -52,6 +61,7 @@ let enable_polarize_ = ref true
 let timeout_ = ref 30
 let version_ = ref false
 let file = ref ""
+let solvers = ref [S_CVC4; S_kodkod; S_paradox]
 let j = ref 3
 
 let set_file f =
@@ -70,6 +80,23 @@ let set_output_ f =
     | "nunchaku" -> O_nunchaku
     | "tptp" -> O_tptp
     | s -> failwith ("unsupported output format: " ^ s)
+
+(* solver string specification *)
+let parse_solvers_ s =
+  let s = String.trim s |> String.lowercase in
+  let l = CCString.Split.list_cpy ~by:"," s in
+  List.map
+    (function
+      | "cvc4" -> S_CVC4
+      | "paradox" -> S_paradox
+      | "kodkod" -> S_kodkod
+      | s ->
+        failwith (Utils.err_sprintf "unknown solver `%s` %s" s (list_solvers_())))
+    l
+
+let set_solvers_ s =
+  let l = parse_solvers_ s |> CCList.Set.uniq ~eq:(=) in
+  solvers := l
 
 (* set debug levels *)
 let options_debug_ = Utils.Section.iter
@@ -115,8 +142,13 @@ let options =
   ; "--print-" ^ Polarize.name , Arg.Set print_polarize_, " print input after polarization"
   ; "--print-" ^ Unroll.name, Arg.Set print_unroll_, " print input after unrolling"
   ; "--print-" ^ ElimCopy.name, Arg.Set print_copy_, " print input after elimination of copy types"
+  ; "--print-elim-data"
+      , Arg.Set print_elim_data_
+      , " print input after elimination of (co)datatypes"
   ; "--print-" ^ IntroGuards.name, Arg.Set print_intro_guards_,
       " print input after introduction of guards"
+  ; "--print-" ^ ElimTypes.name, Arg.Set print_elim_types_,
+      " print input after elimination of types"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
@@ -131,6 +163,8 @@ let options =
   ; "--polarize-rec", Arg.Set polarize_rec_, " enable polarization of rec predicates"
   ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
   ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"
+  ; "--solvers", Arg.String set_solvers_, " solvers to use " ^ list_solvers_ ()
+  ; "-s", Arg.String set_solvers_, " synonym for --solvers"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "-t", Arg.Set_int timeout_, " alias to --timeout"
   ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
@@ -184,9 +218,8 @@ module Pipes = struct
   module Step_mono = Monomorphization.Make(HO)
   module Step_ElimMultipleEqns = ElimMultipleEqns.Make(HO)
   module Step_ElimMatch = ElimPatternMatch.Make(HO)
-  module Step_ElimCodata = ElimData.Make_codata(HO)
   module Step_ElimPreds = ElimIndPreds.Make(HO)
-  module Step_ElimData = ElimData.Make_data(HO)
+  module Step_ElimData = ElimData.Make(HO)
   module Step_Specialize = Specialize.Make(HO)
   module Step_LambdaLift = LambdaLift.Make(HO)
   module Step_ElimHOF = ElimHOF.Make(HO)
@@ -195,6 +228,7 @@ module Pipes = struct
   module Step_unroll = Unroll.Make(HO)
   module Step_elim_copy = ElimCopy.Make(HO)
   module Step_intro_guards = IntroGuards.Make(HO)
+  module Step_ElimTypes = ElimTypes.Make(HO)
   (* conversion to FO *)
   module Step_tofo = TermMono.TransFO(HO)
   (* renaming in model *)
@@ -206,6 +240,27 @@ let close_task p =
     ~f:(fun task ret ->
        Scheduling.Task.map ~f:ret task, CCFun.id)
 
+let make_cvc4 ~deadline () =
+  let open Transform.Pipe in
+  if List.mem S_CVC4 !solvers && Backends.CVC4.is_available ()
+  then
+    Backends.CVC4.pipes
+      ~options:Backends.CVC4.options_l
+      ~print:!print_all_
+      ~print_smt:(!print_all_ || !print_smt_)
+      ~print_model:(!print_all_ || !print_raw_model_)
+      ~deadline ()
+    @@@ id
+  else Fail
+
+let make_paradox ~deadline () =
+  let open Transform.Pipe in
+  if List.mem S_paradox !solvers && Backends.Paradox.is_available ()
+  then
+    Backends.Paradox.pipe ~print:!print_all_ ~deadline ()
+    @@@ id
+  else Fail
+
 (* build a pipeline, depending on options *)
 let make_model_pipeline () =
   let open Transform.Pipe in
@@ -213,18 +268,9 @@ let make_model_pipeline () =
   (* setup pipeline *)
   let check = !check_all_ in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  let cvc4 =
-    if CVC4.is_available ()
-    then
-      CVC4.pipes
-        ~options:CVC4.options_l
-        ~print:!print_all_
-        ~print_smt:(!print_all_ || !print_smt_)
-        ~print_model:(!print_all_ || !print_raw_model_)
-        ~deadline ()
-      @@@ id
-    else Fail
-  in
+  (* solvers *)
+  let cvc4 = make_cvc4 ~deadline () in
+  let paradox = make_paradox ~deadline () in
   let pipe =
     Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
     Step_conv_ty.pipe () @@@
@@ -241,18 +287,36 @@ let make_model_pipeline () =
     @@@
     Step_unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
     Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-    Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-    Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
-    Step_LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
-    Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
-    Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
-    Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
-    Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
-    Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
-    close_task (
-      Step_tofo.pipe ~print:!print_all_ () @@@
-      Transform.Pipe.flatten cvc4
-    )
+    fork
+      (
+        Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+        Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
+        Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
+        Step_ElimData.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
+        Step_LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+        Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+        Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
+        Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+        Step_ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
+        Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
+        close_task (
+          Step_tofo.pipe ~print:!print_all_ () @@@
+          FO.pipe_tptp @@@
+          paradox
+        ))
+      (
+        Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+        Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
+        Step_LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+        Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+        Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
+        Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
+        Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+        Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
+        close_task (
+          Step_tofo.pipe ~print:!print_all_ () @@@
+          Transform.Pipe.flatten cvc4
+        ))
   in
   pipe
 
