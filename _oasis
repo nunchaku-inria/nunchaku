@@ -24,7 +24,7 @@ Library "nunchaku_core"
   Pack:             true
   Modules:          ID, Var, MetaVar, Location, Intf, Utils, Transform,
                     UntypedAST, Model, TypeUnify, Problem, FO, Reduce,
-                    Env, Signature, Statement,
+                    Env, Signature, Statement, FO_tptp,
                     Scheduling, Polarity, Traversal, ProblemMetadata,
                     AnalyzeType, Prelude, TypeCheck, Lazy_list,
                     terms/TermInner,
