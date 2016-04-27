@@ -8,6 +8,7 @@
 *)
 
 module Metadata = ProblemMetadata
+module Res = Problem.Res
 
 type id = ID.t
 type 'a var = 'a Var.t
@@ -194,9 +195,17 @@ module To_tptp : sig
   (** convert the statement. Some statements will just disappear (mostly,
       declarations).
       @raise Error if conversion failed *)
+
+  val conv_problem : (T.t, Ty.t) Problem.t -> FO_tptp.problem
 end
 
 module Of_tptp : sig
+  val conv_ty : FO_tptp.ty -> T.t
   val conv_term : FO_tptp.term -> T.t
   val conv_form : FO_tptp.form -> T.t
 end
+
+val pipe_tptp :
+  ((T.t, Ty.t) Problem.t, FO_tptp.problem,
+    (FO_tptp.term, FO_tptp.ty) Res.t,
+    (T.t, Ty.t) Res.t) Transform.t

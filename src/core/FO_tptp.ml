@@ -34,6 +34,11 @@ type statement = {
   st_form: form;
 }
 
+type problem = {
+  pb_statements: statement CCVector.ro_vector;
+  pb_meta: ProblemMetadata.t;
+}
+
 (** {2 Basics} *)
 
 let app id l = App (id,l)
@@ -153,3 +158,6 @@ let print_statement_tptp out st =
   fpf out "@[<2>fof(@[%s, %a,@ @[%a@]@]).@]"
     st.st_name print_role_tptp st.st_role print_form_tptp st.st_form
 
+let print_problem_tptp out pb =
+  fpf out "@[<v>%a@]"
+    (CCVector.print ~start:"" ~stop:"" ~sep:"" print_statement_tptp) pb.pb_statements

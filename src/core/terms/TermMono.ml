@@ -91,6 +91,7 @@ module ToFO(T : TI.S) = struct
     | TyBuiltin b ->
         begin match b with
         | `Prop -> FO.Ty.builtin `Prop
+        | `Unitype -> FO.Ty.builtin `Unitype
         | `Kind -> fail_ t "kind belongs to HO fragment"
         | `Type -> fail_ t "type belongs to HO fragment"
         end
@@ -328,6 +329,7 @@ module OfFO(T:TI.S) = struct
     | FO.TyBuiltin b ->
         let b = match b with
           | `Prop -> `Prop
+          | `Unitype -> `Unitype
         in U.ty_builtin b
     | FO.TyApp (f,l) ->
         let l = List.map convert_ty l in

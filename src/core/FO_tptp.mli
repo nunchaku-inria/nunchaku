@@ -36,6 +36,11 @@ type statement = {
   st_form: form;
 }
 
+type problem = {
+  pb_statements: statement CCVector.ro_vector;
+  pb_meta: ProblemMetadata.t;
+}
+
 (** {2 Basics} *)
 
 val const : ID.t -> term
@@ -69,6 +74,5 @@ val print_role_tptp : role CCFormat.printer
 val print_term_tptp : term CCFormat.printer
 val print_form_tptp : form CCFormat.printer
 val print_statement_tptp : statement CCFormat.printer
-
-
+val print_problem_tptp : problem CCFormat.printer
 

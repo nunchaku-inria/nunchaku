@@ -4,6 +4,7 @@
 (** {1 First-Order Monomorphic Terms} *)
 
 module Metadata = ProblemMetadata
+module Res = Problem.Res
 
 type id = ID.t
 type 'a var = 'a Var.t
@@ -445,6 +446,7 @@ module Util = struct
       | Decl (id, (_, ret)) ->
           let k = match Ty.view ret with
             | TyBuiltin `Prop -> M.Symbol_prop
+            | TyBuiltin `Unitype
             | TyApp _ -> M.Symbol_fun
           in
           ID.Map.add id k m
@@ -547,9 +549,26 @@ module To_tptp = struct
     | CardBound _ -> assert false (* TODO warning? *)
     | Axiom f -> Some (TT.axiom (conv_form f))
     | Goal f -> Some (TT.conjecture (conv_form f))
+
+  let conv_problem pb =
+    let res = CCVector.filter_map conv_statement (Problem.statements pb) in
+    { FO_tptp.
+      pb_statements=res;
+      pb_meta=Problem.meta pb;
+    }
 end
 
 module Of_tptp = struct
+  let conv_ty _ = assert false (* TODO *)
   let conv_term _ = assert false (* TODO *)
   let conv_form _ = assert false (* TODO *)
 end
+
+let pipe_tptp =
+  let decode () res =
+    Res.map res ~term:Of_tptp.conv_term ~ty:Of_tptp.conv_ty
+  in
+  Transform.make
+    ~name:"conv_tptp"
+    ~encode:(fun pb -> To_tptp.conv_problem pb, ()) ~decode
+    ()
