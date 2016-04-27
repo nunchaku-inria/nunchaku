@@ -52,7 +52,7 @@ Library "nunchaku_parsers"
 Library "nunchaku_backends"
   Path:             src/backends
   Pack:             true
-  Modules:          CVC4, Kodkod
+  Modules:          CVC4, Kodkod, Paradox
   Install:          true
   FindlibName:      backends
   FindlibParent:    nunchaku_core
