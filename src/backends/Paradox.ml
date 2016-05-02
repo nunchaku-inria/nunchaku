@@ -16,6 +16,7 @@ let is_available () =
   with Sys_error _ -> false
 
 let solve ?deadline pb =
+  Utils.debug ~section 1 "calling paradox";
   assert false (* TODO *)
 
 (* solve problem before [deadline] *)
