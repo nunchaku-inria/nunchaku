@@ -736,12 +736,6 @@ module Convert(Term : TermTyped.S) = struct
         (fun k-> k P.print t (CCFormat.list Var.print) new_vars);
     t, new_vars
 
-  let kind_of_ty_ ty =
-    let ret = U.ty_returns ty in
-    if U.ty_is_Type ret then Stmt.Decl_type
-    else if U.ty_is_Prop ret then Stmt.Decl_prop
-    else Stmt.Decl_fun
-
   (* convert [t] into a prop, call [f], generalize [t] *)
   let convert_prop_ ?(before_generalize=CCFun.const ()) ~env t =
     let t = convert_term_exn ~env t in
@@ -983,7 +977,7 @@ module Convert(Term : TermTyped.S) = struct
     (* convert the equations *)
     let l' = List.map
       (fun (id,ty,ty_vars,l) ->
-        let defined = {Stmt.defined_head=id; defined_ty=ty; } in
+        let defined = Stmt.mk_defined id ty in
         (* in the definitions of [id], actually ensure that [id.name]
            is bound to [id ty_vars]. This way we can be sure that all definitions
            will share the same set of type variables. *)
@@ -1019,9 +1013,8 @@ module Convert(Term : TermTyped.S) = struct
           l
         in
         (* return case *)
-        let kind = kind_of_ty_ ty in
         {Stmt.
-          rec_defined=defined; rec_kind=kind; rec_vars=ty_vars;
+          rec_defined=defined; rec_vars=ty_vars;
           rec_eqns=Stmt.Eqn_nested rec_eqns; })
       l'
     in
@@ -1296,11 +1289,10 @@ module Convert(Term : TermTyped.S) = struct
         let id = ID.make_full ~needs_at:(ty_is_poly_ ty) v in
         let env = TyEnv.add_decl ~env v ~id ty in
         check_ty_is_prenex_ ?loc ty;
-        let kind = kind_of_ty_ ty in
         (* parse attributes *)
         let attrs = List.map (convert_attr ~env) attrs in
         check_attrs ?loc attrs;
-        Stmt.mk_decl ~info ~attrs id kind ty, env
+        Stmt.decl ~info ~attrs id ty, env
     | A.Axiom l ->
         (* convert terms, and force them to be propositions *)
         let l = List.map (convert_prop_ ?before_generalize:None ~env) l in

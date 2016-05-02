@@ -180,7 +180,6 @@ module Make(T : TI.S) = struct
     let rhs = U.or_ cases in
     {Stmt.
       rec_defined=d;
-      rec_kind=Stmt.Decl_prop;
       rec_vars=vars;
       rec_eqns=Stmt.Eqn_single (vars,rhs);
     }
@@ -203,7 +202,7 @@ module Make(T : TI.S) = struct
                  by polarize *)
               Utils.not_implemented
                 "cannot eliminate non-well-founded predicates without polarization"
-          | Stmt.Decl (id,k,d,attrs) -> [Stmt.mk_decl ~info ~attrs id k d]
+          | Stmt.Decl (id,d,attrs) -> [Stmt.decl ~info ~attrs id d]
           | Stmt.Copy c -> [Stmt.copy ~info c]
           | Stmt.Axiom (Stmt.Axiom_std l) -> [Stmt.axiom ~info l]
           | Stmt.Axiom (Stmt.Axiom_spec l) -> [Stmt.axiom_spec ~info l]

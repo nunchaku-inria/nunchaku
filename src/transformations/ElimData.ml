@@ -192,7 +192,9 @@ module Make
 
   (* declare the new constants *)
   let common_decls etys =
-    let mk_decl (id,ty) = Stmt.ty_decl ~info:Stmt.info_default ~attrs:[] id ty in
+    let mk_decl (id,ty) =
+      Stmt.decl ~info:Stmt.info_default ~attrs:[] id ty
+    in
     CCList.flat_map
       (fun ety ->
          mk_decl (ety.ety_id,U.ty_type)
@@ -305,7 +307,6 @@ module Make
     let def_c =
       Stmt.axiom_rec ~info:Stmt.info_default
         [ { Stmt.rec_defined=def_c;
-            rec_kind=Stmt.Decl_prop;
             rec_vars=vars;
             rec_eqns=Stmt.Eqn_single (vars, ax_c)
           } ]

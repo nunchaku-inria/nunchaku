@@ -64,21 +64,20 @@ module Make(T : TI.S) = struct
          | _ -> false)
 
   (* declare new function [f : ty := fun vars. body] *)
-  let mk_new_rec kind f ty vars body =
+  let mk_new_rec f ty vars body =
     let eqns = Stmt.Eqn_single (vars, body) in
     let defined = Stmt.mk_defined f ty in
     {Stmt.
       rec_vars=vars;
       rec_defined=defined;
-      rec_kind=kind;
       rec_eqns=eqns;
     }
 
   let mk_axiom f vars body =
     U.forall_l vars (U.eq (U.app (U.const f) (List.map U.var vars)) body)
 
-  let declare_new_rec kind f ty vars body =
-    let def = mk_new_rec kind f ty vars body in
+  let declare_new_rec f ty vars body =
+    let def = mk_new_rec f ty vars body in
     Stmt.axiom_rec ~info:Stmt.info_default [def]
 
   (* TODO: expand `let` if its parameter is HO, and
@@ -98,7 +97,6 @@ module Make(T : TI.S) = struct
         let ty_ret =
           U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) body in
         let ty = U.ty_arrow_l (List.map Var.ty captured_vars @ [Var.ty v]) ty_ret in
-        let kind = if U.ty_is_Prop ty_ret then Stmt.Decl_prop else Stmt.Decl_fun in
         (* declare new toplevel function *)
         let new_fun = fresh_fun_ ~state in
         let new_vars = captured_vars @ [v] in
@@ -107,7 +105,7 @@ module Make(T : TI.S) = struct
         begin match local_state.in_scope with
           | In_rec (ids, l) when contains_some_id ~of_:ids body ->
               (* body needs to be mutually recursive with [ids], and is a rec *)
-              let def = mk_new_rec kind new_fun ty new_vars body in
+              let def = mk_new_rec new_fun ty new_vars body in
               l := def :: !l
           | In_spec (ids, l) when contains_some_id ~of_:ids body ->
               (* body needs to be mutually recursive with [ids], and is a spec *)
@@ -117,7 +115,7 @@ module Make(T : TI.S) = struct
           | In_spec _
           | In_nothing ->
               (* no mutual dependencies, can emit toplevel "rec" *)
-              let decl = declare_new_rec kind new_fun ty new_vars body in
+              let decl = declare_new_rec new_fun ty new_vars body in
               CCVector.push local_state.new_decls decl;
         end;
         (* replace [fun v. body] by [new_fun vars] *)

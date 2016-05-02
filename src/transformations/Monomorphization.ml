@@ -172,10 +172,10 @@ module Make(T : TI.S) = struct
                 Env.Copy_abstract _ | Env.Copy_concrete _ |
                 Env.Copy_ty _); _} ->
         true (* defined objects: mangle *)
-    | {Env.def=Env.NoDef; decl_kind=(Stmt.Decl_fun | Stmt.Decl_prop); _} ->
-        true (* functions and prop: mangle *)
-    | {Env.def=Env.NoDef; decl_kind=Stmt.Decl_type; _} ->
+    | {Env.def=Env.NoDef; ty; _} when U.ty_returns_Type ty ->
         false (* uninterpreted poly types: do not mangle *)
+    | {Env.def=Env.NoDef; _} ->
+        true (* functions and prop: mangle *)
 
   (* bind the type variables of [def] to [tup]. *)
   let match_rec ?(subst=Subst.empty) ~def tup =
@@ -381,7 +381,6 @@ module Make(T : TI.S) = struct
       (* new (specialized) case *)
       let rec_defined = mono_defined ~state:st ~local_state def.Stmt.rec_defined arg in
       let def' = {Stmt.
-        rec_kind=def.Stmt.rec_kind;
         rec_vars=[];
         rec_defined;
         rec_eqns=eqns;
@@ -532,11 +531,11 @@ module Make(T : TI.S) = struct
       );
       ()
 
-    method do_ty_def ?loc ~attrs decl id ~ty tup =
+    method do_ty_def ?loc ~attrs id ~ty tup =
       Utils.debugf ~section 5 "declare type for %a on %a"
         (fun k->k ID.print id ArgTuple.print tup);
-      begin match decl with
-      | Stmt.Decl_type ->
+      if U.ty_returns_Type ty
+      then (
           (* type declaration must be done only once
              (St.is_already_specialized is not precise enough, because
              here we must ignore [tup]) *)
@@ -545,11 +544,9 @@ module Make(T : TI.S) = struct
             let new_ty = mono_type ~state:st
               ~local_state:{depth=0; subst=Subst.empty} ty in
             self#push_res
-              (Stmt.ty_decl ~info:{Stmt.loc; name=None} ~attrs id new_ty)
+              (Stmt.decl ~info:{Stmt.loc; name=None} ~attrs id new_ty)
           )
-      | Stmt.Decl_fun
-      | Stmt.Decl_prop -> self#decl_sym ~attrs id tup
-      end
+      ) else self#decl_sym ~attrs id tup
 
     method! do_goal_or_axiom g t =
       begin match g with

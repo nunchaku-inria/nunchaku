@@ -160,8 +160,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
           let env_info = Env.find_exn ~env id in
           let loc = env_info.Env.loc in
           self#push_res
-            (Stmt.mk_decl ~attrs ~info:{Stmt.loc; name=None}
-              as_ env_info.Env.decl_kind ty);
+            (Stmt.decl ~attrs ~info:{Stmt.loc; name=None} as_ ty);
         )
 
     (* recursive traversal of terms *)
@@ -301,7 +300,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       ()
 
     method virtual do_ty_def
-    : ?loc:Loc.t -> attrs:Stmt.decl_attr list -> Stmt.decl -> ID.t -> ty:term -> Arg.t -> unit
+    : ?loc:Loc.t -> attrs:Stmt.decl_attr list -> ID.t -> ty:term -> Arg.t -> unit
 
     (* traverse the stack downward, merging every frame with [f] until we
        reach [f] itself *)
@@ -412,10 +411,9 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
         | Env.NoDef when conf.direct_tydef -> () (* already defined *)
         | Env.NoDef ->
             let ty = env_info.Env.ty in
-            let decl = env_info.Env.decl_kind in
             let attrs = env_info.Env.decl_attrs in
             let loc = env_info.Env.loc in
-            self#do_ty_def ?loc ~attrs decl id ~ty arg
+            self#do_ty_def ?loc ~attrs id ~ty arg
 
     method update_env f = env <- f env
 
@@ -443,10 +441,10 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
       let tr_term = self#do_term ~depth:0 in
       let tr_type = tr_term in
       begin match Stmt.view st with
-      | Stmt.Decl (id,k,ty,attrs) ->
+      | Stmt.Decl (id,ty,attrs) ->
           if conf.direct_tydef then
             let ty = tr_type ty in
-            self#push_res (Stmt.mk_decl ~attrs ~info id k ty)
+            self#push_res (Stmt.decl ~attrs ~info id ty)
       | Stmt.Goal g ->
           (* convert goal *)
           let g = self#do_goal_or_axiom `Goal g in

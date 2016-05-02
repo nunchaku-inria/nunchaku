@@ -147,7 +147,7 @@ module Make(T : TI.S) = struct
       Problem.statements pb
       |> CCVector.fold
         (fun ((h_ty, app_m) as acc) stmt -> match Stmt.view stmt with
-          | Stmt.Decl (id, _, _, attrs) ->
+          | Stmt.Decl (id, _, attrs) ->
               begin match is_handle_ty attrs, is_app_ attrs, h_ty with
               | true, _, None -> Some id, app_m (* found `to` *)
               | true, _, Some i2 ->
@@ -315,7 +315,7 @@ module Make(T : TI.S) = struct
     add_encoding ~state fun_encoding;
     (* declare abstract type + projectors *)
     CCVector.push state.new_statements
-      (Stmt.ty_decl ~info:Stmt.info_default abs_type_id U.ty_type ~attrs:[]);
+      (Stmt.decl ~info:Stmt.info_default abs_type_id U.ty_type ~attrs:[]);
     List.iter
       (fun (_n,proj,ty_proj) ->
         CCVector.push state.new_statements
@@ -454,11 +454,11 @@ module Make(T : TI.S) = struct
   let tr_statement ~state st =
     let info = Stmt.info st in
     let stmts' = match Stmt.view st with
-    | Stmt.Decl (id,k,l,attrs) ->
+    | Stmt.Decl (id,l,attrs) ->
         (* app symbol: needs encoding *)
         if id_is_app_fun_ ~state id then ensure_exists_encoding_ ~state id;
         (* in any case, no type declaration changes *)
-        Stmt.mk_decl ~info ~attrs id k l :: pop_new_stmts_ ~state
+        Stmt.decl ~info ~attrs id l :: pop_new_stmts_ ~state
     | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l] (* no (co) data changes *)
     | Stmt.Pred _ -> assert false (* typing: should be absent *)
     | Stmt.Axiom l ->

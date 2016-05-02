@@ -27,6 +27,7 @@ module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
   module Ty = TypeMono.Make(T)
+  module PStmt = Stmt.Print(P)(P)
 
   type state = {
     mutable ty_to_pred: ID.t Ty.Map.t;
@@ -95,21 +96,16 @@ module Make(T : TI.S) = struct
     | TI.Const id -> Some id
     | _ -> None
 
-  type encoding =
-    | E_old of ID.t
-    | E_new of ID.t
-    | E_unitype
-
-  (* get or create new predicate for this type *)
-  let get_or_create_ state ty =
-    try E_old (Ty.Map.find ty state.ty_to_pred)
-    with Not_found ->
+  (* ensure the type maps to some predicate *)
+  let ensure_maps_to_predicate state ty =
+    if not (Ty.Map.mem ty state.ty_to_pred)
+    then (
       match Ty.repr ty with
         | TyI.Const id ->
           errorf_ "atomic type `%a` should have been mapped to a prediate" ID.print id
         | TyI.Arrow _ -> assert false
         | TyI.Builtin `Unitype ->
-          E_unitype (* no need to declare *)
+          () (* no need to declare *)
         | TyI.Builtin `Type
         | TyI.Builtin `Kind -> assert false
         | TyI.Builtin `Prop ->
@@ -124,15 +120,15 @@ module Make(T : TI.S) = struct
             (* find name *)
             let name = ID.make_f "is_%a" mangle_ty_ ty in
             add_pred_ state ty name;
-            E_new name
+    )
 
-  (* ensure the type maps to some predicate *)
-  let ensure_maps_to_predicate state ty =
-    ignore (get_or_create_ state ty)
-
-  let encode_stmt state st = match Stmt.view st with
-    | Stmt.Decl (id, Stmt.Decl_type, ty, _) ->
-      assert (U.ty_returns_Type ty);
+  let encode_stmt state st =
+    Utils.debugf ~section 3 "@[<2>encode statement@ `@[%a@]`@]"
+      (fun k->k PStmt.print st);
+    let info = Stmt.info st in
+    match Stmt.view st with
+    | Stmt.Decl (id, ty, _) when U.ty_returns_Type ty ->
+      (* type declaration *)
       let _, args, _ = U.ty_unfold ty in
       assert (List.for_all U.ty_is_Type args);
       begin match args with
@@ -145,17 +141,28 @@ module Make(T : TI.S) = struct
           ID.Tbl.add state.parametrized_ty id ();
       end;
       [] (* remove statement *)
-    | Stmt.Decl (_, Stmt.Decl_prop, ty, _) ->
-      let _, args, ret = U.ty_unfold ty in
-      assert (U.ty_is_Prop ret);
+    | Stmt.Decl (id, ty, attrs) when U.ty_returns_Prop ty ->
+      let _, args, _ = U.ty_unfold ty in
       List.iter (ensure_maps_to_predicate state) args;
-      []
-    | Stmt.Decl (_, Stmt.Decl_fun, ty, _) ->
+      (* new type [term -> term -> ... -> term -> prop] *)
+      let ty' =
+        U.ty_arrow_l
+          (List.map (fun _ -> U.ty_builtin `Unitype) args)
+          U.ty_prop
+      in
+      [ Stmt.decl ~info ~attrs id ty']
+    | Stmt.Decl (id, ty, attrs) ->
       let _, args, ret = U.ty_unfold ty in
       (* declare every argument type, + the return type *)
       ensure_maps_to_predicate state ret;
       List.iter (ensure_maps_to_predicate state) args;
-      []
+      (* new type [term -> term -> ... -> term -> term] *)
+      let ty' =
+        U.ty_arrow_l
+          (List.map (fun _ -> U.ty_builtin `Unitype) args)
+          (U.ty_builtin `Unitype)
+      in
+      [ Stmt.decl ~info ~attrs id ty']
     | _ ->
       [Stmt.map_bind Var.Subst.empty st
         ~term:(encode_term state)

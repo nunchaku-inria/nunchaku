@@ -408,7 +408,7 @@ module Make(T : TI.S) = struct
 
     method do_mutual_types ~depth:_ _ _ = assert false
 
-    method do_ty_def ?loc:_ ~attrs:_ _ _ ~ty:_ _ = assert false
+    method do_ty_def ?loc:_ ~attrs:_ _ ~ty:_ _ = assert false
   end
 
   let polarize

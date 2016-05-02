@@ -765,7 +765,6 @@ module Make(T : TI.S) = struct
       (* new (specialized) case *)
       let rec_defined = specialize_defined ~state:st def.Stmt.rec_defined args in
       let def' = {Stmt.
-        rec_kind=def.Stmt.rec_kind;
         rec_vars=[];
         rec_defined;
         rec_eqns=eqns;
@@ -806,7 +805,7 @@ module Make(T : TI.S) = struct
     method do_copy ~depth:_ ~loc:_ _ _ = assert false
 
     (* direct translation *)
-    method do_ty_def ?loc:_ ~attrs:_ _ _ ~ty:_ _ = assert false
+    method do_ty_def ?loc:_ ~attrs:_ _ ~ty:_ _ = assert false
 
     (* before processing a statement, analyse the call graph *)
     method! before_do_stmt stmt =

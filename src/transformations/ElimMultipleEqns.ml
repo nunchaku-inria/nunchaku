@@ -337,9 +337,9 @@ module Make(T : TI.S) = struct
         env, Stmt.axiom_spec ~info l
     | Stmt.Axiom (Stmt.Axiom_std l) ->
         env, Stmt.axiom ~info l
-    | Stmt.Decl (id,kind,ty,attrs) ->
-        let env = Env.declare ?loc ~attrs ~env ~kind id ty in
-        env, Stmt.mk_decl ~info ~attrs id kind ty
+    | Stmt.Decl (id,ty,attrs) ->
+        let env = Env.declare ?loc ~attrs ~env id ty in
+        env, Stmt.decl ~info ~attrs id ty
     | Stmt.TyDef (k,ty) ->
         (* declare (co)data, so it can be used in encoding *)
         let env = Env.def_data ?loc ~env ~kind:k ty in

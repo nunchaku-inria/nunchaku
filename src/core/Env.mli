@@ -56,7 +56,6 @@ type (+'t, +'ty, 'inv) def =
 (** All information on a given symbol *)
 type (+'t, +'ty, 'inv) info = {
   ty: 'ty; (** type of symbol *)
-  decl_kind: Statement.decl;
   decl_attrs: Statement.decl_attr list;
   loc: loc option;
   def: ('t, 'ty, 'inv) def;
@@ -77,7 +76,6 @@ val create: ?size:int -> unit -> _ t
 val loc: _ info -> loc option
 val def: ('t,'ty,'inv) info -> ('t,'ty,'inv) def
 val ty: (_,'ty,_) info -> 'ty
-val decl_kind: _ info -> Statement.decl
 
 val is_fun : _ info -> bool (** spec/rec *)
 val is_rec : _ info -> bool (** rec *)
@@ -89,7 +87,6 @@ val is_abstract : _ info -> bool
 
 val declare:
   ?loc:loc ->
-  kind:Statement.decl ->
   attrs:Statement.decl_attr list ->
   env:('t, 'ty, 'inv) t ->
   id ->

@@ -374,7 +374,7 @@ module Make(T : TI.S) = struct
           [ Stmt.Decl_attr_exn ElimRecursion.Attr_is_handle_cstor
           ; Stmt.Decl_attr_incomplete
           ] in
-        let stmt = Stmt.mk_decl ~info:Stmt.info_default ~attrs id Stmt.Decl_type ty_id in
+        let stmt = Stmt.decl ~info:Stmt.info_default ~attrs id ty_id in
         CCVector.push state.new_stmts stmt;
         id
 
@@ -452,14 +452,7 @@ module Make(T : TI.S) = struct
       ID.Tbl.replace state.decode.dst_app_symbols app_id ();
       (* push declaration of [app_fun] and extensionality axiom *)
       let attrs = [Stmt.Decl_attr_exn ElimRecursion.Attr_app_val] in
-      let stmt =
-        let decl =
-          if U.ty_returns_Prop ty_app then Stmt.Decl_prop
-          else if U.ty_returns_Type ty_app then Stmt.Decl_type
-          else Stmt.Decl_fun
-        in
-        Stmt.mk_decl ~info:Stmt.info_default ~attrs app_id decl ty_app
-      in
+      let stmt = Stmt.decl ~info:Stmt.info_default ~attrs app_id ty_app in
       CCVector.push state.new_stmts stmt;
       CCVector.push state.new_stmts (extensionality_for_app_ app_fun);
       app_fun
@@ -750,7 +743,7 @@ module Make(T : TI.S) = struct
                 defined_head=id;
                 defined_ty=ty_of_fun_encoding_ ~state fe;
               } in
-              { def with Stmt.
+              { Stmt.
                 rec_defined=defined;
                 rec_vars=vars;
                 rec_eqns=eqn;
@@ -776,7 +769,7 @@ module Make(T : TI.S) = struct
     let tr_type _subst ty = encode_toplevel_ty ~state ty in
     Utils.debugf ~section 3 "@[<2>@{<cyan>> elim HOF in stmt@}@ `@[%a@]`@]" (fun k->k PStmt.print stmt);
     let stmt' = match Stmt.view stmt with
-    | Stmt.Decl (id,decl,ty,attrs) ->
+    | Stmt.Decl (id,ty,attrs) ->
         if ID.Map.mem id state.arities
         then (
           Utils.debugf ~section 3
@@ -788,13 +781,13 @@ module Make(T : TI.S) = struct
               (ty_of_handle_ ~state fun_encoding.fe_ret_handle) in
           Utils.debugf ~section 4 "@[<2>fun %a now has type `@[%a@]`@]"
             (fun k->k ID.print id P.print ty');
-          let stmt = Stmt.mk_decl ~info id decl ty' ~attrs in
+          let stmt = Stmt.decl ~info id ty' ~attrs in
           [stmt]
         )
         else
           (* keep as is, not a partially applied fun; still have to modify type *)
           let ty = encode_toplevel_ty ~state ty in
-          [Stmt.mk_decl ~info id decl ty ~attrs]
+          [Stmt.decl ~info id ty ~attrs]
     | Stmt.Axiom (Stmt.Axiom_rec l) -> elim_hof_rec ~state ~info l
     | Stmt.TyDef (kind,l) ->
         let l =

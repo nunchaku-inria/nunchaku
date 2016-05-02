@@ -221,15 +221,14 @@ module ToFO(T : TI.S) = struct
   let convert_statement ~sigma st =
     let module St = Statement in
     match St.view st with
-    | St.Decl (id, k, ty, attrs) ->
-        let st' = match k with
-        | St.Decl_type ->
+    | St.Decl (id, ty, attrs) ->
+        let _, _, ret = U.ty_unfold ty in
+        let st' =
+          if U.ty_is_Type ret
+          then
             let n = U.ty_num_param ty in
             FO.TyDecl (id, n)
-        | St.Decl_fun ->
-            let ty = conv_top_ty ty in
-            FO.Decl (id, ty)
-        | St.Decl_prop ->
+          else
             let ty = conv_top_ty ty in
             FO.Decl (id, ty)
         in
