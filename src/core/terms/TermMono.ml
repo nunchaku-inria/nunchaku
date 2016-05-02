@@ -391,7 +391,7 @@ module TransFO(T1 : TI.S) = struct
     let on_encoded =
       Utils.singleton_if print ()
         ~f:(fun () ->
-          Format.printf "@[<2>@{<Yellow>after to_fo@}:@ @[%a@]@]@." FO.print_problem)
+          Format.printf "@[<2>@{<Yellow>after to_fo@}: {@,@[%a@]@,}@]@." FO.print_problem)
     in
     Transform.make
     ~name:"to_fo"

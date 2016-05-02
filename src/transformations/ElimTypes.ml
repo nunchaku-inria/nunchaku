@@ -60,9 +60,9 @@ module Make(T : TI.S) = struct
       let v' = Var.fresh_copy v |> Var.set_ty ~ty:state.dummy_ty in
       let subst = Var.Subst.add ~subst v v' in
       (* add guard *)
-      U.asserting
+      U.imply
+        (U.app_const p [U.var v'])
         (U.mk_bind b v' (encode_term state subst body))
-        [U.app_const p [U.var v']]
     | TI.Bind (`Fun, _, _) -> Utils.not_implemented "elim_types for λ"
     | TI.Bind (`TyForall, _, _) -> assert false
     | _ ->
