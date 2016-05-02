@@ -15,11 +15,10 @@ module Stmt = Statement
 
 (* TODO: require elimination of pattern matching earlier, in types *)
 
-type ('a, 'b) inv_param = <ty:[`Mono]; ind_preds:'b; eqn:[`Single]; ..> as 'a
+type inv = <ty:[`Mono]; ind_preds:[`Absent]; eqn:[`Single]>
 
-type _ mode =
-  | Mode_data : [`Absent] mode
-  | Mode_codata : [`Present] mode
+let name = "elim_data"
+let section = Utils.Section.make name
 
 exception Error of string
 
@@ -34,15 +33,11 @@ let errorf msg = Utils.exn_ksprintf ~f:error msg
 module type S = sig
   module T : TI.S
 
-  type ind_preds_mode
-
-  type 'a inv = ('a, ind_preds_mode) inv_param
-
   type decode_state
 
   val transform_pb :
-    (T.t, T.t, 'a inv) Problem.t ->
-    (T.t, T.t, 'a inv) Problem.t * decode_state
+    (T.t, T.t, inv) Problem.t ->
+    (T.t, T.t, inv) Problem.t * decode_state
 
   val decode_model :
     decode_state -> (T.t, T.t) Model.t -> (T.t, T.t) Model.t
@@ -50,8 +45,8 @@ module type S = sig
   val pipe :
     print:bool ->
     check:bool ->
-    ((T.t,T.t, 'a inv) Problem.t,
-     (T.t,T.t, 'a inv) Problem.t,
+    ((T.t,T.t, inv) Problem.t,
+     (T.t,T.t, inv) Problem.t,
       (T.t,T.t) Problem.Res.t, (T.t,T.t) Problem.Res.t
     ) Transform.t
 
@@ -59,18 +54,14 @@ module type S = sig
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
     check:bool ->
-    ((T.t,T.t, 'a inv) Problem.t,
-     (T.t,T.t,'a inv) Problem.t, 'c, 'd
+    ((T.t,T.t, inv) Problem.t,
+     (T.t,T.t, inv) Problem.t, 'c, 'd
     ) Transform.t
 end
 
-module Make_full
-(M : sig
-  type ind_preds_mode
-  val mode : ind_preds_mode mode
- end)
+module Make
 (T : TI.S)
-: S with module T = T and type ind_preds_mode = M.ind_preds_mode
+: S with module T = T
 = struct
   module T = T
   module U = TI.Util(T)
@@ -78,16 +69,6 @@ module Make_full
   module PStmt = Stmt.Print(P)(P)
 
   type ty = T.t
-
-  type ind_preds_mode = M.ind_preds_mode
-
-  type 'a inv = ('a, ind_preds_mode) inv_param
-
-  let name = match M.mode with
-    | Mode_data -> "elim_data"
-    | Mode_codata -> "elim_codata"
-
-  let section = Utils.Section.make name
 
   (* the constructions to encode *)
   type to_encode =
@@ -298,11 +279,14 @@ module Make_full
     let eq_axiom_l = List.map eq_axiom etys in
     decl_l @ eq_axiom_l @ ax_l
 
-  let encode_stmt_data state stmt =
+  let encode_stmt state stmt =
     match Stmt.view stmt with
-      | Stmt.TyDef (`Codata, _) -> assert false (* already removed *)
+      | Stmt.TyDef (`Codata, l) ->
+        Utils.debugf ~section 2 "@[<2>encode codata@ `@[%a@]`@]"
+          (fun k->k PStmt.print_tydefs (`Codata, l));
+        encode_codata state l
       | Stmt.TyDef (`Data, l) ->
-        Utils.debugf ~section 2 "@[<2>encode `@[%a@]`@]"
+        Utils.debugf ~section 2 "@[<2>encode data@ `@[%a@]`@]"
           (fun k->k PStmt.print_tydefs (`Data, l));
         encode_data state l
       | _ ->
@@ -310,23 +294,6 @@ module Make_full
           Stmt.map stmt ~term:(tr_term state) ~ty:(tr_ty state)
         in
         [stmt]
-
-  let encode_stmt_codata state stmt =
-    match Stmt.view stmt with
-      | Stmt.TyDef (`Codata, l) ->
-        Utils.debugf ~section 2 "@[<2>encode `@[%a@]`@]"
-          (fun k->k PStmt.print_tydefs (`Codata, l));
-        encode_codata state l
-      | Stmt.TyDef (`Data, _)
-      | _ ->
-        let stmt =
-          Stmt.map stmt ~term:(tr_term state) ~ty:(tr_ty state)
-        in
-        [stmt]
-
-  let encode_stmt state st = match M.mode with
-    | Mode_data -> encode_stmt_data state st
-    | Mode_codata -> encode_stmt_codata state st
 
   let transform_pb pb =
     let state = create_state () in
@@ -363,7 +330,3 @@ module Make_full
     let decode state = Problem.Res.map_m ~f:(decode_model state) in
     pipe_with ~check ~decode ~print
 end
-
-module Make_data = Make_full(struct type ind_preds_mode = [`Absent] let mode = Mode_data end)
-
-module Make_codata = Make_full(struct type ind_preds_mode = [`Present] let mode = Mode_codata end)
