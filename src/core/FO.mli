@@ -112,6 +112,12 @@ module T : sig
   val view : t -> (t, Ty.t) view
   (** Observe the structure of the term *)
 
+  val compare : t -> t -> int
+  (** Fast total ordering on values of type [t].
+      {b NOT} structural comparison!
+      There is no guarantee that two terms that are only structurally equal,
+      but that have been built independently, will compare to 0 *)
+
   val builtin : Builtin.t -> t
   val const : id -> t
   val app : id -> t list -> t
@@ -147,6 +153,11 @@ module Problem : sig
   val of_list : meta:Metadata.t -> ('t, 'ty) statement list -> ('t, 'ty) t
   val statements : ('t, 'ty) t -> ('t, 'ty) statement CCVector.ro_vector
   val meta : _ t -> Metadata.t
+  val map :
+    meta:Metadata.t ->
+    (('t, 'ty) statement -> ('t2, 'ty2) statement) ->
+    ('t, 'ty) t ->
+    ('t2, 'ty2) t
   val flat_map :
     meta:Metadata.t ->
     (('t, 'ty) statement -> ('t2, 'ty2) statement list) ->

@@ -120,11 +120,18 @@ module Ty = struct
 end
 
 module T = struct
-  type t = { view : (t, Ty.t) view }
+  type t = { view : (t, Ty.t) view; id: int }
 
   let view t = t.view
+  let compare a b = Pervasives.compare a.id b.id
 
-  let make_ view = {view}
+  let make_ =
+    let n = ref 0 in
+    fun view ->
+      let t = {view; id= !n } in
+      incr n;
+      t
+
   let builtin b = make_ (Builtin b)
   let app id l = make_ (App(id,l))
   let const id = make_ (App(id,[]))
@@ -143,17 +150,23 @@ module T = struct
   let and_ = function
     | [] -> true_
     | [x] -> x
+    | l when List.exists (function {view=False; _} -> true | _ -> false) l -> false_
     | l -> make_ (And l)
   let or_ = function
     | [] -> false_
     | [x] -> x
+    | l when List.exists (function {view=True; _} -> true | _ -> false) l -> true_
     | l -> make_ (Or l)
   let not_ = function
     | {view=True; _} -> false_
     | {view=False; _} -> true_
     | {view=Not f; _} -> f
     | f -> make_ (Not f)
-  let imply a b = make_ (Imply (a,b))
+  let imply a b = match a.view, b.view with
+    | True, _ -> b
+    | False, _ -> true_
+    | _, False -> not_ a
+    | _ -> make_ (Imply (a,b))
   let equiv a b = make_ (Equiv (a,b))
   let forall v t = make_ (Forall (v,t))
   let exists v t = make_ (Exists (v,t))
@@ -174,6 +187,8 @@ module Problem = struct
   let flat_map ~meta f pb =
     let res = CCVector.flat_map_list f pb.statements in
     make ~meta res
+
+  let map ~meta f pb = flat_map ~meta (fun s -> [f s]) pb
 
   let fold_flat_map ~meta f acc pb =
     let res = CCVector.create () in
