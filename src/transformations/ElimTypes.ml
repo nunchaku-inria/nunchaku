@@ -59,10 +59,21 @@ module Make(T : TI.S) = struct
       let p = find_pred state (Var.ty v) in
       let v' = Var.fresh_copy v |> Var.set_ty ~ty:state.dummy_ty in
       let subst = Var.Subst.add ~subst v v' in
-      (* add guard *)
-      U.imply
-        (U.app_const p [U.var v'])
-        (U.mk_bind b v' (encode_term state subst body))
+      (* add guard, just under the quantifier. *)
+      begin match b with
+        | `Forall ->
+          (* [forall v:t. F] -> [forall v. is_t v => F] *)
+          U.forall v'
+            (U.imply
+               (U.app_const p [U.var v'])
+               (encode_term state subst body))
+        | `Exists ->
+          (* [exists v:t. F] -> [exists v. is_t v & F] *)
+          U.exists v'
+            (U.and_
+               [ U.app_const p [U.var v']
+               ; encode_term state subst body ])
+      end
     | TI.Bind (`Fun, _, _) -> Utils.not_implemented "elim_types for λ"
     | TI.Bind (`TyForall, _, _) -> assert false
     | _ ->
