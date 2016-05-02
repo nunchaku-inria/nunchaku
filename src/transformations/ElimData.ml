@@ -160,7 +160,7 @@ module Make
      and return a [encoded_ty] *)
   let ety_of_dataty state ty =
     let open Stmt in
-    assert (ty.ty_vars=[]);
+    assert (ty.ty_vars=[] && U.ty_is_Type ty.ty_type);
     add_ state (Const ty.ty_id) ty.ty_id;
     ID.Tbl.add state.decode.ds_data ty.ty_id ();
     (* add destructors, testers, constructors *)
@@ -251,19 +251,73 @@ module Make
       etys
 
   (* acyclicity of datatypes:
-     - declare a recursive pred [contains : ty -> ty -> prop] such that
-       [contains a b] is true iff [a] contains [b] (strictly!).
-     - then, assert [forall a. not (contains a a)]
+     - declare a recursive fun [occurs_in : ty -> ty -> prop] such that
+       [occurs_in a b] is true iff [a] is a strict subterm of [b].
+     - then, assert [forall a. not (occurs_in a a)]
   *)
-  let acyclicity_ax _ety =
-    assert false (* TODO *)
+  let acyclicity_ax ety =
+    let id = ety.ety_id in
+    (* is [ty = id]? *)
+    let is_same_ty ty = match T.repr ty with
+      | TI.Const id' -> ID.equal id id'
+      | _ -> false
+    in
+    (* [id_c : id -> id -> prop] *)
+    let id_c = ID.make_f "occurs_in_%a" ID.print_name id in
+    let ty_c = U.ty_arrow_l [U.const id; U.const id] U.ty_prop in
+    let def_c = Stmt.mk_defined id_c ty_c in
+    (* definition:
+       [occurs_in x y :=
+         exists cstor.
+         (y = cstor a1...an && (Or_k (x=a_k || occurs_in x a_k)))]
+    *)
+    let x = Var.make ~ty:(U.const id) ~name:"x" in
+    let y = Var.make ~ty:(U.const id) ~name:"y" in
+    let vars = [x;y] in
+    let ax_c =
+      List.map
+        (fun cstor ->
+           (* guard: [is_cstor y] *)
+           let test = U.app_const (fst cstor.ecstor_test) [U.var y] in
+           let subcases =
+             CCList.flat_map
+               (fun (proj,proj_ty) -> match U.ty_unfold proj_ty with
+                  | _, [_], ret when is_same_ty ret ->
+                    (* this is a recursive argument, hence a possible case *)
+                    [ U.eq (U.var x) (U.app_const proj [U.var y])
+                    ; U.app_const id_c [U.var x; U.app_const proj [U.var y]]
+                    ]
+                  | _ -> [])
+               cstor.ecstor_proj
+           in
+           U.and_ [test; U.or_ subcases])
+        ety.ety_cstors
+      |> U.or_
+    in
+    let def_c =
+      Stmt.axiom_rec ~info:Stmt.info_default
+        [ { Stmt.rec_defined=def_c;
+            rec_kind=Stmt.Decl_prop;
+            rec_vars=vars;
+            rec_eqns=Stmt.Eqn_single (vars, ax_c)
+          } ]
+    in
+    (* also assert [forall x y. not (occurs_in x x)] *)
+    let ax_no_cycle =
+      let a = Var.make ~ty:(U.const id) ~name:"a" in
+      U.forall a
+        (U.not_ (U.app_const id_c [U.var a; U.var a]))
+    in
+    [ def_c
+    ; Stmt.axiom1 ~info:Stmt.info_default ax_no_cycle
+    ]
 
   (* encode list of data into axioms *)
   let encode_data state l =
     let etys = List.map (ety_of_dataty state) l in
     let decl_l = common_decls etys in
     let ax_l = common_axioms etys in
-    let acyclicity_l = List.map acyclicity_ax etys in
+    let acyclicity_l = CCList.flat_map acyclicity_ax etys in
     decl_l @ acyclicity_l @ ax_l
 
   (* TODO: axiomatization of equality of codatatypes *)
