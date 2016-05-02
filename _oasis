@@ -77,7 +77,8 @@ Library "nunchaku_transformations"
                     IntroGuards,
                     Model_rename,
                     ElimData,
-                    ElimTypes
+                    ElimTypes,
+                    Elim_ite
   Install:          true
   FindlibName:      transformations
   FindlibParent:    nunchaku_core

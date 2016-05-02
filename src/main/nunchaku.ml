@@ -301,6 +301,7 @@ let make_model_pipeline () =
         Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
         close_task (
           Step_tofo.pipe ~print:!print_all_ () @@@
+          Elim_ite.pipe ~print:!print_all_ @@@
           FO.pipe_tptp @@@
           paradox
         ))
