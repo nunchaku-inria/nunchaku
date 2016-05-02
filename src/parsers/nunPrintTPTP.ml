@@ -111,6 +111,7 @@ module Make(T : TI.S) = struct
     | TI.Builtin b -> print_builtin print_inner out b
     | TI.TyBuiltin `Type -> CCFormat.string out "$tType"
     | TI.TyBuiltin `Kind -> error_ "cannot print `kind` in TPTP"
+    | TI.TyBuiltin `Unitype -> CCFormat.string out "$i"
     | TI.TyBuiltin `Prop -> CCFormat.string out "$o"
 
   and print_ty out t = print_term out t
