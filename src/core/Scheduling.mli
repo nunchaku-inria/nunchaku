@@ -52,14 +52,16 @@ end
     The subprocess is managed in a thread, hidden behind a future.
     Cancelling the future will kill the subprocess *)
 
+type process_status = int
+
 val popen :
-  ?on_res:('a Fut.final_state -> unit) list ->
+  ?on_res:(('a * process_status) Fut.final_state -> unit) list ->
   string ->
   f:(out_channel * in_channel -> 'a) ->
-  'a Fut.t
+  ('a * process_status) Fut.t
 (** [popen cmd ~f] starts a subprocess executing [cmd], and calls
     [f] with the [(stdin,stdout)] of the sub-process, in a new thread.
-    @return the future result of [f] *)
+    @return a future tuple (result of [f], process' result status) *)
 
 (** {2 Task} *)
 
