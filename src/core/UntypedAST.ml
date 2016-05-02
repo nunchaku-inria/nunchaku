@@ -291,7 +291,7 @@ let rec print_term out term = match Loc.get term with
   | Asserting (_, []) -> assert false
   | Asserting (t, l) ->
       fpf out "@[<2>%a@ @[<2>asserting @[%a@]@]@]"
-        print_term_inner t (pp_list_ ~sep:" ∧ " print_term_inner) l
+        print_term_inner t (pp_list_ ~sep:" && " print_term_inner) l
   | TyArrow (a, b) ->
       fpf out "@[<2>%a ->@ %a@]"
         print_term_in_arrow a print_term b
