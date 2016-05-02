@@ -189,7 +189,6 @@ module Make
 
   let app_id id l = U.app (U.const id) l
   let app_id_fst (id,_) l = app_id id l
-  let var_f ~ty f = CCFormat.ksprintf f ~f:(fun name -> Var.make ~ty ~name)
 
   (* declare the new constants *)
   let common_decls etys =
@@ -211,7 +210,7 @@ module Make
     CCList.flat_map
       (fun ety ->
          (* define projectors *)
-         let x = var_f ~ty:(U.const ety.ety_id) "v_%a" ID.print_name ety.ety_id in
+         let x = Var.makef ~ty:(U.const ety.ety_id) "v_%a" ID.print_name ety.ety_id in
          (* [forall x, is_c x => x = c (select_c_1 x) ... (select_c_n x)] *)
          let ax_projs =
            List.map
@@ -237,8 +236,17 @@ module Make
            CCList.diagonal ety.ety_cstors
            |> List.map
              (fun (c1,c2) ->
-                let vars1 = List.mapi (fun i (_,ty) -> var_f ~ty "l_%d" i) c1.ecstor_proj in
-                let vars2 = List.mapi (fun i (_,ty) -> var_f ~ty "r_%d" i) c2.ecstor_proj in
+                let proj_ty_arg ty = match U.ty_unfold ty with
+                  | _, [_], ret -> ret
+                  | _ -> assert false
+                in
+                let mk_vars c =
+                  List.mapi
+                    (fun i (_,ty) -> Var.makef ~ty:(proj_ty_arg ty) "l_%d" i)
+                    c.ecstor_proj
+                in
+                let vars1 = mk_vars c1 in
+                let vars2 = mk_vars c2 in
                 U.forall_l
                   (vars1 @ vars2)
                   (U.neq
