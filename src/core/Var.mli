@@ -21,6 +21,9 @@ val make : ty:'ty -> name:string -> 'ty t
 (** [make ~ty ~name] makes a new variable with the given name and type. It
     will have a unique identifier *)
 
+val makef : ty:'ty -> ('b, Format.formatter, unit, 'ty t) format4 -> 'b
+(** printf-ready make function *)
+
 val fresh_copy : 'ty t -> 'ty t
 (** [fresh_copy v] makes a variable that looks like [v] but has a fresh
     identifier *)
