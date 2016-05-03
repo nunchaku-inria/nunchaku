@@ -78,6 +78,7 @@ module Util(T : S)
 
   val ty_type : t (** Type of types *)
   val ty_prop : t (** Propositions *)
+  val ty_unitype : t  (** $i in TPTP *)
 
   val ty_builtin : ?loc:loc -> TI.TyBuiltin.t -> t
   val ty_const : ?loc:loc -> id -> t
@@ -108,6 +109,9 @@ end = struct
 
   let ty_prop =
     build ?loc:None ~ty:ty_type (TI.TyBuiltin `Prop)
+
+  let ty_unitype =
+    build ?loc:None ~ty:ty_type (TI.TyBuiltin `Unitype)
 
   let builtin ?loc ~ty b =
     build ?loc ~ty (TI.Builtin b)

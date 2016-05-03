@@ -172,6 +172,7 @@ let rec declare_missing ~ctx ~state t =
           | `Type
           | `True
           | `False
+          | `Unitype
           | `Undefined _ -> t
           end
       | _ ->

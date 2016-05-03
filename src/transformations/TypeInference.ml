@@ -210,6 +210,7 @@ module Convert(Term : TermTyped.S) = struct
     match Loc.get ty with
       | A.Builtin `Prop -> U.ty_prop
       | A.Builtin `Type -> U.ty_type
+      | A.Builtin `Unitype -> U.ty_unitype
       | A.Builtin s ->
           ill_formedf ?loc ~kind:"type" "%a is not a type" A.Builtin.print s
       | A.App (f, l) ->
@@ -374,6 +375,7 @@ module Convert(Term : TermTyped.S) = struct
           | `Imply | `Or | `And | `Not -> ill_formed ?loc "partially applied connective"
           | `Prop -> ill_formed ?loc "`prop` is not a term, but a type"
           | `Type -> ill_formed ?loc "`type` is not a term"
+          | `Unitype -> ill_formedf ?loc "`unitype` is not a term"
           | `True -> `True, prop
           | `False -> `False, prop
           | `Undefined _ | `Eq | `Equiv -> assert false (* dealt with earlier *)
