@@ -529,7 +529,7 @@ module To_tptp = struct
       let t = conv_as_term subst t in
       let subst = Var.Subst.add ~subst v t in
       conv_rec subst u
-    | Ite (_,_,_) -> assert false (* TODO: transmit through context *)
+    | Ite (_,_,_) -> error_ "fo_to_tptp: unexpected `ite`"
     | True -> F TT.true_
     | False -> F TT.false_
     | Eq (a,b) -> F (TT.eq (conv_as_term subst a) (conv_as_term subst b))
