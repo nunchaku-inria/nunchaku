@@ -280,13 +280,13 @@ let preprocess seq =
   open Nunchaku_core
   module A = UntypedAST
   let parses_ok p t = match p t with `Ok _ -> true | _ -> false
-  let ho_parses_ok = parses_ok NunTPTPLexer.ho_form_of_string
-  let fo_parses_ok = parses_ok NunTPTPLexer.ho_form_of_string
+  let ho_parses_ok = parses_ok TPTP_lexer.ho_form_of_string
+  let fo_parses_ok = parses_ok TPTP_lexer.ho_form_of_string
 
   let term_to_string = CCFormat.to_string A.print_term
   let term_eq t1 t2 = (term_to_string t1) = (term_to_string t2)
 
-  let pho = NunTPTPLexer.ho_form_of_string_exn
+  let pho = TPTP_lexer.ho_form_of_string_exn
 *)
 
 (*$T

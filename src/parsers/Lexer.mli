@@ -3,9 +3,9 @@
 
 (** {1 Lexer} *)
 
-val token : Lexing.lexbuf -> NunParser.token
+val token : Lexing.lexbuf -> Parser.token
 
 (** {2 Utils} *)
 
-include NunParsingUtils.S
+include Parsing_utils.S
 

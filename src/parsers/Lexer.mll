@@ -6,7 +6,7 @@
 {
 
   open Nunchaku_core
-  open NunParser
+  open Parser
 
 }
 
@@ -100,20 +100,20 @@ rule token = parse
   | _ as c
     {
       let loc = Location.of_lexbuf lexbuf in
-      NunParsingUtils.lex_error_ ~loc "unexpected char '%c'" c
+      Parsing_utils.lex_error_ ~loc "unexpected char '%c'" c
     }
 
 {
-  include NunParsingUtils.Make(struct
-    type token = NunParser.token
+  include Parsing_utils.Make(struct
+    type token = Parser.token
 
     type 'a parser_ = (Lexing.lexbuf -> token) -> Lexing.lexbuf -> 'a
 
     let token = token
-    let parse_ty = NunParser.parse_ty
-    let parse_term = NunParser.parse_term
-    let parse_statement = NunParser.parse_statement
-    let parse_statement_list = NunParser.parse_statement_list
+    let parse_ty = Parser.parse_ty
+    let parse_term = Parser.parse_term
+    let parse_statement = Parser.parse_statement
+    let parse_statement_list = Parser.parse_statement_list
   end)
 
 }

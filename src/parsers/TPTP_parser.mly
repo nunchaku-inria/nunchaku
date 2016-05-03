@@ -41,8 +41,10 @@
 %token TY_TYPE /* $tType */
 %token ITE_T
 %token ITE_F
+/*
 %token LET_TF
 %token LET_FF
+*/
 
 %token AT
 %token HO_FORALL
@@ -177,7 +179,7 @@ statement:
   | error
     {
       let loc = L.mk_pos $startpos $endpos in
-      NunParsingUtils.parse_error_ ~loc "expected statement"
+      Parsing_utils.parse_error_ ~loc "expected statement"
     }
 
 %public type_decl(TY):
@@ -203,7 +205,7 @@ thf_formula:
   | error
     {
       let loc = L.mk_pos $startpos $endpos in
-      NunParsingUtils.parse_error_ ~loc "could not parse THF formula" }
+      Parsing_utils.parse_error_ ~loc "could not parse THF formula" }
 
 thf_apply_term:
   | t=thf_unitary_formula { t }
@@ -456,7 +458,7 @@ defined_atom:
   | _=RATIONAL { Utils.not_implemented "TPTP: cannot handle rational" }
   | REAL {
       let loc = L.mk_pos $startpos $endpos in
-      NunParsingUtils.parse_error_ ~loc "TPTP: cannot handle real numbers"
+      Parsing_utils.parse_error_ ~loc "TPTP: cannot handle real numbers"
     }
   | s=DISTINCT_OBJECT { s }
 

@@ -190,11 +190,11 @@ let parse_file ~input () =
     try
       match input with
       | I_nunchaku ->
-          NunLexer.parse src
+          Nunchaku_parsers.Lexer.parse src
       | I_tptp ->
-          NunTPTPLexer.parse ~mode:(`Env "TPTP") src
+          Nunchaku_parsers.TPTP_lexer.parse ~mode:(`Env "TPTP") src
           >|= CCVector.to_seq
-          >>= NunTPTPPreprocess.preprocess
+          >>= Nunchaku_parsers.TPTP_preprocess.preprocess
     with e -> Utils.err_of_exn e
   in
   E.map_err
@@ -381,7 +381,7 @@ let main_model ~output statements =
         (Model.print P.print P.print) m;
   | Res.Sat m, O_tptp ->
       (* XXX: if potentially spurious, what should we print? *)
-      let module PM = NunPrintTPTP.Make(T) in
+      let module PM = Nunchaku_parsers.TPTP_print.Make(T) in
       Format.printf "@[<v2>%a@]@,@." PM.print_model m
   | Res.Unsat, O_nunchaku ->
       Format.printf "@[UNSAT@]@."

@@ -41,8 +41,9 @@ Library "nunchaku_core"
 
 Library "nunchaku_parsers"
   Path:             src/parsers/
-  Modules:          NunParsingUtils, NunLexer, NunParser, NunPrintTPTP,
-                    NunTPTPLexer, NunTPTPParser, NunTPTPPreprocess
+  Pack:             true
+  Modules:          Parsing_utils, Lexer, Parser, TPTP_print,
+                    TPTP_lexer, TPTP_parser, TPTP_preprocess
   Install:          true
   FindlibName:      parsers
   FindlibParent:    nunchaku_core
