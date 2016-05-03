@@ -40,7 +40,7 @@ let solve ~deadline pb =
          let paradox_timeout = int_of_float (ceil (deadline -. now)) in
          let hard_timeout = (int_of_float (timeout +. 1.5)) in
          let cmd =
-           Printf.sprintf "ulimit -t %d; paradox --time %d --model '%s'"
+           Printf.sprintf "ulimit -t %d; paradox --time %d --model --tstp '%s'"
               hard_timeout paradox_timeout file
          in
          (* call paradox, get its stdout and errcode *)
