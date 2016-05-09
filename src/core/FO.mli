@@ -103,6 +103,8 @@ module Ty : sig
   val builtin : TyBuiltin.t -> t
   val arrow : t list -> t -> toplevel_ty
 
+  val is_prop : t -> bool
+
   val equal : t -> t -> bool
   val compare : t -> t -> int
 end

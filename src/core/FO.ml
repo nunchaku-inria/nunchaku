@@ -104,6 +104,10 @@ module Ty = struct
   let builtin b = make_ (TyBuiltin b)
   let arrow a l = a,l
 
+  let is_prop t = match t.view with
+    | TyBuiltin `Prop -> true
+    | _ -> false
+
   let to_int_ = function
     | TyBuiltin _ -> 0
     | TyApp _ -> 1
@@ -302,11 +306,14 @@ let print_problem out pb =
 
 (** {2 Utils} *)
 module Util = struct
+  (* condition: var = term *)
+  type cond = Ty.t Var.t * T.t
+
   exception Parse_err of unit lazy_t
   (* evaluate the lazy -> print a warning *)
 
   (* split [t] into a list of equations [var = t'] where [var in vars] *)
-  let rec get_eqns ~vars t =
+  let rec get_eqns_exn ~vars t : cond list =
     Utils.debugf 5 "get_eqns @[%a@]" (fun k->k print_term t);
     let fail() =
       let msg = lazy (
@@ -317,7 +324,7 @@ module Util = struct
       raise (Parse_err msg)
     in
     match T.view t with
-    | And l -> CCList.flat_map (get_eqns ~vars) l
+    | And l -> CCList.flat_map (get_eqns_exn ~vars) l
     | Eq (t1, t2) ->
         begin match T.view t1, T.view t2 with
           | Var v, _ when List.exists (Var.equal v) vars ->
@@ -337,7 +344,9 @@ module Util = struct
         raise (Parse_err msg)
     | _ -> fail()
 
-  type cond = Ty.t Var.t * T.t
+  let get_eqns ~vars t : cond list option =
+    try Some (get_eqns_exn ~vars t)
+    with Parse_err _ -> None
 
   module DT = Model.DT
 
@@ -347,7 +356,7 @@ module Util = struct
        one with an empty list of conditions *)
     type +'a t = (cond list * 'a) Sequence.t
 
-    let return x = Sequence.return ([], x)
+    let return x : _ t = Sequence.return ([], x)
 
     let (>|=)
     : 'a t -> ('a -> 'b) -> 'b t
@@ -363,10 +372,12 @@ module Util = struct
       f t >|= fun (conds', t') -> List.rev_append conds' conds, t'
 
     (* add a test; if the test holds yield [b], else yield [c] *)
-    let guard
-    : cond list -> 'a -> 'a -> 'a t
-    = fun a b c ->
-      Sequence.doubleton (a, b) ([], c)
+    let case
+    : type a. cond list -> a t -> a t -> a t
+    = fun cond a b ->
+      Sequence.append
+        (Sequence.map (fun (cond',a') -> List.rev_append cond cond', a') a)
+        b
 
     let rec fold_m f acc l = match l with
       | [] -> return acc
@@ -381,6 +392,7 @@ module Util = struct
       | [] -> assert false
       | (_::_,_)::_ -> assert false
       | ([], else_) :: cases ->
+          (* last case must have empty condition *)
           let cases = List.rev cases in
           DT.test cases ~else_
   end
@@ -402,41 +414,38 @@ module Util = struct
       | Equiv (_,_)
       | Forall (_,_)
       | Exists (_,_) -> return t
-      | Var v ->
+      | Var v when Ty.is_prop (Var.ty v)  ->
           (* boolean variable: perform a test on it *)
-          guard [v, T.true_] T.true_ T.false_
+          case [v, T.true_] (return T.true_) (return T.false_)
+      | Var _ -> return t
       | Eq (a,b) ->
-          begin try
+        begin match get_eqns ~vars t with
+          | Some conds ->
             (* yield true if equality holds, false otherwise *)
-            let cond = get_eqns ~vars t in
-            guard cond T.true_ T.false_
-          with Parse_err _ ->
+            case conds (return T.true_) (return T.false_)
+          | None ->
             aux a >>= fun a ->
             aux b >|= fun b -> T.eq a b
           end
       | Imply (a,b) ->
-          begin try
+        begin match get_eqns ~vars a with
+          | Some conds ->
             (* a => b becomes if a then b else false *)
-            let cond = get_eqns ~vars a in
-            aux b >>= fun b ->
-            guard cond b T.false_
-          with Parse_err _ ->
+            case conds (aux b) (return T.false_)
+          | None ->
             aux a >>= fun a ->
             aux b >|= fun b ->
             T.imply a b
           end
       | Ite (a,b,c) ->
-          let cond = get_eqns ~vars a in
-          aux b >>= fun b ->
-          aux c >>= fun c ->
-          guard cond b c
+          let cond = get_eqns_exn ~vars a in
+          case cond (aux b) (aux c)
       | And l ->
-          begin try
-            let cond = get_eqns ~vars t in
-            guard cond T.true_ T.false_
-          with Parse_err _ ->
-            aux_l l >|= T.and_
-          end
+        begin match get_eqns ~vars t with
+          | Some cond ->
+            case cond (return T.true_) (return T.false_)
+          | None -> aux_l l >|= T.and_
+        end
       | Or l -> aux_l l >|= T.or_
       | Not t -> aux t >|= T.not_
       | App (id,l) -> aux_l l >|= T.app id
