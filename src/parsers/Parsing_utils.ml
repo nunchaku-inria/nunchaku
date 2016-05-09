@@ -5,11 +5,11 @@
 
 open Nunchaku_core
 
-module E = CCError
+module E = CCResult
 module A = UntypedAST
 module Loc = Location
 
-type 'a or_error = [`Ok of 'a | `Error of string ]
+type 'a or_error = ('a, string) CCResult.t
 
 let section = Utils.Section.make "parser"
 
@@ -174,7 +174,7 @@ module Make(P : PARSER) : S = struct
       Conv.convert_term t
 
     let term_of_str s =
-      try CCError.return (term_of_str_exn s)
+      try E.return (term_of_str_exn s)
       with e -> Utils.err_of_exn e
   end
 end

@@ -3,7 +3,7 @@
 
 open Nunchaku_core
 
-module E = CCError
+module E = CCResult
 module A = UntypedAST
 module Utils = Utils
 module TI = TermInner
@@ -184,7 +184,7 @@ let print_version_if_needed () =
   ()
 
 let parse_file ~input () =
-  let open CCError.Infix in
+  let open E.Infix in
   let src = if !file = "" then `Stdin else `File !file in
   let res =
     try
@@ -198,7 +198,8 @@ let parse_file ~input () =
     with e -> Utils.err_of_exn e
   in
   E.map_err
-    (fun msg -> CCFormat.sprintf "@[<2>could not parse `%s`:@ %s@]" !file msg) res
+    (fun msg -> CCFormat.sprintf "@[<2>could not parse `%s`:@ %s@]" !file msg)
+    res
 
 let print_input_if_needed statements =
   if !print_ then
@@ -362,7 +363,7 @@ let () = Printexc.register_printer
 
 (* model mode *)
 let main_model ~output statements =
-  let open CCError.Infix in
+  let open E.Infix in
   let module T = TI.Default in
   let module P = TI.Print(T) in
   let module Res = Problem.Res in
@@ -396,7 +397,7 @@ let main_model ~output statements =
 
 (* main *)
 let main () =
-  let open CCError.Infix in
+  let open E.Infix in
   CCFormat.set_color_default true; (* default: enable colors *)
   Arg.parse options set_file "usage: nunchaku [options] file";
   print_version_if_needed ();

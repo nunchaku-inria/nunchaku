@@ -333,8 +333,8 @@ let print_rules() =
 (*$QR & ~count:300
   arbitrary_prop
     (fun t -> match U.ty t ~sigma:(Signature.find ~sigma:base_sig) with
-      | `Ok ty -> U.ty_is_Prop ty
-      | `Error _ -> false)
+      | CCResult.Ok ty -> U.ty_is_Prop ty
+      | CCResult.Error _ -> false)
 *)
 
 (*$QR & ~count:300
@@ -342,6 +342,6 @@ let print_rules() =
     (fun t ->
         (* just  see if it typechecks *)
       match U.ty t ~sigma:(Signature.find ~sigma:base_sig) with
-      | `Ok _ ->  true
-      | `Error _ -> false)
+      | CCResult.Ok _ ->  true
+      | CCResult.Error _ -> false)
 *)

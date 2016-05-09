@@ -9,7 +9,7 @@ module MetaVar = MetaVar
 
 type id = ID.t
 type 'a var = 'a Var.t
-type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a or_error = ('a, string) CCResult.t
 type 'a printer = Format.formatter -> 'a -> unit
 
 let fpf = Format.fprintf
@@ -1479,7 +1479,7 @@ module Util(T : S)
     | TyArrow (_,_) -> ty_type
 
   let ty ~sigma t =
-    try CCError.return (ty_exn ~sigma t)
+    try CCResult.return (ty_exn ~sigma t)
     with e -> Utils.err_of_exn e
 
   (* return lists of same length, for
