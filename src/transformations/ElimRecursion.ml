@@ -336,8 +336,8 @@ let id_is_app_fun_ ~state id = match state.decode.hof with
    It returns an axiom instead. *)
 let tr_eqns ~state ~fun_encoding ty eqn =
   let connect pol lhs rhs = match pol with
-    | Polarity.Pos -> U.imply lhs rhs
-    | Polarity.Neg -> U.imply rhs lhs
+    | Polarity.Pos -> assert (U.ty_returns_Prop ty); U.imply lhs rhs
+    | Polarity.Neg -> assert (U.ty_returns_Prop ty); U.imply rhs lhs
     | Polarity.NoPol ->
         if U.ty_returns_Prop ty
         then U.equiv lhs rhs
