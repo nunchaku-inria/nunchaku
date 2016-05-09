@@ -64,11 +64,14 @@ let version_ = ref false
 let file = ref ""
 let solvers = ref [S_CVC4; S_kodkod; S_paradox]
 let j = ref 3
+let prelude_ = ref []
 
 let set_file f =
   if !file <> ""
   then raise (Arg.Bad "please provide only one file")
   else file := f
+
+let add_prelude p = prelude_ := p :: !prelude_
 
 let set_input_ f =
   input_ := match String.lowercase f with
@@ -172,6 +175,7 @@ let options =
   ; "-i", Arg.String set_input_, " synonym for --input"
   ; "--output", Arg.String set_output_, " set output format " ^ list_outputs_ ()
   ; "-o", Arg.String set_output_, " synonym for --output"
+  ; "--prelude", Arg.String add_prelude, " parse given prelude file"
   ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
   ; "--version", Arg.Set version_, " print version and exit"
   ]
@@ -184,16 +188,17 @@ let print_version_if_needed () =
   );
   ()
 
-let parse_file ~input () =
+let parse_file ~into ~input () =
   let open E.Infix in
   let src = if !file = "" then `Stdin else `File !file in
   let res =
     try
       match input with
       | I_nunchaku ->
-          Nunchaku_parsers.Lexer.parse src
+          Nunchaku_parsers.Lexer.parse ~into src
+          >|= CCVector.freeze
       | I_tptp ->
-          Nunchaku_parsers.TPTP_lexer.parse ~mode:(`Env "TPTP") src
+          Nunchaku_parsers.TPTP_lexer.parse ~into ~mode:(`Env "TPTP") src
           >|= CCVector.to_seq
           >>= Nunchaku_parsers.TPTP_preprocess.preprocess
     with e -> Utils.err_of_exn e
@@ -201,6 +206,18 @@ let parse_file ~input () =
   E.map_err
     (fun msg -> CCFormat.sprintf "@[<2>could not parse `%s`:@ %s@]" !file msg)
     res
+
+(* parse list of prelude files *)
+let parse_prelude files =
+  let open E.Infix in
+  let res = CCVector.of_list Prelude.decls in
+  E.fold_l
+    (fun () file ->
+       Nunchaku_parsers.Lexer.parse (`File file) >|= fun vec ->
+       CCVector.append res vec)
+    ()
+    files
+  >|= fun () -> res
 
 let print_input_if_needed statements =
   if !print_ then
@@ -390,7 +407,9 @@ let main () =
     exit 0
   );
   (* parse *)
-  parse_file ~input:!input_ ()
+  parse_prelude (List.rev !prelude_)
+  >>= fun statements ->
+  parse_file ~into:statements ~input:!input_ ()
   >>= fun statements ->
   print_input_if_needed statements;
   main_model ~output:!output_ statements

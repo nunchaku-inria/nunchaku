@@ -59,8 +59,9 @@ type include_mode =
 module type S = sig
   val parse :
     ?mode:include_mode ->
+    ?into:statement CCVector.vector ->
     [`File of string | `Stdin] ->
-    (statement, [`RO]) CCVector.t or_error
+    statement CCVector.vector or_error
 
   val ty_of_string : string -> ty or_error
 
@@ -138,15 +139,14 @@ module Make(P : PARSER) : S = struct
             Loc.set_file lexbuf f;
             parse_buf_rec ?loc ~mode ~basedir ~res lexbuf)
 
-  let parse ?(mode=`Relative) src =
-    let res = CCVector.create () in
+  let parse ?(mode=`Relative) ?into:(res=CCVector.create()) src =
     let basedir = match src with
       | `File f -> Filename.dirname f
       | `Stdin -> "."
     in
     try
       parse_rec ~mode ~res ~basedir src;
-      E.return (CCVector.freeze res)
+      E.return res
     with e ->
       E.fail (Printexc.to_string e)
 

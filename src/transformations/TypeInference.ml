@@ -1350,24 +1350,10 @@ module Convert(Term : TermTyped.S) = struct
     try E.return (convert_statement_exn ~env st)
     with e -> E.of_exn e
 
-  let read_prelude ~env =
-    let st, l =
-      Utils.fold_map
-        (fun env st ->
-           let st, env = convert_statement_exn ~env st in
-           TyEnv.reset_metas ~env;
-           env, st)
-        env Prelude.decls
-    in
-    l, st
-
   type problem = (term, term, stmt_invariant) Problem.t
 
   let convert_problem_exn ~env l =
     let res = CCVector.create() in
-    (* read prelude *)
-    let prelude, env = read_prelude ~env in
-    CCVector.append_list res prelude;
     (* read statements *)
     let env = CCVector.fold
       (fun env st ->
