@@ -1544,11 +1544,16 @@ end
 
 (** {2 Default Implementation} *)
 
-module Default : S
-= struct
+module Default : sig
+  include S
+
+  module U : UTIL with type t_ = t
+  module P : PRINT with type t = t
+end = struct
   type t = {
     view: t view;
   }
+  type t_ = t
 
   let rec repr t = match t.view with
     | TyMeta {MetaVar.deref=Some t'; _} -> repr t'
@@ -1561,6 +1566,13 @@ module Default : S
     | App ({view=App (f, l1); _}, l2) ->
         make_raw_ (App (f, l1 @ l2))
     | _ -> make_raw_ view
+
+  module U = Util(struct
+      type t = t_
+      let repr = repr
+      let build = build
+    end)
+  module P = Print(struct type t = t_ let repr = repr end)
 end
 
 let default = (module Default : S)

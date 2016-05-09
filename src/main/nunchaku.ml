@@ -8,6 +8,7 @@ module A = UntypedAST
 module Utils = Utils
 module TI = TermInner
 module Backends = Nunchaku_backends
+module Tr = Nunchaku_transformations
 
 type input =
   | I_nunchaku
@@ -118,36 +119,36 @@ let options =
   ; "--print-all", Arg.Set print_all_, " print every step of the pipeline"
   ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline and exit"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
-  ; "--print-" ^ Skolem.name, Arg.Set print_skolem_, " print input after Skolemization"
-  ; "--print-" ^ Monomorphization.name, Arg.Set print_mono_, " print input after monomorphization"
-  ; "--print-" ^ ElimPatternMatch.name
+  ; "--print-" ^ Tr.Skolem.name, Arg.Set print_skolem_, " print input after Skolemization"
+  ; "--print-" ^ Tr.Monomorphization.name, Arg.Set print_mono_, " print input after monomorphization"
+  ; "--print-" ^ Tr.ElimPatternMatch.name
       , Arg.Set print_elim_match_
       , " print input after elimination of pattern matching"
-  ; "--print-" ^ ElimIndPreds.name
+  ; "--print-" ^ Tr.ElimIndPreds.name
       , Arg.Set print_elim_preds_
       , " print input after elimination of (co)inductive predicates"
-  ; "--print-" ^ ElimRecursion.name
+  ; "--print-" ^ Tr.ElimRecursion.name
       , Arg.Set print_elim_recursion_
       , " print input after elimination of recursive functions"
-  ; "--print-" ^ Specialize.name
+  ; "--print-" ^ Tr.Specialize.name
       , Arg.Set print_specialize_
       , " print input after specialization"
-  ; "--print-" ^ LambdaLift.name, Arg.Set print_lambda_lift_, " print after λ-lifting"
-  ; "--print-" ^ ElimHOF.name
+  ; "--print-" ^ Tr.LambdaLift.name, Arg.Set print_lambda_lift_, " print after λ-lifting"
+  ; "--print-" ^ Tr.ElimHOF.name
       , Arg.Set print_elim_hof_
       , " print input after elimination of higher-order/partial functions"
-  ; "--print-" ^ ElimMultipleEqns.name
+  ; "--print-" ^ Tr.ElimMultipleEqns.name
       , Arg.Set print_elim_multi_eqns
       , " print input after elimination of multiple equations"
-  ; "--print-" ^ Polarize.name , Arg.Set print_polarize_, " print input after polarization"
-  ; "--print-" ^ Unroll.name, Arg.Set print_unroll_, " print input after unrolling"
-  ; "--print-" ^ ElimCopy.name, Arg.Set print_copy_, " print input after elimination of copy types"
-  ; "--print-" ^ ElimData.name
+  ; "--print-" ^ Tr.Polarize.name , Arg.Set print_polarize_, " print input after polarization"
+  ; "--print-" ^ Tr.Unroll.name, Arg.Set print_unroll_, " print input after unrolling"
+  ; "--print-" ^ Tr.ElimCopy.name, Arg.Set print_copy_, " print input after elimination of copy types"
+  ; "--print-" ^ Tr.ElimData.name
       , Arg.Set print_elim_data_
       , " print input after elimination of (co)datatypes"
-  ; "--print-" ^ IntroGuards.name, Arg.Set print_intro_guards_,
+  ; "--print-" ^ Tr.IntroGuards.name, Arg.Set print_intro_guards_,
       " print input after introduction of guards"
-  ; "--print-" ^ ElimTypes.name, Arg.Set print_elim_types_,
+  ; "--print-" ^ Tr.ElimTypes.name, Arg.Set print_elim_types_,
       " print input after elimination of types"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
@@ -212,28 +213,10 @@ module Pipes = struct
   module HO = TI.Default
   module Typed = TermTyped.Default
   (* type inference *)
-  module Step_tyinfer = TypeInference.Make(Typed)(HO)
+  module Step_tyinfer = Tr.TypeInference.Make(Typed)(HO)
   module Step_conv_ty = Problem.Convert(Typed)(HO)
-  (* encodings *)
-  module Step_skolem = Skolem.Make(HO)
-  module Step_mono = Monomorphization.Make(HO)
-  module Step_ElimMultipleEqns = ElimMultipleEqns.Make(HO)
-  module Step_ElimMatch = ElimPatternMatch.Make(HO)
-  module Step_ElimPreds = ElimIndPreds.Make(HO)
-  module Step_ElimData = ElimData.Make(HO)
-  module Step_Specialize = Specialize.Make(HO)
-  module Step_LambdaLift = LambdaLift.Make(HO)
-  module Step_ElimHOF = ElimHOF.Make(HO)
-  module Step_ElimRec = ElimRecursion.Make(HO)
-  module Step_polarize = Polarize.Make(HO)
-  module Step_unroll = Unroll.Make(HO)
-  module Step_elim_copy = ElimCopy.Make(HO)
-  module Step_intro_guards = IntroGuards.Make(HO)
-  module Step_ElimTypes = ElimTypes.Make(HO)
   (* conversion to FO *)
   module Step_tofo = TermMono.TransFO(HO)
-  (* renaming in model *)
-  module Step_rename_model = Model_rename.Make(HO)
 end
 
 let close_task p =
@@ -275,46 +258,46 @@ let make_model_pipeline () =
   let pipe =
     Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
     Step_conv_ty.pipe () @@@
-    Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~check ~mode:`Sk_types @@@
-    Step_mono.pipe ~print:(!print_mono_ || !print_all_) ~check @@@
-    Step_ElimMultipleEqns.pipe
+    Tr.Skolem.pipe ~print:(!print_skolem_ || !print_all_) ~check ~mode:`Sk_types @@@
+    Tr.Monomorphization.pipe ~print:(!print_mono_ || !print_all_) ~check @@@
+    Tr.ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~check
       ~print:(!print_elim_multi_eqns || !print_all_) @@@
-    Step_Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check @@@
+    Tr.Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check @@@
     (if !enable_polarize_
-      then Step_polarize.pipe ~print:(!print_polarize_ || !print_all_)
+      then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
         ~check ~polarize_rec:!polarize_rec_
       else Transform.nop ())
     @@@
-    Step_unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
-    Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+    Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+    Tr.Skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
     fork
       (
-        Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-        Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
-        Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
-        Step_ElimData.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
-        Step_LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
-        Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
-        Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
-        Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
-        Step_ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
-        Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
+        Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+        Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
+        Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
+        Tr.ElimData.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
+        Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+        Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+        Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
+        Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+        Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
+        Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
         close_task (
           Step_tofo.pipe ~print:!print_all_ () @@@
-          Elim_ite.pipe ~print:!print_all_ @@@
+          Tr.Elim_ite.pipe ~print:!print_all_ @@@
           FO.pipe_tptp @@@
           paradox
         ))
       (
-        Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-        Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
-        Step_LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
-        Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
-        Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
-        Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
-        Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
-        Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
+        Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+        Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
+        Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+        Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+        Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
+        Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
+        Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+        Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
         close_task (
           Step_tofo.pipe ~print:!print_all_ () @@@
           Transform.Pipe.flatten cvc4

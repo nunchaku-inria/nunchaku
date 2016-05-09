@@ -16,23 +16,23 @@
 
 open Nunchaku_core
 
+module T = TermInner.Default
+
 val name : string
 
-module Make(T : TermInner.S) : sig
-  type term = T.t
+type term = T.t
 
-  val elim_match : T.t -> T.t
+val elim_match : T.t -> T.t
 
-  val tr_problem:
-    (term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t ->
-    (term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t
+val tr_problem:
+  (term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t ->
+  (term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t
 
-  val pipe :
-    print:bool ->
-    check:bool ->
-      ((term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t,
-       (term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t,
-      'c, 'c
-    ) Transform.t
-  (** Pipeline component. Reverse direction is identity. *)
-end
+val pipe :
+  print:bool ->
+  check:bool ->
+    ((term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t,
+     (term, term, <ty:[`Mono]; eqn:'a;ind_preds:'b>) Problem.t,
+    'c, 'c
+  ) Transform.t
+(** Pipeline component. Reverse direction is identity. *)
