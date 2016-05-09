@@ -177,6 +177,7 @@ module Make(T : TI.S) = struct
         | `Kind -> failwith "Term_ho.ty: kind has no type"
         | `Type -> U.ty_kind
         | `Prop -> U.ty_type
+        | `Unitype -> U.ty_type
         end
     | TI.TyArrow (a,b) ->
         (* TODO: if a=type, then b=type is mandatory *)
