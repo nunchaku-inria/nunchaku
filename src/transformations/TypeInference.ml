@@ -395,7 +395,7 @@ module Convert(Term : TermTyped.S) = struct
         let b = convert_term_ ~stack ~env b in
         let ty = U.ty_exn a in
         unify_in_ctx_ ~stack ty (U.ty_exn b);
-        if U.ty_is_Prop ty then U.equiv ?loc a b else U.eq ?loc a b
+        U.eq ?loc a b
     | A.App (f, l) ->
         begin match Loc.get f, l with
         | A.Builtin `Imply, [a;b] ->
@@ -872,7 +872,7 @@ module Convert(Term : TermTyped.S) = struct
         CCOpt.map
           (fun (vars,args,rhs) -> v::vars,args,rhs)
           (extract_eqn ~f t')
-    | TI.Builtin (`Eq (l,r) | `Equiv (l,r)) ->
+    | TI.Builtin (`Eq (l,r)) ->
         begin match Term.repr l with
         | TI.Const f' when ID.equal f f' ->
             let vars, rhs = extract_fun_ r in

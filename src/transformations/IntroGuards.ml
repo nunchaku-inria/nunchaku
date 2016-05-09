@@ -151,10 +151,6 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
       if is_prop ~state t
       then combine pol t conds
       else t, conds
-  | TI.Builtin (`Equiv (a,b)) ->
-      let a, g_a = tr_term ~state ~pol:Pol.NoPol a in
-      let b, g_b = tr_term ~state ~pol:Pol.NoPol b in
-      combine pol (U.equiv a b) (combine_guard g_a g_b)
   | TI.Builtin (`Eq (a,b)) ->
       let a, g_a = tr_term ~state ~pol:Pol.NoPol a in
       let b, g_b = tr_term ~state ~pol:Pol.NoPol b in

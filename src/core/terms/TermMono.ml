@@ -135,17 +135,17 @@ module ToFO(T : TI.S) = struct
     | Builtin (`Unparsable ty) -> FO.T.unparsable (conv_ty ty)
     | Builtin `True -> FO.T.true_
     | Builtin `False -> FO.T.false_
-    | Builtin (`Equiv (a,b)) ->
-        FO.T.equiv (conv_term ~sigma a)(conv_term ~sigma b)
     | Builtin (`Eq (a,b)) ->
         (* forbid equality between functions *)
         let ty = U.ty_exn ~sigma:(Sig.find ~sigma) a in
         begin match T.repr ty with
           | TI.TyArrow _
           | TI.Bind (`TyForall, _, _) -> fail_ t "equality between functions";
-          | _ -> ()
-        end;
-        FO.T.eq (conv_term ~sigma a)(conv_term ~sigma b)
+          | TI.TyBuiltin `Prop ->
+            FO.T.equiv (conv_term ~sigma a) (conv_term ~sigma b)
+          | _ ->
+            FO.T.eq (conv_term ~sigma a) (conv_term ~sigma b)
+        end
     | Builtin (`Not t) -> FO.T.not_ (conv_term ~sigma t)
     | Builtin (`And l) -> FO.T.and_ (List.map (conv_term ~sigma) l)
     | Builtin (`Or l) -> FO.T.or_ (List.map (conv_term ~sigma) l)
@@ -190,8 +190,7 @@ module ToFO(T : TI.S) = struct
       let lhs = FO.T.app head args in
       let f =
         if U.ty_returns_Prop (Sig.find_exn ~sigma head)
-        then
-          FO.T.equiv lhs (conv_term ~sigma rhs)
+        then FO.T.equiv lhs (conv_term ~sigma rhs)
         else FO.T.eq lhs (conv_term ~sigma rhs)
       in
       (* add side conditions *)
@@ -348,7 +347,7 @@ module OfFO(T:TI.S) = struct
     | FO.Or l -> U.or_ (List.map convert_term l)
     | FO.Not f -> U.not_ (convert_term f)
     | FO.Imply (a,b) -> U.imply (convert_term a) (convert_term b)
-    | FO.Equiv (a,b) -> U.equiv (convert_term a) (convert_term b)
+    | FO.Equiv (a,b) -> U.eq (convert_term a) (convert_term b)
     | FO.Forall (v,t) ->
         let v = Var.update_ty v ~f:convert_ty in
         U.forall v (convert_term t)

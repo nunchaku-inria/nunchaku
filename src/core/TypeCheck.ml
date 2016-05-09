@@ -91,12 +91,6 @@ module Make(T : TI.S) = struct
               check_prop a tya;
               check_same_ b c tyb tyc;
               tyb
-          | `Equiv (a,b) ->
-              let tya = check ~env bound a in
-              let tyb = check ~env bound b in
-              check_prop a tya;
-              check_prop b tyb;
-              prop
           | `Eq (a,b) ->
               let tya = check ~env bound a in
               let tyb = check ~env bound b in

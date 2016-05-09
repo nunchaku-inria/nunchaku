@@ -66,7 +66,6 @@ module Util(T : S)
   val forall : ?loc:loc -> t var -> t -> t
   val exists : ?loc:loc -> t var -> t -> t
   val eq : ?loc:loc -> t -> t -> t
-  val equiv : ?loc:loc -> t -> t -> t
   val asserting : ?loc:loc -> t -> t list -> t
 
   val true_ : t
@@ -153,9 +152,6 @@ end = struct
 
   let eq ?loc a b =
     builtin ?loc ~ty:ty_prop (`Eq (a,b))
-
-  let equiv ?loc a b =
-    builtin ?loc ~ty:ty_prop (`Equiv (a,b))
 
   let asserting ?loc t l = match l with
     | [] -> t

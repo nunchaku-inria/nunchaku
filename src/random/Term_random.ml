@@ -134,7 +134,7 @@ let check_rule r =
   U.VarSet.subset vars_g vars_t
 
 let mk_imply = function [a;b] -> U.imply a b | _ -> assert false
-let mk_equiv = function [a;b] -> U.equiv a b | _ -> assert false
+let mk_equiv = function [a;b] -> U.eq a b | _ -> assert false
 let mk_not = function [a] -> U.not_ a | _ -> assert false
 
 (* XXX: we do not have a rule for [=], because the rule would not be
@@ -296,7 +296,7 @@ let rec shrink t = match T.repr t with
   | TI.App (f, l) ->
     Sequence.cons f (Sequence.of_list l)
   | TI.Builtin (`Not f) -> Sequence.singleton f
-  | TI.Builtin (`Imply (a,b) | `Eq (a,b) | `Equiv (a,b)) -> Sequence.doubleton a b
+  | TI.Builtin (`Imply (a,b) | `Eq (a,b)) -> Sequence.doubleton a b
   | TI.Builtin (`And l | `Or l) -> Sequence.of_list l
   | TI.Builtin (`Ite (a,b,c)) -> Sequence.of_list [a;b;c]
   | _ -> Sequence.empty

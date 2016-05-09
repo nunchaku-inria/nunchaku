@@ -164,6 +164,10 @@ let polarize_def_of ~state id pol = match pol with
 
 type subst = (T.t, T.t Var.t) Var.Subst.t
 
+let is_prop ~state t =
+  let ty = U.ty_exn ~sigma:(Env.find_ty ~env:(St.env ~state)) t in
+  U.ty_is_Prop ty
+
 (* traverse [t], replacing some symbols by their polarized version,
    @return the term with more internal guards and polarized symbols *)
 let rec polarize_term_rec
@@ -251,13 +255,13 @@ let rec polarize_term_rec
       end
   | TI.Bind (`TyForall, _, _) ->
       U.eval_renaming ~subst t (* we do not polarize in types *)
-  | TI.Builtin (`Equiv (a,b)) when pol <> Pol.NoPol ->
+  | TI.Builtin (`Eq (a,b)) when pol <> Pol.NoPol && is_prop ~state a ->
       (* we can gain precision here, because if we expand the <=> we
         obtain two polarized formulas, whereas if we keep it we
         only obtain a non-polarized one. *)
       polarize_term_rec ~state pol subst (U.and_ [U.imply a b; U.imply b a])
   | TI.Bind ((`Forall | `Exists | `Fun | `Mu), _, _)
-  | TI.Builtin (`Ite _ | `Eq _ | `Equiv _  | `And _ | `Or _ | `Not _  | `Imply _)
+  | TI.Builtin (`Ite _ | `Eq _ | `And _ | `Or _ | `Not _  | `Imply _)
   | TI.Let _
   | TI.Match _ ->
       (* generic treatment *)

@@ -248,7 +248,7 @@ let rec tr_term_rec_ ~state subst t =
       let g' = TI.Builtin.map_guard (tr_term_rec_ ~state subst) g in
       U.guard t g'
   | TI.Bind (`Fun,_,_) -> fail_tr_ t "translation of λ impossible"
-  | TI.Builtin (`Equiv _ | `Eq _ | `Ite _ | `And _ | `Or _ | `Not _ | `Imply _)
+  | TI.Builtin (`Eq _ | `Ite _ | `And _ | `Or _ | `Not _ | `Imply _)
   | TI.Bind ((`Forall | `Exists | `Mu), _, _)
   | TI.Match _
   | TI.Let _ ->
@@ -334,14 +334,15 @@ let id_is_app_fun_ ~state id = match state.decode.hof with
 (* translate equation [eqn], which is defining the function
    corresponding to [fun_encoding].
    It returns an axiom instead. *)
-let tr_eqns ~state ~fun_encoding ty eqn =
+let tr_eqns ~state ~fun_encoding eqn =
+  let term_is_prop t =
+    let ty = U.ty_exn ~sigma:(Sig.find ~sigma:state.sigma) t in
+    U.ty_is_Prop ty
+  in
   let connect pol lhs rhs = match pol with
-    | Polarity.Pos -> assert (U.ty_returns_Prop ty); U.imply lhs rhs
-    | Polarity.Neg -> assert (U.ty_returns_Prop ty); U.imply rhs lhs
-    | Polarity.NoPol ->
-        if U.ty_returns_Prop ty
-        then U.equiv lhs rhs
-        else U.eq lhs rhs
+    | Polarity.Pos -> assert (term_is_prop lhs); U.imply lhs rhs
+    | Polarity.Neg -> assert (term_is_prop lhs); U.imply rhs lhs
+    | Polarity.NoPol -> U.eq lhs rhs
   in
   (* apply the projectors of fun_encoding to alpha
      @param first if true, keep first argument, else remove it *)
@@ -410,8 +411,7 @@ let tr_eqns ~state ~fun_encoding ty eqn =
 
 (* transform the recursive definition (mostly, its equations) *)
 let tr_rec_def ~state ~fun_encoding def =
-  tr_eqns ~state ~fun_encoding
-    def.Stmt.rec_defined.Stmt.defined_ty def.Stmt.rec_eqns
+  tr_eqns ~state ~fun_encoding def.Stmt.rec_eqns
 
 (* transform each axiom, considering case_head as rec. defined. *)
 let tr_rec_defs ~info ~state l =
