@@ -58,6 +58,11 @@ module Erase : sig
 
   val create_state: unit -> state
 
+  val add_name : state -> string -> t -> unit
+  (** Add the mapping [name <=> id] to the state. It will shadow
+      the previous binding of [name], if any.
+      @raise Invalid_argument if [id] is already bound *)
+
   val to_name : state -> t -> string
 
   val of_name : state -> string -> t

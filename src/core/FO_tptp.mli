@@ -11,10 +11,11 @@ type var = ty Var.t
 type term =
   | App of ID.t * term list
   | Var of var
-
-type form =
   | True
   | False
+  | Undefined of term
+
+type form =
   | And of form list
   | Or of form list
   | Not of form
@@ -46,9 +47,10 @@ type problem = {
 val const : ID.t -> term
 val app : ID.t -> term list -> term
 val var : var -> term
+val undefined : term -> term
+val true_ : term
+val false_ : term
 
-val true_ : form
-val false_ : form
 val and_ : form list -> form
 val or_ : form list -> form
 val imply : form -> form -> form

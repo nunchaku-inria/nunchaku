@@ -3,6 +3,10 @@
 
 (** {1 Simple Model AST} *)
 
+open Nunchaku_core
+
+module T = FO_tptp
+
 type name = string
 type id = string
 type var = string
@@ -116,3 +120,70 @@ let pp_statement out = function
 let pp_statements out =
   Format.fprintf out "[@[<hv>%a@]]"
     (CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_statement)
+
+(** {2 Conversion to Model} *)
+
+let to_model
+  : statement list -> (T.term, T.ty) Model.t
+  = fun l ->
+    let module M = Model in
+    let id_of_name_ = ID.Erase.of_name T.erase in
+    (* some names were not in the input, such as constants *)
+    let get_or_create_id i =
+      try id_of_name_ i
+      with Not_found ->
+        let id = ID.make i in
+        ID.Erase.add_name T.erase i id;
+        id
+    in
+    (* convert a term back *)
+    let rec term_to_tptp : term -> T.term
+      = function
+        | App (id, l) -> T.app (id_of_name_ id) (List.map term_to_tptp l)
+        | Var _ -> assert false
+    in
+    (* convert a list of cases into a Model.DT *)
+    let cases_to_dt ~rhs_to_term id l =
+      (* create fresh variables *)
+      let vars = match l with
+        | [] -> assert false
+        | (args, _) :: _ ->
+          List.mapi (fun i _ -> Var.makef ~ty:T.Unitype "v%d" i) args
+      in
+      let l =
+        List.map
+          (fun (args,rhs) ->
+             assert (List.length args = List.length vars);
+             let args = List.map term_to_tptp args in
+             let rhs = rhs_to_term rhs in
+             let conds = List.combine vars args in
+             conds, rhs)
+          l
+      in
+      let else_ = T.undefined (T.app id (List.map T.var vars)) in
+      let dt = M.DT.test l ~else_ in
+      vars, dt
+    in
+    List.fold_left
+      (fun m st -> match st with
+         | Fi_domain (_, _, l) ->
+           (* trivial domain *)
+           let l = List.map get_or_create_id l in
+           M.add_finite_type m T.Unitype l
+         | Fi_functors (_, name, l) ->
+           let id = id_of_name_ name in
+           let vars, dt =
+             cases_to_dt id l
+               ~rhs_to_term:(fun rhs -> T.const (id_of_name_ rhs))
+           in
+           M.add_fun m (T.const id, vars, dt, M.Symbol_fun)
+         | Fi_predicates (_, name, l) ->
+           let id = id_of_name_ name in
+           let vars, dt =
+             cases_to_dt id l
+               ~rhs_to_term:(fun b -> if b then T.true_ else T.false_)
+           in
+           M.add_fun m (T.const id, vars, dt, M.Symbol_prop)
+      )
+      M.empty
+      l

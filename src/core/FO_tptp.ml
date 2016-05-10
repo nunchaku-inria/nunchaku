@@ -9,10 +9,11 @@ type var = ty Var.t
 type term =
   | App of ID.t * term list
   | Var of var
-
-type form =
   | True
   | False
+  | Undefined of term
+
+type form =
   | And of form list
   | Or of form list
   | Not of form
@@ -43,15 +44,17 @@ type problem = {
 
 let app id l = App (id,l)
 let const id = app id []
+let undefined t = Undefined t
 let var v = Var v
 let true_ = True
 let false_ = False
+
 let and_ = function
-  | [] -> True
+  | [] -> Atom True
   | [x] -> x
   | l -> And l
 let or_ = function
-  | [] -> False
+  | [] -> Atom False
   | [x] -> x
   | l -> Or l
 let imply a b = Imply (a,b)
@@ -110,6 +113,9 @@ let rec print_term_tptp out = function
   | App (id,[]) -> CCFormat.string out (name_of_id_ id)
   | App (id,l) ->
     fpf out "%s(@[<hv>%a@])" (name_of_id_ id) (pp_list print_term_tptp) l
+  | Undefined t -> fpf out "$undefined(@[%a@])" print_term_tptp t
+  | True -> CCFormat.string out "$true"
+  | False -> CCFormat.string out "$false"
 
 type prec =
   | P_not
@@ -134,8 +140,6 @@ let wrap p1 p2 out fmt =
 
 let print_form_tptp out f =
   let rec aux p out = function
-    | True -> CCFormat.string out "$true"
-    | False -> CCFormat.string out "$false"
     | Atom t -> print_term_tptp out t
     | And [] | Or [] -> assert false
     | And l -> wrap P_and p out "@[<hv>%a@]" (pp_list ~sep:" & " (aux P_and)) l

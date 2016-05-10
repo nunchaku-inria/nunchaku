@@ -89,6 +89,12 @@ module Erase = struct
 
   let spf = CCFormat.sprintf
 
+  let add_name state name id =
+    if Tbl.mem state.id_to_name id then invalid_arg "ID.Erase.add_name";
+    Tbl.add state.id_to_name id name;
+    Hashtbl.add state.name_to_id name id;
+    ()
+
   (* add numeric suffix to [name] until it is an unused name *)
   let find_unique_name_ state name0 =
     if not (Hashtbl.mem state.name_to_id name0) then name0

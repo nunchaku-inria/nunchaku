@@ -539,8 +539,8 @@ module To_tptp = struct
       let subst = Var.Subst.add ~subst v t in
       conv_rec subst u
     | Ite (_,_,_) -> error_ "fo_to_tptp: unexpected `ite`"
-    | True -> F TT.true_
-    | False -> F TT.false_
+    | True -> T TT.true_
+    | False -> T TT.false_
     | Eq (a,b) -> F (TT.eq (conv_as_term subst a) (conv_as_term subst b))
     | And l -> F (TT.and_ (List.map (conv_as_form subst) l))
     | Or l -> F (TT.or_ (List.map (conv_as_form subst) l))
@@ -583,8 +583,28 @@ module To_tptp = struct
 end
 
 module Of_tptp = struct
-  let conv_ty _ = assert false (* TODO *)
-  let conv_term _ = assert false (* TODO *)
+  module TT = FO_tptp
+
+  let conv_ty = function
+    | TT.Unitype -> Ty.builtin `Unitype
+
+  let conv_var = Var.update_ty ~f:conv_ty
+
+  let gen_undefined_ =
+    let r = ref 0 in
+    fun () ->
+      let id = ID.make_f "undefined_%d" !r in
+      incr r;
+      id
+
+  let rec conv_term = function
+    | TT.App (id, args) -> T.app id (List.map conv_term args)
+    | TT.Var v -> T.var (conv_var v)
+    | TT.True -> T.true_
+    | TT.False -> T.false_
+    | TT.Undefined t -> T.undefined (gen_undefined_ ()) (conv_term t)
+
+
   let conv_form _ = assert false (* TODO *)
 end
 

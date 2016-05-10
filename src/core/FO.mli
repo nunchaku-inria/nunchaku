@@ -213,7 +213,7 @@ module To_tptp : sig
 end
 
 module Of_tptp : sig
-  val conv_ty : FO_tptp.ty -> T.t
+  val conv_ty : FO_tptp.ty -> Ty.t
   val conv_term : FO_tptp.term -> T.t
   val conv_form : FO_tptp.form -> T.t
 end
