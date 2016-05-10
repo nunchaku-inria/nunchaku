@@ -112,7 +112,7 @@ let ensure_maps_to_predicate state ty =
   then (
     match Ty.repr ty with
       | TyI.Const id ->
-        errorf_ "atomic type `%a` should have been mapped to a prediate" ID.print id
+        errorf_ "atomic type `%a` should have been mapped to a predicate" ID.print id
       | TyI.Arrow _ -> assert false
       | TyI.Builtin `Unitype ->
         () (* no need to declare *)
