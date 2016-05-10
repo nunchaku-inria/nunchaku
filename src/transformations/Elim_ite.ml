@@ -66,7 +66,7 @@ end
 
 let transform_term t =
   let open Ite_M in
-  let rec aux t : term Ite_M.t = match T.view t with
+  let rec aux subst t : term Ite_M.t = match T.view t with
     | FO.Builtin _
     | FO.DataTest (_,_)
     | FO.DataSelect (_,_,_)
@@ -74,35 +74,40 @@ let transform_term t =
     | FO.Unparsable _
     | FO.Mu (_,_)
     | FO.True
-    | FO.Var _
     | FO.False -> return t
-    | FO.Eq (a,b) -> return T.eq <*> aux a <*> aux b
-    | FO.Equiv (a,b) -> return T.equiv <*> aux a <*> aux b
-    | FO.Imply (a,b) -> return T.imply <*> aux a <*> aux b
+    | FO.Var v ->
+      return (CCOpt.get t (Var.Subst.find ~subst v))
+    | FO.Eq (a,b) -> return T.eq <*> aux subst a <*> aux subst b
+    | FO.Equiv (a,b) -> return T.equiv <*> aux subst a <*> aux subst b
+    | FO.Imply (a,b) -> return T.imply <*> aux subst a <*> aux subst b
     | FO.Ite (a,b,c) ->
-      aux a >>= fun a ->
-      aux b >>= fun b ->
-      aux c >>= fun c ->
+      aux subst a >>= fun a ->
+      aux subst b >>= fun b ->
+      aux subst c >>= fun c ->
       guard (TSet.singleton a) b c
-    | FO.And l -> aux_l l >|= T.and_
-    | FO.Or l -> aux_l l >|= T.or_
-    | FO.Not t -> aux t >|= T.not_
-    | FO.App (id,l) -> aux_l l >|= T.app id
-    | FO.Let _ -> assert false (* TODO! if it's a term `let`, we must expand  *)
+    | FO.And l -> aux_l subst l >|= T.and_
+    | FO.Or l -> aux_l subst l >|= T.or_
+    | FO.Not t -> aux subst t >|= T.not_
+    | FO.App (id,l) -> aux_l subst l >|= T.app id
+    | FO.Let (v,t,u) ->
+      (* expand `let` on the fly *)
+      aux subst t >>= fun t ->
+      let subst' = Var.Subst.add ~subst v t in
+      aux subst' u
     | FO.Fun _ -> assert false (* TODO: doomed, if guards contain the bound var *)
     | FO.Forall (v,body) ->
       (* flatten here, otherwise the guards might contain [v] *)
-      return (T.forall v (aux_top body))
+      return (T.forall v (aux_top subst body))
     | FO.Exists (v,body) ->
-      return (T.exists v (aux_top body))
-  and aux_l l =
+      return (T.exists v (aux_top subst body))
+  and aux_l subst l =
     fold_m
-      (fun l x -> aux x >|= fun y -> y :: l)
+      (fun l x -> aux subst x >|= fun y -> y :: l)
       [] l
     >|= List.rev
   (* transform a toplevel property *)
-  and aux_top t =
-    aux t
+  and aux_top subst t =
+    aux subst t
     |> Sequence.to_list
     |> CCList.fold_map
       (fun prev_conds (cond,t) ->
@@ -119,7 +124,7 @@ let transform_term t =
     |> snd (* drop the list of conditions *)
     |> T.and_
   in
-  let res = aux_top t in
+  let res = aux_top Var.Subst.empty t in
   Utils.debugf ~section 5 "@[<2>encoded `@[%a@]`@ into `@[%a@]@]"
     (fun k->k FO.print_term t FO.print_term res);
   res
