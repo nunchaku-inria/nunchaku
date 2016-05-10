@@ -19,3 +19,5 @@
 (B) 2016-01-18 deal with empty sorts
 (B) 2016-01-21 compute type cardinalities to approximate exists/forall with top/bot in non polarized cases
 (A) 2016-04-14 do not propagate incompleteness flags, just change result back?
+(A) 2016-05-10 reverse transformation of models in ElimTypes
+(A) 2016-05-10 fix bug in ElimHOF (need to declare more, earlier for ty_exn to work) --> polarity2
