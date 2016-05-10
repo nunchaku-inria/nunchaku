@@ -63,7 +63,7 @@ val on_input : ('a, _, _, _) t -> f:('a -> unit) -> unit
 module Pipe : sig
   (** Composite transformation from ['a] to ['b], with a reverse transformation
       from ['c] to ['d] *)
-  type ('a, 'b, 'c, 'd) t =
+  type ('a, 'b, 'c, 'd) t = private
     | Id : ('a, 'a, 'c, 'c) t (** no transformation *)
     | Fail : ('a, 'b, 'c, 'd) t (** yields empty list *)
     | Flatten :

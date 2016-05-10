@@ -252,7 +252,7 @@ let make_cvc4 ~deadline () =
       ~print_model:(!print_all_ || !print_raw_model_)
       ~deadline ()
     @@@ id
-  else Fail
+  else fail
 
 let make_paradox ~deadline () =
   let open Transform.Pipe in
@@ -260,7 +260,7 @@ let make_paradox ~deadline () =
   then
     Backends.Paradox.pipe ~print:!print_all_ ~deadline ()
     @@@ id
-  else Fail
+  else fail
 
 (* build a pipeline, depending on options *)
 let make_model_pipeline () =
