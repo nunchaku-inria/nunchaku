@@ -6,6 +6,8 @@ open Nunchaku_core
 module T = FO_tptp
 module Res = Problem.Res
 module S = Scheduling
+module Pa = Nunchaku_parsers
+module A = Pa.TPTP_model_ast
 
 let name = "paradox"
 let section = Utils.Section.make name
@@ -17,11 +19,54 @@ let is_available () =
     res
   with Sys_error _ -> false
 
+exception Error of string
+
+let () = Printexc.register_printer
+    (function
+      | Error msg -> Some (Utils.err_sprintf "Paradox: %s" msg)
+      | _ -> None)
+
+let error_ msg = raise (Error msg)
+let errorf msg = Utils.exn_ksprintf msg ~f:error_
+
 let print_pb_ file pb =
   CCIO.with_out file
     (fun oc ->
        let fmt = Format.formatter_of_out_channel oc in
        Format.fprintf fmt "@[<v>%a@]@." T.print_problem_tptp pb)
+
+let begin_model = "SZS output start FiniteModel"
+let end_model = "SZS output end FiniteModel"
+
+(* parse a model from paradox' output [s] *)
+let parse_model s =
+  let i1 = CCString.find ~sub:begin_model s in
+  let i1 = String.index_from s i1 '\n' in (* skip full line *)
+  let i2 = CCString.find ~start:i1 ~sub:end_model s in
+  (* [s']: part of [s] between the model markers *)
+  let s' = String.sub s i1 (i2-i1) in
+  let lexbuf = Lexing.from_string s' in
+  Location.set_file lexbuf "<paradox output>";
+  let l =
+    try
+      Pa.TPTP_model_parser.parse_statement_list
+        Pa.TPTP_model_lexer.token
+        lexbuf
+    with e ->
+      errorf "@[<hv2>parsing model failed:@ %s@]" (Printexc.to_string e)
+  in
+  Format.printf "parsed model @[%a@]@." A.pp_statements l;
+  assert false
+
+(* [s] is the output of paradox, parse a result from it *)
+let parse_res s =
+  if CCString.mem ~sub:"BEGIN MODEL" s
+  then
+    let m = parse_model s in
+    Res.Sat m, S.Shortcut
+  else if CCString.mem ~sub:"RESULT: Unsatisfiable" s
+  then Res.Unsat, S.Shortcut
+  else Res.Unknown, S.No_shortcut
 
 let solve ~deadline pb =
   Utils.debug ~section 1 "calling paradox";
@@ -54,7 +99,7 @@ let solve ~deadline pb =
            | S.Fut.Done (stdout, errcode) ->
              Utils.debugf ~lock:true ~section 2
                "@[<2>paradox exited with %d, stdout:@ `%s`@]" (fun k->k errcode stdout);
-             assert false (* TODO *)
+             parse_res stdout
            | S.Fut.Stopped ->
              Res.Timeout, S.No_shortcut
            | S.Fut.Fail e ->
