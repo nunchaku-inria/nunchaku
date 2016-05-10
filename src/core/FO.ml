@@ -572,7 +572,7 @@ module To_tptp = struct
     | MutualTypes _ -> errorf_ "@[cannot convert@ statement `@[%a@]`@]" print_statement st
     | CardBound _ -> assert false (* TODO warning? *)
     | Axiom f -> Some (TT.axiom (conv_form f))
-    | Goal f -> Some (TT.conjecture (conv_form f))
+    | Goal f -> Some (TT.axiom (conv_form f)) (* careful, not a conjecture *)
 
   let conv_problem pb =
     let res = CCVector.filter_map conv_statement (Problem.statements pb) in
