@@ -796,7 +796,16 @@ module type UTIL = sig
   val rename_var : subst -> t_ Var.t -> subst * t_ Var.t
   (** Same as {!Subst.rename_var} but wraps the renamed var in a term *)
 
-  exception ApplyError of string * t_ * t_ list * subst
+  type apply_error = {
+    ae_msg: string;
+    ae_term: t_ option;
+    ae_ty: t_;
+    ae_args: t_ list;
+    ae_args_ty: t_ list; (* same length as ae_args *)
+    ae_subst: subst;
+  }
+
+  exception ApplyError of apply_error
   (** Raised when a type application fails *)
 
   val eval : subst:subst -> t_ -> t_
@@ -864,7 +873,9 @@ module Util(T : S)
 
   let const id = T.build (Const id)
   let var v = T.build (Var v)
-  let app t l = T.build (App(t,l))
+  let app t l = match l with
+    | [] -> t
+    | _::_ -> T.build (App(t,l))
   let app_const id l = app (const id) l
   let mk_bind b v t = T.build (Bind (b, v, t))
   let fun_ v t = T.build (Bind (`Fun, v, t))
@@ -1317,7 +1328,16 @@ module Util(T : S)
 
   let renaming_to_subst subst = Var.Subst.map ~f:var subst
 
-  exception ApplyError of string * t_ * t_ list * subst
+  type apply_error = {
+    ae_msg: string;
+    ae_term: t_ option;
+    ae_ty: t_;
+    ae_args: t_ list;
+    ae_args_ty: t_ list; (* same length as ae_args *)
+    ae_subst: subst;
+  }
+
+  exception ApplyError of apply_error
   (** Raised when a type application fails *)
 
   exception UnifError of string * T.t * T.t
@@ -1326,12 +1346,18 @@ module Util(T : S)
   let () =
     Printexc.register_printer
     (function
-      | ApplyError (msg, t, l, subst) ->
+      | ApplyError ae ->
           let module P = Print(T) in
+          let pp_t out = function
+            | None -> ()
+            | Some t -> fpf out "`@[%a@]`@ : " P.print t
+          in
           let msg = Utils.err_sprintf
-            "@[<hv2>type error@ when applying %a@ on @[%a@]@ in @[%a@]: %s@]"
-            P.print_in_app t (CCFormat.list P.print_in_app) l
-            (Subst.print P.print) subst msg
+            "@[<hv2>type error@ when applying @[%a%a@]@ on @[%a : %a@]@ in subst @[%a@]: %s@]"
+            pp_t ae.ae_term P.print_in_app ae.ae_ty
+            (CCFormat.list P.print_in_app) ae.ae_args
+            (CCFormat.list P.print_in_app) ae.ae_args_ty
+            (Subst.print P.print) ae.ae_subst ae.ae_msg
           in Some msg
       | UnifError (msg, t1, t2) ->
           let module P = Print(T) in
@@ -1342,7 +1368,7 @@ module Util(T : S)
       | _ -> None
     )
 
-  let error_apply_ msg ~hd ~l ~subst = raise (ApplyError (msg, hd, l, subst))
+  let error_apply_ ae = raise (ApplyError ae)
   let error_unif_ msg t1 t2 = raise (UnifError (msg, t1, t2))
 
   let ty_apply_full t ~terms:l_terms ~tys:l_tys =
@@ -1352,20 +1378,26 @@ module Util(T : S)
       | TyBuiltin _, _, _
       | App (_,_),_, _
       | Const _, _, _ ->
-          error_apply_ "cannot apply this type" ~hd:t ~l:l_tys ~subst
+          error_apply_
+            {ae_msg="cannot apply this type"; ae_term=None;
+             ae_ty=t; ae_args=l_terms; ae_args_ty=l_tys; ae_subst=subst}
       | Var v, _, _ ->
           begin try
             let t = Subst.find_exn ~subst v in
             app_ ~subst t l_terms l_tys
           with Not_found ->
-            error_apply_ "cannot apply this type" ~hd:t ~l:l_tys ~subst
+            error_apply_
+              {ae_msg="cannot apply this type"; ae_term=None;
+               ae_ty=t; ae_args=l_terms; ae_args_ty=l_tys; ae_subst=subst; }
           end
       | TyMeta _,_,_ -> assert false
       | TyArrow (a, t'), _ :: l_terms', b :: l_tys' ->
           if equal_with ~subst a b
           then app_ ~subst t' l_terms' l_tys'
-          else error_apply_
-            "type mismatch on first argument" ~hd:t ~l:l_tys' ~subst
+          else
+            error_apply_
+              {ae_msg="type mismatch on first argument"; ae_term=None;
+               ae_ty=t; ae_args=l_terms; ae_args_ty=l_tys; ae_subst=subst; }
       | Bind (`TyForall, v, t'), b :: l_terms', _ :: l_tys' ->
           let subst = Subst.add ~subst v b in
           app_ ~subst t' l_terms' l_tys'
@@ -1384,17 +1416,25 @@ module Util(T : S)
       | TyBuiltin _, _
       | App (_,_),_
       | Const _, _ ->
-          error_apply_ "cannot apply this type" ~hd:t ~l ~subst
+          error_apply_
+            {ae_msg="cannot apply this type"; ae_term=None;
+             ae_ty=t; ae_args=[]; ae_args_ty=l; ae_subst=subst}
       | Var _, _ ->
-          error_apply_ "cannot apply this type" ~hd:t ~l ~subst
+          error_apply_
+            {ae_msg="cannot apply this type"; ae_term=None;
+             ae_ty=t; ae_args=[]; ae_args_ty=l; ae_subst=subst}
       | TyMeta _,_ -> assert false
       | TyArrow (a, t'), b :: l' ->
           if equal a b
           then app_ t' l'
-          else error_apply_
-            "type mismatch on first argument" ~hd:t ~l ~subst
+          else
+            error_apply_
+              {ae_msg="type mismatch on first argument"; ae_term=None;
+               ae_ty=t; ae_args=[]; ae_args_ty=l; ae_subst=subst; }
       | Bind (`TyForall, _, _), _ ->
-          error_apply_ "non monomorphic type" ~hd:t ~l ~subst
+          error_apply_
+            {ae_msg="non monomorphic type"; ae_term=None;
+             ae_ty=t; ae_args=[]; ae_args_ty=l; ae_subst=subst}
       | _ -> assert false
     in
     app_ t l
@@ -1438,8 +1478,16 @@ module Util(T : S)
           | `Guard (t, _) -> ty_exn ~sigma t
         end
     | Var v -> Var.ty v
+    | App (_, []) -> assert false
     | App (f,l) ->
-        ty_apply (ty_exn ~sigma f) ~terms:l ~tys:(List.map (ty_exn ~sigma) l)
+        let ty_f = ty_exn ~sigma f in
+        let tys = List.map (ty_exn ~sigma) l in
+        begin
+          try ty_apply ty_f ~terms:l ~tys
+          with ApplyError ae ->
+            let ae = {ae with ae_term=Some f; ae_args=l; ae_args_ty=tys; ae_ty=ty_f} in
+            raise (ApplyError ae)
+        end
     | Bind (b,v,t) ->
         begin match b with
         | `Forall
