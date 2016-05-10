@@ -52,12 +52,16 @@ let find_pred state t =
   assert (Ty.is_ty t);
   Ty.Map.find t state.ty_to_pred
 
+let encode_var state subst v =
+  let v' = Var.fresh_copy v |> Var.set_ty ~ty:state.dummy_ty in
+  let subst = Var.Subst.add ~subst v v' in
+  subst, v'
+
 let rec encode_term state subst t = match T.repr t with
   | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
   | TI.Bind ((`Forall | `Exists) as b, v, body) ->
     let p = find_pred state (Var.ty v) in
-    let v' = Var.fresh_copy v |> Var.set_ty ~ty:state.dummy_ty in
-    let subst = Var.Subst.add ~subst v v' in
+    let subst, v' = encode_var state subst v in
     (* add guard, just under the quantifier. *)
     begin match b with
       | `Forall ->
@@ -76,7 +80,7 @@ let rec encode_term state subst t = match T.repr t with
   | TI.Bind (`Fun, _, _) -> Utils.not_implemented "elim_types for λ"
   | TI.Bind (`TyForall, _, _) -> assert false
   | _ ->
-    U.map subst t ~f:(encode_term state) ~bind:Var.Subst.rename_var
+    U.map subst t ~f:(encode_term state) ~bind:(encode_var state)
 
 (* types are all sent to [state.dummy_ty] *)
 let encode_ty state _ t =
