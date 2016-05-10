@@ -158,16 +158,22 @@ let common_decls etys =
   let mk_decl (id,ty) =
     Stmt.decl ~info:Stmt.info_default ~attrs:[] id ty
   in
-  CCList.flat_map
-    (fun ety ->
-       mk_decl (ety.ety_id,U.ty_type)
-       :: CCList.flat_map
+  let tys =
+    List.map (fun ety -> mk_decl (ety.ety_id,U.ty_type)) etys
+  in
+  let others =
+    CCList.flat_map
+      (fun ety ->
+         CCList.flat_map
            (fun ec ->
               mk_decl ec.ecstor_cstor
               :: mk_decl ec.ecstor_test
               :: List.map mk_decl ec.ecstor_proj)
            ety.ety_cstors)
-    etys
+      etys
+  in
+  List.rev_append tys others
+
 
 let common_axioms etys =
   let mk_ax f = Stmt.axiom1 ~info:Stmt.info_default f in
