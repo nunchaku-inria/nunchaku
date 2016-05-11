@@ -150,19 +150,24 @@ let to_model
         | (args, _) :: _ ->
           List.mapi (fun i _ -> Var.makef ~ty:T.Unitype "v%d" i) args
       in
-      let l =
-        List.map
-          (fun (args,rhs) ->
-             assert (List.length args = List.length vars);
-             let args = List.map term_to_tptp args in
-             let rhs = rhs_to_term rhs in
-             let conds = List.combine vars args in
-             conds, rhs)
-          l
-      in
-      let else_ = T.undefined (T.app id (List.map T.var vars)) in
-      let dt = M.DT.test l ~else_ in
-      vars, dt
+      if vars=[]
+      then match l with
+        | [[], rhs] -> `Const (rhs_to_term rhs)
+        | _ -> assert false
+      else
+        let l =
+          List.map
+            (fun (args,rhs) ->
+               assert (List.length args = List.length vars);
+               let args = List.map term_to_tptp args in
+               let rhs = rhs_to_term rhs in
+               let conds = List.combine vars args in
+               conds, rhs)
+            l
+        in
+        let else_ = T.undefined (T.app id (List.map T.var vars)) in
+        let dt = M.DT.test l ~else_ in
+        `Fun (vars, dt)
     in
     List.fold_left
       (fun m st -> match st with
@@ -172,18 +177,24 @@ let to_model
            M.add_finite_type m T.Unitype l
          | Fi_functors (_, name, l) ->
            let id = id_of_name_ name in
-           let vars, dt =
+           begin match
              cases_to_dt id l
                ~rhs_to_term:(fun rhs -> T.const (id_of_name_ rhs))
-           in
-           M.add_fun m (T.const id, vars, dt, M.Symbol_fun)
+             with
+               | `Const rhs -> M.add_const m (T.const id, rhs, M.Symbol_fun)
+               | `Fun (vars, dt) ->
+                 M.add_fun m (T.const id, vars, dt, M.Symbol_fun)
+           end
          | Fi_predicates (_, name, l) ->
            let id = id_of_name_ name in
-           let vars, dt =
+           begin match
              cases_to_dt id l
                ~rhs_to_term:(fun b -> if b then T.true_ else T.false_)
-           in
-           M.add_fun m (T.const id, vars, dt, M.Symbol_prop)
+             with
+               | `Const rhs -> M.add_const m (T.const id, rhs, M.Symbol_prop)
+               | `Fun (vars, dt) ->
+                 M.add_fun m (T.const id, vars, dt, M.Symbol_prop)
+           end
       )
       M.empty
       l
