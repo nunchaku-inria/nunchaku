@@ -55,7 +55,8 @@ let parse_model s =
     with e ->
       errorf "@[<hv2>parsing model failed:@ %s@]" (Printexc.to_string e)
   in
-  Format.printf "@[<2>parsed model:@ @[%a@]@]@." A.pp_statements l;
+  Utils.debugf ~section 3 "@[<2>parsed model:@ @[<hv>%a@]@]"
+    (fun k->k A.pp_statements l);
   A.to_model l
 
 (* [s] is the output of paradox, parse a result from it *)

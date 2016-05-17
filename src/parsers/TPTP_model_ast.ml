@@ -27,8 +27,8 @@ type form =
 
 type statement =
   | Fi_domain of name * var * id list (* forall X. X=a1 | ... | X=an *)
-  | Fi_functors of name * id * (term list * id) list
-  | Fi_predicates of name * id * (term list * bool) list
+  | Fi_functors of name * id * var list * (term list * id) list
+  | Fi_predicates of name * id * var list * (term list * bool) list
 
 let var v = Var v
 let app id l = App (id,l)
@@ -77,21 +77,21 @@ let mk_fi_domain name f =
   let l = List.map (Conv.as_id_eqn_of_ v) (Conv.as_or_ l) in
   Fi_domain (name, v, l)
 
-let mk_fi_functors name l =
+let mk_fi_functors name vars l =
   let l = List.map Conv.as_ground_eqn_ l in
   let id = match l with
     | [] -> assert false
     | (id, _) :: _ -> id
   in
-  Fi_functors (name, id, List.map snd l)
+  Fi_functors (name, id, vars, List.map snd l)
 
-let mk_fi_predicates name l =
+let mk_fi_predicates name vars l =
   let l = List.map Conv.as_ground_atom_ l in
   let id = match l with
     | [] -> assert false
     | (id, _) :: _ -> id
   in
-  Fi_predicates (name, id, List.map snd l)
+  Fi_predicates (name, id, vars, List.map snd l)
 
 let pp_list_ pp = CCFormat.list ~sep:" " ~start:"" ~stop:"" pp
 
@@ -101,21 +101,28 @@ let rec pp_term out = function
   | App (id,l) ->
     Format.fprintf out "(@[%s@ %a@])" id (pp_list_ pp_term) l
 
-let pp_statement out = function
+let pp_statement out st =
+  let pp_vars out = function
+    | [] -> ()
+    | vars -> Format.fprintf out "![@[%a@]]:@ " (pp_list_ CCFormat.string) vars
+  in
+  match st with
   | Fi_domain (_, v, l) ->
     Format.fprintf out "(@[<1>domain %s in@ [@[%a@]]@])."
       v (pp_list_ CCFormat.string) l
-  | Fi_functors (_, id, l) ->
+  | Fi_functors (_, id, vars, l) ->
     let pp_eqn out (args,rhs_id) =
       Format.fprintf out "(@[%s(%a)@ = %s@])" id (pp_list_ pp_term) args rhs_id
     in
-    Format.fprintf out "(@[<1>functors for %s@ [@[%a@]]@])." id (pp_list_ pp_eqn) l
-  | Fi_predicates (_, id, l) ->
+    Format.fprintf out "(@[<1>functors for %s@ @[%a[@[%a@]]@]@])."
+      id pp_vars vars (pp_list_ pp_eqn) l
+  | Fi_predicates (_, id, vars, l) ->
     let pp_pred out args = Format.fprintf out "%s(%a)" id (pp_list_ pp_term) args in
     let pp_pred out (args,b) =
       if b then pp_pred out args else Format.fprintf out "(@[not@ %a@])" pp_pred args
     in
-    Format.fprintf out "(@[<1>predicates for %s@ [@[%a@]]@])." id (pp_list_ pp_pred) l
+    Format.fprintf out "(@[<1>predicates for %s@ @[%a[@[%a@]]@]@])."
+      id pp_vars vars (pp_list_ pp_pred) l
 
 let pp_statements out =
   Format.fprintf out "[@[<hv>%a@]]"
@@ -127,39 +134,55 @@ let to_model
   : statement list -> (T.term, T.ty) Model.t
   = fun l ->
     let module M = Model in
-    let id_of_name_ = ID.Erase.of_name T.erase in
+    (* unfailing name -> ID *)
+    let id_of_name_ i =
+      try Some (ID.Erase.of_name T.erase i)
+      with Not_found -> None
+    in
     (* some names were not in the input, such as constants *)
     let get_or_create_id i =
-      try id_of_name_ i
+      try ID.Erase.of_name T.erase i
       with Not_found ->
         let id = ID.make i in
         ID.Erase.add_name T.erase i id;
         id
     in
     (* convert a term back *)
-    let rec term_to_tptp : term -> T.term
+    let rec term_to_tptp subst : term -> T.term
       = function
-        | App (id, l) -> T.app (id_of_name_ id) (List.map term_to_tptp l)
-        | Var _ -> assert false
+        | App (id, l) ->
+          let subst _ = Conv.failf "no variable allowed in sub-term under %s" id in
+          T.app (get_or_create_id id) (List.map (term_to_tptp subst) l)
+        | Var v -> subst v
     in
     (* convert a list of cases into a Model.DT *)
-    let cases_to_dt ~rhs_to_term id l =
+    let cases_to_dt ~rhs_to_term id input_vars l =
       (* create fresh variables *)
       let vars = match l with
         | [] -> assert false
         | (args, _) :: _ ->
           List.mapi (fun i _ -> Var.makef ~ty:T.Unitype "v%d" i) args
       in
+      assert (List.length vars >= List.length input_vars);
       if vars=[]
       then match l with
         | [[], rhs] -> `Const (rhs_to_term rhs)
         | _ -> assert false
-      else
+      else (
         let l =
           List.map
             (fun (args,rhs) ->
                assert (List.length args = List.length vars);
-               let args = List.map term_to_tptp args in
+               let vars_seen = ref [] in
+               (* map members of [input_vars] to [vars] *)
+               let subst i v =
+                 if List.mem v !vars_seen
+                 then Conv.failf "variable %s occurs non-linearly" v
+                 else if List.mem v input_vars
+                 then T.var (List.nth vars i)
+                 else Conv.failf "variable %s not in scope" v
+               in
+               let args = List.mapi (fun i -> term_to_tptp (subst i)) args in
                let rhs = rhs_to_term rhs in
                let conds = List.combine vars args in
                conds, rhs)
@@ -168,6 +191,7 @@ let to_model
         let else_ = T.undefined (T.app id (List.map T.var vars)) in
         let dt = M.DT.test l ~else_ in
         `Fun (vars, dt)
+      )
     in
     List.fold_left
       (fun m st -> match st with
@@ -175,25 +199,35 @@ let to_model
            (* trivial domain *)
            let l = List.map get_or_create_id l in
            M.add_finite_type m T.Unitype l
-         | Fi_functors (_, name, l) ->
-           let id = id_of_name_ name in
-           begin match
-             cases_to_dt id l
-               ~rhs_to_term:(fun rhs -> T.const (id_of_name_ rhs))
-             with
-               | `Const rhs -> M.add_const m (T.const id, rhs, M.Symbol_fun)
-               | `Fun (vars, dt) ->
-                 M.add_fun m (T.const id, vars, dt, M.Symbol_fun)
+         | Fi_functors (_, name, vars, l) ->
+           begin match id_of_name_ name with
+             | None ->
+               Utils.debugf 2 "failed to map `%s` to a known ID" (fun k->k name);
+               m
+             | Some id ->
+               begin match
+                   cases_to_dt id vars l
+                     ~rhs_to_term:(fun rhs -> T.const (get_or_create_id rhs))
+                 with
+                   | `Const rhs -> M.add_const m (T.const id, rhs, M.Symbol_fun)
+                   | `Fun (vars, dt) ->
+                     M.add_fun m (T.const id, vars, dt, M.Symbol_fun)
+               end
            end
-         | Fi_predicates (_, name, l) ->
-           let id = id_of_name_ name in
-           begin match
-             cases_to_dt id l
-               ~rhs_to_term:(fun b -> if b then T.true_ else T.false_)
-             with
-               | `Const rhs -> M.add_const m (T.const id, rhs, M.Symbol_prop)
-               | `Fun (vars, dt) ->
-                 M.add_fun m (T.const id, vars, dt, M.Symbol_prop)
+         | Fi_predicates (_, name, vars, l) ->
+           begin match id_of_name_ name with
+             | None ->
+               Utils.debugf 2 "failed to map `%s` to a known ID" (fun k->k name);
+               m
+             | Some id ->
+               begin match
+                   cases_to_dt id vars l
+                     ~rhs_to_term:(fun b -> if b then T.true_ else T.false_)
+                 with
+                   | `Const rhs -> M.add_const m (T.const id, rhs, M.Symbol_prop)
+                   | `Fun (vars, dt) ->
+                     M.add_fun m (T.const id, vars, dt, M.Symbol_prop)
+               end
            end
       )
       M.empty

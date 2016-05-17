@@ -30,6 +30,7 @@
 %token NOT
 %token AND
 %token EQUAL
+%token EQUIV
 %token VLINE
 
 %token TRUE
@@ -64,10 +65,14 @@ parse_statement_list: l=list(statement) EOI { l }
 statement:
   | FOF LEFT_PAREN name=name COMMA ROLE_FI_DOMAIN COMMA f=form RIGHT_PAREN DOT
     { let loc = L.mk_pos $startpos $endpos in A.mk_fi_domain name f }
-  | FOF LEFT_PAREN name=name COMMA ROLE_FI_FUNCTORS COMMA l=equations RIGHT_PAREN DOT
-    { let loc = L.mk_pos $startpos $endpos in A.mk_fi_functors name l }
-  | FOF LEFT_PAREN name=name COMMA ROLE_FI_PREDICATES COMMA l=atoms RIGHT_PAREN DOT
-    { let loc = L.mk_pos $startpos $endpos in A.mk_fi_predicates name l }
+  | FOF LEFT_PAREN name=name COMMA ROLE_FI_FUNCTORS
+    COMMA l=equations RIGHT_PAREN DOT
+    { let vars, l = l in
+      A.mk_fi_functors name vars l }
+  | FOF LEFT_PAREN name=name COMMA ROLE_FI_PREDICATES
+    COMMA l=atoms RIGHT_PAREN DOT
+    { let vars, l = l in
+      A.mk_fi_predicates name vars l }
   | error
     { let loc = L.mk_pos $startpos $endpos in
       Parsing_utils.parse_error_ ~loc "expected statement" }
@@ -97,6 +102,10 @@ atomic_form:
     { A.eq l r }
   | t=term
     { A.atom t }
+  | t=term EQUIV TRUE
+    { A.atom t }
+  | t=term EQUIV FALSE
+    { A.not_ (A.atom t) }
   | TRUE { A.true_ }
   | FALSE { A.false_ }
 
@@ -104,16 +113,24 @@ atom:
   | f=atomic_form { f }
   | NOT f=atom { A.not_ f }
 
+%inline forall_vars:
+  | FORALL LEFT_BRACKET l=separated_nonempty_list(COMMA,var) RIGHT_BRACKET COLON { l }
+
 equation:
   | LEFT_PAREN e=equation RIGHT_PAREN { e }
   | l=term EQUAL r=term { l, r }
+
 equations:
   | LEFT_PAREN l=equations RIGHT_PAREN { l }
-  | l=separated_nonempty_list(AND, equation) { l }
+  | vars=forall_vars l=equations
+    { let vars', l = l in vars @ vars', l }
+  | l=separated_nonempty_list(AND, equation) { [], l }
 
 atoms:
   | LEFT_PAREN l=atoms RIGHT_PAREN { l }
-  | l=separated_nonempty_list(AND, atom) { l }
+  | vars=forall_vars l=atoms
+    { let vars', l = l in vars @ vars', l }
+  | l=separated_nonempty_list(AND, atom) { [], l }
 
 term:
   | v=var { A.var v }

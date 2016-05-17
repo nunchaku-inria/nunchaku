@@ -61,6 +61,7 @@ rule token = parse
   | '[' { LEFT_BRACKET }
   | ']' { RIGHT_BRACKET }
   | '=' { EQUAL }
+  | "<=>" { EQUIV }
   | ':' { COLON }
   | ',' { COMMA }
   | '.' { DOT }

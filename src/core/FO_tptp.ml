@@ -106,7 +106,9 @@ let pp_var out v =
   CCFormat.string out n
 
 (* map ID to a name, unambiguously *)
-let name_of_id_ id = E.to_name erase id |> String.uncapitalize
+let name_of_id_ id =
+  let encode = String.uncapitalize in
+  E.to_name ~encode erase id
 
 let rec print_term_tptp out = function
   | Var v -> pp_var out v
