@@ -3,10 +3,12 @@
 
 open Nunchaku_core
 
-module E = CCError
+module E = CCResult
 module A = UntypedAST
 module Utils = Utils
 module TI = TermInner
+module Backends = Nunchaku_backends
+module Tr = Nunchaku_transformations
 
 type input =
   | I_nunchaku
@@ -19,6 +21,13 @@ type output =
   | O_tptp
 
 let list_outputs_ () = "(available choices: nunchaku tptp)"
+
+type solver =
+  | S_CVC4
+  | S_kodkod
+  | S_paradox
+
+let list_solvers_ () = "(available choices: cvc4 kodkod paradox)"
 
 (** {2 Options} *)
 
@@ -41,21 +50,28 @@ let print_elim_multi_eqns = ref false
 let print_polarize_ = ref false
 let print_unroll_ = ref false
 let print_elim_preds_ = ref false
+let print_elim_data_ = ref false
 let print_copy_ = ref false
 let print_intro_guards_ = ref false
+let print_elim_types_ = ref false
 let print_fo_ = ref false
 let print_smt_ = ref false
+let print_raw_model_ = ref false
 let print_model_ = ref false
 let enable_polarize_ = ref true
 let timeout_ = ref 30
 let version_ = ref false
 let file = ref ""
+let solvers = ref [S_CVC4; S_kodkod; S_paradox]
 let j = ref 3
+let prelude_ = ref []
 
 let set_file f =
   if !file <> ""
   then raise (Arg.Bad "please provide only one file")
   else file := f
+
+let add_prelude p = prelude_ := p :: !prelude_
 
 let set_input_ f =
   input_ := match String.lowercase f with
@@ -68,6 +84,23 @@ let set_output_ f =
     | "nunchaku" -> O_nunchaku
     | "tptp" -> O_tptp
     | s -> failwith ("unsupported output format: " ^ s)
+
+(* solver string specification *)
+let parse_solvers_ s =
+  let s = String.trim s |> String.lowercase in
+  let l = CCString.Split.list_cpy ~by:"," s in
+  List.map
+    (function
+      | "cvc4" -> S_CVC4
+      | "paradox" -> S_paradox
+      | "kodkod" -> S_kodkod
+      | s ->
+        failwith (Utils.err_sprintf "unknown solver `%s` %s" s (list_solvers_())))
+    l
+
+let set_solvers_ s =
+  let l = parse_solvers_ s |> CCList.Set.uniq ~eq:(=) in
+  solvers := l
 
 (* set debug levels *)
 let options_debug_ = Utils.Section.iter
@@ -89,35 +122,40 @@ let options =
   ; "--print-all", Arg.Set print_all_, " print every step of the pipeline"
   ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline and exit"
   ; "--print-typed", Arg.Set print_typed_, " print input after typing"
-  ; "--print-" ^ Skolem.name, Arg.Set print_skolem_, " print input after Skolemization"
-  ; "--print-" ^ Monomorphization.name, Arg.Set print_mono_, " print input after monomorphization"
-  ; "--print-" ^ ElimPatternMatch.name
+  ; "--print-" ^ Tr.Skolem.name, Arg.Set print_skolem_, " print input after Skolemization"
+  ; "--print-" ^ Tr.Monomorphization.name, Arg.Set print_mono_, " print input after monomorphization"
+  ; "--print-" ^ Tr.ElimPatternMatch.name
       , Arg.Set print_elim_match_
       , " print input after elimination of pattern matching"
-  ; "--print-" ^ ElimIndPreds.name
+  ; "--print-" ^ Tr.ElimIndPreds.name
       , Arg.Set print_elim_preds_
       , " print input after elimination of (co)inductive predicates"
-  ; "--print-" ^ ElimRecursion.name
+  ; "--print-" ^ Tr.ElimRecursion.name
       , Arg.Set print_elim_recursion_
       , " print input after elimination of recursive functions"
-  ; "--print-" ^ Specialize.name
+  ; "--print-" ^ Tr.Specialize.name
       , Arg.Set print_specialize_
       , " print input after specialization"
-  ; "--print-" ^ LambdaLift.name, Arg.Set print_lambda_lift_, " print after λ-lifting"
-  ; "--print-" ^ ElimHOF.name
+  ; "--print-" ^ Tr.LambdaLift.name, Arg.Set print_lambda_lift_, " print after λ-lifting"
+  ; "--print-" ^ Tr.ElimHOF.name
       , Arg.Set print_elim_hof_
       , " print input after elimination of higher-order/partial functions"
-  ; "--print-" ^ ElimMultipleEqns.name
+  ; "--print-" ^ Tr.ElimMultipleEqns.name
       , Arg.Set print_elim_multi_eqns
       , " print input after elimination of multiple equations"
-  ; "--print-" ^ Polarize.name , Arg.Set print_polarize_, " print input after polarization"
-  ; "--print-" ^ Unroll.name, Arg.Set print_unroll_, " print input after unrolling"
-  ; "--print-" ^ ElimCopy.name, Arg.Set print_copy_, " print input after elimination of copy types"
-  ; "--print-" ^ IntroGuards.name, Arg.Set print_intro_guards_,
+  ; "--print-" ^ Tr.Polarize.name , Arg.Set print_polarize_, " print input after polarization"
+  ; "--print-" ^ Tr.Unroll.name, Arg.Set print_unroll_, " print input after unrolling"
+  ; "--print-" ^ Tr.ElimCopy.name, Arg.Set print_copy_, " print input after elimination of copy types"
+  ; "--print-" ^ Tr.ElimData.name
+      , Arg.Set print_elim_data_
+      , " print input after elimination of (co)datatypes"
+  ; "--print-" ^ Tr.IntroGuards.name, Arg.Set print_intro_guards_,
       " print input after introduction of guards"
+  ; "--print-" ^ Tr.ElimTypes.name, Arg.Set print_elim_types_,
+      " print input after elimination of types"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
-  ; "--print-raw-model", Arg.Set Solver_intf.print_model_, " print raw model"
+  ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
   ; "--print-undefined", Arg.Set TermInner.print_undefined_id, " print unique IDs of `undefined` terms"
   ; "--checks", Arg.Set check_all_, " check invariants after each pass"
@@ -129,12 +167,15 @@ let options =
   ; "--polarize-rec", Arg.Set polarize_rec_, " enable polarization of rec predicates"
   ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
   ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"
+  ; "--solvers", Arg.String set_solvers_, " solvers to use " ^ list_solvers_ ()
+  ; "-s", Arg.String set_solvers_, " synonym for --solvers"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "-t", Arg.Set_int timeout_, " alias to --timeout"
   ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
   ; "-i", Arg.String set_input_, " synonym for --input"
   ; "--output", Arg.String set_output_, " set output format " ^ list_outputs_ ()
   ; "-o", Arg.String set_output_, " synonym for --output"
+  ; "--prelude", Arg.String add_prelude, " parse given prelude file"
   ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
   ; "--version", Arg.Set version_, " print version and exit"
   ]
@@ -147,22 +188,36 @@ let print_version_if_needed () =
   );
   ()
 
-let parse_file ~input () =
-  let open CCError.Infix in
+let parse_file ~into ~input () =
+  let open E.Infix in
   let src = if !file = "" then `Stdin else `File !file in
   let res =
     try
       match input with
       | I_nunchaku ->
-          NunLexer.parse src
+          Nunchaku_parsers.Lexer.parse ~into src
+          >|= CCVector.freeze
       | I_tptp ->
-          NunTPTPLexer.parse ~mode:(`Env "TPTP") src
+          Nunchaku_parsers.TPTP_lexer.parse ~into ~mode:(`Env "TPTP") src
           >|= CCVector.to_seq
-          >>= NunTPTPPreprocess.preprocess
+          >>= Nunchaku_parsers.TPTP_preprocess.preprocess
     with e -> Utils.err_of_exn e
   in
   E.map_err
-    (fun msg -> CCFormat.sprintf "@[<2>could not parse `%s`:@ %s@]" !file msg) res
+    (fun msg -> CCFormat.sprintf "@[<2>could not parse `%s`:@ %s@]" !file msg)
+    res
+
+(* parse list of prelude files *)
+let parse_prelude files =
+  let open E.Infix in
+  let res = CCVector.of_list Prelude.decls in
+  E.fold_l
+    (fun () file ->
+       Nunchaku_parsers.Lexer.parse (`File file) >|= fun vec ->
+       CCVector.append res vec)
+    ()
+    files
+  >|= fun () -> res
 
 let print_input_if_needed statements =
   if !print_ then
@@ -175,32 +230,37 @@ module Pipes = struct
   module HO = TI.Default
   module Typed = TermTyped.Default
   (* type inference *)
-  module Step_tyinfer = TypeInference.Make(Typed)(HO)
+  module Step_tyinfer = Tr.TypeInference.Make(Typed)(HO)
   module Step_conv_ty = Problem.Convert(Typed)(HO)
-  (* encodings *)
-  module Step_skolem = Skolem.Make(HO)
-  module Step_mono = Monomorphization.Make(HO)
-  module Step_ElimMultipleEqns = ElimMultipleEqns.Make(HO)
-  module Step_ElimMatch = ElimPatternMatch.Make(HO)
-  module Step_ElimPreds = ElimIndPreds.Make(HO)
-  module Step_Specialize = Specialize.Make(HO)
-  module Step_LambdaLift = LambdaLift.Make(HO)
-  module Step_ElimHOF = ElimHOF.Make(HO)
-  module Step_ElimRec = ElimRecursion.Make(HO)
-  module Step_polarize = Polarize.Make(HO)
-  module Step_unroll = Unroll.Make(HO)
-  module Step_elim_copy = ElimCopy.Make(HO)
-  module Step_intro_guards = IntroGuards.Make(HO)
   (* conversion to FO *)
-  module Step_tofo = TermMono.TransFO(HO)(FO.Default)
-  (* renaming in model *)
-  module Step_rename_model = Model_rename.Make(HO)
+  module Step_tofo = TermMono.TransFO(HO)
 end
 
 let close_task p =
   Transform.Pipe.close p
     ~f:(fun task ret ->
        Scheduling.Task.map ~f:ret task, CCFun.id)
+
+let make_cvc4 ~deadline () =
+  let open Transform.Pipe in
+  if List.mem S_CVC4 !solvers && Backends.CVC4.is_available ()
+  then
+    Backends.CVC4.pipes
+      ~options:Backends.CVC4.options_l
+      ~print:!print_all_
+      ~print_smt:(!print_all_ || !print_smt_)
+      ~print_model:(!print_all_ || !print_raw_model_)
+      ~deadline ()
+    @@@ id
+  else fail
+
+let make_paradox ~deadline () =
+  let open Transform.Pipe in
+  if List.mem S_paradox !solvers && Backends.Paradox.is_available ()
+  then
+    Backends.Paradox.pipe ~print:!print_all_ ~deadline ()
+    @@@ id
+  else fail
 
 (* build a pipeline, depending on options *)
 let make_model_pipeline () =
@@ -209,41 +269,56 @@ let make_model_pipeline () =
   (* setup pipeline *)
   let check = !check_all_ in
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
-  let cvc4 =
-    CVC4.pipes FO.default
-       ~options:CVC4.options_l
-       ~print:!print_all_
-       ~print_smt:(!print_all_ || !print_smt_) ~deadline ()
-    @@@ id
-  in
+  (* solvers *)
+  let cvc4 = make_cvc4 ~deadline () in
+  let paradox = make_paradox ~deadline () in
   let pipe =
     Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
     Step_conv_ty.pipe () @@@
-    Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~check ~mode:`Sk_types @@@
-    Step_mono.pipe ~print:(!print_mono_ || !print_all_) ~check @@@
-    Step_ElimMultipleEqns.pipe
+    Tr.Skolem.pipe ~print:(!print_skolem_ || !print_all_) ~check ~mode:`Sk_types @@@
+    Tr.Monomorphization.pipe ~print:(!print_mono_ || !print_all_) ~check @@@
+    Tr.ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~check
       ~print:(!print_elim_multi_eqns || !print_all_) @@@
-    Step_Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check @@@
+    Tr.Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check @@@
     (if !enable_polarize_
-      then Step_polarize.pipe ~print:(!print_polarize_ || !print_all_)
+      then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
         ~check ~polarize_rec:!polarize_rec_
       else Transform.nop ())
     @@@
-    Step_unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
-    Step_skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-    Step_ElimPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-    Step_elim_copy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
-    Step_LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
-    Step_ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
-    Step_ElimRec.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
-    Step_ElimMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
-    Step_intro_guards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
-    Step_rename_model.pipe_rename ~print:(!print_model_ || !print_all_) @@@
-    close_task (
-      Step_tofo.pipe () @@@
-      Transform.Pipe.flatten cvc4
-    )
+    Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+    Tr.Skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+    fork
+      (
+        Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+        Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
+        Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
+        Tr.ElimData.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
+        Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+        Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+        Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
+        Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+        Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
+        Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
+        close_task (
+          Step_tofo.pipe ~print:!print_all_ () @@@
+          Tr.Elim_ite.pipe ~print:!print_all_ @@@
+          FO.pipe_tptp @@@
+          paradox
+        ))
+      (
+        Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+        Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
+        Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+        Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+        Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
+        Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
+        Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+        Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
+        close_task (
+          Step_tofo.pipe ~print:!print_all_ () @@@
+          Transform.Pipe.flatten cvc4
+        ))
   in
   pipe
 
@@ -288,7 +363,7 @@ let () = Printexc.register_printer
 
 (* model mode *)
 let main_model ~output statements =
-  let open CCError.Infix in
+  let open E.Infix in
   let module T = TI.Default in
   let module P = TI.Print(T) in
   let module Res = Problem.Res in
@@ -307,7 +382,7 @@ let main_model ~output statements =
         (Model.print P.print P.print) m;
   | Res.Sat m, O_tptp ->
       (* XXX: if potentially spurious, what should we print? *)
-      let module PM = NunPrintTPTP.Make(T) in
+      let module PM = Nunchaku_parsers.TPTP_print.Make(T) in
       Format.printf "@[<v2>%a@]@,@." PM.print_model m
   | Res.Unsat, O_nunchaku ->
       Format.printf "@[UNSAT@]@."
@@ -322,7 +397,7 @@ let main_model ~output statements =
 
 (* main *)
 let main () =
-  let open CCError.Infix in
+  let open E.Infix in
   CCFormat.set_color_default true; (* default: enable colors *)
   Arg.parse options set_file "usage: nunchaku [options] file";
   print_version_if_needed ();
@@ -332,7 +407,9 @@ let main () =
     exit 0
   );
   (* parse *)
-  parse_file ~input:!input_ ()
+  parse_prelude (List.rev !prelude_)
+  >>= fun statements ->
+  parse_file ~into:statements ~input:!input_ ()
   >>= fun statements ->
   print_input_if_needed statements;
   main_model ~output:!output_ statements

@@ -83,6 +83,24 @@ module Fut = struct
     state=Some (Done x);
   }
 
+  let map f x =
+    let y = {
+      on_res=[];
+      lock=Mutex.create();
+      cond=Condition.create();
+      state=None;
+    } in
+    on_res x
+      ~f:(function
+        | Stopped -> stop y
+        | Done x -> set_done y (f x)
+        | Fail e -> set_fail y e);
+    y
+
+  type 'a partial_result =
+    | P_done of 'a
+    | P_fail of exn
+
   let make ?(on_res=[]) f =
     let fut = {
       on_res;
@@ -90,15 +108,18 @@ module Fut = struct
       cond=Condition.create();
       state=None;
     } in
-    let do_it () =
-      try
-        let x = f () in
-        set_done fut x;
-      with e ->
-        set_fail fut e;
+    (* task to run in a thread *)
+    let compute_and_set () =
+      let res =
+        try P_done (f ())
+        with e -> P_fail e
+      in
+      match res with
+      | P_done x -> set_done fut x
+      | P_fail e -> set_fail fut e
     in
     (* spawn thread to run the job *)
-    let _ = Thread.create do_it () in
+    let _ = Thread.create compute_and_set () in
     fut
 end
 
@@ -121,6 +142,8 @@ end
     Fut.get t)
 *)
 
+type process_status = int
+
 (* create a new active process by running [cmd] and applying [f] on it *)
 let popen ?(on_res=[]) cmd ~f =
   Utils.debugf ~lock:true ~section 3
@@ -132,22 +155,38 @@ let popen ?(on_res=[]) cmd ~f =
   let stdin = Unix.out_channel_of_descr stdin in
   let pid = Unix.create_process
       "/bin/sh" [| "/bin/sh"; "-c"; cmd |] p_stdin p_stdout Unix.stderr in
-  Utils.debugf ~lock:true ~section 3 "@[<2>pid %d -->@ sub-process `@[%s@]`@]" (fun k -> k pid cmd);
+  Unix.close p_stdout;
+  Unix.close p_stdin;
+  Utils.debugf ~lock:true ~section 3
+    "@[<2>pid %d -->@ sub-process `@[%s@]`@]" (fun k -> k pid cmd);
   (* cleanup process *)
   let cleanup _ =
     Utils.debugf ~lock:true ~section 3 "cleanup subprocess %d" (fun k->k pid);
-    Unix.kill pid 15;
+    (try Unix.kill pid 15 with _ -> ());
     close_out_noerr stdin;
     close_in_noerr stdout;
-    Unix.kill pid 9; (* just to be sure *)
+    (try Unix.kill pid 9 with _ -> ()); (* just to be sure *)
     ()
   in
   Fut.make ~on_res:(cleanup :: on_res)
     (fun () ->
        let x = f (stdin, stdout) in
-       Utils.debugf ~lock:true ~section 3 "@[<2>sub-process %d done:@ `@[%s@]`@]"
+       let _, res = Unix.waitpid [Unix.WUNTRACED] pid in
+       let res = match res with
+         | Unix.WEXITED i | Unix.WSTOPPED i | Unix.WSIGNALED i -> i
+       in
+       Utils.debugf ~lock:true ~section 3 "@[<2>sub-process %d done;@ command was `@[%s@]`@]"
          (fun k->k pid cmd);
-       x)
+       x, res)
+
+(*$T
+  (try ignore (popen "ls /tmp" ~f:(fun _ -> ())); true with _ -> false)
+*)
+
+(*$=
+  (Fut.Done ("coucou\n", 0)) \
+    (popen "echo coucou" ~f:(fun (_,oc) -> CCIO.read_all oc) |> Fut.get)
+*)
 
 type shortcut =
   | Shortcut

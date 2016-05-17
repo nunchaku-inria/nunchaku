@@ -21,6 +21,9 @@ val make : ty:'ty -> name:string -> 'ty t
 (** [make ~ty ~name] makes a new variable with the given name and type. It
     will have a unique identifier *)
 
+val makef : ty:'ty -> ('b, Format.formatter, unit, 'ty t) format4 -> 'b
+(** printf-ready make function *)
+
 val fresh_copy : 'ty t -> 'ty t
 (** [fresh_copy v] makes a variable that looks like [v] but has a fresh
     identifier *)
@@ -40,6 +43,9 @@ val name : _ t -> string
 val update_ty : 'a t -> f:('a -> 'b) -> 'b t
 (** Update the type, and make a new variable with it with {b THE SAME ID}.
     Careful not to break invariants. *)
+
+val set_ty : 'a t -> ty:'b -> 'b t
+(** Change the type of the variable *)
 
 val fresh_update_ty : 'a t -> f:('a -> 'b) -> 'b t
 (** Update the type, and make a new variable with it with a fresh ID. *)

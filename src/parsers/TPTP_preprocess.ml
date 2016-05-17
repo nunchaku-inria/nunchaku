@@ -8,7 +8,7 @@ open Nunchaku_core
 module A = UntypedAST
 module Loc = Location
 
-type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a or_error = ('a, string) CCResult.t
 
 let section = Utils.Section.make "TPTPRecursiveParser"
 
@@ -172,6 +172,7 @@ let rec declare_missing ~ctx ~state t =
           | `Type
           | `True
           | `False
+          | `Unitype
           | `Undefined _ -> t
           end
       | _ ->
@@ -272,20 +273,20 @@ let preprocess_exn seq =
   CCVector.freeze state.into
 
 let preprocess seq =
-  try CCError.return (preprocess_exn seq)
+  try CCResult.return (preprocess_exn seq)
   with e -> Utils.err_of_exn e
 
 (*$inject
   open Nunchaku_core
   module A = UntypedAST
-  let parses_ok p t = match p t with `Ok _ -> true | _ -> false
-  let ho_parses_ok = parses_ok NunTPTPLexer.ho_form_of_string
-  let fo_parses_ok = parses_ok NunTPTPLexer.ho_form_of_string
+  let parses_ok p t = match p t with CCResult.Ok _ -> true | _ -> false
+  let ho_parses_ok = parses_ok TPTP_lexer.ho_form_of_string
+  let fo_parses_ok = parses_ok TPTP_lexer.ho_form_of_string
 
   let term_to_string = CCFormat.to_string A.print_term
   let term_eq t1 t2 = (term_to_string t1) = (term_to_string t2)
 
-  let pho = NunTPTPLexer.ho_form_of_string_exn
+  let pho = TPTP_lexer.ho_form_of_string_exn
 *)
 
 (*$T

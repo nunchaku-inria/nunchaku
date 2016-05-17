@@ -120,4 +120,11 @@ val map :
   ('t1, 'ty1) t ->
   ('t2, 'ty2) t
 
+val filter :
+  ?constants:('t * 't * symbol_kind -> bool) ->
+  ?funs:('t * 'ty Var.t list * ('t,'ty) decision_tree * symbol_kind -> bool) ->
+  ?finite_types:('ty * ID.t list -> bool) ->
+  ('t, 'ty) t ->
+  ('t, 'ty) t
+
 val print : 't printer -> 'ty printer -> ('t,'ty) t printer

@@ -165,6 +165,19 @@ let filter_map ~constants ~funs ~finite_types m = {
   finite_types = CCList.filter_map finite_types m.finite_types;
 }
 
+let const_true_ _ = true
+
+let filter
+    ?(constants=const_true_)
+    ?(funs=const_true_)
+    ?(finite_types=const_true_)
+    m
+  =
+  filter_map m
+    ~constants:(fun x -> if constants x then Some x else None)
+    ~funs:(fun x -> if funs x then Some x else None)
+    ~finite_types:(fun x -> if finite_types x then Some x else None)
+
 let iter ~constants ~funs ~finite_types m =
   List.iter constants m.constants;
   List.iter funs m.funs;

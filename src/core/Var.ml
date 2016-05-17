@@ -17,6 +17,9 @@ let make ~ty ~name =
   let id = ID.make name in
   { ty; id }
 
+let makef ~ty fmt =
+  CCFormat.ksprintf ~f:(fun name -> make ~ty ~name) fmt
+
 let fresh_copy v =
   { v with id=ID.fresh_copy v.id }
 
@@ -35,6 +38,8 @@ let fresh_update_ty v ~f =
 let update_ty v ~f =
   let ty = f v.ty in
   { id=v.id; ty }
+
+let set_ty v ~ty = { v with ty }
 
 let make_gen ~names =
   let n = ref 0 in

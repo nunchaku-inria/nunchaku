@@ -14,7 +14,7 @@
 
 open Nunchaku_core
 
-type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a or_error = ('a, string) CCResult.t
 
 val preprocess_exn :
   UntypedAST.statement Sequence.t ->

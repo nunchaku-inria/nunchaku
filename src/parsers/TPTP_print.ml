@@ -51,8 +51,6 @@ module Make(T : TI.S) = struct
     | `False -> CCFormat.string out "$false"
     | `Eq (a,b) ->
         fpf out "@[<hv>%a =@ %a@]" print_inner a print_inner b
-    | `Equiv (a,b) ->
-        fpf out "@[<hv>%a <=>@ %a@]" print_inner a print_inner b
     | `Undefined (_id,t) -> print_inner out t
     | `Not f -> fpf out "~ %a" print_inner f
     | `And l ->
@@ -111,6 +109,7 @@ module Make(T : TI.S) = struct
     | TI.Builtin b -> print_builtin print_inner out b
     | TI.TyBuiltin `Type -> CCFormat.string out "$tType"
     | TI.TyBuiltin `Kind -> error_ "cannot print `kind` in TPTP"
+    | TI.TyBuiltin `Unitype -> CCFormat.string out "$i"
     | TI.TyBuiltin `Prop -> CCFormat.string out "$o"
 
   and print_ty out t = print_term out t
@@ -256,7 +255,7 @@ module Make(T : TI.S) = struct
                 match T.repr rhs with
                 | TI.Builtin `True -> U.app t args
                 | TI.Builtin `False -> U.not_ (U.app t args)
-                | _ -> U.equiv (U.app t args) rhs
+                | _ -> U.eq (U.app t args) rhs
           in
           U.forall_l vars body)
         (([], dt.Model.DT.else_) :: dt.Model.DT.tests)

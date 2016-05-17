@@ -8,6 +8,7 @@
 *)
 
 module Metadata = ProblemMetadata
+module Res = Problem.Res
 
 type id = ID.t
 type 'a var = 'a Var.t
@@ -17,8 +18,10 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 module TyBuiltin : sig
   type t =
     [ `Prop
+    | `Unitype
     ]
   val equal : t -> t -> bool
+  val compare : t -> t -> int
   val print : Format.formatter -> t -> unit
 end
 
@@ -27,6 +30,7 @@ module Builtin : sig
     [ `Int of int (* TODO use zarith *)
     ]
   val equal : t -> t -> bool
+  val compare : t -> t -> int
   val print : Format.formatter -> t -> unit
 end
 
@@ -86,75 +90,59 @@ type ('t, 'ty) statement =
   | MutualTypes of [`Data | `Codata] * 'ty mutual_types
   | Goal of 't
 
-(** {2 Read-Only View} *)
-module type VIEW = sig
-  module Ty : sig
-    type t
-    type toplevel_ty = t list * t
-    val view : t -> t ty_view
-  end
-
-  module T : sig
-    type t
-    val view : t -> (t, Ty.t) view
-    (** Observe the structure of the term *)
-  end
-end
-
 (** {2 View and Build Formulas, Terms, Types} *)
-module type S = sig
-  module Ty : sig
-    type t
-    type toplevel_ty = t list * t
 
-    val view : t -> t ty_view
+module Ty : sig
+  type t
+  type toplevel_ty = t list * t
 
-    val const : id -> t
-    val app : id -> t list -> t
-    val builtin : TyBuiltin.t -> t
-    val arrow : t list -> t -> toplevel_ty
-  end
+  val view : t -> t ty_view
 
-  module T : sig
-    type t
-    val view : t -> (t, Ty.t) view
-    (** Observe the structure of the term *)
+  val const : id -> t
+  val app : id -> t list -> t
+  val builtin : TyBuiltin.t -> t
+  val arrow : t list -> t -> toplevel_ty
 
-    val builtin : Builtin.t -> t
-    val const : id -> t
-    val app : id -> t list -> t
-    val data_test : id -> t -> t
-    val data_select : id -> int -> t -> t
-    val undefined : id -> t -> t
-    val unparsable : Ty.t -> t
-    val var : Ty.t var -> t
-    val let_ : Ty.t var -> t -> t -> t
-    val fun_ : Ty.t var -> t -> t
-    val mu : Ty.t var -> t -> t
-    val ite : t -> t -> t -> t
-    val true_ : t
-    val false_ : t
-    val eq : t -> t -> t
-    val and_ : t list -> t
-    val or_ : t list -> t
-    val not_ : t -> t
-    val imply : t -> t -> t
-    val equiv : t -> t -> t
-    val forall : Ty.t var -> t -> t
-    val exists : Ty.t var -> t -> t
-  end
+  val is_prop : t -> bool
+
+  val equal : t -> t -> bool
+  val compare : t -> t -> int
 end
 
-type ('t, 'ty) repr =
-  (module VIEW with type T.t = 't and type Ty.t = 'ty)
+module T : sig
+  type t
+  val view : t -> (t, Ty.t) view
+  (** Observe the structure of the term *)
 
-type ('t, 'ty) build =
-  (module S with type T.t = 't and type Ty.t = 'ty)
+  val compare : t -> t -> int
+  (** Fast total ordering on values of type [t].
+      {b NOT} structural comparison!
+      There is no guarantee that two terms that are only structurally equal,
+      but that have been built independently, will compare to 0 *)
 
-module Default : S
-
-val default_repr: (Default.T.t, Default.Ty.t) repr
-val default: (Default.T.t, Default.Ty.t) build
+  val builtin : Builtin.t -> t
+  val const : id -> t
+  val app : id -> t list -> t
+  val data_test : id -> t -> t
+  val data_select : id -> int -> t -> t
+  val undefined : id -> t -> t
+  val unparsable : Ty.t -> t
+  val var : Ty.t var -> t
+  val let_ : Ty.t var -> t -> t -> t
+  val fun_ : Ty.t var -> t -> t
+  val mu : Ty.t var -> t -> t
+  val ite : t -> t -> t -> t
+  val true_ : t
+  val false_ : t
+  val eq : t -> t -> t
+  val and_ : t list -> t
+  val or_ : t list -> t
+  val not_ : t -> t
+  val imply : t -> t -> t
+  val equiv : t -> t -> t
+  val forall : Ty.t var -> t -> t
+  val exists : Ty.t var -> t -> t
+end
 
 (** {2 Problem} *)
 module Problem : sig
@@ -167,6 +155,11 @@ module Problem : sig
   val of_list : meta:Metadata.t -> ('t, 'ty) statement list -> ('t, 'ty) t
   val statements : ('t, 'ty) t -> ('t, 'ty) statement CCVector.ro_vector
   val meta : _ t -> Metadata.t
+  val map :
+    meta:Metadata.t ->
+    (('t, 'ty) statement -> ('t2, 'ty2) statement) ->
+    ('t, 'ty) t ->
+    ('t2, 'ty2) t
   val flat_map :
     meta:Metadata.t ->
     (('t, 'ty) statement -> ('t2, 'ty2) statement list) ->
@@ -181,28 +174,51 @@ module Problem : sig
 end
 
 (** {2 Utils} *)
-module Util(T : S) : sig
+module Util : sig
   val dt_of_term :
-    vars:T.Ty.t Var.t list ->
-    T.T.t ->
-    (T.T.t, T.Ty.t) Model.DT.t
+    vars:Ty.t Var.t list ->
+    T.t ->
+    (T.t, Ty.t) Model.DT.t
   (** Convert a term into a decision tree, or emit a warning and
       return a trivial tree with "unparsable" inside *)
 
-  val problem_kinds : (_,T.Ty.t) Problem.t -> Model.symbol_kind ID.Map.t
+  val problem_kinds : (_,Ty.t) Problem.t -> Model.symbol_kind ID.Map.t
 end
 
 (** {2 IO} *)
 
-module type PRINT = sig
-  module FO : VIEW
+val print_ty : Ty.t printer
+val print_toplevel_ty : Ty.toplevel_ty printer
+val print_term : T.t printer
+val print_statement : (T.t, Ty.t) statement printer
+val print_model : (T.t * T.t) list printer
+val print_problem : (T.t, Ty.t) Problem.t printer
 
-  val print_ty : FO.Ty.t printer
-  val print_toplevel_ty : FO.Ty.toplevel_ty printer
-  val print_term : FO.T.t printer
-  val print_statement : (FO.T.t, FO.Ty.t) statement printer
-  val print_model : (FO.T.t * FO.T.t) list printer
-  val print_problem : (FO.T.t, FO.Ty.t) Problem.t printer
+(** {2 Conversion} *)
+
+(** Assume there are no types (other than `Unitype), no datatypes, no
+    pattern match... *)
+module To_tptp : sig
+  exception Error of string
+
+  val conv_form : T.t -> FO_tptp.form
+  (** @raise Error if conversion failed *)
+
+  val conv_statement : (T.t, Ty.t) statement -> FO_tptp.statement option
+  (** convert the statement. Some statements will just disappear (mostly,
+      declarations).
+      @raise Error if conversion failed *)
+
+  val conv_problem : (T.t, Ty.t) Problem.t -> FO_tptp.problem
 end
 
-module Print(FO : VIEW) : PRINT with module FO = FO
+module Of_tptp : sig
+  val conv_ty : FO_tptp.ty -> Ty.t
+  val conv_term : FO_tptp.term -> T.t
+  val conv_form : FO_tptp.form -> T.t
+end
+
+val pipe_tptp :
+  ((T.t, Ty.t) Problem.t, FO_tptp.problem,
+    (FO_tptp.term, FO_tptp.ty) Res.t,
+    (T.t, Ty.t) Res.t) Transform.t

@@ -53,7 +53,6 @@ type ('t, 'ty, 'inv) def =
 (** All information on a given symbol *)
 type ('t, 'ty, 'inv) info = {
   ty: 'ty; (** type of symbol *)
-  decl_kind: Statement.decl;
   decl_attrs: Statement.decl_attr list;
   loc: loc option;
   def: ('t, 'ty, 'inv) def;
@@ -87,7 +86,6 @@ let errorf_ id msg =
 let loc t = t.loc
 let def t = t.def
 let ty t = t.ty
-let decl_kind t = t.decl_kind
 
 let is_fun i = match i.def with Fun_spec _ | Fun_def _ -> true | _ -> false
 let is_rec i = match i.def with Fun_def _ -> true | _ -> false
@@ -104,9 +102,9 @@ let create ?(size=64) () = {infos=ID.PerTbl.create size}
 let check_not_defined_ t ~id ~fail_msg =
   if ID.PerTbl.mem t.infos id then errorf_ id fail_msg
 
-let declare ?loc ~kind ~attrs ~env:t id ty =
+let declare ?loc ~attrs ~env:t id ty =
   check_not_defined_ t ~id ~fail_msg:"already declared";
-  let info = {loc; decl_kind=kind; decl_attrs=attrs; ty; def=NoDef} in
+  let info = {loc; decl_attrs=attrs; ty; def=NoDef} in
   {infos=ID.PerTbl.replace t.infos id info}
 
 let rec_funs ?loc ~env:t defs =
@@ -118,7 +116,6 @@ let rec_funs ?loc ~env:t defs =
       let info = {
         loc;
         ty=def.Stmt.rec_defined.Stmt.defined_ty;
-        decl_kind=def.Stmt.rec_kind;
         decl_attrs=[];
         def=Fun_def (defs, def, loc);
       } in
@@ -130,7 +127,7 @@ let declare_rec_funs ?loc ~env defs =
     (fun env def ->
       let d = def.Stmt.rec_defined in
       let id = d.Stmt.defined_head in
-      declare ~kind:def.Stmt.rec_kind ~attrs:[] ?loc ~env id d.Stmt.defined_ty)
+      declare ~attrs:[] ?loc ~env id d.Stmt.defined_ty)
     env defs
 
 let find_exn ~env:t id =
@@ -156,7 +153,6 @@ let spec_funs
       let info = {
         loc;
         ty=defined.Stmt.defined_ty;
-        decl_kind=Stmt.Decl_prop;
         decl_attrs=[];
         def=Fun_spec(spec, loc);
       } in
@@ -172,7 +168,6 @@ let def_data ?loc ~env:t ~kind tys =
       check_not_defined_ t ~id ~fail_msg:"is (co)data, but already defined";
       let info = {
         loc;
-        decl_kind=Stmt.Decl_type;
         ty=tydef.Stmt.ty_type;
         decl_attrs=[];
         def=Data (kind, tys, tydef);
@@ -185,7 +180,6 @@ let def_data ?loc ~env:t ~kind tys =
           check_not_defined_ t ~id ~fail_msg:"is constructor, but already defined";
           let info = {
             loc;
-            decl_kind=Stmt.Decl_fun;
             ty=cstor.Stmt.cstor_type;
             decl_attrs=[];
             def=Cstor (kind,tys,tydef, cstor);
@@ -200,7 +194,6 @@ let def_pred ?loc ~env ~wf ~kind def l =
     ~fail_msg:"is (co)inductive pred, but already defined";
   let info = {
     loc;
-    decl_kind=Stmt.Decl_prop;
     ty=def.Stmt.pred_defined.Stmt.defined_ty;
     decl_attrs=[];
     def=Pred(wf,kind,def,l,loc);
@@ -218,15 +211,15 @@ let add_copy ?loc ~env c =
   let infos = env.infos in
   let infos =
     ID.PerTbl.replace infos c.Stmt.copy_id
-      {loc; decl_kind=Stmt.Decl_type; decl_attrs=[];
+      {loc; decl_attrs=[];
        ty=c.Stmt.copy_ty; def=Copy_ty c; } in
   let infos =
     ID.PerTbl.replace infos c.Stmt.copy_abstract
-      {loc; decl_kind=Stmt.Decl_fun; decl_attrs=[];
+      {loc; decl_attrs=[];
        ty=c.Stmt.copy_abstract_ty; def=Copy_abstract c; } in
   let infos =
     ID.PerTbl.replace infos c.Stmt.copy_concrete
-      {loc; decl_kind=Stmt.Decl_fun; decl_attrs=[];
+      {loc; decl_attrs=[];
        ty=c.Stmt.copy_concrete_ty; def=Copy_concrete c; } in
   {infos; }
 
@@ -238,8 +231,8 @@ let add_statement
 = fun ~env st ->
   let loc = Stmt.loc st in
   match Stmt.view st with
-  | Stmt.Decl (id,kind,ty,attrs) ->
-      declare ?loc ~attrs ~kind ~env id ty
+  | Stmt.Decl (id,ty,attrs) ->
+      declare ?loc ~attrs ~env id ty
   | Stmt.TyDef (kind,l) ->
       def_data ?loc ~env ~kind l
   | Stmt.Goal _ -> env

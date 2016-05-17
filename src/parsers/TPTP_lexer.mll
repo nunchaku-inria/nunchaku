@@ -4,7 +4,7 @@
 
 {
   open Nunchaku_core
-  open NunTPTPParser
+  open TPTP_parser
 }
 
 let printable_char = [^ '\n']
@@ -107,8 +107,10 @@ rule token = parse
   | "definition" { ROLE_DEFINITION }
   | "$ite_f" { ITE_F }
   | "$ite_t" { ITE_T }
+  (*
   | "$let_tf" { LET_TF }
   | "$let_tf" { LET_FF }
+  *)
   | lower_word { LOWER_WORD(Lexing.lexeme lexbuf) }
   | upper_word { UPPER_WORD(Lexing.lexeme lexbuf) }
   | dollar_word { DOLLAR_WORD(Lexing.lexeme lexbuf) }
@@ -119,7 +121,7 @@ rule token = parse
   | rational { RATIONAL(Lexing.lexeme lexbuf) }
   | real { REAL(Lexing.lexeme lexbuf) }
   | _ as c
-    { NunParsingUtils.lex_error_ "lexer fails on char %c" c }
+    { Parsing_utils.lex_error_ "lexer fails on char %c" c }
 
 
 {
@@ -128,24 +130,24 @@ rule token = parse
   let parse_str_ p s = p token (Lexing.from_string s)
 
   let try_parse_ p s =
-    try CCError.return (parse_str_ p s)
-    with e -> CCError.fail (Printexc.to_string e)
+    try CCResult.return (parse_str_ p s)
+    with e -> CCResult.fail (Printexc.to_string e)
 
-  let fo_form_of_string = try_parse_ NunTPTPParser.parse_fo_form
-  let fo_form_of_string_exn = parse_str_ NunTPTPParser.parse_fo_form
+  let fo_form_of_string = try_parse_ TPTP_parser.parse_fo_form
+  let fo_form_of_string_exn = parse_str_ TPTP_parser.parse_fo_form
 
-  let ho_form_of_string = try_parse_ NunTPTPParser.parse_ho_form
-  let ho_form_of_string_exn = parse_str_ NunTPTPParser.parse_ho_form
+  let ho_form_of_string = try_parse_ TPTP_parser.parse_ho_form
+  let ho_form_of_string_exn = parse_str_ TPTP_parser.parse_ho_form
 
-  include NunParsingUtils.Make(struct
-    type token = NunTPTPParser.token
+  include Parsing_utils.Make(struct
+    type token = TPTP_parser.token
 
     type 'a parser_ = (Lexing.lexbuf -> token) -> Lexing.lexbuf -> 'a
 
     let token = token
-    let parse_ty = NunTPTPParser.parse_ty
-    let parse_term = NunTPTPParser.parse_term
-    let parse_statement = NunTPTPParser.parse_statement
-    let parse_statement_list = NunTPTPParser.parse_statement_list
+    let parse_ty = TPTP_parser.parse_ty
+    let parse_term = TPTP_parser.parse_term
+    let parse_statement = TPTP_parser.parse_statement
+    let parse_statement_list = TPTP_parser.parse_statement_list
   end)
 }

@@ -24,8 +24,8 @@ Library "nunchaku_core"
   Pack:             true
   Modules:          ID, Var, MetaVar, Location, Intf, Utils, Transform,
                     UntypedAST, Model, TypeUnify, Problem, FO, Reduce,
-                    Solver_intf, Env, Signature, Statement,
-                    Scheduling, CVC4, Polarity, Traversal, ProblemMetadata,
+                    Env, Signature, Statement, FO_tptp,
+                    Scheduling, Polarity, Traversal, ProblemMetadata,
                     AnalyzeType, Prelude, TypeCheck, Lazy_list,
                     terms/TermInner,
                     terms/TermTyped,
@@ -36,18 +36,29 @@ Library "nunchaku_core"
                     types/TypeMono
   Install:          true
   FindlibName:      nunchaku
-  BuildDepends:     containers, containers.sexp, containers.iter,
-                    containers.data, sequence, unix, threads, zarith
+  BuildDepends:     containers, containers.data, containers.sexp, sequence,
+                    zarith, unix, threads
 
 Library "nunchaku_parsers"
   Path:             src/parsers/
-  Modules:          NunParsingUtils, NunLexer, NunParser, NunPrintTPTP,
-                    NunTPTPLexer, NunTPTPParser, NunTPTPPreprocess
+  Pack:             true
+  Modules:          Parsing_utils, Lexer, Parser, TPTP_print,
+                    TPTP_lexer, TPTP_parser, TPTP_preprocess,
+                    TPTP_model_ast, TPTP_model_lexer, TPTP_model_parser
   Install:          true
   FindlibName:      parsers
   FindlibParent:    nunchaku_core
   BuildTools:       menhir
   BuildDepends:     nunchaku
+
+Library "nunchaku_backends"
+  Path:             src/backends
+  Pack:             true
+  Modules:          CVC4, Kodkod, Paradox
+  Install:          true
+  FindlibName:      backends
+  FindlibParent:    nunchaku_core
+  BuildDepends:     nunchaku, nunchaku.parsers, containers.sexp
 
 Library "nunchaku_transformations"
   Path:             src/transformations
@@ -66,7 +77,10 @@ Library "nunchaku_transformations"
                     Polarize,
                     Unroll,
                     IntroGuards,
-                    Model_rename
+                    Model_rename,
+                    ElimData,
+                    ElimTypes,
+                    Elim_ite
   Install:          true
   FindlibName:      transformations
   FindlibParent:    nunchaku_core
@@ -87,7 +101,8 @@ Executable nunchaku
   Install:          true
   CompiledObject:   native
   MainIs:           nunchaku.ml
-  BuildDepends:     nunchaku, nunchaku.transformations, nunchaku.parsers
+  BuildDepends:     nunchaku, nunchaku.transformations, nunchaku.parsers,
+                    nunchaku.backends
 
 PreBuildCommand:    make qtest-gen
 

@@ -4,7 +4,7 @@
 (** {1 Utils} *)
 
 type 'a sequence = ('a -> unit) -> unit
-type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a or_error = ('a, string) CCResult.t
 
 (** {2 Time} *)
 

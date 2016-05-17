@@ -9,7 +9,7 @@ module MetaVar = MetaVar
 
 type id = ID.t
 type 'a var = 'a Var.t
-type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a or_error = ('a, string) CCResult.t
 type 'a printer = Format.formatter -> 'a -> unit
 
 let fpf = Format.fprintf
@@ -40,12 +40,15 @@ module TyBuiltin = struct
     [ `Kind
     | `Type
     | `Prop
+    | `Unitype (** when there is only one type *)
     ]
   let equal = (=)
+  let compare = Pervasives.compare
   let to_string = function
     | `Prop -> "prop"
     | `Kind -> "kind"
     | `Type -> "type"
+    | `Unitype -> "unitype"
 end
 
 module Builtin = struct
@@ -66,7 +69,6 @@ module Builtin = struct
     | `Or of 'a list
     | `And of 'a list
     | `Imply of 'a * 'a
-    | `Equiv of 'a * 'a
     | `Ite of 'a * 'a * 'a
     | `Eq of 'a * 'a
     | `DataTest of id (** Test whether [t : tau] starts with given constructor *)
@@ -77,7 +79,7 @@ module Builtin = struct
     ]
 
   let is_infix : _ t -> bool = function
-    | `Eq _ | `Or _ | `And _ | `Equiv _ | `Imply _ | `Guard _ -> true
+    | `Eq _ | `Or _ | `And _ | `Imply _ | `Guard _ -> true
     | _ -> false
 
   let rec print_infix_list pterm s out l = match l with
@@ -96,7 +98,7 @@ module Builtin = struct
     | `And l ->
         fpf out "@[<hv>%a@]" (print_infix_list pterm "&&") l
     | `Imply (a,b) -> fpf out "@[@[%a@]@ @[<2>=>@ @[%a@]@]@]" pterm a pterm b
-    | `Equiv (a,b) | `Eq (a,b) ->
+    | `Eq (a,b) ->
         fpf out "@[<hv>%a@ @[<hv>=@ %a@]@]" pterm a pterm b
     | `Ite (a,b,c) ->
         fpf out "@[<hv>@[<2>if@ %a@]@ @[<2>then@ %a@]@ @[<2>else@ %a@]@]"
@@ -132,7 +134,6 @@ module Builtin = struct
     | `And l1, `And l2 -> CCList.equal eqterm l1 l2
     | `Ite(a1,b1,c1), `Ite(a2,b2,c2) ->
         eqterm a1 a2 && eqterm b1 b2 && eqterm c1 c2
-    | `Equiv (a1,b1), `Equiv(a2,b2)
     | `Eq(a1,b1), `Eq (a2,b2) -> eqterm a1 a2 && eqterm b1 b2
     | `DataTest id, `DataTest id' -> ID.equal id id'
     | `DataSelect (id, n), `DataSelect (id', n') -> n=n' && ID.equal id id'
@@ -146,7 +147,7 @@ module Builtin = struct
         && List.for_all2 eqterm g1.asserting g2.asserting
     | `Guard _, _
     | `True, _ | `False, _ | `Ite _, _ | `Not _, _ | `Unparsable _, _
-    | `Eq _, _ | `Or _, _ | `And _, _ | `Equiv _, _ | `Imply _, _
+    | `Eq _, _ | `Or _, _ | `And _, _ | `Imply _, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> false
 
   let map : f:('a -> 'b) -> 'a t -> 'b t
@@ -157,7 +158,6 @@ module Builtin = struct
     | `Imply (a,b) -> `Imply (f a, f b)
     | `Ite (a,b,c) -> `Ite (f a, f b, f c)
     | `Eq (a,b) -> `Eq (f a, f b)
-    | `Equiv (a,b) -> `Equiv (f a, f b)
     | `DataTest id -> `DataTest id
     | `Or l -> `Or (List.map f l)
     | `Not t -> `Not (f t)
@@ -179,8 +179,7 @@ module Builtin = struct
     | `Or l
     | `And l -> List.fold_left f acc l
     | `Ite (a,b,c) -> f (f (f acc a) b) c
-    | `Eq (a,b)
-    | `Equiv (a,b) -> f (f acc a) b
+    | `Eq (a,b) -> f (f acc a) b
     | `Unparsable t
     | `Undefined (_,t) -> f acc t
     | `Guard (t, g) ->
@@ -211,8 +210,7 @@ module Builtin = struct
         let acc = f acc a1 a2 in
         let acc = f acc b1 b2 in
         f acc c1 c2
-    | `Eq (a1,b1), `Eq (a2,b2)
-    | `Equiv (a1,b1), `Equiv (a2,b2) -> let acc = f acc a1 a2 in f acc b1 b2
+    | `Eq (a1,b1), `Eq (a2,b2) -> let acc = f acc a1 a2 in f acc b1 b2
     | `Undefined (i1,t1), `Undefined (i2,t2) ->
         if ID.equal i1 i2 then f acc t1 t2 else fail()
     | `Unparsable t1, `Unparsable t2 -> f acc t1 t2
@@ -224,7 +222,7 @@ module Builtin = struct
         List.fold_left2 f acc g1.asserting g2.asserting
     | `Guard _, _
     | `True, _ | `False, _ | `Ite _, _ | `Not _, _ | `Unparsable _, _
-    | `Eq _, _ | `Or _, _ | `And _, _ | `Equiv _, _ | `Imply _, _
+    | `Eq _, _ | `Or _, _ | `And _, _ | `Imply _, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> fail()
 
 
@@ -239,8 +237,7 @@ module Builtin = struct
     | `And l
     | `Or l -> List.iter f l
     | `Ite (a,b,c) -> f a; f b; f c
-    | `Eq (a,b)
-    | `Equiv (a,b) -> f a; f b
+    | `Eq (a,b) -> f a; f b
     | `Unparsable t
     | `Undefined (_,t) -> f t
     | `Guard (t,g) ->
@@ -682,6 +679,7 @@ module type UTIL = sig
   val app_builtin : t_ Builtin.t -> t_ list -> t_
   val var : t_ var -> t_
   val app : t_ -> t_ list -> t_
+  val app_const : ID.t -> t_ list -> t_
   val fun_ : t_ var -> t_ -> t_
   val mu : t_ var -> t_ -> t_
   val let_ : t_ var -> t_ -> t_ -> t_
@@ -692,7 +690,6 @@ module type UTIL = sig
 
   val eq : t_ -> t_ -> t_
   val neq : t_ -> t_ -> t_
-  val equiv : t_ -> t_ -> t_
   val imply : t_ -> t_ -> t_
   val imply_l : t_ list -> t_ -> t_
   val true_ : t_
@@ -799,7 +796,16 @@ module type UTIL = sig
   val rename_var : subst -> t_ Var.t -> subst * t_ Var.t
   (** Same as {!Subst.rename_var} but wraps the renamed var in a term *)
 
-  exception ApplyError of string * t_ * t_ list * subst
+  type apply_error = {
+    ae_msg: string;
+    ae_term: t_ option;
+    ae_ty: t_;
+    ae_args: t_ list;
+    ae_args_ty: t_ list; (* same length as ae_args *)
+    ae_subst: subst;
+  }
+
+  exception ApplyError of apply_error
   (** Raised when a type application fails *)
 
   val eval : subst:subst -> t_ -> t_
@@ -867,7 +873,10 @@ module Util(T : S)
 
   let const id = T.build (Const id)
   let var v = T.build (Var v)
-  let app t l = T.build (App(t,l))
+  let app t l = match l with
+    | [] -> t
+    | _::_ -> T.build (App(t,l))
+  let app_const id l = app (const id) l
   let mk_bind b v t = T.build (Bind (b, v, t))
   let fun_ v t = T.build (Bind (`Fun, v, t))
   let mu v t = T.build (Bind (`Mu, v, t))
@@ -922,7 +931,7 @@ module Util(T : S)
         | _, _, Builtin `False -> and_ [a; b] (* else branch: false *)
         | _ -> builtin_ arg
         end
-    | `Equiv (a,b) ->
+    | `Eq (a,b) ->
         begin match T.repr a, T.repr b with
         | Builtin `True, _ -> b
         | _, Builtin `True -> a
@@ -962,7 +971,7 @@ module Util(T : S)
     | _ -> builtin_ arg
 
   and app_builtin arg l = match arg, l with
-    | (`Ite _ | `Eq _ | `Equiv _), [] -> builtin arg
+    | (`Ite _ | `Eq _), [] -> builtin arg
     | _ -> app_builtin_ arg l
 
   and not_ t = builtin (`Not t)
@@ -977,7 +986,6 @@ module Util(T : S)
 
   let eq a b = builtin (`Eq (a,b))
   let neq a b = not_ (eq a b)
-  let equiv a b = builtin (`Equiv (a,b))
   let ite a b c = app_builtin (`Ite (a,b,c)) []
 
   let undefined_ t =
@@ -1232,10 +1240,6 @@ module Util(T : S)
           assuming = List.map (f b_acc P.Neg) g.assuming;
         } in
         guard t g
-    | Builtin (`Equiv (a,b)) ->
-        let a = f b_acc P.NoPol a in
-        let b = f b_acc P.NoPol b in
-        equiv a b
     | Builtin (`Eq (a,b)) ->
         let a = f b_acc P.NoPol a in
         let b = f b_acc P.NoPol b in
@@ -1324,7 +1328,16 @@ module Util(T : S)
 
   let renaming_to_subst subst = Var.Subst.map ~f:var subst
 
-  exception ApplyError of string * t_ * t_ list * subst
+  type apply_error = {
+    ae_msg: string;
+    ae_term: t_ option;
+    ae_ty: t_;
+    ae_args: t_ list;
+    ae_args_ty: t_ list; (* same length as ae_args *)
+    ae_subst: subst;
+  }
+
+  exception ApplyError of apply_error
   (** Raised when a type application fails *)
 
   exception UnifError of string * T.t * T.t
@@ -1333,12 +1346,18 @@ module Util(T : S)
   let () =
     Printexc.register_printer
     (function
-      | ApplyError (msg, t, l, subst) ->
+      | ApplyError ae ->
           let module P = Print(T) in
+          let pp_t out = function
+            | None -> ()
+            | Some t -> fpf out "`@[%a@]`@ : " P.print t
+          in
           let msg = Utils.err_sprintf
-            "@[<hv2>type error@ when applying %a@ on @[%a@]@ in @[%a@]: %s@]"
-            P.print_in_app t (CCFormat.list P.print_in_app) l
-            (Subst.print P.print) subst msg
+            "@[<hv2>type error@ when applying @[%a%a@]@ on @[%a : %a@]@ in subst @[%a@]: %s@]"
+            pp_t ae.ae_term P.print_in_app ae.ae_ty
+            (CCFormat.list P.print_in_app) ae.ae_args
+            (CCFormat.list P.print_in_app) ae.ae_args_ty
+            (Subst.print P.print) ae.ae_subst ae.ae_msg
           in Some msg
       | UnifError (msg, t1, t2) ->
           let module P = Print(T) in
@@ -1349,7 +1368,7 @@ module Util(T : S)
       | _ -> None
     )
 
-  let error_apply_ msg ~hd ~l ~subst = raise (ApplyError (msg, hd, l, subst))
+  let error_apply_ ae = raise (ApplyError ae)
   let error_unif_ msg t1 t2 = raise (UnifError (msg, t1, t2))
 
   let ty_apply_full t ~terms:l_terms ~tys:l_tys =
@@ -1359,20 +1378,26 @@ module Util(T : S)
       | TyBuiltin _, _, _
       | App (_,_),_, _
       | Const _, _, _ ->
-          error_apply_ "cannot apply this type" ~hd:t ~l:l_tys ~subst
+          error_apply_
+            {ae_msg="cannot apply this type"; ae_term=None;
+             ae_ty=t; ae_args=l_terms; ae_args_ty=l_tys; ae_subst=subst}
       | Var v, _, _ ->
           begin try
             let t = Subst.find_exn ~subst v in
             app_ ~subst t l_terms l_tys
           with Not_found ->
-            error_apply_ "cannot apply this type" ~hd:t ~l:l_tys ~subst
+            error_apply_
+              {ae_msg="cannot apply this type"; ae_term=None;
+               ae_ty=t; ae_args=l_terms; ae_args_ty=l_tys; ae_subst=subst; }
           end
       | TyMeta _,_,_ -> assert false
       | TyArrow (a, t'), _ :: l_terms', b :: l_tys' ->
           if equal_with ~subst a b
           then app_ ~subst t' l_terms' l_tys'
-          else error_apply_
-            "type mismatch on first argument" ~hd:t ~l:l_tys' ~subst
+          else
+            error_apply_
+              {ae_msg="type mismatch on first argument"; ae_term=None;
+               ae_ty=t; ae_args=l_terms; ae_args_ty=l_tys; ae_subst=subst; }
       | Bind (`TyForall, v, t'), b :: l_terms', _ :: l_tys' ->
           let subst = Subst.add ~subst v b in
           app_ ~subst t' l_terms' l_tys'
@@ -1391,17 +1416,25 @@ module Util(T : S)
       | TyBuiltin _, _
       | App (_,_),_
       | Const _, _ ->
-          error_apply_ "cannot apply this type" ~hd:t ~l ~subst
+          error_apply_
+            {ae_msg="cannot apply this type"; ae_term=None;
+             ae_ty=t; ae_args=[]; ae_args_ty=l; ae_subst=subst}
       | Var _, _ ->
-          error_apply_ "cannot apply this type" ~hd:t ~l ~subst
+          error_apply_
+            {ae_msg="cannot apply this type"; ae_term=None;
+             ae_ty=t; ae_args=[]; ae_args_ty=l; ae_subst=subst}
       | TyMeta _,_ -> assert false
       | TyArrow (a, t'), b :: l' ->
           if equal a b
           then app_ t' l'
-          else error_apply_
-            "type mismatch on first argument" ~hd:t ~l ~subst
+          else
+            error_apply_
+              {ae_msg="type mismatch on first argument"; ae_term=None;
+               ae_ty=t; ae_args=[]; ae_args_ty=l; ae_subst=subst; }
       | Bind (`TyForall, _, _), _ ->
-          error_apply_ "non monomorphic type" ~hd:t ~l ~subst
+          error_apply_
+            {ae_msg="non monomorphic type"; ae_term=None;
+             ae_ty=t; ae_args=[]; ae_args_ty=l; ae_subst=subst}
       | _ -> assert false
     in
     app_ t l
@@ -1427,7 +1460,6 @@ module Util(T : S)
           | `False -> prop
           | `Unparsable ty -> ty
           | `Ite (_,b,_) -> ty_exn ~sigma b
-          | `Equiv (_,_)
           | `Eq (_,_) -> prop
           | `DataTest id ->
               (* id: a->b->tau, where tau inductive; is-id: tau->prop *)
@@ -1446,8 +1478,16 @@ module Util(T : S)
           | `Guard (t, _) -> ty_exn ~sigma t
         end
     | Var v -> Var.ty v
+    | App (_, []) -> assert false
     | App (f,l) ->
-        ty_apply (ty_exn ~sigma f) ~terms:l ~tys:(List.map (ty_exn ~sigma) l)
+        let ty_f = ty_exn ~sigma f in
+        let tys = List.map (ty_exn ~sigma) l in
+        begin
+          try ty_apply ty_f ~terms:l ~tys
+          with ApplyError ae ->
+            let ae = {ae with ae_term=Some f; ae_args=l; ae_args_ty=tys; ae_ty=ty_f} in
+            raise (ApplyError ae)
+        end
     | Bind (b,v,t) ->
         begin match b with
         | `Forall
@@ -1468,12 +1508,13 @@ module Util(T : S)
         begin match b with
         | `Kind -> failwith "Term_ho.ty: kind has no type"
         | `Type -> ty_kind
-        | `Prop -> ty_type
+        | `Prop
+        | `Unitype -> ty_type
         end
     | TyArrow (_,_) -> ty_type
 
   let ty ~sigma t =
-    try CCError.return (ty_exn ~sigma t)
+    try CCResult.return (ty_exn ~sigma t)
     with e -> Utils.err_of_exn e
 
   (* return lists of same length, for
@@ -1538,11 +1579,16 @@ end
 
 (** {2 Default Implementation} *)
 
-module Default : S
-= struct
+module Default : sig
+  include S
+
+  module U : UTIL with type t_ = t
+  module P : PRINT with type t = t
+end = struct
   type t = {
     view: t view;
   }
+  type t_ = t
 
   let rec repr t = match t.view with
     | TyMeta {MetaVar.deref=Some t'; _} -> repr t'
@@ -1555,6 +1601,13 @@ module Default : S
     | App ({view=App (f, l1); _}, l2) ->
         make_raw_ (App (f, l1 @ l2))
     | _ -> make_raw_ view
+
+  module U = Util(struct
+      type t = t_
+      let repr = repr
+      let build = build
+    end)
+  module P = Print(struct type t = t_ let repr = repr end)
 end
 
 let default = (module Default : S)

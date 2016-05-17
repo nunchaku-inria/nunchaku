@@ -11,6 +11,8 @@ include Intf.HASH with type t := t
 
 val make : string -> t
 
+val make_f : ('a, Format.formatter, unit, t) format4 -> 'a
+
 val make_full : ?pol:Polarity.t -> needs_at:bool -> string -> t
 
 val fresh_copy : t -> t
@@ -56,7 +58,15 @@ module Erase : sig
 
   val create_state: unit -> state
 
-  val to_name : state -> t -> string
+  val add_name : state -> string -> t -> unit
+  (** Add the mapping [name <=> id] to the state. It will shadow
+      the previous binding of [name], if any.
+      @raise Invalid_argument if [id] is already bound *)
+
+  val to_name : ?encode:(t -> string -> string) -> state -> t -> string
+  (** [to_name state id] maps [id] to a unique name, and remembers the
+      inverse mapping so that [of_name state (to_name state id) = id].
+      @param encode a function to transform the name before remembering it *)
 
   val of_name : state -> string -> t
   (** @raise Not_found if the name corresponds to no ID *)

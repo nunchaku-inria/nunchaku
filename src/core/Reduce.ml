@@ -87,25 +87,21 @@ module Make(T : TI.S) = struct
           U.builtin b (* undefined term doesn't evaluate *)
       | `Ite (_,_,_) | `DataSelect _ | `DataTest _ ->
           invalid_arg "not boolean operators"
-      | `Equiv (a,b) ->
-          (* truth table *)
-          let a' = eval ~subst a in
-          let b' = eval ~subst b in
-          begin match as_bool_ a', as_bool_ b' with
+      | `Eq (a,b) ->
+          let a = eval ~subst a in
+          let b = eval ~subst b in
+          (* TODO: if [a] and [b] fully evaluated, return False? *)
+          begin match as_bool_ a, as_bool_ b with
           | BTrue, BTrue
           | BFalse, BFalse -> U.true_
           | BTrue, BFalse
           | BFalse, BTrue -> U.false_
           | BPartial _, _
-          | _, BPartial _ -> U.equiv a' b'
+          | _, BPartial _ ->
+            if U.equal_with ~subst a b
+            then U.true_
+            else U.eq a b
           end
-      | `Eq (a,b) ->
-          let a = eval ~subst a in
-          let b = eval ~subst b in
-          (* TODO: if [a] and [b] fully evaluated, return False? *)
-          if U.equal_with ~subst a b
-          then U.true_
-          else U.eq a b
       | `And l -> eval_and_l ~eval ~subst ~acc:[] l
       | `Or l -> eval_or_l ~eval ~subst ~acc:[] l
       | `Imply (a,b) ->
@@ -138,7 +134,7 @@ module Make(T : TI.S) = struct
       | `True | `False ->
           assert (args=[]);
           State.const ~subst (U.builtin b)(* normal form *)
-      | `And _ | `Imply _ | `Not _ | `Or _ | `Eq _ | `Equiv _ ->
+      | `And _ | `Imply _ | `Not _ | `Or _ | `Eq _ ->
           assert (args = []);
           begin match
               eval_bool_builtin ~eval:eval_term ~subst b

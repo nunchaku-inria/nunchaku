@@ -9,11 +9,6 @@ type 'a var = 'a Var.t
 type loc = Location.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-type decl =
-  | Decl_type
-  | Decl_fun
-  | Decl_prop
-
 type 'ty defined = {
   defined_head: id; (* symbol being defined *)
   defined_ty: 'ty; (* type of the head symbol *)
@@ -40,7 +35,6 @@ type (+'t, +'ty, 'kind) equations =
 
 type (+'t,+'ty,'kind) rec_def = {
   rec_defined: 'ty defined;
-  rec_kind: decl;
   rec_vars: 'ty var list; (* type variables in definitions *)
   rec_eqns: ('t, 'ty,'kind) equations; (* list of equations defining the term *)
 }
@@ -120,7 +114,7 @@ type decl_attr =
   | Decl_attr_exn of exn (** open case *)
 
 type (+'term, +'ty, 'inv) view =
-  | Decl of id * decl * 'ty * decl_attr list
+  | Decl of id * 'ty * decl_attr list
   | Axiom of ('term, 'ty, 'inv) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
   | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty, 'inv) pred_def list
@@ -157,12 +151,9 @@ let name t = t.info.name
 let make_ ~info view = {info;view}
 
 let mk_axiom ~info t = make_ ~info (Axiom t)
-let mk_decl ~info ~attrs id k decl = make_ ~info (Decl (id,k,decl,attrs))
 let mk_ty_def ~info k l = make_ ~info (TyDef (k, l))
 
-let ty_decl ~info ~attrs id t = mk_decl ~info ~attrs id Decl_type t
-let decl ~info ~attrs id t = mk_decl ~info ~attrs id Decl_fun t
-let prop_decl ~info ~attrs id t = mk_decl ~info ~attrs id Decl_prop t
+let decl ~info ~attrs id t = make_ ~info (Decl (id,t,attrs))
 let axiom ~info l = mk_axiom ~info (Axiom_std l)
 let axiom1 ~info t = axiom ~info [t]
 let axiom_spec ~info t = mk_axiom ~info (Axiom_spec t)
@@ -277,7 +268,6 @@ external cast_eqns
 let map_rec_def_bind ~bind ~term ~ty acc t =
   let acc', vars = Utils.fold_map bind acc t.rec_vars in
   {
-    rec_kind=t.rec_kind;
     rec_defined=map_defined ~f:(ty acc) t.rec_defined;
     rec_vars=vars;
     rec_eqns=map_eqns_bind ~bind ~term acc' t.rec_eqns;
@@ -379,8 +369,8 @@ external cast_preds
 let map_bind ~bind ~term:ft ~ty:fty acc st =
   let info = st.info in
   match st.view with
-  | Decl (id,k,t,attrs) ->
-      mk_decl ~info ~attrs id k (fty acc t)
+  | Decl (id,t,attrs) ->
+      decl ~info ~attrs id (fty acc t)
   | Axiom a ->
       begin match a with
       | Axiom_std l -> axiom ~info (List.map (ft acc) l)
@@ -444,7 +434,7 @@ let fold_preds_bind ~bind ~term ~ty b_acc acc l =
 
 let fold_bind (type inv) ~bind ~term:fterm ~ty:fty b_acc acc (st:(_,_,inv) t) =
   match st.view with
-  | Decl (_, _, t, _) -> fty b_acc acc t
+  | Decl (_, t, _) -> fty b_acc acc t
   | Axiom a ->
       begin match a with
       | Axiom_std l -> List.fold_left (fterm b_acc) acc l
@@ -621,7 +611,7 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
     fpf out ".@]"
 
   let print out t = match t.view with
-  | Decl (id,_,t,attrs) ->
+  | Decl (id,t,attrs) ->
       fpf out "@[<2>val %a@ : %a%a.@]" ID.print id Pty.print t print_attrs attrs
   | Axiom a ->
       begin match a with

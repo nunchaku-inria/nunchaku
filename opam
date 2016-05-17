@@ -24,7 +24,7 @@ remove: [
 ]
 depends: [
     "ocamlfind" {build}
-    "containers" { >= "0.15" }
+    "containers" { >= "0.16" }
     "menhir" {build}
     "sequence"
     "base-unix"
@@ -34,7 +34,7 @@ depends: [
     "ocamlbuild" {build}
 ]
 depopts: [
-    "qtest"
+    "qtest" {test}
 ]
 homepage: "https://github.com/nunchaku-inria/nunchaku/"
 available: [ocaml-version >= "4.00.0"]

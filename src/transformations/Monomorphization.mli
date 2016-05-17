@@ -5,7 +5,7 @@
 
 open Nunchaku_core
 
-type id = ID.t
+module T = TermInner.Default
 
 (* summary:
     - detect polymorphic functions
@@ -30,56 +30,54 @@ val name : string
 
 exception InvalidProblem of string
 
-module Make(T : TermInner.S) : sig
-  type term = T.t
+type term = T.t
 
-  type unmangle_state
-  (** State used to un-mangle specialized symbols *)
+type unmangle_state
+(** State used to un-mangle specialized symbols *)
 
-  val monomorphize :
-    ?depth_limit:int ->
-    (term, term, ('a,'b) inv1) Problem.t ->
-    (term, term, ('a,'b) inv2) Problem.t * unmangle_state
-  (** Filter and specialize definitions of the problem.
+val monomorphize :
+  ?depth_limit:int ->
+  (term, term, ('a,'b) inv1) Problem.t ->
+  (term, term, ('a,'b) inv2) Problem.t * unmangle_state
+(** Filter and specialize definitions of the problem.
 
-      First it finds a set of instances for each symbol
-      such that it is sufficient to instantiate the corresponding (partial)
-      definitions of the symbol with those tuples.
+    First it finds a set of instances for each symbol
+    such that it is sufficient to instantiate the corresponding (partial)
+    definitions of the symbol with those tuples.
 
-      Then it specializes relevant definitions with the set of tuples
-      computed earlier.
+    Then it specializes relevant definitions with the set of tuples
+    computed earlier.
 
-      @param depth_limit recursion limit for specialization of functions
-      @return a new list of (monomorphized) statements, and the final
-        state obtained after monomorphization
-  *)
+    @param depth_limit recursion limit for specialization of functions
+    @return a new list of (monomorphized) statements, and the final
+      state obtained after monomorphization
+*)
 
-  val unmangle_term : state:unmangle_state -> term -> term
-  (** Unmangle a single term: replace mangled constants by their definition *)
+val unmangle_term : state:unmangle_state -> term -> term
+(** Unmangle a single term: replace mangled constants by their definition *)
 
-  val unmangle_model :
-      state:unmangle_state ->
-      (term,term) Model.t ->
-      (term,term) Model.t
-  (** Unmangles constants that have been collapsed with their type arguments *)
+val unmangle_model :
+    state:unmangle_state ->
+    (term,term) Model.t ->
+    (term,term) Model.t
+(** Unmangles constants that have been collapsed with their type arguments *)
 
-  val pipe :
-    print:bool ->
-    check:bool ->
-    ((term, term, ('a,'b) inv1) Problem.t,
-     (term, term, ('a,'b) inv2) Problem.t,
-      (term,term) Problem.Res.t, (term,term) Problem.Res.t
-    ) Transform.t
-  (** Pipeline component *)
+val pipe :
+  print:bool ->
+  check:bool ->
+  ((term, term, ('a,'b) inv1) Problem.t,
+   (term, term, ('a,'b) inv2) Problem.t,
+    (term,term) Problem.Res.t, (term,term) Problem.Res.t
+  ) Transform.t
+(** Pipeline component *)
 
-  val pipe_with :
-    decode:(unmangle_state -> 'c -> 'd) ->
-    print:bool ->
-    check:bool ->
-    ((term, term, ('a,'b) inv1) Problem.t,
-     (term, term, ('a,'b) inv2) Problem.t, 'c, 'd
-    ) Transform.t
-  (** Generic Pipe Component
-      @param decode the decode function that takes an applied [(module S)]
-        in addition to the state *)
-end
+val pipe_with :
+  decode:(unmangle_state -> 'c -> 'd) ->
+  print:bool ->
+  check:bool ->
+  ((term, term, ('a,'b) inv1) Problem.t,
+   (term, term, ('a,'b) inv2) Problem.t, 'c, 'd
+  ) Transform.t
+(** Generic Pipe Component
+    @param decode the decode function that takes an applied [(module S)]
+      in addition to the state *)

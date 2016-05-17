@@ -2,6 +2,7 @@ S src/core
 S src/core/terms
 S src/core/types
 S src/transformations/
+S src/backends/
 S src/main/
 S src/parsers/
 S src/random/
@@ -9,6 +10,7 @@ B _build/src/**
 PKG containers
 PKG containers.iter
 PKG containers.data
+PKG containers.sexp
 PKG sequence
 PKG unix
 PKG zarith

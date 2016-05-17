@@ -64,3 +64,4 @@ x 2016-03-08 2016-01-11 print models in TPTP properly @feature
 x 2016-03-24 2015-11-30 finish specialization (emit extensionality axioms) @feature
 x 2016-03-24 2016-03-22 make specialize handle ind. preds.
 x 2016-03-24 2016-03-07 optional type-checking fence after each step
+x 2016-05-17 2016-05-10 fix bug in ElimHOF (need to declare more, earlier for ty_exn to work) --> polarity2

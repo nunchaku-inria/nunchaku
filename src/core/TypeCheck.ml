@@ -91,12 +91,6 @@ module Make(T : TI.S) = struct
               check_prop a tya;
               check_same_ b c tyb tyc;
               tyb
-          | `Equiv (a,b) ->
-              let tya = check ~env bound a in
-              let tyb = check ~env bound b in
-              check_prop a tya;
-              check_prop b tyb;
-              prop
           | `Eq (a,b) ->
               let tya = check ~env bound a in
               let tyb = check ~env bound b in
@@ -177,6 +171,7 @@ module Make(T : TI.S) = struct
         | `Kind -> failwith "Term_ho.ty: kind has no type"
         | `Type -> U.ty_kind
         | `Prop -> U.ty_type
+        | `Unitype -> U.ty_type
         end
     | TI.TyArrow (a,b) ->
         (* TODO: if a=type, then b=type is mandatory *)

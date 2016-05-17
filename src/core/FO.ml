@@ -4,6 +4,7 @@
 (** {1 First-Order Monomorphic Terms} *)
 
 module Metadata = ProblemMetadata
+module Res = Problem.Res
 
 type id = ID.t
 type 'a var = 'a Var.t
@@ -13,9 +14,12 @@ type 'a or_error = [`Ok of 'a | `Error of string]
 module TyBuiltin = struct
   type t =
     [ `Prop
+    | `Unitype
     ]
   let equal = (=)
+  let compare = Pervasives.compare
   let print out = function
+    | `Unitype -> CCFormat.string out "unitype"
     | `Prop -> CCFormat.string out "prop"
 end
 
@@ -24,6 +28,7 @@ module Builtin = struct
     [ `Int of int
     ]
   let equal = (=)
+  let compare = Pervasives.compare
   let print out = function
     | `Int n -> CCFormat.int out n
 end
@@ -84,139 +89,92 @@ type ('t, 'ty) statement =
   | MutualTypes of [`Data | `Codata] * 'ty mutual_types
   | Goal of 't
 
-(** {2 Read-Only View} *)
-module type VIEW = sig
-  module Ty : sig
-    type t
-    type toplevel_ty = t list * t
-    val view : t -> t ty_view
-  end
+module Ty = struct
+  type t = {
+    view: t ty_view;
+  }
+  type _t = t
+  type toplevel_ty = t list * t
 
-  module T : sig
-    type t
-    val view : t -> (t, Ty.t) view
-    (** Observe the structure of the term *)
-  end
+  let view t = t.view
+
+  let make_ view = {view}
+  let const id = make_ (TyApp (id, []))
+  let app id l = make_ (TyApp (id, l))
+  let builtin b = make_ (TyBuiltin b)
+  let arrow a l = a,l
+
+  let is_prop t = match t.view with
+    | TyBuiltin `Prop -> true
+    | _ -> false
+
+  let to_int_ = function
+    | TyBuiltin _ -> 0
+    | TyApp _ -> 1
+
+  let rec compare_ty t1 t2 = match t1.view, t2.view with
+    | TyBuiltin b1, TyBuiltin b2 -> TyBuiltin.compare b1 b2
+    | TyApp (c1,l1), TyApp (c2,l2) ->
+      CCOrd.( ID.compare c1 c2 <?> (list_ compare_ty, l1, l2))
+    | TyApp _, _
+    | TyBuiltin _, _ -> Pervasives.compare (to_int_ t1.view) (to_int_ t2.view)
+
+  let compare = compare_ty
+  let equal a b = compare a b = 0
 end
 
-(** {2 View and Build Formulas, Terms, Types} *)
-module type S = sig
-  module Ty : sig
-    type t
-    type toplevel_ty = t list * t
+module T = struct
+  type t = { view : (t, Ty.t) view; id: int }
 
-    val view : t -> t ty_view
+  let view t = t.view
+  let compare a b = Pervasives.compare a.id b.id
 
-    val const : id -> t
-    val app : id -> t list -> t
-    val builtin : TyBuiltin.t -> t
-    val arrow : t list -> t -> toplevel_ty
-  end
+  let make_ =
+    let n = ref 0 in
+    fun view ->
+      let t = {view; id= !n } in
+      incr n;
+      t
 
-  module T : sig
-    type t
-    val view : t -> (t, Ty.t) view
-    (** Observe the structure of the term *)
-
-    val builtin : Builtin.t -> t
-    val const : id -> t
-    val app : id -> t list -> t
-    val data_test : id -> t -> t
-    val data_select : id -> int -> t -> t
-    val undefined : id -> t -> t
-    val unparsable : Ty.t -> t
-    val var : Ty.t var -> t
-    val let_ : Ty.t var -> t -> t -> t
-    val fun_ : Ty.t var -> t -> t
-    val mu : Ty.t var -> t -> t
-    val ite : t -> t -> t -> t
-    val true_ : t
-    val false_ : t
-    val eq : t -> t -> t
-    val and_ : t list -> t
-    val or_ : t list -> t
-    val not_ : t -> t
-    val imply : t -> t -> t
-    val equiv : t -> t -> t
-    val forall : Ty.t var -> t -> t
-    val exists : Ty.t var -> t -> t
-  end
+  let builtin b = make_ (Builtin b)
+  let app id l = make_ (App(id,l))
+  let const id = make_ (App(id,[]))
+  let var v = make_ (Var v)
+  let data_test c t = make_ (DataTest (c,t))
+  let data_select c n t = make_ (DataSelect (c,n,t))
+  let undefined c t = make_ (Undefined (c,t))
+  let unparsable ty = make_ (Unparsable ty)
+  let let_ v t u = make_ (Let(v,t,u))
+  let fun_ v t = make_ (Fun (v,t))
+  let mu v t = make_ (Mu (v,t))
+  let ite f t u = make_ (Ite (f,t,u))
+  let true_ = make_ True
+  let false_ = make_ False
+  let eq a b = make_ (Eq (a,b))
+  let and_ = function
+    | [] -> true_
+    | [x] -> x
+    | l when List.exists (function {view=False; _} -> true | _ -> false) l -> false_
+    | l -> make_ (And l)
+  let or_ = function
+    | [] -> false_
+    | [x] -> x
+    | l when List.exists (function {view=True; _} -> true | _ -> false) l -> true_
+    | l -> make_ (Or l)
+  let not_ = function
+    | {view=True; _} -> false_
+    | {view=False; _} -> true_
+    | {view=Not f; _} -> f
+    | f -> make_ (Not f)
+  let imply a b = match a.view, b.view with
+    | True, _ -> b
+    | False, _ -> true_
+    | _, False -> not_ a
+    | _ -> make_ (Imply (a,b))
+  let equiv a b = make_ (Equiv (a,b))
+  let forall v t = make_ (Forall (v,t))
+  let exists v t = make_ (Exists (v,t))
 end
-
-type ('t, 'ty) repr =
-  (module VIEW with type T.t = 't and type Ty.t = 'ty)
-
-type ('t, 'ty) build =
-  (module S with type T.t = 't and type Ty.t = 'ty)
-
-module Default : S = struct
-  module Ty = struct
-    type t = {
-      view: t ty_view;
-    }
-    type toplevel_ty = t list * t
-
-    let view t = t.view
-
-    let make_ view = {view}
-    let const id = make_ (TyApp (id, []))
-    let app id l = make_ (TyApp (id, l))
-    let builtin b = make_ (TyBuiltin b)
-    let arrow a l = a,l
-  end
-
-  module T = struct
-    type t = { view : (t, Ty.t) view }
-
-    let view t = t.view
-
-    let make_ view = {view}
-    let builtin b = make_ (Builtin b)
-    let app id l = make_ (App(id,l))
-    let const id = make_ (App(id,[]))
-    let var v = make_ (Var v)
-    let data_test c t = make_ (DataTest (c,t))
-    let data_select c n t = make_ (DataSelect (c,n,t))
-    let undefined c t = make_ (Undefined (c,t))
-    let unparsable ty = make_ (Unparsable ty)
-    let let_ v t u = make_ (Let(v,t,u))
-    let fun_ v t = make_ (Fun (v,t))
-    let mu v t = make_ (Mu (v,t))
-    let ite f t u = make_ (Ite (f,t,u))
-    let true_ = make_ True
-    let false_ = make_ False
-    let eq a b = make_ (Eq (a,b))
-    let and_ = function
-      | [] -> true_
-      | [x] -> x
-      | l -> make_ (And l)
-    let or_ = function
-      | [] -> false_
-      | [x] -> x
-      | l -> make_ (Or l)
-    let not_ = function
-      | {view=True; _} -> false_
-      | {view=False; _} -> true_
-      | {view=Not f; _} -> f
-      | f -> make_ (Not f)
-    let imply a b = make_ (Imply (a,b))
-    let equiv a b = make_ (Equiv (a,b))
-    let forall v t = make_ (Forall (v,t))
-    let exists v t = make_ (Exists (v,t))
-  end
-end
-
-let default_repr
-: (Default.T.t, Default.Ty.t) repr
-= (module Default : VIEW
-     with type T.t = Default.T.t
-     and type Ty.t = Default.Ty.t)
-
-let default
-: (Default.T.t, Default.Ty.t) build
-= (module Default : S
-     with type T.t = Default.T.t
-     and type Ty.t = Default.Ty.t)
 
 (** {2 The Problems sent to Solvers} *)
 module Problem = struct
@@ -234,6 +192,8 @@ module Problem = struct
     let res = CCVector.flat_map_list f pb.statements in
     make ~meta res
 
+  let map ~meta f pb = flat_map ~meta (fun s -> [f s]) pb
+
   let fold_flat_map ~meta f acc pb =
     let res = CCVector.create () in
     let acc' = CCVector.fold
@@ -247,139 +207,124 @@ module Problem = struct
     acc', pb'
 end
 
-module type PRINT = sig
-  module FO : VIEW
-
-  val print_ty : FO.Ty.t printer
-  val print_toplevel_ty : FO.Ty.toplevel_ty printer
-  val print_term : FO.T.t printer
-  val print_statement : (FO.T.t, FO.Ty.t) statement printer
-  val print_model : (FO.T.t * FO.T.t) list printer
-  val print_problem : (FO.T.t, FO.Ty.t) Problem.t printer
-end
-
 (* TODO: use it in CVC4? or too specific, this is not SMT specific *)
-module Print(FO : VIEW) : PRINT with module FO = FO = struct
-  module FO = FO
 
-  let fpf = Format.fprintf
+let fpf = Format.fprintf
 
-  let pp_list_ ?(sep=" ") out p = CCFormat.list ~start:"" ~stop:"" ~sep out p
+let pp_list_ ?(sep=" ") out p = CCFormat.list ~start:"" ~stop:"" ~sep out p
 
-  let rec print_ty out ty = match FO.Ty.view ty with
-    | TyApp (id, []) -> ID.print out id
-    | TyApp (id, l) ->
-        fpf out "@[<2>(%a@ %a)@]" ID.print id (pp_list_ print_ty) l
-    | TyBuiltin b -> TyBuiltin.print out b
+let rec print_ty out ty = match Ty.view ty with
+  | TyApp (id, []) -> ID.print out id
+  | TyApp (id, l) ->
+    fpf out "@[<2>(%a@ %a)@]" ID.print id (pp_list_ print_ty) l
+  | TyBuiltin b -> TyBuiltin.print out b
 
-  let print_toplevel_ty out (args, ret) =
-    if args=[] then print_ty out ret
-    else fpf out "@[<2>(%a -> %a)@]" (pp_list_ ~sep:" × " print_ty) args print_ty ret
+let print_toplevel_ty out (args, ret) =
+  if args=[] then print_ty out ret
+  else fpf out "@[<2>(%a -> %a)@]" (pp_list_ ~sep:" × " print_ty) args print_ty ret
 
-  let rec print_term out t = match FO.T.view t with
-    | Builtin b -> Builtin.print out b
-    | Var v -> Var.print_full out v
-    | App (f,[]) -> ID.print out f
-    | App (f,l) ->
-        fpf out "(@[<2>%a@ %a@])" ID.print f (pp_list_ print_term) l
-    | Fun (v,t) ->
-        fpf out "(@[<2>fun %a:%a.@ %a@])"
-          Var.print_full v print_ty (Var.ty v) print_term t
-    | Mu (v,t) ->
-        fpf out "(@[<2>mu %a.@ %a@])" Var.print_full v print_term t
-    | DataTest (c,t) ->
-        fpf out "(@[<2>is-%a@ %a@])" ID.print c print_term t
-    | DataSelect (c,n,t) ->
-        fpf out "(@[<2>select-%a-%d@ %a@])" ID.print c n print_term t
-    | Undefined (c,t) ->
-        fpf out "(@[<2>undefined-%a@ %a@])" ID.print c print_term t
-    | Unparsable ty ->
-        fpf out "(@[<2>unparsable ty:%a@])" print_ty ty
-    | Let (v,t,u) ->
-        fpf out "(@[<2>let@ %a =@ %a in@ %a@])"
-          Var.print_full v print_term t print_term u
-    | Ite (a,b,c) ->
-        fpf out "(@[<2>ite@ %a@ %a@ %a@])"
-          print_term a print_term b print_term c
-    | True -> CCFormat.string out "true"
-    | False -> CCFormat.string out "false"
-    | Eq (a,b) -> fpf out "(@[%a =@ %a@])" print_term a print_term b
-    | And l -> fpf out "(@[and@ %a@])" (pp_list_ print_term) l
-    | Or l ->  fpf out "(@[and@ %a@])" (pp_list_ print_term) l
-    | Not f -> fpf out "(@[not@ %a@])" print_term f
-    | Imply (a,b) -> fpf out "(@[%a =>@ %a@])" print_term a print_term b
-    | Equiv (a,b) -> fpf out "(@[%a <=>@ %a@])" print_term a print_term b
-    | Forall (v,f) ->
-        fpf out "(@[forall %a@ %a@])" Var.print_full v print_term f
-    | Exists (v,f) ->
-        fpf out "(@[exists %a@ %a@])" Var.print_full v print_term f
+let rec print_term out t = match T.view t with
+  | Builtin b -> Builtin.print out b
+  | Var v -> Var.print_full out v
+  | App (f,[]) -> ID.print out f
+  | App (f,l) ->
+    fpf out "(@[<2>%a@ %a@])" ID.print f (pp_list_ print_term) l
+  | Fun (v,t) ->
+    fpf out "(@[<2>fun %a:%a.@ %a@])"
+      Var.print_full v print_ty (Var.ty v) print_term t
+  | Mu (v,t) ->
+    fpf out "(@[<2>mu %a.@ %a@])" Var.print_full v print_term t
+  | DataTest (c,t) ->
+    fpf out "(@[<2>is-%a@ %a@])" ID.print c print_term t
+  | DataSelect (c,n,t) ->
+    fpf out "(@[<2>select-%a-%d@ %a@])" ID.print c n print_term t
+  | Undefined (c,t) ->
+    fpf out "(@[<2>undefined-%a@ %a@])" ID.print c print_term t
+  | Unparsable ty ->
+    fpf out "(@[<2>unparsable ty:%a@])" print_ty ty
+  | Let (v,t,u) ->
+    fpf out "(@[<2>let@ %a =@ %a in@ %a@])"
+      Var.print_full v print_term t print_term u
+  | Ite (a,b,c) ->
+    fpf out "(@[<2>ite@ %a@ %a@ %a@])"
+      print_term a print_term b print_term c
+  | True -> CCFormat.string out "true"
+  | False -> CCFormat.string out "false"
+  | Eq (a,b) -> fpf out "(@[%a =@ %a@])" print_term a print_term b
+  | And l -> fpf out "(@[and@ %a@])" (pp_list_ print_term) l
+  | Or l ->  fpf out "(@[and@ %a@])" (pp_list_ print_term) l
+  | Not f -> fpf out "(@[not@ %a@])" print_term f
+  | Imply (a,b) -> fpf out "(@[%a =>@ %a@])" print_term a print_term b
+  | Equiv (a,b) -> fpf out "(@[%a <=>@ %a@])" print_term a print_term b
+  | Forall (v,f) ->
+    fpf out "(@[forall %a@ %a@])" Var.print_full v print_term f
+  | Exists (v,f) ->
+    fpf out "(@[exists %a@ %a@])" Var.print_full v print_term f
 
-  let print_model out m =
-    let pp_pair out (t,u) = fpf out "@[%a -> %a@]" print_term t print_term u in
-    fpf out "@[model {@,@[<hv>%a@]}@]"
-      (CCFormat.list ~start:"" ~stop:"" ~sep:","  pp_pair) m
+let print_model out m =
+  let pp_pair out (t,u) = fpf out "@[%a -> %a@]" print_term t print_term u in
+  fpf out "@[model {@,@[<hv>%a@]}@]"
+    (CCFormat.list ~start:"" ~stop:"" ~sep:","  pp_pair) m
 
-  let print_statement out s = match s with
-    | TyDecl (id, n) ->
-        fpf out "@[<2>type %a (arity %d).@]" ID.print id n
-    | Decl (v, ty) ->
-        fpf out "@[<2>val %a@ : %a.@]" ID.print v print_toplevel_ty ty
-    | Axiom t -> fpf out "@[<2>axiom %a.@]" print_term t
-    | CardBound (ty_id, which, n) ->
-        let s = match which with `Max -> "max_card" | `Min -> "min_card" in
-        fpf out "@[<2>%s %a@ = %d.@]" s ID.print ty_id n
-    | MutualTypes (k, l) ->
-        let pp_arg = print_ty in
-        let pp_tyvars_ out = function
-          | [] -> ()
-          | l -> fpf out "pi %a. " (pp_list_ ID.print) l
-        in
-        let pp_cstor out c = match c.cstor_args with
-          | [] -> ID.print out c.cstor_name
-          | _ ->
-              fpf out "@[<2>(%a@ %a)@]" ID.print c.cstor_name
-                (pp_list_ ~sep:" " pp_arg) c.cstor_args
-        in
-        let print_tydef out tydef =
-          fpf out "@[<hv2>%a :=@ %a@]"
-            ID.print tydef.ty_name
-            (pp_list_ ~sep:" | " pp_cstor)
-            (ID.Map.to_list tydef.ty_cstors |> List.map snd)
-        in
-        fpf out "@[<hv2>%s %a@,%a.@]"
-          (match k with `Data -> "data" | `Codata -> "codata")
-          pp_tyvars_ l.tys_vars
-          (pp_list_ ~sep:" and " print_tydef) l.tys_defs
-    | Goal t -> fpf out "@[<2>goal %a.@]" print_term t
+let print_statement out s = match s with
+  | TyDecl (id, n) ->
+    fpf out "@[<2>type %a (arity %d).@]" ID.print id n
+  | Decl (v, ty) ->
+    fpf out "@[<2>val %a@ : %a.@]" ID.print v print_toplevel_ty ty
+  | Axiom t -> fpf out "@[<2>axiom %a.@]" print_term t
+  | CardBound (ty_id, which, n) ->
+    let s = match which with `Max -> "max_card" | `Min -> "min_card" in
+    fpf out "@[<2>%s %a@ = %d.@]" s ID.print ty_id n
+  | MutualTypes (k, l) ->
+    let pp_arg = print_ty in
+    let pp_tyvars_ out = function
+      | [] -> ()
+      | l -> fpf out "pi %a. " (pp_list_ ID.print) l
+    in
+    let pp_cstor out c = match c.cstor_args with
+      | [] -> ID.print out c.cstor_name
+      | _ ->
+        fpf out "@[<2>(%a@ %a)@]" ID.print c.cstor_name
+          (pp_list_ ~sep:" " pp_arg) c.cstor_args
+    in
+    let print_tydef out tydef =
+      fpf out "@[<hv2>%a :=@ %a@]"
+        ID.print tydef.ty_name
+        (pp_list_ ~sep:" | " pp_cstor)
+        (ID.Map.to_list tydef.ty_cstors |> List.map snd)
+    in
+    fpf out "@[<hv2>%s %a@,%a.@]"
+      (match k with `Data -> "data" | `Codata -> "codata")
+      pp_tyvars_ l.tys_vars
+      (pp_list_ ~sep:" and " print_tydef) l.tys_defs
+  | Goal t -> fpf out "@[<2>goal %a.@]" print_term t
 
-  let print_problem out pb =
-    fpf out "@[<v>%a@]"
-      (CCVector.print ~start:"" ~stop:"" ~sep:"" print_statement)
-      (Problem.statements pb)
-end
+let print_problem out pb =
+  fpf out "@[<v>%a@]"
+    (CCVector.print ~start:"" ~stop:"" ~sep:"" print_statement)
+    (Problem.statements pb)
 
 (** {2 Utils} *)
-module Util(Repr : S) = struct
-  module T = Repr.T
-  module Ty = Repr.Ty
-  module P = Print(Repr)
+module Util = struct
+  (* condition: var = term *)
+  type cond = Ty.t Var.t * T.t
 
   exception Parse_err of unit lazy_t
   (* evaluate the lazy -> print a warning *)
 
   (* split [t] into a list of equations [var = t'] where [var in vars] *)
-  let rec get_eqns ~vars t =
-    Utils.debugf 5 "get_eqns @[%a@]" (fun k->k P.print_term t);
+  let rec get_eqns_exn ~vars t : cond list =
+    Utils.debugf 5 "get_eqns @[%a@]" (fun k->k print_term t);
     let fail() =
       let msg = lazy (
         Utils.warningf Utils.Warn_model_parsing_error
         "expected a test <var = term>@ with <var> among @[%a@],@ but got `@[%a@]`@]"
-        (CCFormat.list Var.print_full) vars P.print_term t
+        (CCFormat.list Var.print_full) vars print_term t
       ) in
       raise (Parse_err msg)
     in
     match T.view t with
-    | And l -> CCList.flat_map (get_eqns ~vars) l
+    | And l -> CCList.flat_map (get_eqns_exn ~vars) l
     | Eq (t1, t2) ->
         begin match T.view t1, T.view t2 with
           | Var v, _ when List.exists (Var.equal v) vars ->
@@ -394,12 +339,14 @@ module Util(Repr : S) = struct
         let msg = lazy (
           Utils.warningf Utils.Warn_model_parsing_error
             "expected a boolean variable among @[%a@],@ but got @[%a@]@]"
-            (CCFormat.list Var.print_full) vars P.print_term t
+            (CCFormat.list Var.print_full) vars print_term t
         ) in
         raise (Parse_err msg)
     | _ -> fail()
 
-  type cond = Repr.Ty.t Var.t * T.t
+  let get_eqns ~vars t : cond list option =
+    try Some (get_eqns_exn ~vars t)
+    with Parse_err _ -> None
 
   module DT = Model.DT
 
@@ -409,7 +356,7 @@ module Util(Repr : S) = struct
        one with an empty list of conditions *)
     type +'a t = (cond list * 'a) Sequence.t
 
-    let return x = Sequence.return ([], x)
+    let return x : _ t = Sequence.return ([], x)
 
     let (>|=)
     : 'a t -> ('a -> 'b) -> 'b t
@@ -425,10 +372,12 @@ module Util(Repr : S) = struct
       f t >|= fun (conds', t') -> List.rev_append conds' conds, t'
 
     (* add a test; if the test holds yield [b], else yield [c] *)
-    let guard
-    : cond list -> 'a -> 'a -> 'a t
-    = fun a b c ->
-      Sequence.doubleton (a, b) ([], c)
+    let case
+    : type a. cond list -> a t -> a t -> a t
+    = fun cond a b ->
+      Sequence.append
+        (Sequence.map (fun (cond',a') -> List.rev_append cond cond', a') a)
+        b
 
     let rec fold_m f acc l = match l with
       | [] -> return acc
@@ -443,6 +392,7 @@ module Util(Repr : S) = struct
       | [] -> assert false
       | (_::_,_)::_ -> assert false
       | ([], else_) :: cases ->
+          (* last case must have empty condition *)
           let cases = List.rev cases in
           DT.test cases ~else_
   end
@@ -464,41 +414,38 @@ module Util(Repr : S) = struct
       | Equiv (_,_)
       | Forall (_,_)
       | Exists (_,_) -> return t
-      | Var v ->
+      | Var v when Ty.is_prop (Var.ty v)  ->
           (* boolean variable: perform a test on it *)
-          guard [v, T.true_] T.true_ T.false_
+          case [v, T.true_] (return T.true_) (return T.false_)
+      | Var _ -> return t
       | Eq (a,b) ->
-          begin try
+        begin match get_eqns ~vars t with
+          | Some conds ->
             (* yield true if equality holds, false otherwise *)
-            let cond = get_eqns ~vars t in
-            guard cond T.true_ T.false_
-          with Parse_err _ ->
+            case conds (return T.true_) (return T.false_)
+          | None ->
             aux a >>= fun a ->
             aux b >|= fun b -> T.eq a b
           end
       | Imply (a,b) ->
-          begin try
+        begin match get_eqns ~vars a with
+          | Some conds ->
             (* a => b becomes if a then b else false *)
-            let cond = get_eqns ~vars a in
-            aux b >>= fun b ->
-            guard cond b T.false_
-          with Parse_err _ ->
+            case conds (aux b) (return T.false_)
+          | None ->
             aux a >>= fun a ->
             aux b >|= fun b ->
             T.imply a b
           end
       | Ite (a,b,c) ->
-          let cond = get_eqns ~vars a in
-          aux b >>= fun b ->
-          aux c >>= fun c ->
-          guard cond b c
+          let cond = get_eqns_exn ~vars a in
+          case cond (aux b) (aux c)
       | And l ->
-          begin try
-            let cond = get_eqns ~vars t in
-            guard cond T.true_ T.false_
-          with Parse_err _ ->
-            aux_l l >|= T.and_
-          end
+        begin match get_eqns ~vars t with
+          | Some cond ->
+            case cond (return T.true_) (return T.false_)
+          | None -> aux_l l >|= T.and_
+        end
       | Or l -> aux_l l >|= T.or_
       | Not t -> aux t >|= T.not_
       | App (id,l) -> aux_l l >|= T.app id
@@ -521,8 +468,9 @@ module Util(Repr : S) = struct
     let add_stmt m = function
       | TyDecl (id, _) -> ID.Map.add id M.Symbol_utype m
       | Decl (id, (_, ret)) ->
-          let k = match Repr.Ty.view ret with
+          let k = match Ty.view ret with
             | TyBuiltin `Prop -> M.Symbol_prop
+            | TyBuiltin `Unitype
             | TyApp _ -> M.Symbol_fun
           in
           ID.Map.add id k m
@@ -538,3 +486,133 @@ module Util(Repr : S) = struct
     in
     CCVector.fold add_stmt ID.Map.empty (Problem.statements pb)
 end
+
+(** {2 Conversion} *)
+
+module To_tptp = struct
+  module TT = FO_tptp
+
+  exception Error of string
+  let () = Printexc.register_printer
+      (function
+        | (Error e) -> Some (Utils.err_sprintf "conversion to TPTP: %s" e)
+        | _ -> None)
+
+  let error_ msg = raise (Error msg)
+  let errorf_ msg = Utils.exn_ksprintf ~f:error_ msg
+
+  let is_unitype_ ty = match Ty.view ty with
+    | TyBuiltin `Unitype ->  true
+    | _ -> false
+
+  (* check the type of [v] *)
+  let conv_var v =
+    if is_unitype_ (Var.ty v)
+    then Var.set_ty v ~ty:TT.Unitype
+    else errorf_ "variable `%a` does not have type `unitype`" Var.print_full v
+
+  (* intermediate structure, for having only one conversion into terms and
+     into formulas *)
+  type term_or_form =
+    | T of TT.term
+    | F of TT.form
+
+  (* convert term *)
+  let rec conv_rec subst t : term_or_form = match T.view t with
+    | Builtin _ -> assert false (* TODO *)
+    | Var v ->
+      begin match Var.Subst.find ~subst v with
+        | Some t -> T t
+        | None -> T (TT.var (conv_var v))
+      end
+    | App (f,l) -> T (TT.app f (List.map (conv_as_term subst) l))
+    | Mu (_,_)
+    | DataTest (_,_)
+    | DataSelect (_,_,_)
+    | Undefined (_,_)
+    | Unparsable _ ->
+      errorf_ "cannot convert `@[%a@]` to TPTP" print_term t
+    | Fun (_,_) -> errorf_ "cannot convert function `@[%a@]` to TPTP" print_term t
+    | Let (v,t,u) ->
+      (* expand `let` *)
+      let t = conv_as_term subst t in
+      let subst = Var.Subst.add ~subst v t in
+      conv_rec subst u
+    | Ite (_,_,_) -> error_ "fo_to_tptp: unexpected `ite`"
+    | True -> T TT.true_
+    | False -> T TT.false_
+    | Eq (a,b) -> F (TT.eq (conv_as_term subst a) (conv_as_term subst b))
+    | And l -> F (TT.and_ (List.map (conv_as_form subst) l))
+    | Or l -> F (TT.or_ (List.map (conv_as_form subst) l))
+    | Not f -> F (TT.not_ (conv_as_form subst f))
+    | Imply (a,b) -> F (TT.imply (conv_as_form subst a) (conv_as_form subst b))
+    | Equiv (a,b) -> F (TT.equiv (conv_as_form subst a) (conv_as_form subst b))
+    | Forall (v,f) ->
+      let v' = conv_var v in
+      let subst = Var.Subst.add v (TT.var v') ~subst in
+      F (TT.forall v' (conv_as_form subst f))
+    | Exists (v,f) ->
+      let v' = conv_var v in
+      let subst = Var.Subst.add v (TT.var v') ~subst in
+      F (TT.exists v' (conv_as_form subst f))
+
+  and conv_as_term subst t = match conv_rec subst t with
+    | T t -> t
+    | F _ -> errorf_ "@[expected term,@ but `@[%a@]` is a formula@]" print_term t
+
+  and conv_as_form subst t = match conv_rec subst t with
+    | F t -> t
+    | T t -> TT.atom t
+
+  let conv_form = conv_as_form Var.Subst.empty
+
+  let conv_statement st = match st with
+    | TyDecl _
+    | Decl _ -> None
+    | MutualTypes _ -> errorf_ "@[cannot convert@ statement `@[%a@]`@]" print_statement st
+    | CardBound _ -> assert false (* TODO warning? *)
+    | Axiom f -> Some (TT.axiom (conv_form f))
+    | Goal f -> Some (TT.axiom (conv_form f)) (* careful, not a conjecture *)
+
+  let conv_problem pb =
+    let res = CCVector.filter_map conv_statement (Problem.statements pb) in
+    { FO_tptp.
+      pb_statements=res;
+      pb_meta=Problem.meta pb;
+    }
+end
+
+module Of_tptp = struct
+  module TT = FO_tptp
+
+  let conv_ty = function
+    | TT.Unitype -> Ty.builtin `Unitype
+
+  let conv_var = Var.update_ty ~f:conv_ty
+
+  let gen_undefined_ =
+    let r = ref 0 in
+    fun () ->
+      let id = ID.make_f "undefined_%d" !r in
+      incr r;
+      id
+
+  let rec conv_term = function
+    | TT.App (id, args) -> T.app id (List.map conv_term args)
+    | TT.Var v -> T.var (conv_var v)
+    | TT.True -> T.true_
+    | TT.False -> T.false_
+    | TT.Undefined t -> T.undefined (gen_undefined_ ()) (conv_term t)
+
+
+  let conv_form _ = assert false (* TODO *)
+end
+
+let pipe_tptp =
+  let decode () res =
+    Res.map res ~term:Of_tptp.conv_term ~ty:Of_tptp.conv_ty
+  in
+  Transform.make
+    ~name:"conv_tptp"
+    ~encode:(fun pb -> To_tptp.conv_problem pb, ()) ~decode
+    ()

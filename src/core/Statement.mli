@@ -7,11 +7,6 @@ type loc = Location.t
 type 'a var = 'a Var.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-type decl =
-  | Decl_type
-  | Decl_fun
-  | Decl_prop
-
 type 'ty defined = {
   defined_head: id; (* symbol being defined *)
   defined_ty: 'ty; (* type of the head symbol *)
@@ -38,7 +33,6 @@ type (+'t, +'ty, 'kind) equations =
 
 type (+'t,+'ty,'kind) rec_def = {
   rec_defined: 'ty defined;
-  rec_kind: decl;
   rec_vars: 'ty var list; (* type variables in definitions *)
   rec_eqns: ('t, 'ty,'kind) equations; (* list of equations defining the term *)
 }
@@ -118,7 +112,7 @@ type decl_attr =
   | Decl_attr_exn of exn (** open case *)
 
 type (+'term, +'ty, 'inv) view =
-  | Decl of id * decl * 'ty * decl_attr list
+  | Decl of id * 'ty * decl_attr list
   | Axiom of ('term, 'ty, 'inv) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
   | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty, 'inv) pred_def list
@@ -152,18 +146,11 @@ val loc : _ t -> loc option
 val name : _ t -> string option
 val info : _ t -> info
 
-val mk_decl : info:info -> attrs:decl_attr list -> id -> decl -> 'ty -> ('t,'ty,'inv) t
 val mk_axiom : info:info -> ('a,'ty,'inv) axiom -> ('a, 'ty,'inv) t
 val mk_ty_def : info:info -> [`Data | `Codata] -> 'ty mutual_types -> (_, 'ty,_) t
 
-val ty_decl : info:info -> attrs:decl_attr list -> id -> 'a -> (_, 'a, _) t
-(** declare a type constructor *)
-
 val decl : info:info -> attrs:decl_attr list -> id -> 'a -> (_, 'a, _) t
-(** declare a function symbol *)
-
-val prop_decl : info:info -> attrs:decl_attr list -> id -> 'a -> (_, 'a, _) t
-(** Declare a proposition ([prop] must be provided) *)
+(** declare a type/function/predicate *)
 
 val axiom : info:info -> 'a list -> ('a,_,_) t
 (** Axioms without additional assumptions *)

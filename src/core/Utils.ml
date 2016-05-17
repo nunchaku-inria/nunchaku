@@ -2,7 +2,7 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 type 'a sequence = ('a -> unit) -> unit
-type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a or_error = ('a, string) CCResult.t
 
 module Time = struct
   (** Time elapsed since initialization of the program, and time of start *)
@@ -265,7 +265,7 @@ let not_implemented feat = raise (NotImplemented feat)
 let err_of_exn e =
   let trace = Printexc.get_backtrace () in
   let msg = CCFormat.sprintf "%s\n%s" (Printexc.to_string e) trace in
-  CCError.fail msg
+  CCResult.fail msg
 
 let exn_ksprintf ~f fmt =
   let buf = Buffer.create 32 in

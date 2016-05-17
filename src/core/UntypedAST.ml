@@ -32,6 +32,7 @@ module Builtin : sig
     | `Equiv
     | `Imply
     | `Undefined of string
+    | `Unitype
     ]
 
   include Intf.PRINT with type t := t
@@ -50,6 +51,7 @@ end = struct
     | `Equiv
     | `Imply
     | `Undefined of string
+    | `Unitype
     ]
 
   let fixity : t -> [`Infix | `Prefix] = function
@@ -63,6 +65,7 @@ end = struct
     | `Imply
     | `Equiv
     | `Eq
+    | `Unitype
     | `Undefined _ -> `Infix
 
   let to_string : t -> string = function
@@ -77,6 +80,7 @@ end = struct
     | `Equiv -> "="
     | `Imply -> "=>"
     | `Undefined s -> "?_" ^ s
+    | `Unitype -> "<unitype>"
 
   let print out s = Format.pp_print_string out (to_string s)
 end
@@ -291,7 +295,7 @@ let rec print_term out term = match Loc.get term with
   | Asserting (_, []) -> assert false
   | Asserting (t, l) ->
       fpf out "@[<2>%a@ @[<2>asserting @[%a@]@]@]"
-        print_term_inner t (pp_list_ ~sep:" ∧ " print_term_inner) l
+        print_term_inner t (pp_list_ ~sep:" && " print_term_inner) l
   | TyArrow (a, b) ->
       fpf out "@[<2>%a ->@ %a@]"
         print_term_in_arrow a print_term b
@@ -388,9 +392,8 @@ module TPTP = struct
   (* additional statements for any TPTP problem *)
   let prelude =
     let (==>) = ty_arrow in
-    let ty_term = var "$i" in
-    [ decl ~attrs:[] "$i" ty_type
-    ; decl ~attrs:[] "!!" ((ty_term ==> ty_prop) ==> ty_prop)
+    let ty_term = builtin `Unitype in
+    [ decl ~attrs:[] "!!" ((ty_term ==> ty_prop) ==> ty_prop)
     ; decl ~attrs:[] "??" ((ty_term ==> ty_prop) ==> ty_prop)
     ]
 

@@ -210,6 +210,7 @@ module Convert(Term : TermTyped.S) = struct
     match Loc.get ty with
       | A.Builtin `Prop -> U.ty_prop
       | A.Builtin `Type -> U.ty_type
+      | A.Builtin `Unitype -> U.ty_unitype
       | A.Builtin s ->
           ill_formedf ?loc ~kind:"type" "%a is not a type" A.Builtin.print s
       | A.App (f, l) ->
@@ -374,6 +375,7 @@ module Convert(Term : TermTyped.S) = struct
           | `Imply | `Or | `And | `Not -> ill_formed ?loc "partially applied connective"
           | `Prop -> ill_formed ?loc "`prop` is not a term, but a type"
           | `Type -> ill_formed ?loc "`type` is not a term"
+          | `Unitype -> ill_formedf ?loc "`unitype` is not a term"
           | `True -> `True, prop
           | `False -> `False, prop
           | `Undefined _ | `Eq | `Equiv -> assert false (* dealt with earlier *)
@@ -393,7 +395,7 @@ module Convert(Term : TermTyped.S) = struct
         let b = convert_term_ ~stack ~env b in
         let ty = U.ty_exn a in
         unify_in_ctx_ ~stack ty (U.ty_exn b);
-        if U.ty_is_Prop ty then U.equiv ?loc a b else U.eq ?loc a b
+        U.eq ?loc a b
     | A.App (f, l) ->
         begin match Loc.get f, l with
         | A.Builtin `Imply, [a;b] ->
@@ -736,12 +738,6 @@ module Convert(Term : TermTyped.S) = struct
         (fun k-> k P.print t (CCFormat.list Var.print) new_vars);
     t, new_vars
 
-  let kind_of_ty_ ty =
-    let ret = U.ty_returns ty in
-    if U.ty_is_Type ret then Stmt.Decl_type
-    else if U.ty_is_Prop ret then Stmt.Decl_prop
-    else Stmt.Decl_fun
-
   (* convert [t] into a prop, call [f], generalize [t] *)
   let convert_prop_ ?(before_generalize=CCFun.const ()) ~env t =
     let t = convert_term_exn ~env t in
@@ -876,7 +872,7 @@ module Convert(Term : TermTyped.S) = struct
         CCOpt.map
           (fun (vars,args,rhs) -> v::vars,args,rhs)
           (extract_eqn ~f t')
-    | TI.Builtin (`Eq (l,r) | `Equiv (l,r)) ->
+    | TI.Builtin (`Eq (l,r)) ->
         begin match Term.repr l with
         | TI.Const f' when ID.equal f f' ->
             let vars, rhs = extract_fun_ r in
@@ -983,7 +979,7 @@ module Convert(Term : TermTyped.S) = struct
     (* convert the equations *)
     let l' = List.map
       (fun (id,ty,ty_vars,l) ->
-        let defined = {Stmt.defined_head=id; defined_ty=ty; } in
+        let defined = Stmt.mk_defined id ty in
         (* in the definitions of [id], actually ensure that [id.name]
            is bound to [id ty_vars]. This way we can be sure that all definitions
            will share the same set of type variables. *)
@@ -1019,9 +1015,8 @@ module Convert(Term : TermTyped.S) = struct
           l
         in
         (* return case *)
-        let kind = kind_of_ty_ ty in
         {Stmt.
-          rec_defined=defined; rec_kind=kind; rec_vars=ty_vars;
+          rec_defined=defined; rec_vars=ty_vars;
           rec_eqns=Stmt.Eqn_nested rec_eqns; })
       l'
     in
@@ -1296,11 +1291,10 @@ module Convert(Term : TermTyped.S) = struct
         let id = ID.make_full ~needs_at:(ty_is_poly_ ty) v in
         let env = TyEnv.add_decl ~env v ~id ty in
         check_ty_is_prenex_ ?loc ty;
-        let kind = kind_of_ty_ ty in
         (* parse attributes *)
         let attrs = List.map (convert_attr ~env) attrs in
         check_attrs ?loc attrs;
-        Stmt.mk_decl ~info ~attrs id kind ty, env
+        Stmt.decl ~info ~attrs id ty, env
     | A.Axiom l ->
         (* convert terms, and force them to be propositions *)
         let l = List.map (convert_prop_ ?before_generalize:None ~env) l in
@@ -1356,24 +1350,10 @@ module Convert(Term : TermTyped.S) = struct
     try E.return (convert_statement_exn ~env st)
     with e -> E.of_exn e
 
-  let read_prelude ~env =
-    let st, l =
-      Utils.fold_map
-        (fun env st ->
-           let st, env = convert_statement_exn ~env st in
-           TyEnv.reset_metas ~env;
-           env, st)
-        env Prelude.decls
-    in
-    l, st
-
   type problem = (term, term, stmt_invariant) Problem.t
 
   let convert_problem_exn ~env l =
     let res = CCVector.create() in
-    (* read prelude *)
-    let prelude, env = read_prelude ~env in
-    CCVector.append_list res prelude;
     (* read statements *)
     let env = CCVector.fold
       (fun env st ->

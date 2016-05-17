@@ -73,9 +73,15 @@ module Pipe = struct
 
   let id = Id
   let fail = Fail
-  let flatten t = Flatten t
-  let close ~f p = Close (f,p)
-  let compose a p = Comp (a, p)
+  let flatten = function
+    | Fail -> Fail
+    | p -> Flatten p
+  let close ~f = function
+    | Fail -> Fail
+    | p -> Close (f,p)
+  let compose a p = match p with
+    | Fail -> Fail
+    | _ -> Comp (a, p)
   let fork
     : type a b c d.
       (a, b, c, d) t ->
@@ -105,7 +111,7 @@ module Pipe = struct
     | Comp (Ex tr, t') ->
         fpf out "@[%s ≡≡@ %a@]" tr.name pp t'
     | Fork (a,b) ->
-        fpf out "fork {@[<v> @[%a@]@,| @[%a@]@]}" pp a pp b
+        fpf out "fork @[<v>{ @[%a@]@,| @[%a@]@,}@]" pp a pp b
     in
     fpf out "@[%a@]" pp t
 end
