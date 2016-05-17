@@ -143,8 +143,6 @@ type t = {
 
 let name = "cvc4"
 
-let peek_res t = t.res
-
 let close s =
   if not s.closed then (
     s.closed <- true;
@@ -624,6 +622,10 @@ let read_res_ ~print_model ~decode s =
 
 let res t = match t.res with
   | Some r -> r
+  | None when t.closed ->
+      let r = Res.Timeout in
+      t.res <- Some r;
+      r
   | None ->
       let r =
         try read_res_ ~print_model:t.print_model ~decode:t.decode t
@@ -698,14 +700,14 @@ let preprocess pb : processed_problem =
 
 (* the command line to invoke CVC4 *)
 let mk_cvc4_cmd_ timeout options =
-  let timeout_hard = int_of_float (timeout +. 1.) in
+  let timeout_hard = int_of_float (timeout +. 1.50001) in
   let timeout_ms = int_of_float (timeout *. 1000.) in
   Printf.sprintf
-    "ulimit -t %d; exec cvc4 --tlimit-per=%d --lang smt --finite-model-find \
+    "ulimit -t %d; exec cvc4 --tlimit=%d --hard-limit --lang smt --finite-model-find \
      --uf-ss-fair-monotone --no-condense-function-values %s"
     timeout_hard timeout_ms options
 
-let do_solve_ ~print_model options deadline print pb =
+let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
   let now = Unix.gettimeofday() in
   let deadline = match deadline with Some s -> s | None -> now +. 30. in
   (* preprocess first *)
@@ -714,37 +716,36 @@ let do_solve_ ~print_model options deadline print pb =
   then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem (decode, problem');
   (* enough time remaining? *)
   if now +. 0.1 > deadline
-  then Res.Timeout, S.No_shortcut
+  then S.Fut.return (Res.Timeout, S.No_shortcut)
   else (
     let timeout = deadline -. now in
     assert (timeout > 0.);
     let cmd = mk_cvc4_cmd_ timeout options in
-    Utils.debugf ~lock:true ~section 2 "@[<2>run command@ `%s`@]" (fun k->k cmd);
-    let ic, oc = Unix.open_process cmd in
-    let s = create_ ~print_model ~decode (ic,oc) in
-    send_ s problem';
-    let r = res s in
-    Utils.debugf ~lock:true ~section 3 "@[<2>result: %a@]"
-      (fun k->k (Res.print FO.print_term FO.print_ty) r);
-    match r with
-      | Res.Sat _ -> r, S.Shortcut
-      | Res.Unsat ->
-        (* beware, this "unsat" might be wrong *)
-        if pb.FO.Problem.meta.ProblemMetadata.unsat_means_unknown
-        then Res.Unknown, S.No_shortcut
-        else Res.Unsat, S.Shortcut
-      | Res.Timeout
-      | Res.Unknown -> r, S.No_shortcut
-      | Res.Error e ->
-        Utils.debugf ~lock:true ~section 1
-          "@[<2>error while running CVC4@ with `%s`:@ @[%s@]@]"
-          (fun k->k cmd (Printexc.to_string e));
-        raise e
+    S.popen cmd
+      ~f:(fun (oc,ic) ->
+        let s = create_ ~print_model ~decode (ic,oc) in
+        send_ s problem';
+        let r = res s in
+        Utils.debugf ~lock:true ~section 3 "@[<2>result: %a@]"
+          (fun k->k (Res.print FO.print_term FO.print_ty) r);
+        close s;
+        match r with
+          | Res.Sat _ -> r, S.Shortcut
+          | Res.Unsat ->
+            (* beware, this "unsat" might be wrong *)
+            if pb.FO.Problem.meta.ProblemMetadata.unsat_means_unknown
+            then Res.Unknown, S.No_shortcut
+            else Res.Unsat, S.Shortcut
+          | Res.Timeout
+          | Res.Unknown -> r, S.No_shortcut
+          | Res.Error e ->
+            Utils.debugf ~lock:true ~section 1
+              "@[<2>error while running CVC4@ with `%s`:@ @[%s@]@]"
+              (fun k->k cmd (Printexc.to_string e));
+            raise e
+      )
+    |> S.Fut.map fst
   )
-
-let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
-  S.Fut.make
-    (fun () -> do_solve_ ~print_model options deadline print pb)
 
 let is_available () =
   try
