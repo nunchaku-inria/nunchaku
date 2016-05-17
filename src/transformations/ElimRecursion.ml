@@ -335,13 +335,9 @@ let id_is_app_fun_ ~state id = match state.decode.hof with
    corresponding to [fun_encoding].
    It returns an axiom instead. *)
 let tr_eqns ~state ~fun_encoding eqn =
-  let term_is_prop t =
-    let ty = U.ty_exn ~sigma:(Sig.find ~sigma:state.sigma) t in
-    U.ty_is_Prop ty
-  in
   let connect pol lhs rhs = match pol with
-    | Polarity.Pos -> assert (term_is_prop lhs); U.imply lhs rhs
-    | Polarity.Neg -> assert (term_is_prop lhs); U.imply rhs lhs
+    | Polarity.Pos -> U.imply lhs rhs
+    | Polarity.Neg -> U.imply rhs lhs
     | Polarity.NoPol -> U.eq lhs rhs
   in
   (* apply the projectors of fun_encoding to alpha
