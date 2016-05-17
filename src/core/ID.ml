@@ -104,12 +104,12 @@ module Erase = struct
       spf "%s_%d" name0 !n
     )
 
-  let to_name ?(encode=CCFun.id) state id =
+  let to_name ?(encode=fun _ n->n) state id =
     try Tbl.find state.id_to_name id
     with Not_found ->
       let name =
         CCFormat.to_string print_name id
-        |> encode
+        |> encode id
         |> find_unique_name_ state
       in
       Hashtbl.add state.name_to_id name id;

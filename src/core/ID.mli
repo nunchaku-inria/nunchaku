@@ -63,7 +63,7 @@ module Erase : sig
       the previous binding of [name], if any.
       @raise Invalid_argument if [id] is already bound *)
 
-  val to_name : ?encode:(string -> string) -> state -> t -> string
+  val to_name : ?encode:(t -> string -> string) -> state -> t -> string
   (** [to_name state id] maps [id] to a unique name, and remembers the
       inverse mapping so that [of_name state (to_name state id) = id].
       @param encode a function to transform the name before remembering it *)

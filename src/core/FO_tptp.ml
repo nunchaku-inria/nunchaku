@@ -107,7 +107,7 @@ let pp_var out v =
 
 (* map ID to a name, unambiguously *)
 let name_of_id_ id =
-  let encode = String.uncapitalize in
+  let encode _ = String.uncapitalize in
   E.to_name ~encode erase id
 
 let rec print_term_tptp out = function
