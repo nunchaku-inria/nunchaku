@@ -117,11 +117,12 @@ let rec print_term_tptp out = function
   | True -> CCFormat.string out "$true"
   | False -> CCFormat.string out "$false"
 
+(* precedence. Order matters, as it defines priorities *)
 type prec =
   | P_not
+  | P_bind
   | P_and
   | P_or
-  | P_bind
 
 let right_assoc_ = function
   | P_and
