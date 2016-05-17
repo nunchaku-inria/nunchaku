@@ -83,6 +83,20 @@ module Fut = struct
     state=Some (Done x);
   }
 
+  let map f x =
+    let y = {
+      on_res=[];
+      lock=Mutex.create();
+      cond=Condition.create();
+      state=None;
+    } in
+    on_res x
+      ~f:(function
+        | Stopped -> stop y
+        | Done x -> set_done y (f x)
+        | Fail e -> set_fail y e);
+    y
+
   type 'a partial_result =
     | P_done of 'a
     | P_fail of exn

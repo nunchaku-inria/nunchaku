@@ -28,6 +28,8 @@ module Fut : sig
 
   val return : 'a -> 'a t
 
+  val map : ('a -> 'b) -> 'a t -> 'b t
+
   type 'a final_state =
     | Stopped
     | Done of 'a
