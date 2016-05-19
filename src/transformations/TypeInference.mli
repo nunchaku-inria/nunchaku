@@ -5,7 +5,7 @@
 
 open Nunchaku_core
 
-type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a or_error = ('a, string) CCResult.t
 type id = ID.t
 type 'a var = 'a Var.t
 type loc = Location.t

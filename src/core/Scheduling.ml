@@ -3,6 +3,14 @@
 
 (** {1 Scheduling of sub-processes} *)
 
+module E = CCResult
+
+(*$inject
+  module E = CCResult
+*)
+
+type 'a or_error = ('a, exn) CCResult.t
+
 let section = Utils.Section.make "scheduling"
 
 module MVar = struct
@@ -148,15 +156,18 @@ type process_status = int
 let popen ?(on_res=[]) cmd ~f =
   Utils.debugf ~lock:true ~section 3
     "@[<2>start sub-process@ `@[%s@]`@]" (fun k->k cmd);
+  ignore (Unix.sigprocmask Unix.SIG_BLOCK [13]); (* block sigpipe *)
   (* spawn subprocess *)
   let stdout, p_stdout = Unix.pipe () in
+  let stderr, p_stderr = Unix.pipe () in
   let p_stdin, stdin = Unix.pipe () in
   let stdout = Unix.in_channel_of_descr stdout in
   let stdin = Unix.out_channel_of_descr stdin in
   let pid = Unix.create_process
-      "/bin/sh" [| "/bin/sh"; "-c"; cmd |] p_stdin p_stdout Unix.stderr in
+      "/bin/sh" [| "/bin/sh"; "-c"; cmd |] p_stdin p_stdout p_stderr in
   Unix.close p_stdout;
   Unix.close p_stdin;
+  Unix.close p_stderr;
   Utils.debugf ~lock:true ~section 3
     "@[<2>pid %d -->@ sub-process `@[%s@]`@]" (fun k -> k pid cmd);
   (* cleanup process *)
@@ -165,26 +176,31 @@ let popen ?(on_res=[]) cmd ~f =
     (try Unix.kill pid 15 with _ -> ());
     close_out_noerr stdin;
     close_in_noerr stdout;
+    (try Unix.close stderr with _ -> ());
     (try Unix.kill pid 9 with _ -> ()); (* just to be sure *)
     ()
   in
   Fut.make ~on_res:(cleanup :: on_res)
     (fun () ->
-       let x = f (stdin, stdout) in
-       let _, res = Unix.waitpid [Unix.WUNTRACED] pid in
-       let res = match res with
-         | Unix.WEXITED i | Unix.WSTOPPED i | Unix.WSIGNALED i -> i
-       in
-       Utils.debugf ~lock:true ~section 3 "@[<2>sub-process %d done;@ command was `@[%s@]`@]"
-         (fun k->k pid cmd);
-       x, res)
+       try
+         let x = f (stdin, stdout) in
+         let _, res = Unix.waitpid [Unix.WUNTRACED] pid in
+         let res = match res with
+           | Unix.WEXITED i | Unix.WSTOPPED i | Unix.WSIGNALED i -> i
+         in
+         Utils.debugf ~lock:true ~section 3 "@[<2>sub-process %d done;@ command was `@[%s@]`@]"
+           (fun k->k pid cmd);
+         E.return (x,res)
+       with e ->
+         E.fail e
+    )
 
 (*$T
-  (try ignore (popen "ls /tmp" ~f:(fun _ -> ())); true with _ -> false)
+  (try ignore (popen "ls /tmp" ~f:(fun _ -> ()) |> Fut.get); true with _ -> false)
 *)
 
 (*$=
-  (Fut.Done ("coucou\n", 0)) \
+  (Fut.Done (E.Ok ("coucou\n", 0))) \
     (popen "echo coucou" ~f:(fun (_,oc) -> CCIO.read_all oc) |> Fut.get)
 *)
 

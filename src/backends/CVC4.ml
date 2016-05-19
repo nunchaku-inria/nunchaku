@@ -5,7 +5,7 @@
 
 open Nunchaku_core
 
-module E = CCError
+module E = CCResult
 module Var = Var
 module ID = ID
 module Res = Problem.Res
@@ -358,6 +358,7 @@ let print_problem out (decode, pb) =
 
 let send_ s problem =
   fpf s.fmt "%a@." print_problem (s.decode, problem);
+  Format.pp_print_flush s.fmt ();
   ()
 
 let find_atom_ ~decode s =
@@ -742,9 +743,12 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
             Utils.debugf ~lock:true ~section 1
               "@[<2>error while running CVC4@ with `%s`:@ @[%s@]@]"
               (fun k->k cmd (Printexc.to_string e));
-            raise e
+            r, S.Shortcut
       )
-    |> S.Fut.map fst
+    |> S.Fut.map
+      (function
+        | E.Ok x -> fst x
+        | E.Error e -> Res.Error e, S.Shortcut)
   )
 
 let is_available () =

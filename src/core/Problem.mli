@@ -8,7 +8,7 @@ module Metadata = ProblemMetadata
 type loc = Location.t
 type id = ID.t
 type 'a printer = Format.formatter -> 'a -> unit
-type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a or_error = ('a, string) CCResult.t
 
 (** {2 Problem: a Set of Statements + Signature} *)
 
