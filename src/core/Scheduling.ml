@@ -3,6 +3,14 @@
 
 (** {1 Scheduling of sub-processes} *)
 
+module E = CCResult
+
+(*$inject
+  module E = CCResult
+*)
+
+type 'a or_error = ('a, exn) CCResult.t
+
 let section = Utils.Section.make "scheduling"
 
 module MVar = struct
@@ -167,27 +175,31 @@ let popen ?(on_res=[]) cmd ~f =
     (try Unix.kill pid 15 with _ -> ());
     close_out_noerr stdin;
     close_in_noerr stdout;
-    Unix.close stderr;
+    (try Unix.close stderr with _ -> ());
     (try Unix.kill pid 9 with _ -> ()); (* just to be sure *)
     ()
   in
   Fut.make ~on_res:(cleanup :: on_res)
     (fun () ->
-       let x = f (stdin, stdout) in
-       let _, res = Unix.waitpid [Unix.WUNTRACED] pid in
-       let res = match res with
-         | Unix.WEXITED i | Unix.WSTOPPED i | Unix.WSIGNALED i -> i
-       in
-       Utils.debugf ~lock:true ~section 3 "@[<2>sub-process %d done;@ command was `@[%s@]`@]"
-         (fun k->k pid cmd);
-       x, res)
+       try
+         let x = f (stdin, stdout) in
+         let _, res = Unix.waitpid [Unix.WUNTRACED] pid in
+         let res = match res with
+           | Unix.WEXITED i | Unix.WSTOPPED i | Unix.WSIGNALED i -> i
+         in
+         Utils.debugf ~lock:true ~section 3 "@[<2>sub-process %d done;@ command was `@[%s@]`@]"
+           (fun k->k pid cmd);
+         E.return (x,res)
+       with e ->
+         E.fail e
+    )
 
 (*$T
-  (try ignore (popen "ls /tmp" ~f:(fun _ -> ())); true with _ -> false)
+  (try ignore (popen "ls /tmp" ~f:(fun _ -> ()) |> Fut.get); true with _ -> false)
 *)
 
 (*$=
-  (Fut.Done ("coucou\n", 0)) \
+  (Fut.Done (E.Ok ("coucou\n", 0))) \
     (popen "echo coucou" ~f:(fun (_,oc) -> CCIO.read_all oc) |> Fut.get)
 *)
 

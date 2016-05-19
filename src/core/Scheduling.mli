@@ -7,6 +7,8 @@
   options. This module provides a clean interface to do that.
 *)
 
+type 'a or_error = ('a, exn) CCResult.t
+
 (** {2 MVar}
 
     A MVar is a value that is only accessed atomically *)
@@ -57,10 +59,10 @@ end
 type process_status = int
 
 val popen :
-  ?on_res:(('a * process_status) Fut.final_state -> unit) list ->
+  ?on_res:(('a * process_status) or_error Fut.final_state -> unit) list ->
   string ->
   f:(out_channel * in_channel -> 'a) ->
-  ('a * process_status) Fut.t
+  ('a * process_status) or_error Fut.t
 (** [popen cmd ~f] starts a subprocess executing [cmd], and calls
     [f] with the [(stdin,stdout)] of the sub-process, in a new thread.
     @return a future tuple (result of [f], process' result status) *)

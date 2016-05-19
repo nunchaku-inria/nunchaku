@@ -5,6 +5,7 @@ open Nunchaku_core
 
 module T = FO_tptp
 module Res = Problem.Res
+module E = CCResult
 module S = Scheduling
 module Pa = Nunchaku_parsers
 module A = Pa.TPTP_model_ast
@@ -97,10 +98,12 @@ let solve ~deadline pb =
                CCIO.read_all stdout)
          in
          match S.Fut.get fut with
-           | S.Fut.Done (stdout, errcode) ->
+           | S.Fut.Done (E.Ok (stdout, errcode)) ->
              Utils.debugf ~lock:true ~section 2
                "@[<2>paradox exited with %d, stdout:@ `%s`@]" (fun k->k errcode stdout);
              parse_res stdout
+           | S.Fut.Done (E.Error e) ->
+             Res.Error e, S.Shortcut
            | S.Fut.Stopped ->
              Res.Timeout, S.No_shortcut
            | S.Fut.Fail e ->
