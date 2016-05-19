@@ -159,8 +159,8 @@ let encode_stmt state st =
            OR emit some constraint on the predicate *)
         List.iter
           (function
-            | Stmt.Decl_attr_card_max _
-            | Stmt.Decl_attr_card_min _ ->
+            | Stmt.Attr_card_max _
+            | Stmt.Attr_card_min _ ->
               errorf_ "cannot encode cardinality bounds of %a to TPTP" ID.print id
             | _ -> ())
           attrs;

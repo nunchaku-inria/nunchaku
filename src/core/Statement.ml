@@ -107,11 +107,11 @@ type (+'t, +'ty) copy = {
 
 (** Attribute on declarations *)
 type decl_attr =
-  | Decl_attr_card_max of int
-  | Decl_attr_card_min of int
-  | Decl_attr_incomplete (** encoding of some type with some values removed *)
-  | Decl_attr_abstract (** encoding of some type where some values are conflated *)
-  | Decl_attr_exn of exn (** open case *)
+  | Attr_card_max of int (** maximal cardinality of type *)
+  | Attr_card_min of int (** minimal cardinality of type *)
+  | Attr_incomplete (** encoding of some type with some values removed *)
+  | Attr_abstract (** encoding of some type where some values are conflated *)
+  | Attr_exn of exn (** open case *)
 
 type (+'term, +'ty, 'inv) view =
   | Decl of id * 'ty * decl_attr list
@@ -491,11 +491,11 @@ let pplist_prefix ~first ~pre pp out l =
     l
 
 let print_attr out = function
-  | Decl_attr_card_max i -> fpf out "max_card %d" i
-  | Decl_attr_card_min i -> fpf out "min_card %d" i
-  | Decl_attr_incomplete -> CCFormat.string out "incomplete"
-  | Decl_attr_abstract -> CCFormat.string out "abstract"
-  | Decl_attr_exn e -> CCFormat.string out (Printexc.to_string e)
+  | Attr_card_max i -> fpf out "max_card %d" i
+  | Attr_card_min i -> fpf out "min_card %d" i
+  | Attr_incomplete -> CCFormat.string out "incomplete"
+  | Attr_abstract -> CCFormat.string out "abstract"
+  | Attr_exn e -> CCFormat.string out (Printexc.to_string e)
 
 let print_attrs out = function
   | [] -> ()

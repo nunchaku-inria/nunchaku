@@ -370,8 +370,8 @@ let get_handle_id_ ~state = match state.decode.dst_handle_id with
       let ty_id = U.ty_arrow_l [U.ty_type; U.ty_type] U.ty_type in
       (* declare the symbol [to : type -> type -> type] *)
       let attrs =
-        [ Stmt.Decl_attr_exn ElimRecursion.Attr_is_handle_cstor
-        ; Stmt.Decl_attr_incomplete
+        [ Stmt.Attr_exn ElimRecursion.Attr_is_handle_cstor
+        ; Stmt.Attr_incomplete
         ] in
       let stmt = Stmt.decl ~info:Stmt.info_default ~attrs id ty_id in
       CCVector.push state.new_stmts stmt;
@@ -450,7 +450,7 @@ let app_of_handle_ ~state args ret : apply_fun =
     state.app_symbols <- HandleMap.add h app_fun state.app_symbols;
     ID.Tbl.replace state.decode.dst_app_symbols app_id ();
     (* push declaration of [app_fun] and extensionality axiom *)
-    let attrs = [Stmt.Decl_attr_exn ElimRecursion.Attr_app_val] in
+    let attrs = [Stmt.Attr_exn ElimRecursion.Attr_app_val] in
     let stmt = Stmt.decl ~info:Stmt.info_default ~attrs app_id ty_app in
     CCVector.push state.new_stmts stmt;
     CCVector.push state.new_stmts (extensionality_for_app_ app_fun);

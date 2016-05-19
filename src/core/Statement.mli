@@ -105,11 +105,11 @@ type (+'t, +'ty) copy = {
 
 (** Attribute on declarations *)
 type decl_attr =
-  | Decl_attr_card_max of int (** maximal cardinality of type *)
-  | Decl_attr_card_min of int (** minimal cardinality of type *)
-  | Decl_attr_incomplete (** encoding of some type with some values removed *)
-  | Decl_attr_abstract (** encoding of some type where some values are conflated *)
-  | Decl_attr_exn of exn (** open case *)
+  | Attr_card_max of int (** maximal cardinality of type *)
+  | Attr_card_min of int (** minimal cardinality of type *)
+  | Attr_incomplete (** encoding of some type with some values removed *)
+  | Attr_abstract (** encoding of some type where some values are conflated *)
+  | Attr_exn of exn (** open case *)
 
 type (+'term, +'ty, 'inv) view =
   | Decl of id * 'ty * decl_attr list
