@@ -150,13 +150,15 @@ let popen ?(on_res=[]) cmd ~f =
     "@[<2>start sub-process@ `@[%s@]`@]" (fun k->k cmd);
   (* spawn subprocess *)
   let stdout, p_stdout = Unix.pipe () in
+  let stderr, p_stderr = Unix.pipe () in
   let p_stdin, stdin = Unix.pipe () in
   let stdout = Unix.in_channel_of_descr stdout in
   let stdin = Unix.out_channel_of_descr stdin in
   let pid = Unix.create_process
-      "/bin/sh" [| "/bin/sh"; "-c"; cmd |] p_stdin p_stdout Unix.stderr in
+      "/bin/sh" [| "/bin/sh"; "-c"; cmd |] p_stdin p_stdout p_stderr in
   Unix.close p_stdout;
   Unix.close p_stdin;
+  Unix.close p_stderr;
   Utils.debugf ~lock:true ~section 3
     "@[<2>pid %d -->@ sub-process `@[%s@]`@]" (fun k -> k pid cmd);
   (* cleanup process *)
@@ -165,6 +167,7 @@ let popen ?(on_res=[]) cmd ~f =
     (try Unix.kill pid 15 with _ -> ());
     close_out_noerr stdin;
     close_in_noerr stdout;
+    Unix.close stderr;
     (try Unix.kill pid 9 with _ -> ()); (* just to be sure *)
     ()
   in

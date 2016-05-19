@@ -358,6 +358,7 @@ let print_problem out (decode, pb) =
 
 let send_ s problem =
   fpf s.fmt "%a@." print_problem (s.decode, problem);
+  Format.pp_print_flush s.fmt ();
   ()
 
 let find_atom_ ~decode s =
