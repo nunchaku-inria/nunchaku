@@ -156,6 +156,7 @@ type process_status = int
 let popen ?(on_res=[]) cmd ~f =
   Utils.debugf ~lock:true ~section 3
     "@[<2>start sub-process@ `@[%s@]`@]" (fun k->k cmd);
+  ignore (Unix.sigprocmask Unix.SIG_BLOCK [13]); (* block sigpipe *)
   (* spawn subprocess *)
   let stdout, p_stdout = Unix.pipe () in
   let stderr, p_stderr = Unix.pipe () in
