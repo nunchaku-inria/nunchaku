@@ -13,6 +13,7 @@ module U = T.U
 module P = T.P
 module Ty = TypeMono.Make(T)
 module PStmt = Stmt.Print(P)(P)
+module M = Model
 
 let name = "elim_types"
 let section = Utils.Section.make name
@@ -37,12 +38,15 @@ type state = {
     (* predicate -> type it encodes *)
   parametrized_ty: unit ID.Tbl.t;
     (* parametrized ty *)
+  sigma: T.t Signature.t;
+    (* signature, for decoding purpose *)
 }
 
-let create_state () = {
+let create_state ~sigma () = {
   ty_to_pred=Ty.Map.empty;
   pred_to_ty=ID.Map.empty;
   parametrized_ty=ID.Tbl.create 16;
+  sigma;
 }
 
 (* find predicate for this type
@@ -204,13 +208,186 @@ let encode_stmt state st =
       ~bind:Var.Subst.rename_var]
 
 let transform_pb pb =
-  let state = create_state () in
+  let sigma = Problem.signature pb in
+  let state = create_state ~sigma () in
   let pb' = Problem.flat_map_statements pb ~f:(encode_stmt state) in
   pb', state
 
 (** {2 Decoding} *)
 
-let decode_model ~state:_ m = m (* TODO *)
+module DTU = M.DT_util(T)
+
+type retyping = {
+  rety_domains: ID.t list Ty.Map.t; (* type -> domain *)
+  rety_map: ID.t ID.Map.t Ty.Map.t; (* type -> (uni_const -> const) *)
+}
+
+(* for each type predicate, find cardinality and build a new set of
+   constants for this type *)
+let rebuild_types state m : retyping =
+  (* set of constants for unitype *)
+  let uni_domain =
+    CCList.find_map
+      (fun (ty,l) -> if U.equal ty U.ty_unitype then Some l else None)
+      m.M.finite_types
+    |> (function
+      | Some x -> x
+      | None -> error_ "could not find `unitype` in model")
+  in
+  M.fold
+    {rety_domains=Ty.Map.empty; rety_map=Ty.Map.empty}
+    m
+    ~constants:(fun rety _ -> rety)
+    ~finite_types:(fun rety _ -> rety)
+    ~funs:(fun rety (t,vars,dt,_) -> match vars, T.repr t with
+      | [v], TI.Const pred_id when ID.Map.mem pred_id state.pred_to_ty ->
+        (* (unary) type predicate: evaluate it on [uni_domain] to find
+           the actual subset, then make new constants *)
+        let ty = ID.Map.find pred_id state.pred_to_ty in
+        let uni_domain_sub =
+          CCList.filter_map
+            (fun id ->
+               let subst = Var.Subst.add ~subst:Var.Subst.empty v (U.const id) in
+               let image = DTU.eval ~subst dt in
+               match T.repr image with
+                 | TI.Builtin `True ->
+                   (* belongs to domain! *)
+                   Some id
+                 | TI.Builtin `False
+                 | TI.Builtin (`Undefined _) -> None
+                 | _ -> errorf_ "unexpected value for %a on %a" ID.print pred_id ID.print id
+            )
+            uni_domain
+        in
+        let map =
+          List.mapi
+            (fun i c -> c, ID.make_f "%a_%d" mangle_ty_ ty i)
+            uni_domain_sub
+          |> ID.Map.of_list
+        in
+        let dom = ID.Map.values map |> Sequence.to_rev_list in
+        Utils.debugf ~section 3
+          "@[<2>domain of type `%a`@ is {@[%a@]},@ map to @[[%a]@]@]"
+          (fun k->k P.print ty (CCFormat.list ID.print) dom
+              (ID.Map.print ID.print ID.print) map);
+        { rety_domains = Ty.Map.add ty dom rety.rety_domains;
+          rety_map = Ty.Map.add ty map rety.rety_map
+        }
+      | _ -> rety)
+
+let ty_of_id_ state id =
+  match Signature.find ~sigma:state.sigma id with
+    | Some t -> t
+    | None -> errorf_ "could not find the type of `@[%a@]`" ID.print id
+
+(* what should be the type of [t]? We assume [t] is not a constant
+   from the domain of [unitype] *)
+let rec expected_ty state t = match T.repr t with
+  | TI.Const id -> ty_of_id_ state id
+  | TI.App (f, _) ->
+    let _, _, ret = expected_ty state f |> U.ty_unfold in
+    ret
+  | _ -> errorf_ "could not find the expected type of `@[%a@]`" P.print t
+
+(* decode an atomic term t: recursively infer the expected types,
+   and use the corresponding constants from [rety] *)
+let decode_term ?(subst=Var.Subst.empty) state rety t ty =
+  (* we expect [t:ty] *)
+  let rec aux t ty =
+    Format.printf "@[<2>decode `@[%a@]` : `@[%a@]`@ with `@[%a@]`@]@."
+      P.print t P.print ty (Var.Subst.print Var.print) subst;
+    match T.repr t with
+    | TI.Var v ->
+      begin match Var.Subst.find ~subst v with
+        | Some v' -> U.var v'
+        | None ->
+          errorf_ "variable `%a` not bound in `@[%a@]`"
+            Var.print_full v (Var.Subst.print Var.print_full) subst
+      end
+    | TI.App (f, l) ->
+      (* use the expected type of [f] *)
+      let _, ty_args, ty_ret = expected_ty state f |> U.ty_unfold in
+      assert (U.equal ty_ret ty); (* expected type must match *)
+      assert (List.length ty_args = List.length l);
+      assert (U.is_const f);
+      let l = List.map2 aux l ty_args in
+      U.app f l
+    | TI.Const id ->
+      begin match Ty.Map.get ty rety.rety_map with
+        | None -> t
+        | Some map ->
+          (* if [id] is a unitype domain constant, replace it *)
+          ID.Map.get id map
+          |> CCOpt.maybe U.const t
+      end
+    | _ ->
+      U.map () t
+        ~f:(fun () t ->
+          let ty = expected_ty state t in
+          aux t ty)
+        ~bind:(fun _ _ -> assert false)
+  in
+  aux t ty
+
+(* transform unityped variables into typed variables *)
+let decode_vars ?(subst=Var.Subst.empty) ty vars =
+  let _, args, _ = U.ty_unfold ty in
+  assert (List.length args = List.length vars);
+  (* map each variable to the corresponding type *)
+  Utils.fold_map
+    (fun subst (v,ty) ->
+       let v' = Var.set_ty v ~ty in
+       Var.Subst.add ~subst v v', v')
+    subst (List.combine vars args)
+
+let decode_model ~state m =
+  let rety = rebuild_types state m in
+  let dec_t ?subst t ty = decode_term state rety ?subst t ty in
+  let m =
+    M.filter_map m
+      ~constants:(fun (t,u,k) ->
+        let ty = expected_ty state t in
+        Some (dec_t t ty, dec_t u ty, k))
+      ~finite_types:(fun (t,_) ->
+        (* only one possible choice: unitype, and we remove it *)
+        assert (U.equal t U.ty_unitype);
+        None)
+      ~funs:(fun (t,vars,dt,k) -> match T.repr t with
+        | TI.Const p_id when ID.Map.mem p_id state.pred_to_ty ->
+          None (* remove typing predicates from model *)
+        | _ ->
+          Utils.debugf ~section 5
+            "@[<2>decode @[%a %a@]@ := `@[%a@]@]"
+            (fun k->k P.print t (CCFormat.list Var.print) vars (M.DT.print P.print) dt);
+          let ty = expected_ty state t in
+          let ty_ret = U.ty_returns ty in
+          let subst, vars = decode_vars ty vars in
+          let dt' =
+            M.DT.test
+              (List.map
+                 (fun (tests,then_) ->
+                    let tests' =
+                      List.map
+                        (fun (v,t) ->
+                           let v' = Var.Subst.find_exn ~subst v in
+                           let ty_v = Var.ty v' in
+                           v', dec_t ~subst t ty_v)
+                        tests
+                    in
+                    let then_' = dec_t ~subst then_ ty_ret in
+                    tests', then_')
+                 dt.M.DT.tests)
+              ~else_:(dec_t ~subst dt.M.DT.else_ ty_ret)
+          in
+          let t' = dec_t t ty in
+          Some (t', vars, dt', k)
+      )
+  in
+  (* add new types' domains *)
+  Ty.Map.to_seq rety.rety_domains
+    |> Sequence.fold
+      (fun m (ty,dom) -> M.add_finite_type m ty dom)
+      m
 
 (** {2 Pipe} *)
 
