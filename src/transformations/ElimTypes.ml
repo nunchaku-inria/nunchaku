@@ -28,6 +28,8 @@ let () = Printexc.register_printer
 let error_ e = raise (Error e)
 let errorf_ msg = Utils.exn_ksprintf msg ~f:error_
 
+(** {2 Encoding} *)
+
 type state = {
   mutable ty_to_pred: ID.t Ty.Map.t;
     (* type -> predicate for this type *)
@@ -35,15 +37,12 @@ type state = {
     (* predicate -> type it encodes *)
   parametrized_ty: unit ID.Tbl.t;
     (* parametrized ty *)
-  dummy_ty: T.t;
-    (* dummy "universal" type *)
 }
 
-let create_state ~dummy_ty () = {
+let create_state () = {
   ty_to_pred=Ty.Map.empty;
   pred_to_ty=ID.Map.empty;
   parametrized_ty=ID.Tbl.create 16;
-  dummy_ty;
 }
 
 (* find predicate for this type
@@ -52,8 +51,8 @@ let find_pred state t =
   assert (Ty.is_ty t);
   Ty.Map.find t state.ty_to_pred
 
-let encode_var state subst v =
-  let v' = Var.fresh_copy v |> Var.set_ty ~ty:state.dummy_ty in
+let encode_var subst v =
+  let v' = Var.fresh_copy v |> Var.set_ty ~ty:U.ty_unitype in
   let subst = Var.Subst.add ~subst v v' in
   subst, v'
 
@@ -61,7 +60,7 @@ let rec encode_term state subst t = match T.repr t with
   | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
   | TI.Bind ((`Forall | `Exists) as b, v, body) ->
     let p = find_pred state (Var.ty v) in
-    let subst, v' = encode_var state subst v in
+    let subst, v' = encode_var subst v in
     (* add guard, just under the quantifier. *)
     begin match b with
       | `Forall ->
@@ -80,13 +79,13 @@ let rec encode_term state subst t = match T.repr t with
   | TI.Bind (`Fun, _, _) -> Utils.not_implemented "elim_types for λ"
   | TI.Bind (`TyForall, _, _) -> assert false
   | _ ->
-    U.map subst t ~f:(encode_term state) ~bind:(encode_var state)
+    U.map subst t ~f:(encode_term state) ~bind:encode_var
 
 (* types are all sent to [state.dummy_ty] *)
 let encode_ty state _ t =
   assert (Ty.is_ty t);
   assert (Ty.Map.mem t state.ty_to_pred);
-  state.dummy_ty
+  U.ty_unitype
 
 (* mangle the type into a valid identifier *)
 let rec mangle_ty_ out t = match Ty.repr t with
@@ -110,16 +109,17 @@ let as_id_ ty = match T.repr ty with
   | TI.Const id -> Some id
   | _ -> None
 
-(* ensure the type maps to some predicate *)
-let ensure_maps_to_predicate state ty =
-  if not (Ty.Map.mem ty state.ty_to_pred)
-  then (
-    match Ty.repr ty with
+(* ensure the type maps to some predicate, and return it
+  @return Some p where p is the predicate for this type, or None if ty=unitype *)
+let map_to_predicate state ty =
+  try Some (Ty.Map.find ty state.ty_to_pred)
+  with Not_found ->
+    begin match Ty.repr ty with
       | TyI.Const id ->
         errorf_ "atomic type `%a` should have been mapped to a predicate" ID.print id
       | TyI.Arrow _ -> assert false
       | TyI.Builtin `Unitype ->
-        () (* no need to declare *)
+        None (* no need to declare *)
       | TyI.Builtin `Type
       | TyI.Builtin `Kind -> assert false
       | TyI.Builtin `Prop ->
@@ -134,7 +134,11 @@ let ensure_maps_to_predicate state ty =
           (* find name *)
           let name = ID.make_f "is_%a" mangle_ty_ ty in
           add_pred_ state ty name;
-  )
+          Some name
+    end
+
+let ensure_maps_to_predicate state ty =
+  ignore (map_to_predicate state ty)
 
 let encode_stmt state st =
   Utils.debugf ~section 3 "@[<2>encode statement@ `@[%a@]`@]"
@@ -156,27 +160,43 @@ let encode_stmt state st =
     end;
     [] (* remove statement *)
   | Stmt.Decl (id, ty, attrs) when U.ty_returns_Prop ty ->
+    (* symbol declaration *)
     let _, args, _ = U.ty_unfold ty in
     List.iter (ensure_maps_to_predicate state) args;
     (* new type [term -> term -> ... -> term -> prop] *)
     let ty' =
       U.ty_arrow_l
-        (List.map (fun _ -> U.ty_builtin `Unitype) args)
+        (List.map (fun _ -> U.ty_unitype) args)
         U.ty_prop
     in
-    [ Stmt.decl ~info ~attrs id ty']
+    [ Stmt.decl ~info ~attrs id ty' ]
   | Stmt.Decl (id, ty, attrs) ->
     let _, args, ret = U.ty_unfold ty in
     (* declare every argument type, + the return type *)
-    ensure_maps_to_predicate state ret;
-    List.iter (ensure_maps_to_predicate state) args;
+    let pred_ret = map_to_predicate state ret in
+    let preds = List.map (map_to_predicate state) args in
     (* new type [term -> term -> ... -> term -> term] *)
     let ty' =
       U.ty_arrow_l
-        (List.map (fun _ -> U.ty_builtin `Unitype) args)
-        (U.ty_builtin `Unitype)
+        (List.map (fun _ -> U.ty_unitype) args)
+        U.ty_unitype
     in
-    [ Stmt.decl ~info ~attrs id ty']
+    (* typing clause:
+      is_ty1(x1) & ... & is_tyn(xn) => is_ty(id(x1...xn)) *)
+    let ty_clause = match pred_ret with
+    | None -> U.true_
+    | Some p_ret ->
+      let vars = List.mapi (fun i _ -> Var.makef ~ty:U.ty_unitype "v_%d" i) args in
+      U.forall_l vars
+        (U.imply_l
+           (List.map2
+              (fun pred v -> match pred with
+                 | None -> U.true_
+                 | Some p -> U.app_const p [U.var v])
+              preds vars)
+           (U.app_const p_ret [U.app_const id (List.map U.var vars)]))
+    in
+    [ Stmt.decl ~info ~attrs id ty'; Stmt.axiom1 ~info ty_clause ]
   | _ ->
     [Stmt.map_bind Var.Subst.empty st
       ~term:(encode_term state)
@@ -184,12 +204,15 @@ let encode_stmt state st =
       ~bind:Var.Subst.rename_var]
 
 let transform_pb pb =
-  let dummy_ty = U.ty_builtin `Unitype in
-  let state = create_state ~dummy_ty () in
+  let state = create_state () in
   let pb' = Problem.flat_map_statements pb ~f:(encode_stmt state) in
   pb', state
 
+(** {2 Decoding} *)
+
 let decode_model ~state:_ m = m (* TODO *)
+
+(** {2 Pipe} *)
 
 let pipe_with ?on_decoded ~decode ~print ~check:_ =
   let on_encoded =

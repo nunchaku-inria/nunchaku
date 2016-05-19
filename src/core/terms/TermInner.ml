@@ -711,6 +711,7 @@ module type UTIL = sig
   val ty_type : t_ (** Type of types *)
   val ty_kind : t_ (** Type of ty_type *)
   val ty_prop : t_ (** Propositions *)
+  val ty_unitype : t_
 
   val ty_builtin : TyBuiltin.t -> t_
   val ty_const : id -> t_
@@ -870,6 +871,7 @@ module Util(T : S)
   let ty_type = T.build (TyBuiltin `Type)
   let ty_kind = T.build (TyBuiltin `Kind)
   let ty_prop = T.build (TyBuiltin `Prop)
+  let ty_unitype = T.build (TyBuiltin `Unitype)
 
   let const id = T.build (Const id)
   let var v = T.build (Var v)
