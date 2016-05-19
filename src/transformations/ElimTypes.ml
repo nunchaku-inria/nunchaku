@@ -191,20 +191,27 @@ let transform_pb pb =
 
 let decode_model ~state:_ m = m (* TODO *)
 
-let pipe_with ~decode ~print ~check:_ =
+let pipe_with ?on_decoded ~decode ~print ~check:_ =
   let on_encoded =
     Utils.singleton_if print ()
       ~f:(fun () ->
         let module Ppb = Problem.Print(P)(P) in
-        Format.printf "@[<v2>@{<Yellow>after ElimTypes@}: %a@]@." Ppb.print)
+        Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name Ppb.print)
   in
   Transform.make
     ~name
+    ?on_decoded
     ~on_encoded
     ~encode:transform_pb
     ~decode
     ()
 
 let pipe ~print ~check =
-  pipe_with ~check ~print
+  let on_decoded = if print
+    then
+      [Format.printf "@[<2>@{<Yellow>res after %s@}:@ %a@]@."
+         name (Problem.Res.print P.print P.print)]
+    else []
+  in
+  pipe_with ~check ~print ~on_decoded
     ~decode:(fun state -> Problem.Res.map_m ~f:(decode_model ~state))

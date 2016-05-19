@@ -600,7 +600,7 @@ let pipe_with ?on_decoded ~decode ~polarize_rec ~print ~check =
 let pipe ~polarize_rec ~print ~check =
   let on_decoded = if print
     then
-      [Format.printf "@[<2>@{<Yellow>model after polarize@}:@ %a@]@."
+      [Format.printf "@[<2>@{<Yellow>res after polarize@}:@ %a@]@."
          (Problem.Res.print P.print P.print)]
     else []
   in
