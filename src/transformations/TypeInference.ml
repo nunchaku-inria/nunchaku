@@ -6,7 +6,7 @@
 open Nunchaku_core
 
 module A = UntypedAST
-module E = CCError
+module E = CCResult
 module ID = ID
 module Var = Var
 module MetaVar = MetaVar
@@ -16,7 +16,7 @@ module Stmt = Statement
 module TI = TermInner
 module TyI = TypePoly
 
-type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a or_error = ('a, string) CCResult.t
 type id = ID.t
 type 'a var = 'a Var.t
 type loc = Loc.t

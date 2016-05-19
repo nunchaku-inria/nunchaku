@@ -21,7 +21,7 @@ module TI = TermInner
 
 type id = ID.t
 type 'a var = 'a Var.t
-type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a or_error = ('a, string) CCResult.t
 type 'a printer = Format.formatter -> 'a -> unit
 
 module Builtin = TI.Builtin
