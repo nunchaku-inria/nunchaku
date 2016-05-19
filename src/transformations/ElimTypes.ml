@@ -265,7 +265,7 @@ let rebuild_types state m : retyping =
             uni_domain_sub
           |> ID.Map.of_list
         in
-        let dom = ID.Map.values map |> Sequence.to_rev_list in
+        let dom = ID.Map.values map |> Sequence.to_list in
         Utils.debugf ~section 3
           "@[<2>domain of type `%a`@ is {@[%a@]},@ map to @[[%a]@]@]"
           (fun k->k P.print ty (CCFormat.list ID.print) dom
@@ -293,10 +293,7 @@ let rec expected_ty state t = match T.repr t with
    and use the corresponding constants from [rety] *)
 let decode_term ?(subst=Var.Subst.empty) state rety t ty =
   (* we expect [t:ty] *)
-  let rec aux t ty =
-    Format.printf "@[<2>decode `@[%a@]` : `@[%a@]`@ with `@[%a@]`@]@."
-      P.print t P.print ty (Var.Subst.print Var.print) subst;
-    match T.repr t with
+  let rec aux t ty = match T.repr t with
     | TI.Var v ->
       begin match Var.Subst.find ~subst v with
         | Some v' -> U.var v'
