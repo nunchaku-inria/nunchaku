@@ -201,7 +201,7 @@ let as_defined_ ~state f = match T.repr f with
   | _ -> None
 
 (* translate term/formula recursively into a new (guarded) term. *)
-let rec tr_term_rec_ ~state subst t =
+let rec tr_term_rec_ ~guards ~state subst t =
   match T.repr t with
   | TI.Const _ -> t
   | TI.Var v ->
@@ -215,7 +215,7 @@ let rec tr_term_rec_ ~state subst t =
          [f] is an 'app symbol'; in this case, later, we will add the
          'proto' case *)
       begin match as_defined_ ~state f with
-        | Some (id, fundef) ->
+        | Some (id, fundef) when guards ->
             (* [f] is a recursive function we are encoding *)
             if List.length l <> List.length fundef.fun_concretization
               then fail_tr_ t
@@ -226,8 +226,11 @@ let rec tr_term_rec_ ~state subst t =
             let eqns = ref [] in
             let l' = List.map2
               (fun arg (_i, proj,_ty_proj) ->
-                let arg' = tr_term_rec_ ~state subst arg in
-                let eqn = U.eq arg' (U.app (U.const proj) [U.var alpha]) in
+                (* evaluate [arg] twice, the version without guards
+                   will be used in the "asserting" *)
+                let arg' = tr_term_rec_ ~guards ~state subst arg in
+                let arg'_g = tr_term_rec_ ~guards:false ~state subst arg in
+                let eqn = U.eq arg'_g (U.app (U.const proj) [U.var alpha]) in
                 eqns := eqn :: !eqns;
                 arg')
               l
@@ -235,38 +238,43 @@ let rec tr_term_rec_ ~state subst t =
             in
             let cond = U.exists alpha (U.and_ !eqns) in
             U.asserting (U.app f l') [cond]
+        | Some _ ->
+            (* do not introduce guards *)
+            let f' = tr_term_rec_ ~guards:false ~state subst f in
+            let l' = List.map (tr_term_rec_ ~guards:false ~state subst) l in
+            U.app f' l'
         | None ->
             (* generic treatment *)
-            tr_term_rec_' ~state subst t
+            tr_term_rec_' ~guards ~state subst t
       end
   | TI.Builtin (`True | `False | `DataSelect _ | `DataTest _) ->
         t (* partially applied, or constant *)
   | TI.Builtin ((`Undefined _ | `Unparsable _) as b) ->
-      U.builtin (TI.Builtin.map b ~f:(tr_term_rec_ ~state subst))
+      U.builtin (TI.Builtin.map b ~f:(tr_term_rec_ ~guards ~state subst))
   | TI.Builtin (`Guard (t, g)) ->
-      let t = tr_term_rec_ ~state subst t in
-      let g' = TI.Builtin.map_guard (tr_term_rec_ ~state subst) g in
+      let t = tr_term_rec_ ~guards ~state subst t in
+      let g' = TI.Builtin.map_guard (tr_term_rec_ ~guards ~state subst) g in
       U.guard t g'
   | TI.Bind (`Fun,_,_) -> fail_tr_ t "translation of λ impossible"
   | TI.Builtin (`Eq _ | `Ite _ | `And _ | `Or _ | `Not _ | `Imply _)
   | TI.Bind ((`Forall | `Exists | `Mu), _, _)
   | TI.Match _
   | TI.Let _ ->
-      tr_term_rec_' ~state subst t
+      tr_term_rec_' ~guards ~state subst t
   | TI.TyBuiltin _
   | TI.TyArrow (_,_) -> t
   | TI.Bind (`TyForall, _, _)
   | TI.TyMeta _ -> assert false
 
-and tr_term_rec_' ~state subst t =
+and tr_term_rec_' ~guards ~state subst t =
   U.map subst t
-    ~f:(tr_term_rec_ ~state)
+    ~f:(tr_term_rec_ ~guards ~state)
     ~bind:U.rename_var
 
 let tr_term ~state subst t =
   Utils.debugf ~section 4
     "@[<2>convert toplevel term@ `@[%a@]`@]" (fun k -> k P.print t);
-  tr_term_rec_ ~state subst t
+  tr_term_rec_ ~guards:true ~state subst t
 
 (* translate a top-level formula *)
 let tr_form ~state t = tr_term ~state Subst.empty t
