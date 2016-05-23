@@ -729,6 +729,7 @@ let () = Printexc.register_printer
 module type UTIL = sig
   include UTIL_REPR
 
+  val build : t_ view -> t_
   val const : id -> t_
   val builtin : t_ Builtin.t -> t_
   val app_builtin : t_ Builtin.t -> t_ list -> t_
@@ -815,19 +816,26 @@ module type UTIL = sig
       @param bind updates the binding accumulator with the bound variable
       @param f called on immediate subterms and on the regular accumulator *)
 
-  val map :
-    f:('b_acc -> t_ -> t_) ->
-    bind:('b_acc -> t_ Var.t -> 'b_acc * t_ Var.t) ->
+  val map' :
+    f:('b_acc -> t_ -> 'a) ->
+    bind:('b_acc -> t_ Var.t -> 'b_acc * 'a Var.t) ->
     'b_acc ->
     t_ ->
-    t_
-  (** Non recursive map.
+    'a view
+  (** Non recursive polymorphic map, returning a new view. Combine with
+        {!T.build} in the special case of terms.
       @param f maps a term to a term
       @param bind updates the binding accumulator and returns a new variable *)
 
+  val map :
+    f:('b_acc -> t_ -> t_) ->
+    bind:('b_acc -> t_ Var.t -> 'b_acc * t_ Var.t) ->
+    'b_acc -> t_ -> t_
+  (** Special version of {!map'} for terms *)
+
   val map_pol :
     f:('b_acc -> Polarity.t -> t_ -> t_) ->
-    bind:('b_acc -> Polarity.t -> t_ Var.t -> 'b_acc * t_ Var.t) ->
+    bind:('b_acc -> t_ Var.t -> 'b_acc * t_ Var.t) ->
     'b_acc ->
     Polarity.t ->
     t_ ->
@@ -928,6 +936,7 @@ module Util(T : S)
   let ty_prop = T.build (TyBuiltin `Prop)
   let ty_unitype = T.build (TyBuiltin `Unitype)
 
+  let build = T.build
   let const id = T.build (Const id)
   let var v = T.build (Var v)
   let app t l = match l with
@@ -1219,27 +1228,27 @@ module Util(T : S)
   let iter ~f ~bind b_acc t =
     fold () b_acc t ~bind ~f:(fun () b_acc t -> f b_acc t)
 
-  let map ~f ~bind b_acc t = match T.repr t with
-    | TyBuiltin _
-    | Const _
-    | TyMeta _ -> t
-    | Var v -> var (Var.update_ty ~f:(f b_acc) v)
+  let map' ~f ~bind b_acc t = match T.repr t with
+    | TyBuiltin b -> TyBuiltin b
+    | Const id -> Const id
+    | TyMeta v -> TyMeta (MetaVar.update ~f:(f b_acc) v)
+    | Var v -> Var (Var.update_ty ~f:(f b_acc) v)
     | App (hd,l) ->
         let hd = f b_acc hd in
         let l = List.map (f b_acc) l in
-        app hd l
+        App (hd, l)
     | Builtin b ->
         let b = Builtin.map ~f:(f b_acc) b in
-        builtin b
+        Builtin b
     | Let (v,t,u) ->
         let t = f b_acc t in
         let b_acc, v' = bind b_acc v in
         let u = f b_acc u in
-        let_ v' t u
+        Let (v', t, u)
     | Bind (b,v,t) ->
         let b_acc, v' = bind b_acc v in
         let t = f b_acc t in
-        mk_bind b v' t
+        Bind (b, v', t)
     | Match (lhs,cases) ->
         let lhs = f b_acc lhs in
         let cases = ID.Map.map
@@ -1248,11 +1257,13 @@ module Util(T : S)
             vars', f b_acc rhs)
           cases
         in
-        match_with lhs cases
+        Match (lhs, cases)
     | TyArrow (a,b) ->
         let a = f b_acc a in
         let b = f b_acc b in
-        ty_arrow a b
+        TyArrow (a,b)
+
+  let map ~f ~bind b_acc t = T.build (map' ~f ~bind b_acc t)
 
   let map_pol ~f ~bind b_acc pol t =
     let module P = Polarity in
@@ -1308,24 +1319,23 @@ module Util(T : S)
         ite a b c
     | Let (v,t,u) ->
         let t = f b_acc P.NoPol t in
-        let b_acc, v' = bind b_acc pol v in
+        let b_acc, v' = bind b_acc v in
         let u = f b_acc pol u in
         let_ v' t u
     | Bind ((`Forall | `Exists as b), v, t) ->
-        let b_acc, v' = bind b_acc pol v in
+        let b_acc, v' = bind b_acc v in
         let t = f b_acc pol t in
         mk_bind b v' t
     | Bind ((`TyForall | `Fun | `Mu) as b, v, t) ->
         (* no polarity in those binders *)
-        let b_acc, v' = bind b_acc P.NoPol v in
+        let b_acc, v' = bind b_acc v in
         let t = f b_acc P.NoPol t in
         mk_bind b v' t
     | Match (lhs,cases) ->
         let lhs = f b_acc P.NoPol lhs in
         let cases = ID.Map.map
           (fun (vars,rhs) ->
-            let b_acc, vars' =
-              Utils.fold_map (fun acc v -> bind acc pol v) b_acc vars in
+            let b_acc, vars' = Utils.fold_map bind b_acc vars in
             vars', f b_acc pol rhs)
           cases
         in

@@ -54,6 +54,7 @@ let print_elim_recursion_ = ref false
 let print_elim_hof_ = ref false
 let print_lambda_lift_ = ref false
 let print_specialize_ = ref false
+let print_elim_infinite = ref false
 let print_elim_multi_eqns = ref false
 let print_polarize_ = ref false
 let print_unroll_ = ref false
@@ -142,6 +143,10 @@ let options =
   ; "--print-" ^ Tr.ElimMultipleEqns.name
       , Arg.Set print_elim_multi_eqns
       , " print input after elimination of multiple equations"
+  ; "--print-" ^ Tr.Elim_infinite.name
+      , Arg.Set print_elim_infinite
+      , " print input after elimination of infinite types"
+
   ; "--print-" ^ Tr.Polarize.name , Arg.Set print_polarize_, " print input after polarization"
   ; "--print-" ^ Tr.Unroll.name, Arg.Set print_unroll_, " print input after unrolling"
   ; "--print-" ^ Tr.ElimCopy.name, Arg.Set print_copy_, " print input after elimination of copy types"
@@ -276,6 +281,7 @@ let make_model_pipeline () =
     Step_conv_ty.pipe () @@@
     Tr.Skolem.pipe ~print:(!print_skolem_ || !print_all_) ~check ~mode:`Sk_types @@@
     Tr.Monomorphization.pipe ~print:(!print_mono_ || !print_all_) ~check @@@
+    Tr.Elim_infinite.pipe ~print:(!print_elim_infinite || !print_all_) ~check @@@
     Tr.ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~check
       ~print:(!print_elim_multi_eqns || !print_all_) @@@

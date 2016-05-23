@@ -681,7 +681,7 @@ let elim_hof_term ~state subst pol t =
   and aux' subst pol t =
     U.map_pol subst pol t
       ~f:aux
-      ~bind:(fun subst _ -> bind_hof_var ~state subst)
+      ~bind:(bind_hof_var ~state)
   and aux_ty subst ty =
     encode_ty_ ~state (U.eval_renaming ~subst ty)
   in

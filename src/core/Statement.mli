@@ -109,6 +109,8 @@ type decl_attr =
   | Attr_card_min of int (** minimal cardinality of type *)
   | Attr_incomplete (** encoding of some type with some values removed *)
   | Attr_abstract (** encoding of some type where some values are conflated *)
+  | Attr_infinite (** infinite uninterpreted type *)
+  | Attr_finite_approx of ID.t (** finite approximation of an infinite type *)
   | Attr_exn of exn (** open case *)
 
 type (+'term, +'ty, 'inv) view =

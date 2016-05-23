@@ -1249,7 +1249,7 @@ module Convert(Term : TermTyped.S) = struct
 
   module PStmt = Stmt.Print(P)(P)
 
-  let convert_attr ~env:_ a =
+  let convert_attr ~env a =
     let fail() = ill_formedf "ill-formed attribute %a" A.pp_attr a in
     match a with
     | ["max_card"; n] ->
@@ -1258,6 +1258,13 @@ module Convert(Term : TermTyped.S) = struct
     | ["min_card"; n] ->
         let n = try int_of_string n with _ -> fail() in
         Stmt.Attr_card_min n
+    | ["infinite"] ->
+        Stmt.Attr_infinite
+    | ["approx_of"; id] ->
+        begin match TyEnv.find_var ~env id with
+          | Decl (id,_) -> Stmt.Attr_finite_approx id
+          | _ -> ill_formedf "expected type identifier, got %s" id
+        end
     | _ -> fail()
 
   (* check that attributes are "sound" *)
@@ -1270,6 +1277,8 @@ module Convert(Term : TermTyped.S) = struct
         | Stmt.Attr_card_min n -> min_card := n
         | Stmt.Attr_incomplete
         | Stmt.Attr_abstract
+        | Stmt.Attr_infinite
+        | Stmt.Attr_finite_approx _
         | Stmt.Attr_exn _ -> ())
       l;
     if !min_card > !max_card

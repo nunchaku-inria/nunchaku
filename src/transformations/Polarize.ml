@@ -276,7 +276,7 @@ and polarize_term_rec'
 = fun ~state pol subst t ->
   U.map_pol subst pol t
     ~f:(fun subst pol -> polarize_term_rec ~state pol subst)
-    ~bind:(fun subst _pol v -> Subst.rename_var subst v)
+    ~bind:Subst.rename_var
 
 (* [p] is the polarization of the function defined by [def]; *)
 let define_rec
