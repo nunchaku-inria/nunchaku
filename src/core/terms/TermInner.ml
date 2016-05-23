@@ -835,7 +835,7 @@ module type UTIL = sig
 
   val map_pol :
     f:('b_acc -> Polarity.t -> t_ -> t_) ->
-    bind:('b_acc -> Polarity.t -> t_ Var.t -> 'b_acc * t_ Var.t) ->
+    bind:('b_acc -> t_ Var.t -> 'b_acc * t_ Var.t) ->
     'b_acc ->
     Polarity.t ->
     t_ ->
@@ -1319,24 +1319,23 @@ module Util(T : S)
         ite a b c
     | Let (v,t,u) ->
         let t = f b_acc P.NoPol t in
-        let b_acc, v' = bind b_acc pol v in
+        let b_acc, v' = bind b_acc v in
         let u = f b_acc pol u in
         let_ v' t u
     | Bind ((`Forall | `Exists as b), v, t) ->
-        let b_acc, v' = bind b_acc pol v in
+        let b_acc, v' = bind b_acc v in
         let t = f b_acc pol t in
         mk_bind b v' t
     | Bind ((`TyForall | `Fun | `Mu) as b, v, t) ->
         (* no polarity in those binders *)
-        let b_acc, v' = bind b_acc P.NoPol v in
+        let b_acc, v' = bind b_acc v in
         let t = f b_acc P.NoPol t in
         mk_bind b v' t
     | Match (lhs,cases) ->
         let lhs = f b_acc P.NoPol lhs in
         let cases = ID.Map.map
           (fun (vars,rhs) ->
-            let b_acc, vars' =
-              Utils.fold_map (fun acc v -> bind acc pol v) b_acc vars in
+            let b_acc, vars' = Utils.fold_map bind b_acc vars in
             vars', f b_acc pol rhs)
           cases
         in

@@ -125,7 +125,7 @@ let skolemize_ ~state pol t =
   and aux' env pol t =
     U.map_pol env pol t
       ~f:aux
-      ~bind:(fun env _ v ->
+      ~bind:(fun env v ->
         let v' = aux_var env v in
         let env = env_add_var ~env v' in
         env, v')
