@@ -37,7 +37,7 @@ Library "nunchaku_core"
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.data, containers.sexp, sequence,
-                    zarith, unix, threads
+                    num, unix, threads
 
 Library "nunchaku_parsers"
   Path:             src/parsers/

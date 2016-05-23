@@ -28,7 +28,6 @@ depends: [
     "sequence"
     "base-unix"
     "base-threads"
-    "zarith"
     "oasis" {build}
     "ocamlbuild" {build}
 ]

@@ -14,9 +14,9 @@ exception EmptyData of ID.t
 (** Approximation of a cardinal, including infinite cardinals *)
 module Card : sig
   type t =
-    | Exact of Z.t
+    | Exact of Big_int.big_int
 
-    | QuasiFiniteGEQ of Z.t
+    | QuasiFiniteGEQ of Big_int.big_int
         (** unknown, but ≥ 0. If all uninterpreted types are finite, then
             this is finite too *)
 
@@ -30,11 +30,11 @@ module Card : sig
   val zero : t
   val one : t
   val of_int : int -> t
-  val of_z : Z.t -> t
+  val of_z : Big_int.big_int -> t
 
   val infinite : t
   val unknown : t
-  val quasi_finite_geq : Z.t -> t
+  val quasi_finite_geq : Big_int.big_int -> t
   val quasi_finite_zero : t (** anything ≥ 0 *)
   val quasi_finite_nonzero : t (** ≥ 1 *)
 

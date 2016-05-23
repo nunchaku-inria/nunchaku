@@ -6,6 +6,21 @@
 module TI = TermInner
 module Stmt = Statement
 
+module Z = struct
+  type t = Big_int.big_int
+  let zero = Big_int.zero_big_int
+  let of_int = Big_int.big_int_of_int
+  let one = of_int 1
+  let sign = Big_int.sign_big_int
+  let equal = Big_int.eq_big_int
+  let to_string = Big_int.string_of_big_int
+  let pp_print out x = CCFormat.string out (to_string x)
+  let compare = Big_int.compare_big_int
+  let hash x = Hashtbl.hash (to_string x)
+  let (+) = Big_int.add_big_int
+  let ( * ) = Big_int.mult_big_int
+end
+
 exception Error of string
 
 exception Polymorphic
@@ -27,9 +42,9 @@ let () = Printexc.register_printer
 (** Approximation of a cardinal, including infinite cardinals *)
 module Card = struct
   type t =
-    | Exact of Z.t
+    | Exact of Big_int.big_int
 
-    | QuasiFiniteGEQ of Z.t
+    | QuasiFiniteGEQ of Big_int.big_int
         (** unknown, but ≥ 0. If all uninterpreted types are finite, then
             this is finite too *)
 
