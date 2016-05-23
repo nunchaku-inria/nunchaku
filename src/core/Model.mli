@@ -3,6 +3,7 @@
 (** {1 Model} *)
 
 type 'a printer = Format.formatter -> 'a -> unit
+type 'a to_sexp = 'a -> CCSexp.t
 
 (** {2 Decision Trees}
 
@@ -128,3 +129,5 @@ val filter :
   ('t, 'ty) t
 
 val print : 't printer -> 'ty printer -> ('t,'ty) t printer
+
+val to_sexp : 't to_sexp -> 'ty to_sexp -> ('t,'ty) t to_sexp

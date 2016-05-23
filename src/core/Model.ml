@@ -3,6 +3,8 @@
 module TI = TermInner
 
 type 'a printer = Format.formatter -> 'a -> unit
+type 'a to_sexp = 'a -> CCSexp.t
+
 let fpf = Format.fprintf
 
 (** {2 Decision Trees}
@@ -71,6 +73,20 @@ module DT = struct
         let pp_elif = CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_pair in
         fpf out "@[<hv>@[<v2>@[<2>if@ %a@]@ @[<2>then@ %a@]@]@ %a@ @[<2>else@ %a@]@]"
           pp_eqns a pp b pp_elif l pp t.else_
+
+  let to_sexp ft t : CCSexp.t =
+    let lst = CCSexp.of_list in
+    let str = CCSexp.atom in
+    let eqn_to_sexp (v,t) = lst [str "="; str (Var.to_string_full v); ft t] in
+    let eqns_to_sexp = function
+      | [] -> str "true"
+      | [v,t] -> eqn_to_sexp (v,t)
+      | l -> lst (str "and" :: List.map eqn_to_sexp l)
+    in
+    List.fold_right
+      (fun (eqns,then_) else_ ->
+         lst [str "if"; eqns_to_sexp eqns; ft then_; else_])
+      t.tests (ft t.else_)
 end
 
 type ('t,'ty) decision_tree = ('t,'ty) DT.t
@@ -214,3 +230,27 @@ let print pt pty out m =
     (pp_nonempty_list pp_type) m.finite_types
     (pp_nonempty_list pp_const) m.constants
     (pp_nonempty_list pp_fun) m.funs
+
+let str = CCSexp.atom
+let lst = CCSexp.of_list
+
+let to_sexp ft fty m : CCSexp.t =
+  let id_to_sexp id = str (ID.to_string id) in
+  let var_to_sexp v = lst [ str (Var.to_string_full v); fty (Var.ty v)] in
+  let const_to_sexp (t,u,_) = lst [str "val"; ft t; ft u] in
+  let ty_to_sexp (ty,dom) =
+    lst [str "type"; fty ty; lst (List.map id_to_sexp dom)] in
+  let fun_to_sexp (f,vars,dt,_) =
+    let fun_ =
+      lst
+        [ str "lambda"
+        ; lst (List.map var_to_sexp vars)
+        ; DT.to_sexp ft dt
+        ]
+    in
+    lst [str "fun"; ft f; fun_]
+  in
+  lst
+    ( List.map ty_to_sexp m.finite_types
+    @ List.map const_to_sexp m.constants
+    @ List.map fun_to_sexp m.funs)

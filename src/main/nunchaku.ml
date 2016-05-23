@@ -19,6 +19,7 @@ let list_inputs_ () = "(available choices: nunchaku tptp)"
 type output =
   | O_nunchaku
   | O_tptp
+  | O_sexp
 
 let list_outputs_ () = "(available choices: nunchaku tptp)"
 
@@ -83,6 +84,7 @@ let set_output_ f =
   output_ := match String.lowercase f with
     | "nunchaku" -> O_nunchaku
     | "tptp" -> O_tptp
+    | "sexp" -> O_sexp
     | s -> failwith ("unsupported output format: " ^ s)
 
 (* solver string specification *)
@@ -374,6 +376,9 @@ let main_model ~output statements =
   run_tasks ~j:!j pipe statements
   >|= fun res ->
   match res, output with
+  | _, O_sexp ->
+      let s = Problem.Res.to_sexp P.to_sexp P.to_sexp res in
+      Format.printf "@[<hv2>%a@]@." CCSexpM.print s
   | Res.Sat m, O_nunchaku when m.Model.potentially_spurious ->
       Format.printf "@[<v>@[<v2>SAT: (potentially spurious) {@,@[<v>%a@]@]@,}@]@."
         (Model.print P.print P.print) m;
