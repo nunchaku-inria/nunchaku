@@ -14,14 +14,21 @@ type input =
   | I_nunchaku
   | I_tptp
 
-let list_inputs_ () = "(available choices: nunchaku tptp)"
+let inputs_ =
+  [ "nunchaku", I_nunchaku
+  ; "tptp", I_tptp
+  ]
 
 type output =
   | O_nunchaku
   | O_tptp
   | O_sexp
 
-let list_outputs_ () = "(available choices: nunchaku tptp)"
+let outputs_ =
+  [ "nunchaku", O_nunchaku
+  ; "tptp", O_tptp
+  ; "sexp", O_sexp
+  ]
 
 type solver =
   | S_CVC4
@@ -74,18 +81,8 @@ let set_file f =
 
 let add_prelude p = prelude_ := p :: !prelude_
 
-let set_input_ f =
-  input_ := match String.lowercase f with
-    | "nunchaku" -> I_nunchaku
-    | "tptp" -> I_tptp
-    | s -> failwith ("unsupported input format: " ^ s)
-
-let set_output_ f =
-  output_ := match String.lowercase f with
-    | "nunchaku" -> O_nunchaku
-    | "tptp" -> O_tptp
-    | "sexp" -> O_sexp
-    | s -> failwith ("unsupported output format: " ^ s)
+let input_opt = Utils.arg_choice inputs_ ((:=) input_)
+let output_opt = Utils.arg_choice outputs_ ((:=) output_)
 
 (* solver string specification *)
 let parse_solvers_ s =
@@ -173,10 +170,10 @@ let options =
   ; "-s", Arg.String set_solvers_, " synonym for --solvers"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
   ; "-t", Arg.Set_int timeout_, " alias to --timeout"
-  ; "--input", Arg.String set_input_, " set input format " ^ list_inputs_ ()
-  ; "-i", Arg.String set_input_, " synonym for --input"
-  ; "--output", Arg.String set_output_, " set output format " ^ list_outputs_ ()
-  ; "-o", Arg.String set_output_, " synonym for --output"
+  ; "--input", input_opt , " set input format"
+  ; "-i", input_opt, " synonym for --input"
+  ; "--output", output_opt, " set output format"
+  ; "-o", output_opt, " synonym for --output"
   ; "--prelude", Arg.String add_prelude, " parse given prelude file"
   ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
   ; "--version", Arg.Set version_, " print version and exit"

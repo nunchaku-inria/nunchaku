@@ -102,6 +102,13 @@ val filteri : (int -> 'a -> bool) -> 'a list -> 'a list
 
 val singleton_if : bool -> f:('a -> 'b) -> 'a -> 'b list
 
+(** {2 Arg}
+    Small overlay on top of {!Arg} *)
+
+val arg_choice : (string * 'a) list -> ('a -> unit) -> Arg.spec
+(** [arg_choice ~kind l f] picks a CLI option among the string in [l],
+    and apply [f] to the result. *)
+
 (** {2 Warnings} *)
 
 type warning =
