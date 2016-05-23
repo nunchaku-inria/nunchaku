@@ -71,20 +71,23 @@ module ToFO(T : TI.S) = struct
   module U = TI.Util(T)
   module Mono = Make(T)
 
-  exception NotInFO of string * T.t
+  exception NotInFO of string
 
   let section = Utils.Section.make "to_fo"
 
   let () = Printexc.register_printer
     (function
-      | NotInFO (msg, t) ->
-          Some(Utils.err_sprintf
-            "@[<2>term `@[%a@]` is not in the first-order fragment:@ %s@]"
-              P.print t msg)
+      | NotInFO msg -> Some(Utils.err_sprintf "term_mono:@ %s" msg)
       | _ -> None
     )
 
-  let fail_ t msg = raise (NotInFO (msg, t))
+  let fail_ msg = raise (NotInFO msg)
+  let failf msg = Utils.exn_ksprintf ~f:fail_ msg
+
+  let fail_ t msg =
+    failf
+    "@[<2>term `@[%a@]` is not in the first-order fragment:@ %s@]"
+      P.print t msg
 
   let rec conv_ty t = match Mono.repr t with
     | Var _ -> fail_ t "variable in type"
@@ -237,6 +240,9 @@ module ToFO(T : TI.S) = struct
             (function
               | St.Attr_card_max n -> Some (FO.CardBound (id, `Max, n))
               | St.Attr_card_min n -> Some (FO.CardBound (id, `Min, n))
+              | St.Attr_infinite ->
+                failf "@[<2>infinite type `%a`@ should have been eliminated@]" ID.print id
+              | St.Attr_finite_approx _
               | St.Attr_abstract
               | St.Attr_incomplete
               | St.Attr_exn _ -> None)
