@@ -8,6 +8,7 @@ module Metadata = ProblemMetadata
 type loc = Location.t
 type id = ID.t
 type 'a printer = Format.formatter -> 'a -> unit
+type 'a to_sexp = 'a -> CCSexp.t
 type 'a or_error = ('a, string) CCResult.t
 
 (** {2 Problem: a Set of Statements + Signature} *)
@@ -133,4 +134,6 @@ module Res : sig
     ('t2, 'ty2) t
 
   val print : 't printer -> 'ty printer -> ('t,'ty) t printer
+
+  val to_sexp : 't to_sexp -> 'ty to_sexp -> ('t,'ty) t to_sexp
 end

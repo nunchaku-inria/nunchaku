@@ -58,6 +58,7 @@ val print : _ t CCFormat.printer
 val to_string : _ t -> string
 
 val print_full : _ t CCFormat.printer
+val to_string_full : _ t -> string
 
 (** {2 Substitutions} *)
 

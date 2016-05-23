@@ -1254,10 +1254,10 @@ module Convert(Term : TermTyped.S) = struct
     match a with
     | ["max_card"; n] ->
         let n = try int_of_string n with _ -> fail() in
-        Stmt.Decl_attr_card_max n
+        Stmt.Attr_card_max n
     | ["min_card"; n] ->
         let n = try int_of_string n with _ -> fail() in
-        Stmt.Decl_attr_card_min n
+        Stmt.Attr_card_min n
     | _ -> fail()
 
   (* check that attributes are "sound" *)
@@ -1266,11 +1266,11 @@ module Convert(Term : TermTyped.S) = struct
     let max_card = ref max_int in
     List.iter
       (function
-        | Stmt.Decl_attr_card_max n -> max_card := n
-        | Stmt.Decl_attr_card_min n -> min_card := n
-        | Stmt.Decl_attr_incomplete
-        | Stmt.Decl_attr_abstract
-        | Stmt.Decl_attr_exn _ -> ())
+        | Stmt.Attr_card_max n -> max_card := n
+        | Stmt.Attr_card_min n -> min_card := n
+        | Stmt.Attr_incomplete
+        | Stmt.Attr_abstract
+        | Stmt.Attr_exn _ -> ())
       l;
     if !min_card > !max_card
     then ill_formedf ?loc ~kind:"attributes"

@@ -235,11 +235,11 @@ module ToFO(T : TI.S) = struct
         let others =
           CCList.filter_map
             (function
-              | St.Decl_attr_card_max n -> Some (FO.CardBound (id, `Max, n))
-              | St.Decl_attr_card_min n -> Some (FO.CardBound (id, `Min, n))
-              | St.Decl_attr_abstract
-              | St.Decl_attr_incomplete
-              | St.Decl_attr_exn _ -> None)
+              | St.Attr_card_max n -> Some (FO.CardBound (id, `Max, n))
+              | St.Attr_card_min n -> Some (FO.CardBound (id, `Min, n))
+              | St.Attr_abstract
+              | St.Attr_incomplete
+              | St.Attr_exn _ -> None)
             attrs
         in
         st' :: others

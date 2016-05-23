@@ -44,6 +44,8 @@ val to_string_slug : t -> string
 val print_full : Format.formatter -> t -> unit
 (** Print with the unique integer ID *)
 
+val to_string_full : t -> string
+
 val print_name : Format.formatter -> t -> unit
 (** Print only the name, nothing else *)
 

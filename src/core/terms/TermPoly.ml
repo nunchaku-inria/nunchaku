@@ -133,6 +133,7 @@ end = struct
           | `Type -> U.ty_type
           | `True -> U.builtin `True
           | `False -> U.builtin `False
+          | `Unitype -> U.ty_unitype
           | `Undefined _ -> error_ t "cannot convert `undefined`"
           | `Eq | `Equiv | `Not | `And | `Or | `Imply ->
               error_ t "partially applied builtin"

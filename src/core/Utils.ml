@@ -192,6 +192,16 @@ let filteri f l =
 
 let singleton_if check ~f x = if check then [f x] else []
 
+(** {2 Arg} *)
+
+let arg_choice l f =
+  let pick s =
+    let s = s |> String.trim |> String.lowercase in
+    try f (List.assoc s l)
+    with Not_found -> assert false
+  in
+  Arg.Symbol (List.map fst l, pick)
+
 (** {2 Warnings} *)
 
 type warning =

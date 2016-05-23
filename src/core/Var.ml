@@ -52,6 +52,7 @@ let make_gen ~names =
 let print oc v = ID.print oc v.id
 let to_string v = ID.to_string v.id
 let print_full oc v = ID.print_full oc v.id
+let to_string_full v = ID.to_string v.id
 
 (** {2 Substitutions} *)
 

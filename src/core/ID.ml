@@ -62,6 +62,8 @@ let print_full out v =
     then Format.fprintf out "@@%s%s/%d" v.name (Polarity.to_string v.pol) v.id
     else Format.fprintf out "%s%s/%d" v.name (Polarity.to_string v.pol) v.id
 
+let to_string_full = CCFormat.to_string print_full
+
 let print_name out v = CCFormat.string out v.name
 
 module As_key = struct

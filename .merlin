@@ -13,7 +13,7 @@ PKG containers.data
 PKG containers.sexp
 PKG sequence
 PKG unix
-PKG zarith
+PKG num
 PKG qcheck
 B +threads
 FLG -w +a-4-44-29

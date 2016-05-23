@@ -225,7 +225,6 @@ module Builtin = struct
     | `Eq _, _ | `Or _, _ | `And _, _ | `Imply _, _
     | `DataSelect _, _ | `DataTest _, _ | `Undefined _, _ -> fail()
 
-
   let iter : ('a -> unit) -> 'a t -> unit
   = fun f b -> match b with
     | `True
@@ -246,6 +245,28 @@ module Builtin = struct
         List.iter f g.assuming
 
   let to_seq b f = iter f b
+
+  let to_sexp
+  : ('a -> CCSexp.t) -> 'a t -> CCSexp.t
+  = fun cterm t ->
+    let str = CCSexp.atom and lst = CCSexp.of_list in
+    match t with
+      | `True -> str "true"
+      | `False -> str "false"
+      | `Not x -> lst [str "not"; cterm x]
+      | `Or l -> lst (str "or" :: List.map cterm l)
+      | `And l -> lst (str "and" :: List.map cterm l)
+      | `Imply (a,b) -> lst [str "imply"; cterm a; cterm b]
+      | `Eq (a,b) -> lst [str "="; cterm a; cterm b]
+      | `Ite (a,b,c) -> lst [str "if"; cterm a; cterm b; cterm c]
+      | `DataTest id -> str ("is-" ^ ID.to_string id)
+      | `DataSelect (id, n) ->
+        str (CCFormat.sprintf "select-%s-%d" (ID.name id) n)
+      | `Undefined (id,t) ->
+        lst [str "?__"; str (ID.to_string id); cterm t]
+      | `Unparsable ty ->
+        lst [str "?__unparsable"; cterm ty]
+      | `Guard _ -> assert false (* TODO *)
 end
 
 type 'a case = 'a var list * 'a
@@ -319,6 +340,8 @@ module type PRINT = sig
   val print_in_app : t printer
   val print_in_binder : t printer
   val to_string : t -> string
+
+  val to_sexp : t -> CCSexp.t
 end
 
 module Print(T : REPR)
@@ -404,6 +427,36 @@ module Print(T : REPR)
     else fpf out "(@[%a:@,@[%a@]@])" Var.print_full v print ty
 
   let to_string = CCFormat.to_string print
+
+  let str = CCSexp.atom
+  let lst = CCSexp.of_list
+
+  let rec to_sexp t : CCSexp.t = match T.repr t with
+    | TyBuiltin b -> str (TyBuiltin.to_string b)
+    | Const id -> str (ID.to_string id)
+    | TyMeta _ -> assert false
+    | Var v -> str (Var.to_string_full v)
+    | Builtin b -> Builtin.to_sexp to_sexp b
+    | App (f,l) -> lst (to_sexp f :: List.map to_sexp l)
+    | Let (v,t,u) ->
+      lst [str "let"; lst [lst [var_to_sexp v; to_sexp t]]; to_sexp u]
+    | Match (t,l) ->
+      lst
+        (str "match" ::
+           to_sexp t ::
+           ID.Map.fold
+             (fun c (vars,t) acc ->
+                lst [str (ID.to_string c); lst (List.map var_to_sexp vars); to_sexp t]
+                :: acc)
+             l [])
+    | Bind (b, _, _) ->
+      let s = Binder.to_string b in
+      let vars, body = unroll_binder b t in
+      lst [str s; lst (List.map var_to_sexp vars); to_sexp body]
+    | TyArrow (a,b) ->
+      lst [str "->"; to_sexp a; to_sexp b]
+  and var_to_sexp v =
+    lst [str (Var.to_string_full v); to_sexp (Var.ty v)]
 end
 
 type 'a print = (module PRINT with type t = 'a)

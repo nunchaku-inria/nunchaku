@@ -132,13 +132,13 @@ let gather_hof_ pb =
   let is_handle_ty attrs =
     List.exists
       (function
-        | Stmt.Decl_attr_exn Attr_is_handle_cstor -> true
+        | Stmt.Attr_exn Attr_is_handle_cstor -> true
         | _ -> false)
       attrs
   and is_app_ attrs =
     List.exists
       (function
-        | Stmt.Decl_attr_exn Attr_app_val -> true
+        | Stmt.Attr_exn Attr_app_val -> true
         | _ -> false)
       attrs
   in

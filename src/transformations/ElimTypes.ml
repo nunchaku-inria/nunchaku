@@ -149,12 +149,21 @@ let encode_stmt state st =
     (fun k->k PStmt.print st);
   let info = Stmt.info st in
   match Stmt.view st with
-  | Stmt.Decl (id, ty, _) when U.ty_returns_Type ty ->
+  | Stmt.Decl (id, ty, attrs) when U.ty_returns_Type ty ->
     (* type declaration *)
     let _, args, _ = U.ty_unfold ty in
     assert (List.for_all U.ty_is_Type args);
     begin match args with
       | [] ->
+        (* TODO: combine the min/max of cardinalities for unitype,
+           OR emit some constraint on the predicate *)
+        List.iter
+          (function
+            | Stmt.Attr_card_max _
+            | Stmt.Attr_card_min _ ->
+              errorf_ "cannot encode cardinality bounds of %a to TPTP" ID.print id
+            | _ -> ())
+          attrs;
         (* atomic type, easy *)
         let p = ID.make_f "is_%a" ID.print_name id in
         add_pred_ state (U.const id) p

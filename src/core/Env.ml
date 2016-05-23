@@ -93,9 +93,9 @@ let is_data i = match i.def with Data _ -> true | _ -> false
 let is_cstor i = match i.def with Cstor _ -> true | _ -> false
 
 let is_incomplete i =
-  List.exists (function Stmt.Decl_attr_incomplete -> true | _ -> false) i.decl_attrs
+  List.exists (function Stmt.Attr_incomplete -> true | _ -> false) i.decl_attrs
 let is_abstract i =
-  List.exists (function Stmt.Decl_attr_abstract -> true | _ -> false) i.decl_attrs
+  List.exists (function Stmt.Attr_abstract -> true | _ -> false) i.decl_attrs
 
 let create ?(size=64) () = {infos=ID.PerTbl.create size}
 
