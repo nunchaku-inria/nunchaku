@@ -80,7 +80,8 @@ Library "nunchaku_transformations"
                     Model_rename,
                     ElimData,
                     ElimTypes,
-                    Elim_ite
+                    Elim_ite,
+                    Elim_infinite
   Install:          true
   FindlibName:      transformations
   FindlibParent:    nunchaku_core
