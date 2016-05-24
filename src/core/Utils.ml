@@ -280,8 +280,9 @@ let err_of_exn e =
 let exn_ksprintf ~f fmt =
   let buf = Buffer.create 32 in
   let out = Format.formatter_of_buffer buf in
+  Format.fprintf out "@[<2>";
   Format.kfprintf
-    (fun _ -> Format.pp_print_flush out (); raise (f (Buffer.contents buf)))
+    (fun _ -> Format.fprintf out "@]@?"; raise (f (Buffer.contents buf)))
     out fmt
 
 let not_implementedf fmt = exn_ksprintf fmt ~f:not_implemented

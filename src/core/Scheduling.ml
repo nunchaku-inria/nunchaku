@@ -152,10 +152,16 @@ end
 
 type process_status = int
 
+(* make sure that we are a session leader; that is, our children die if we die *)
+let ensure_session_leader =
+  let thunk = lazy (ignore (Unix.setsid ())) in
+  fun () -> Lazy.force thunk
+
 (* create a new active process by running [cmd] and applying [f] on it *)
 let popen ?(on_res=[]) cmd ~f =
   Utils.debugf ~lock:true ~section 3
     "@[<2>start sub-process@ `@[%s@]`@]" (fun k->k cmd);
+  ensure_session_leader ();
   ignore (Unix.sigprocmask Unix.SIG_BLOCK [13]); (* block sigpipe *)
   (* spawn subprocess *)
   let stdout, p_stdout = Unix.pipe () in

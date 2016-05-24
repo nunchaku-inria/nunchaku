@@ -113,6 +113,7 @@ module Convert(Term : TermTyped.S) = struct
       cstors: (string, id * term) Hashtbl.t;  (* constructor ID + type *)
       datatypes: Term.t Stmt.ty_constructor ID.Map.t ID.Tbl.t;
         (* datatype -> ID + constructors *)
+      attrs: Stmt.decl_attr list ID.Tbl.t;
       mutable metas: (string, term MetaVar.t) Hashtbl.t option;
     }
     (* map names to proper identifiers, with their definition *)
@@ -121,6 +122,7 @@ module Convert(Term : TermTyped.S) = struct
       vars=MStr.empty;
       cstors=Hashtbl.create 16;
       datatypes=ID.Tbl.create 16;
+      attrs=ID.Tbl.create 16;
       metas=None;
     }
 
@@ -190,6 +192,12 @@ module Convert(Term : TermTyped.S) = struct
         let var = MetaVar.make ~name:v in
         Hashtbl.add tbl v var;
         var
+
+    let get_attrs ~env id = ID.Tbl.get_or ~or_:[] env.attrs id
+
+    let set_attrs ~env id l =
+      assert (not (ID.Tbl.mem env.attrs id));
+      if l<>[] then ID.Tbl.add env.attrs id l
 
     (* reset table of meta-variables *)
     let reset_metas ~env = CCOpt.iter Hashtbl.clear env.metas
@@ -1265,10 +1273,21 @@ module Convert(Term : TermTyped.S) = struct
           | Decl (id,_) -> Stmt.Attr_finite_approx id
           | _ -> ill_formedf "expected type identifier, got %s" id
         end
+    | ["upcast"] -> Stmt.Attr_infinite_upcast
     | _ -> fail()
 
+  let is_infinite_ ~env id =
+    let l = TyEnv.get_attrs ~env id in
+    List.exists (function Stmt.Attr_infinite -> true | _ -> false) l
+
+  let is_approx_of_ ~env id ~of_ =
+    let l = TyEnv.get_attrs ~env id in
+    List.exists
+      (function Stmt.Attr_finite_approx id' -> ID.equal id' of_ | _ -> false)
+      l
+
   (* check that attributes are "sound" *)
-  let check_attrs ?loc l =
+  let check_attrs ?loc ~env id ty l =
     let min_card = ref 0 in
     let max_card = ref max_int in
     List.iter
@@ -1278,8 +1297,28 @@ module Convert(Term : TermTyped.S) = struct
         | Stmt.Attr_incomplete
         | Stmt.Attr_abstract
         | Stmt.Attr_infinite
-        | Stmt.Attr_finite_approx _
-        | Stmt.Attr_exn _ -> ())
+        | Stmt.Attr_exn _ -> ()
+        | Stmt.Attr_finite_approx id' ->
+          if not (is_infinite_ ~env id')
+          then ill_formedf ?loc ~kind:"attributes"
+              "`%a` cannot be a finite approximation of `%a`,@ \
+               which is not infinite" ID.print id ID.print id'
+        | Stmt.Attr_infinite_upcast ->
+          let ok =
+            match TyPoly.repr ty with
+              | TyI.Arrow (a,b) ->
+                begin match TyPoly.repr a, TyPoly.repr b with
+                  | TyI.Const alpha, TyI.Const u ->
+                    is_infinite_ ~env u && is_approx_of_ ~env alpha ~of_:u
+                  | _ -> false
+                end
+              | _ -> false
+          in
+          if not ok
+          then ill_formedf ?loc ~kind:"attributes"
+              "expect type of `%a` to be `<finite approx> → <infinite type>`,@ \
+               but got `@[%a@]`" ID.print id P.print ty;
+      )
       l;
     if !min_card > !max_card
     then ill_formedf ?loc ~kind:"attributes"
@@ -1302,7 +1341,8 @@ module Convert(Term : TermTyped.S) = struct
         check_ty_is_prenex_ ?loc ty;
         (* parse attributes *)
         let attrs = List.map (convert_attr ~env) attrs in
-        check_attrs ?loc attrs;
+        check_attrs ?loc ~env id ty attrs;
+        TyEnv.set_attrs ~env id attrs;
         Stmt.decl ~info ~attrs id ty, env
     | A.Axiom l ->
         (* convert terms, and force them to be propositions *)
