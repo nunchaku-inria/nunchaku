@@ -68,6 +68,7 @@ let print_smt_ = ref false
 let print_raw_model_ = ref false
 let print_model_ = ref false
 let enable_polarize_ = ref true
+let enable_specialize_ = ref true
 let timeout_ = ref 30
 let version_ = ref false
 let file = ref ""
@@ -171,6 +172,7 @@ let options =
   ; "--polarize-rec", Arg.Set polarize_rec_, " enable polarization of rec predicates"
   ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
   ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"
+  ; "--no-specialize", Arg.Clear enable_specialize_, " disable specialization"
   ; "--solvers", Arg.String set_solvers_, " solvers to use " ^ list_solvers_ ()
   ; "-s", Arg.String set_solvers_, " synonym for --solvers"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
@@ -285,7 +287,10 @@ let make_model_pipeline () =
     Tr.ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~check
       ~print:(!print_elim_multi_eqns || !print_all_) @@@
-    Tr.Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check @@@
+    (if !enable_specialize_
+     then Tr.Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check
+     else Transform.nop ())
+    @@@
     (if !enable_polarize_
       then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
         ~check ~polarize_rec:!polarize_rec_
