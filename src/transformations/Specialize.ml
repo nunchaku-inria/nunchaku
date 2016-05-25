@@ -167,9 +167,12 @@ end = struct
     | (i1,t1) :: l1', (i2,t2) :: l2' ->
         i1 = i2 && U.equal t1 t2 && equal_l l1' l2'
 
+  (* NOTE: since equality is up to variable renaming, we use
+     the {!U.hash_fun_alpha_eq} hash function which is compatible with alpha-renaming *)
+
   let equal a b = equal_l a.terms b.terms
 
-  let hash_fun a h = CCHash.(list (pair int U.hash_fun)) a.terms h
+  let hash_fun a h = CCHash.(list (pair int U.hash_fun_alpha_eq)) a.terms h
   let hash = CCHash.apply hash_fun
 
   let print out a =
@@ -462,8 +465,6 @@ let heuristic_should_specialize_arg a ty =
   in
   is_fun_ty ty || is_bool_const_ a
 
-(* FIXME: specialize on non-closed terms *)
-
 (* shall we specialize the application of [f : ty] to [l], and on which
     subset of [l]? *)
 let decide_if_specialize ~state f ty l =
@@ -655,7 +656,7 @@ let specialize_eqns
                   replace it with the corresponding term [t], after
                   renaming of its free variables *)
                try
-                 let t = Arg.get i args |> U.eval ~subst in
+                 let t = Arg.get i args |> U.eval ~rec_:false ~subst in
                  Subst.add ~subst v t, None
                with Not_found ->
                  let v' = Var.fresh_copy v in
@@ -664,8 +665,8 @@ let specialize_eqns
         let new_vars = CCList.filter_map CCFun.id new_vars in
         (* specialize the body, using the given substitution;
            then reduce newly introduced β-redexes, etc. *)
-        let new_rhs =
-          Red.snf (specialize_term ~state ~depth:(depth+1) subst rhs) in
+        let rhs' = specialize_term ~state ~depth:(depth+1) subst rhs in
+        let new_rhs = Red.snf rhs' in
         Stmt.Eqn_single (closure_vars @ new_vars, new_rhs)
       )
 
@@ -1076,7 +1077,7 @@ let rec decode_term_rec (state:decode_state) subst t =
   match T.repr t with
     | TI.Var v ->
         (* variable might not be bound, e.g. in skolem [_witness_of ...] *)
-        Subst.find_or ~default:t ~subst v |> U.eval ~subst
+        Subst.find_or ~default:t ~subst v |> U.eval ~rec_:false ~subst
     | TI.Const f_id when is_spec_fun state f_id ->
         let dsf = find_spec state f_id in
         Utils.debugf ~section 5 "@[<2>decode `@[%a@]`@ from %a@]"

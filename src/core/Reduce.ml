@@ -24,7 +24,7 @@ module Make(T : TI.S) = struct
     val make : subst:subst -> T.t -> T.t list -> t
     val const : subst:subst -> T.t -> t
     val set_head : t -> T.t -> t
-    val to_term : t -> T.t
+    val to_term : ?rec_:bool -> t -> T.t
   end = struct
     type t = {
       head: T.t;
@@ -32,9 +32,11 @@ module Make(T : TI.S) = struct
       subst: subst;
     }
 
+    let app_ a b = if b=[] then a else a @ b
+
     (* enforce the invariant about `head` not being an `App` *)
     let rec norm_st st = match T.repr st.head with
-      | TI.App (f, l) -> norm_st {st with head=f; args=l @ st.args}
+      | TI.App (f, l) -> norm_st {st with head=f; args=app_ l st.args}
       | _ -> st
 
     (* build a state and enforce invariant *)
@@ -45,7 +47,7 @@ module Make(T : TI.S) = struct
     let set_head st t = norm_st {st with head=t}
 
     (* convert a state back to a term *)
-    let to_term st = U.eval ~subst:st.subst (U.app st.head st.args)
+    let to_term ?rec_ st = U.eval ?rec_ ~subst:st.subst (U.app st.head st.args)
   end
 
   module Full = struct
@@ -128,7 +130,7 @@ module Make(T : TI.S) = struct
       let eval_term ~subst t =
         State.make ~subst t []
         |> eval
-        |> State.to_term
+        |> State.to_term ~rec_:true
       in
       match b with
       | `True | `False ->
@@ -275,7 +277,7 @@ module Make(T : TI.S) = struct
 
     (* compute the SNF of this term in [subst] *)
     and snf_term ~subst t =
-      State.to_term (snf_ (State.const ~subst t))
+      State.to_term ~rec_:true (snf_ (State.const ~subst t))
 
     (* enter the scope of [v] and compute [snf t] *)
     and enter_snf_ st v t f =
@@ -299,7 +301,7 @@ module Make(T : TI.S) = struct
 
   let snf ?(subst=Subst.empty) t =
     let st = Full.snf_ (State.const ~subst t) in
-    State.to_term st
+    State.to_term ~rec_:true st
 
   (* if [t = f x1...xn var], this returns [Some (f x1...xn)] *)
   let as_app_to_ ~var:v t = match T.repr t with

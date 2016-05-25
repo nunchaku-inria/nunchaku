@@ -790,6 +790,10 @@ module type UTIL = sig
   val hash : t_ -> int
   (** Hash into a positive integer *)
 
+  val hash_fun_alpha_eq : t_ CCHash.hash_fun
+  val hash_alpha_eq : t_ -> int
+  (** Hash function that is not sensitive to alpha-renaming *)
+
   val equal : t_ -> t_ -> bool
   (** Syntactic equality *)
 
@@ -872,8 +876,11 @@ module type UTIL = sig
   exception ApplyError of apply_error
   (** Raised when a type application fails *)
 
-  val eval : subst:subst -> t_ -> t_
-  (** Applying a substitution *)
+  val eval : ?rec_:bool -> subst:subst -> t_ -> t_
+  (** Applying a substitution
+      @param rec_ if true, when replacing [v] with [t]
+        because [(v -> t) in subst], we call [eval subst t] instead of
+        assuming [t] is preserved by subst (default false) *)
 
   val eval_renaming : subst:renaming -> t_ -> t_
   (** Applying a variable renaming *)
@@ -1096,31 +1103,39 @@ module Util(T : S)
     let fvars = free_vars t |> VarSet.to_list in
     forall_l fvars t
 
-  let hash_fun t h =
+  let hash_fun_ hash_var t h =
     let d = ref 30 in (* number of nodes to explore *)
     let rec hash_ t h =
       if !d = 0 then h
       else match T.repr t with
         | Const id -> decr d; ID.hash_fun id h
-        | Var v -> decr d; hash_var_ v h
+        | Var v -> decr d; hash_var v h
         | App (f,l) -> hash_ f h |> CCHash.list hash_ l
         | Builtin b -> CCHash.seq hash_ (Builtin.to_seq b) h
-        | Let (v,t,u) -> decr d; hash_var_ v h |> hash_ t |> hash_ u
-        | Bind (_,v,t) -> decr d; hash_var_ v h |> hash_ t
+        | Let (v,t,u) -> decr d; hash_var v h |> hash_ t |> hash_ u
+        | Bind (_,v,t) -> decr d; hash_var v h |> hash_ t
         | Match (t,l) ->
             decr d;
             hash_ t h
               |> CCHash.seq
-                (fun (vars,rhs) h -> CCHash.list hash_var_ vars h |> hash_ rhs)
+                (fun (vars,rhs) h -> CCHash.list hash_var vars h |> hash_ rhs)
                 (ID.Map.to_seq l |> Sequence.map snd)
         | TyArrow (a,b) -> decr d; hash_ a h |> hash_ b
         | TyBuiltin _
         | TyMeta _ -> h
-      and hash_var_ v h = ID.hash_fun (Var.id v) h
     in
     hash_ t h
 
+  let hash_fun =
+    let hash_var_ v h = ID.hash_fun (Var.id v) h in
+    hash_fun_ hash_var_
+
+  let hash_fun_alpha_eq =
+    let hash_var_ _ h = CCHash.string "var" h in
+    hash_fun_ hash_var_
+
   let hash t = CCHash.apply hash_fun t
+  let hash_alpha_eq t = CCHash.apply hash_fun_alpha_eq t
 
   module Subst = Var.Subst
 
@@ -1362,12 +1377,16 @@ module Util(T : S)
         end
     | _ -> t
 
-  let eval ~subst t =
+  let eval ?(rec_=false) ~subst t =
     let rec aux subst t = match T.repr t with
       | Var v ->
           (* NOTE: when dependent types are added, substitution in types
              will be needed *)
-          CCOpt.get t (Subst.find ~subst v)
+          begin match Subst.find ~subst v with
+            | None -> t
+            | Some t' when rec_ -> aux subst t'
+            | Some t' -> t'
+          end
       | _ ->
           map subst t
             ~f:aux
