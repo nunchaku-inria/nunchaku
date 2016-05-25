@@ -19,16 +19,28 @@ let section = Utils.Section.make name
 type term = T.t
 type ty = T.t
 
+(* term -> 'a, modulo alpha equivalence *)
+module TermTbl = CCHashtbl.Make(struct
+  type t = T.t
+  let equal = U.equal
+  let hash = U.hash_alpha_eq
+  end)
+
 type state = {
   mutable count: int;
     (* counter for new names *)
   mutable sigma: ty Signature.t;
     (* signature *)
+  funs: T.t TermTbl.t;
+    (* function -> lambda-lifted function *)
 }
 (* TODO: store information for decoding *)
 
 let create_state ~sigma () =
-  { count=0; sigma; }
+  { count=0;
+    sigma;
+    funs=TermTbl.create 16;
+  }
 
 let fresh_fun_ ~state =
   let new_fun = ID.make (Printf.sprintf "anon_fun_%d" state.count) in
@@ -82,8 +94,22 @@ let declare_new_rec f ty vars body =
 (* TODO: expand `let` if its parameter is HO, and
    compute WHNF in case [var args] (new β redexes) *)
 
+let find_ty_ ~state t =
+  U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) t
+
+let decl_fun_ ~state id ty =
+  state.sigma <- Signature.declare ~sigma:state.sigma id ty
+
 (* traverse [t] recursively, replacing lambda terms by new named functions *)
 let rec tr_term ~state local_state t = match T.repr t with
+  | TI.Bind (`Fun, _, _) when TermTbl.mem state.funs t ->
+      (* will only work if [t] is alpha-equivalent to [t']; in particular
+         that implies that [t] and [t'] capture exactly the same terms,
+         which makes this safe *)
+      let t' = TermTbl.find state.funs t in
+      Utils.debugf ~section 5 "@[<2>re-use `@[%a@]`@ for `@[%a@]`@]"
+        (fun k->k P.print t' P.print t);
+      t'
   | TI.Bind (`Fun, v, body) ->
       (* first, λ-lift in the body *)
       let body = tr_term ~state local_state body in
@@ -93,8 +119,7 @@ let rec tr_term ~state local_state t = match T.repr t with
         |> U.VarSet.to_list
       in
       (* compute type of new function *)
-      let ty_ret =
-        U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) body in
+      let ty_ret = find_ty_ ~state body in
       let ty = U.ty_arrow_l (List.map Var.ty captured_vars @ [Var.ty v]) ty_ret in
       (* declare new toplevel function *)
       let new_fun = fresh_fun_ ~state in
@@ -122,7 +147,9 @@ let rec tr_term ~state local_state t = match T.repr t with
             CCVector.push local_state.new_decls decl;
       end;
       (* replace [fun v. body] by [new_fun vars] *)
-      U.app (U.const new_fun) (List.map U.var captured_vars)
+      let t' = U.app_const new_fun (List.map U.var captured_vars) in
+      TermTbl.add state.funs t t'; (* save it *)
+      t'
   | _ -> tr_term' ~state local_state t
 and tr_term' ~state new_decls t =
   U.map () t ~bind:(fun () v -> (), v) ~f:(fun () -> tr_term ~state new_decls)
