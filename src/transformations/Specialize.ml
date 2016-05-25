@@ -167,9 +167,12 @@ end = struct
     | (i1,t1) :: l1', (i2,t2) :: l2' ->
         i1 = i2 && U.equal t1 t2 && equal_l l1' l2'
 
+  (* NOTE: since equality is up to variable renaming, we use
+     the {!U.hash_fun_alpha_eq} hash function which is compatible with alpha-renaming *)
+
   let equal a b = equal_l a.terms b.terms
 
-  let hash_fun a h = CCHash.(list (pair int U.hash_fun)) a.terms h
+  let hash_fun a h = CCHash.(list (pair int U.hash_fun_alpha_eq)) a.terms h
   let hash = CCHash.apply hash_fun
 
   let print out a =
@@ -461,8 +464,6 @@ let heuristic_should_specialize_arg a ty =
     | _ -> false
   in
   is_fun_ty ty || is_bool_const_ a
-
-(* FIXME: specialize on non-closed terms *)
 
 (* shall we specialize the application of [f : ty] to [l], and on which
     subset of [l]? *)
