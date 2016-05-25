@@ -791,6 +791,7 @@ module type UTIL = sig
   (** Hash into a positive integer *)
 
   val hash_fun_alpha_eq : t_ CCHash.hash_fun
+  val hash_alpha_eq : t_ -> int
   (** Hash function that is not sensitive to alpha-renaming *)
 
   val equal : t_ -> t_ -> bool
@@ -1131,6 +1132,7 @@ module Util(T : S)
     hash_fun_ hash_var_
 
   let hash t = CCHash.apply hash_fun t
+  let hash_alpha_eq t = CCHash.apply hash_fun_alpha_eq t
 
   module Subst = Var.Subst
 

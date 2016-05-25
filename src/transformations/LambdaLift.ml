@@ -14,6 +14,7 @@ module P = T.P
 type inv = <ty:[`Mono]; ind_preds:[`Absent]; eqn:[`Single]>
 
 let name = "lambda_lift"
+let section = Utils.Section.make name
 
 type term = T.t
 type ty = T.t
@@ -21,7 +22,7 @@ type ty = T.t
 type state = {
   mutable count: int;
     (* counter for new names *)
-  sigma: ty Signature.t;
+  mutable sigma: ty Signature.t;
     (* signature *)
 }
 (* TODO: store information for decoding *)
@@ -98,6 +99,10 @@ let rec tr_term ~state local_state t = match T.repr t with
       (* declare new toplevel function *)
       let new_fun = fresh_fun_ ~state in
       let new_vars = captured_vars @ [v] in
+      (* declare new function *)
+      decl_fun_ ~state new_fun ty;
+      Utils.debugf ~section 5 "@[<2>declare `@[%a : %a@]`@ for `@[%a@]`@]"
+        (fun k->k ID.print new_fun P.print ty P.print t);
       (* how we define [new_fun] depends on whether it is mutually recursive
          with the surrounding rec/spec *)
       begin match local_state.in_scope with
@@ -182,8 +187,7 @@ let tr_problem pb =
       (* append auxiliary definitions *)
       let res =
         CCVector.to_list local_state.new_decls
-        |> CCList.cons stmt'
-        |> List.rev
+        @ [stmt']
       in
       CCVector.clear local_state.new_decls;
       res)
