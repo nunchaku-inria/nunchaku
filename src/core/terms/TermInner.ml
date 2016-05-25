@@ -876,8 +876,11 @@ module type UTIL = sig
   exception ApplyError of apply_error
   (** Raised when a type application fails *)
 
-  val eval : subst:subst -> t_ -> t_
-  (** Applying a substitution *)
+  val eval : ?rec_:bool -> subst:subst -> t_ -> t_
+  (** Applying a substitution
+      @param rec_ if true, when replacing [v] with [t]
+        because [(v -> t) in subst], we call [eval subst t] instead of
+        assuming [t] is preserved by subst (default false) *)
 
   val eval_renaming : subst:renaming -> t_ -> t_
   (** Applying a variable renaming *)
@@ -1374,12 +1377,16 @@ module Util(T : S)
         end
     | _ -> t
 
-  let eval ~subst t =
+  let eval ?(rec_=false) ~subst t =
     let rec aux subst t = match T.repr t with
       | Var v ->
           (* NOTE: when dependent types are added, substitution in types
              will be needed *)
-          CCOpt.get t (Subst.find ~subst v)
+          begin match Subst.find ~subst v with
+            | None -> t
+            | Some t' when rec_ -> aux subst t'
+            | Some t' -> t'
+          end
       | _ ->
           map subst t
             ~f:aux
