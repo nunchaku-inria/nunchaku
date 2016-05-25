@@ -119,11 +119,19 @@ let rec tr_term ~state local_state t = match T.repr t with
         |> U.VarSet.to_list
       in
       (* compute type of new function *)
-      let ty_ret = find_ty_ ~state body in
-      let ty = U.ty_arrow_l (List.map Var.ty captured_vars @ [Var.ty v]) ty_ret in
+      let _, body_ty_args, ty_ret = find_ty_ ~state body |> U.ty_unfold in
+      let ty =
+        U.ty_arrow_l
+          (List.map Var.ty captured_vars @ Var.ty v :: body_ty_args)
+          ty_ret in
+      (* fully apply body *)
+      let body_vars =
+        List.mapi (fun i ty -> Var.makef ~ty "eta_%d" i) body_ty_args
+      in
+      let body = U.app body (List.map U.var body_vars) in
       (* declare new toplevel function *)
       let new_fun = fresh_fun_ ~state in
-      let new_vars = captured_vars @ [v] in
+      let new_vars = captured_vars @ v :: body_vars in
       (* declare new function *)
       decl_fun_ ~state new_fun ty;
       Utils.debugf ~section 5 "@[<2>declare `@[%a : %a@]`@ for `@[%a@]`@]"
