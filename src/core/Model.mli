@@ -93,17 +93,17 @@ val add_finite_type : ('t, 'ty) t -> 'ty -> ID.t list -> ('t, 'ty) t
 (** Map the type to its finite domain. *)
 
 val fold :
-  constants:('acc -> 'a * 'a * symbol_kind -> 'acc) ->
-  funs:('acc -> 'a * 'b Var.t list * ('a,'b) decision_tree * symbol_kind -> 'acc) ->
-  finite_types:('acc -> 'b * ID.t list -> 'acc) ->
+  ?constants:('acc -> 'a * 'a * symbol_kind -> 'acc) ->
+  ?funs:('acc -> 'a * 'b Var.t list * ('a,'b) decision_tree * symbol_kind -> 'acc) ->
+  ?finite_types:('acc -> 'b * ID.t list -> 'acc) ->
   'acc ->
   ('a,'b) t ->
   'acc
 
 val iter :
-  constants:('a * 'a * symbol_kind -> unit) ->
-  funs:('a * 'b Var.t list * ('a,'b) decision_tree * symbol_kind -> unit) ->
-  finite_types:('b * ID.t list -> unit) ->
+  ?constants:('a * 'a * symbol_kind -> unit) ->
+  ?funs:('a * 'b Var.t list * ('a,'b) decision_tree * symbol_kind -> unit) ->
+  ?finite_types:('b * ID.t list -> unit) ->
   ('a,'b) t ->
   unit
 

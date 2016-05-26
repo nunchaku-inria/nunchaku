@@ -182,6 +182,8 @@ let filter_map ~constants ~funs ~finite_types m = {
 }
 
 let const_true_ _ = true
+let const_unit_ _ = ()
+let const_fst_ x _ = x
 
 let filter
     ?(constants=const_true_)
@@ -194,13 +196,13 @@ let filter
     ~funs:(fun x -> if funs x then Some x else None)
     ~finite_types:(fun x -> if finite_types x then Some x else None)
 
-let iter ~constants ~funs ~finite_types m =
+let iter ?(constants=const_unit_) ?(funs=const_unit_) ?(finite_types=const_unit_) m =
   List.iter constants m.constants;
   List.iter funs m.funs;
   List.iter finite_types m.finite_types;
   ()
 
-let fold ~constants ~funs ~finite_types acc m =
+let fold ?(constants=const_fst_) ?(funs=const_fst_) ?(finite_types=const_fst_) acc m =
   let acc = ref acc in
   iter m
     ~constants:(fun x -> acc := constants !acc x)
