@@ -81,9 +81,12 @@ form:
   | f=or_form { f }
   | FORALL LEFT_BRACKET v=var RIGHT_BRACKET COLON f=form
     { A.forall v f }
+  | error
+    { let loc = L.mk_pos $startpos $endpos in
+      Parsing_utils.parse_error_ ~loc "expected form" }
 
 or_form:
-  | l=and_form VLINE r=and_form { A.or_ l r }
+  | l=and_form VLINE r=or_form { A.or_ l r }
   | f=and_form { f }
 
 and_form:
@@ -108,9 +111,13 @@ atomic_form:
     { A.not_ (A.atom t) }
   | TRUE { A.true_ }
   | FALSE { A.false_ }
+  | error
+    { let loc = L.mk_pos $startpos $endpos in
+      Parsing_utils.parse_error_ ~loc "expected atomic form" }
 
 atom:
   | f=atomic_form { f }
+  | LEFT_PAREN f=atom RIGHT_PAREN { f }
   | NOT f=atom { A.not_ f }
 
 %inline forall_vars:
@@ -131,6 +138,9 @@ atoms:
   | vars=forall_vars l=atoms
     { let vars', l = l in vars @ vars', l }
   | l=separated_nonempty_list(AND, atom) { [], l }
+  | error
+    { let loc = L.mk_pos $startpos $endpos in
+      Parsing_utils.parse_error_ ~loc "expected atom" }
 
 term:
   | v=var { A.var v }
