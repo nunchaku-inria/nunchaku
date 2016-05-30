@@ -49,16 +49,21 @@ module Fut = struct
     Mutex.lock t.lock;
     CCFun.finally ~h:(fun () -> Mutex.unlock t.lock) ~f
 
+  let apply_catch_ f x =
+    try f x
+    with _ -> ()
+
   let set_res ~idempotent t res =
     with_ t
       ~f:(fun () -> match t.state with
         | Some Stopped -> ()
-        | Some _ when idempotent -> ()
-        | Some _ -> failwith "future already done"
+        | Some _ ->
+          if not idempotent then failwith "future already done"
         | None ->
           t.state <- Some res;
           Condition.broadcast t.cond;
-          List.iter (fun f -> f res) t.on_res)
+          (* apply each callback, and catch their exceptions *)
+          List.iter (fun f -> apply_catch_ f res) t.on_res)
 
   let set_done t x = set_res ~idempotent:false t (Done x)
 
@@ -101,7 +106,11 @@ module Fut = struct
     on_res x
       ~f:(function
         | Stopped -> stop y
-        | Done x -> set_done y (f x)
+        | Done x ->
+          begin
+            try set_done y (f x)
+            with e -> set_fail y e
+          end
         | Fail e -> set_fail y e);
     y
 
@@ -150,6 +159,19 @@ end
     Fut.get t)
 *)
 
+(*$=
+  (Fut.Fail Pervasives.Exit) ( \
+    let t = Fut.make (fun () -> 0) |> Fut.map (fun _ -> raise Exit) in \
+    Fut.get t)
+*)
+
+(*$=
+  (Fut.Done ()) ( \
+    let t = Fut.make (fun () -> 0) |> Fut.map (fun _ -> ()) in \
+    Fut.on_res t ~f:(fun _ -> raise Exit); \
+    Fut.get t)
+*)
+
 type process_status = int
 
 (* make sure that we are a session leader; that is, our children die if we die *)
@@ -184,6 +206,7 @@ let popen ?(on_res=[]) cmd ~f =
     close_in_noerr stdout;
     (try Unix.close stderr with _ -> ());
     (try Unix.kill pid 9 with _ -> ()); (* just to be sure *)
+    Utils.debugf ~lock:true ~section 3 "subprocess %d cleaned" (fun k->k pid);
     ()
   in
   Fut.make ~on_res:(cleanup :: on_res)
@@ -194,7 +217,8 @@ let popen ?(on_res=[]) cmd ~f =
          let res = match res with
            | Unix.WEXITED i | Unix.WSTOPPED i | Unix.WSIGNALED i -> i
          in
-         Utils.debugf ~lock:true ~section 3 "@[<2>sub-process %d done;@ command was `@[%s@]`@]"
+         Utils.debugf ~lock:true ~section 3
+           "@[<2>sub-process %d done;@ command was `@[%s@]`@]"
            (fun k->k pid cmd);
          E.return (x,res)
        with e ->
@@ -293,11 +317,21 @@ let start_task p t =
           p.active <- remove_rtask_ id p.active;
           begin match res, p.pool_state with
             | Fut.Done (x, No_shortcut), Res_list l ->
-              let x = t_inner.Task.post x in
-              p.pool_state <- Res_list (x::l)
+              begin
+                try
+                  let y = t_inner.Task.post x in
+                  p.pool_state <- Res_list (y::l)
+                with e ->
+                  p.pool_state <- Res_fail e
+              end
             | Fut.Done (x, Shortcut), Res_list _ ->
-              let x = t_inner.Task.post x in
-              p.pool_state <- Res_one x;
+              begin
+                try
+                  let y = t_inner.Task.post x in
+                  p.pool_state <- Res_one y
+                with e ->
+                  p.pool_state <- Res_fail e
+              end
             | Fut.Fail e, Res_list _ ->
               p.pool_state <- Res_fail e;
             | Fut.Stopped, _
@@ -319,8 +353,8 @@ let rec run_pool pool =
         List.iter kill_rtask_ pool.active;
         pool.pool_state
     | [], [], _ ->
-        Mutex.unlock pool.lock;
         Utils.debug ~lock:true ~section 2 "all tasks done";
+        Mutex.unlock pool.lock;
         pool.pool_state
     | task :: todo_tl, _, Res_list _ ->
         if List.length pool.active < pool.j
