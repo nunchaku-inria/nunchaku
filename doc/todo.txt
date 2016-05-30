@@ -19,4 +19,5 @@
 (B) 2016-01-18 deal with empty sorts
 (B) 2016-01-21 compute type cardinalities to approximate exists/forall with top/bot in non polarized cases
 (A) 2016-04-14 do not propagate incompleteness flags, just change result back?
-(A) 2016-05-10 reverse transformation of models in ElimTypes
+(A) 2016-05-10 fix ElimTypes (for copy/spec statements); fix decoding
+(A) 2016-05-26 fix model parsing for paradox (see spec_inval_def2.nun)
