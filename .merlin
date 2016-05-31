@@ -16,4 +16,4 @@ PKG unix
 PKG num
 PKG qcheck
 B +threads
-FLG -w +a-4-44-29
+FLG -w +a-4-44-29 -short-paths
