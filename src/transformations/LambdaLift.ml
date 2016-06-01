@@ -103,8 +103,39 @@ let find_ty_ ~state t =
 let decl_fun_ ~state id ty =
   state.sigma <- Signature.declare ~sigma:state.sigma id ty
 
+let is_lambda_ t = match T.repr t with
+  | TI.Bind (`Fun, _, _) -> true
+  | _ -> false
+
+(* given two lists of variables, return:
+   - a list of fresh variables that is a copy of the longest one
+   - a substitution that renames l1 and l2 to those new variables
+   - the suffixes to add to [l1] (resp. l2) so that they have
+     the same length as the list of fresh variables
+  precond: variables in the common prefix of l1 and l2 have compatible types *)
+let complete_vars l1 l2 =
+  let rec aux vars args1 args2 subst l1 l2 = match l1, l2 with
+    | [], [] -> List.rev vars, List.rev args1, List.rev args2, subst
+    | [], v::tail
+    | v::tail, [] ->
+      let v' = Var.fresh_copy v in
+      let subst = Var.Subst.add ~subst v v' in
+      (* [v'] is the missing argument to either [args1] or [args2] *)
+      let args1, args2 =
+        if l1=[] then U.var v'::args1, args2 else args1, U.var v'::args2
+      in
+      aux (v'::vars) args1 args2 subst tail []
+    | v1::tail1, v2::tail2 ->
+      let v' = Var.fresh_copy v1 in
+      let subst = Var.Subst.add ~subst v1 v' in
+      let subst = Var.Subst.add ~subst v2 v' in
+      aux (v'::vars) args1 args2 subst tail1 tail2
+  in
+  aux [] [] [] Var.Subst.empty l1 l2
+
 (* traverse [t] recursively, replacing lambda terms by new named functions *)
-let rec tr_term ~state local_state t = match T.repr t with
+let rec tr_term ~state local_state subst t = match T.repr t with
+  | TI.Var v -> U.var (Var.Subst.find_or ~default:v ~subst v)
   | TI.Bind (`Fun, _, _) when TermTbl.mem state.funs t ->
       (* will only work if [t] is alpha-equivalent to [t']; in particular
          that implies that [t] and [t'] capture exactly the same terms,
@@ -115,7 +146,7 @@ let rec tr_term ~state local_state t = match T.repr t with
       t'
   | TI.Bind (`Fun, v, body) ->
       (* first, λ-lift in the body *)
-      let body = tr_term ~state local_state body in
+      let body = tr_term ~state local_state subst body in
       (* captured variables *)
       let captured_vars =
         U.free_vars ~bound:(U.VarSet.singleton v) body
@@ -162,9 +193,19 @@ let rec tr_term ~state local_state t = match T.repr t with
       TermTbl.add state.funs t t'; (* save it *)
       ID.Tbl.add state.new_ids new_fun ();
       t'
-  | _ -> tr_term' ~state local_state t
-and tr_term' ~state new_decls t =
-  U.map () t ~bind:(fun () v -> (), v) ~f:(fun () -> tr_term ~state new_decls)
+  | TI.Builtin (`Eq (a,b)) when is_lambda_ a || is_lambda_ b ->
+      (* extensionality: [(λx. t) = f] becomes [∀x. t = t' x] *)
+      let vars1, body1 = U.fun_unfold a in
+      let vars2, body2 = U.fun_unfold b in
+      let new_vars, args1, args2, subst = complete_vars vars1 vars2 in
+      let body1 = tr_term ~state local_state subst (U.app body1 args1) in
+      let body2 = tr_term ~state local_state subst (U.app body2 args2) in
+      (* quantify on common variables *)
+      U.forall_l new_vars (U.eq body1 body2)
+  | _ ->
+    U.map subst t
+      ~bind:Var.Subst.rename_var
+      ~f:(fun subst -> tr_term ~state local_state subst)
 
 let tr_problem pb =
   let sigma = Problem.signature pb in
@@ -189,7 +230,7 @@ let tr_problem pb =
             let l = ref [] in
             local_state.in_scope <- In_rec (ids, l);
             let defs' = Stmt.map_rec_defs defs
-                ~ty:CCFun.id ~term:(tr_term ~state local_state)
+                ~ty:CCFun.id ~term:(tr_term ~state local_state Var.Subst.empty)
             in
             (* combine [defs'] with additional definitions in [l] *)
             let new_defs = List.rev_append !l defs' in
@@ -205,7 +246,7 @@ let tr_problem pb =
             let l = ref [] in
             local_state.in_scope <- In_spec (ids, l);
             let spec' = Stmt.map_spec_defs spec
-                ~ty:CCFun.id ~term:(tr_term ~state local_state)
+                ~ty:CCFun.id ~term:(tr_term ~state local_state Var.Subst.empty)
             in
             let new_defined, new_axioms =
               List.map (fun (id,ty,ax) -> Stmt.mk_defined id ty, ax) !l
@@ -221,7 +262,8 @@ let tr_problem pb =
             Stmt.axiom_spec ~info new_defs
         | _ ->
             local_state.in_scope <- In_nothing;
-            Stmt.map stmt ~ty:CCFun.id ~term:(tr_term ~state local_state)
+            Stmt.map stmt ~ty:CCFun.id
+              ~term:(tr_term ~state local_state Var.Subst.empty)
       in
       (* append auxiliary definitions *)
       let res =
@@ -233,10 +275,9 @@ let tr_problem pb =
   in
   pb', state
 
-(* TODO *)
 let decode_model ~state m =
   Model.filter m
-    ~funs:(fun (t,vars,dt,k) -> match T.repr t with
+    ~funs:(fun (t,_,_,_) -> match T.repr t with
       | TI.Const id when ID.Tbl.mem state.new_ids id ->
         false (* drop anonymous funs from model *)
       | _ -> true)

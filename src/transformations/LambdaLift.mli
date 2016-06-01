@@ -3,7 +3,9 @@
 
 (** {1 Lambda Lifting}
 
-    Remaining λ expressions are extracted as toplevel {b named} functions *)
+    Remaining λ expressions are extracted as toplevel {b named} functions;
+    equalities such as [(fun x. t) = (fun y. u)] are replaced by
+    [forall x. t = u[x/y]]. *)
 
 open Nunchaku_core
 
