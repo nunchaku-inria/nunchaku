@@ -41,7 +41,7 @@ let list_solvers_ () = "(available choices: cvc4 kodkod paradox)"
 
 let input_ = ref I_nunchaku
 let output_ = ref O_nunchaku
-let check_all_ = ref false
+let check_all_ = ref true
 let polarize_rec_ = ref true
 let print_ = ref false
 let print_all_ = ref false

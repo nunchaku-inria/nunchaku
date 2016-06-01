@@ -774,27 +774,51 @@ let elim_hof_statement ~state stmt : (_, _, inv2) Stmt.t list =
   let tr_term pol subst = elim_hof_term ~state subst pol in
   let tr_type _subst ty = encode_toplevel_ty ~state ty in
   Utils.debugf ~section 3 "@[<2>@{<cyan>> elim HOF in stmt@}@ `@[%a@]`@]" (fun k->k PStmt.print stmt);
+  (* find the new type of the given partially applied function [id : ty] *)
+  let encode_fun id =
+    Utils.debugf ~section 3
+      "introduce application symbols and handle types for %a…"
+      (fun k->k ID.print id);
+    let fun_encoding = introduce_apply_syms ~state id in
+    let ty' =
+      U.ty_arrow_l fun_encoding.fe_args
+        (ty_of_handle_ ~state fun_encoding.fe_ret_handle) in
+    Utils.debugf ~section 4 "@[<2>fun %a now has type `@[%a@]`@]"
+      (fun k->k ID.print id P.print ty');
+    ty'
+  in
   let stmt' = match Stmt.view stmt with
   | Stmt.Decl (id,ty,attrs) ->
-      if ID.Map.mem id state.arities
-      then (
-        Utils.debugf ~section 3
-          "introduce application symbols and handle types for %a…"
-          (fun k->k ID.print id);
-        let fun_encoding = introduce_apply_syms ~state id in
-        let ty' =
-          U.ty_arrow_l fun_encoding.fe_args
-            (ty_of_handle_ ~state fun_encoding.fe_ret_handle) in
-        Utils.debugf ~section 4 "@[<2>fun %a now has type `@[%a@]`@]"
-          (fun k->k ID.print id P.print ty');
-        let stmt = Stmt.decl ~info id ty' ~attrs in
-        [stmt]
-      )
-      else
-        (* keep as is, not a partially applied fun; still have to modify type *)
-        let ty = encode_toplevel_ty ~state ty in
-        [Stmt.decl ~info id ty ~attrs]
+      let ty' =
+        if ID.Map.mem id state.arities
+        then encode_fun id
+        else encode_toplevel_ty ~state ty
+            (* keep as is, not a partially applied fun; still have to modify type *)
+      in
+      [Stmt.decl ~info id ty' ~attrs]
   | Stmt.Axiom (Stmt.Axiom_rec l) -> elim_hof_rec ~state ~info l
+  | Stmt.Axiom (Stmt.Axiom_spec spec) ->
+      let subst, vars =
+        Utils.fold_map (bind_hof_var ~state) Subst.empty spec.Stmt.spec_vars
+      in
+      let spec =
+        { Stmt.
+          spec_axioms=List.map (tr_term Pol.Pos subst) spec.Stmt.spec_axioms;
+          spec_vars=vars;
+          spec_defined=
+            List.map
+              (fun d ->
+                 let id = Stmt.id_of_defined d in
+                 let ty = Stmt.ty_of_defined d in
+                 let ty' =
+                   if ID.Map.mem id state.arities
+                   then encode_fun id
+                   else encode_toplevel_ty ~state ty
+                 in
+                 Stmt.mk_defined id ty')
+              spec.Stmt.spec_defined;
+        } in
+      [Stmt.axiom_spec ~info spec]
   | Stmt.TyDef (kind,l) ->
       let l =
         let open Stmt in
@@ -1137,8 +1161,9 @@ let map_ho_consts_to_funs ~state m : const_map * (unit -> _ Model.fun_def list) 
    the model [m] by flattening/filtering discrimination trees for functions
    of [tower].
    @return set of variables, discrimination tree, function kind *)
-let extract_subtree_ m tower =
+let extract_subtree_ ~state ~map m tower =
   Utils.debugf ~section 5 "@[<2>extract subtree for @[%a@]@]" (fun k->k pp_fe_tower tower);
+  let rename_decode_var = bind_decode_var_ ~state ~map in
   (* @param hd: first parameter, that is, the partial function being applied *)
   let rec aux subst hd tower = match tower with
     | [] -> assert false
@@ -1147,8 +1172,8 @@ let extract_subtree_ m tower =
         begin match find_dt_ m af.af_id with
           | [], _, _ -> assert false  (* af: must be a function *)
           | v::vars, dt, k ->
-            let subst, _ = U.rename_var subst v in
-            let subst, vars = Utils.fold_map U.rename_var subst vars in
+            let subst, _ = rename_decode_var subst v in
+            let subst, vars = Utils.fold_map rename_decode_var subst vars in
             v, vars, subst, dt, k
         end
     | TC_app af :: tower' ->
@@ -1157,7 +1182,7 @@ let extract_subtree_ m tower =
         (* first variable, [v], is replaced by [hd] *)
         let v, vars = match vars with a::b ->a,b | [] -> assert false in
         let subst = Subst.add ~subst v hd in
-        let subst, vars = Utils.fold_map U.rename_var subst vars in
+        let subst, vars = Utils.fold_map rename_decode_var subst vars in
         let hd = U.app hd (List.map U.var vars) in
         (* merge with [dt] for remaining tower functions *)
         let _, vars', subst, dt', k = aux subst hd tower' in
@@ -1169,7 +1194,7 @@ let extract_subtree_ m tower =
     | TC_app _ ::_ -> assert false
     | TC_first_param (f,_) :: tower' ->
         let vars, dt, _ = find_dt_ m f in
-        let subst, vars = Utils.fold_map U.rename_var Subst.empty vars in
+        let subst, vars = Utils.fold_map rename_decode_var Subst.empty vars in
         (* in the surrounding application symbols, replace first arg with [hd] *)
         let hd = U.app_const f (List.map U.var vars) in
         (* merge with rest of DT *)
@@ -1198,7 +1223,7 @@ let decode_model ~state m =
       |> IntMap.max_binding
       |> snd
     in
-    let vars, subst, dt, k = extract_subtree_ m tower in
+    let vars, subst, dt, k = extract_subtree_ ~state ~map m tower in
     let dt = tr_dt ~state ~map ~subst dt in
     Model.add_fun new_m (U.const id, vars, dt, k)
   in

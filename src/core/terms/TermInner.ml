@@ -57,9 +57,16 @@ module Builtin = struct
     asserting: 'a list; (* postconditions, to be enforced *)
   }
 
+  let empty_guard = {asserting=[]; assuming=[]}
+
   let map_guard f g =
     { assuming = List.map f g.assuming;
       asserting = List.map f g.asserting;
+    }
+
+  let merge_guard g1 g2 =
+    { assuming = List.rev_append g1.assuming g2.assuming;
+      asserting = List.rev_append g1.asserting g2.asserting;
     }
 
   type 'a t =
@@ -499,6 +506,9 @@ module type UTIL_REPR = sig
   val free_meta_vars : ?init:t_ MetaVar.t ID.Map.t -> t_ -> t_ MetaVar.t ID.Map.t
   (** The free type meta-variables in [t] *)
 
+  val fun_unfold : t_ -> t_ Var.t list * t_
+  (** [fun_unfold (fun x y z. t) = [x;y;z], t] *)
+
   val get_ty_arg : t_ -> int -> t_ option
   (** [get_ty_arg ty n] gets the [n]-th argument of [ty], if [ty] is a
       function type with at least [n] arguments. *)
@@ -648,6 +658,13 @@ module UtilRepr(T : REPR)
       |> Sequence.fold
           (fun acc v -> ID.Map.add (MetaVar.id v) v acc)
           init
+
+  let fun_unfold t =
+    let rec aux vars t = match T.repr t with
+      | Bind (`Fun, v, t') -> aux (v::vars) t'
+      | _ -> List.rev vars, t
+    in
+    aux [] t
 
   let ty_unfold t =
     let rec aux1 t = match T.repr t with
@@ -1074,11 +1091,8 @@ module Util(T : S)
     match T.repr t, g.asserting, g.assuming with
     | _, [], [] -> t
     | Builtin (`Guard (t', g')), _, _ ->
-        let g' = {
-          assuming = g.assuming @ g'.assuming;
-          asserting = g.asserting @ g'.asserting;
-        } in
-        builtin (`Guard (t', g'))
+        let g'' = Builtin.merge_guard g g' in
+        builtin (`Guard (t', g''))
     | _ ->
         builtin (`Guard (t, g))
 
