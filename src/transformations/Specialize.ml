@@ -1040,7 +1040,7 @@ let pp_dsf out dsf =
 
 (* convert a specialized function into a λ-term that evaluates to the
    non-specialized function when fully applied *)
-let dsf_to_fun dsf =
+let dsf_to_fun (dsf:decode_state_fun) =
   let _, ty_args, _ = U.ty_unfold dsf.dsf_ty_of in
   let arg = dsf.dsf_arg in
   (* arguments the unspecialized function will be applied to *)
@@ -1070,6 +1070,12 @@ let dsf_to_fun dsf =
     (fun k->k pp_dsf dsf P.print res);
   assert (U.is_closed res);
   res
+
+let find_var_ ~subst v =
+  try Subst.find_exn ~subst v
+  with Not_found ->
+    errorf "could not find var `%a`@ in `@[%a@]`"
+      Var.print_full v (Subst.print Var.print_full) subst
 
 (* traverse the term and use reverse table to replace specialized
    functions by their definition *)
@@ -1253,7 +1259,7 @@ let decode_model state m =
               (fun k->k (Model.DT.print P.print) dt (Subst.print P.print) subst);
             let dt =
               Model.DT.map dt
-                ~var:(fun v -> Some (Subst.find_exn ~subst:renaming v))
+                ~var:(fun v -> Some (find_var_ ~subst:renaming v))
                 ~ty:CCFun.id ~term:(decode_term_rec state subst) in
             Some (f, vars, dt, kind))
   in

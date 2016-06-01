@@ -12,13 +12,14 @@ type 'a to_sexp = 'a -> CCSexp.t
 
 module DT : sig
   type ('t, 'ty) test = 'ty Var.t * 't (** Equation var=term *)
+  type ('t, 'ty) tests = ('t,'ty) test list
 
   val print_test : 't printer -> ('t, _) test printer
   val print_tests : 't printer -> ('t, _) test list printer
   val print_case : 't printer -> (('t,_) test list * 't) printer
 
   type (+'t, +'ty) t = private {
-    tests: (('t, 'ty) test list * 't) list;
+    tests: (('t, 'ty) tests * 't) list;
       (* [(else) if v_1 = t_1 & ... & v_n = t_n then ...] *)
 
     else_ : 't;
@@ -61,11 +62,16 @@ type symbol_kind =
   | Symbol_utype
   | Symbol_data
 
+(** definition of a function in the model *)
+type (+'t, +'ty) fun_def =
+  ('t * 'ty Var.t list * ('t,'ty) decision_tree * symbol_kind)
+
+(** A model *)
 type (+'t, +'ty) t = {
   constants: ('t * 't * symbol_kind) list;
     (* constant -> its interpretation *)
 
-  funs: ('t * 'ty Var.t list * ('t,'ty) decision_tree * symbol_kind) list;
+  funs: ('t, 'ty) fun_def list;
     (* fun * var list -> body *)
 
   finite_types: ('ty * ID.t list) list;
@@ -93,17 +99,17 @@ val add_finite_type : ('t, 'ty) t -> 'ty -> ID.t list -> ('t, 'ty) t
 (** Map the type to its finite domain. *)
 
 val fold :
-  constants:('acc -> 'a * 'a * symbol_kind -> 'acc) ->
-  funs:('acc -> 'a * 'b Var.t list * ('a,'b) decision_tree * symbol_kind -> 'acc) ->
-  finite_types:('acc -> 'b * ID.t list -> 'acc) ->
+  ?constants:('acc -> 'a * 'a * symbol_kind -> 'acc) ->
+  ?funs:('acc -> 'a * 'b Var.t list * ('a,'b) decision_tree * symbol_kind -> 'acc) ->
+  ?finite_types:('acc -> 'b * ID.t list -> 'acc) ->
   'acc ->
   ('a,'b) t ->
   'acc
 
 val iter :
-  constants:('a * 'a * symbol_kind -> unit) ->
-  funs:('a * 'b Var.t list * ('a,'b) decision_tree * symbol_kind -> unit) ->
-  finite_types:('b * ID.t list -> unit) ->
+  ?constants:('a * 'a * symbol_kind -> unit) ->
+  ?funs:('a * 'b Var.t list * ('a,'b) decision_tree * symbol_kind -> unit) ->
+  ?finite_types:('b * ID.t list -> unit) ->
   ('a,'b) t ->
   unit
 

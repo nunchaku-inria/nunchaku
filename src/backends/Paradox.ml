@@ -42,7 +42,7 @@ let end_model = "SZS output end FiniteModel"
 (* parse a model from paradox' output [s] *)
 let parse_model s =
   let i1 = CCString.find ~sub:begin_model s in
-  let i1 = String.index_from s i1 '\n' in (* skip full line *)
+  let i1 = String.index_from s i1 '\n'+1 in (* skip full line *)
   let i2 = CCString.find ~start:i1 ~sub:end_model s in
   (* [s']: part of [s] between the model markers *)
   let s' = String.sub s i1 (i2-i1) in
