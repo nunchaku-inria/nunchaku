@@ -249,12 +249,12 @@ let to_sexp ft fty m : CCSexp.t =
   let fun_to_sexp (f,vars,dt,_) =
     let fun_ =
       lst
-        [ str "lambda"
+        [ str "fun"
         ; lst (List.map var_to_sexp vars)
         ; DT.to_sexp ft dt
         ]
     in
-    lst [str "fun"; ft f; fun_]
+    lst [str "val"; ft f; fun_]
   in
   lst
     ( List.map ty_to_sexp m.finite_types
