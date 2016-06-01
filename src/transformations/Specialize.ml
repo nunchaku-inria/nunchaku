@@ -832,7 +832,7 @@ module InstanceGraph = struct
   type vertex = {
     v_id: ID.t; (* name of the specialized function *)
     v_spec_of: ID.t; (* name of generic function *)
-    v_spec_on: Arg.t; (* arguments on which [v_id] is specialized *)
+    v_spec_on: Arg.t; (* arguments on which [v_spec_of] is specialized *)
     v_args: term list; (* [v_id v_spec_on = v_spec_of v_args] *)
     v_term: term; (* [v_spec_of v_args] *)
   }
@@ -932,10 +932,13 @@ module InstanceGraph = struct
       (CCFormat.list ~start:"" ~stop:"" pp_item) g.vertices
 end
 
+(* each vertex corresponds to a (specialized) term *)
 let spec_term_of_vertex v =
   let open InstanceGraph in
-  let args = Utils.filteri (fun i _ -> Arg.mem i v.v_spec_on) v.v_args in
-  U.app (U.const v.v_id) args
+  let closure_vars = Arg.vars v.v_spec_on in
+  let args = Utils.filteri (fun i _ -> not (Arg.mem i v.v_spec_on)) v.v_args in
+  let t = U.app_const v.v_id (List.map U.var closure_vars @ args) in
+  Red.snf t
 
 let mk_congruence_axiom v1 v2 =
   let module IG = InstanceGraph in
