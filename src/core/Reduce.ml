@@ -20,16 +20,19 @@ module Make(T : TI.S) = struct
       head: T.t; (* invariant: not an App *)
       args: T.t list;
       subst: subst;
+      guard: T.t TI.Builtin.guard;
     }
     val make : subst:subst -> T.t -> T.t list -> t
     val const : subst:subst -> T.t -> t
     val set_head : t -> T.t -> t
+    val map_guard : (T.t -> T.t) -> t -> t
     val to_term : ?rec_:bool -> t -> T.t
   end = struct
     type t = {
       head: T.t;
       args: T.t list;
       subst: subst;
+      guard: T.t TI.Builtin.guard;
     }
 
     let app_ a b = if b=[] then a else a @ b
@@ -37,17 +40,24 @@ module Make(T : TI.S) = struct
     (* enforce the invariant about `head` not being an `App` *)
     let rec norm_st st = match T.repr st.head with
       | TI.App (f, l) -> norm_st {st with head=f; args=app_ l st.args}
+      | TI.Builtin (`Guard (t,g)) ->
+        norm_st {st with head=t; guard=TI.Builtin.merge_guard g st.guard}
       | _ -> st
 
     (* build a state and enforce invariant *)
-    let make ~subst f l = norm_st {head=f; args=l; subst; }
+    let make ~subst f l =
+      norm_st {head=f; args=l; subst; guard=TI.Builtin.empty_guard; }
 
     let const ~subst t = make ~subst t []
 
     let set_head st t = norm_st {st with head=t}
 
+    let map_guard f st = {st with guard=TI.Builtin.map_guard f st.guard}
+
     (* convert a state back to a term *)
-    let to_term ?rec_ st = U.eval ?rec_ ~subst:st.subst (U.app st.head st.args)
+    let to_term ?rec_ st =
+      let t = U.guard (U.app st.head st.args) st.guard in
+      U.eval ?rec_ ~subst:st.subst t
   end
 
   module Full = struct
@@ -235,10 +245,12 @@ module Make(T : TI.S) = struct
     let rec snf_ st =
       (* first, head reduction *)
       let st = whnf_ st in
+      let st = State.map_guard (snf_term ~subst:st.subst) st in
       (* then, reduce subterms *)
       match T.repr st.head with
       | TI.TyBuiltin _
       | TI.Const _ -> st
+      | TI.Builtin (`Guard _) -> assert false
       | TI.Builtin b ->
           eval_app_builtin ~eval:snf_ ~subst:st.subst b st.args
       | TI.Bind (`TyForall,_,_) -> st
