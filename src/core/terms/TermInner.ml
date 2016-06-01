@@ -57,9 +57,16 @@ module Builtin = struct
     asserting: 'a list; (* postconditions, to be enforced *)
   }
 
+  let empty_guard = {asserting=[]; assuming=[]}
+
   let map_guard f g =
     { assuming = List.map f g.assuming;
       asserting = List.map f g.asserting;
+    }
+
+  let merge_guard g1 g2 =
+    { assuming = List.rev_append g1.assuming g2.assuming;
+      asserting = List.rev_append g1.asserting g2.asserting;
     }
 
   type 'a t =
@@ -1074,11 +1081,8 @@ module Util(T : S)
     match T.repr t, g.asserting, g.assuming with
     | _, [], [] -> t
     | Builtin (`Guard (t', g')), _, _ ->
-        let g' = {
-          assuming = g.assuming @ g'.assuming;
-          asserting = g.asserting @ g'.asserting;
-        } in
-        builtin (`Guard (t', g'))
+        let g'' = Builtin.merge_guard g g' in
+        builtin (`Guard (t', g''))
     | _ ->
         builtin (`Guard (t, g))
 
