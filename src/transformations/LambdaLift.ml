@@ -33,6 +33,8 @@ type state = {
     (* signature *)
   funs: T.t TermTbl.t;
     (* function -> lambda-lifted function *)
+  new_ids: unit ID.Tbl.t;
+    (* set of newly introduced functions *)
 }
 (* TODO: store information for decoding *)
 
@@ -40,6 +42,7 @@ let create_state ~sigma () =
   { count=0;
     sigma;
     funs=TermTbl.create 16;
+    new_ids=ID.Tbl.create 16;
   }
 
 let fresh_fun_ ~state =
@@ -157,6 +160,7 @@ let rec tr_term ~state local_state t = match T.repr t with
       (* replace [fun v. body] by [new_fun vars] *)
       let t' = U.app_const new_fun (List.map U.var captured_vars) in
       TermTbl.add state.funs t t'; (* save it *)
+      ID.Tbl.add state.new_ids new_fun ();
       t'
   | _ -> tr_term' ~state local_state t
 and tr_term' ~state new_decls t =
@@ -230,7 +234,12 @@ let tr_problem pb =
   pb', state
 
 (* TODO *)
-let decode_model ~state:_ m = m
+let decode_model ~state m =
+  Model.filter m
+    ~funs:(fun (t,vars,dt,k) -> match T.repr t with
+      | TI.Const id when ID.Tbl.mem state.new_ids id ->
+        false (* drop anonymous funs from model *)
+      | _ -> true)
 
 let pipe_with ~decode ~print ~check =
   let on_encoded =
