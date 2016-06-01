@@ -1161,8 +1161,9 @@ let map_ho_consts_to_funs ~state m : const_map * (unit -> _ Model.fun_def list) 
    the model [m] by flattening/filtering discrimination trees for functions
    of [tower].
    @return set of variables, discrimination tree, function kind *)
-let extract_subtree_ m tower =
+let extract_subtree_ ~state ~map m tower =
   Utils.debugf ~section 5 "@[<2>extract subtree for @[%a@]@]" (fun k->k pp_fe_tower tower);
+  let rename_decode_var = bind_decode_var_ ~state ~map in
   (* @param hd: first parameter, that is, the partial function being applied *)
   let rec aux subst hd tower = match tower with
     | [] -> assert false
@@ -1171,8 +1172,8 @@ let extract_subtree_ m tower =
         begin match find_dt_ m af.af_id with
           | [], _, _ -> assert false  (* af: must be a function *)
           | v::vars, dt, k ->
-            let subst, _ = U.rename_var subst v in
-            let subst, vars = Utils.fold_map U.rename_var subst vars in
+            let subst, _ = rename_decode_var subst v in
+            let subst, vars = Utils.fold_map rename_decode_var subst vars in
             v, vars, subst, dt, k
         end
     | TC_app af :: tower' ->
@@ -1181,7 +1182,7 @@ let extract_subtree_ m tower =
         (* first variable, [v], is replaced by [hd] *)
         let v, vars = match vars with a::b ->a,b | [] -> assert false in
         let subst = Subst.add ~subst v hd in
-        let subst, vars = Utils.fold_map U.rename_var subst vars in
+        let subst, vars = Utils.fold_map rename_decode_var subst vars in
         let hd = U.app hd (List.map U.var vars) in
         (* merge with [dt] for remaining tower functions *)
         let _, vars', subst, dt', k = aux subst hd tower' in
@@ -1193,7 +1194,7 @@ let extract_subtree_ m tower =
     | TC_app _ ::_ -> assert false
     | TC_first_param (f,_) :: tower' ->
         let vars, dt, _ = find_dt_ m f in
-        let subst, vars = Utils.fold_map U.rename_var Subst.empty vars in
+        let subst, vars = Utils.fold_map rename_decode_var Subst.empty vars in
         (* in the surrounding application symbols, replace first arg with [hd] *)
         let hd = U.app_const f (List.map U.var vars) in
         (* merge with rest of DT *)
@@ -1222,7 +1223,7 @@ let decode_model ~state m =
       |> IntMap.max_binding
       |> snd
     in
-    let vars, subst, dt, k = extract_subtree_ m tower in
+    let vars, subst, dt, k = extract_subtree_ ~state ~map m tower in
     let dt = tr_dt ~state ~map ~subst dt in
     Model.add_fun new_m (U.const id, vars, dt, k)
   in
