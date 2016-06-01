@@ -649,7 +649,7 @@ let elim_hof_term ~state subst pol t =
         | `Forall, Pol.Pos
         | `Exists, Pol.Neg ->
           (* approximation required: we can never evaluate `forall v. t` *)
-          let res = U.false_ in
+          let res = if pol=Pol.Neg then U.true_ else U.false_ in
           Utils.debugf ~section 3
             "@[<2>encode `@[%a@]`@ as `@[%a@]`,@ quantifying over type `@[%a@]`@]"
             (fun k->k P.print t P.print res P.print (Var.ty v));
