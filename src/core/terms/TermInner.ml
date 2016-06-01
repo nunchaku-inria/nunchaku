@@ -506,6 +506,9 @@ module type UTIL_REPR = sig
   val free_meta_vars : ?init:t_ MetaVar.t ID.Map.t -> t_ -> t_ MetaVar.t ID.Map.t
   (** The free type meta-variables in [t] *)
 
+  val fun_unfold : t_ -> t_ Var.t list * t_
+  (** [fun_unfold (fun x y z. t) = [x;y;z], t] *)
+
   val get_ty_arg : t_ -> int -> t_ option
   (** [get_ty_arg ty n] gets the [n]-th argument of [ty], if [ty] is a
       function type with at least [n] arguments. *)
@@ -655,6 +658,13 @@ module UtilRepr(T : REPR)
       |> Sequence.fold
           (fun acc v -> ID.Map.add (MetaVar.id v) v acc)
           init
+
+  let fun_unfold t =
+    let rec aux vars t = match T.repr t with
+      | Bind (`Fun, v, t') -> aux (v::vars) t'
+      | _ -> List.rev vars, t
+    in
+    aux [] t
 
   let ty_unfold t =
     let rec aux1 t = match T.repr t with
