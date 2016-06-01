@@ -484,10 +484,14 @@ module Util = struct
       | Axiom _
       | CardBound _
       | Goal _ -> m
-      | MutualTypes (_, tydefs) ->
+      | MutualTypes (d, tydefs) ->
+          let d = match d with
+            | `Data -> M.Symbol_data
+            | `Codata -> M.Symbol_codata
+          in
           List.fold_left
             (fun m tydef ->
-              let m = ID.Map.add tydef.ty_name M.Symbol_data m in
+              let m = ID.Map.add tydef.ty_name d m in
               ID.Map.fold (fun id _ m -> ID.Map.add id M.Symbol_fun m) tydef.ty_cstors m)
             m tydefs.tys_defs
     in

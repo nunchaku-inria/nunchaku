@@ -136,6 +136,7 @@ type symbol_kind =
   | Symbol_fun
   | Symbol_utype
   | Symbol_data
+  | Symbol_codata
 
 type (+'t, +'ty) fun_def =
   ('t * 'ty Var.t list * ('t,'ty) decision_tree * symbol_kind)
