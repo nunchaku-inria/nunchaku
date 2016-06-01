@@ -1057,7 +1057,7 @@ let all_fun_consts_ ~state m : (ty * handle) ID.Map.t =
           List.fold_left (fun m i -> ID.Map.add i (ty,h) m) m ids)
 
 let new_fun_name_ ~state =
-  let id = ID.make_f "anon_fun_%d" state.dst_gensym in
+  let id = ID.make_f "$anon_fun_%d" state.dst_gensym in
   state.dst_gensym <- state.dst_gensym + 1;
   id
 
