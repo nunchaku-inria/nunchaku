@@ -774,27 +774,51 @@ let elim_hof_statement ~state stmt : (_, _, inv2) Stmt.t list =
   let tr_term pol subst = elim_hof_term ~state subst pol in
   let tr_type _subst ty = encode_toplevel_ty ~state ty in
   Utils.debugf ~section 3 "@[<2>@{<cyan>> elim HOF in stmt@}@ `@[%a@]`@]" (fun k->k PStmt.print stmt);
+  (* find the new type of the given partially applied function [id : ty] *)
+  let encode_fun id =
+    Utils.debugf ~section 3
+      "introduce application symbols and handle types for %a…"
+      (fun k->k ID.print id);
+    let fun_encoding = introduce_apply_syms ~state id in
+    let ty' =
+      U.ty_arrow_l fun_encoding.fe_args
+        (ty_of_handle_ ~state fun_encoding.fe_ret_handle) in
+    Utils.debugf ~section 4 "@[<2>fun %a now has type `@[%a@]`@]"
+      (fun k->k ID.print id P.print ty');
+    ty'
+  in
   let stmt' = match Stmt.view stmt with
   | Stmt.Decl (id,ty,attrs) ->
-      if ID.Map.mem id state.arities
-      then (
-        Utils.debugf ~section 3
-          "introduce application symbols and handle types for %a…"
-          (fun k->k ID.print id);
-        let fun_encoding = introduce_apply_syms ~state id in
-        let ty' =
-          U.ty_arrow_l fun_encoding.fe_args
-            (ty_of_handle_ ~state fun_encoding.fe_ret_handle) in
-        Utils.debugf ~section 4 "@[<2>fun %a now has type `@[%a@]`@]"
-          (fun k->k ID.print id P.print ty');
-        let stmt = Stmt.decl ~info id ty' ~attrs in
-        [stmt]
-      )
-      else
-        (* keep as is, not a partially applied fun; still have to modify type *)
-        let ty = encode_toplevel_ty ~state ty in
-        [Stmt.decl ~info id ty ~attrs]
+      let ty' =
+        if ID.Map.mem id state.arities
+        then encode_fun id
+        else encode_toplevel_ty ~state ty
+            (* keep as is, not a partially applied fun; still have to modify type *)
+      in
+      [Stmt.decl ~info id ty' ~attrs]
   | Stmt.Axiom (Stmt.Axiom_rec l) -> elim_hof_rec ~state ~info l
+  | Stmt.Axiom (Stmt.Axiom_spec spec) ->
+      let subst, vars =
+        Utils.fold_map (bind_hof_var ~state) Subst.empty spec.Stmt.spec_vars
+      in
+      let spec =
+        { Stmt.
+          spec_axioms=List.map (tr_term Pol.Pos subst) spec.Stmt.spec_axioms;
+          spec_vars=vars;
+          spec_defined=
+            List.map
+              (fun d ->
+                 let id = Stmt.id_of_defined d in
+                 let ty = Stmt.ty_of_defined d in
+                 let ty' =
+                   if ID.Map.mem id state.arities
+                   then encode_fun id
+                   else encode_toplevel_ty ~state ty
+                 in
+                 Stmt.mk_defined id ty')
+              spec.Stmt.spec_defined;
+        } in
+      [Stmt.axiom_spec ~info spec]
   | Stmt.TyDef (kind,l) ->
       let l =
         let open Stmt in
