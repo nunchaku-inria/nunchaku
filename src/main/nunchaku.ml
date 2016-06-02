@@ -284,6 +284,7 @@ let make_model_pipeline () =
     Tr.Skolem.pipe ~print:(!print_skolem_ || !print_all_) ~check ~mode:`Sk_types @@@
     Tr.Monomorphization.pipe ~print:(!print_mono_ || !print_all_) ~check @@@
     Tr.Elim_infinite.pipe ~print:(!print_elim_infinite || !print_all_) ~check @@@
+    Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
     Tr.ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~check
       ~print:(!print_elim_multi_eqns || !print_all_) @@@
@@ -301,7 +302,6 @@ let make_model_pipeline () =
     fork
       (
         Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-        Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
         Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
         Tr.ElimData.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
         Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
@@ -318,7 +318,6 @@ let make_model_pipeline () =
         ))
       (
         Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-        Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
         Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
         Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@

@@ -190,9 +190,12 @@ let rec polarize_term_rec
       St.call ~state ~depth:0 id `Keep; (* keep it as is *)
       t
   | TI.App (f,l) ->
+      let l = List.map (polarize_term_rec ~state Pol.NoPol subst) l in
       begin match T.repr f, l with
       | TI.Const id, _ when ID.Tbl.mem state.St.polarized id ->
-          let l = List.map (polarize_term_rec ~state Pol.NoPol subst) l in
+          Utils.debugf ~section 5
+            "@[<2>decision to polarize `%a` already taken@]"
+            (fun k->k ID.print_full id);
           (* we already chose whether [id] was polarized or not *)
           begin match ID.Tbl.find state.St.polarized id with
           | None ->
@@ -204,7 +207,6 @@ let rec polarize_term_rec
           end
       | TI.Const id, _ ->
           (* shall we polarize this constant? *)
-          let l = List.map (polarize_term_rec ~state Pol.NoPol subst) l in
           let info = Env.find_exn ~env:(St.env ~state) id in
           begin match Env.def info with
           | Env.NoDef
@@ -239,12 +241,16 @@ let rec polarize_term_rec
               if U.ty_is_Prop ty then (
                 (* constant: degenerate case of (co)inductive pred, no need
                    for polarization, and necessarily WF. *)
+                Utils.debugf ~section 5 "@[<2>do not polarize pred `%a`@]"
+                  (fun k->k ID.print_full id);
                 ID.Tbl.add state.St.polarized id None;
                 St.call ~state ~depth:0 id `Keep;
                 assert (l = []);
                 f
               ) else (
                 (* polarize *)
+                Utils.debugf ~section 5 "@[<2>polarize pred `%a`@]"
+                  (fun k->k ID.print_full id);
                 polarize_def_of ~state id pol;
                 let p = find_polarized_exn ~state id in
                 app_polarized pol p l
@@ -360,7 +366,7 @@ class ['a, 'c] traverse_pol ?(size=64) ~polarize_rec () = object(self)
       (fun k->k ID.print id pp_act act);
     match act with
     | `Keep ->
-        ID.Tbl.add st.St.polarized id None;
+        ID.Tbl.replace st.St.polarized id None;
         let def =
           Stmt.map_rec_def_bind Var.Subst.empty def
             ~bind:Subst.rename_var

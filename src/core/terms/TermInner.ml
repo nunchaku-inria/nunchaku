@@ -1069,10 +1069,10 @@ module Util(T : S)
   and or_ l = builtin (`Or l)
   and imply a b = builtin (`Imply (a,b))
 
-  let rec imply_l l ret = match l with
+  let imply_l l ret = match l with
     | [] -> ret
     | [a] -> imply a ret
-    | a :: l' -> imply a (imply_l l' ret)
+    | _ -> imply (and_ l) ret
 
   let eq a b = builtin (`Eq (a,b))
   let neq a b = not_ (eq a b)

@@ -13,6 +13,7 @@ module U = T.U
 module P = T.P
 module PStmt = Statement.Print(P)(P)
 module Pat = Pattern.Make(T)
+module Red = Reduce.Make(T)
 
 type ('a,'b) inv1 = <ty:'a; ind_preds:'b; eqn:[`Nested]>
 type ('a,'b) inv2 = <ty:'a; ind_preds:'b; eqn:[`Single]>
@@ -147,7 +148,7 @@ let rec compile_equations ~local_state vars l : term =
           | Env.Copy_abstract _
           | Env.Copy_concrete _
           | Env.Cstor (_,_,_,_) ->
-              errorf_ "@[%a is not a type.@]" ID.print ty_id
+              errorf_ "@[`@[%a@]`@ is not a type.@]" ID.print ty_id
           | Env.Copy_ty _
           | Env.NoDef ->
               (* [v] is of a non-matchable type, but we can still bind
@@ -175,6 +176,7 @@ let rec compile_equations ~local_state vars l : term =
                      the name of [v'] is probably more relevant, except
                      if [v] is already renamed to something else . *)
                   let subst = match Subst.find_deref_rec ~subst:local_state.renaming v with
+                    | None when Var.equal v v' -> subst
                     | None ->
                         (* v -> v', use [v'] instead of [v] now, in every branch. *)
                         add_renaming ~local_state v v';
@@ -276,27 +278,27 @@ let uniq_eqns
 : type a b.
   env:(a,b) env ->
   id:ID.t ->
+  ty:T.t ->
   (term, term, (a,b) inv1) Statement.equations ->
   (term, term, (a,b) inv2) Statement.equations
-= fun ~env ~id (Stmt.Eqn_nested l) ->
+= fun ~env ~id ~ty (Stmt.Eqn_nested l) ->
     (* create fresh vars *)
-    let vars = match l with
-      | [] -> assert false
-      | (_, args, _, _) :: _ ->
-          List.mapi
-            (fun i a ->
-              let ty = U.ty_exn ~sigma:(Env.find_ty ~env) a in
-              Var.make ~ty ~name:(spf "v_%d" i))
-            args
+    let _, ty_args, _ = U.ty_unfold ty in
+    let vars =
+      List.mapi
+        (fun i ty -> Var.makef ~ty "v_%d" i)
+        ty_args
     in
     let cases =
       List.map
         (fun (_,args,rhs,side) ->
-          let pats = List.map (fun t -> P_term t) args in
-          pats, rhs, side, Subst.empty)
+          (* might need to add some variables in [args] and [rhs] *)
+          let eta_expand_args = CCList.drop (List.length args) vars |> List.map U.var in
+          let pats = List.map (fun t -> P_term t) (args @ eta_expand_args) in
+          pats, Red.app_whnf rhs eta_expand_args, side, Subst.empty)
         l
     and local_state = {
-      root=U.app (U.const id) (List.map U.var vars); (* defined term *)
+      root=U.app_const id (List.map U.var vars); (* defined term *)
       renaming=Subst.empty;
       env;
     } in
@@ -322,8 +324,10 @@ let uniq_eqn_st env st =
         (fun k->k PStmt.print_rec_defs l);
       let l' = List.map
         (fun def ->
-          let id = def.Stmt.rec_defined.Stmt.defined_head in
-          let rec_eqns = uniq_eqns ~id ~env def.Stmt.rec_eqns in
+          let d = Stmt.defined_of_rec def in
+          let id = Stmt.id_of_defined d in
+          let ty = Stmt.ty_of_defined d in
+          let rec_eqns = uniq_eqns ~id ~ty ~env def.Stmt.rec_eqns in
           {def with Stmt.rec_eqns; })
         l
       in

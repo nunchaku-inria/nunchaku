@@ -369,7 +369,8 @@ let tr_eqns ~state ~fun_encoding eqn =
       let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
       let rhs' = tr_term ~state subst rhs in
       (* how to connect [lhs] and [rhs]? *)
-      U.forall alpha (connect (ID.polarity id) lhs rhs')
+      let t = connect (ID.polarity id) lhs rhs' in
+      if vars=[] then t else U.forall alpha t
   | Stmt.Eqn_app (app_l, _vars, lhs, rhs) ->
       (* introduce encodings if needed *)
       List.iter (ensure_exists_encoding_ ~state) app_l;
