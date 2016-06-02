@@ -286,6 +286,7 @@ let exn_ksprintf ~f fmt =
     out fmt
 
 let not_implementedf fmt = exn_ksprintf fmt ~f:not_implemented
+let failwithf fmt = exn_ksprintf fmt ~f:failwith
 
 let ignore_catch f x =
   try ignore (f x)
