@@ -116,14 +116,15 @@ let is_lambda_ t = match T.repr t with
 let complete_vars l1 l2 =
   let rec aux vars args1 args2 subst l1 l2 = match l1, l2 with
     | [], [] -> List.rev vars, List.rev args1, List.rev args2, subst
-    | [], v::tail
+    | [], v::tail ->
+      let v' = Var.fresh_copy v in
+      let subst = Var.Subst.add ~subst v v' in
+      let args1 = U.var v'::args1 in
+      aux (v'::vars) args1 args2 subst [] tail
     | v::tail, [] ->
       let v' = Var.fresh_copy v in
       let subst = Var.Subst.add ~subst v v' in
-      (* [v'] is the missing argument to either [args1] or [args2] *)
-      let args1, args2 =
-        if l1=[] then U.var v'::args1, args2 else args1, U.var v'::args2
-      in
+      let args2 = U.var v' :: args2 in
       aux (v'::vars) args1 args2 subst tail []
     | v1::tail1, v2::tail2 ->
       let v' = Var.fresh_copy v1 in
