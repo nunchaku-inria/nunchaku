@@ -112,6 +112,12 @@ module Fut = struct
             with e -> set_fail y e
           end
         | Fail e -> set_fail y e);
+    on_res y
+      ~f:(function
+        | Stopped ->
+          (* stop [x]. must be in another thread to avoid deadlock *)
+          ignore (Thread.create stop x)
+        | _ -> ());
     y
 
   type 'a partial_result =
