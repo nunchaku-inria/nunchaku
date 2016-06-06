@@ -113,7 +113,7 @@ let is_lambda_ t = match T.repr t with
    - the suffixes to add to [l1] (resp. l2) so that they have
      the same length as the list of fresh variables
   precond: variables in the common prefix of l1 and l2 have compatible types *)
-let complete_vars l1 l2 =
+let complete_vars ~subst l1 l2 =
   let rec aux vars args1 args2 subst l1 l2 = match l1, l2 with
     | [], [] -> List.rev vars, List.rev args1, List.rev args2, subst
     | [], v::tail ->
@@ -132,7 +132,7 @@ let complete_vars l1 l2 =
       let subst = Var.Subst.add ~subst v2 v' in
       aux (v'::vars) args1 args2 subst tail1 tail2
   in
-  aux [] [] [] Var.Subst.empty l1 l2
+  aux [] [] [] subst l1 l2
 
 (* traverse [t] recursively, replacing lambda terms by new named functions *)
 let rec tr_term ~state local_state subst t = match T.repr t with
@@ -198,7 +198,7 @@ let rec tr_term ~state local_state subst t = match T.repr t with
       (* extensionality: [(λx. t) = f] becomes [∀x. t = t' x] *)
       let vars1, body1 = U.fun_unfold a in
       let vars2, body2 = U.fun_unfold b in
-      let new_vars, args1, args2, subst = complete_vars vars1 vars2 in
+      let new_vars, args1, args2, subst = complete_vars ~subst vars1 vars2 in
       let body1 = tr_term ~state local_state subst (U.app body1 args1) in
       let body2 = tr_term ~state local_state subst (U.app body2 args2) in
       (* quantify on common variables *)
