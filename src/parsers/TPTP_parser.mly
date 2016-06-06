@@ -371,10 +371,10 @@ binary_connective:
   | AND { fun loc x y -> A.and_ ~loc [x;y] }
   | VLINE { fun loc x y -> A.or_ ~loc [x;y] }
 fol_quantifier:
-  | FORALL { A.forall_list }
-  | EXISTS { A.exists_list }
+  | FORALL { fun ~loc vars t -> A.forall_list ~loc vars t }
+  | EXISTS { fun ~loc vars t -> A.exists_list ~loc vars t }
 unary_connective:
-  | NOT { A.not_ }
+  | NOT { fun ~loc t -> A.not_ ~loc t }
 
 atomic_formula:
   | TRUE { A.true_ }
