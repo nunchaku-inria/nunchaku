@@ -52,6 +52,8 @@ type fun_encoding = {
     (* symbol corresponding to [fun_abstract_ty] *)
   fun_concretization: (int * id * ty) list;
     (* for each parameter, concretization function, as an association list *)
+  fun_ty: ty;
+    (* original type *)
 }
 
 (* symbols used to eliminate higher-order funs *)
@@ -249,7 +251,7 @@ let rec tr_term_rec_ ~guards ~state subst t =
       end
   | TI.Builtin (`True | `False | `DataSelect _ | `DataTest _) ->
         t (* partially applied, or constant *)
-  | TI.Builtin ((`Undefined _ | `Unparsable _) as b) ->
+  | TI.Builtin ((`Undefined_self _ | `Undefined_atom _ | `Unparsable _) as b) ->
       U.builtin (TI.Builtin.map b ~f:(tr_term_rec_ ~guards ~state subst))
   | TI.Builtin (`Guard (t, g)) ->
       let t = tr_term_rec_ ~guards ~state subst t in
@@ -318,6 +320,7 @@ let mk_fun_encoding_for_ ~state id =
     fun_abstract_ty_id=abs_type_id;
     fun_abstract_ty=abs_type;
     fun_concretization=projectors;
+    fun_ty=ty;
   } in
   add_encoding ~state fun_encoding;
   (* declare abstract type + projectors *)
@@ -600,7 +603,7 @@ let pass2_ projs (doms:finite_domains) =
 *)
 let pass3_ ~state doms m =
   (* decode a function. *)
-  let decode_fun_ f_id dom vars body =
+  let decode_fun_ dom vars body =
     let arity = List.length dom.dom_fun.fun_concretization in
     if List.length vars <> arity
       then fail_decode_
@@ -616,7 +619,9 @@ let pass3_ ~state doms m =
       (* default case: undefined
         TODO: if initial domain was finite, this might be unecessary,
           because CVC4 could model the whole domain? *)
-    let default = U.undefined_ (U.app (U.const f_id) (List.map U.var vars)) in
+    let default =
+      U.app (U.undefined_atom ~ty:dom.dom_fun.fun_ty) (List.map U.var vars)
+    in
     let new_body =
       List.map
         (fun tup ->
@@ -638,7 +643,7 @@ let pass3_ ~state doms m =
           None (* drop approximation functions *)
       | TI.Const f_id when ID.Tbl.mem state.encoded_fun f_id ->
           (* remove junk from the definition of [t] *)
-          let body' = decode_fun_ f_id (ID.Tbl.find doms f_id) vars body in
+          let body' = decode_fun_ (ID.Tbl.find doms f_id) vars body in
           Utils.debugf ~section 3
             "@[<hv2>decoding of recursive fun @[%a %a@] :=@ `@[%a@]`@ is `@[%a@]`@]"
             (fun k->k ID.print f_id (CCFormat.list Var.print_full) vars

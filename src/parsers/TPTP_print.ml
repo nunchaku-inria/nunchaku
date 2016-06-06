@@ -51,7 +51,8 @@ module Make(T : TI.S) = struct
     | `False -> CCFormat.string out "$false"
     | `Eq (a,b) ->
         fpf out "@[<hv>%a =@ %a@]" print_inner a print_inner b
-    | `Undefined (_id,t) -> print_inner out t
+    | `Undefined_atom _ -> error_ "cannot print undefined atom"
+    | `Undefined_self (_id,t) -> print_inner out t
     | `Not f -> fpf out "~ %a" print_inner f
     | `And l ->
         fpf out "@[<hv>%a@]" (pp_list ~sep:" & " print_inner) l

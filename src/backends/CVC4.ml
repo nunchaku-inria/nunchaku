@@ -269,6 +269,7 @@ let print_problem out (decode, pb) =
     | FO.DataSelect (c,n,t) ->
         fpf out "(@[%a@ %a@])" print_select (c,n) print_term t
     | FO.Undefined (_,t) -> print_term out t (* tailcall, probably *)
+    | FO.Undefined_atom _ -> errorf_ "cannot print `undefined_atom` in SMTlib"
     | FO.Unparsable _ -> errorf_ "cannot print `unparsable` in SMTlib"
     | FO.Fun (v,t) ->
         fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"

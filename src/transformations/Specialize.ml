@@ -1228,8 +1228,10 @@ let dt_of_spec_dt state vars (dt_vars,dt,dsf) =
     (fun k->k CCFormat.(list (Model.DT.print_case P.print')) res);
   res
 
-let merge_dts f_id vars l =
-  let else_ = U.undefined_ (U.app (U.const f_id) (List.map U.var vars)) in
+let merge_dts ty vars l =
+  let else_ =
+    U.app (U.undefined_atom ~ty) (List.map U.var vars)
+  in
   let cases = CCList.flatten l in
   Model.DT.test cases ~else_
 
@@ -1277,7 +1279,7 @@ let decode_model state m =
            List.mapi (fun i ty -> Var.make ~ty ~name:(Printf.sprintf "v_%d" i)) ty_args
          in
          let spec_dt_l = List.map (dt_of_spec_dt state new_vars) models in
-         let dt = merge_dts f_id new_vars spec_dt_l in
+         let dt = merge_dts ty_f new_vars spec_dt_l in
          (U.const f_id, new_vars, dt, kind) :: acc)
       spec_funs
       []

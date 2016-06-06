@@ -263,7 +263,7 @@ let rebuild_types state m : retyping =
                    (* belongs to domain! *)
                    Some id
                  | TI.Builtin `False
-                 | TI.Builtin (`Undefined _) -> None
+                 | TI.Builtin (`Undefined_atom _) -> None
                  | _ -> errorf_ "unexpected value for %a on %a" ID.print pred_id ID.print id
             )
             uni_domain

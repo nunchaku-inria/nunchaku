@@ -105,7 +105,7 @@ let pp_quad out (pats,rhs,side,subst) =
 (* transform flat equations into a match tree. *)
 let rec compile_equations ~local_state vars l : term =
   match vars, l with
-  | _, [] -> U.undefined_ local_state.root (* undefined case *)
+  | _, [] -> U.undefined_self local_state.root (* undefined case *)
   | [], [([], rhs, [], subst)] ->
       (* simple case: no side conditions, one RHS *)
       U.eval_renaming ~subst rhs
@@ -201,7 +201,7 @@ and yield_list ~local_state l = match l with
       U.eval_renaming ~subst t
   | [t, ((_::_) as sides), subst] ->
       (* final case, but might fail *)
-      let else_ = U.undefined_ local_state.root in
+      let else_ = U.undefined_self local_state.root in
       let sides = List.map (U.eval_renaming ~subst) sides in
       U.ite (U.and_ sides) (U.eval_renaming ~subst t) else_
   | (t,[],subst)::_::_ ->
