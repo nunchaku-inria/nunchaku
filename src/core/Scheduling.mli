@@ -79,15 +79,18 @@ module Task : sig
 
   val make :
     ?prio:int ->
-    (unit -> 'a * shortcut) ->
+    ?slice:float ->
+    (deadline:float -> unit -> 'a * shortcut) ->
     'a t
   (** [make f] creates a new task that will execute [f] in a separate thread.
       @param prio the priority (default 50); the lower, the more important
+      @param slice the max fraction of time allotted to this task, in [[0., 1.]]
       @param post post-processing of the value *)
 
   val of_fut :
     ?prio:int ->
-    (unit -> ('a * shortcut) Fut.t) ->
+    ?slice:float ->
+    (deadline:float -> unit -> ('a * shortcut) Fut.t) ->
     'a t
   (** [of_fut f] is similar to {!make}, but [f] produces a future, not a direct
       result *)
@@ -103,6 +106,7 @@ type 'a run_result =
 
 val run :
   j:int ->
+  deadline:float ->
   'res Task.t list ->
   'res run_result
 (** [run ~j tasks] runs the given list of tasks in at most [j] simultaneous

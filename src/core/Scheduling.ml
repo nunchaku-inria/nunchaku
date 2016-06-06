@@ -241,7 +241,8 @@ type shortcut =
 module Task = struct
   type ('a, 'res) inner = {
     prio: int; (* priority. The lower, the more urgent *)
-    f: (unit -> ('a * shortcut) Fut.t);
+    slice: float; (* fraction of time allotted to the task *)
+    f: (deadline:float -> unit -> ('a * shortcut) Fut.t);
     post: ('a -> 'res);
   }
   (** Task consisting in running [f arg], obtaining a result. After [f]
@@ -251,10 +252,12 @@ module Task = struct
   type 'res t =
     | Task : ('a, 'res) inner -> 'res t
 
-  let of_fut ?(prio=50) f =
-    Task { prio; f; post=CCFun.id; }
+  let of_fut ?(prio=50) ?(slice=1.) f =
+    Task { prio; f; slice; post=CCFun.id; }
 
-  let make ?prio f = of_fut ?prio (fun () -> Fut.make f)
+  let make ?prio ?slice f =
+    of_fut ?prio ?slice
+      (fun ~deadline () -> Fut.make (fun () -> f ~deadline ()))
 
   let compare_prio (Task t1) (Task t2) = Pervasives.compare t1.prio t2.prio
 
@@ -277,6 +280,8 @@ type 'a run_result =
 
 type 'res pool = {
   j: int;
+  deadline: float;
+  total_alloted_time: float; (* total time, from creation of pool to deadline *)
   mutable task_id: int;
   mutable todo: 'res Task.t list;
   mutable active : 'res running_task list;
@@ -304,7 +309,16 @@ let start_task p t =
   let id = p.task_id in
   p.task_id <- id + 1;
   let (Task.Task t_inner) = t in
-  let fut = t_inner.Task.f () in
+  (* adjust deadline according to task.slice: take the minimum of
+     the global deadline, and *)
+  let deadline =
+    let now = Unix.gettimeofday() in
+    let deadline' = now +. (p.total_alloted_time *. t_inner.Task.slice) in
+    min p.deadline deadline'
+  in
+  Utils.debugf ~section 5 "@[<2>actual deadline is %.2f (slice: %.2f)@]"
+    (fun k->k deadline t_inner.Task.slice);
+  let fut = t_inner.Task.f ~deadline () in
   let r_task = R_task (id, t_inner, fut) in
   p.active <- r_task :: p.active;
   Mutex.unlock p.lock;
@@ -382,7 +396,7 @@ let rec run_pool pool =
         (* check again *)
         run_pool pool
 
-let run ~j tasks =
+let run ~j ~deadline tasks =
   if j < 1 then invalid_arg "Scheduling.run";
   Utils.debugf ~lock:true ~section 1
     "@[<2>%d tasks to run (j=%d)...@]" (fun k->k (List.length tasks) j);
@@ -391,6 +405,8 @@ let run ~j tasks =
     active=[];
     pool_state = Res_list [];
     task_id=0;
+    deadline;
+    total_alloted_time=(deadline -. Unix.gettimeofday());
     j;
     lock=Mutex.create();
     cond=Condition.create();
@@ -399,27 +415,28 @@ let run ~j tasks =
 
 (*$=
   (Res_one 5) ( \
-    let mk i = Task.make (fun () -> if i=5 then i, Shortcut else i, No_shortcut) in \
-    run ~j:3 CCList.(1 -- 10 |> map mk))
+    let mk i = Task.make \
+      (fun ~deadline:_ () -> if i=5 then i, Shortcut else i, No_shortcut) in \
+    run ~j:3 ~deadline:5. CCList.(1 -- 10 |> map mk))
 *)
 
 (*$=
   (Res_one 5) ( \
     let mk i = Task.make \
-      (fun () -> Thread.delay (float i *. 0.1); \
+      (fun ~deadline:_ () -> Thread.delay (float i *. 0.1); \
                  if i=5 then i, Shortcut else i, No_shortcut) in \
-    run ~j:3 CCList.(1 -- 10 |> map mk))
+    run ~j:3 ~deadline:5. CCList.(1 -- 10 |> map mk))
 *)
 
 (*$=
   (Res_fail Exit) ( \
-    let mk i = Task.make (fun () -> if i=5 then raise Exit else i, No_shortcut) in \
-    run ~j:3 CCList.(1 -- 10 |> map mk))
+    let mk i = Task.make (fun ~deadline:_ () -> if i=5 then raise Exit else i, No_shortcut) in \
+    run ~j:3 ~deadline:5. CCList.(1 -- 10 |> map mk))
 *)
 
 (*$=
   (Res_list CCList.(1--10)) ( \
-    let mk i = Task.make (fun () -> i, No_shortcut) in \
-    let res = run ~j:3 CCList.(1 -- 10 |> map mk) in \
+    let mk i = Task.make (fun ~deadline:_ () -> i, No_shortcut) in \
+    let res = run ~j:3 ~deadline:5. CCList.(1 -- 10 |> map mk) in \
     match res with Res_list l -> Res_list (List.sort Pervasives.compare l) | x->x)
 *)

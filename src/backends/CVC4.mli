@@ -44,14 +44,14 @@ val options_l : string list
 (** Task for running CVC4 on a problem, with a set of options
   @return a tasks
   @param options: flags to pass the solver (default "").
-  @param deadline absolute timestamp at which the process must have finished
+  @param slice total amount of time allotted to CVC4
   @param prio priority of the task
   @raise CVC4_error if the solver failed with an error
 *)
 val call :
   ?options:string ->
-  ?deadline:float ->
   ?prio:int ->
+  ?slice:float ->
   print:bool ->
   print_smt:bool ->
   print_model:bool ->
@@ -60,7 +60,7 @@ val call :
 
 val pipes :
   ?options:string list ->
-  ?deadline:float ->
+  ?slice:float ->
   print:bool ->
   print_smt:bool ->
   print_model:bool ->

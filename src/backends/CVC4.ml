@@ -773,14 +773,23 @@ let options_l =
 
 (* solve problem using CVC4 before [deadline] *)
 let call
-    ?(options="") ?deadline ?prio ~print ~print_smt ~print_model problem
+    ?(options="") ?prio ?slice ~print ~print_smt ~print_model problem
   =
   if print
   then Format.printf "@[<v2>FO problem:@ %a@]@." FO.print_problem problem;
-  Scheduling.Task.of_fut ?prio
-    (fun () -> solve ~options ?deadline ~print:print_smt ~print_model problem)
+  Scheduling.Task.of_fut ?prio ?slice
+    (fun ~deadline () -> solve ~options ~deadline ~print:print_smt ~print_model problem)
 
-let pipes ?(options=[""]) ?deadline ~print ~print_smt ~print_model () =
+let pipes ?(options=[""]) ?slice ~print ~print_smt ~print_model () =
+  (* each process' slice is only 1/n of the global CVC4 slice *)
+  let slice =
+    CCOpt.map
+      (fun s ->
+         let n = List.length options in
+         assert (n > 0);
+         s /. float n)
+      slice
+  in
   let encode pb =
     List.mapi
       (fun i options ->
@@ -788,7 +797,7 @@ let pipes ?(options=[""]) ?deadline ~print ~print_smt ~print_model () =
          let print = print && i=0 in
          let print_smt = print_smt && i=0 in
          let prio = 30 + 10 * i in
-         call ~options ?deadline ~prio ~print ~print_smt ~print_model pb)
+         call ?slice ~options ~prio ~print ~print_smt ~print_model pb)
     options, ()
   in
   Transform.make ~name ~encode ~decode:(fun _ x -> x) ()
