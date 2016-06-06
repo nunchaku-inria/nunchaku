@@ -37,8 +37,14 @@ module Fut : sig
     | Done of 'a
     | Fail of exn
 
+  type tasks_bag
+  (** internal type for a list of tasks to run *)
+
+  type 'a on_res_callback = tasks_bag -> 'a final_state -> unit
+  (** callback executed once a future is done *)
+
   val make :
-    ?on_res:('a final_state -> unit) list ->
+    ?on_res:'a on_res_callback list ->
     (unit -> 'a) ->
     'a t
 
@@ -46,7 +52,7 @@ module Fut : sig
 
   val is_done : _ t -> bool
 
-  val on_res : 'a t -> f:('a final_state -> unit) -> unit
+  val on_res : 'a t -> f:'a on_res_callback -> unit
 
   val get : 'a t -> 'a final_state
 end
@@ -59,7 +65,7 @@ end
 type process_status = int
 
 val popen :
-  ?on_res:(('a * process_status) or_error Fut.final_state -> unit) list ->
+  ?on_res:('a * process_status) or_error Fut.on_res_callback list ->
   string ->
   f:(out_channel * in_channel -> 'a) ->
   ('a * process_status) or_error Fut.t

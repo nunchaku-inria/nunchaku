@@ -38,10 +38,15 @@ module Fut = struct
     | Done of 'a
     | Fail of exn
 
+  (* bag of tasks to execute one after the other *)
+  type tasks_bag = (unit -> unit) Queue.t
+
+  type 'a on_res_callback = tasks_bag -> 'a final_state -> unit
+
   type 'a t = {
     lock: Mutex.t;
     cond: Condition.t;
-    mutable on_res: ('a final_state -> unit) list;
+    mutable on_res: (tasks_bag -> 'a final_state -> unit) list;
     mutable state : 'a final_state option; (* none=running *)
   }
 
@@ -49,11 +54,20 @@ module Fut = struct
     Mutex.lock t.lock;
     CCFun.finally ~h:(fun () -> Mutex.unlock t.lock) ~f
 
-  let apply_catch_ f x =
-    try f x
-    with _ -> ()
+  (* fixpoint: do all the tasks in [q], until [q] is empty *)
+  let run_queue_ q =
+    while not (Queue.is_empty q) do
+      try Queue.pop q ()
+      with _ -> ()
+    done
+
+  let apply_in0_ q f = Queue.push f q
+  let apply_in1_ q f x = Queue.push (fun () -> f x) q
+  let apply_in2_ q f x y = Queue.push (fun () -> f x y) q
 
   let set_res ~idempotent t res =
+    (* tasks to do without a lock *)
+    let q = Queue.create() in
     with_ t
       ~f:(fun () -> match t.state with
         | Some Stopped -> ()
@@ -62,8 +76,12 @@ module Fut = struct
         | None ->
           t.state <- Some res;
           Condition.broadcast t.cond;
-          (* apply each callback, and catch their exceptions *)
-          List.iter (fun f -> apply_catch_ f res) t.on_res)
+          (* apply each callback, but in [q], outside of the lock *)
+          List.iter (fun f -> apply_in2_ q f q res) t.on_res;
+      );
+    (* now execute the tasks *)
+    run_queue_ q;
+    ()
 
   let set_done t x = set_res ~idempotent:false t (Done x)
 
@@ -84,10 +102,13 @@ module Fut = struct
   let is_done t = with_ t ~f:(fun () -> t.state <> None)
 
   let on_res t ~f =
+    let q = Queue.create() in
     with_ t
       ~f:(fun () -> match t.state with
         | None -> t.on_res <- f :: t.on_res
-        | Some res -> f res)
+        | Some res -> apply_in2_ q f q res);
+    run_queue_ q;
+    ()
 
   let return x = {
     on_res=[];
@@ -104,19 +125,17 @@ module Fut = struct
       state=None;
     } in
     on_res x
-      ~f:(function
-        | Stopped -> stop y
+      ~f:(fun q res -> match res with
+        | Stopped -> apply_in1_ q stop y
         | Done x ->
-          begin
-            try set_done y (f x)
-            with e -> set_fail y e
-          end
-        | Fail e -> set_fail y e);
+          apply_in0_ q
+            (fun () ->
+              try set_done y (f x)
+              with e -> set_fail y e)
+        | Fail e -> apply_in2_ q set_fail y e);
     on_res y
-      ~f:(function
-        | Stopped ->
-          (* stop [x]. must be in another thread to avoid deadlock *)
-          ignore (Thread.create stop x)
+      ~f:(fun q res -> match res with
+        | Stopped -> apply_in1_ q stop x (* propagate "stop" *)
         | _ -> ());
     y
 
@@ -205,15 +224,17 @@ let popen ?(on_res=[]) cmd ~f =
   Utils.debugf ~lock:true ~section 3
     "@[<2>pid %d -->@ sub-process `@[%s@]`@]" (fun k -> k pid cmd);
   (* cleanup process *)
-  let cleanup _ =
-    Utils.debugf ~lock:true ~section 3 "cleanup subprocess %d" (fun k->k pid);
-    (try Unix.kill pid 15 with _ -> ());
-    close_out_noerr stdin;
-    close_in_noerr stdout;
-    (try Unix.close stderr with _ -> ());
-    (try Unix.kill pid 9 with _ -> ()); (* just to be sure *)
-    Utils.debugf ~lock:true ~section 3 "subprocess %d cleaned" (fun k->k pid);
-    ()
+  let cleanup q _ =
+    Fut.apply_in0_ q
+      (fun () ->
+         Utils.debugf ~lock:true ~section 3 "cleanup subprocess %d" (fun k->k pid);
+         (try Unix.kill pid 15 with _ -> ());
+         close_out_noerr stdin;
+         close_in_noerr stdout;
+         (try Unix.close stderr with _ -> ());
+         (try Unix.kill pid 9 with _ -> ()); (* just to be sure *)
+         Utils.debugf ~lock:true ~section 3 "subprocess %d cleaned" (fun k->k pid);
+      )
   in
   Fut.make ~on_res:(cleanup :: on_res)
     (fun () ->
@@ -331,7 +352,7 @@ let start_task p t =
   (* ensure that after completion, the task is removed and the pool's
      state is updated *)
   Fut.on_res fut
-    ~f:(fun res ->
+    ~f:(fun _ res ->
       with_ p
         ~f:(fun () ->
           p.active <- remove_rtask_ id p.active;
