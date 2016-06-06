@@ -124,10 +124,12 @@ type prec =
   | P_not
   | P_bind
   | P_and
+  | P_eq
   | P_or
 
 let right_assoc_ = function
   | P_and
+  | P_eq
   | P_or -> false
   | P_not
   | P_bind -> true
@@ -153,9 +155,9 @@ let print_form_tptp out f =
     | Equiv (a,b) ->
       wrap P_or p out "@[@[%a@] <=>@ @[%a@]@]" (aux P_or) a (aux P_or) b
     | Eq (a,b) ->
-      fpf out "@[@[%a@] =@ @[%a@]@]" print_term_tptp a print_term_tptp b
+      wrap P_eq p out "@[@[%a@] =@ @[%a@]@]" print_term_tptp a print_term_tptp b
     | Neq (a,b) ->
-      fpf out "@[@[%a@] !=@ @[%a@]@]" print_term_tptp a print_term_tptp b
+      wrap P_eq p out "@[@[%a@] !=@ @[%a@]@]" print_term_tptp a print_term_tptp b
     | Forall (v,f) -> wrap P_bind p out "@[![%a]:@ @[%a@]@]" pp_var v (aux P_bind) f
     | Exists (v,f) -> wrap P_bind p out "@[?[%a]:@ @[%a@]@]" pp_var v (aux P_bind) f
   in
