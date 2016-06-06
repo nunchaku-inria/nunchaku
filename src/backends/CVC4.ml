@@ -620,7 +620,9 @@ let read_res_ ~print_model ~decode s =
       in
       Res.Error (Error msg)
   | `Error e -> Res.Error (Error e)
-  | `End -> Res.Error (Error "no answer from the solver")
+  | `End ->
+      Utils.debug ~section 5 "no answer from CVC4, assume it timeouted";
+      Res.Timeout
 
 let res t = match t.res with
   | Some r -> r
