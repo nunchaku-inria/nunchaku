@@ -1031,7 +1031,7 @@ let join_dt_ ~subst ~remove_var:v t1 t2 =
 let tr_dt ~state ~map ~subst ?remove_var dt =
   Utils.debugf ~section 5 "@[<2>decode `@[%a@]`@ in @[%a@]@]"
     (fun k->k
-        (Model.DT.print P.print) dt (Subst.print P.print) subst);
+        (Model.DT.print P.print') dt (Subst.print P.print) subst);
   let tr_ = decode_term ~state ~map subst in
   let dt : _ Model.DT.t =
     Model.DT.map dt
@@ -1115,7 +1115,7 @@ let map_ho_consts_to_funs ~state m : const_map * (unit -> _ Model.fun_def list) 
       Utils.debugf ~section 5
         "@[... decode `%a`@ into `@[@[%a %a@]@ := @[%a@]@]`@]"
         (fun k->k ID.print c ID.print c'
-            (CCFormat.list Var.print_full) vars (Model.DT.print P.print) dt);
+            (CCFormat.list Var.print_full) vars (Model.DT.print P.print') dt);
       t'
   (* compute a decision tree for this constant *)
   and compute_dt app c c' =
@@ -1279,7 +1279,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after elim_HOF@}:@ %a@]@."
-         (Problem.Res.print P.print P.print)]
+         (Problem.Res.print P.print' P.print)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model ~state) in

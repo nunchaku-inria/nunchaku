@@ -18,6 +18,17 @@ let print_undefined_id : bool ref = ref false
 (** global option affecting printing: if true, undefined values will
     be displayed as "undefined_42" rather than "?__" *)
 
+(* precedence. Order matters, as it defines priorities *)
+type prec =
+  | P_guard
+  | P_app
+  | P_eq
+  | P_not
+  | P_bind
+  | P_and
+  | P_or
+  | P_top (* toplevel precedence *)
+
 module Binder = struct
   type t =
     [ `Forall
@@ -85,9 +96,17 @@ module Builtin = struct
     | `Guard of 'a * 'a guard (** term + some boolean conditions *)
     ]
 
-  let is_infix : _ t -> bool = function
-    | `Eq _ | `Or _ | `And _ | `Imply _ | `Guard _ -> true
-    | _ -> false
+  let prec : _ t -> prec = function
+    | `Eq _ -> P_eq
+    | `Not _ -> P_not
+    | `Imply _
+    | `Or _ -> P_or
+    | `And _ -> P_and
+    | `Guard _ -> P_guard
+    | `DataSelect _
+    | `DataTest _
+    | `Undefined _ -> P_app
+    | _ -> P_top
 
   let rec print_infix_list pterm s out l = match l with
     | [] -> assert false
@@ -344,6 +363,7 @@ end
 module type PRINT = sig
   type t
   val print : t printer
+  val print' : prec -> t printer
   val print_in_app : t printer
   val print_in_binder : t printer
   val to_string : t -> string
@@ -375,12 +395,26 @@ module Print(T : REPR)
         v :: vars, body
     | _ -> [], t
 
-  let is_atomic_ t = match T.repr t with
-    | Builtin b -> not (Builtin.is_infix b)
-    | TyBuiltin _ | Const _ | TyMeta _ | Var _ | Match _ -> true
-    | App (_,_) | Let _ | Bind _ | TyArrow _ -> false
+  let right_assoc_ = function
+    | P_eq
+    | P_guard
+    | P_app
+    | P_and
+    | P_or -> false
+    | P_top
+    | P_not
+    | P_bind -> true
 
-  let rec print out t = match T.repr t with
+  (* put "()" around [fmt] if needed *)
+  let wrap p1 p2 out fmt =
+    if p1>p2 || (p1 = p2 && (not (right_assoc_ p1)))
+    then (
+      CCFormat.string out "(";
+      Format.kfprintf (fun _ -> CCFormat.string out ")") out fmt
+    )
+    else Format.kfprintf (fun _ -> ()) out fmt
+
+  let rec print' p out t = match T.repr t with
     | TyBuiltin b -> CCFormat.string out (TyBuiltin.to_string b)
     | Const id -> ID.print out id
     | TyMeta v -> MetaVar.print out v
@@ -388,20 +422,24 @@ module Print(T : REPR)
     | Builtin (`Ite (a,b,c)) when is_if_ c ->
         (* special case to avoid deep nesting of ifs *)
         let pp_middle out (a,b) =
-          fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]" print a print b
+          wrap P_top p out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]"
+            print  a print b
         in
         let middle, last = unroll_if_ c in
         assert (not (is_if_ last));
-        fpf out "@[<hv>@[<2>if@ @[%a@]@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
+        wrap P_top p out
+          "@[<hv>@[<2>if@ @[%a@]@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
           print a print b
           (pp_list_ ~sep:"" pp_middle) middle
           print last
-    | Builtin b -> Builtin.pp print_in_app out b
+    | Builtin b ->
+        let p' = Builtin.prec b in
+        wrap p' p out "%a" (Builtin.pp (print' p')) b
     | App (f,l) ->
-        fpf out "@[<2>%a@ %a@]" print_in_app f
+        wrap P_app p out "@[<2>%a@ %a@]" print_in_app f
           (pp_list_ ~sep:" " print_in_app) l
     | Let (v,t,u) ->
-        fpf out "@[<2>let %a :=@ %a in@ %a@]" Var.print_full v print t print u
+        wrap P_top p out "@[<2>let %a :=@ %a in@ %a@]" Var.print_full v print t print u
     | Match (t,l) ->
         let pp_case out (id,(vars,t)) =
           fpf out "@[<hv2>| @[<hv2>%a %a@] ->@ %a@]"
@@ -412,26 +450,17 @@ module Print(T : REPR)
     | Bind (b, _, _) ->
         let s = Binder.to_string b in
         let vars, body = unroll_binder b t in
-        fpf out "@[<2>%s @[<hv>%a@].@ %a@]" s
-          (pp_list_ ~sep:" " pp_typed_var) vars print body
+        wrap P_bind p out "@[<2>%s @[<hv>%a@].@ %a@]" s
+          (pp_list_ ~sep:" " pp_typed_var) vars print_in_binder body
     | TyArrow (a,b) ->
-        fpf out "@[<2>%a ->@ %a@]" print_in_binder a print b
-  and print_in_app out t =
-    if is_atomic_ t
-    then print out t
-    else fpf out "(@[%a@])" print t
-  and print_in_binder out t = match T.repr t with
-    | TyBuiltin _ | Const _ | App _ | Builtin _ | Match _ ->
-        print out t
-    | Var _ -> print out t
-    | TyMeta _ -> print out t
-    | Bind _ -> fpf out "(@[%a@])" print t
-    | Let _ | TyArrow (_,_) -> fpf out "(@[%a@])" print t
+        wrap P_or p out "@[<2>%a ->@ %a@]" print_in_binder a print_in_or b
   and pp_typed_var out v =
     let ty = Var.ty v in
-    if is_atomic_ ty
-    then fpf out "@[%a:%a@]" Var.print_full v print ty
-    else fpf out "(@[%a:@,@[%a@]@])" Var.print_full v print ty
+    fpf out "(@[%a:@,@[%a@]@])" Var.print_full v print ty
+  and print_in_app out t = print' P_app out t
+  and print_in_binder out t = print' P_bind out t
+  and print_in_or out t = print' P_or out t
+  and print out t = print' P_top out t
 
   let to_string = CCFormat.to_string print
 

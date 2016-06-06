@@ -388,10 +388,10 @@ let main_model ~output statements =
       Format.printf "@[<hv2>%a@]@." CCSexpM.print s
   | Res.Sat m, O_nunchaku when m.Model.potentially_spurious ->
       Format.printf "@[<v>@[<v2>SAT: (potentially spurious) {@,@[<v>%a@]@]@,}@]@."
-        (Model.print P.print P.print) m;
+        (Model.print P.print' P.print) m;
   | Res.Sat m, O_nunchaku ->
       Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]@."
-        (Model.print P.print P.print) m;
+        (Model.print P.print' P.print) m;
   | Res.Sat m, O_tptp ->
       (* XXX: if potentially spurious, what should we print? *)
       let module PM = Nunchaku_parsers.TPTP_print.Make(T) in

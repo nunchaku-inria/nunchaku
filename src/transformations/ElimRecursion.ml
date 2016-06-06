@@ -642,7 +642,7 @@ let pass3_ ~state doms m =
           Utils.debugf ~section 3
             "@[<hv2>decoding of recursive fun @[%a %a@] :=@ `@[%a@]`@ is `@[%a@]`@]"
             (fun k->k ID.print f_id (CCFormat.list Var.print_full) vars
-            (Model.DT.print P.print) body (Model.DT.print P.print) body');
+            (Model.DT.print P.print') body (Model.DT.print P.print') body');
           Some (t, vars, body',k)
       | _ ->
           (* keep *)
@@ -654,14 +654,14 @@ let pass3_ ~state doms m =
 
 let decode_model ~state m =
   Utils.debugf ~section 3 "@[<2>decode model:@ @[%a@]@]"
-    (fun k->k (Model.print P.print P.print) m);
+    (fun k->k (Model.print P.print' P.print) m);
   let projs, domains = pass1_ ~state m in
   pass2_ projs domains;
   Utils.debugf ~section 2 "@[<2>domains:@ @[%a@]@]"
     (fun k->k (CCFormat.seq ~start:"" ~stop:"" pp_domain) (ID.Tbl.values domains));
   let m = pass3_ ~state domains m in
   Utils.debugf ~section 3 "@[<2>model after decoding:@ @[%a@]@]"
-    (fun k->k (Model.print P.print P.print) m);
+    (fun k->k (Model.print P.print' P.print) m);
   m
 
 (** {6 Pipe} *)
@@ -690,7 +690,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after elim_rec@}:@ %a@]@."
-         (Problem.Res.print P.print P.print)]
+         (Problem.Res.print P.print' P.print)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model ~state) in

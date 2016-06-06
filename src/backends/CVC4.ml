@@ -494,7 +494,7 @@ let parse_fun_ ~decode ~arity:n term =
   (* change the shape of [body] so it looks more like a decision tree *)
   let dt = FO.Util.dt_of_term ~vars body in
   Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
-    (fun k->k FO.print_term body (Model.DT.print FO.print_term) dt);
+    (fun k->k FO.print_term body (Model.DT.print FO.print_term') dt);
   vars, dt
 
 let sym_get_const_ ~decode id = match ID.Tbl.find decode.symbols id with
@@ -728,7 +728,7 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
         send_ s problem';
         let r = res s in
         Utils.debugf ~lock:true ~section 3 "@[<2>result: %a@]"
-          (fun k->k (Res.print FO.print_term FO.print_ty) r);
+          (fun k->k (Res.print FO.print_term' FO.print_ty) r);
         close s;
         match r with
           | Res.Sat _ -> r, S.Shortcut

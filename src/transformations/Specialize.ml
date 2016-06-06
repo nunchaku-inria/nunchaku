@@ -1160,7 +1160,7 @@ let dt_of_spec_dt state vars (dt_vars,dt,dsf) =
   Utils.debugf ~section 5
     "@[<2>generalize dt@ `@[<2>%a ->@ @[%a@]@]`@ on vars @[%a@]@ with arg %a@]"
     (fun k->k (CCFormat.list Var.print_full) dt_vars
-        (Model.DT.print P.print) dt
+        (Model.DT.print P.print') dt
         (CCFormat.list Var.print_full) vars Arg.print dsf.dsf_arg);
   let n_closure_vars = List.length (Arg.vars dsf.dsf_arg) in
   assert (List.length dt_vars
@@ -1225,7 +1225,7 @@ let dt_of_spec_dt state vars (dt_vars,dt,dsf) =
   in
   let res = List.rev_append then_ else_ in
   Utils.debugf ~section 5 "@[<2>... obtaining@ `@[<v>%a@]`@]"
-    (fun k->k CCFormat.(list (Model.DT.print_case P.print)) res);
+    (fun k->k CCFormat.(list (Model.DT.print_case P.print')) res);
   res
 
 let merge_dts f_id vars l =
@@ -1259,7 +1259,7 @@ let decode_model state m =
             let subst = U.renaming_to_subst renaming in
             Utils.debugf ~section 5
               "@[<2>decode DT `@[%a@]`@ with @[%a@]@]"
-              (fun k->k (Model.DT.print P.print) dt (Subst.print P.print) subst);
+              (fun k->k (Model.DT.print P.print') dt (Subst.print P.print) subst);
             let dt =
               Model.DT.map dt
                 ~var:(fun v -> Some (find_var_ ~subst:renaming v))
@@ -1309,7 +1309,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after specialize@}:@ %a@]@."
-         (Problem.Res.print P.print P.print)]
+         (Problem.Res.print P.print' P.print)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model state) in

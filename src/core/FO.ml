@@ -261,6 +261,8 @@ let rec print_term out t = match T.view t with
   | Exists (v,f) ->
     fpf out "(@[exists %a@ %a@])" Var.print_full v print_term f
 
+let print_term' _prec = print_term
+
 let print_model out m =
   let pp_pair out (t,u) = fpf out "@[%a -> %a@]" print_term t print_term u in
   fpf out "@[model {@,@[<hv>%a@]}@]"

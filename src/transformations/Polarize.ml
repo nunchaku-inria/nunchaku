@@ -473,7 +473,7 @@ and rewrite' ~subst sys t =
 let filter_dt_ ~is_pos ~polarized ~sys ~subst dt =
   Utils.debugf ~section 5
     "@[<v>retain branches that yield %B for `%a`@ from `@[%a@]`@]"
-    (fun k->k is_pos ID.print polarized (Model.DT.print P.print) dt);
+    (fun k->k is_pos ID.print polarized (Model.DT.print P.print') dt);
   CCList.filter_map
     (fun (eqns, then_) ->
       (* evaluate as fully as possible, hoping for [true] or [false] *)
@@ -494,7 +494,7 @@ let filter_dt_ ~is_pos ~polarized ~sys ~subst dt =
           errorf_
             "@[<2>expected decision tree for %a@ to yield only true/false@ \
              but branch `@[%a@]`@ yields `@[%a@]`@]"
-             ID.print polarized (Model.DT.print_tests P.print) eqns P.print then_)
+             ID.print polarized (Model.DT.print_tests P.print') eqns P.print then_)
     dt.Model.DT.tests
 
 let find_polarized_ ~state id =
@@ -607,7 +607,7 @@ let pipe ~polarize_rec ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after polarize@}:@ %a@]@."
-         (Problem.Res.print P.print P.print)]
+         (Problem.Res.print P.print' P.print)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model ~state) in

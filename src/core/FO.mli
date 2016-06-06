@@ -190,6 +190,7 @@ end
 val print_ty : Ty.t printer
 val print_toplevel_ty : Ty.toplevel_ty printer
 val print_term : T.t printer
+val print_term' : _ -> T.t printer
 val print_statement : (T.t, Ty.t) statement printer
 val print_model : (T.t * T.t) list printer
 val print_problem : (T.t, Ty.t) Problem.t printer
