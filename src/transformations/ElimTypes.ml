@@ -53,7 +53,9 @@ let create_state ~sigma () = {
    precondition: [t] a type for which we created a new predicate *)
 let find_pred state t =
   assert (Ty.is_ty t);
-  Ty.Map.find t state.ty_to_pred
+  try Ty.Map.find t state.ty_to_pred
+  with Not_found ->
+    errorf_ "could not find the predicate for type@ `@[%a@]`" P.print t
 
 let encode_var subst v =
   let v' = Var.fresh_copy v |> Var.set_ty ~ty:U.ty_unitype in
@@ -136,13 +138,21 @@ let map_to_predicate state ty =
           if not (ID.Tbl.mem state.parametrized_ty id)
           then errorf_ "type constructor `%a`/%d has not been declared" ID.print id n;
           (* find name *)
-          let name = ID.make_f "is_%a" mangle_ty_ ty in
+          let name = ID.make_f "@[<h>is_%a@]" mangle_ty_ ty in
           add_pred_ state ty name;
           Some name
     end
 
+(* ensure  that the immediate arguments and return type map to predicates *)
 let ensure_maps_to_predicate state ty =
-  ignore (map_to_predicate state ty)
+  let aux ty = match Ty.repr ty with
+    | TyI.Builtin `Prop -> ()
+    | _ -> ignore (map_to_predicate state ty)
+  in
+  let _, args, ret = U.ty_unfold ty in
+  List.iter aux args;
+  aux ret;
+  ()
 
 let encode_stmt state st =
   Utils.debugf ~section 3 "@[<2>encode statement@ `@[%a@]`@]"
@@ -174,8 +184,8 @@ let encode_stmt state st =
     [] (* remove statement *)
   | Stmt.Decl (id, ty, attrs) when U.ty_returns_Prop ty ->
     (* symbol declaration *)
+    ensure_maps_to_predicate state ty;
     let _, args, _ = U.ty_unfold ty in
-    List.iter (ensure_maps_to_predicate state) args;
     (* new type [term -> term -> ... -> term -> prop] *)
     let ty' =
       U.ty_arrow_l
@@ -185,6 +195,7 @@ let encode_stmt state st =
     [ Stmt.decl ~info ~attrs id ty' ]
   | Stmt.Decl (id, ty, attrs) ->
     let _, args, ret = U.ty_unfold ty in
+    assert (not (U.ty_is_Prop ret));
     (* declare every argument type, + the return type *)
     let pred_ret = map_to_predicate state ret in
     let preds = List.map (map_to_predicate state) args in
