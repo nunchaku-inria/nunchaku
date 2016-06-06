@@ -115,16 +115,16 @@ let solve ~deadline pb =
   )
 
 (* solve problem before [deadline] *)
-let call ?prio ~deadline ~print problem =
+let call ?prio ~print problem =
   if print
   then Format.printf "@[<v2>FO_tptp problem:@ %a@]@." T.print_problem_tptp problem;
   S.Task.make ?prio
-    (fun () -> solve ~deadline problem)
+    (fun ~deadline () -> solve ~deadline problem)
 
-let pipe ~deadline ~print () =
+let pipe ~print () =
   let encode pb =
     let prio = 25 in
-    call ~deadline ~prio ~print pb, ()
+    call ~prio ~print pb, ()
   in
   Transform.make
     ~name ~encode ~decode:(fun _ x -> x) ()

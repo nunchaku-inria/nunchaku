@@ -41,6 +41,7 @@ type ('t, 'ty) view =
   | DataTest of id * 't
   | DataSelect of id * int * 't
   | Undefined of id * 't (** ['t] is not defined here *)
+  | Undefined_atom of id * 'ty (** some undefined term of given type *)
   | Unparsable of 'ty (** could not parse term *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Mu of 'ty var * 't   (** caution, not supported everywhere *)
@@ -143,6 +144,7 @@ module T = struct
   let data_test c t = make_ (DataTest (c,t))
   let data_select c n t = make_ (DataSelect (c,n,t))
   let undefined c t = make_ (Undefined (c,t))
+  let undefined_atom c ty = make_ (Undefined_atom (c,ty))
   let unparsable ty = make_ (Unparsable ty)
   let let_ v t u = make_ (Let(v,t,u))
   let fun_ v t = make_ (Fun (v,t))
@@ -240,6 +242,8 @@ let rec print_term out t = match T.view t with
     fpf out "(@[<2>select-%a-%d@ %a@])" ID.print c n print_term t
   | Undefined (c,t) ->
     fpf out "(@[<2>undefined-%a@ %a@])" ID.print c print_term t
+  | Undefined_atom (c,ty) ->
+    fpf out "(@[<2>undefined-%a@ ty:%a@])" ID.print c print_ty ty
   | Unparsable ty ->
     fpf out "(@[<2>unparsable ty:%a@])" print_ty ty
   | Let (v,t,u) ->
@@ -260,6 +264,8 @@ let rec print_term out t = match T.view t with
     fpf out "(@[forall %a@ %a@])" Var.print_full v print_term f
   | Exists (v,f) ->
     fpf out "(@[exists %a@ %a@])" Var.print_full v print_term f
+
+let print_term' _prec = print_term
 
 let print_model out m =
   let pp_pair out (t,u) = fpf out "@[%a -> %a@]" print_term t print_term u in
@@ -405,6 +411,7 @@ module Util = struct
       | DataTest (_,_)
       | DataSelect (_,_,_)
       | Undefined (_,_)
+      | Undefined_atom _
       | Unparsable _
       | Mu (_,_)
       | True
@@ -530,6 +537,7 @@ module To_tptp = struct
     | DataTest (_,_)
     | DataSelect (_,_,_)
     | Undefined (_,_)
+    | Undefined_atom _
     | Unparsable _ ->
       errorf_ "cannot convert `@[%a@]` to TPTP" print_term t
     | Fun (_,_) -> errorf_ "cannot convert function `@[%a@]` to TPTP" print_term t

@@ -1160,7 +1160,7 @@ let dt_of_spec_dt state vars (dt_vars,dt,dsf) =
   Utils.debugf ~section 5
     "@[<2>generalize dt@ `@[<2>%a ->@ @[%a@]@]`@ on vars @[%a@]@ with arg %a@]"
     (fun k->k (CCFormat.list Var.print_full) dt_vars
-        (Model.DT.print P.print) dt
+        (Model.DT.print P.print') dt
         (CCFormat.list Var.print_full) vars Arg.print dsf.dsf_arg);
   let n_closure_vars = List.length (Arg.vars dsf.dsf_arg) in
   assert (List.length dt_vars
@@ -1225,11 +1225,13 @@ let dt_of_spec_dt state vars (dt_vars,dt,dsf) =
   in
   let res = List.rev_append then_ else_ in
   Utils.debugf ~section 5 "@[<2>... obtaining@ `@[<v>%a@]`@]"
-    (fun k->k CCFormat.(list (Model.DT.print_case P.print)) res);
+    (fun k->k CCFormat.(list (Model.DT.print_case P.print')) res);
   res
 
-let merge_dts f_id vars l =
-  let else_ = U.undefined_ (U.app (U.const f_id) (List.map U.var vars)) in
+let merge_dts ty vars l =
+  let else_ =
+    U.app (U.undefined_atom ~ty) (List.map U.var vars)
+  in
   let cases = CCList.flatten l in
   Model.DT.test cases ~else_
 
@@ -1259,7 +1261,7 @@ let decode_model state m =
             let subst = U.renaming_to_subst renaming in
             Utils.debugf ~section 5
               "@[<2>decode DT `@[%a@]`@ with @[%a@]@]"
-              (fun k->k (Model.DT.print P.print) dt (Subst.print P.print) subst);
+              (fun k->k (Model.DT.print P.print') dt (Subst.print P.print) subst);
             let dt =
               Model.DT.map dt
                 ~var:(fun v -> Some (find_var_ ~subst:renaming v))
@@ -1277,7 +1279,7 @@ let decode_model state m =
            List.mapi (fun i ty -> Var.make ~ty ~name:(Printf.sprintf "v_%d" i)) ty_args
          in
          let spec_dt_l = List.map (dt_of_spec_dt state new_vars) models in
-         let dt = merge_dts f_id new_vars spec_dt_l in
+         let dt = merge_dts ty_f new_vars spec_dt_l in
          (U.const f_id, new_vars, dt, kind) :: acc)
       spec_funs
       []
@@ -1309,7 +1311,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after specialize@}:@ %a@]@."
-         (Problem.Res.print P.print P.print)]
+         (Problem.Res.print P.print' P.print)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model state) in

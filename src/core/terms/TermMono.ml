@@ -133,8 +133,10 @@ module ToFO(T : TI.S) = struct
     | Builtin (`Ite (a,b,c)) ->
         FO.T.ite
           (conv_term ~sigma a) (conv_term ~sigma b) (conv_term ~sigma c)
-    | Builtin (`Undefined (c,t)) ->
+    | Builtin (`Undefined_self (c,t)) ->
         FO.T.undefined c (conv_term ~sigma t)
+    | Builtin (`Undefined_atom (c,ty)) ->
+        FO.T.undefined_atom c (conv_ty ty)
     | Builtin (`Unparsable ty) -> FO.T.unparsable (conv_ty ty)
     | Builtin `True -> FO.T.true_
     | Builtin `False -> FO.T.false_
@@ -363,8 +365,10 @@ module OfFO(T:TI.S) = struct
         U.exists v (convert_term t)
     | FO.Var v ->
         U.var (Var.update_ty v ~f:(convert_ty))
-    | FO.Undefined (c,t) ->
-        U.builtin (`Undefined (c,convert_term t))
+    | FO.Undefined(c,t) ->
+        U.builtin (`Undefined_self (c,convert_term t))
+    | FO.Undefined_atom (c,ty) ->
+        U.builtin (`Undefined_atom (c,convert_ty ty))
     | FO.Unparsable ty ->
         U.unparsable ~ty:(convert_ty ty)
     | FO.App (f,l) ->

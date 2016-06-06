@@ -39,14 +39,14 @@ type polarized_id = {
   neg: ID.t;
 }
 
-type decode_state = (ID.t * bool * polarized_id) ID.Tbl.t
-    (* polarized_id -> (original_id, polarity, polarized_id) *)
+type decode_state = (ID.t * bool * T.t * polarized_id) ID.Tbl.t
+(* polarized_id -> (original_id, polarity, type, polarized_id) *)
 
 let term_contains_undefined t =
   U.to_seq t
   |> Sequence.exists
     (fun t' -> match T.repr t' with
-      | TI.Builtin (`Undefined _) -> true
+      | TI.Builtin (`Undefined_self _) -> true
       | _ -> false)
 
 (* does this set of equations contain an "undefined" sub-term? *)
@@ -138,15 +138,15 @@ let app_polarized pol p l = match pol with
     U.asserting t [ U.eq (U.app p_pos l) (U.app p_neg l) ]
 
 (* return the pair of polarized IDs for [id], with caching *)
-let polarize_id ~state id =
+let polarize_id ~state ~ty id =
   assert (not (ID.Tbl.mem state.St.polarized id));
   let pos = ID.make_full ~needs_at:false ~pol:Pol.Pos (ID.name id) in
   let neg = ID.make_full ~needs_at:false ~pol:Pol.Neg (ID.name id) in
   let p = {pos; neg; } in
   ID.Tbl.add state.St.polarized id (Some p);
   (* reverse mapping, for decoding *)
-  ID.Tbl.add state.St.decode_state pos (id, true, p);
-  ID.Tbl.add state.St.decode_state neg (id, false, p);
+  ID.Tbl.add state.St.decode_state pos (id, true, ty, p);
+  ID.Tbl.add state.St.decode_state neg (id, false, ty, p);
   p
 
 let find_polarized_exn ~state id =
@@ -183,7 +183,7 @@ let rec polarize_term_rec
       let t = polarize_term_rec ~state pol subst t in
       U.guard t g
   | TI.Builtin (`True | `False | `DataTest _ | `Unparsable _
-               | `DataSelect _ | `Undefined _) ->
+               | `DataSelect _ | `Undefined_self _ | `Undefined_atom _) ->
       U.eval_renaming ~subst t
   | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
   | TI.Const id ->
@@ -361,7 +361,9 @@ class ['a, 'c] traverse_pol ?(size=64) ~polarize_rec () = object(self)
   method decode_state = st.St.decode_state
 
   method do_def ~depth:_ def act =
-    let id = def.Stmt.rec_defined.Stmt.defined_head in
+    let d = Stmt.defined_of_rec def in
+    let id = Stmt.id_of_defined d in
+    let ty = Stmt.ty_of_defined d in
     Utils.debugf ~section 5 "@[<2>polarize def `@[%a@]`@ on %a@]"
       (fun k->k ID.print id pp_act act);
     match act with
@@ -379,12 +381,14 @@ class ['a, 'c] traverse_pol ?(size=64) ~polarize_rec () = object(self)
             | None -> assert false
             | Some p -> p
           with Not_found ->
-            polarize_id ~state:st id
+            polarize_id ~state:st ~ty id
         in
         [define_rec ~state:st is_pos def p]
 
   method do_pred ~depth:_ _wf _kind def act =
-    let id = def.Stmt.pred_defined.Stmt.defined_head in
+    let d = Stmt.defined_of_pred def in
+    let id = Stmt.id_of_defined d in
+    let ty = Stmt.ty_of_defined d in
     if act<>`Keep
     then
       Utils.debugf ~section 2 "polarize (co)inductive predicate %a on (%a)"
@@ -403,7 +407,7 @@ class ['a, 'c] traverse_pol ?(size=64) ~polarize_rec () = object(self)
             match ID.Tbl.find st.St.polarized id with
             | None -> assert false (* incompatible *)
             | Some p -> p
-          with Not_found -> polarize_id ~state:st id
+          with Not_found -> polarize_id ~state:st ~ty id
         in
         [define_pred ~state:st ~is_pos def p]
 
@@ -473,7 +477,7 @@ and rewrite' ~subst sys t =
 let filter_dt_ ~is_pos ~polarized ~sys ~subst dt =
   Utils.debugf ~section 5
     "@[<v>retain branches that yield %B for `%a`@ from `@[%a@]`@]"
-    (fun k->k is_pos ID.print polarized (Model.DT.print P.print) dt);
+    (fun k->k is_pos ID.print polarized (Model.DT.print P.print') dt);
   CCList.filter_map
     (fun (eqns, then_) ->
       (* evaluate as fully as possible, hoping for [true] or [false] *)
@@ -494,10 +498,10 @@ let filter_dt_ ~is_pos ~polarized ~sys ~subst dt =
           errorf_
             "@[<2>expected decision tree for %a@ to yield only true/false@ \
              but branch `@[%a@]`@ yields `@[%a@]`@]"
-             ID.print polarized (Model.DT.print_tests P.print) eqns P.print then_)
+             ID.print polarized (Model.DT.print_tests P.print') eqns P.print then_)
     dt.Model.DT.tests
 
-let find_polarized_ ~state id =
+let find_polarized_ ~(state:decode_state) id =
   try ID.Tbl.find state id
   with Not_found ->
     errorf_ "could not find polarized symbol `%a` when decoding" ID.print id
@@ -515,7 +519,7 @@ let make_rw_sys_ ~state m =
       match T.repr t with
       | TI.Const id when ID.is_polarized id ->
           (* rewrite into the unpolarized version *)
-          let id', _is_pos, _p = find_polarized_ ~state id in
+          let id', _is_pos, _, _p = find_polarized_ ~state id in
           Utils.debugf ~section 4 "@[<2>decoding:@ rewrite %a into %a@]"
             (fun k->k ID.print id ID.print id');
           ID.Map.add id id' sys
@@ -541,7 +545,7 @@ let decode_model ~state m =
       match T.repr t with
       | TI.Const id when ID.is_polarized id ->
           (* unpolarize. id' is the unpolarized ID. *)
-          let id', is_pos, p = find_polarized_ ~state id in
+          let id', is_pos, ty, p = find_polarized_ ~state id in
           begin try
             (* if [id' in partial_map], we already met its other polarized
                version, so we can merge the decision trees and push [id']
@@ -551,7 +555,7 @@ let decode_model ~state m =
             let subst = Subst.add_list ~subst:Subst.empty vars vars' in
             let cases = filter_dt_ ~polarized:id ~is_pos ~sys ~subst dt in
             (* merge the two partial decision trees — they should not overlap *)
-            let else_ = U.undefined_ (U.app (U.const id') (List.map U.var vars')) in
+            let else_ = U.app (U.undefined_atom ~ty) (List.map U.var vars') in
             let new_dt =
               Model.DT.test
                 (List.rev_append cases cases')
@@ -572,7 +576,7 @@ let decode_model ~state m =
             ) else (
               (* the other polarized version of [id'] is not defined in the
                  model, we can emit this function now *)
-              let else_ = U.undefined_ (U.app (U.const id') (List.map U.var vars)) in
+              let else_ = U.app (U.undefined_atom ~ty) (List.map U.var vars) in
               let new_dt = Model.DT.test cases ~else_ in
               Some (U.const id', vars, new_dt, k)
             )
@@ -607,7 +611,7 @@ let pipe ~polarize_rec ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after polarize@}:@ %a@]@."
-         (Problem.Res.print P.print P.print)]
+         (Problem.Res.print P.print' P.print)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model ~state) in

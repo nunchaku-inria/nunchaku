@@ -42,6 +42,7 @@ type ('t, 'ty) view =
   | DataTest of id * 't
   | DataSelect of id * int * 't
   | Undefined of id * 't (** ['t] is not defined here *)
+  | Undefined_atom of id * 'ty (** some undefined term of given type *)
   | Unparsable of 'ty (** could not parse term *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Mu of 'ty var * 't   (** caution, not supported everywhere *)
@@ -126,6 +127,7 @@ module T : sig
   val data_test : id -> t -> t
   val data_select : id -> int -> t -> t
   val undefined : id -> t -> t
+  val undefined_atom : id -> Ty.t -> t
   val unparsable : Ty.t -> t
   val var : Ty.t var -> t
   val let_ : Ty.t var -> t -> t -> t
@@ -190,6 +192,7 @@ end
 val print_ty : Ty.t printer
 val print_toplevel_ty : Ty.toplevel_ty printer
 val print_term : T.t printer
+val print_term' : _ -> T.t printer
 val print_statement : (T.t, Ty.t) statement printer
 val print_model : (T.t * T.t) list printer
 val print_problem : (T.t, Ty.t) Problem.t printer

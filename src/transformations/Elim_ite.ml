@@ -71,6 +71,7 @@ let transform_term t =
     | FO.DataTest (_,_)
     | FO.DataSelect (_,_,_)
     | FO.Undefined (_,_)
+    | FO.Undefined_atom _
     | FO.Unparsable _
     | FO.Mu (_,_)
     | FO.True

@@ -17,13 +17,11 @@ val is_available : unit -> bool
 *)
 val call :
   ?prio:int ->
-  deadline:float ->
   print:bool ->
   T.problem ->
   (T.term, T.ty) Problem.Res.t Scheduling.Task.t
 
 val pipe :
-  deadline:float ->
   print:bool ->
   unit ->
   ( T.problem,

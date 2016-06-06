@@ -288,7 +288,7 @@ and rewrite' ~state t =
 let filter_dt_ ~state ~removed_var dt =
   Utils.debugf ~section 5
     "@[<v>remove var @[%a@]@ from `@[%a@]`@]"
-    (fun k->k Var.print_full removed_var (Model.DT.print P.print) dt);
+    (fun k->k Var.print_full removed_var (Model.DT.print P.print') dt);
   let tests =
     CCList.filter_map
       (fun (eqns, then_) ->
@@ -367,7 +367,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after unrolling@}:@ %a@]@."
-         (Problem.Res.print P.print P.print)]
+         (Problem.Res.print P.print' P.print)]
     else []
   in
   pipe_with ~on_decoded

@@ -111,5 +111,5 @@ let pipe_rename ~print:must_print =
       if must_print then (
         let module P = TI.Print(T) in
         Format.printf "@[<v2>@{<Yellow>after model renaming@}:@ %a@]@."
-          (Problem.Res.print P.print P.print) res');
+          (Problem.Res.print P.print' P.print) res');
       res')

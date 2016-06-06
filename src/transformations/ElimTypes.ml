@@ -263,7 +263,7 @@ let rebuild_types state m : retyping =
                    (* belongs to domain! *)
                    Some id
                  | TI.Builtin `False
-                 | TI.Builtin (`Undefined _) -> None
+                 | TI.Builtin (`Undefined_atom _) -> None
                  | _ -> errorf_ "unexpected value for %a on %a" ID.print pred_id ID.print id
             )
             uni_domain
@@ -364,7 +364,8 @@ let decode_model ~state m =
         | _ ->
           Utils.debugf ~section 5
             "@[<2>decode @[%a %a@]@ := `@[%a@]@]"
-            (fun k->k P.print t (CCFormat.list Var.print) vars (M.DT.print P.print) dt);
+            (fun k->k P.print t (CCFormat.list Var.print) vars
+                (M.DT.print P.print') dt);
           let ty = expected_ty state t in
           let ty_ret = U.ty_returns ty in
           let subst, vars = decode_vars ty vars in
@@ -416,7 +417,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after %s@}:@ %a@]@."
-         name (Problem.Res.print P.print P.print)]
+         name (Problem.Res.print P.print' P.print)]
     else []
   in
   pipe_with ~check ~print ~on_decoded

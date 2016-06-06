@@ -3,6 +3,7 @@
 (** {1 Model} *)
 
 type 'a printer = Format.formatter -> 'a -> unit
+type 'a prec_printer = TermInner.prec -> 'a printer
 type 'a to_sexp = 'a -> CCSexp.t
 
 (** {2 Decision Trees}
@@ -14,9 +15,9 @@ module DT : sig
   type ('t, 'ty) test = 'ty Var.t * 't (** Equation var=term *)
   type ('t, 'ty) tests = ('t,'ty) test list
 
-  val print_test : 't printer -> ('t, _) test printer
-  val print_tests : 't printer -> ('t, _) test list printer
-  val print_case : 't printer -> (('t,_) test list * 't) printer
+  val print_test : 't prec_printer -> ('t, _) test printer
+  val print_tests : 't prec_printer -> ('t, _) test list printer
+  val print_case : 't prec_printer -> (('t,_) test list * 't) printer
 
   type (+'t, +'ty) t = private {
     tests: (('t, 'ty) tests * 't) list;
@@ -38,7 +39,7 @@ module DT : sig
     ('t1,'ty1) t ->
     ('t2,'ty2) t
 
-  val print : 't printer -> ('t,_) t printer
+  val print : 't prec_printer -> ('t,_) t printer
 end
 
 type ('t,'ty) decision_tree = ('t,'ty) DT.t
@@ -134,6 +135,6 @@ val filter :
   ('t, 'ty) t ->
   ('t, 'ty) t
 
-val print : 't printer -> 'ty printer -> ('t,'ty) t printer
+val print : 't prec_printer -> 'ty printer -> ('t,'ty) t printer
 
 val to_sexp : 't to_sexp -> 'ty to_sexp -> ('t,'ty) t to_sexp

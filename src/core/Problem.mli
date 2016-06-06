@@ -133,7 +133,7 @@ module Res : sig
     ('t1, 'ty1) t ->
     ('t2, 'ty2) t
 
-  val print : 't printer -> 'ty printer -> ('t,'ty) t printer
+  val print : (TermInner.prec -> 't printer) -> 'ty printer -> ('t,'ty) t printer
 
   val to_sexp : 't to_sexp -> 'ty to_sexp -> ('t,'ty) t to_sexp
 end

@@ -247,24 +247,25 @@ let close_task p =
     ~f:(fun task ret ->
        Scheduling.Task.map ~f:ret task, CCFun.id)
 
-let make_cvc4 ~deadline () =
+let make_cvc4 ~j () =
   let open Transform.Pipe in
   if List.mem S_CVC4 !solvers && Backends.CVC4.is_available ()
   then
     Backends.CVC4.pipes
       ~options:Backends.CVC4.options_l
+      ~slice:(1. *. float j)
       ~print:!print_all_
       ~print_smt:(!print_all_ || !print_smt_)
       ~print_model:(!print_all_ || !print_raw_model_)
-      ~deadline ()
+      ()
     @@@ id
   else fail
 
-let make_paradox ~deadline () =
+let make_paradox () =
   let open Transform.Pipe in
   if List.mem S_paradox !solvers && Backends.Paradox.is_available ()
   then
-    Backends.Paradox.pipe ~print:!print_all_ ~deadline ()
+    Backends.Paradox.pipe ~print:!print_all_ ()
     @@@ id
   else fail
 
@@ -274,10 +275,9 @@ let make_model_pipeline () =
   let open Pipes in
   (* setup pipeline *)
   let check = !check_all_ in
-  let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   (* solvers *)
-  let cvc4 = make_cvc4 ~deadline () in
-  let paradox = make_paradox ~deadline () in
+  let cvc4 = make_cvc4 ~j:!j () in
+  let paradox = make_paradox () in
   let pipe =
     Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
     Step_conv_ty.pipe () @@@
@@ -333,14 +333,14 @@ let make_model_pipeline () =
 
 (* run the pipeline on this problem, then run tasks, and return the
    result *)
-let run_tasks ~j pipe pb =
+let run_tasks ~j ~deadline pipe pb =
   let module Res = Problem.Res in
   let tasks =
     Transform.run ~pipe pb
     |> Lazy_list.map ~f:(fun (task,ret) -> Scheduling.Task.map ~f:ret task)
     |> Lazy_list.to_list
   in
-  let res = Scheduling.run ~j tasks in
+  let res = Scheduling.run ~j ~deadline tasks in
   match res with
   | Scheduling.Res_fail e -> E.fail (Printexc.to_string e)
   | Scheduling.Res_list [] -> E.fail "no task succeeded"
@@ -380,7 +380,8 @@ let main_model ~output statements =
   let pipe = make_model_pipeline() in
   if !print_pipeline_
     then Format.printf "@[Pipeline: %a@]@." Transform.Pipe.print pipe;
-  run_tasks ~j:!j pipe statements
+  let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
+  run_tasks ~j:!j ~deadline pipe statements
   >|= fun res ->
   match res, output with
   | _, O_sexp ->
@@ -388,10 +389,10 @@ let main_model ~output statements =
       Format.printf "@[<hv2>%a@]@." CCSexpM.print s
   | Res.Sat m, O_nunchaku when m.Model.potentially_spurious ->
       Format.printf "@[<v>@[<v2>SAT: (potentially spurious) {@,@[<v>%a@]@]@,}@]@."
-        (Model.print P.print P.print) m;
+        (Model.print P.print' P.print) m;
   | Res.Sat m, O_nunchaku ->
       Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]@."
-        (Model.print P.print P.print) m;
+        (Model.print P.print' P.print) m;
   | Res.Sat m, O_tptp ->
       (* XXX: if potentially spurious, what should we print? *)
       let module PM = Nunchaku_parsers.TPTP_print.Make(T) in

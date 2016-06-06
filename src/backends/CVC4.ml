@@ -269,6 +269,7 @@ let print_problem out (decode, pb) =
     | FO.DataSelect (c,n,t) ->
         fpf out "(@[%a@ %a@])" print_select (c,n) print_term t
     | FO.Undefined (_,t) -> print_term out t (* tailcall, probably *)
+    | FO.Undefined_atom _ -> errorf_ "cannot print `undefined_atom` in SMTlib"
     | FO.Unparsable _ -> errorf_ "cannot print `unparsable` in SMTlib"
     | FO.Fun (v,t) ->
         fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
@@ -494,7 +495,7 @@ let parse_fun_ ~decode ~arity:n term =
   (* change the shape of [body] so it looks more like a decision tree *)
   let dt = FO.Util.dt_of_term ~vars body in
   Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
-    (fun k->k FO.print_term body (Model.DT.print FO.print_term) dt);
+    (fun k->k FO.print_term body (Model.DT.print FO.print_term') dt);
   vars, dt
 
 let sym_get_const_ ~decode id = match ID.Tbl.find decode.symbols id with
@@ -619,7 +620,9 @@ let read_res_ ~print_model ~decode s =
       in
       Res.Error (Error msg)
   | `Error e -> Res.Error (Error e)
-  | `End -> Res.Error (Error "no answer from the solver")
+  | `End ->
+      Utils.debug ~section 5 "no answer from CVC4, assume it timeouted";
+      Res.Timeout
 
 let res t = match t.res with
   | Some r -> r
@@ -728,7 +731,7 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
         send_ s problem';
         let r = res s in
         Utils.debugf ~lock:true ~section 3 "@[<2>result: %a@]"
-          (fun k->k (Res.print FO.print_term FO.print_ty) r);
+          (fun k->k (Res.print FO.print_term' FO.print_ty) r);
         close s;
         match r with
           | Res.Sat _ -> r, S.Shortcut
@@ -770,14 +773,23 @@ let options_l =
 
 (* solve problem using CVC4 before [deadline] *)
 let call
-    ?(options="") ?deadline ?prio ~print ~print_smt ~print_model problem
+    ?(options="") ?prio ?slice ~print ~print_smt ~print_model problem
   =
   if print
   then Format.printf "@[<v2>FO problem:@ %a@]@." FO.print_problem problem;
-  Scheduling.Task.of_fut ?prio
-    (fun () -> solve ~options ?deadline ~print:print_smt ~print_model problem)
+  Scheduling.Task.of_fut ?prio ?slice
+    (fun ~deadline () -> solve ~options ~deadline ~print:print_smt ~print_model problem)
 
-let pipes ?(options=[""]) ?deadline ~print ~print_smt ~print_model () =
+let pipes ?(options=[""]) ?slice ~print ~print_smt ~print_model () =
+  (* each process' slice is only 1/n of the global CVC4 slice *)
+  let slice =
+    CCOpt.map
+      (fun s ->
+         let n = List.length options in
+         assert (n > 0);
+         s /. float n)
+      slice
+  in
   let encode pb =
     List.mapi
       (fun i options ->
@@ -785,7 +797,7 @@ let pipes ?(options=[""]) ?deadline ~print ~print_smt ~print_model () =
          let print = print && i=0 in
          let print_smt = print_smt && i=0 in
          let prio = 30 + 10 * i in
-         call ~options ?deadline ~prio ~print ~print_smt ~print_model pb)
+         call ?slice ~options ~prio ~print ~print_smt ~print_model pb)
     options, ()
   in
   Transform.make ~name ~encode ~decode:(fun _ x -> x) ()

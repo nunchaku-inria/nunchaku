@@ -38,10 +38,15 @@ module Fut = struct
     | Done of 'a
     | Fail of exn
 
+  (* bag of tasks to execute one after the other *)
+  type tasks_bag = (unit -> unit) Queue.t
+
+  type 'a on_res_callback = tasks_bag -> 'a final_state -> unit
+
   type 'a t = {
     lock: Mutex.t;
     cond: Condition.t;
-    mutable on_res: ('a final_state -> unit) list;
+    mutable on_res: (tasks_bag -> 'a final_state -> unit) list;
     mutable state : 'a final_state option; (* none=running *)
   }
 
@@ -49,11 +54,20 @@ module Fut = struct
     Mutex.lock t.lock;
     CCFun.finally ~h:(fun () -> Mutex.unlock t.lock) ~f
 
-  let apply_catch_ f x =
-    try f x
-    with _ -> ()
+  (* fixpoint: do all the tasks in [q], until [q] is empty *)
+  let run_queue_ q =
+    while not (Queue.is_empty q) do
+      try Queue.pop q ()
+      with _ -> ()
+    done
+
+  let apply_in0_ q f = Queue.push f q
+  let apply_in1_ q f x = Queue.push (fun () -> f x) q
+  let apply_in2_ q f x y = Queue.push (fun () -> f x y) q
 
   let set_res ~idempotent t res =
+    (* tasks to do without a lock *)
+    let q = Queue.create() in
     with_ t
       ~f:(fun () -> match t.state with
         | Some Stopped -> ()
@@ -62,8 +76,12 @@ module Fut = struct
         | None ->
           t.state <- Some res;
           Condition.broadcast t.cond;
-          (* apply each callback, and catch their exceptions *)
-          List.iter (fun f -> apply_catch_ f res) t.on_res)
+          (* apply each callback, but in [q], outside of the lock *)
+          List.iter (fun f -> apply_in2_ q f q res) t.on_res;
+      );
+    (* now execute the tasks *)
+    run_queue_ q;
+    ()
 
   let set_done t x = set_res ~idempotent:false t (Done x)
 
@@ -84,10 +102,13 @@ module Fut = struct
   let is_done t = with_ t ~f:(fun () -> t.state <> None)
 
   let on_res t ~f =
+    let q = Queue.create() in
     with_ t
       ~f:(fun () -> match t.state with
         | None -> t.on_res <- f :: t.on_res
-        | Some res -> f res)
+        | Some res -> apply_in2_ q f q res);
+    run_queue_ q;
+    ()
 
   let return x = {
     on_res=[];
@@ -104,14 +125,18 @@ module Fut = struct
       state=None;
     } in
     on_res x
-      ~f:(function
-        | Stopped -> stop y
+      ~f:(fun q res -> match res with
+        | Stopped -> apply_in1_ q stop y
         | Done x ->
-          begin
-            try set_done y (f x)
-            with e -> set_fail y e
-          end
-        | Fail e -> set_fail y e);
+          apply_in0_ q
+            (fun () ->
+              try set_done y (f x)
+              with e -> set_fail y e)
+        | Fail e -> apply_in2_ q set_fail y e);
+    on_res y
+      ~f:(fun q res -> match res with
+        | Stopped -> apply_in1_ q stop x (* propagate "stop" *)
+        | _ -> ());
     y
 
   type 'a partial_result =
@@ -199,15 +224,17 @@ let popen ?(on_res=[]) cmd ~f =
   Utils.debugf ~lock:true ~section 3
     "@[<2>pid %d -->@ sub-process `@[%s@]`@]" (fun k -> k pid cmd);
   (* cleanup process *)
-  let cleanup _ =
-    Utils.debugf ~lock:true ~section 3 "cleanup subprocess %d" (fun k->k pid);
-    (try Unix.kill pid 15 with _ -> ());
-    close_out_noerr stdin;
-    close_in_noerr stdout;
-    (try Unix.close stderr with _ -> ());
-    (try Unix.kill pid 9 with _ -> ()); (* just to be sure *)
-    Utils.debugf ~lock:true ~section 3 "subprocess %d cleaned" (fun k->k pid);
-    ()
+  let cleanup q _ =
+    Fut.apply_in0_ q
+      (fun () ->
+         Utils.debugf ~lock:true ~section 3 "cleanup subprocess %d" (fun k->k pid);
+         (try Unix.kill pid 15 with _ -> ());
+         close_out_noerr stdin;
+         close_in_noerr stdout;
+         (try Unix.close stderr with _ -> ());
+         (try Unix.kill pid 9 with _ -> ()); (* just to be sure *)
+         Utils.debugf ~lock:true ~section 3 "subprocess %d cleaned" (fun k->k pid);
+      )
   in
   Fut.make ~on_res:(cleanup :: on_res)
     (fun () ->
@@ -241,7 +268,8 @@ type shortcut =
 module Task = struct
   type ('a, 'res) inner = {
     prio: int; (* priority. The lower, the more urgent *)
-    f: (unit -> ('a * shortcut) Fut.t);
+    slice: float; (* fraction of time allotted to the task *)
+    f: (deadline:float -> unit -> ('a * shortcut) Fut.t);
     post: ('a -> 'res);
   }
   (** Task consisting in running [f arg], obtaining a result. After [f]
@@ -251,10 +279,12 @@ module Task = struct
   type 'res t =
     | Task : ('a, 'res) inner -> 'res t
 
-  let of_fut ?(prio=50) f =
-    Task { prio; f; post=CCFun.id; }
+  let of_fut ?(prio=50) ?(slice=1.) f =
+    Task { prio; f; slice; post=CCFun.id; }
 
-  let make ?prio f = of_fut ?prio (fun () -> Fut.make f)
+  let make ?prio ?slice f =
+    of_fut ?prio ?slice
+      (fun ~deadline () -> Fut.make (fun () -> f ~deadline ()))
 
   let compare_prio (Task t1) (Task t2) = Pervasives.compare t1.prio t2.prio
 
@@ -277,6 +307,8 @@ type 'a run_result =
 
 type 'res pool = {
   j: int;
+  deadline: float;
+  total_alloted_time: float; (* total time, from creation of pool to deadline *)
   mutable task_id: int;
   mutable todo: 'res Task.t list;
   mutable active : 'res running_task list;
@@ -304,14 +336,23 @@ let start_task p t =
   let id = p.task_id in
   p.task_id <- id + 1;
   let (Task.Task t_inner) = t in
-  let fut = t_inner.Task.f () in
+  (* adjust deadline according to task.slice: take the minimum of
+     the global deadline, and *)
+  let deadline =
+    let now = Unix.gettimeofday() in
+    let deadline' = now +. (p.total_alloted_time *. t_inner.Task.slice) in
+    min p.deadline deadline'
+  in
+  Utils.debugf ~section 5 "@[<2>actual deadline is %.2f (slice: %.2f)@]"
+    (fun k->k deadline t_inner.Task.slice);
+  let fut = t_inner.Task.f ~deadline () in
   let r_task = R_task (id, t_inner, fut) in
   p.active <- r_task :: p.active;
   Mutex.unlock p.lock;
   (* ensure that after completion, the task is removed and the pool's
      state is updated *)
   Fut.on_res fut
-    ~f:(fun res ->
+    ~f:(fun _ res ->
       with_ p
         ~f:(fun () ->
           p.active <- remove_rtask_ id p.active;
@@ -382,7 +423,7 @@ let rec run_pool pool =
         (* check again *)
         run_pool pool
 
-let run ~j tasks =
+let run ~j ~deadline tasks =
   if j < 1 then invalid_arg "Scheduling.run";
   Utils.debugf ~lock:true ~section 1
     "@[<2>%d tasks to run (j=%d)...@]" (fun k->k (List.length tasks) j);
@@ -391,6 +432,8 @@ let run ~j tasks =
     active=[];
     pool_state = Res_list [];
     task_id=0;
+    deadline;
+    total_alloted_time=(deadline -. Unix.gettimeofday());
     j;
     lock=Mutex.create();
     cond=Condition.create();
@@ -399,27 +442,28 @@ let run ~j tasks =
 
 (*$=
   (Res_one 5) ( \
-    let mk i = Task.make (fun () -> if i=5 then i, Shortcut else i, No_shortcut) in \
-    run ~j:3 CCList.(1 -- 10 |> map mk))
+    let mk i = Task.make \
+      (fun ~deadline:_ () -> if i=5 then i, Shortcut else i, No_shortcut) in \
+    run ~j:3 ~deadline:5. CCList.(1 -- 10 |> map mk))
 *)
 
 (*$=
   (Res_one 5) ( \
     let mk i = Task.make \
-      (fun () -> Thread.delay (float i *. 0.1); \
+      (fun ~deadline:_ () -> Thread.delay (float i *. 0.1); \
                  if i=5 then i, Shortcut else i, No_shortcut) in \
-    run ~j:3 CCList.(1 -- 10 |> map mk))
+    run ~j:3 ~deadline:5. CCList.(1 -- 10 |> map mk))
 *)
 
 (*$=
   (Res_fail Exit) ( \
-    let mk i = Task.make (fun () -> if i=5 then raise Exit else i, No_shortcut) in \
-    run ~j:3 CCList.(1 -- 10 |> map mk))
+    let mk i = Task.make (fun ~deadline:_ () -> if i=5 then raise Exit else i, No_shortcut) in \
+    run ~j:3 ~deadline:5. CCList.(1 -- 10 |> map mk))
 *)
 
 (*$=
   (Res_list CCList.(1--10)) ( \
-    let mk i = Task.make (fun () -> i, No_shortcut) in \
-    let res = run ~j:3 CCList.(1 -- 10 |> map mk) in \
+    let mk i = Task.make (fun ~deadline:_ () -> i, No_shortcut) in \
+    let res = run ~j:3 ~deadline:5. CCList.(1 -- 10 |> map mk) in \
     match res with Res_list l -> Res_list (List.sort Pervasives.compare l) | x->x)
 *)

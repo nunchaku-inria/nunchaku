@@ -3,6 +3,7 @@
 module TI = TermInner
 
 type 'a printer = Format.formatter -> 'a -> unit
+type 'a prec_printer = TermInner.prec -> 'a printer
 type 'a to_sexp = 'a -> CCSexp.t
 
 let fpf = Format.fprintf
@@ -56,24 +57,26 @@ module DT = struct
       else_ = term t.else_;
     }
 
-  let print_test pp out (v,t) = fpf out "@[<2>%a@ = @[%a@]@]" Var.print_full v pp t
+  let print_test pp out (v,t) =
+    fpf out "@[<2>%a@ = @[%a@]@]" Var.print_full v (pp TI.P_eq) t
   let print_tests pp = CCFormat.list ~start:"" ~stop:"" ~sep:" && " (print_test pp)
   let print_case pp out (eqns,t) =
-    fpf out "@[<2>if @[%a@]@ then @[%a@]@]" (print_tests pp) eqns pp t
+    fpf out "@[<2>if @[%a@]@ then @[%a@]@]" (print_tests pp) eqns (pp TI.P_top) t
 
   let print pp out t =
     let pp_eqns = print_tests pp in
     match t.tests with
-    | [] -> fpf out "@[%a@]" pp t.else_
+    | [] -> fpf out "@[%a@]" (pp TI.P_top) t.else_
     | [a,b] ->
         fpf out "@[@[<v2>@[<2>if@ @[<hv>%a@]@]@ @[<2>then@ %a@]@]@ @[<2>else@ %a@]@]"
-          pp_eqns a pp b pp t.else_
+          pp_eqns a (pp TI.P_top) b (pp TI.P_top) t.else_
     | (a,b) :: l ->
         let pp_pair out (a,b) =
-          fpf out "@[<v2>@[<2>else if@ @[<hv>%a@]@]@ @[<2>then@ %a@]@]" pp_eqns a pp b in
+          fpf out "@[<v2>@[<2>else if@ @[<hv>%a@]@]@ @[<2>then@ %a@]@]"
+            pp_eqns a (pp TI.P_top) b in
         let pp_elif = CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_pair in
         fpf out "@[<hv>@[<v2>@[<2>if@ %a@]@ @[<2>then@ %a@]@]@ %a@ @[<2>else@ %a@]@]"
-          pp_eqns a pp b pp_elif l pp t.else_
+          pp_eqns a (pp TI.P_top) b pp_elif l (pp TI.P_top) t.else_
 
   let to_sexp ft t : CCSexp.t =
     let lst = CCSexp.of_list in
@@ -215,15 +218,17 @@ let fold ?(constants=const_fst_) ?(funs=const_fst_) ?(finite_types=const_fst_) a
   !acc
 
 let print pt pty out m =
-  let pp_tyvar out v = fpf out "@[<2>(%a : %a)@]" Var.print_full v pty (Var.ty v) in
+  let pp_tyvar out v =
+    fpf out "@[<2>(%a : %a)@]" Var.print_full v pty (Var.ty v) in
   let pplist ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp in
-  let pp_const out (t,u,_) = fpf out "@[<2>val %a :=@ @[%a@]@]." pt t pt u in
+  let pp_const out (t,u,_) =
+    fpf out "@[<2>val %a :=@ @[%a@]@]." (pt TI.P_top) t (pt TI.P_top) u in
   let pp_type out (ty,dom) =
     fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
       pty ty (pplist ~sep:", " ID.print) dom
   and pp_fun out (f,vars,dt,_) =
     fpf out "@[<2>val @[%a@]@ :=@ @[<v2>@[fun @[<hv>%a@]@].@ @[%a@]@]@]."
-      pt f
+      (pt TI.P_top) f
       (pplist ~sep:" " pp_tyvar) vars
       (DT.print pt) dt
   in
