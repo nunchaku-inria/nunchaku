@@ -250,8 +250,8 @@ type retyping = {
   rety_map: ID.t ID.Map.t Ty.Map.t; (* type -> (uni_const -> const) *)
 }
 
-(* for each type predicate, find cardinality and build a new set of
-   constants for this type *)
+(* for each type predicate, find cardinality of the corresponding type,
+   and build a new set of constants for this type *)
 let rebuild_types state m : retyping =
   (* set of constants for unitype *)
   let uni_domain =
@@ -315,12 +315,19 @@ let rec expected_ty state t = match T.repr t with
   | TI.App (f, _) ->
     let _, _, ret = expected_ty state f |> U.ty_unfold in
     ret
+  | TI.Builtin (`Undefined_atom (_,ty)) -> ty
   | _ -> errorf_ "could not find the expected type of `@[%a@]`" P.print t
 
-(* decode an atomic term t: recursively infer the expected types,
+let retype_find rety ty = Ty.Map.get ty rety.rety_map
+
+let is_undefined_atom_ t = match T.repr t with
+  | TI.Builtin (`Undefined_atom _) -> true
+  | _ -> false
+
+(* decode an atomic term [t]: recursively infer the expected types,
    and use the corresponding constants from [rety] *)
 let decode_term ?(subst=Var.Subst.empty) state rety t ty =
-  (* we expect [t:ty] *)
+  (* decode [t], expecting [t:ty] *)
   let rec aux t ty = match T.repr t with
     | TI.Var v ->
       begin match Var.Subst.find ~subst v with
@@ -329,6 +336,12 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
           errorf_ "variable `%a` not bound in `@[%a@]`"
             Var.print_full v (Var.Subst.print Var.print_full) subst
       end
+    | TI.App (f, l) when is_undefined_atom_ f ->
+      (* must infer type of [f] using arguments: its expected type
+         is [typeof l -> ty] *)
+      let l, tys = List.map aux' l |> List.split in
+      let f = aux f (U.ty_arrow_l tys ty) in
+      U.app f l
     | TI.App (f, l) ->
       (* use the expected type of [f] *)
       let _, ty_args, ty_ret = expected_ty state f |> U.ty_unfold in
@@ -337,8 +350,10 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
       assert (U.is_const f);
       let l = List.map2 aux l ty_args in
       U.app f l
+    | TI.Builtin (`Undefined_atom (c,_ty')) ->
+      U.builtin (`Undefined_atom (c,ty))
     | TI.Const id ->
-      begin match Ty.Map.get ty rety.rety_map with
+      begin match retype_find rety ty with
         | None -> t
         | Some map ->
           (* if [id] is a unitype domain constant, replace it *)
@@ -351,6 +366,22 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
           let ty = expected_ty state t in
           aux t ty)
         ~bind:(fun _ _ -> assert false)
+
+  (* decode [t], not knowing its type; or fail if it can't be inferred *)
+  and aux' t = match T.repr t with
+    | TI.Var v ->
+      begin match Var.Subst.find ~subst v with
+        | Some v' -> U.var v', Var.ty v'
+        | None ->
+          errorf_ "variable `%a` not bound in `@[%a@]`"
+            Var.print_full v (Var.Subst.print Var.print_full) subst
+      end
+    | TI.Const _ -> t, expected_ty state t
+    | TI.App (f, _) ->
+      (* use the expected type of [f],  then fallback on [aux] *)
+      let _, _, ty_ret = expected_ty state f |> U.ty_unfold in
+      aux t ty_ret, ty_ret
+    | _ -> errorf_ "could not infer expected type of `@[%a@]`" P.print t
   in
   aux t ty
 

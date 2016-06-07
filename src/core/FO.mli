@@ -42,7 +42,7 @@ type ('t, 'ty) view =
   | DataTest of id * 't
   | DataSelect of id * int * 't
   | Undefined of id * 't (** ['t] is not defined here *)
-  | Undefined_atom of id * 'ty (** some undefined term of given type *)
+  | Undefined_atom of id * 'ty * 't list (** some undefined term of given type, + args *)
   | Unparsable of 'ty (** could not parse term *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Mu of 'ty var * 't   (** caution, not supported everywhere *)
@@ -127,7 +127,7 @@ module T : sig
   val data_test : id -> t -> t
   val data_select : id -> int -> t -> t
   val undefined : id -> t -> t
-  val undefined_atom : id -> Ty.t -> t
+  val undefined_atom : id -> Ty.t -> t list -> t
   val unparsable : Ty.t -> t
   val var : Ty.t var -> t
   val let_ : Ty.t var -> t -> t -> t

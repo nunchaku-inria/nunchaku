@@ -585,6 +585,8 @@ module type UTIL_REPR = sig
   val ty_is_Prop : t_ -> bool
   (** t == Prop? *)
 
+  val ty_is_unitype : t_ -> bool
+
   val ty_num_param : t_ -> int
   (** Number of type variables that must be bound in the type. *)
 end
@@ -740,6 +742,10 @@ module UtilRepr(T : REPR)
 
   let ty_is_Prop t = match T.repr t with
     | TyBuiltin `Prop -> true
+    | _ -> false
+
+  let ty_is_unitype t = match T.repr t with
+    | TyBuiltin `Unitype -> true
     | _ -> false
 
   let rec ty_returns t = match T.repr t with

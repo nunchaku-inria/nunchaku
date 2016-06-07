@@ -11,7 +11,7 @@ type term =
   | Var of var
   | True
   | False
-  | Undefined of term
+  | Undefined_atom of term list (* ?__ args *)
 
 type form =
   | And of form list
@@ -44,7 +44,7 @@ type problem = {
 
 let app id l = App (id,l)
 let const id = app id []
-let undefined t = Undefined t
+let undefined_atom l = Undefined_atom l
 let var v = Var v
 let true_ = True
 let false_ = False
@@ -115,7 +115,8 @@ let rec print_term_tptp out = function
   | App (id,[]) -> CCFormat.string out (name_of_id_ id)
   | App (id,l) ->
     fpf out "%s(@[<hv>%a@])" (name_of_id_ id) (pp_list print_term_tptp) l
-  | Undefined t -> fpf out "$undefined(@[%a@])" print_term_tptp t
+  | Undefined_atom [] -> fpf out "$undefined"
+  | Undefined_atom l -> fpf out "$undefined(@[%a@])" (pp_list print_term_tptp) l
   | True -> CCFormat.string out "$true"
   | False -> CCFormat.string out "$false"
 

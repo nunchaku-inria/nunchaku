@@ -13,7 +13,7 @@ type term =
   | Var of var
   | True
   | False
-  | Undefined of term
+  | Undefined_atom of term list
 
 type form =
   | And of form list
@@ -47,7 +47,7 @@ type problem = {
 val const : ID.t -> term
 val app : ID.t -> term list -> term
 val var : var -> term
-val undefined : term -> term
+val undefined_atom : term list -> term
 val true_ : term
 val false_ : term
 
