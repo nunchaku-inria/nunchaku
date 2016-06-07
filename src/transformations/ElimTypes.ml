@@ -467,12 +467,16 @@ let decode_model ~state m =
 
 (** {2 Pipe} *)
 
-let pipe_with ?on_decoded ~decode ~print ~check:_ =
+let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print ()
       ~f:(fun () ->
         let module Ppb = Problem.Print(P)(P) in
         Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name Ppb.print)
+    @
+    Utils.singleton_if check () ~f:(fun () ->
+      let module C = TypeCheck.Make(T) in
+      C.check_problem ?env:None)
   in
   Transform.make
     ~name

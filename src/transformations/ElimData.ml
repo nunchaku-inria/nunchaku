@@ -483,6 +483,9 @@ let find_select_ dec c i =
     errorf "could not find, in model,@ the value for %d-th selector of `%a`"
       i ID.print c
 
+(* FIXME: detect looping constructs (i.e. cyclic codata).
+   -> maybe by partial memoization (put a variable + bool ref in the memo table) *)
+
 (* decode a term, recursively, replacing constants of uninterpreted
    domains by their value in the model *)
 let decode_term dec t =
