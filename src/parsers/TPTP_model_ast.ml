@@ -156,7 +156,7 @@ let to_model
         | Var v -> subst v
     in
     (* convert a list of cases into a Model.DT *)
-    let cases_to_dt ~rhs_to_term id input_vars l =
+    let cases_to_dt ~rhs_to_term input_vars l =
       (* create fresh variables *)
       let vars = match l with
         | [] -> assert false
@@ -188,7 +188,7 @@ let to_model
                conds, rhs)
             l
         in
-        let else_ = T.undefined (T.app id (List.map T.var vars)) in
+        let else_ = T.undefined_atom (List.map T.var vars) in
         let dt = M.DT.test l ~else_ in
         `Fun (vars, dt)
       )
@@ -206,7 +206,7 @@ let to_model
                m
              | Some id ->
                begin match
-                   cases_to_dt id vars l
+                   cases_to_dt vars l
                      ~rhs_to_term:(fun rhs -> T.const (get_or_create_id rhs))
                  with
                    | `Const rhs -> M.add_const m (T.const id, rhs, M.Symbol_fun)
@@ -221,7 +221,7 @@ let to_model
                m
              | Some id ->
                begin match
-                   cases_to_dt id vars l
+                   cases_to_dt vars l
                      ~rhs_to_term:(fun b -> if b then T.true_ else T.false_)
                  with
                    | `Const rhs -> M.add_const m (T.const id, rhs, M.Symbol_prop)

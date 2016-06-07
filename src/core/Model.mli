@@ -62,6 +62,7 @@ type symbol_kind =
   | Symbol_fun
   | Symbol_utype
   | Symbol_data
+  | Symbol_codata
 
 (** definition of a function in the model *)
 type (+'t, +'ty) fun_def =

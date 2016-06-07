@@ -136,6 +136,7 @@ type symbol_kind =
   | Symbol_fun
   | Symbol_utype
   | Symbol_data
+  | Symbol_codata
 
 type (+'t, +'ty) fun_def =
   ('t * 'ty Var.t list * ('t,'ty) decision_tree * symbol_kind)
@@ -222,7 +223,7 @@ let print pt pty out m =
     fpf out "@[<2>(%a : %a)@]" Var.print_full v pty (Var.ty v) in
   let pplist ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp in
   let pp_const out (t,u,_) =
-    fpf out "@[<2>val %a :=@ @[%a@]@]." (pt TI.P_top) t (pt TI.P_top) u in
+    fpf out "@[<2>val @[%a@]@ :=@ @[%a@]@]." (pt TI.P_top) t (pt TI.P_top) u in
   let pp_type out (ty,dom) =
     fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
       pty ty (pplist ~sep:", " ID.print) dom

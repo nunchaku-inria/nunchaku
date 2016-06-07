@@ -298,9 +298,72 @@ let encode_data state l =
   let acyclicity_l = CCList.flat_map acyclicity_ax etys in
   decl_l @ acyclicity_l @ ax_l
 
-(* TODO: axiomatization of equality of codatatypes *)
-let eq_axiom _ety =
-  assert false
+(* axiomatization of equality of codatatypes:
+  - declare a recursive fun [eq_corec : ty -> ty -> prop] such that
+    [eq_corec a b] is true iff [a] and [b] are structurally equal
+   - assert [forall a b. eq_corec a b <=> a=b] *)
+let eq_corec_axiom ety =
+  let id = ety.ety_id in
+  (* is [ty = id]? *)
+  let is_same_ty ty = match T.repr ty with
+    | TI.Const id' -> ID.equal id id'
+    | _ -> false
+  in
+  (* [id_c : id -> id -> prop] *)
+  let id_c = ID.make_f "eq_corec_%a" ID.print_name id in
+  let ty_c = U.ty_arrow_l [U.const id; U.const id] U.ty_prop in
+  let def_c = Stmt.mk_defined id_c ty_c in
+  (* definition:
+     [eq_corec x y :=
+       exists cstor.
+       (x = cstor a1...an && y = cstor b1...bn &&
+          And_k eq_corec a_k b_k)]
+  *)
+  let x = Var.make ~ty:(U.const id) ~name:"x" in
+  let y = Var.make ~ty:(U.const id) ~name:"y" in
+  let vars = [x;y] in
+  let ax_c =
+    List.map
+      (fun cstor ->
+         (* guards: [is_cstor {x,y}] *)
+         let test_x = U.app_const (fst cstor.ecstor_test) [U.var x] in
+         let test_y = U.app_const (fst cstor.ecstor_test) [U.var y] in
+         let subcases =
+           List.map
+             (fun (proj,proj_ty) ->
+                (* how do we decide whether the arguments are equal? *)
+                let mk_eq = match U.ty_unfold proj_ty with
+                  | _, [_], ret when is_same_ty ret ->
+                    (fun a b -> U.app_const id_c [a; b])
+                  | _ -> U.eq
+                in
+                mk_eq (U.app_const proj [U.var x]) (U.app_const proj [U.var y])
+             )
+             cstor.ecstor_proj
+         in
+         U.and_ (test_x :: test_y :: subcases))
+      ety.ety_cstors
+    |> U.or_
+  in
+  let def_c =
+    Stmt.axiom_rec ~info:Stmt.info_default
+      [ { Stmt.rec_defined=def_c;
+          rec_vars=vars;
+          rec_eqns=Stmt.Eqn_single (vars, ax_c)
+        } ]
+  in
+  (* also assert [forall x y. x=y <=> eq_corec x y] *)
+  let ax_eq =
+    let x = Var.make ~ty:(U.const id) ~name:"x" in
+    let y = Var.make ~ty:(U.const id) ~name:"y" in
+    U.forall_l [x;y]
+      (U.eq
+         (U.eq (U.var x) (U.var y))
+         (U.app_const id_c [U.var x; U.var y]))
+  in
+  [ def_c
+  ; Stmt.axiom1 ~info:Stmt.info_default ax_eq
+  ]
 
 (* encode list of codata into axioms *)
 let encode_codata state l =
@@ -308,7 +371,7 @@ let encode_codata state l =
   let decl_l = common_decls etys in
   let ax_l = common_axioms etys in
   (* definition of coinductive equality *)
-  let eq_axiom_l = List.map eq_axiom etys in
+  let eq_axiom_l = CCList.flat_map eq_corec_axiom etys in
   decl_l @ eq_axiom_l @ ax_l
 
 let encode_stmt state stmt =

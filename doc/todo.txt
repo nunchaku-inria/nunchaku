@@ -21,3 +21,7 @@
 (A) 2016-04-14 do not propagate incompleteness flags, just change result back?
 (A) 2016-05-10 fix ElimTypes (for copy/spec statements); fix decoding
 (A) 2016-05-26 fix model parsing for paradox (see spec_inval_def2.nun)
+(A) 2016-06-01 decode models in ElimCopy (insert casts, change types)
+(A) 2016-06-01 repair, in ElimCopy, rec/pred statements (adjust num. of variables)
+(A) 2016-06-06 system of dependencies for passes (checked at pipeline-build time); replace old GADT
+(A) 2016-06-06 pass to eliminate predicate arguments (using pseudo-prop type + ite)

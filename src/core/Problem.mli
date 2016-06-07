@@ -135,5 +135,8 @@ module Res : sig
 
   val print : (TermInner.prec -> 't printer) -> 'ty printer -> ('t,'ty) t printer
 
+  val print_head : (_,_) t printer
+  (** print result, not content (i.e. not the model *)
+
   val to_sexp : 't to_sexp -> 'ty to_sexp -> ('t,'ty) t to_sexp
 end

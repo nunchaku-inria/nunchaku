@@ -23,6 +23,7 @@ type prec =
   | P_bot
   | P_guard
   | P_app
+  | P_arrow
   | P_eq
   | P_not
   | P_bind
@@ -420,6 +421,7 @@ module Print(T : REPR)
     | P_bot
     | P_top
     | P_not
+    | P_arrow
     | P_bind -> true
 
   (* put "()" around [fmt] if needed *)
@@ -470,13 +472,12 @@ module Print(T : REPR)
         wrap P_bind p out "@[<2>%s @[<hv>%a@].@ %a@]" s
           (pp_list_ ~sep:" " pp_typed_var) vars print_in_binder body
     | TyArrow (a,b) ->
-        wrap P_or p out "@[<2>%a ->@ %a@]" print_in_binder a print_in_or b
+        wrap P_arrow p out "@[<2>%a ->@ %a@]" (print' P_arrow) a (print' P_arrow) b
   and pp_typed_var out v =
     let ty = Var.ty v in
     fpf out "(@[%a:@,@[%a@]@])" Var.print_full v print ty
   and print_in_app out t = print' P_app out t
   and print_in_binder out t = print' P_bind out t
-  and print_in_or out t = print' P_or out t
   and print out t = print' P_top out t
 
   let to_string = CCFormat.to_string print
@@ -583,6 +584,8 @@ module type UTIL_REPR = sig
 
   val ty_is_Prop : t_ -> bool
   (** t == Prop? *)
+
+  val ty_is_unitype : t_ -> bool
 
   val ty_num_param : t_ -> int
   (** Number of type variables that must be bound in the type. *)
@@ -739,6 +742,10 @@ module UtilRepr(T : REPR)
 
   let ty_is_Prop t = match T.repr t with
     | TyBuiltin `Prop -> true
+    | _ -> false
+
+  let ty_is_unitype t = match T.repr t with
+    | TyBuiltin `Unitype -> true
     | _ -> false
 
   let rec ty_returns t = match T.repr t with

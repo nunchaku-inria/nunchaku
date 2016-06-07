@@ -249,7 +249,7 @@ module Make(T : TI.S) = struct
           in
           let rhs = U.eval ~subst rhs in
           let body = match kind with
-            | Model.Symbol_utype | Model.Symbol_data -> assert false
+            | Model.Symbol_utype | Model.Symbol_data | Model.Symbol_codata -> assert false
             | Model.Symbol_fun -> U.eq (U.app t args) rhs
             | Model.Symbol_prop ->
                 (* propositions should become [p(x)] or [not p(x)] *)
@@ -276,7 +276,7 @@ module Make(T : TI.S) = struct
   let role_of_kind = function
     | Model.Symbol_prop -> Role_predicate
     | Model.Symbol_fun -> Role_functor
-    | Model.Symbol_utype | Model.Symbol_data -> assert false
+    | Model.Symbol_utype | Model.Symbol_data | Model.Symbol_codata -> assert false
 
   (* preprocess model to make it as FO as possible, and associate it a role. *)
   let preprocess_model (m:model) : tptp_model =

@@ -48,6 +48,7 @@ type symbol_kind = Model.symbol_kind
 
 type decoded_sym =
   | ID of id (* regular fun *)
+  | De_bruijn of int * Ty.t (* index to mu-binder *)
   | DataTest of id
   | DataSelect of id * int
 
@@ -116,6 +117,11 @@ type decode_state = {
     (* set of symbols to ask values for in the model *)
   vars: Ty.t Var.t ID.Tbl.t;
     (* variables in scope *)
+  db_prefixes: (string,ground_ty) Hashtbl.t;
+    (* prefixes expected for De Bruijn indices *)
+  mutable db_stack: Ty.t Var.t option ref list;
+    (* stack of variables for mu-binders, with a bool ref.
+       If the ref is true, it means the variable is used at least once *)
   mutable witnesses : ID.t gty_map;
     (* type -> witness of this type *)
 }
@@ -125,6 +131,8 @@ let create_decode_state ~kinds () = {
   id_to_name=ID.Tbl.create 32;
   name_to_id=Hashtbl.create 32;
   symbols=ID.Tbl.create 32;
+  db_prefixes=Hashtbl.create 8;
+  db_stack=[];
   vars=ID.Tbl.create 32;
   witnesses=gty_map_empty;
 }
@@ -220,6 +228,14 @@ let rec pp_gty ~decode out g =
   | FO.TyApp (id,l) ->
       fpf out "_%s_%a_" (id_to_name ~decode id |> normalize_str)
         (pp_list ~sep:"_" (pp_gty ~decode)) l
+
+(* the prefix used by CVC4 for constants of the given type *)
+let const_of_ty ~decode gty =
+  CCFormat.sprintf "@[<h>@uc_%a@]" (pp_gty ~decode) gty
+
+(* the i-th constant of the given type *)
+let const_of_ty_nth ~decode gty i =
+  CCFormat.sprintf "@[<h>%s_%d@]" (const_of_ty ~decode gty) i
 
 (* print processed problem *)
 let print_problem out (decode, pb) =
@@ -372,13 +388,25 @@ let find_atom_ ~decode s =
 
 (* parse an identifier *)
 let parse_atom_ ~decode = function
-  | `Atom s -> find_atom_ ~decode s
+  | `Atom s ->
+    begin match CCString.Split.right ~by:"_" s with
+      | None -> find_atom_ ~decode s
+      | Some (pre,n) ->
+        (* might be a De Bruijn index *)
+        try
+          let ty = Hashtbl.find decode.db_prefixes pre in
+          let n = int_of_string n in
+          De_bruijn (n,ty)
+        with Not_found ->
+          find_atom_ ~decode s
+    end
   | _ -> error_ "expected ID, got a list"
 
 let parse_id_ ~decode s = match parse_atom_ ~decode s with
   | ID id -> id
+  | De_bruijn _
   | DataTest _
-  | DataSelect _ -> error_ "expected ID, got data test/select"
+  | DataSelect _ -> error_ "expected ID, got data test/select/de bruijn"
 
 (* parse an atomic type *)
 let rec parse_ty_ ~decode = function
@@ -403,14 +431,44 @@ let parse_int_ = function
   | `List _ -> error_ "expected int"
 
 (* parse a ground term *)
-let rec parse_term_ ~decode = function
+let rec parse_term_ ~decode s =
+  let r = ref None in (* maybe, a mu-variable *)
+  decode.db_stack <- r :: decode.db_stack;
+  let res =
+    CCFun.finally
+    ~h:(fun () -> decode.db_stack <- List.tl decode.db_stack)
+    ~f:(fun () -> parse_term_sub_ ~decode s)
+  in
+  match !r with
+    | None -> res
+    | Some v -> T.mu v res (* introduce a mu binder *)
+and parse_term_sub_ ~decode = function
   | `Atom "true" -> T.true_
   | `Atom "false" -> T.false_
   | `Atom _ as t ->
-      let id = parse_id_ ~decode t in
-      (* can be a constant or a variable, depending on scoping *)
-      begin try T.var (ID.Tbl.find decode.vars id)
-      with Not_found -> T.const id
+      begin match parse_atom_ ~decode t with
+        | ID id ->
+          (* can be a constant or a variable, depending on scoping *)
+          begin try T.var (ID.Tbl.find decode.vars id)
+            with Not_found -> T.const id
+          end
+        | De_bruijn (n,ty) ->
+          (* adjust: the current term, i.e. the constant, doesn't have
+             a binder, so its stack slot should not count *)
+          let n = n+1 in
+          begin match CCList.Idx.get decode.db_stack n with
+            | None -> errorf_ "De Bruijn index %d not bound" n
+            | Some r ->
+              match !r with
+                | Some v -> T.var v (* use same variable *)
+                | None ->
+                  (* introduce new variable *)
+                  let v = Var.make ~ty ~name:"self" in
+                  r := Some v;
+                  T.var v
+          end
+        | DataTest _
+        | DataSelect _ -> error_ "expected ID, got data test/select"
       end
   | `List [`Atom "LAMBDA"; `List bindings; body] ->
       (* lambda term *)
@@ -458,6 +516,7 @@ let rec parse_term_ ~decode = function
             (* regular function app *)
             let l = List.map (parse_term_ ~decode) l in
             T.app f l
+        | De_bruijn _, _ -> error_ "invalid arity for De Bruijn index"
         | DataTest c, [t] ->
             let t = parse_term_ ~decode t in
             T.data_test c t
@@ -543,8 +602,7 @@ let parse_model_ ~decode : CCSexp.t -> _ Model.t = function
             let terms = Sequence.(0 -- (n-1)
               |> map
                 (fun i ->
-                  let name =
-                    CCFormat.sprintf "@[<h>@uc_%a_%d@]" (pp_gty ~decode) gty i in
+                  let name = const_of_ty_nth ~decode gty i in
                   let id = match find_atom_ ~decode name with
                     | ID id -> id
                     | _ -> assert false
@@ -644,11 +702,7 @@ type processed_problem = decode_state * problem
 
 (* is [ty] a finite (uninterpreted) type? *)
 let is_finite_ decode ty = match Ty.view ty with
-  | FO.TyApp (id, _) ->
-      begin match get_kind ~decode id with
-        | Model.Symbol_utype -> true
-        | Model.Symbol_data | Model.Symbol_fun | Model.Symbol_prop -> false
-      end
+  | FO.TyApp (id, _) -> get_kind ~decode id = Model.Symbol_utype
   | _ -> false
 
 (* does two things:
@@ -660,6 +714,9 @@ let preprocess pb : processed_problem =
   let n = ref 0 in
   let state = create_decode_state ~kinds () in
   let decl state id c = ID.Tbl.add state.symbols id c in
+  let add_db_prefix state c ty =
+    Hashtbl.replace state.db_prefixes c ty
+  in
   (* if some types in [l] do not have a witness, add them to [[stmt]] *)
   let add_ty_witnesses stmt l =
     List.fold_left
@@ -694,6 +751,16 @@ let preprocess pb : processed_problem =
       | FO.CardBound (id,_,_)
       | FO.TyDecl (id,0) ->
           add_ty_witnesses stmt [gty_const id]
+      | FO.MutualTypes (`Codata, l) ->
+          List.iter
+            (fun tydef ->
+               (* use De Bruijn prefixes *)
+               let ty = gty_const tydef.FO.ty_name in
+               let c = const_of_ty ~decode:state ty in
+               Utils.debugf ~section 5 "@[<2>declare `%s` as De Bruijn prefix@]" (fun k->k c);
+               add_db_prefix state c ty)
+            l.FO.tys_defs;
+          [stmt]
       | FO.TyDecl _
       | FO.Axiom _
       | FO.Goal _

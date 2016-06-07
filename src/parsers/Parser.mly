@@ -48,6 +48,7 @@
 %token LOGIC_EXISTS
 %token LOGIC_EQ
 %token LOGIC_NEQ
+%token ASSERTING
 
 %token PROP
 %token TYPE
@@ -224,6 +225,11 @@ or_term:
 
 term:
   | t=or_term { t }
+  | t=apply_term ASSERTING g=term
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.asserting ~loc t [g]
+    }
   | FUN vars=typed_var+ DOT t=term
     {
       let loc = L.mk_pos $startpos $endpos in

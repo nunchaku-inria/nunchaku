@@ -41,7 +41,7 @@ type ('t, 'ty) view =
   | DataTest of id * 't
   | DataSelect of id * int * 't
   | Undefined of id * 't (** ['t] is not defined here *)
-  | Undefined_atom of id * 'ty (** some undefined term of given type *)
+  | Undefined_atom of id * 'ty * 't list (** some undefined term of given type, + args *)
   | Unparsable of 'ty (** could not parse term *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Mu of 'ty var * 't   (** caution, not supported everywhere *)
@@ -144,7 +144,7 @@ module T = struct
   let data_test c t = make_ (DataTest (c,t))
   let data_select c n t = make_ (DataSelect (c,n,t))
   let undefined c t = make_ (Undefined (c,t))
-  let undefined_atom c ty = make_ (Undefined_atom (c,ty))
+  let undefined_atom c ty l = make_ (Undefined_atom (c,ty,l))
   let unparsable ty = make_ (Unparsable ty)
   let let_ v t u = make_ (Let(v,t,u))
   let fun_ v t = make_ (Fun (v,t))
@@ -242,8 +242,11 @@ let rec print_term out t = match T.view t with
     fpf out "(@[<2>select-%a-%d@ %a@])" ID.print c n print_term t
   | Undefined (c,t) ->
     fpf out "(@[<2>undefined-%a@ %a@])" ID.print c print_term t
-  | Undefined_atom (c,ty) ->
+  | Undefined_atom (c,ty,[]) ->
     fpf out "(@[<2>undefined-%a@ ty:%a@])" ID.print c print_ty ty
+  | Undefined_atom (c,ty,l) ->
+    fpf out "(@[<2>undefined-%a@ ty:%a@ %a@])"
+      ID.print c print_ty ty (pp_list_ print_term) l
   | Unparsable ty ->
     fpf out "(@[<2>unparsable ty:%a@])" print_ty ty
   | Let (v,t,u) ->
@@ -484,10 +487,14 @@ module Util = struct
       | Axiom _
       | CardBound _
       | Goal _ -> m
-      | MutualTypes (_, tydefs) ->
+      | MutualTypes (d, tydefs) ->
+          let d = match d with
+            | `Data -> M.Symbol_data
+            | `Codata -> M.Symbol_codata
+          in
           List.fold_left
             (fun m tydef ->
-              let m = ID.Map.add tydef.ty_name M.Symbol_data m in
+              let m = ID.Map.add tydef.ty_name d m in
               ID.Map.fold (fun id _ m -> ID.Map.add id M.Symbol_fun m) tydef.ty_cstors m)
             m tydefs.tys_defs
     in
@@ -610,8 +617,10 @@ module Of_tptp = struct
     | TT.Var v -> T.var (conv_var v)
     | TT.True -> T.true_
     | TT.False -> T.false_
-    | TT.Undefined t -> T.undefined (gen_undefined_ ()) (conv_term t)
-
+    | TT.Undefined_atom l ->
+      (* a new undefined atom of type "unitype" *)
+      let l = List.map conv_term l in
+      T.undefined_atom (gen_undefined_ ()) (Ty.builtin `Unitype) l
 
   let conv_form _ = assert false (* TODO *)
 end

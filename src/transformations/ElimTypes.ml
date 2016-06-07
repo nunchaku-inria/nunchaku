@@ -53,7 +53,9 @@ let create_state ~sigma () = {
    precondition: [t] a type for which we created a new predicate *)
 let find_pred state t =
   assert (Ty.is_ty t);
-  Ty.Map.find t state.ty_to_pred
+  try Ty.Map.find t state.ty_to_pred
+  with Not_found ->
+    errorf_ "could not find the predicate for type@ `@[%a@]`" P.print t
 
 let encode_var subst v =
   let v' = Var.fresh_copy v |> Var.set_ty ~ty:U.ty_unitype in
@@ -86,10 +88,18 @@ let rec encode_term state subst t = match T.repr t with
     U.map subst t ~f:(encode_term state) ~bind:encode_var
 
 (* types are all sent to [state.dummy_ty] *)
-let encode_ty state _ t =
-  assert (Ty.is_ty t);
-  assert (Ty.Map.mem t state.ty_to_pred);
-  U.ty_unitype
+let rec encode_ty state ~top x t = match Ty.repr t with
+  | TyI.Builtin `Prop ->
+    if top then U.ty_prop
+    else error_ "cannot encode type prop";
+  | TyI.Arrow (a,b) ->
+    U.ty_arrow
+      (encode_ty state ~top:false x a)
+      (encode_ty state ~top x b)
+  | _ ->
+    assert (Ty.is_ty t);
+    assert (Ty.Map.mem t state.ty_to_pred);
+    U.ty_unitype
 
 (* mangle the type into a valid identifier *)
 let rec mangle_ty_ out t = match Ty.repr t with
@@ -136,13 +146,21 @@ let map_to_predicate state ty =
           if not (ID.Tbl.mem state.parametrized_ty id)
           then errorf_ "type constructor `%a`/%d has not been declared" ID.print id n;
           (* find name *)
-          let name = ID.make_f "is_%a" mangle_ty_ ty in
+          let name = ID.make_f "@[<h>is_%a@]" mangle_ty_ ty in
           add_pred_ state ty name;
           Some name
     end
 
+(* ensure  that the immediate arguments and return type map to predicates *)
 let ensure_maps_to_predicate state ty =
-  ignore (map_to_predicate state ty)
+  let aux ty = match Ty.repr ty with
+    | TyI.Builtin `Prop -> ()
+    | _ -> ignore (map_to_predicate state ty)
+  in
+  let _, args, ret = U.ty_unfold ty in
+  List.iter aux args;
+  aux ret;
+  ()
 
 let encode_stmt state st =
   Utils.debugf ~section 3 "@[<2>encode statement@ `@[%a@]`@]"
@@ -174,8 +192,8 @@ let encode_stmt state st =
     [] (* remove statement *)
   | Stmt.Decl (id, ty, attrs) when U.ty_returns_Prop ty ->
     (* symbol declaration *)
+    ensure_maps_to_predicate state ty;
     let _, args, _ = U.ty_unfold ty in
-    List.iter (ensure_maps_to_predicate state) args;
     (* new type [term -> term -> ... -> term -> prop] *)
     let ty' =
       U.ty_arrow_l
@@ -185,6 +203,7 @@ let encode_stmt state st =
     [ Stmt.decl ~info ~attrs id ty' ]
   | Stmt.Decl (id, ty, attrs) ->
     let _, args, ret = U.ty_unfold ty in
+    assert (not (U.ty_is_Prop ret));
     (* declare every argument type, + the return type *)
     let pred_ret = map_to_predicate state ret in
     let preds = List.map (map_to_predicate state) args in
@@ -213,7 +232,7 @@ let encode_stmt state st =
   | _ ->
     [Stmt.map_bind Var.Subst.empty st
       ~term:(encode_term state)
-      ~ty:(encode_ty state)
+      ~ty:(encode_ty state ~top:true)
       ~bind:Var.Subst.rename_var]
 
 let transform_pb pb =
@@ -231,8 +250,8 @@ type retyping = {
   rety_map: ID.t ID.Map.t Ty.Map.t; (* type -> (uni_const -> const) *)
 }
 
-(* for each type predicate, find cardinality and build a new set of
-   constants for this type *)
+(* for each type predicate, find cardinality of the corresponding type,
+   and build a new set of constants for this type *)
 let rebuild_types state m : retyping =
   (* set of constants for unitype *)
   let uni_domain =
@@ -296,12 +315,19 @@ let rec expected_ty state t = match T.repr t with
   | TI.App (f, _) ->
     let _, _, ret = expected_ty state f |> U.ty_unfold in
     ret
+  | TI.Builtin (`Undefined_atom (_,ty)) -> ty
   | _ -> errorf_ "could not find the expected type of `@[%a@]`" P.print t
 
-(* decode an atomic term t: recursively infer the expected types,
+let retype_find rety ty = Ty.Map.get ty rety.rety_map
+
+let is_undefined_atom_ t = match T.repr t with
+  | TI.Builtin (`Undefined_atom _) -> true
+  | _ -> false
+
+(* decode an atomic term [t]: recursively infer the expected types,
    and use the corresponding constants from [rety] *)
 let decode_term ?(subst=Var.Subst.empty) state rety t ty =
-  (* we expect [t:ty] *)
+  (* decode [t], expecting [t:ty] *)
   let rec aux t ty = match T.repr t with
     | TI.Var v ->
       begin match Var.Subst.find ~subst v with
@@ -310,6 +336,12 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
           errorf_ "variable `%a` not bound in `@[%a@]`"
             Var.print_full v (Var.Subst.print Var.print_full) subst
       end
+    | TI.App (f, l) when is_undefined_atom_ f ->
+      (* must infer type of [f] using arguments: its expected type
+         is [typeof l -> ty] *)
+      let l, tys = List.map aux' l |> List.split in
+      let f = aux f (U.ty_arrow_l tys ty) in
+      U.app f l
     | TI.App (f, l) ->
       (* use the expected type of [f] *)
       let _, ty_args, ty_ret = expected_ty state f |> U.ty_unfold in
@@ -318,8 +350,10 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
       assert (U.is_const f);
       let l = List.map2 aux l ty_args in
       U.app f l
+    | TI.Builtin (`Undefined_atom (c,_ty')) ->
+      U.builtin (`Undefined_atom (c,ty))
     | TI.Const id ->
-      begin match Ty.Map.get ty rety.rety_map with
+      begin match retype_find rety ty with
         | None -> t
         | Some map ->
           (* if [id] is a unitype domain constant, replace it *)
@@ -332,6 +366,22 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
           let ty = expected_ty state t in
           aux t ty)
         ~bind:(fun _ _ -> assert false)
+
+  (* decode [t], not knowing its type; or fail if it can't be inferred *)
+  and aux' t = match T.repr t with
+    | TI.Var v ->
+      begin match Var.Subst.find ~subst v with
+        | Some v' -> U.var v', Var.ty v'
+        | None ->
+          errorf_ "variable `%a` not bound in `@[%a@]`"
+            Var.print_full v (Var.Subst.print Var.print_full) subst
+      end
+    | TI.Const _ -> t, expected_ty state t
+    | TI.App (f, _) ->
+      (* use the expected type of [f],  then fallback on [aux] *)
+      let _, _, ty_ret = expected_ty state f |> U.ty_unfold in
+      aux t ty_ret, ty_ret
+    | _ -> errorf_ "could not infer expected type of `@[%a@]`" P.print t
   in
   aux t ty
 
@@ -345,6 +395,8 @@ let decode_vars ?(subst=Var.Subst.empty) ty vars =
        let v' = Var.set_ty v ~ty in
        Var.Subst.add ~subst v v', v')
     subst (List.combine vars args)
+
+exception Dead_branch
 
 let decode_model ~state m =
   let rety = rebuild_types state m in
@@ -371,18 +423,35 @@ let decode_model ~state m =
           let subst, vars = decode_vars ty vars in
           let dt' =
             M.DT.test
-              (List.map
+              (CCList.filter_map
                  (fun (tests,then_) ->
-                    let tests' =
-                      List.map
-                        (fun (v,t) ->
-                           let v' = Var.Subst.find_exn ~subst v in
-                           let ty_v = Var.ty v' in
-                           v', dec_t ~subst t ty_v)
-                        tests
-                    in
-                    let then_' = dec_t ~subst then_ ty_ret in
-                    tests', then_')
+                    try
+                      let tests' =
+                        List.map
+                          (fun (v,t) ->
+                             let v' = Var.Subst.find_exn ~subst v in
+                             let ty_v = Var.ty v' in
+                             begin match T.repr t, retype_find rety ty_v with
+                               | TI.Const id, Some map when not (ID.Map.mem id map) ->
+                                 (* [ty_v] is a finite type whose elements
+                                    have been encoded into [domain map].
+                                    Since [t] is a constant outside this
+                                    domain, the test is necessarily false
+                                    and must be removed *)
+                                 raise Dead_branch
+                               | _ -> ()
+                             end;
+                             let t' = dec_t ~subst t ty_v in
+                             v', t')
+                          tests
+                      in
+                      let then_' = dec_t ~subst then_ ty_ret in
+                      Some (tests', then_')
+                    with Dead_branch ->
+                      (* this branch of the DT is useless, as it performs
+                         impossible tests *)
+                      None
+                 )
                  dt.M.DT.tests)
               ~else_:(dec_t ~subst dt.M.DT.else_ ty_ret)
           in

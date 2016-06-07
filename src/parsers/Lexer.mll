@@ -69,6 +69,7 @@ rule token = parse
   | "if" { IF }
   | "then" { THEN }
   | "else" { ELSE }
+  | "asserting" { ASSERTING }
   | "and" { AND }
   | "true" { LOGIC_TRUE }
   | "false" { LOGIC_FALSE }

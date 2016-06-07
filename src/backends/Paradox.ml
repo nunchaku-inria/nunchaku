@@ -61,13 +61,17 @@ let parse_model s =
   A.to_model l
 
 (* [s] is the output of paradox, parse a result from it *)
-let parse_res s =
+let parse_res ~meta s =
   if CCString.mem ~sub:"BEGIN MODEL" s
-  then
-    let m = parse_model s in
-    Res.Sat m, S.Shortcut
+  then if meta.ProblemMetadata.sat_means_unknown
+    then Res.Unknown, S.No_shortcut
+    else
+      let m = parse_model s in
+      Res.Sat m, S.Shortcut
   else if CCString.mem ~sub:"RESULT: Unsatisfiable" s
-  then Res.Unsat, S.Shortcut
+  then if meta.ProblemMetadata.unsat_means_unknown
+    then Res.Unknown, S.No_shortcut
+    else Res.Unsat, S.Shortcut
   else Res.Unknown, S.No_shortcut
 
 let solve ~deadline pb =
@@ -101,7 +105,7 @@ let solve ~deadline pb =
            | S.Fut.Done (E.Ok (stdout, errcode)) ->
              Utils.debugf ~lock:true ~section 2
                "@[<2>paradox exited with %d, stdout:@ `%s`@]" (fun k->k errcode stdout);
-             parse_res stdout
+             parse_res ~meta:pb.FO_tptp.pb_meta stdout
            | S.Fut.Done (E.Error e) ->
              Res.Error e, S.Shortcut
            | S.Fut.Stopped ->
@@ -119,7 +123,11 @@ let call ?prio ~print problem =
   if print
   then Format.printf "@[<v2>FO_tptp problem:@ %a@]@." T.print_problem_tptp problem;
   S.Task.make ?prio
-    (fun ~deadline () -> solve ~deadline problem)
+    (fun ~deadline () ->
+       let res, short = solve ~deadline problem in
+       Utils.debugf ~section 2 "@[<2>paradox result:@ %a@]"
+         (fun k->k Res.print_head res);
+       res, short)
 
 let pipe ~print () =
   let encode pb =
