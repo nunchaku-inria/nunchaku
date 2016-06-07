@@ -325,8 +325,9 @@ let eq_corec_axiom ety =
   let ax_c =
     List.map
       (fun cstor ->
-         (* guard: [is_cstor y] *)
-         let test = U.app_const (fst cstor.ecstor_test) [U.var y] in
+         (* guards: [is_cstor {x,y}] *)
+         let test_x = U.app_const (fst cstor.ecstor_test) [U.var x] in
+         let test_y = U.app_const (fst cstor.ecstor_test) [U.var y] in
          let subcases =
            List.map
              (fun (proj,proj_ty) ->
@@ -340,7 +341,7 @@ let eq_corec_axiom ety =
              )
              cstor.ecstor_proj
          in
-         U.and_ (test :: subcases))
+         U.and_ (test_x :: test_y :: subcases))
       ety.ety_cstors
     |> U.or_
   in
