@@ -20,7 +20,7 @@ let section = Utils.Section.make name
 module Conv = TI.Convert(T)(T)
 
 type new_sym = {
-  sym_defines : T.t Var.t; (* the existential variable represented by the symbol *)
+  sym_defines : T.t; (* what is the formula represented by the symbol *)
   sym_ty : T.t; (* type of the symbol *)
 }
 
@@ -99,7 +99,7 @@ let skolemize_ ~state pol t =
             (* create new skolem function *)
             let skolem_id = new_sym ~state in
             let skolem = U.app (U.const skolem_id) (List.map U.var env.vars) in
-            let new_sym = { sym_defines=v; sym_ty=ty } in
+            let new_sym = { sym_defines=t; sym_ty=ty } in
             ID.Tbl.add state.tbl skolem_id new_sym;
             state.new_sym <- (skolem_id, new_sym):: state.new_sym;
             Utils.debugf ~section 2
@@ -186,7 +186,7 @@ let fpf = Format.fprintf
 let print_state out st =
   let pp_sym out (id,s) =
     fpf out "@[<2>%a: %a@ standing for `@[%a@]`@]"
-      ID.print id P.print s.sym_ty Var.print_full s.sym_defines
+      ID.print id P.print s.sym_ty P.print s.sym_defines
   in
   fpf out "@[<2>skolem table {@,%a@]@,}"
     (CCFormat.seq pp_sym) (ID.Tbl.to_seq st.tbl)
@@ -198,8 +198,8 @@ let find_id_def ~state id =
     existential formula it is the witness of *)
   try
     let sym = ID.Tbl.find state.tbl id in
-    let v = sym.sym_defines in
-    Some (U.app_const epsilon [U.var v])
+    let f = sym.sym_defines in
+    Some (U.app (U.const epsilon) [f])
   with Not_found -> None
 
 let decode_model ~state m =
