@@ -37,17 +37,20 @@ type ty = T.t
 type to_encode =
   | Test of ID.t
   | Select of ID.t * int
+  | Axiom_rec (* recursive function used for eq_corec/acyclicity axioms *)
   | Const of ID.t
 
 let equal_to_encode a b = match a, b with
   | Test a, Test b
   | Const a, Const b -> ID.equal a b
   | Select (a,i), Select (b,j) -> i=j && ID.equal a b
-  | Test _, _ | Const _, _ | Select _, _ -> false
+  | Axiom_rec, Axiom_rec -> true
+  | Test _, _ | Const _, _ | Select _, _ | Axiom_rec, _ -> false
 
 let hash_to_encode = function
   | Test a -> Hashtbl.hash (ID.hash a, "test")
   | Select (a,i) -> Hashtbl.hash (ID.hash a, "select", i)
+  | Axiom_rec -> Hashtbl.hash "axiom_rec"
   | Const a -> Hashtbl.hash (ID.hash a, "const")
 
 module Tbl = CCHashtbl.Make(struct
@@ -228,7 +231,7 @@ let common_axioms etys =
      [occurs_in a b] is true iff [a] is a strict subterm of [b].
    - then, assert [forall a. not (occurs_in a a)]
 *)
-let acyclicity_ax ety =
+let acyclicity_ax state ety =
   let id = ety.ety_id in
   (* is [ty = id]? *)
   let is_same_ty ty = match T.repr ty with
@@ -239,6 +242,7 @@ let acyclicity_ax ety =
   let id_c = ID.make_f "occurs_in_%a" ID.print_name id in
   let ty_c = U.ty_arrow_l [U.const id; U.const id] U.ty_prop in
   let def_c = Stmt.mk_defined id_c ty_c in
+  ID.Tbl.add state.decode id_c Axiom_rec;
   (* definition:
      [occurs_in x y :=
        exists cstor.
@@ -289,14 +293,14 @@ let encode_data state l =
   let etys = List.map (ety_of_dataty state) l in
   let decl_l = common_decls etys in
   let ax_l = common_axioms etys in
-  let acyclicity_l = CCList.flat_map acyclicity_ax etys in
+  let acyclicity_l = CCList.flat_map (acyclicity_ax state) etys in
   decl_l @ acyclicity_l @ ax_l
 
 (* axiomatization of equality of codatatypes:
   - declare a recursive fun [eq_corec : ty -> ty -> prop] such that
     [eq_corec a b] is true iff [a] and [b] are structurally equal
    - assert [forall a b. eq_corec a b <=> a=b] *)
-let eq_corec_axiom ety =
+let eq_corec_axiom state ety =
   let id = ety.ety_id in
   (* is [ty = id]? *)
   let is_same_ty ty = match T.repr ty with
@@ -307,6 +311,7 @@ let eq_corec_axiom ety =
   let id_c = ID.make_f "eq_corec_%a" ID.print_name id in
   let ty_c = U.ty_arrow_l [U.const id; U.const id] U.ty_prop in
   let def_c = Stmt.mk_defined id_c ty_c in
+  ID.Tbl.add state.decode id_c Axiom_rec;
   (* definition:
      [eq_corec x y :=
        exists cstor.
@@ -365,7 +370,7 @@ let encode_codata state l =
   let decl_l = common_decls etys in
   let ax_l = common_axioms etys in
   (* definition of coinductive equality *)
-  let eq_axiom_l = CCList.flat_map eq_corec_axiom etys in
+  let eq_axiom_l = CCList.flat_map (eq_corec_axiom state) etys in
   decl_l @ eq_axiom_l @ ax_l
 
 let encode_stmt state stmt =
@@ -442,7 +447,7 @@ let build_decoding state m =
             let m = ID.Map.get_or ~or_:IntMap.empty c dec.dec_select in
             let m = IntMap.add i (vars,dt,k) m in
             {dec with dec_select=ID.Map.add c m dec.dec_select}
-          | Some (Const _) -> dec
+          | Some (Const _ | Axiom_rec) -> dec
         end
       | _ -> dec)
 
