@@ -36,7 +36,6 @@ type state = {
   new_ids: unit ID.Tbl.t;
     (* set of newly introduced functions *)
 }
-(* TODO: store information for decoding *)
 
 let create_state ~sigma () =
   { count=0;

@@ -76,7 +76,12 @@ module Print(P1 : TermInner.PRINT)(P2 : TermInner.PRINT) = struct
   module PStmt = Statement.Print(P1)(P2)
 
   let print out pb =
-    fpf out "{@,%a@,}"
+    let str_of_meta m =
+      (if m.Metadata.sat_means_unknown then "(sat->?)" else "") ^
+      (if m.Metadata.unsat_means_unknown then "(unsat->?)" else "")
+    in
+    fpf out "{%s@,%a@,}"
+      (str_of_meta pb.metadata)
       (CCVector.print ~start:"" ~stop:"" ~sep:"" PStmt.print)
       pb.statements
 end
