@@ -161,6 +161,13 @@ module Res = struct
 
   let fpf = Format.fprintf
 
+  let print_head out = function
+    | Unsat -> fpf out "UNSAT"
+    | Timeout -> fpf out "TIMEOUT"
+    | Error e -> fpf out "ERROR %s" (Printexc.to_string e)
+    | Unknown -> fpf out "UNKNOWN"
+    | Sat _ -> fpf out "SAT"
+
   let print pt pty out = function
     | Unsat -> fpf out "UNSAT"
     | Timeout -> fpf out "TIMEOUT"

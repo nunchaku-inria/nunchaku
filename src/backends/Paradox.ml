@@ -123,7 +123,11 @@ let call ?prio ~print problem =
   if print
   then Format.printf "@[<v2>FO_tptp problem:@ %a@]@." T.print_problem_tptp problem;
   S.Task.make ?prio
-    (fun ~deadline () -> solve ~deadline problem)
+    (fun ~deadline () ->
+       let res, short = solve ~deadline problem in
+       Utils.debugf ~section 2 "@[<2>paradox result:@ %a@]"
+         (fun k->k Res.print_head res);
+       res, short)
 
 let pipe ~print () =
   let encode pb =
