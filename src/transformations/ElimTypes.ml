@@ -88,10 +88,18 @@ let rec encode_term state subst t = match T.repr t with
     U.map subst t ~f:(encode_term state) ~bind:encode_var
 
 (* types are all sent to [state.dummy_ty] *)
-let encode_ty state _ t =
-  assert (Ty.is_ty t);
-  assert (Ty.Map.mem t state.ty_to_pred);
-  U.ty_unitype
+let rec encode_ty state ~top x t = match Ty.repr t with
+  | TyI.Builtin `Prop ->
+    if top then U.ty_prop
+    else error_ "cannot encode type prop";
+  | TyI.Arrow (a,b) ->
+    U.ty_arrow
+      (encode_ty state ~top:false x a)
+      (encode_ty state ~top x b)
+  | _ ->
+    assert (Ty.is_ty t);
+    assert (Ty.Map.mem t state.ty_to_pred);
+    U.ty_unitype
 
 (* mangle the type into a valid identifier *)
 let rec mangle_ty_ out t = match Ty.repr t with
@@ -224,7 +232,7 @@ let encode_stmt state st =
   | _ ->
     [Stmt.map_bind Var.Subst.empty st
       ~term:(encode_term state)
-      ~ty:(encode_ty state)
+      ~ty:(encode_ty state ~top:true)
       ~bind:Var.Subst.rename_var]
 
 let transform_pb pb =
