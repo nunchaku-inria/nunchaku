@@ -365,6 +365,8 @@ let decode_vars ?(subst=Var.Subst.empty) ty vars =
        Var.Subst.add ~subst v v', v')
     subst (List.combine vars args)
 
+exception Dead_branch
+
 let decode_model ~state m =
   let rety = rebuild_types state m in
   let dec_t ?subst t ty = decode_term state rety ?subst t ty in
@@ -390,18 +392,35 @@ let decode_model ~state m =
           let subst, vars = decode_vars ty vars in
           let dt' =
             M.DT.test
-              (List.map
+              (CCList.filter_map
                  (fun (tests,then_) ->
-                    let tests' =
-                      List.map
-                        (fun (v,t) ->
-                           let v' = Var.Subst.find_exn ~subst v in
-                           let ty_v = Var.ty v' in
-                           v', dec_t ~subst t ty_v)
-                        tests
-                    in
-                    let then_' = dec_t ~subst then_ ty_ret in
-                    tests', then_')
+                    try
+                      let tests' =
+                        List.map
+                          (fun (v,t) ->
+                             let v' = Var.Subst.find_exn ~subst v in
+                             let ty_v = Var.ty v' in
+                             begin match T.repr t, retype_find rety ty_v with
+                               | TI.Const id, Some map when not (ID.Map.mem id map) ->
+                                 (* [ty_v] is a finite type whose elements
+                                    have been encoded into [domain map].
+                                    Since [t] is a constant outside this
+                                    domain, the test is necessarily false
+                                    and must be removed *)
+                                 raise Dead_branch
+                               | _ -> ()
+                             end;
+                             let t' = dec_t ~subst t ty_v in
+                             v', t')
+                          tests
+                      in
+                      let then_' = dec_t ~subst then_ ty_ret in
+                      Some (tests', then_')
+                    with Dead_branch ->
+                      (* this branch of the DT is useless, as it performs
+                         impossible tests *)
+                      None
+                 )
                  dt.M.DT.tests)
               ~else_:(dec_t ~subst dt.M.DT.else_ ty_ret)
           in
