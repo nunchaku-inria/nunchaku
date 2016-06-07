@@ -402,7 +402,7 @@ let decode_model state m =
       | TI.Const id when ID.Tbl.mem state.ds_rev_map id -> false
       | _ -> true)
 
-let pipe_with ~decode ~print ~check =
+let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print ()
       ~f:(fun () ->
@@ -417,10 +417,17 @@ let pipe_with ~decode ~print ~check =
   Transform.make
     ~name
     ~on_encoded
+    ?on_decoded
     ~encode:transform_pb
     ~decode
     ()
 
 let pipe ~print ~check =
+  let on_decoded = if print
+    then
+      [Format.printf "@[<2>@{<Yellow>res after %s@}:@ %a@]@."
+         name (Problem.Res.print P.print' P.print)]
+    else []
+  in
   let decode state = Problem.Res.map_m ~f:(decode_model state) in
-  pipe_with ~check ~decode ~print
+  pipe_with ~on_decoded ~check ~decode ~print
