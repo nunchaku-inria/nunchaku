@@ -40,6 +40,8 @@ type state = {
     (* parametrized ty *)
   sigma: T.t Signature.t;
     (* signature, for decoding purpose *)
+  new_decls: (T.t, T.t, inv) Statement.t CCVector.vector;
+    (* new declarations *)
 }
 
 let create_state ~sigma () = {
@@ -47,6 +49,7 @@ let create_state ~sigma () = {
   pred_to_ty=ID.Map.empty;
   parametrized_ty=ID.Tbl.create 16;
   sigma;
+  new_decls=CCVector.create();
 }
 
 (* find predicate for this type
@@ -117,6 +120,9 @@ let add_pred_ state ty pred =
   state.pred_to_ty <- ID.Map.add pred ty state.pred_to_ty;
   Utils.debugf ~section 3 "@[<2>map type `@[%a@]`@ to predicate `%a`@]"
     (fun k->k P.print ty ID.print pred);
+  let ty = U.ty_arrow U.ty_unitype U.ty_prop in
+  CCVector.push state.new_decls
+    (Stmt.decl ~info:Stmt.info_default ~attrs:[] pred ty);
   ()
 
 let as_id_ ty = match T.repr ty with
@@ -162,9 +168,7 @@ let ensure_maps_to_predicate state ty =
   aux ret;
   ()
 
-let encode_stmt state st =
-  Utils.debugf ~section 3 "@[<2>encode statement@ `@[%a@]`@]"
-    (fun k->k PStmt.print st);
+let encode_stmt_ state st : (_,_,_) Stmt.t list =
   let info = Stmt.info st in
   match Stmt.view st with
   | Stmt.Decl (id, ty, attrs) when U.ty_returns_Type ty ->
@@ -234,6 +238,18 @@ let encode_stmt state st =
       ~term:(encode_term state)
       ~ty:(encode_ty state ~top:true)
       ~bind:Var.Subst.rename_var]
+
+let encode_stmt state st =
+  Utils.debugf ~section 3 "@[<2>encode statement@ `@[%a@]`@]"
+    (fun k->k PStmt.print st);
+  let st' = encode_stmt_ state st in
+  let res =
+    List.rev_append
+      (CCVector.to_list state.new_decls)
+      st'
+  in
+  CCVector.clear state.new_decls;
+  res
 
 let transform_pb pb =
   let sigma = Problem.signature pb in
