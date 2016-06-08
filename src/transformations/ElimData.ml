@@ -221,8 +221,35 @@ let common_axioms etys =
                    (app_id_fst c1.ecstor_cstor (List.map U.var vars1))
                    (app_id_fst c2.ecstor_cstor (List.map U.var vars2)))
               |> mk_ax)
+       (* injectivity for each constructor [c]:
+          [forall a1...an b1...bn.
+            c(a1...an) = c(b1...bn) => a1=b1 & ... & an=bn]
+       *)
+       and ax_injectivity =
+         CCList.filter_map
+           (fun ec ->
+              let c_id, c_ty = ec.ecstor_cstor in
+              let _, args, _ = U.ty_unfold c_ty in
+              if args=[] then None
+              else (
+                let vars1 = List.mapi (fun i ty -> Var.makef ~ty "x_%d" i) args
+                and vars2 = List.mapi (fun i ty -> Var.makef ~ty "y_%d" i) args
+                in
+                U.forall_l (vars1 @ vars2)
+                  (U.imply
+                     (U.eq
+                        (U.app_const c_id (List.map U.var vars1))
+                        (U.app_const c_id (List.map U.var vars2)))
+                     (U.and_
+                        (List.map2
+                           (fun v1 v2 -> U.eq (U.var v1) (U.var v2))
+                           vars1 vars2)))
+                |> mk_ax
+                |> CCOpt.return
+              ))
+           ety.ety_cstors
        in
-       ax_exhaustiveness :: ax_projs @ ax_disjointness
+       ax_exhaustiveness :: ax_injectivity @ ax_projs @ ax_disjointness
     )
     etys
 
