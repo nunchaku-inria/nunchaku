@@ -37,9 +37,15 @@ val find_id_def : state:state -> ID.t -> T.t option
 (** Find definition of this Skolemized ID *)
 
 val decode_model :
-  state:state -> (T.t,T.t) Model.t -> (T.t,T.t) Model.t
+  skolems_in_model:bool ->
+  state:state ->
+  (T.t,T.t) Model.t -> (T.t,T.t) Model.t
+(** Decode the given model
+    @param skolems_in_model if true, skolem constants will stay in the
+      model after decoding; otherwise they are dropped *)
 
 val pipe :
+  skolems_in_model:bool ->
   mode:mode ->
   print:bool ->
   check:bool ->
@@ -52,6 +58,8 @@ val pipe :
     @param mode determines which variables are skolemized
     @param print if true, prints problem after skolemization
     @param check if true, check the invariants on the result
+    @param skolems_in_model if true, skolem constants will stay in the
+      model after decoding; otherwise they are dropped
     @param decode is given [find_id_def], which maps Skolemized
       constants to the formula they define *)
 val pipe_with :
