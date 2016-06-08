@@ -867,5 +867,9 @@ let pipes ?(options=[""]) ?slice ~print ~print_smt ~print_model () =
          call ?slice ~options ~prio ~print ~print_smt ~print_model pb)
     options, ()
   in
-  Transform.make ~name ~encode ~decode:(fun _ x -> x) ()
+  let input_spec =
+    Transform.Features.(of_list
+        [ Ty, Mono; Eqn, Absent; Copy, Absent; Match, Absent ])
+  in
+  Transform.make ~input_spec ~name ~encode ~decode:(fun _ x -> x) ()
 

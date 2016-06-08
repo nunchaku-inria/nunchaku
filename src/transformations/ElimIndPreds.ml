@@ -184,8 +184,6 @@ let elim_ind_preds
 : (term, term) Problem.t ->
   (term, term) Problem.t * decode_state
 = fun pb ->
-  Problem.check_features pb
-    ~spec:Problem.Features.(of_list [Ty, Mono; Ind_preds, Present; Eqn, Eqn_single]);
   let env = Problem.env pb in
   let pb' = Problem.flat_map_statements pb
     ~f:(fun st ->
@@ -208,7 +206,6 @@ let elim_ind_preds
         | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l]
         | Stmt.Goal g -> [Stmt.goal ~info g]
       )
-    ~features:Problem.Features.(update Ind_preds Absent)
   in
   pb', ()
 
@@ -226,6 +223,9 @@ let pipe_with ~decode ~print ~check =
   in
   Transform.make
     ~name
+    ~input_spec:Transform.Features.(of_list
+          [Ty, Mono; Ind_preds, Present; Eqn, Eqn_single])
+    ~map_spec:Transform.Features.(update Ind_preds Absent)
     ~on_encoded
     ~encode:(fun pb -> elim_ind_preds pb)
     ~decode

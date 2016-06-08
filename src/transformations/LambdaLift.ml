@@ -206,8 +206,6 @@ let rec tr_term ~state local_state subst t = match T.repr t with
       ~f:(fun subst -> tr_term ~state local_state subst)
 
 let tr_problem pb =
-  Problem.check_features pb
-    ~spec:Problem.Features.(of_list [Ty, Mono; Ind_preds, Absent; Eqn, Eqn_single]);
   let sigma = Problem.signature pb in
   let state = create_state ~sigma () in
   let local_state = {
@@ -216,7 +214,6 @@ let tr_problem pb =
   } in
   let pb' =
     Problem.flat_map_statements pb
-    ~features:Problem.Features.(update Fun Absent)
     ~f:(fun stmt ->
       let info = Stmt.info stmt in
       let stmt' = match Stmt.view stmt with
@@ -297,6 +294,9 @@ let pipe_with ~decode ~print ~check =
   in
   Transform.make
     ~name
+    ~input_spec:Transform.Features.(of_list
+          [Ty, Mono; Ind_preds, Absent; Eqn, Eqn_single])
+    ~map_spec:Transform.Features.(update Fun Absent)
     ~on_encoded
     ~encode:tr_problem
     ~decode

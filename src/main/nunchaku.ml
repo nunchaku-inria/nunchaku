@@ -345,6 +345,7 @@ let make_model_pipeline () =
           Transform.Pipe.flatten cvc4
         ))
   in
+  Transform.Pipe.check pipe;
   pipe
 
 (* run the pipeline on this problem, then run tasks, and return the

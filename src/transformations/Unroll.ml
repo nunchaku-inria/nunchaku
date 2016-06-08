@@ -252,8 +252,6 @@ let tr_statement ~state st =
       [st]
 
 let unroll pb =
-  Problem.check_features pb
-    ~spec:Problem.Features.(of_list [Ty, Mono; Ind_preds, Present]);
   let state = create_state () in
   let pb = Problem.flat_map_statements pb ~f:(tr_statement ~state) in
   pb, state
@@ -357,6 +355,7 @@ let pipe_with ?on_decoded ~decode ~print ~check =
   in
   Transform.make
     ?on_decoded
+    ~input_spec:Transform.Features.(of_list [Ty, Mono; Ind_preds, Present])
     ~name
     ~on_encoded
     ~encode:(fun pb -> unroll pb)

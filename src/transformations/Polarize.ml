@@ -424,8 +424,6 @@ let polarize
   (term, term) Problem.t ->
   (term, term) Problem.t * decode_state
 = fun ~polarize_rec pb ->
-  Problem.check_features pb
-    ~spec:Problem.Features.(of_list [Ty, Mono; Ind_preds, Present]);
   let trav = new traverse_pol ~polarize_rec () in
   trav#setup();
   Problem.iter_statements pb ~f:trav#do_stmt;
@@ -433,7 +431,6 @@ let polarize
   let pb' =
     Problem.make (CCVector.freeze res)
       ~meta:(Problem.metadata pb)
-      ~features:(Problem.features pb)
   in
   pb', trav#decode_state
 
@@ -602,6 +599,7 @@ let pipe_with ?on_decoded ~decode ~polarize_rec ~print ~check =
   in
   Transform.make
     ~name
+    ~input_spec:Transform.Features.(of_list [Ty, Mono; Ind_preds, Present])
     ~on_encoded ?on_decoded
     ~encode:(fun pb -> polarize ~polarize_rec pb)
     ~decode

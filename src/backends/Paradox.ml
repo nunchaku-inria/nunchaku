@@ -140,9 +140,15 @@ let call ?(print_model=false) ?prio ~print problem =
        res, short)
 
 let pipe ?(print_model=false) ~print () =
+  let input_spec =
+    Transform.Features.(of_list [
+        Ty, Absent; If_then_else, Absent; Match, Absent;
+        Fun, Absent; Copy, Absent; Ind_preds, Absent])
+  in
   let encode pb =
     let prio = 25 in
     call ~print_model ~prio ~print pb, ()
   in
   Transform.make
+    ~input_spec
     ~name ~encode ~decode:(fun _ x -> x) ()

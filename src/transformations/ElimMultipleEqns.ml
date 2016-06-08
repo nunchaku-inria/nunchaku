@@ -278,7 +278,10 @@ let uniq_eqns
   ty:T.t ->
   (term, term) Statement.equations ->
   (term, term) Statement.equations
-= fun ~env ~id ~ty (Stmt.Eqn_nested l) ->
+  = fun ~env ~id ~ty e -> match e with
+  | Stmt.Eqn_single _
+  | Stmt.Eqn_app _ -> assert false
+  | Stmt.Eqn_nested l ->
     (* create fresh vars *)
     let _, ty_args, _ = U.ty_unfold ty in
     let vars =
@@ -345,12 +348,9 @@ let uniq_eqn_st env st =
       env, Stmt.goal ~info g
 
 let uniq_eqns_pb pb =
-  Problem.check_features pb
-    ~spec:Problem.Features.(of_list [Eqn, Eqn_nested]);
   let _, pb' =
     Problem.fold_map_statements pb
       ~f:uniq_eqn_st ~x:(Env.create())
-      ~features:Problem.Features.(update Eqn Eqn_single)
   in
   pb'
 
@@ -366,6 +366,8 @@ let pipe ~decode ~print ~check =
   and decode _ x = decode x in
   Transform.make
     ~on_encoded
+    ~input_spec:Transform.Features.(of_list [Eqn, Eqn_nested])
+    ~map_spec:Transform.Features.(update Eqn Eqn_single)
     ~name
     ~encode:(fun p ->
       let p = uniq_eqns_pb p in

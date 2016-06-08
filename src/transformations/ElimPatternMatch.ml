@@ -74,10 +74,7 @@ and elim_match_l_ ~subst l =
 let elim_match t = elim_match_ ~subst:Subst.empty t
 
 let tr_problem pb =
-  Problem.check_features pb
-    ~spec:Problem.Features.(empty |> update Ty Mono);
   Problem.map pb
-    ~features:Problem.Features.(update Match Absent)
     ~term:elim_match
     ~ty:elim_match
 
@@ -95,6 +92,8 @@ let pipe ~print ~check =
   let encode pb = tr_problem pb, () in
   make ~name
     ~encode
+    ~input_spec:Transform.Features.(empty |> update Ty Mono)
+    ~map_spec:Transform.Features.(update Match Absent)
     ~on_encoded
     ~decode:(fun () x -> x)
     ()

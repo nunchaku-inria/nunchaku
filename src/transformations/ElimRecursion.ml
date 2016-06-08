@@ -490,8 +490,6 @@ let tr_statement ~state st =
   stmts'' @ stmts'
 
 let elim_recursion pb =
-  Problem.check_features pb
-    ~spec:Problem.Features.(of_list [Ty, Mono; Eqn, Eqn_app; Ind_preds, Absent]);
   let hof = gather_hof_ pb in
   let sigma = Problem.signature pb in
   Utils.debugf ~section 3 "@[<2>hof info:@ @[%a@]@]" (fun k->k (CCFormat.opt pp_hof) hof);
@@ -499,7 +497,6 @@ let elim_recursion pb =
   let pb' =
     Problem.flat_map_statements pb
       ~f:(tr_statement ~state)
-      ~features:Problem.Features.(update Eqn Absent)
   in
   pb', state.decode
 
@@ -687,6 +684,8 @@ let pipe_with ?on_decoded ~decode ~print ~check =
   in
   Transform.make
     ~on_encoded ?on_decoded
+    ~input_spec:Transform.Features.(of_list [Ty, Mono; Eqn, Eqn_app; Ind_preds, Absent])
+    ~map_spec:Transform.Features.(update Eqn Absent)
     ~name
     ~encode:(fun p ->
       let p, state = elim_recursion p in

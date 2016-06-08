@@ -412,15 +412,10 @@ let encode_stmt state stmt =
       [stmt]
 
 let transform_pb pb =
-  Problem.check_features pb
-    ~spec:Problem.Features.(of_list
-          [Match, Absent; Ty, Mono; Data, Present;
-           Eqn, Eqn_single; Ind_preds, Absent]);
   let state = create_state () in
   let pb' =
     Problem.flat_map_statements pb
       ~f:(encode_stmt state)
-      ~features:Problem.Features.(update Data Absent)
   in
   pb', state
 
@@ -616,6 +611,10 @@ let pipe_with ?on_decoded ~decode ~print ~check =
     ~name
     ~on_encoded
     ?on_decoded
+    ~input_spec:Transform.Features.(of_list
+          [Match, Absent; Ty, Mono; Data, Present;
+           Eqn, Eqn_single; Ind_preds, Absent])
+    ~map_spec:Transform.Features.(update Data Absent)
     ~encode:transform_pb
     ~decode
     ()

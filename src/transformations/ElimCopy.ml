@@ -72,8 +72,6 @@ and bind_var ~env subst v =
   Var.Subst.add ~subst v v', v'
 
 let elim pb =
-  Problem.check_features pb
-    ~spec:Problem.Features.(of_list [Ty, Mono]);
   let env = Problem.env pb in
   Problem.flat_map_statements pb
   ~f:(fun st ->
@@ -95,6 +93,8 @@ let pipe ~print ~check =
   in
   Transform.make
     ~name
+    ~input_spec:Transform.Features.(of_list [Ty, Mono; Copy, Present])
+    ~map_spec:Transform.Features.(update Copy Absent)
     ~on_encoded
     ~encode:(fun pb -> elim pb, ())
     ~decode:(fun () x -> x)

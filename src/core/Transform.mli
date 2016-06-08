@@ -5,6 +5,53 @@
 
 type 'a printer = 'a CCFormat.printer
 
+(** {2 Features}
+
+    Set of features that characterize a logic,
+    as a record of individual features *)
+
+module Features : sig
+  type t
+
+  type value =
+    | Present
+    | Absent
+    | Mono
+    | Poly
+    | Eqn_single
+    | Eqn_nested
+    | Eqn_app
+
+  (* the various kind of features *)
+  type key =
+    | Ty
+    | Eqn
+    | If_then_else
+    | Ind_preds
+    | Match
+    | Data
+    | Fun
+    | Copy
+
+  val empty : t
+  (** For writing specifications *)
+
+  val full : t
+  (** Every feature is on *)
+
+  val update : key -> value -> t -> t
+  (** [update k v t] sets the key [k] to [v] in [t]. This is useful to
+      specify how a specification changed *)
+
+  val of_list : (key * value) list -> t
+
+  val check : t -> spec:t -> bool
+  (** [check t ~spec] returns [true] if all features required by [spec] are
+      valid in [t] *)
+
+  val print : t printer
+end
+
 (** {2 Single Transformation} *)
 
 (** Transformation of ['a] to ['b], with reverse transformation from ['c]
@@ -19,6 +66,8 @@ and ('a, 'b, 'c, 'd, 'st) inner = {
   name : string; (** name for the transformation, used for debug, CLI options, etc. *)
   encode : 'a -> ('b * 'st);
   decode : 'st -> 'c -> 'd;
+  input_spec : Features.t;
+  map_spec : Features.t -> Features.t;
   mutable on_input : ('a -> unit) list;
   mutable on_encoded : ('b -> unit) list;
   mutable on_decoded : ('d -> unit) list;
@@ -33,6 +82,8 @@ val make :
   ?on_input:('a -> unit) list ->
   ?on_encoded:('b -> unit) list ->
   ?on_decoded:('d -> unit) list ->
+  ?input_spec:Features.t ->
+  ?map_spec:(Features.t -> Features.t) ->
   name:string ->
   encode:('a -> ('b * 'st)) ->
   decode:('st -> 'c -> 'd) ->
@@ -82,6 +133,11 @@ module Pipe : sig
         ('a, 'b, 'c, 'd) t ->
         ('a, 'b, 'c, 'd) t
 
+  (** Every constructor from here is "smart":
+      - Fail is right-absorbing (e.g. [compose f fail = fail])
+      - Fork with Id in both branches becomes the Id
+      - Fork with Fail in a branch becomes the other branch *)
+
   val id : ('a, 'a, 'c, 'c) t
 
   val fail : ('a, 'b, 'c, 'd) t
@@ -115,6 +171,11 @@ module Pipe : sig
   val fork_comp :
     ('a, 'b, 'd1, 'e) transformation list ->
     ('b, 'b2, 'c, 'd1) t -> ('a, 'b2, 'c, 'e) t
+
+  val check : _ t -> unit
+  (** [check pipe] checks that the features of each component of
+      the pipeline fit with their input.
+      It is assumed we start with {!Features.full} *)
 
   val print : _ t printer
 end

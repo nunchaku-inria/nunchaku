@@ -872,8 +872,6 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
   new_stmts @ stmt'
 
 let elim_hof pb =
-  Problem.check_features pb
-    ~spec:Problem.Features.(of_list [Ty, Mono; Ind_preds, Absent; Eqn, Eqn_single]);
   let env = Problem.env pb in
   (* compute arities *)
   let arities = compute_arities_pb ~env:env pb in
@@ -883,7 +881,6 @@ let elim_hof pb =
   let state = create_state ~env arities in
   let pb' =
     Problem.flat_map_statements pb
-      ~features:Problem.Features.(update Eqn Eqn_app)
       ~f:(elim_hof_statement ~state)
   in
   let pb' = Problem.add_unsat_means_unknown state.lost_completeness pb' in
@@ -1268,6 +1265,9 @@ let pipe_with ?on_decoded ~decode ~print ~check =
   Transform.make
     ?on_decoded
     ~on_encoded
+    ~input_spec:Transform.Features.(of_list
+          [Ty, Mono; Ind_preds, Absent; Eqn, Eqn_single])
+    ~map_spec:Transform.Features.(update Eqn Eqn_app)
     ~name
     ~encode:(fun p ->
       let p, state = elim_hof p in

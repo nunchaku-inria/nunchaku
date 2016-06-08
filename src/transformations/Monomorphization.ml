@@ -567,8 +567,6 @@ let check_defs_ pb =
   Problem.iter_statements pb ~f:(TyCard.check_non_zero ~cache env)
 
 let monomorphize ?(depth_limit=256) pb =
-  Problem.check_features pb
-    ~spec:Problem.Features.(empty |> update Ty Poly);
   (* create the state used for monomorphization. Toplevel function
     for specializing (id,tup) is [mono_statements_for_id] *)
   let traverse = new mono_traverse ~depth_limit () in
@@ -582,8 +580,7 @@ let monomorphize ?(depth_limit=256) pb =
   let meta = Problem.Metadata.add_sat_means_unknown
     traverse#reached_depth_limit meta in
   let res = traverse#output in
-  let features = Problem.features pb |> Problem.Features.(update Ty Mono) in
-  let pb' = Problem.make ~features ~meta (CCVector.freeze res) in
+  let pb' = Problem.make ~meta (CCVector.freeze res) in
   (* some debug *)
   Utils.debugf ~section 3 "@[<2>instances:@ @[%a@]@]"
     (fun k-> k print_tbl_ traverse#processed);
@@ -634,6 +631,8 @@ let pipe_with ~decode ~print ~check =
   in
   Transform.make
     ~on_encoded
+    ~input_spec:Transform.Features.(empty |> update Ty Poly)
+    ~map_spec:Transform.Features.(update Ty Mono)
     ~name
     ~encode:(fun p ->
       let p, state = monomorphize p in

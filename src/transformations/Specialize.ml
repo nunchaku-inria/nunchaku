@@ -985,8 +985,6 @@ let add_congruence_axioms push_stmt g =
 (** {6 Main Encoding} *)
 
 let specialize_problem pb =
-  Problem.check_features pb
-    ~spec:Problem.Features.(of_list [Ty, Mono; Eqn, Eqn_single; Match, Present]);
   let state = create_state() in
   let trav = new traverse state in
   trav#setup;
@@ -1006,7 +1004,7 @@ let specialize_problem pb =
   let pb' =
     trav#output
     |> CCVector.freeze
-    |> Problem.make ~features:(Problem.features pb) ~meta:(Problem.metadata pb)
+    |> Problem.make ~meta:(Problem.metadata pb)
   in
   pb', state.decode
 
@@ -1304,6 +1302,7 @@ let pipe_with ?on_decoded ~decode ~print ~check =
   in
   Transform.make
     ~name
+    ~input_spec:Transform.Features.(of_list [Ty, Mono; Eqn, Eqn_single; Match, Present])
     ~on_encoded ?on_decoded
     ~encode:(fun pb ->
       let pb, decode = specialize_problem pb in

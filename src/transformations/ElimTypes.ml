@@ -251,16 +251,11 @@ let encode_stmt state st =
 
 (* TODO: more accurate spec *)
 let transform_pb pb =
-  Problem.check_features pb
-    ~spec:Problem.Features.(of_list
-          [Ty, Mono; Fun, Absent; Match, Absent; Ind_preds, Absent
-          ]);
   let sigma = Problem.signature pb in
   let state = create_state ~sigma () in
   let pb' =
     Problem.flat_map_statements pb
       ~f:(encode_stmt state)
-      ~features:Problem.Features.(update Ty Absent)
   in
   pb', state
 
@@ -504,6 +499,10 @@ let pipe_with ?on_decoded ~decode ~print ~check =
   Transform.make
     ~name
     ?on_decoded
+    ~input_spec:Transform.Features.(of_list
+          [Ty, Mono; Fun, Absent; Match, Absent; Ind_preds, Absent
+          ])
+    ~map_spec:Transform.Features.(update Ty Absent)
     ~on_encoded
     ~encode:transform_pb
     ~decode

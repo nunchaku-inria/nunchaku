@@ -5,6 +5,85 @@
 
 type 'a printer = 'a CCFormat.printer
 
+(** {2 Features} *)
+
+module Features = struct
+  type value =
+    | Present
+    | Absent
+    | Mono
+    | Poly
+    | Eqn_single
+    | Eqn_nested
+    | Eqn_app
+
+  (* the various kind of features *)
+  type key =
+    | Ty
+    | Eqn
+    | If_then_else
+    | Ind_preds
+    | Match
+    | Data
+    | Fun
+    | Copy
+
+  module M = CCMap.Make(struct
+      type t = key
+      let compare = Pervasives.compare
+    end)
+
+  type t = value M.t
+
+  let empty = M.empty
+
+  let full =
+    [ Ty, Poly
+    ; Eqn, Eqn_nested
+    ; If_then_else, Present
+    ; Ind_preds, Present
+    ; Match, Present
+    ; Data, Present
+    ; Fun, Present
+    ; Copy, Present
+    ] |> M.of_list
+
+  let update = M.add
+  let of_list = M.of_list
+
+  (* check that every pair [k,v in spec] is also in [t] *)
+  let check t ~spec =
+    M.for_all
+      (fun k v -> match M.get k t with
+         | None -> false
+         | Some v' -> v=v')
+      spec
+
+  let str_of_value = function
+    | Present -> "present"
+    | Absent -> "absent"
+    | Mono -> "mono"
+    | Poly -> "poly"
+    | Eqn_single -> "single"
+    | Eqn_nested -> "nested"
+    | Eqn_app -> "app"
+
+  let str_of_key = function
+    | Ty -> "ty"
+    | Eqn -> "eqn"
+    | If_then_else -> "ite"
+    | Ind_preds -> "ind_preds"
+    | Match -> "match"
+    | Data -> "data"
+    | Fun -> "fun"
+    | Copy -> "copy"
+
+  let print out (m:t) =
+    let pp_k out x = CCFormat.string out (str_of_key x) in
+    let pp_v out x = CCFormat.string out (str_of_value x) in
+    Format.fprintf out "@[<hv>%a@]" (M.print ~start:"" ~stop:"" pp_k pp_v) m
+end
+
 (** {2 Single Transformation} *)
 
 (** Transformation of ['a] to ['b]. The transformation make choices by
@@ -17,6 +96,8 @@ and ('a, 'b, 'c, 'd, 'st) inner = {
   name : string; (** name for the transformation, used for debug, CLI options, etc. *)
   encode : 'a -> ('b * 'st);
   decode : 'st -> 'c -> 'd;
+  input_spec : Features.t;
+  map_spec : Features.t -> Features.t;
   mutable on_input : ('a -> unit) list;
   mutable on_encoded : ('b -> unit) list;
   mutable on_decoded : ('d -> unit) list;
@@ -26,12 +107,16 @@ and ('a, 'b, 'c, 'd, 'st) inner = {
 type ('a, 'b, 'c, 'd) transformation = ('a, 'b, 'c, 'd) t
 (** Alias to {!t} *)
 
-let make ?print ?(on_input=[])
-?(on_encoded=[]) ?(on_decoded=[]) ~name ~encode ~decode () =
+let make
+    ?print ?(on_input=[])
+    ?(on_encoded=[]) ?(on_decoded=[]) ?(input_spec=Features.empty)
+    ?(map_spec=fun x->x) ~name ~encode ~decode () =
   Ex {
     name;
     encode;
     decode;
+    input_spec;
+    map_spec;
     on_input;
     on_encoded;
     on_decoded;
@@ -114,6 +199,30 @@ module Pipe = struct
         fpf out "fork @[<v>{ @[%a@]@,| @[%a@]@,}@]" pp a pp b
     in
     fpf out "@[%a@]" pp t
+
+  let check_features_ ~name f ~spec =
+    if not (Features.check ~spec f)
+    then Utils.failwithf
+        "@[<hv2>feature mismatch in transformation %s:@ \
+         expected @[%a@] as input,@ got @[%a@]@]"
+        name Features.print spec Features.print f
+
+  let check p =
+    let rec aux
+      : type a b c d. Features.t -> (a,b,c,d) t -> unit
+      = fun f p -> match p with
+        | Id -> ()
+        | Fail -> ()
+        | Close (_, p') -> aux f p'
+        | Flatten p' -> aux f p'
+        | Comp (Ex tr, p') ->
+          check_features_ f ~name:tr.name ~spec:tr.input_spec;
+          aux (tr.map_spec f) p'
+        | Fork (p1,p2) ->
+          aux f p1;
+          aux f p2
+    in
+    aux Features.full p
 end
 
 (* run callbacks on [x] *)

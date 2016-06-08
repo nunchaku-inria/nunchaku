@@ -1417,7 +1417,6 @@ module Convert(Term : TermTyped.S) = struct
     let res = CCVector.freeze res in
     let pb =
       Problem.make res
-        ~features:Problem.Features.full
         ~meta:Problem.Metadata.default
     in
     pb, env
@@ -1446,6 +1445,7 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
     Transform.make
       ~on_encoded
       ~name
+      ~input_spec:Transform.Features.full
       ~encode:(fun l ->
         let problem, _ = l
           |> Conv.convert_problem_exn ~env:Conv.empty_env
