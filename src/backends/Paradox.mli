@@ -16,12 +16,14 @@ val is_available : unit -> bool
   @param prio priority of the task
 *)
 val call :
+  ?print_model:bool ->
   ?prio:int ->
   print:bool ->
   T.problem ->
   (T.term, T.ty) Problem.Res.t Scheduling.Task.t
 
 val pipe :
+  ?print_model:bool ->
   print:bool ->
   unit ->
   ( T.problem,

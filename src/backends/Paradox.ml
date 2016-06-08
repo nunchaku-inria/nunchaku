@@ -39,6 +39,9 @@ let print_pb_ file pb =
 let begin_model = "SZS output start FiniteModel"
 let end_model = "SZS output end FiniteModel"
 
+(* TODO : also include constants? e.g. on skolem_unique, skolem
+  constants are not included in the model *)
+
 (* parse a model from paradox' output [s] *)
 let parse_model s =
   let i1 = CCString.find ~sub:begin_model s in
@@ -119,7 +122,7 @@ let solve ~deadline pb =
   )
 
 (* solve problem before [deadline] *)
-let call ?prio ~print problem =
+let call ?(print_model=false) ?prio ~print problem =
   if print
   then Format.printf "@[<v2>FO_tptp problem:@ %a@]@." T.print_problem_tptp problem;
   S.Task.make ?prio
@@ -127,12 +130,19 @@ let call ?prio ~print problem =
        let res, short = solve ~deadline problem in
        Utils.debugf ~section 2 "@[<2>paradox result:@ %a@]"
          (fun k->k Res.print_head res);
+       begin match res with
+         | Res.Sat m when print_model ->
+           let pp_ty oc _ = CCFormat.string oc "$i" in
+           Format.printf "@[<2>raw paradox model:@ @[%a@]@]@."
+             (Model.print (CCFun.const T.print_term_tptp) pp_ty) m
+         | _ -> ()
+       end;
        res, short)
 
-let pipe ~print () =
+let pipe ?(print_model=false) ~print () =
   let encode pb =
     let prio = 25 in
-    call ~prio ~print pb, ()
+    call ~print_model ~prio ~print pb, ()
   in
   Transform.make
     ~name ~encode ~decode:(fun _ x -> x) ()

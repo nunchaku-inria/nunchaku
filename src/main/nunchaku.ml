@@ -268,7 +268,9 @@ let make_paradox () =
   let open Transform.Pipe in
   if List.mem S_paradox !solvers && Backends.Paradox.is_available ()
   then
-    Backends.Paradox.pipe ~print:!print_all_ ()
+    Backends.Paradox.pipe
+      ~print_model:(!print_all_ || !print_raw_model_)
+      ~print:!print_all_ ()
     @@@ id
   else fail
 
