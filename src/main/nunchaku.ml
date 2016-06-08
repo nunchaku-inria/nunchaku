@@ -69,6 +69,7 @@ let print_raw_model_ = ref false
 let print_model_ = ref false
 let enable_polarize_ = ref true
 let enable_specialize_ = ref true
+let skolems_in_model_ = ref true
 let timeout_ = ref 30
 let version_ = ref false
 let file = ref ""
@@ -173,6 +174,8 @@ let options =
   ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
   ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"
   ; "--no-specialize", Arg.Clear enable_specialize_, " disable specialization"
+  ; "--skolems-in-model", Arg.Set skolems_in_model_, " enable skolem constants in models"
+  ; "--no-skolems-in-model", Arg.Clear skolems_in_model_, " disable skolem constants in models"
   ; "--solvers", Arg.String set_solvers_, " solvers to use " ^ list_solvers_ ()
   ; "-s", Arg.String set_solvers_, " synonym for --solvers"
   ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
@@ -281,7 +284,9 @@ let make_model_pipeline () =
   let pipe =
     Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
     Step_conv_ty.pipe () @@@
-    Tr.Skolem.pipe ~print:(!print_skolem_ || !print_all_) ~check ~mode:`Sk_types @@@
+    Tr.Skolem.pipe
+      ~skolems_in_model:!skolems_in_model_
+      ~print:(!print_skolem_ || !print_all_) ~check ~mode:`Sk_types @@@
     Tr.Monomorphization.pipe ~print:(!print_mono_ || !print_all_) ~check @@@
     Tr.Elim_infinite.pipe ~print:(!print_elim_infinite || !print_all_) ~check @@@
     Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
@@ -298,7 +303,9 @@ let make_model_pipeline () =
       else Transform.nop ())
     @@@
     Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
-    Tr.Skolem.pipe ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+    Tr.Skolem.pipe
+      ~skolems_in_model:!skolems_in_model_
+      ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
     fork
       (
         Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@

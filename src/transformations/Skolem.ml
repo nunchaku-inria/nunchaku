@@ -202,7 +202,7 @@ let find_id_def ~state id =
     Some (U.app (U.const epsilon) [f])
   with Not_found -> None
 
-let decode_model ~state m =
+let decode_model ~skolems_in_model ~state m =
   Model.filter_map m
     ~finite_types:(fun (ty,dom) -> Some (ty,dom))
     ~funs:(fun ((t,vars,body,k) as tup) ->
@@ -210,7 +210,8 @@ let decode_model ~state m =
         | TI.Const id ->
             begin match find_id_def ~state id with
               | None -> Some tup
-              | Some t' -> Some (t',vars,body,k)
+              | Some t' ->
+                if skolems_in_model then Some (t',vars,body,k) else None
             end
         | _ -> Some tup)
     ~constants:(fun (t,u,k) ->
@@ -218,7 +219,8 @@ let decode_model ~state m =
         | TI.Const id ->
             begin match find_id_def ~state id with
               | None -> Some (t, u, k)
-              | Some t' -> Some (t', u, k)
+              | Some t' ->
+                if skolems_in_model then Some (t', u, k) else None
             end
         | _ -> Some (t, u, k)
       )
@@ -247,6 +249,8 @@ let pipe_with ~mode ~decode ~print ~check =
     ~decode
     ()
 
-let pipe ~mode ~print ~check =
+let pipe ~skolems_in_model ~mode ~print ~check =
   pipe_with ~check ~mode ~print
-    ~decode:(fun state -> Problem.Res.map_m ~f:(decode_model ~state))
+    ~decode:(fun state ->
+      Problem.Res.map_m
+        ~f:(decode_model ~skolems_in_model ~state))

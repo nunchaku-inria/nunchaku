@@ -33,6 +33,7 @@ val pipe :
   ) Transform.t
 
 val pipe_with :
+  ?on_decoded:('d -> unit) list ->
   decode:(decode_state -> 'c -> 'd) ->
   print:bool ->
   check:bool ->
