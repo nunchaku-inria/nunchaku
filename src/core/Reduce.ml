@@ -217,10 +217,6 @@ module Make(T : TI.S) = struct
               let subst = Subst.add ~subst:st.subst v a in
               whnf_ (State.make ~subst body args')
           end
-      | TI.Bind (`Mu, v, body) ->
-          (* [µ v. t] --> [t with v:= µv. t] *)
-          let subst = Subst.add ~subst:st.subst v head in
-          whnf_ (State.make ~subst body st.args)
       | TI.Match (t, l) ->
           let st_t = whnf_ (State.const ~subst:st.subst t) in
           (* see whether [st] matches some case *)
@@ -232,13 +228,13 @@ module Make(T : TI.S) = struct
                 whnf_ (State.make ~subst rhs args)
           end
       | TI.Bind (`TyForall, _, _) -> assert false
-      | TI.Bind ((`Forall | `Exists), _, _) -> st
+      | TI.Bind ((`Forall | `Exists | `Mu), _, _) -> st
       | TI.Let _
       | TI.TyBuiltin _
       | TI.TyArrow _ -> st
       | TI.TyMeta _ -> assert false
 
-    let whnf ?(subst=Subst.empty) t args =
+    and whnf ?(subst=Subst.empty) t args =
       let st = whnf_ (State.make ~subst t args) in
       st.head, st.args, st.subst
 
