@@ -53,9 +53,11 @@ module Ite_M = struct
 
   (* add a test; if the test holds yield [b], else yield [c] *)
   let guard
-    : cond -> 'a -> 'a -> 'a t
+    : cond -> 'a t -> 'a t -> 'a t
     = fun a b c ->
-      Sequence.doubleton (a, b) (TSet.empty, c)
+      Sequence.append
+        (Sequence.map (fun (a',b') -> TSet.union a a', b') b)
+        c
 
   let rec fold_m f acc l = match l with
     | [] -> return acc
@@ -83,9 +85,9 @@ let transform_term t =
     | FO.Imply (a,b) -> return T.imply <*> aux subst a <*> aux subst b
     | FO.Ite (a,b,c) ->
       aux subst a >>= fun a ->
-      aux subst b >>= fun b ->
-      aux subst c >>= fun c ->
-      guard (TSet.singleton a) b c
+      guard (TSet.singleton a)
+        (aux subst b)
+        (aux subst c)
     | FO.And l -> aux_l subst l >|= T.and_
     | FO.Or l -> aux_l subst l >|= T.or_
     | FO.Not t -> aux subst t >|= T.not_
@@ -114,10 +116,12 @@ let transform_term t =
       (fun prev_conds (cond,t) ->
          (* if there are some previous conditions, require their negation
             so the current case is orthogonal to the previous cases *)
+         let prev_conds' = TSet.diff prev_conds cond |> TSet.remove T.true_ in
          let cond' =
-           if TSet.is_empty prev_conds
+           if TSet.is_empty prev_conds'
            then cond
-           else TSet.add (T.not_ (and_set_ prev_conds)) cond
+           else (* cond && not (prev_conds \ cond) *)
+             TSet.add (T.not_ (and_set_ prev_conds')) cond
          in
          let t' = T.imply (and_set_ cond') t in
          TSet.union cond prev_conds, t')
