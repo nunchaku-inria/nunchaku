@@ -14,7 +14,6 @@ module P = T.P
 module U = T.U
 
 type term = TermInner.Default.t
-type ('a,'b,'c) inv = < eqn : 'a; ind_preds : 'b; ty : 'c >
 
 let name = "elim_infinite"
 let section = Utils.Section.make name

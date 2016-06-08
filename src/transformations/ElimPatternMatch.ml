@@ -15,7 +15,6 @@ module TMono = TermMono.Make(T)
 
 let name = "elim_match"
 
-
 type term = T.t
 
 let mk_select_ = U.data_select
@@ -75,7 +74,10 @@ and elim_match_l_ ~subst l =
 let elim_match t = elim_match_ ~subst:Subst.empty t
 
 let tr_problem pb =
+  Problem.check_features pb
+    ~spec:Problem.Features.(empty |> update Ty Mono);
   Problem.map pb
+    ~features:Problem.Features.(update Match Absent)
     ~term:elim_match
     ~ty:elim_match
 

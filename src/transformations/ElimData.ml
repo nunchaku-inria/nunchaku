@@ -13,11 +13,6 @@ module U = T.U
 module P = T.P
 module PStmt = Stmt.Print(P)(P)
 
-
-(* TODO: require elimination of pattern matching earlier, in types *)
-
-type inv = <ty:[`Mono]; ind_preds:[`Absent]; eqn:[`Single]>
-
 let name = "elim_data"
 let section = Utils.Section.make name
 
@@ -417,8 +412,16 @@ let encode_stmt state stmt =
       [stmt]
 
 let transform_pb pb =
+  Problem.check_features pb
+    ~spec:Problem.Features.(of_list
+          [Match, Absent; Ty, Mono; Data, Present;
+           Eqn, Eqn_single; Ind_preds, Absent]);
   let state = create_state () in
-  let pb' = Problem.flat_map_statements pb ~f:(encode_stmt state) in
+  let pb' =
+    Problem.flat_map_statements pb
+      ~f:(encode_stmt state)
+      ~features:Problem.Features.(update Data Absent)
+  in
   pb', state
 
 (** {2 Decoding} *)

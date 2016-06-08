@@ -37,8 +37,8 @@ val print_state : Format.formatter -> state -> unit
 
 val skolemize_pb :
   state:state ->
-  (T.t, T.t, <eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t ->
-  (T.t, T.t, 'inv) Problem.t
+  (T.t, T.t) Problem.t ->
+  (T.t, T.t) Problem.t
 
 val decode_model :
   skolems_in_model:bool ->
@@ -53,8 +53,8 @@ val pipe :
   mode:mode ->
   print:bool ->
   check:bool ->
-  ((T.t,T.t,<eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t,
-    (T.t,T.t,'inv) Problem.t,
+  ((T.t,T.t as 'inv) Problem.t,
+    (T.t,T.t) Problem.t,
     (T.t,T.t) Problem.Res.t, (T.t,T.t) Problem.Res.t
   ) Transform.t
 
@@ -71,6 +71,6 @@ val pipe_with :
   decode:(state -> 'c -> 'd) ->
   print:bool ->
   check:bool ->
-  ((T.t,T.t, <eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t,
-    (T.t,T.t,'inv) Problem.t, 'c, 'd
+  ((T.t,T.t) Problem.t,
+    (T.t,T.t) Problem.t, 'c, 'd
   ) Transform.t

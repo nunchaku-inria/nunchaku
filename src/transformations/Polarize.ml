@@ -15,8 +15,6 @@ module P = T.P
 module PStmt = Stmt.Print(P)(P)
 module Red = Reduce.Make(T)
 
-type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds:[`Present]>
-
 let name = "polarize"
 let section = Utils.Section.make name
 
@@ -32,7 +30,7 @@ let errorf_ msg = Utils.exn_ksprintf msg ~f:error_
 
 type term = T.t
 
-type 'a env = (term, term, 'a inv) Env.t
+type env = (term, term) Env.t
 
 type polarized_id = {
   pos: ID.t;
@@ -51,7 +49,7 @@ let term_contains_undefined t =
 
 (* does this set of equations contain an "undefined" sub-term? *)
 let eqns_contains_undefined
-: type i. (term, term, i) Stmt.equations -> bool
+: (term, term) Stmt.equations -> bool
 = function
   | Stmt.Eqn_nested l ->
       List.exists
@@ -84,7 +82,7 @@ module Trav = Traversal.Make(T)(struct
 end)
 
 module St = struct
-  type 'a t = {
+  type t = {
     polarized: polarized_id option ID.Tbl.t;
       (* id -> its polarized version, if we decided to polarize it *)
 
@@ -97,7 +95,7 @@ module St = struct
     mutable call: depth:int -> ID.t -> action -> unit;
       (* callback for recursion *)
 
-    mutable get_env: unit -> 'a env;
+    mutable get_env: unit -> env;
 
     mutable add_deps : ID.t -> unit;
   }
@@ -171,7 +169,7 @@ let is_prop ~state t =
 (* traverse [t], replacing some symbols by their polarized version,
    @return the term with more internal guards and polarized symbols *)
 let rec polarize_term_rec
-: type i. state:i St.t -> Pol.t -> subst -> T.t -> T.t
+: state:St.t -> Pol.t -> subst -> T.t -> T.t
 = fun ~state pol subst t ->
   match T.repr t with
   | TI.Builtin (`Guard (t, g)) ->
@@ -278,7 +276,7 @@ let rec polarize_term_rec
 
 (* generic recursive step *)
 and polarize_term_rec'
-: type i. state:i St.t -> Pol.t -> subst -> T.t -> T.t
+: state:St.t -> Pol.t -> subst -> T.t -> T.t
 = fun ~state pol subst t ->
   U.map_pol subst pol t
     ~f:(fun subst pol -> polarize_term_rec ~state pol subst)
@@ -286,11 +284,10 @@ and polarize_term_rec'
 
 (* [p] is the polarization of the function defined by [def]; *)
 let define_rec
-: type a.
-  state:a St.t -> bool ->
-  (_, _, a inv) Stmt.rec_def ->
+: state:St.t -> bool ->
+  (_, _) Stmt.rec_def ->
   polarized_id ->
-  (_, _, a inv) Stmt.rec_def
+  (_, _) Stmt.rec_def
 = fun ~state is_pos def p ->
   let open Stmt in
   let defined = def.rec_defined in
@@ -307,12 +304,11 @@ let define_rec
 
 (* [p] is the polarization of the predicate defined by [def]; *)
 let define_pred
-: type a.
-  state:a St.t ->
+: state:St.t ->
   is_pos:bool ->
-  (_, _, a inv) Stmt.pred_def ->
+  (_, _) Stmt.pred_def ->
   polarized_id ->
-  (_, _, a inv) Stmt.pred_def
+  (_, _) Stmt.pred_def
 = fun ~state ~is_pos def p ->
   let open Stmt in
   let defined = def.pred_defined in
@@ -322,9 +318,8 @@ let define_pred
       defined_ty=defined.Stmt.defined_ty;
     } in
   let tr_clause
-    : type a.
-        (term, term, a inv) pred_clause ->
-        (term, term, a inv) pred_clause
+    : (term, term) pred_clause ->
+      (term, term) pred_clause
     = fun clause ->
       let pol = if is_pos then Pol.Pos else Pol.Neg in
       (* we keep the same polarity in the guard, because it is not
@@ -348,10 +343,10 @@ let conf = {Traversal.
   direct_mutual_types=true;
 }
 
-class ['a, 'c] traverse_pol ?(size=64) ~polarize_rec () = object(self)
-  inherit ['a inv, 'a inv, 'c] Trav.traverse ~conf ~size ()
+class ['c] traverse_pol ?(size=64) ~polarize_rec () = object(self)
+  inherit ['c] Trav.traverse ~conf ~size ()
 
-  val st: 'inv1 St.t = St.create ~polarize_rec ()
+  val st: St.t = St.create ~polarize_rec ()
 
   method setup() =
     st.St.call <- self#do_statements_for_id;
@@ -426,15 +421,20 @@ end
 
 let polarize
 : polarize_rec:bool ->
-  (term, term, 'a inv) Problem.t ->
-  (term, term, 'a inv) Problem.t * decode_state
+  (term, term) Problem.t ->
+  (term, term) Problem.t * decode_state
 = fun ~polarize_rec pb ->
+  Problem.check_features pb
+    ~spec:Problem.Features.(of_list [Ty, Mono; Ind_preds, Present]);
   let trav = new traverse_pol ~polarize_rec () in
   trav#setup();
   Problem.iter_statements pb ~f:trav#do_stmt;
   let res = trav#output in
   let pb' =
-    Problem.make ~meta:(Problem.metadata pb) (CCVector.freeze res) in
+    Problem.make (CCVector.freeze res)
+      ~meta:(Problem.metadata pb)
+      ~features:(Problem.features pb)
+  in
   pb', trav#decode_state
 
 (** {6 Decoding} *)

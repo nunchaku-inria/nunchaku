@@ -7,15 +7,14 @@ open Nunchaku_core
 
 module T = TermInner.Default
 
-type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds:[`Present]>
 type term = T.t
 type decode_state
 
 val name : string
 
 val unroll :
-  (term, term, 'a inv) Problem.t ->
-  (term, term, 'a inv) Problem.t * decode_state
+  (term, term) Problem.t ->
+  (term, term) Problem.t * decode_state
 
 val decode_model :
   state:decode_state -> (term,term) Model.t -> (term,term) Model.t
@@ -24,8 +23,8 @@ val decode_model :
 val pipe :
   print:bool ->
   check:bool ->
-  ((term, term, 'a inv) Problem.t,
-   (term, term, 'a inv) Problem.t,
+  ((term, term) Problem.t,
+   (term, term) Problem.t,
    (term, term) Problem.Res.t, (term, term) Problem.Res.t) Transform.t
 
 (** Generic Pipe Component *)
@@ -34,7 +33,7 @@ val pipe_with :
   decode:(decode_state -> 'c -> 'd) ->
   print:bool ->
   check:bool ->
-  ((term, term, 'a inv) Problem.t,
-   (term, term, 'a inv) Problem.t,
+  ((term, term) Problem.t,
+   (term, term) Problem.t,
    'c, 'd
   ) Transform.t

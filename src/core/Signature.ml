@@ -22,7 +22,7 @@ let add_list ~sigma l =
 
 let of_list l = add_list ~sigma:empty l
 
-let add_pred (type inv) ~sigma (pred:(_,_,inv) Stmt.pred_def) =
+let add_pred ~sigma (pred:(_,_) Stmt.pred_def) =
   let d = pred.Stmt.pred_defined in
   declare ~sigma d.Stmt.defined_head d.Stmt.defined_ty
 

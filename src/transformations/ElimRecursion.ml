@@ -20,9 +20,6 @@ let name = "elim_rec"
 
 let section = Utils.Section.make name
 
-type inv1 = <ty:[`Mono]; eqn:[`App]; ind_preds:[`Absent]>
-type inv2 = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
-
 exception Attr_is_handle_cstor
 
 exception Attr_app_val
@@ -81,7 +78,7 @@ type decode_state = {
 type state = {
   decode: decode_state;
     (* for decoding purpose *)
-  new_statements: (term, ty, inv2) Stmt.t CCVector.vector;
+  new_statements: (term, ty) Stmt.t CCVector.vector;
     (* additional statements to be added to the result, such as declarations *)
   sigma: ty Sig.t;
     (* signature *)
@@ -416,6 +413,7 @@ let tr_eqns ~state ~fun_encoding eqn =
       let rhs' = tr_term ~state subst rhs in
       let form = connect Polarity.NoPol lhs' rhs' in
       U.forall_l vars' form
+  | Stmt.Eqn_nested _ -> assert false
 
 (* transform the recursive definition (mostly, its equations) *)
 let tr_rec_def ~state ~fun_encoding def =
@@ -492,11 +490,17 @@ let tr_statement ~state st =
   stmts'' @ stmts'
 
 let elim_recursion pb =
+  Problem.check_features pb
+    ~spec:Problem.Features.(of_list [Ty, Mono; Eqn, Eqn_app; Ind_preds, Absent]);
   let hof = gather_hof_ pb in
   let sigma = Problem.signature pb in
   Utils.debugf ~section 3 "@[<2>hof info:@ @[%a@]@]" (fun k->k (CCFormat.opt pp_hof) hof);
   let state = create_state ~hof ~sigma () in
-  let pb' = Problem.flat_map_statements ~f:(tr_statement ~state) pb in
+  let pb' =
+    Problem.flat_map_statements pb
+      ~f:(tr_statement ~state)
+      ~features:Problem.Features.(update Eqn Absent)
+  in
   pb', state.decode
 
 (** {6 Decoding}

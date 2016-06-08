@@ -18,8 +18,6 @@ module M = Model
 let name = "elim_types"
 let section = Utils.Section.make name
 
-type inv = <eqn:[`Absent]; ty:[`Mono]; ind_preds:[`Absent]>
-
 type error = string
 exception Error of error
 let () = Printexc.register_printer
@@ -40,7 +38,7 @@ type state = {
     (* parametrized ty *)
   sigma: T.t Signature.t;
     (* signature, for decoding purpose *)
-  new_decls: (T.t, T.t, inv) Statement.t CCVector.vector;
+  new_decls: (T.t, T.t) Statement.t CCVector.vector;
     (* new declarations *)
 }
 
@@ -168,7 +166,7 @@ let ensure_maps_to_predicate state ty =
   aux ret;
   ()
 
-let encode_stmt_ state st : (_,_,_) Stmt.t list =
+let encode_stmt_ state st : (_,_) Stmt.t list =
   let info = Stmt.info st in
   match Stmt.view st with
   | Stmt.Decl (id, ty, attrs) when U.ty_returns_Type ty ->
@@ -251,10 +249,19 @@ let encode_stmt state st =
   CCVector.clear state.new_decls;
   res
 
+(* TODO: more accurate spec *)
 let transform_pb pb =
+  Problem.check_features pb
+    ~spec:Problem.Features.(of_list
+          [Ty, Mono; Fun, Absent; Match, Absent; Ind_preds, Absent
+          ]);
   let sigma = Problem.signature pb in
   let state = create_state ~sigma () in
-  let pb' = Problem.flat_map_statements pb ~f:(encode_stmt state) in
+  let pb' =
+    Problem.flat_map_statements pb
+      ~f:(encode_stmt state)
+      ~features:Problem.Features.(update Ty Absent)
+  in
   pb', state
 
 (** {2 Decoding} *)

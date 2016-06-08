@@ -11,8 +11,6 @@ module T = TermInner.Default
 module U = T.U
 module P = T.P
 
-type ('a,'b) inv = <eqn:'a; ind_preds:'b; ty:[`Mono]>
-
 let name = "elim_copy"
 
 type term = T.t
@@ -74,6 +72,8 @@ and bind_var ~env subst v =
   Var.Subst.add ~subst v v', v'
 
 let elim pb =
+  Problem.check_features pb
+    ~spec:Problem.Features.(of_list [Ty, Mono]);
   let env = Problem.env pb in
   Problem.flat_map_statements pb
   ~f:(fun st ->

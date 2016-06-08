@@ -82,15 +82,15 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     mutable sf_is_root: bool;
   }
 
-  class virtual ['inv1, 'inv2, 'c] traverse ~conf ?(size=64) ?(depth_limit=256) () = object (self)
+  class virtual ['c] traverse ~conf ?(size=64) ?(depth_limit=256) () = object (self)
     (* access definitions/declarations by ID *)
-    val mutable env : (term, term, 'inv1) Env.t = Env.create()
+    val mutable env : (term, term) Env.t = Env.create()
 
     (* did we reach the maximal depth? *)
     val mutable depth_reached: bool = false
 
     (* resulting statements *)
-    val output: (term, term, 'inv2) Stmt.t CCVector.vector = CCVector.create()
+    val output: (term, term) Stmt.t CCVector.vector = CCVector.create()
 
     (* symbols already declared *)
     val declared : unit IDArgTbl.t = IDArgTbl.create size
@@ -142,7 +142,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     method done_declaring : ID.t -> Arg.t -> unit
       = fun id arg -> IDArgTbl.replace declared (id, arg) ()
 
-    method push_res : (term, term, 'inv2) Stmt.t -> unit
+    method push_res : (term, term) Stmt.t -> unit
       = fun stmt -> CCVector.push output stmt
 
     method reached_depth_limit = depth_reached
@@ -172,12 +172,12 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
 
     (* transformation of this particular definition *)
     method virtual do_def
-      : depth:int -> (term, term, 'inv1) Stmt.rec_def -> Arg.t -> (term, term, 'inv2) Stmt.rec_def list
+      : depth:int -> (term, term) Stmt.rec_def -> Arg.t -> (term, term) Stmt.rec_def list
 
     method do_def_rec
     : depth:int -> loc:Loc.t option ->
-      (term, term, 'inv1) Stmt.rec_defs ->
-      (term, term, 'inv1) Stmt.rec_def -> Arg.t -> unit
+      (term, term) Stmt.rec_defs ->
+      (term, term) Stmt.rec_def -> Arg.t -> unit
     = fun ~depth ~loc _defs def arg ->
       let id = def.Stmt.rec_defined.Stmt.defined_head in
       Utils.debugf ~section 3
@@ -210,8 +210,8 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     method virtual do_pred
     : depth:int ->
       [`Wf | `Not_wf] -> [`Pred | `Copred] ->
-      (term, term, 'inv1) Stmt.pred_def -> Arg.t ->
-      (term, term, 'inv2) Stmt.pred_def list
+      (term, term) Stmt.pred_def -> Arg.t ->
+      (term, term) Stmt.pred_def list
 
     (* how does well-foundedness translate? *)
     method pred_translate_wf
@@ -221,8 +221,8 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     method do_pred_rec
     : depth:int -> loc:Loc.t option ->
       [`Wf | `Not_wf] -> [`Pred | `Copred] ->
-      (term, term, 'inv1) Stmt.pred_def list ->
-      (term, term, 'inv1) Stmt.pred_def ->
+      (term, term) Stmt.pred_def list ->
+      (term, term) Stmt.pred_def ->
       Arg.t ->
       unit
     = fun ~depth ~loc wf kind _defs def arg ->
@@ -419,7 +419,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
 
     (* called before {!do_stmt} does the job, but after it registers the
        statement in {!env} *)
-    method before_do_stmt (_: (term, term, 'inv1) Stmt.t) = ()
+    method before_do_stmt (_: (term, term) Stmt.t) = ()
 
     (* translation of toplevel goal or axiom (default is {!do_term}) *)
     method do_goal_or_axiom
@@ -429,7 +429,7 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     (* register the statement into the state's [env], so that next statements
       can refer to it. Some statements are automatically kept (goal and axiom) *)
     method do_stmt
-    : (term, term, 'inv1) Stmt.t -> unit
+    : (term, term) Stmt.t -> unit
     = fun st ->
       Utils.debugf ~section 2 "@[<2>enter statement@ `%a`@]"
         (fun k-> k PStmt.print st);

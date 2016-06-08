@@ -11,8 +11,6 @@ module T = TermInner.Default
 module U = T.U
 module P = T.P
 
-type inv = <ty:[`Mono]; ind_preds:[`Absent]; eqn:[`Single]>
-
 let name = "lambda_lift"
 let section = Utils.Section.make name
 
@@ -55,14 +53,14 @@ type in_scope_of =
   | In_nothing
   | In_rec of
       ID.Set.t * (* ids locally declared *)
-      (T.t, T.t, inv) Stmt.rec_def list ref (* new definitions *)
+      (T.t, T.t) Stmt.rec_def list ref (* new definitions *)
   | In_spec of
       ID.Set.t *
       (ID.t * ty * term) list ref (* new axioms *)
 
 (* state for declaring the lambda lifted functions *)
 type local_state = {
-  new_decls: (term, ty, inv) Stmt.t CCVector.vector;
+  new_decls: (term, ty) Stmt.t CCVector.vector;
     (* toplevel statements to be added to the problem *)
   mutable in_scope : in_scope_of;
     (* if [local_ids] is not empty, we are in scope of "rec" or "spec" declarations *)
@@ -208,6 +206,8 @@ let rec tr_term ~state local_state subst t = match T.repr t with
       ~f:(fun subst -> tr_term ~state local_state subst)
 
 let tr_problem pb =
+  Problem.check_features pb
+    ~spec:Problem.Features.(of_list [Ty, Mono; Ind_preds, Absent; Eqn, Eqn_single]);
   let sigma = Problem.signature pb in
   let state = create_state ~sigma () in
   let local_state = {
@@ -216,6 +216,7 @@ let tr_problem pb =
   } in
   let pb' =
     Problem.flat_map_statements pb
+    ~features:Problem.Features.(update Fun Absent)
     ~f:(fun stmt ->
       let info = Stmt.info stmt in
       let stmt' = match Stmt.view stmt with

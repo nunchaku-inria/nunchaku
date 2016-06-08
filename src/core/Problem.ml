@@ -14,14 +14,100 @@ type 'a or_error = ('a, string) CCResult.t
 
 let fpf = Format.fprintf
 
-type ('t, 'ty, 'inv) t = {
-  statements : ('t, 'ty, 'inv) Statement.t CCVector.ro_vector;
+(** {2 Features} *)
+
+module Features = struct
+  type value =
+    | Present
+    | Absent
+    | Mono
+    | Poly
+    | Eqn_single
+    | Eqn_nested
+    | Eqn_app
+
+  (* the various kind of features *)
+  type key =
+    | Ty
+    | Eqn
+    | If_then_else
+    | Ind_preds
+    | Match
+    | Data
+    | Fun
+
+  module M = CCMap.Make(struct
+      type t = key
+      let compare = Pervasives.compare
+    end)
+
+  type t = value M.t
+
+  let empty = M.empty
+
+  let full =
+    [ Ty, Poly
+    ; Eqn, Eqn_nested
+    ; If_then_else, Present
+    ; Ind_preds, Present
+    ; Data, Present
+    ; Match, Present
+    ; Fun, Present
+    ] |> M.of_list
+
+  let update = M.add
+  let of_list = M.of_list
+
+  (* check that every pair [k,v in spec] is also in [t] *)
+  let check t ~spec =
+    M.for_all
+      (fun k v -> match M.get k t with
+         | None -> false
+         | Some v' -> v=v')
+      spec
+
+  let str_of_value = function
+    | Present -> "present"
+    | Absent -> "absent"
+    | Mono -> "mono"
+    | Poly -> "poly"
+    | Eqn_single -> "single"
+    | Eqn_nested -> "nested"
+    | Eqn_app -> "app"
+
+  let str_of_key = function
+    | Ty -> "ty"
+    | Eqn -> "eqn"
+    | If_then_else -> "ite"
+    | Ind_preds -> "ind_preds"
+    | Match -> "match"
+    | Data -> "data"
+    | Fun -> "fun"
+
+  let print out (m:t) =
+    let pp_k out x = CCFormat.string out (str_of_key x) in
+    let pp_v out x = CCFormat.string out (str_of_value x) in
+    fpf out "@[<hv>%a@]" (M.print ~start:"" ~stop:"" pp_k pp_v) m
+end
+
+type ('t, 'ty) t = {
+  statements : ('t, 'ty) Statement.t CCVector.ro_vector;
   metadata: Metadata.t;
+  features: Features.t;
 }
 
 let statements t = t.statements
 let metadata t = t.metadata
+let features t = t.features
 let update_meta t f = { t with metadata = f t.metadata; }
+
+let map_features ~f t = { t with features = f t.features; }
+
+let check_features t ~spec =
+  if not (Features.check ~spec t.features)
+  then Utils.failwithf
+      "@[<hv2>feature mismatch:@ expected @[%a@],@ got @[%a@]@]"
+      Features.print spec Features.print t.features
 
 let add_sat_means_unknown b t = update_meta t (Metadata.add_sat_means_unknown b)
 let set_sat_means_unknown t = update_meta t Metadata.set_sat_means_unknown
@@ -29,23 +115,27 @@ let set_sat_means_unknown t = update_meta t Metadata.set_sat_means_unknown
 let add_unsat_means_unknown b t = update_meta t (Metadata.add_unsat_means_unknown b)
 let set_unsat_means_unknown t = update_meta t Metadata.set_unsat_means_unknown
 
-let make ~meta statements = { metadata=meta; statements; }
+let make ~features ~meta statements =
+  { metadata=meta; statements; features; }
 
-let of_list ~meta l = make ~meta (CCVector.of_list l)
+let of_list ~features ~meta l = make ~features ~meta (CCVector.of_list l)
 
 let iter_statements ~f pb = CCVector.iter f pb.statements
 
-let map_statements ~f pb = {
+let id_ x = x
+
+let map_statements ?features:(fft=id_) ~f pb = {
+  features=fft pb.features;
   metadata=pb.metadata;
   statements=CCVector.map f pb.statements;
 }
 
-let fold_map_statements ~f ~x pb =
+let fold_map_statements ?features:(fft=id_) ~f ~x pb =
   let acc, statements = Utils.vec_fold_map f x pb.statements in
   let statements = CCVector.freeze statements in
-  acc, { pb with statements }
+  acc, { pb with statements; features=fft pb.features }
 
-let flat_map_statements ~f pb =
+let flat_map_statements ?features:(fft=id_) ~f pb =
   let res = CCVector.create () in
   CCVector.iter
     (fun st ->
@@ -53,10 +143,14 @@ let flat_map_statements ~f pb =
       List.iter (CCVector.push res) new_stmts
     ) pb.statements;
   let res = CCVector.freeze res in
-  { metadata=pb.metadata; statements=res; }
+  { features=fft pb.features;
+    metadata=pb.metadata;
+    statements=res;
+  }
 
-let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
+let map_with ?features:(fft=id_) ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
   metadata=p.metadata;
+  features=fft p.features;
   statements=(
     let res = CCVector.create () in
     CCVector.iter
@@ -70,7 +164,7 @@ let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
   );
 }
 
-let map ~term ~ty pb = map_with ~term ~ty pb
+let map ?features ~term ~ty pb = map_with ?features ~term ~ty pb
 
 module Print(P1 : TermInner.PRINT)(P2 : TermInner.PRINT) = struct
   module PStmt = Statement.Print(P1)(P2)

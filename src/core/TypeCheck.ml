@@ -22,7 +22,7 @@ module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
 
-  type 'inv env = (T.t, T.t, 'inv) Env.t
+  type env = (T.t, T.t) Env.t
 
   let empty_env () = Env.create ()
 
@@ -210,7 +210,7 @@ module Make(T : TI.S) = struct
       then err_ty_mismatch t U.ty_type ty;
     ty
 
-  let check_eqns (type a) ~env ~bound id (eqn:(_,_,a) Stmt.equations) =
+  let check_eqns ~env ~bound id (eqn:(_,_) Stmt.equations) =
     match eqn with
       | Stmt.Eqn_single (vars, rhs) ->
           (* check that [freevars rhs ⊆ vars] *)

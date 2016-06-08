@@ -10,8 +10,6 @@ type id = ID.t
 type 'a var = 'a Var.t
 type loc = Location.t
 
-type stmt_invariant = <ty:[`Poly]; eqn:[`Nested]; ind_preds:[`Present]>
-
 exception ScopingError of string * string * loc option
 (** Scoping error for the given variable *)
 
@@ -65,7 +63,7 @@ module Convert(T : TermTyped.S) : sig
       @return a pair [(t', vars)] such that, roughly, [app t' vars = t],
         or [t'] is [forall vars t], or [t'] contains [vars] *)
 
-  type statement = (term, term, stmt_invariant) Statement.t
+  type statement = (term, term) Statement.t
 
   val convert_statement :
     env:env ->
@@ -78,7 +76,7 @@ module Convert(T : TermTyped.S) : sig
     statement * env
   (** Unsafe version of {!convert} *)
 
-  type problem = (term, term, stmt_invariant) Problem.t
+  type problem = (term, term) Problem.t
 
   val convert_problem :
     env:env ->
@@ -98,7 +96,7 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) : sig
   val pipe :
     print:bool ->
     (UntypedAST.statement CCVector.ro_vector,
-      (term1, term1, stmt_invariant) Problem.t, 'a, 'a)
+      (term1, term1) Problem.t, 'a, 'a)
       Transform.t
   (** Pipeline component. Takes input and output Term representations. *)
 
@@ -106,6 +104,6 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) : sig
     decode:('c -> 'd) ->
     print:bool ->
     (UntypedAST.statement CCVector.ro_vector,
-      (term1, term1, stmt_invariant) Problem.t, 'c, 'd)
+      (term1, term1) Problem.t, 'c, 'd)
     Transform.t
 end

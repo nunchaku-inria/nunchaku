@@ -23,8 +23,6 @@ module Red = Reduce.Make(T)
 let name = "mono"
 let section = Utils.Section.make name
 
-type ('a,'b) inv1 = <ty:[`Poly]; eqn:'a; ind_preds:'b>
-type ('a,'b) inv2 = <ty:[`Mono]; eqn:'a; ind_preds:'b>
 type term = T.t
 
 exception InvalidProblem of string
@@ -101,14 +99,14 @@ type unmangle_state = (ID.t * term list) ID.Tbl.t
 (* used for unmangling *)
 
 module St = struct
-  type ('a,'b) t = {
+  type t = {
     mangle : (string, ID.t) Hashtbl.t;
       (* mangled name -> mangled ID *)
     unmangle : unmangle_state;
       (* mangled name -> (id, args) *)
     mutable fun_: depth:int -> ID.t -> ArgTuple.t -> unit;
       (* specialization function *)
-    mutable get_env: unit -> (term, term, ('a,'b) inv1) Env.t;
+    mutable get_env: unit -> (term, term) Env.t;
       (* obtain the current environment *)
   }
 
@@ -182,7 +180,7 @@ let match_spec ?(subst=Subst.empty) ~spec tup =
   Subst.add_list ~subst spec.Stmt.spec_vars (ArgTuple.m_args tup)
 
 (* bind the type variables of [def] to [tup]. *)
-let match_pred (type i) ?(subst=Subst.empty) ~(def:(_,_,i) Stmt.pred_def) tup =
+let match_pred ?(subst=Subst.empty) ~(def:(_,_) Stmt.pred_def) tup =
   assert (ArgTuple.length tup = List.length def.Stmt.pred_tyvars);
   Subst.add_list ~subst def.Stmt.pred_tyvars (ArgTuple.m_args tup)
 
@@ -322,9 +320,8 @@ let mono_defined ~state ~local_state d tup =
 (* monomorphize equations properly
    n: number of type arguments *)
 let mono_eqns
-: type a b.
-    state:_ St.t -> local_state:local_state -> int ->
-    (_,_,(a,b) inv1) Stmt.equations -> (_,_,(a,b) inv2) Stmt.equations
+: state:St.t -> local_state:local_state -> int ->
+  (_,_) Stmt.equations -> (_,_) Stmt.equations
 = fun ~state ~local_state n eqn ->
   let f e = Stmt.map_eqns e
     ~term:(mono_term ~state ~local_state)
@@ -339,6 +336,7 @@ let mono_eqns
     | Stmt.Eqn_single (vars, rhs) ->
         let vars = CCList.drop n vars in
         Stmt.Eqn_single (vars, mono_term ~state ~local_state rhs)
+    | Stmt.Eqn_app _ -> assert false
 
 let conf = {Traversal.
   direct_tydef=false;
@@ -347,10 +345,10 @@ let conf = {Traversal.
   direct_mutual_types=false;
 }
 
-class ['inv1, 'inv2, 'c] mono_traverse ?size ?depth_limit () = object (self)
-  inherit ['inv1, 'inv2, 'c] Trav.traverse ~conf ?size ?depth_limit () as super
+class ['c] mono_traverse ?size ?depth_limit () = object (self)
+  inherit ['c] Trav.traverse ~conf ?size ?depth_limit () as super
 
-  val st : (_, _) St.t = St.create ()
+  val st : St.t = St.create ()
 
   method setup =
     st.St.fun_ <- self#do_statements_for_id;
@@ -569,6 +567,8 @@ let check_defs_ pb =
   Problem.iter_statements pb ~f:(TyCard.check_non_zero ~cache env)
 
 let monomorphize ?(depth_limit=256) pb =
+  Problem.check_features pb
+    ~spec:Problem.Features.(empty |> update Ty Poly);
   (* create the state used for monomorphization. Toplevel function
     for specializing (id,tup) is [mono_statements_for_id] *)
   let traverse = new mono_traverse ~depth_limit () in
@@ -582,7 +582,8 @@ let monomorphize ?(depth_limit=256) pb =
   let meta = Problem.Metadata.add_sat_means_unknown
     traverse#reached_depth_limit meta in
   let res = traverse#output in
-  let pb' = Problem.make ~meta (CCVector.freeze res) in
+  let features = Problem.features pb |> Problem.Features.(update Ty Mono) in
+  let pb' = Problem.make ~features ~meta (CCVector.freeze res) in
   (* some debug *)
   Utils.debugf ~section 3 "@[<2>instances:@ @[%a@]@]"
     (fun k-> k print_tbl_ traverse#processed);

@@ -118,7 +118,7 @@ module Make(T : TI.S) = struct
   module P = TI.Print(T)
 
   type ty = T.t
-  type ('a, 'inv) env = ('a, ty, 'inv) Env.t constraint 'inv = <ty:[`Mono]; ..>
+  type 'a env = ('a, ty) Env.t
 
   module TyTbl = CCHashtbl.Make(struct
     type t = T.t
@@ -163,7 +163,7 @@ module Make(T : TI.S) = struct
 
   (* evaluate the cardinality of [ty] *)
   let rec eval_ty_
-    : save_op -> (_,_) env -> cache -> ty -> Card.t
+    : save_op -> _ env -> cache -> ty -> Card.t
     = fun op env cache ty ->
       match TyTbl.get cache.state ty with
       | Some (Cached c)

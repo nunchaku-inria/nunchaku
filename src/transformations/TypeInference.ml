@@ -28,8 +28,6 @@ let section = Utils.Section.make name
 
 type attempt_stack = UntypedAST.term list
 
-type stmt_invariant = <ty:[`Poly]; eqn:[`Nested]; ind_preds:[`Present]>
-
 exception ScopingError of string * string * loc option
 exception IllFormed of string * string * loc option (* what, msg, loc *)
 exception TypeError of string * attempt_stack
@@ -635,7 +633,7 @@ module Convert(Term : TermTyped.S) = struct
     try E.return (convert_term_exn ~env t)
     with e -> E.of_exn e
 
-  type statement = (term, term, stmt_invariant) Stmt.t
+  type statement = (term, term) Stmt.t
 
   (* checks that the name is not declared/defined already *)
   let check_new_ ?loc ~env name =
@@ -1055,7 +1053,7 @@ module Convert(Term : TermTyped.S) = struct
          let cases =
            p.Stmt.pred_clauses
            |> List.map
-             (fun (Stmt.Pred_clause c) -> match c.Stmt.clause_guard with
+             (fun c -> match c.Stmt.clause_guard with
                 | None -> ID.Set.empty
                 | Some t ->
                   U.to_seq_consts t
@@ -1126,9 +1124,10 @@ module Convert(Term : TermTyped.S) = struct
                     ID.print id
             | Some (vars,g,rhs) ->
                 CCOpt.iter (check_prenex_types_ ?loc) g;
-                Stmt.Pred_clause {Stmt.
+                {Stmt.
                   clause_concl=rhs; clause_guard=g; clause_vars=vars;
-                })
+                }
+          )
           l
         in
         {Stmt.
@@ -1362,7 +1361,10 @@ module Convert(Term : TermTyped.S) = struct
         List.iter
           (fun def ->
             let id1 = def.Stmt.rec_defined.Stmt.defined_head in
-            let Stmt.Eqn_nested l = def.Stmt.rec_eqns in
+            let l = match def.Stmt.rec_eqns with
+              | Stmt.Eqn_nested l -> l
+              | _ -> assert false
+            in
             if List.exists
               (fun (_,_,rhs,_) -> term_contains_ ~id:id1 rhs)
               l
@@ -1399,7 +1401,7 @@ module Convert(Term : TermTyped.S) = struct
     try E.return (convert_statement_exn ~env st)
     with e -> E.of_exn e
 
-  type problem = (term, term, stmt_invariant) Problem.t
+  type problem = (term, term) Problem.t
 
   let convert_problem_exn ~env l =
     let res = CCVector.create() in
@@ -1413,7 +1415,12 @@ module Convert(Term : TermTyped.S) = struct
       env l
     in
     let res = CCVector.freeze res in
-    Problem.make ~meta:Problem.Metadata.default res, env
+    let pb =
+      Problem.make res
+        ~features:Problem.Features.full
+        ~meta:Problem.Metadata.default
+    in
+    pb, env
 
   let convert_problem ~env st =
     try E.return (convert_problem_exn ~env st)

@@ -13,8 +13,6 @@ module U = T.U
 module P = T.P
 module PStmt = Stmt.Print(P)(P)
 
-type 'a inv = <ty:[`Mono]; eqn:'a; ind_preds:[`Present]>
-
 let name = "unroll"
 let section = Utils.Section.make name
 
@@ -130,11 +128,11 @@ let unroll_preds ~state v is_pos l =
   let open Stmt in
   (* translate one clause *)
   let tr_clause
-    : type a. ID.t ->
-      (term, term, a inv) Stmt.pred_clause ->
-      (term, term, a inv) Stmt.pred_clause
-    = fun id (Pred_clause c) ->
-      Pred_clause {
+    : ID.t ->
+      (term, term) Stmt.pred_clause ->
+      (term, term) Stmt.pred_clause
+    = fun id c ->
+      {
         clause_vars = v :: c.clause_vars;
         clause_guard =
           (* in guard, replace [pred] by [pred v)] *)
@@ -171,7 +169,7 @@ let unroll_preds ~state v is_pos l =
           let _, ty_args, _ = U.ty_unfold def.pred_defined.defined_ty in
           let vars = make_vars ty_args in
           let vars_t = List.map U.var vars in
-          let c = Pred_clause {
+          let c = {
             clause_vars = vars;
             clause_guard = None;
             clause_concl = U.app (U.const id) (zero ~state :: vars_t);
@@ -254,6 +252,8 @@ let tr_statement ~state st =
       [st]
 
 let unroll pb =
+  Problem.check_features pb
+    ~spec:Problem.Features.(of_list [Ty, Mono; Ind_preds, Present]);
   let state = create_state () in
   let pb = Problem.flat_map_statements pb ~f:(tr_statement ~state) in
   pb, state

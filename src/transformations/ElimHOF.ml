@@ -20,9 +20,6 @@ module Red = Reduce.Make(T)
 let name = "elim_hof"
 let section = Utils.Section.make name
 
-type inv1 = <ty:[`Mono]; eqn:[`Single]; ind_preds: [`Absent]>
-type inv2 = <ty:[`Mono]; eqn:[`App]; ind_preds: [`Absent]>
-
 let fpf = Format.fprintf
 
 exception Error of string
@@ -168,7 +165,7 @@ let compute_arities_term ~env m t =
    infinite cardinality (extensionality not strictly needed then). Problem
    is for [unit -> unit] and the likes. *)
 
-let compute_arities_stmt ~env m (stmt:(_,_,inv1) Stmt.t) =
+let compute_arities_stmt ~env m (stmt:(_,_) Stmt.t) =
   let f = compute_arities_term ~env in
   (* declare  that [id : ty] is fully applied *)
   let add_full_arity id ty m =
@@ -324,13 +321,13 @@ type decode_state = {
 }
 
 type state = {
-  env: (term, ty, inv1) Env.t;
+  env: (term, ty) Env.t;
     (* environment (to get signatures, etc.) *)
   arities: arity_set ID.Map.t;
     (* set of arities for partially applied symbols/variables *)
   mutable app_count: int;
     (* used for generating new names *)
-  mutable new_stmts : (term, ty, inv2) Stmt.t CCVector.vector;
+  mutable new_stmts : (term, ty) Stmt.t CCVector.vector;
     (* used for new declarations. [id, type, attribute list] *)
   mutable lost_completeness: bool;
     (* did we have to do some approximation? *)
@@ -411,7 +408,7 @@ let rec handle_arrow_l l h = match l with
 
 (* given an application function, generate the corresponding extensionality
    axiom: `forall f g. (f = g or exists x. f x != g x)` *)
-let extensionality_for_app_ app_fun : (_,_,_) Stmt.t =
+let extensionality_for_app_ app_fun : (_,_) Stmt.t =
   let app_id = app_fun.af_id in
   let _, args, _ = U.ty_unfold app_fun.af_ty in
   match args with
@@ -706,16 +703,16 @@ let encode_toplevel_ty ~state ty =
 (* OH MY.
    safe, because we only change the invariants *)
 let cast_stmt_unsafe_ :
-  (term, ty, inv1) Stmt.t -> (term, ty, inv2) Stmt.t = Obj.magic
+  (term, ty) Stmt.t -> (term, ty) Stmt.t = Obj.magic
 let cast_rec_unsafe_ :
-  (term, ty, inv1) Stmt.rec_def -> (term, ty, inv2) Stmt.rec_def = Obj.magic
+  (term, ty) Stmt.rec_def -> (term, ty) Stmt.rec_def = Obj.magic
 
 (* translate a "single rec" into an "app rec" *)
-let elim_hof_rec ~info ~state (defs:(_,_,inv1) Stmt.rec_defs)
-: (_, _, inv2) Stmt.t list
+let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
+: (_, _) Stmt.t list
 =
   let elim_eqn
-    : (term,ty,inv1) Stmt.rec_def -> (term,ty,inv2) Stmt.rec_def
+    : (term,ty) Stmt.rec_def -> (term,ty) Stmt.rec_def
     = fun def ->
       let id = def.Stmt.rec_defined.Stmt.defined_head in
       match def.Stmt.rec_eqns with
@@ -763,13 +760,15 @@ let elim_hof_rec ~info ~state (defs:(_,_,inv1) Stmt.rec_defs)
               ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
             |> cast_rec_unsafe_
           )
+      | Stmt.Eqn_nested _
+      | Stmt.Eqn_app _ -> assert false
   in
   let defs = List.map elim_eqn defs in
   [Stmt.axiom_rec ~info defs]
 
 (* eliminate partial applications in the given statement. Can return several
    statements because of the declarations of new application symbols. *)
-let elim_hof_statement ~state stmt : (_, _, inv2) Stmt.t list =
+let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
   let info = Stmt.info stmt in
   let tr_term pol subst = elim_hof_term ~state subst pol in
   let tr_type _subst ty = encode_toplevel_ty ~state ty in
@@ -873,6 +872,8 @@ let elim_hof_statement ~state stmt : (_, _, inv2) Stmt.t list =
   new_stmts @ stmt'
 
 let elim_hof pb =
+  Problem.check_features pb
+    ~spec:Problem.Features.(of_list [Ty, Mono; Ind_preds, Absent; Eqn, Eqn_single]);
   let env = Problem.env pb in
   (* compute arities *)
   let arities = compute_arities_pb ~env:env pb in
@@ -880,12 +881,12 @@ let elim_hof pb =
     (fun k->k pp_arities arities);
   (* introduce application symbols and sorts *)
   let state = create_state ~env arities in
-  let pb' = Problem.flat_map_statements pb ~f:(elim_hof_statement ~state) in
   let pb' =
-    if state.lost_completeness
-    then Problem.set_unsat_means_unknown pb'
-    else pb'
+    Problem.flat_map_statements pb
+      ~features:Problem.Features.(update Eqn Eqn_app)
+      ~f:(elim_hof_statement ~state)
   in
+  let pb' = Problem.add_unsat_means_unknown state.lost_completeness pb' in
   (* return new problem *)
   pb', state.decode
 

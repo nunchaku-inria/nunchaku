@@ -15,7 +15,6 @@ module PStmt = Stmt.Print(P)(P)
 module Red = Reduce.Make(T)
 module VarSet = U.VarSet
 
-type 'a inv = <eqn:[`Single]; ty:[`Mono]; ind_preds:'a>
 type term = T.t
 type ty = T.t
 
@@ -197,7 +196,7 @@ type decode_state_fun = {
 
 type decode_state = decode_state_fun ID.Tbl.t
 
-type 'a state = {
+type state = {
   specializable_args : bool array ID.Tbl.t;
     (* function -> list of argument positions that can be specialized *)
   new_funs: [ `New of Arg.t * new_fun | `Same] list ID.Tbl.t;
@@ -209,11 +208,11 @@ type 'a state = {
     (* used for new names *)
   mutable fun_ : (depth:int -> ID.t -> Arg.t -> unit);
     (* the function used to specialize [id] on [arg] *)
-  mutable get_env : (unit -> (term, term, 'a inv) Env.t);
+  mutable get_env : (unit -> (term, term) Env.t);
     (* obtain the environment *)
   decode: decode_state;
     (* used for decoding new symbols *)
-  new_decls: (term, ty, 'a inv) Stmt.t CCVector.vector;
+  new_decls: (term, ty) Stmt.t CCVector.vector;
     (* vector of new declarations *)
 }
 
@@ -240,7 +239,7 @@ let create_state () = {
 (* state used for analysing the call graph of a block of mutual definitions *)
 type 'a call_graph_analyze_state = {
   cga_graph: CallGraph.t;
-  cga_env: (term,ty,'a inv) Env.t;
+  cga_env: (term,ty) Env.t;
   cga_ids: ID.Set.t; (* IDs defined in the same block of mutual definitions *)
   cga_explored: unit ID.Tbl.t; (* explored nodes *)
 }
@@ -326,10 +325,11 @@ and record_calls_def cga id def = match def.Stmt.rec_eqns with
       let args = Array.of_list vars in
       record_calls_term cga id args rhs;
       Array.length args
+  | Stmt.Eqn_app _
+  | Stmt.Eqn_nested _ -> assert false
 
 (* process one clause of a (co)inductive predicate *)
-and record_calls_clause (type a) cga id (c:(_,_,a inv) Stmt.pred_clause) =
-  let Stmt.Pred_clause c = c in
+and record_calls_clause cga id (c:(_,_) Stmt.pred_clause) =
   match T.repr c.Stmt.clause_concl with
     | TI.Const _ -> ()  (* no recursion is possible *)
     | TI.App (f, l) ->
@@ -388,7 +388,7 @@ let bv_of_callgraph cg id n =
             (CallGraph.Arg(id,i))))
 
 (* compute the set of specializable arguments in each function of [defs] *)
-let compute_specializable_args_def ~state (defs : (_,_,<eqn:[`Single];..>) Stmt.rec_defs) =
+let compute_specializable_args_def ~state (defs : (_,_) Stmt.rec_defs) =
   let ids =
     Stmt.defined_of_recs defs
     |> Sequence.map Stmt.id_of_defined
@@ -413,7 +413,7 @@ let compute_specializable_args_def ~state (defs : (_,_,<eqn:[`Single];..>) Stmt.
   ()
 
 (* similar to {!compute_specializable_args_def} *)
-let compute_specializable_args_pred ~state (preds : (_,_,_ inv) Stmt.pred_def list) =
+let compute_specializable_args_pred ~state (preds : (_,_) Stmt.pred_def list) =
   let ids =
     Stmt.defined_of_preds preds
     |> Sequence.map Stmt.id_of_defined
@@ -626,8 +626,8 @@ let specialize_defined ~state d args =
     and compute SNF of body (no def expansion, only local β reductions)
     so as to inline *)
 let specialize_eqns
-: type a. state:a state -> depth:int -> ID.t ->
-  (term,term,a inv) Stmt.equations -> Arg.t -> (term,term,a inv) Stmt.equations
+: state:state -> depth:int -> ID.t ->
+  (term,term) Stmt.equations -> Arg.t -> (term,term) Stmt.equations
 = fun ~state ~depth id eqns args ->
   Utils.debugf ~section 2 "@[<2>specialize@ `@[%a@]`@ on @[%a@]@]"
     (fun k->k (PStmt.print_eqns id) eqns Arg.print args);
@@ -669,21 +669,22 @@ let specialize_eqns
         let new_rhs = Red.snf rhs' in
         Stmt.Eqn_single (closure_vars @ new_vars, new_rhs)
       )
+  | Stmt.Eqn_app _
+  | Stmt.Eqn_nested _ -> assert false
 
 let specialize_clause
-: type a. state:a state -> depth:int -> ID.t ->
-  (term,term,a inv) Stmt.pred_clause -> Arg.t -> (term,term,a inv) Stmt.pred_clause
+: state:state -> depth:int -> ID.t ->
+  (term,term) Stmt.pred_clause -> Arg.t -> (term,term) Stmt.pred_clause
 = fun ~state ~depth id c args ->
   Utils.debugf ~section 2 "@[<2>specialize@ `@[%a@]`@ on @[%a@]@]"
     (fun k->k PStmt.print_clause c Arg.print args);
-  let (Stmt.Pred_clause c) = c in
   if Arg.is_empty args then (
     (* still need to traverse the clause *)
     let subst, vars = Utils.fold_map U.rename_var Subst.empty c.Stmt.clause_vars in
     let spec_term = specialize_term ~state ~depth:(depth+1) subst in
     let clause_guard = CCOpt.map spec_term c.Stmt.clause_guard in
     let clause_concl = spec_term c.Stmt.clause_concl in
-    Stmt.Pred_clause {Stmt.clause_vars=vars; clause_guard; clause_concl}
+    {Stmt.clause_vars=vars; clause_guard; clause_concl}
   ) else (
     (* specialize. Since we are allowed to do it, it means that positions
        of [args] designate arguments in the clause that are variables. *)
@@ -729,7 +730,7 @@ let specialize_clause
       CCOpt.map_or ~default:v1 (fun t -> VarSet.union (U.free_vars t) v1) clause_guard
       |> VarSet.to_list
     in
-    Stmt.Pred_clause {Stmt.clause_guard; clause_concl; clause_vars=new_vars}
+    {Stmt.clause_guard; clause_concl; clause_vars=new_vars}
   )
 
 let conf = {Traversal.
@@ -742,8 +743,8 @@ let conf = {Traversal.
 (* recursive traversal of the statement graph *)
 module Trav = Traversal.Make(T)(Arg)
 
-class ['a, 'c] traverse ?size ?depth_limit state = object (self)
-  inherit ['a inv, 'a inv, 'c] Trav.traverse ~conf ?size ?depth_limit ()
+class ['c] traverse ?size ?depth_limit state = object (self)
+  inherit ['c] Trav.traverse ~conf ?size ?depth_limit ()
 
   val st : _ = state
 
@@ -984,6 +985,8 @@ let add_congruence_axioms push_stmt g =
 (** {6 Main Encoding} *)
 
 let specialize_problem pb =
+  Problem.check_features pb
+    ~spec:Problem.Features.(of_list [Ty, Mono; Eqn, Eqn_single; Match, Present]);
   let state = create_state() in
   let trav = new traverse state in
   trav#setup;
@@ -1003,7 +1006,8 @@ let specialize_problem pb =
   let pb' =
     trav#output
     |> CCVector.freeze
-    |> Problem.make ~meta:(Problem.metadata pb)  in
+    |> Problem.make ~features:(Problem.features pb) ~meta:(Problem.metadata pb)
+  in
   pb', state.decode
 
 (** {2 Decoding}

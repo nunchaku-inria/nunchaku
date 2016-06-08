@@ -15,10 +15,8 @@ module PStmt = Statement.Print(P)(P)
 module Pat = Pattern.Make(T)
 module Red = Reduce.Make(T)
 
-type ('a,'b) inv1 = <ty:'a; ind_preds:'b; eqn:[`Nested]>
-type ('a,'b) inv2 = <ty:'a; ind_preds:'b; eqn:[`Single]>
 type term = T.t
-type ('a,'b) env = (term,term,<eqn:[`Single];ind_preds:'b;ty:'a>) Env.t
+type env = (term,term) Env.t
 
 let name = "elim_multi_eqns"
 
@@ -37,10 +35,10 @@ let () = Printexc.register_printer
 let error_ msg = raise (Error msg)
 let errorf_ msg = Utils.exn_ksprintf msg ~f:error_
 
-type ('a,'b) local_state = {
+type local_state = {
   root: term; (* term being pattern matched on (for undefined) *)
   mutable renaming: (term, term Var.t) Subst.t;
-  env: ('a,'b) env;
+  env: env;
 }
 
 type pattern =
@@ -275,12 +273,11 @@ and compile_dnode ~local_state v next_vars dn : term = match dn with
    @param id the symbol being defined
 *)
 let uniq_eqns
-: type a b.
-  env:(a,b) env ->
+: env:env ->
   id:ID.t ->
   ty:T.t ->
-  (term, term, (a,b) inv1) Statement.equations ->
-  (term, term, (a,b) inv2) Statement.equations
+  (term, term) Statement.equations ->
+  (term, term) Statement.equations
 = fun ~env ~id ~ty (Stmt.Eqn_nested l) ->
     (* create fresh vars *)
     let _, ty_args, _ = U.ty_unfold ty in
@@ -308,12 +305,6 @@ let uniq_eqns
     let new_rhs = U.eval_renaming ~subst:local_state.renaming new_rhs in
     let vars = List.map (Subst.deref_rec ~subst:local_state.renaming) vars in
     Stmt.Eqn_single (vars,new_rhs)
-
-let conv_preds
-: type a b.
-  ('t, 'ty, (a,b) inv1) Stmt.pred_def list ->
-  ('t, 'ty, (a,b) inv2) Stmt.pred_def list
-= fun l -> Stmt.cast_preds l
 
 let uniq_eqn_st env st =
   let loc = Stmt.loc st in
@@ -345,7 +336,6 @@ let uniq_eqn_st env st =
       let env = Env.def_data ?loc ~env ~kind:k ty in
       env, Stmt.mk_ty_def ~info k ty
   | Stmt.Pred (wf, k, l) ->
-      let l = conv_preds l in
       let env = Env.def_preds ?loc ~env ~wf ~kind:k l in
       env, Stmt.mk_pred ~info ~wf k l
   | Stmt.Copy c ->
@@ -355,8 +345,13 @@ let uniq_eqn_st env st =
       env, Stmt.goal ~info g
 
 let uniq_eqns_pb pb =
-  let _, pb' = Problem.fold_map_statements pb
-    ~f:uniq_eqn_st ~x:(Env.create()) in
+  Problem.check_features pb
+    ~spec:Problem.Features.(of_list [Eqn, Eqn_nested]);
+  let _, pb' =
+    Problem.fold_map_statements pb
+      ~f:uniq_eqn_st ~x:(Env.create())
+      ~features:Problem.Features.(update Eqn Eqn_single)
+  in
   pb'
 
 let pipe ~decode ~print ~check =

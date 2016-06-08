@@ -16,17 +16,14 @@ module U = T.U
 module P = T.P
 module PPb = Problem.Print(P)(P)
 
-
-type inv = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
-
 let name = "intro_guards"
 let section = Utils.Section.make name
 
 type term = T.t
 
-type 'inv state = {
+type state = {
   mutable lost_precision: bool;
-  env: (T.t, T.t, 'inv) Env.t;
+  env: (T.t, T.t) Env.t;
 }
 
 type +'a guard = 'a TI.Builtin.guard = {

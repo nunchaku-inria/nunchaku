@@ -189,8 +189,7 @@ module ToFO(T : TI.S) = struct
     conv_term ~sigma f
 
   let convert_eqns
-  : type inv.
-    head:id -> sigma:T.t Sig.t -> (T.t,T.t,inv) Statement.equations -> FO.T.t list
+  : head:id -> sigma:T.t Sig.t -> (T.t,T.t) Statement.equations -> FO.T.t list
   = fun ~head ~sigma eqns ->
     let module St = Statement in
     let conv_eqn (vars, args, rhs, side) =

@@ -8,10 +8,11 @@ type id = ID.t
 type loc = Loc.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-type ('t, 'ty, 'inv) def =
+
+type (+'t, +'ty) def =
   | Fun_def of
-      ('t, 'ty, 'inv) Statement.rec_defs *
-      ('t, 'ty, 'inv) Statement.rec_def *
+      ('t, 'ty) Statement.rec_defs *
+      ('t, 'ty) Statement.rec_def *
       loc option
       (** ID is a defined fun/predicate. *)
 
@@ -34,8 +35,8 @@ type ('t, 'ty, 'inv) def =
   | Pred of
       [`Wf | `Not_wf] *
       [`Pred | `Copred] *
-      ('t, 'ty, 'inv) Statement.pred_def *
-      ('t, 'ty, 'inv) Statement.pred_def list *
+      ('t, 'ty) Statement.pred_def *
+      ('t, 'ty) Statement.pred_def list *
       loc option
 
   | Copy_ty of ('t, 'ty) Statement.copy
@@ -51,16 +52,16 @@ type ('t, 'ty, 'inv) def =
       (** Undefined symbol *)
 
 (** All information on a given symbol *)
-type ('t, 'ty, 'inv) info = {
+type (+'t, +'ty) info = {
   ty: 'ty; (** type of symbol *)
   decl_attrs: Statement.decl_attr list;
   loc: loc option;
-  def: ('t, 'ty, 'inv) def;
+  def: ('t, 'ty) def;
 }
 
 (** Maps ID to their type and definitions *)
-type ('t, 'ty, 'inv) t = {
-  infos: ('t, 'ty, 'inv) info ID.PerTbl.t;
+type ('t, 'ty) t = {
+  infos: ('t, 'ty) info ID.PerTbl.t;
 }
 
 exception InvalidDef of id * string
@@ -138,13 +139,7 @@ let find ~env:t id =
   try Some (ID.PerTbl.find t.infos id)
   with Not_found -> None
 
-let spec_funs
-: type inv.
-  ?loc:loc ->
-  env:('t, 'ty, inv) t ->
-  ('t, 'ty) Statement.spec_defs ->
-  ('t, 'ty, inv) t
-= fun ?loc ~env:t spec ->
+let spec_funs ?loc ~env:t spec =
   List.fold_left
     (fun t defined ->
       let id = defined.Stmt.defined_head in
@@ -223,12 +218,7 @@ let add_copy ?loc ~env c =
        ty=c.Stmt.copy_concrete_ty; def=Copy_concrete c; } in
   {infos; }
 
-let add_statement
-: type inv.
-  env:('t,'ty,inv) t ->
-  ('t,'ty,inv) Statement.t ->
-  ('t,'ty,inv) t
-= fun ~env st ->
+let add_statement ~env st =
   let loc = Stmt.loc st in
   match Stmt.view st with
   | Stmt.Decl (id,ty,attrs) ->
