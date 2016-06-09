@@ -540,10 +540,10 @@ module To_tptp = struct
         | None -> T (TT.var (conv_var v))
       end
     | App (f,l) -> T (TT.app f (List.map (conv_as_term subst) l))
+    | Undefined (_,t) -> conv_rec subst t
     | Mu (_,_)
     | DataTest (_,_)
     | DataSelect (_,_,_)
-    | Undefined (_,_)
     | Undefined_atom _
     | Unparsable _ ->
       errorf_ "cannot convert `@[%a@]` to TPTP" print_term t
