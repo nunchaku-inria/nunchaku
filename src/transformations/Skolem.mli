@@ -21,10 +21,17 @@ val create : ?prefix:string -> mode:mode -> unit -> state
 (** @param prefix the prefix used to generate Skolem symbols
     @param mode the kind of skolemization we expect *)
 
-val skolemize : state:state -> Polarity.t -> T.t -> T.t * (ID.t * T.t) list
+val skolemize :
+  state:state ->
+  ?in_goal:bool ->
+  Polarity.t ->
+  T.t ->
+  T.t * (ID.t * T.t) list
 (** [skolemize ~state pol t] returns [t', new_syms] where [t'] is
     the skolemization of [t] under polarity [pol],
-    and [new_syms] is a set of new symbols with their type *)
+    and [new_syms] is a set of new symbols with their type
+    @param in_goal if true, record skolem definitions so that they can
+      appear in the model *)
 
 val print_state : Format.formatter -> state -> unit
 
@@ -32,9 +39,6 @@ val skolemize_pb :
   state:state ->
   (T.t, T.t, <eqn:_;ind_preds:_;ty:_;..> as 'inv) Problem.t ->
   (T.t, T.t, 'inv) Problem.t
-
-val find_id_def : state:state -> ID.t -> T.t option
-(** Find definition of this Skolemized ID *)
 
 val decode_model :
   skolems_in_model:bool ->
