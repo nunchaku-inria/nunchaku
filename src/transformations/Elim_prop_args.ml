@@ -98,6 +98,14 @@ let rename_var state subst v =
   let v' = transform_var state v in
   Var.Subst.add ~subst v v', v'
 
+(* TODO: rewrite this as a type-driven pass:
+   - carry around old_sigma, new_sigma
+   - recurse in subterms, translate them, infer their new type
+   - if new type is prop and we expect prop_, use `ite`
+     if new type is prop_ and we expect prop, use `= true_`
+     (careful with builtins, in particular boolean ones)
+  *)
+
 (* traverse a term, replacing any argument [a : prop]
    with [if a then pseudo_true else pseudo_false];
    also, change variables' types *)
