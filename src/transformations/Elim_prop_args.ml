@@ -44,6 +44,8 @@ let create_state ~sigma () =
     sigma;
   }
 
+(** {2 Encoding} *)
+
 (* statements that declare the pseudo-prop type *)
 let declare_ state : (_,_,_) Stmt.t list =
   assert (not state.declared);
@@ -159,8 +161,37 @@ let transform_problem pb =
   in
   pb', state
 
+(** {2 Decoding} *)
+
+(* decoding terms: just collapse pseudo-prop into prop *)
+let decode_term state t =
+  let rec aux t = match T.repr t with
+    | TI.Const id when ID.equal id state.true_ -> U.true_
+    | TI.Const id when ID.equal id state.false_ -> U.false_
+    | TI.Const id when ID.equal id state.pseudo_prop -> U.ty_prop
+    | _ ->
+      U.map () t
+        ~bind:(fun () v -> (), v)
+        ~f:(fun () -> aux)
+  in
+  aux t
+
 let decode_model state m =
-  m (* TODO *)
+  let tr_term = decode_term state in
+  Model.filter_map m
+    ~finite_types:(fun (ty,dom) -> match T.repr ty with
+      | TI.Const id when ID.equal id state.pseudo_prop -> None
+      | _ -> Some (tr_term ty, dom))
+    ~constants:(fun (t,u,k) -> match T.repr t with
+      | TI.Const id when (ID.equal id state.true_ || ID.equal id state.false_) ->
+        None (* drop pseudo-booleans from model *)
+      | _ -> Some (tr_term t, tr_term u, k))
+    ~funs:(fun (t,vars,dt,k) ->
+      let vars = List.map (Var.update_ty ~f:tr_term) vars in
+      let dt = Model.DT.map dt ~ty:tr_term ~term:tr_term in
+      Some (tr_term t, vars, dt, k))
+
+(** {2 Pipes} *)
 
 (* TODO: require the spec "type:mono, ite:present; hof: absent" *)
 
