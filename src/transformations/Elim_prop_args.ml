@@ -87,11 +87,12 @@ let rec transform_ty state ~top ty =
   in
   aux top ty
 
-(* rename [v], and maybe update its type from [prop] to [pseudo_prop] *)
+(* rename [v], and maybe update its type from [prop] to [pseudo_prop], since
+   we cannot quantify on propositions *)
 and transform_var state v =
   let v' = Var.fresh_copy v in
   Var.update_ty v'
-    ~f:(transform_ty state ~top:true)
+    ~f:(transform_ty state ~top:false)
 
 let rename_var state subst v =
   let v' = transform_var state v in
@@ -102,7 +103,9 @@ let rename_var state subst v =
    also, change variables' types *)
 let transform_term state subst t =
   let rec aux subst t = match T.repr t with
-    | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
+    | TI.Var v ->
+      let v = Var.Subst.find_exn ~subst v in
+      U.var v
     | TI.App (f, l) ->
       let ty_f = find_ty state f in
       let _, ty_args, _ = U.ty_unfold ty_f in
@@ -117,7 +120,13 @@ let transform_term state subst t =
              if U.ty_is_Prop ty
              then (
                state.needed <- true;
-               U.ite arg (U.const state.true_) (U.const state.false_)
+               match T.repr arg with
+                 | TI.Var v ->
+                   assert (U.equal (Var.ty v) (U.const state.pseudo_prop));
+                   arg (* no casting needed *)
+                 | _ ->
+                   (* otherwise, we cast *)
+                   U.ite arg (U.const state.true_) (U.const state.false_)
              ) else arg)
           l'
           ty_args
