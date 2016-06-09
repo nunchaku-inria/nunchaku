@@ -62,6 +62,8 @@ let print_elim_preds_ = ref false
 let print_elim_data_ = ref false
 let print_copy_ = ref false
 let print_intro_guards_ = ref false
+let print_elim_ite_ = ref false
+let print_elim_prop_args_ = ref false
 let print_elim_types_ = ref false
 let print_fo_ = ref false
 let print_smt_ = ref false
@@ -157,6 +159,10 @@ let options =
       , " print input after elimination of (co)datatypes"
   ; "--print-" ^ Tr.IntroGuards.name, Arg.Set print_intro_guards_,
       " print input after introduction of guards"
+  ; "--print-" ^ Tr.Elim_ite.name, Arg.Set print_elim_ite_,
+      " print input after elimination of if/then/else"
+  ; "--print-" ^ Tr.Elim_prop_args.name, Arg.Set print_elim_prop_args_,
+      " print input after elimination of propositional function subterms"
   ; "--print-" ^ Tr.ElimTypes.name, Arg.Set print_elim_types_,
       " print input after elimination of types"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
@@ -317,11 +323,12 @@ let make_model_pipeline () =
         Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
         Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+        Tr.Elim_prop_args.pipe ~print:(!print_elim_prop_args_ || !print_all_) ~check @@@
         Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
         Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
         close_task (
           Step_tofo.pipe ~print:!print_all_ () @@@
-          Tr.Elim_ite.pipe ~print:!print_all_ @@@
+          Tr.Elim_ite.pipe ~print:(!print_elim_ite_ || !print_all_) @@@
           FO.pipe_tptp @@@
           paradox
         ))

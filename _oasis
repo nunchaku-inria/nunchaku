@@ -80,6 +80,7 @@ Library "nunchaku_transformations"
                     Model_rename,
                     ElimData,
                     ElimTypes,
+                    Elim_prop_args,
                     Elim_ite,
                     Elim_infinite
   Install:          true
