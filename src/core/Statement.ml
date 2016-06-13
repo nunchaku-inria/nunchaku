@@ -131,6 +131,7 @@ type (+'term, +'ty) t = {
 type (+'t, +'ty) statement = ('t, 'ty) t
 
 let info_default = { loc=None; name=None; }
+let info_of_loc loc = { loc; name=None; }
 
 let mk_defined id ty = { defined_head=id; defined_ty=ty; }
 
@@ -266,11 +267,16 @@ let map_rec_defs ~term ~ty t = List.map (map_rec_def ~term ~ty) t
 let map_rec_defs_bind ~bind ~term ~ty acc t =
   List.map (map_rec_def_bind ~bind ~term ~ty acc) t
 
-let map_spec_defs ~term ~ty t = {
-  spec_vars=List.map (Var.update_ty ~f:ty) t.spec_vars;
-  spec_defined=List.map (map_defined ~f:ty) t.spec_defined;
-  spec_axioms=List.map term t.spec_axioms;
-}
+let map_spec_defs_bind ~bind ~term ~ty acc t =
+  let acc', vars = Utils.fold_map bind acc t.spec_vars in
+  { spec_vars=vars;
+    spec_defined=List.map (map_defined ~f:(ty acc)) t.spec_defined;
+    spec_axioms=List.map (term acc') t.spec_axioms;
+  }
+
+let map_spec_defs ~term ~ty t =
+  let bind () v = (), Var.update_ty ~f:ty v in
+  map_spec_defs_bind () t ~bind ~term:(fun _ -> term) ~ty:(fun _ -> ty)
 
 let map_clause_bind ~bind ~term acc c =
   let acc, vars = Utils.fold_map bind acc c.clause_vars in
@@ -302,25 +308,25 @@ let map_preds_bind ~bind ~term ~ty acc l = List.map (map_pred_bind acc ~bind ~te
 
 let map_preds ~term ~ty l = List.map (map_pred ~term ~ty) l
 
-let map_ty_def_bind ~bind ~ty:fty acc l =
-  List.map
-    (fun tydef ->
-      let acc', ty_vars = Utils.fold_map bind acc tydef.ty_vars in
-      {tydef with
-        ty_type=fty acc tydef.ty_type;
-        ty_vars;
-        ty_cstors=
-          ID.Map.map
-            (fun c -> {c with
-              cstor_args=List.map (fty acc') c.cstor_args;
-              cstor_type=fty acc' c.cstor_type
-            })
-            tydef.ty_cstors;
-      }) l
+let map_ty_def_bind ~bind ~ty:fty acc tydef =
+  let acc', ty_vars = Utils.fold_map bind acc tydef.ty_vars in
+  {tydef with
+     ty_type=fty acc tydef.ty_type;
+     ty_vars;
+     ty_cstors=
+       ID.Map.map
+         (fun c -> {c with
+                      cstor_args=List.map (fty acc') c.cstor_args;
+                      cstor_type=fty acc' c.cstor_type
+                   })
+         tydef.ty_cstors;
+  }
 
 let map_ty_def ~ty l =
   let bind () v = (), Var.update_ty v ~f:ty in
   map_ty_def_bind () l ~bind ~ty:(fun () -> ty)
+
+let map_ty_defs ~ty l = List.map (map_ty_def ~ty) l
 
 let map_bind ~bind ~term:ft ~ty:fty acc st =
   let info = st.info in
@@ -336,7 +342,7 @@ let map_bind ~bind ~term:ft ~ty:fty acc st =
           axiom_rec ~info (map_rec_defs_bind ~bind ~term:ft ~ty:fty acc t)
       end
   | TyDef (k, l) ->
-      let l = map_ty_def_bind acc ~bind ~ty:fty l in
+      let l = List.map (map_ty_def_bind acc ~bind ~ty:fty) l in
       mk_ty_def ~info k l
   | Pred (wf, k, preds) ->
       let preds = map_preds_bind ~bind ~term:ft ~ty:fty acc preds in
@@ -433,6 +439,20 @@ let defined_of_recs l = Sequence.of_list l |> Sequence.map defined_of_rec
 let defined_of_spec spec = Sequence.of_list spec.spec_defined
 let defined_of_pred p = p.pred_defined
 let defined_of_preds l = Sequence.of_list l |> Sequence.map defined_of_pred
+let defined_of_cstor c = mk_defined c.cstor_name c.cstor_type
+let defined_of_data d yield =
+  yield (mk_defined d.ty_id d.ty_type);
+  ID.Map.iter (fun _ c -> yield (defined_of_cstor c)) d.ty_cstors
+let defined_of_datas l =
+  Sequence.of_list l |> Sequence.flat_map defined_of_data
+let defined_of_copy c yield =
+  yield (mk_defined c.copy_id c.copy_ty);
+  yield (mk_defined c.copy_abstract c.copy_abstract_ty);
+  yield (mk_defined c.copy_concrete c.copy_concrete_ty);
+  ()
+
+let ids_of_copy c =
+  Sequence.of_list [c.copy_id; c.copy_concrete; c.copy_abstract]
 
 let fpf = Format.fprintf
 let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp

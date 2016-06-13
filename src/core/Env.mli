@@ -81,6 +81,7 @@ val is_fun : _ info -> bool (** spec/rec *)
 val is_rec : _ info -> bool (** rec *)
 val is_data : _ info -> bool
 val is_cstor : _ info -> bool
+val is_not_def : _ info -> bool
 
 val is_incomplete : _ info -> bool
 val is_abstract : _ info -> bool

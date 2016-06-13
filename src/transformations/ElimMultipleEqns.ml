@@ -362,7 +362,7 @@ let pipe ~decode ~print ~check =
     @
     Utils.singleton_if check () ~f:(fun () ->
       let module C = TypeCheck.Make(T) in
-      C.check_problem ?env:None)
+      C.empty () |> C.check_problem)
   and decode _ x = decode x in
   Transform.make
     ~on_encoded

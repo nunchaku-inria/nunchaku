@@ -87,7 +87,7 @@ let pipe ~print ~check =
     @
     Utils.singleton_if check () ~f:(fun () ->
       let module C = TypeCheck.Make(T) in
-      C.check_problem ?env:None)
+      C.check_problem (C.empty ()))
   in
   let encode pb = tr_problem pb, () in
   make ~name

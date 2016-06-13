@@ -92,6 +92,7 @@ let is_fun i = match i.def with Fun_spec _ | Fun_def _ -> true | _ -> false
 let is_rec i = match i.def with Fun_def _ -> true | _ -> false
 let is_data i = match i.def with Data _ -> true | _ -> false
 let is_cstor i = match i.def with Cstor _ -> true | _ -> false
+let is_not_def i = match i.def with NoDef -> true | _ -> false
 
 let is_incomplete i =
   List.exists (function Stmt.Attr_incomplete -> true | _ -> false) i.decl_attrs

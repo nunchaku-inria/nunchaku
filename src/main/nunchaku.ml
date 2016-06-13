@@ -345,7 +345,6 @@ let make_model_pipeline () =
           Transform.Pipe.flatten cvc4
         ))
   in
-  Transform.Pipe.check pipe;
   pipe
 
 (* run the pipeline on this problem, then run tasks, and return the
@@ -395,8 +394,8 @@ let main_model ~output statements =
   let module Res = Problem.Res in
   (* run pipeline *)
   let pipe = make_model_pipeline() in
-  if !print_pipeline_
-    then Format.printf "@[Pipeline: %a@]@." Transform.Pipe.print pipe;
+  Transform.Pipe.check pipe;
+  assert (not !print_pipeline_);
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   run_tasks ~j:!j ~deadline pipe statements
   >|= fun res ->
@@ -434,6 +433,7 @@ let main () =
   if !print_pipeline_ then (
     let pipe = make_model_pipeline() in
     Format.printf "@[Pipeline: %a@]@." Transform.Pipe.print pipe;
+    Transform.Pipe.check pipe;
     exit 0
   );
   (* parse *)

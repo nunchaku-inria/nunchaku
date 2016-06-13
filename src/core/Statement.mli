@@ -135,6 +135,7 @@ val tydef_type : 'ty tydef -> 'ty
 val tydef_cstors : 'ty tydef -> 'ty ty_constructor ID.Map.t
 
 val info_default : info
+val info_of_loc : Location.t option -> info
 
 val view : ('term,'ty) t -> ('term, 'ty) view
 val loc : _ t -> loc option
@@ -258,12 +259,25 @@ val map_rec_defs :
 
 val map_ty_def :
   ty:('ty -> 'ty2) ->
+  'ty tydef ->
+  'ty2 tydef
+
+val map_ty_defs :
+  ty:('ty -> 'ty2) ->
   'ty mutual_types ->
   'ty2 mutual_types
 
 val map_spec_defs :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
+  ('t, 'ty) spec_defs ->
+  ('t2, 'ty2) spec_defs
+
+val map_spec_defs_bind :
+  bind:('b_acc -> 'ty Var.t -> 'b_acc * 'ty2 Var.t) ->
+  term:('b_acc -> 't -> 't2) ->
+  ty:('b_acc -> 'ty -> 'ty2) ->
+  'b_acc ->
   ('t, 'ty) spec_defs ->
   ('t2, 'ty2) spec_defs
 
@@ -330,6 +344,12 @@ val defined_of_recs : (_, 'ty) rec_defs -> 'ty defined Sequence.t
 val defined_of_spec : (_, 'ty) spec_defs -> 'ty defined Sequence.t
 val defined_of_pred : (_, 'ty) pred_def -> 'ty defined
 val defined_of_preds : (_, 'ty) pred_def list -> 'ty defined Sequence.t
+val defined_of_cstor : 'ty ty_constructor -> 'ty defined
+val defined_of_data : 'ty tydef -> 'ty defined Sequence.t
+val defined_of_datas : 'ty mutual_types -> 'ty defined Sequence.t
+val defined_of_copy : (_, 'ty) copy -> 'ty defined Sequence.t
+
+val ids_of_copy : (_,_) copy -> ID.t Sequence.t
 
 (** {2 Print} *)
 
