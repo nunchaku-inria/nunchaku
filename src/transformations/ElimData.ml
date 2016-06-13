@@ -204,8 +204,8 @@ let common_axioms etys =
          CCList.diagonal ety.ety_cstors
          |> List.map
            (fun (c1,c2) ->
-              let proj_ty_arg ty = match U.ty_unfold ty with
-                | _, [_], ret -> ret
+              let proj_ty_arg ty = match T.repr ty with
+                | TI.TyArrow (_,ret) -> ret
                 | _ -> assert false
               in
               let mk_vars c =

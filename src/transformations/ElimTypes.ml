@@ -305,7 +305,7 @@ let rebuild_types state m : retyping =
         in
         let map =
           List.mapi
-            (fun i c -> c, ID.make_f "%a_%d" mangle_ty_ ty i)
+            (fun i c -> c, ID.make_f "$%a_%d" mangle_ty_ ty i)
             uni_domain_sub
           |> ID.Map.of_list
         in

@@ -21,6 +21,7 @@ module Conv = TI.Convert(T)(T)
 
 type new_sym = {
   sym_defines : T.t; (* what is the formula represented by the symbol *)
+  sym_decode: bool; (* record for the model? *)
   sym_ty : T.t; (* type of the symbol *)
 }
 
@@ -79,7 +80,7 @@ let should_skolemize_ ~state v =
   | `Sk_ho, TI.TyArrow _ -> true
   | `Sk_ho, _ -> false
 
-let skolemize_ ~state pol t =
+let skolemize_ ~state ?(in_goal=false) pol t =
   (* recursive traversal *)
   let rec aux env pol t = match T.repr t with
     | TI.Const id -> U.const id
@@ -99,7 +100,7 @@ let skolemize_ ~state pol t =
             (* create new skolem function *)
             let skolem_id = new_sym ~state in
             let skolem = U.app (U.const skolem_id) (List.map U.var env.vars) in
-            let new_sym = { sym_defines=t; sym_ty=ty } in
+            let new_sym = { sym_defines=t; sym_decode=in_goal; sym_ty=ty } in
             ID.Tbl.add state.tbl skolem_id new_sym;
             state.new_sym <- (skolem_id, new_sym):: state.new_sym;
             Utils.debugf ~section 2
@@ -138,8 +139,8 @@ let skolemize_ ~state pol t =
   } in
   aux env pol t
 
-let skolemize ~state pol t =
-  let t' = skolemize_ ~state pol t in
+let skolemize ~state ?in_goal pol t =
+  let t' = skolemize_ ~state ?in_goal pol t in
   (* clear list of new symbols *)
   let l = state.new_sym in
   state.new_sym <- [];
@@ -147,7 +148,7 @@ let skolemize ~state pol t =
 
 let skolemize_stmt ~state st =
   let info = Stmt.info st in
-  let sk_term pol t = skolemize_ ~state pol t in
+  let sk_term ?in_goal pol t = skolemize_ ~state ?in_goal pol t in
   match Stmt.view st with
   | Stmt.Axiom (Stmt.Axiom_std l) ->
       Stmt.axiom ~info (List.map (sk_term Pol.Pos) l)
@@ -161,7 +162,7 @@ let skolemize_stmt ~state st =
       let l = Stmt.map_preds ~term:(sk_term Pol.NoPol) ~ty:CCFun.id l in
       Stmt.mk_pred ~info ~wf kind l
   | Stmt.Goal g ->
-      Stmt.goal ~info (sk_term Pol.Pos g)
+      Stmt.goal ~info (sk_term ~in_goal:true Pol.Pos g)
   | Stmt.Copy _
   | Stmt.TyDef _
   | Stmt.Decl _ -> st
@@ -198,8 +199,7 @@ let find_id_def ~state id =
     existential formula it is the witness of *)
   try
     let sym = ID.Tbl.find state.tbl id in
-    let f = sym.sym_defines in
-    Some (U.app (U.const epsilon) [f])
+    Some sym
   with Not_found -> None
 
 let decode_model ~skolems_in_model ~state m =
@@ -210,8 +210,12 @@ let decode_model ~skolems_in_model ~state m =
         | TI.Const id ->
             begin match find_id_def ~state id with
               | None -> Some tup
-              | Some t' ->
-                if skolems_in_model then Some (t',vars,body,k) else None
+              | Some sym ->
+                if sym.sym_decode && skolems_in_model
+                then
+                  let t' = U.app_const epsilon [sym.sym_defines] in
+                  Some (t',vars,body,k)
+                else None (* ignore  this symbol *)
             end
         | _ -> Some tup)
     ~constants:(fun (t,u,k) ->
@@ -219,8 +223,12 @@ let decode_model ~skolems_in_model ~state m =
         | TI.Const id ->
             begin match find_id_def ~state id with
               | None -> Some (t, u, k)
-              | Some t' ->
-                if skolems_in_model then Some (t', u, k) else None
+              | Some sym ->
+                if sym.sym_decode && skolems_in_model
+                then
+                  let t' = U.app_const epsilon [sym.sym_defines] in
+                  Some (t',u,k)
+                else None
             end
         | _ -> Some (t, u, k)
       )

@@ -140,7 +140,7 @@ let encode_statement map st = match Stmt.view st with
     let st' =
       Stmt.map_bind
         Subst.empty st
-        ~bind:Subst.rename_var ~term:tr_term ~ty:tr_ty
+        ~bind:(bind_var map) ~term:tr_term ~ty:tr_ty
     in
     [st']
 
