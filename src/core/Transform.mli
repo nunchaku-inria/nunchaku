@@ -30,7 +30,8 @@ module Features : sig
     | Ind_preds
     | Match
     | Data
-    | Fun
+    | Fun (* lambdas *)
+    | HOF (* any higher-order fun *)
     | Copy
 
   val empty : t
@@ -42,6 +43,8 @@ module Features : sig
   val update : key -> value -> t -> t
   (** [update k v t] sets the key [k] to [v] in [t]. This is useful to
       specify how a specification changed *)
+
+  val update_l : (key * value) list -> t -> t
 
   val of_list : (key * value) list -> t
 

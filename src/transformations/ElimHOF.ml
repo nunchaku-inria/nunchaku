@@ -1267,7 +1267,7 @@ let pipe_with ?on_decoded ~decode ~print ~check =
     ~on_encoded
     ~input_spec:Transform.Features.(of_list
           [Ty, Mono; Ind_preds, Absent; Eqn, Eqn_single])
-    ~map_spec:Transform.Features.(update Eqn Eqn_app)
+    ~map_spec:Transform.Features.(update_l [Eqn, Eqn_app; HOF, Absent])
     ~name
     ~encode:(fun p ->
       let p, state = elim_hof p in

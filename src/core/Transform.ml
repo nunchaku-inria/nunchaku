@@ -25,7 +25,8 @@ module Features = struct
     | Ind_preds
     | Match
     | Data
-    | Fun
+    | Fun (* lambdas *)
+    | HOF (* any higher-order fun *)
     | Copy
 
   module M = CCMap.Make(struct
@@ -49,6 +50,7 @@ module Features = struct
     ] |> M.of_list
 
   let update = M.add
+  let update_l = List.fold_right (fun (k,v) -> update k v)
   let of_list = M.of_list
 
   (* check that every pair [k,v in spec] is also in [t] *)
@@ -76,6 +78,7 @@ module Features = struct
     | Match -> "match"
     | Data -> "data"
     | Fun -> "fun"
+    | HOF -> "hof"
     | Copy -> "copy"
 
   let print out (m:t) =

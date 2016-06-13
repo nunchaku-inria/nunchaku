@@ -14,11 +14,9 @@ module Ty = TypeMono.Make(T)
 module Stmt = Statement
 module PStmt = Stmt.Print(P)(P)
 
-type inv = <ind_preds:[`Absent]; ty:[`Mono]; eqn:[`Absent]>
-
 type term = T.t
 type ty = T.t
-type problem = (term, ty, inv) Problem.t
+type problem = (term, ty) Problem.t
 type model = (term,ty) Model.t
 type res = (term,ty) Problem.Res.t
 
@@ -47,7 +45,7 @@ let create_state ~sigma () =
 (** {2 Encoding} *)
 
 (* statements that declare the pseudo-prop type *)
-let declare_ state : (_,_,_) Stmt.t list =
+let declare_ state : (_,_) Stmt.t list =
   assert (not state.declared);
   state.declared <- true;
   let mk_decl id ty =
@@ -146,7 +144,7 @@ let transform_term state subst t =
   in
   aux subst t
 
-let transform_statement state st : (_,_,_) Stmt.t =
+let transform_statement state st : (_,_) Stmt.t =
   Utils.debugf ~section 3 "@[<2>transform @{<cyan>statement@}@ `@[%a@]`@]"
     (fun k->k PStmt.print st);
   let info = Stmt.info st in
@@ -210,8 +208,6 @@ let decode_model state m =
 
 (** {2 Pipes} *)
 
-(* TODO: require the spec "type:mono, ite:present; hof: absent" *)
-
 let pipe_with ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
@@ -221,10 +217,13 @@ let pipe_with ~decode ~print ~check =
     Utils.singleton_if check ()
       ~f:(fun () ->
          let module C = TypeCheck.Make(T) in
-         C.check_problem ?env:None)
+         C.empty () |> C.check_problem)
   in
   Transform.make
     ~name
+    ~input_spec:Transform.Features.(of_list
+          [Ind_preds, Absent; Ty, Mono; Eqn, Absent;
+           If_then_else, Present; HOF, Absent])
     ~on_encoded
     ~encode:transform_problem
     ~decode

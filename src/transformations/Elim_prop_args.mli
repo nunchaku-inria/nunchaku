@@ -10,11 +10,9 @@ open Nunchaku_core
 
 module T = TermInner.Default
 
-type inv = <ind_preds:[`Absent]; ty:[`Mono]; eqn:[`Absent]>
-
 type term = T.t
 type ty = T.t
-type problem = (term, ty, inv) Problem.t
+type problem = (term, ty) Problem.t
 type model = (term,ty) Model.t
 type res = (term,ty) Problem.Res.t
 
