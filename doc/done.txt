@@ -66,3 +66,4 @@ x 2016-03-24 2016-03-22 make specialize handle ind. preds.
 x 2016-03-24 2016-03-07 optional type-checking fence after each step
 x 2016-05-17 2016-05-10 fix bug in ElimHOF (need to declare more, earlier for ty_exn to work) --> polarity2
 x 2016-06-08 2016-01-19 µ terms, parse them from CVC4 and deal with them internally
+x 2016-06-13 2016-06-06 system of dependencies for passes (checked at pipeline-build time); replace old GADT
