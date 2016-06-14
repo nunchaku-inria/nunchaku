@@ -195,31 +195,44 @@ let common_axioms etys =
     (fun ety ->
        (* define constructors:
           [forall x1...xn,
-            c x1...xn = c x1...xn
-             asserting
-             is_c (c x1...xn) &&
-             And_i proj_i (c x1...xn) = x_i] *)
+             let prop t :=
+                is_c t &&
+                And_i proj_i t = x_i
+             in
+             prop (c x1...xn) && forall t'. (prop t' => t = t')]
+
+          This is an encoding of [c := unique! prop] *)
        let ax_cstors =
          List.map
            (fun ec ->
               let c_id, c_ty = ec.ecstor_cstor in
-              let _, args, _ = U.ty_unfold c_ty in
-              let vars = List.mapi (fun i ty -> Var.makef ~ty "v_%d" i) args in
+              let _, ty_args, ty_ret = U.ty_unfold c_ty in
+              let vars = List.mapi (fun i ty -> Var.makef ~ty "v_%d" i) ty_args in
               let t = U.app_const c_id (List.map U.var vars) in
+              (* some variable that might be equal to [t] *)
+              let v' = Var.makef ~ty:ty_ret "%a" ID.print_name ety.ety_id in
+              let t' = U.var v' in
+              (* property satisfied by [c x1...xn], that defines it *)
+              let mk_prop t =
+                ( app_id_fst ec.ecstor_test [t]
+                  ::
+                    List.map2
+                      (fun v proj ->
+                         U.eq
+                           (app_id_fst proj [t])
+                           (U.var v))
+                      vars
+                      ec.ecstor_proj)
+                |> U.and_
+              in
               U.forall_l vars
-                (U.eq
-                   t
-                   (U.asserting t
-                      ( app_id_fst ec.ecstor_test [t]
-                        ::
-                          List.map2
-                            (fun v proj ->
-                               U.eq
-                                 (app_id_fst proj [t])
-                                 (U.var v))
-                            vars
-                            ec.ecstor_proj
-                      )))
+                (U.and_
+                   [ mk_prop t
+                   ; U.forall v'
+                       (U.imply
+                          (mk_prop t')
+                          (U.eq t t'))
+                   ])
               |> mk_ax
            )
            ety.ety_cstors
