@@ -13,6 +13,9 @@ module Z = struct
   let one = of_int 1
   let sign = Big_int.sign_big_int
   let equal = Big_int.eq_big_int
+  let to_int n =
+    try Some (Big_int.int_of_big_int n)
+    with _ -> None
   let to_string = Big_int.string_of_big_int
   let pp_print out x = CCFormat.string out (to_string x)
   let compare = Big_int.compare_big_int
@@ -42,9 +45,9 @@ let () = Printexc.register_printer
 (** Approximation of a cardinal, including infinite cardinals *)
 module Card = struct
   type t =
-    | Exact of Big_int.big_int
+    | Exact of Z.t
 
-    | QuasiFiniteGEQ of Big_int.big_int
+    | QuasiFiniteGEQ of Z.t
         (** unknown, but ≥ 0. If all uninterpreted types are finite, then
             this is finite too *)
 
@@ -88,6 +91,9 @@ module Card = struct
     | Exact a, Exact b -> Exact Z.(a*b)
     | QuasiFiniteGEQ a, (Exact b | QuasiFiniteGEQ b)
     | Exact a, QuasiFiniteGEQ b -> QuasiFiniteGEQ Z.(a * b)  (* absorbs bounded *)
+
+  let sum = List.fold_left (+) zero
+  let product = List.fold_left ( * ) one
 
   let equal a b = match a, b with
     | Unknown, Unknown -> true
@@ -230,8 +236,15 @@ module Make(T : TI.S) = struct
           | None -> eval_ty_ op env cache c.Stmt.copy_of (* cardinality of definition *)
           end
       | Env.NoDef ->
-          (* TODO: check attributes *)
-          Card.quasi_finite_nonzero
+          let attrs = info.Env.decl_attrs in
+          CCList.find_map
+            (function
+              | Stmt.Attr_card_min n ->
+                Some (Card.QuasiFiniteGEQ (Z.of_int n))
+              | Stmt.Attr_infinite -> Some Card.infinite
+              | _ -> None)
+            attrs
+          |> CCOpt.get Card.quasi_finite_nonzero
       | Env.Cstor _
       | Env.Fun_def (_,_,_)
       | Env.Fun_spec (_,_)

@@ -11,12 +11,28 @@ exception Polymorphic
 
 exception EmptyData of ID.t
 
+module Z : sig
+  type t = Big_int.big_int
+  val zero : t
+  val of_int : int -> t
+  val to_int : t -> int option
+  val one : t
+  val sign : t -> int
+  val equal : t -> t -> bool
+  val to_string : t -> string
+  val pp_print : t CCFormat.printer
+  val compare : t -> t -> int
+  val hash : t -> int
+  val ( + ) : t -> t -> t
+  val ( * ) : t -> t -> t
+end
+
 (** Approximation of a cardinal, including infinite cardinals *)
 module Card : sig
   type t =
-    | Exact of Big_int.big_int
+    | Exact of Z.t
 
-    | QuasiFiniteGEQ of Big_int.big_int
+    | QuasiFiniteGEQ of Z.t
         (** unknown, but ≥ 0. If all uninterpreted types are finite, then
             this is finite too *)
 
@@ -30,11 +46,14 @@ module Card : sig
   val zero : t
   val one : t
   val of_int : int -> t
-  val of_z : Big_int.big_int -> t
+  val of_z : Z.t -> t
+
+  val sum : t list -> t
+  val product : t list -> t
 
   val infinite : t
   val unknown : t
-  val quasi_finite_geq : Big_int.big_int -> t
+  val quasi_finite_geq : Z.t -> t
   val quasi_finite_zero : t (** anything ≥ 0 *)
   val quasi_finite_nonzero : t (** ≥ 1 *)
 
@@ -70,7 +89,7 @@ module Make(T : TI.S) : sig
         or depends on polymorphic types *)
 
   val check_non_zero :
-    ?cache:cache -> ('a) env -> ('a, ty) Statement.t -> unit
+    ?cache:cache -> 'a env -> ('a, ty) Statement.t -> unit
   (** [check_non_zero env stmt] checks that [stmt] is not a definition of
       an empty datatype *)
 
