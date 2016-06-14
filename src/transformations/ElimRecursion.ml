@@ -7,12 +7,14 @@ module ID = ID
 module Var = Var
 module TI = TermInner
 module Stmt = Statement
-module Sig = Signature
 module T = TermInner.Default
 module U = T.U
 module P = T.P
 module PStmt = Stmt.Print(P)(P)
 module Subst = Var.Subst
+
+module Card = Cardinality
+module AT = AnalyzeType.Make(T)
 
 type id = ID.t
 
@@ -80,11 +82,13 @@ type state = {
     (* for decoding purpose *)
   new_statements: (term, ty) Stmt.t CCVector.vector;
     (* additional statements to be added to the result, such as declarations *)
-  sigma: ty Sig.t;
-    (* signature *)
+  env: (term,ty) Env.t;
+    (* environment *)
+  at_cache: AT.cache;
+    (* for computing cardinalities of types *)
 }
 
-let create_state ~hof ~sigma () = {
+let create_state ~hof ~env () = {
   decode={
     approx_fun=ID.Tbl.create 16;
     encoded_fun=ID.Tbl.create 16;
@@ -92,7 +96,8 @@ let create_state ~hof ~sigma () = {
     hof;
   };
   new_statements=CCVector.create();
-  sigma;
+  env;
+  at_cache=AT.create_cache ();
 }
 
 exception Error of string
@@ -184,10 +189,8 @@ let pop_new_stmts_ ~state =
       - keep same term
 *)
 
-let find_encoding_ ~state id =
-  try ID.Tbl.find state.decode.encoded_fun id
-  with Not_found ->
-    errorf_ "could not find the fun encoding for %a" ID.print id
+let find_encoding ~state id : fun_encoding option =
+  ID.Tbl.get state.decode.encoded_fun id
 
 (* if [f] is a recursively defined function that is being eliminated,
     then return [Some def_of_f] *)
@@ -301,7 +304,7 @@ let mk_fun_encoding_for_ ~state id =
   let name = "G_" ^ ID.to_string_slug id in
   let abs_type_id = ID.make name in
   let abs_type = U.ty_const abs_type_id in
-  let ty = Sig.find_exn ~sigma:state.sigma id in
+  let ty = Env.find_ty_exn ~env:state.env id in
   (* projection function: one per argument. It has
     type  [abs_type -> type of arg] *)
   let projectors =
@@ -340,9 +343,9 @@ let id_is_app_fun_ ~state id = match state.decode.hof with
   | Some h -> ID.Set.mem id h.app_symbs
 
 (* translate equation [eqn], which is defining the function
-   corresponding to [fun_encoding].
+   corresponding to [fun_encoding] (if any).
    It returns an axiom instead. *)
-let tr_eqns ~state ~fun_encoding eqn =
+let tr_eqns ~state ~(encoding:fun_encoding option) id eqn : term =
   let connect pol lhs rhs = match pol with
     | Polarity.Pos -> U.imply lhs rhs
     | Polarity.Neg -> U.imply rhs lhs
@@ -358,7 +361,9 @@ let tr_eqns ~state ~fun_encoding eqn =
   in
   match eqn with
   | Stmt.Eqn_single (vars,rhs) ->
-      let id = fun_encoding.fun_encoded_fun in
+    begin match encoding with
+    | Some fun_encoding ->
+      assert (ID.equal id fun_encoding.fun_encoded_fun);
       (* quantify over abstract variable now *)
       let alpha = Var.make ~ty:fun_encoding.fun_abstract_ty ~name:"a" in
       (* replace each [x_i] by [proj_i var] *)
@@ -366,15 +371,22 @@ let tr_eqns ~state ~fun_encoding eqn =
       let args' = apply_projs ~keep_first:true fun_encoding alpha in
       let subst = Subst.add_list ~subst:Subst.empty vars args' in
       (* convert right-hand side and add its side conditions *)
-      let lhs = U.app (U.const fun_encoding.fun_encoded_fun) args' in
+      let lhs = U.app_const fun_encoding.fun_encoded_fun args' in
       let rhs' = tr_term ~state subst rhs in
       (* how to connect [lhs] and [rhs]? *)
       let t = connect (ID.polarity id) lhs rhs' in
       if vars=[] then t else U.forall alpha t
-  | Stmt.Eqn_app (app_l, _vars, lhs, rhs) ->
-      (* introduce encodings if needed *)
-      List.iter (ensure_exists_encoding_ ~state) app_l;
-      let root_fun = fun_encoding in
+    | None ->
+      (* no abstract type *)
+      let subst, vars' = Utils.fold_map U.rename_var Subst.empty vars in
+      let lhs = U.app_const id (List.map U.var vars') in
+      let rhs' = tr_term ~state subst rhs in
+      (* how to connect [lhs] and [rhs]? *)
+      let t = connect (ID.polarity id) lhs rhs' in
+      U.forall_l vars' t
+    end
+  | Stmt.Eqn_app (_app_l, _vars, lhs, rhs) ->
+      let root_id = id in
       (* traverse [lhs], making an encoding *)
       let rec traverse_lhs i subst t = match T.repr t with
         | TI.Const _ -> t, subst, []
@@ -382,10 +394,10 @@ let tr_eqns ~state ~fun_encoding eqn =
             begin match T.repr f, l with
             | _, [] -> assert false
             | TI.Const f_id, first_arg :: l' ->
-                let fun_encoding = find_encoding_ ~state f_id in
-                let var_name = Printf.sprintf "a_%d" i in
+              begin match find_encoding ~state f_id with
+              | Some fun_encoding ->
                 (* variable of the abstract type of [f_id] *)
-                let alpha = Var.make ~name:var_name ~ty:fun_encoding.fun_abstract_ty in
+                let alpha = Var.makef "a_%d" i ~ty:fun_encoding.fun_abstract_ty in
                 if id_is_app_fun_ ~state f_id then (
                   (* first case: application symbol. We need to recurse
                      in the first argument *)
@@ -398,52 +410,105 @@ let tr_eqns ~state ~fun_encoding eqn =
                 ) else (
                   (* regular function, should have only variables as
                      arguments *)
-                  assert (ID.equal f_id root_fun.fun_encoded_fun);
+                  assert (ID.equal f_id root_id);
                   let l_as_vars = List.map as_var_exn_ l in
                   let new_args = apply_projs ~keep_first:true fun_encoding alpha in
-                  let subst = Var.Subst.add_list ~subst l_as_vars new_args in
+                  let subst = Subst.add_list ~subst l_as_vars new_args in
                   let t' = U.app f new_args in
                   t', subst, [alpha]
                 )
+              | None ->
+                if id_is_app_fun_ ~state f_id then (
+                  (* first case: application symbol. We need to recurse
+                     in the first argument *)
+                  let first_arg', subst, vars = traverse_lhs (i+1) subst first_arg in
+                  let l'_as_vars = List.map as_var_exn_ l' in
+                  let t' = U.app f (first_arg' :: List.map U.var l'_as_vars) in
+                  t', subst, l'_as_vars @ vars
+                ) else (
+                  (* regular function, should have only variables as
+                     arguments *)
+                  assert (ID.equal f_id root_id);
+                  let l_as_vars = List.map as_var_exn_ l in
+                  let t' = U.app f (List.map U.var l_as_vars) in
+                  t', subst, l_as_vars
+                )
+              end
             | _ -> assert false (* incorrect shape *)
             end
         | _ -> assert false
       in
-      let lhs', subst, vars' = traverse_lhs 0 Var.Subst.empty lhs in
+      let lhs', subst, vars' = traverse_lhs 0 Subst.empty lhs in
       let rhs' = tr_term ~state subst rhs in
       let form = connect Polarity.NoPol lhs' rhs' in
       U.forall_l vars' form
   | Stmt.Eqn_nested _ -> assert false
 
 (* transform the recursive definition (mostly, its equations) *)
-let tr_rec_def ~state ~fun_encoding def =
-  tr_eqns ~state ~fun_encoding def.Stmt.rec_eqns
+let tr_rec_def ~state ~encoding def =
+  let id = Stmt.defined_of_rec def |> Stmt.id_of_defined in
+  tr_eqns ~state ~encoding id def.Stmt.rec_eqns
+
+let card_ty_ ~state (ty:ty) : Card.t =
+  AT.cardinality_ty ~cache:state.at_cache state.env ty
+
+(* cardinality of this tuple *)
+let card_tys_ ~state l : Card.t = match l with
+  | [] -> Card.one
+  | _ -> Card.product (List.map (card_ty_ ~state) l)
+
+(* given [id : ty] a recursive function, should we encode its domain?
+   This is a heuristic if [ty = a1 -> a2 -> ... -> ak -> ret] where
+    each [a_i] is finite; otherwise we MUST box. *)
+let should_box_ ~state id ty : bool =
+  let module Z = Card.Z in
+  let _, args, _ = U.ty_unfold ty in
+  assert (args <> []);
+  let card = card_tys_ ~state args in
+  let res = match card with
+    | Card.Unknown
+    | Card.Infinite -> true
+    | Card.Exact c
+    | Card.QuasiFiniteGEQ c ->
+      (* should box if [z >= 30] *)
+      Z.compare c (Z.of_int 30) >= 0
+  in
+  Utils.debugf ~section 2
+    "@[<2>@{<Cyan>decision to box@} `@[%a : %a@]`:@ %B (card of domain = %a)@]"
+    (fun k->k ID.print id P.print ty res Card.print card);
+  res
 
 (* transform each axiom, considering case_head as rec. defined. *)
 let tr_rec_defs ~info ~state l =
   (* first, build and register an encoding for each defined function *)
   let ty_decls = CCList.flat_map
     (fun def ->
-      let id = def.Stmt.rec_defined.Stmt.defined_head in
+      let d = Stmt.defined_of_rec def in
+      let id = Stmt.id_of_defined d in
+      let ty = Stmt.ty_of_defined d in
       (* declare the function, since it is not longer "rec defined",
          but only axiomatized *)
-      let st =
-        Stmt.decl ~info:Stmt.info_default ~attrs:[]
-          id def.Stmt.rec_defined.Stmt.defined_ty in
-      (* compute encoding afterwards (order matters! because symbols
-         needed for the encoding also depend on [id] being declared) *)
-      let _ = mk_fun_encoding_for_ ~state id in
-      let st_l = pop_new_stmts_ ~state in
-      st :: st_l)
+      let st = Stmt.decl ~info:Stmt.info_default ~attrs:[] id ty in
+      (* decide whether to box the function's arguments *)
+      if should_box_ ~state id ty
+      then (
+        (* compute encoding afterwards (order matters! because symbols
+           needed for the encoding also depend on [id] being declared) *)
+        let _ = mk_fun_encoding_for_ ~state id in
+        let st_l = pop_new_stmts_ ~state in
+        st :: st_l
+      ) else
+        (* just the declaration, since we do not box *)
+        [st])
     l
   in
   (* then translate each definition *)
   let l' = List.map
     (fun def ->
+      let id = def.Stmt.rec_defined.Stmt.defined_head in
+      let encoding = find_encoding ~state id in
       try
-        let id = def.Stmt.rec_defined.Stmt.defined_head in
-        let fun_encoding = find_encoding_ ~state id in
-        tr_rec_def ~state ~fun_encoding def
+        tr_rec_def ~state ~encoding def
       with TranslationFailed (t, msg) as e ->
         (* could not translate, keep old definition *)
         Utils.debugf ~section 1
@@ -491,9 +556,10 @@ let tr_statement ~state st =
 
 let elim_recursion pb =
   let hof = gather_hof_ pb in
-  let sigma = Problem.signature pb in
-  Utils.debugf ~section 3 "@[<2>hof info:@ @[%a@]@]" (fun k->k (CCFormat.opt pp_hof) hof);
-  let state = create_state ~hof ~sigma () in
+  let env = Problem.env pb in
+  Utils.debugf ~section 3 "@[<2>hof info:@ @[%a@]@]"
+    (fun k->k (CCFormat.opt pp_hof) hof);
+  let state = create_state ~hof ~env () in
   let pb' =
     Problem.flat_map_statements pb
       ~f:(tr_statement ~state)
