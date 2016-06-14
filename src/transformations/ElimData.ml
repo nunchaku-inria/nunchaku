@@ -12,6 +12,7 @@ module T = TermInner.Default
 module U = T.U
 module P = T.P
 module PStmt = Stmt.Print(P)(P)
+module AT = AnalyzeType.Make(T)
 
 let name = "elim_data"
 let section = Utils.Section.make name
@@ -64,6 +65,7 @@ type encoded_cstor = {
 type encoded_ty = {
   ety_id: ID.t;
   ety_cstors: encoded_cstor list;
+  ety_card: AnalyzeType.Card.t;
 }
 
 type state = {
@@ -73,15 +75,24 @@ type state = {
     (* (co)data -> its encoding *)
   map: ID.t Tbl.t;
     (* map constructors to be encoded, into fresh identifiers *)
+  env: (T.t, T.t) Env.t;
+    (* environment *)
+  at_cache: AT.cache;
+    (* used for computing type cardinalities *)
 }
 
 type decode_state = state
 
-let create_state() = {
+let create_state ~env () = {
   decode=ID.Tbl.create 16;
   tys=ID.Tbl.create 16;
   map=Tbl.create 16;
+  env;
+  at_cache=AT.create_cache();
 }
+
+(* FIXME: replace quantifiers over infinite datatypes with the proper
+   approximation? (false, depending on polarity) *)
 
 let rec tr_term state t = match T.repr t with
   | TI.Const id ->
@@ -139,7 +150,8 @@ let ety_of_dataty state ty =
            ecstor_cstor=(c_id, cstor.cstor_type)} :: acc)
       ty.ty_cstors []
   in
-  let res = { ety_id=ty.ty_id; ety_cstors } in
+  let ety_card = AT.cardinality_ty_id ~cache:state.at_cache state.env ty.ty_id in
+  let res = { ety_id=ty.ty_id; ety_cstors; ety_card; } in
   ID.Tbl.replace state.tys ty.ty_id res;
   res
 
@@ -150,9 +162,27 @@ let app_id_fst (id,_) l = app_id id l
 let common_decls etys =
   let mk_decl (id,ty) =
     Stmt.decl ~info:Stmt.info_default ~attrs:[] id ty
+  (* cardinality attribute  for this type *)
+  and attr_card ety =
+    let module C = AnalyzeType.Card in
+    let module Z = AnalyzeType.Z in
+    match ety.ety_card with
+      | C.QuasiFiniteGEQ n ->
+        CCOpt.map_or ~default:[]
+          (fun n' -> [Stmt.Attr_card_min n'])
+          (Z.to_int n)
+      | C.Exact n ->
+        CCOpt.map_or ~default:[]
+          (fun n' -> [Stmt.Attr_card_min n'; Stmt.Attr_card_max n'])
+          (Z.to_int n)
+      | _ -> []
   in
   let tys =
-    List.map (fun ety -> mk_decl (ety.ety_id,U.ty_type)) etys
+    List.map
+      (fun ety ->
+         let attrs = attr_card ety in
+         Stmt.decl ~info:Stmt.info_default ~attrs ety.ety_id U.ty_type)
+      etys
   in
   let others =
     CCList.flat_map
@@ -429,7 +459,8 @@ let encode_stmt state stmt =
       [stmt]
 
 let transform_pb pb =
-  let state = create_state () in
+  let env = Problem.env pb in
+  let state = create_state ~env () in
   let pb' =
     Problem.flat_map_statements pb
       ~f:(encode_stmt state)
