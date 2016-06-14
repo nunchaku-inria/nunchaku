@@ -99,6 +99,7 @@ type (+'t, +'ty) copy = {
 type decl_attr =
   | Attr_card_max of int (** maximal cardinality of type *)
   | Attr_card_min of int (** minimal cardinality of type *)
+  | Attr_card_hint of Cardinality.t (** hint on the card of a type *)
   | Attr_incomplete (** encoding of some type with some values removed *)
   | Attr_abstract (** encoding of some type where some values are conflated *)
   | Attr_infinite (** infinite uninterpreted type *)

@@ -65,7 +65,7 @@ type encoded_cstor = {
 type encoded_ty = {
   ety_id: ID.t;
   ety_cstors: encoded_cstor list;
-  ety_card: AnalyzeType.Card.t;
+  ety_card: Cardinality.t;
 }
 
 type state = {
@@ -164,23 +164,14 @@ let common_decls etys =
     Stmt.decl ~info:Stmt.info_default ~attrs:[] id ty
   (* cardinality attribute  for this type *)
   and attr_card ety =
-    let module C = AnalyzeType.Card in
-    let module Z = AnalyzeType.Z in
-    match ety.ety_card with
-      | C.QuasiFiniteGEQ n ->
-        CCOpt.map_or ~default:[]
-          (fun n' -> [Stmt.Attr_card_min n'])
-          (Z.to_int n)
-      | C.Exact n ->
-        CCOpt.map_or ~default:[]
-          (fun n' -> [Stmt.Attr_card_min n'; Stmt.Attr_card_max n'])
-          (Z.to_int n)
-      | _ -> []
+    let module C = Cardinality in
+    let module Z = C.Z in
+    Stmt.Attr_card_hint ety.ety_card
   in
   let tys =
     List.map
       (fun ety ->
-         let attrs = attr_card ety in
+         let attrs = [attr_card ety] in
          Stmt.decl ~info:Stmt.info_default ~attrs ety.ety_id U.ty_type)
       etys
   in
