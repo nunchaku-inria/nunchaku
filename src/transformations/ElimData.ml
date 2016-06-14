@@ -172,22 +172,39 @@ let common_axioms etys =
   (* axiomatize new constants *)
   CCList.flat_map
     (fun ety ->
-       (* define projectors *)
-       let x = Var.makef ~ty:(U.const ety.ety_id) "v_%a" ID.print_name ety.ety_id in
-       (* [forall x, is_c x => x = c (select_c_1 x) ... (select_c_n x)] *)
-       let ax_projs =
+       (* define constructors:
+          [forall x1...xn,
+            c x1...xn = c x1...xn
+             asserting
+             is_c (c x1...xn) &&
+             And_i proj_i (c x1...xn) = x_i] *)
+       let ax_cstors =
          List.map
            (fun ec ->
-              U.forall x
-                (U.imply
-                   (app_id_fst ec.ecstor_test [U.var x])
-                   (U.eq (U.var x)
-                      (app_id_fst ec.ecstor_cstor
-                         (List.map (fun p -> app_id_fst p [U.var x]) ec.ecstor_proj))))
-              |> mk_ax)
+              let c_id, c_ty = ec.ecstor_cstor in
+              let _, args, _ = U.ty_unfold c_ty in
+              let vars = List.mapi (fun i ty -> Var.makef ~ty "v_%d" i) args in
+              let t = U.app_const c_id (List.map U.var vars) in
+              U.forall_l vars
+                (U.eq
+                   t
+                   (U.asserting t
+                      ( app_id_fst ec.ecstor_test [t]
+                        ::
+                          List.map2
+                            (fun v proj ->
+                               U.eq
+                                 (app_id_fst proj [t])
+                                 (U.var v))
+                            vars
+                            ec.ecstor_proj
+                      )))
+              |> mk_ax
+           )
            ety.ety_cstors
        (* [forall x, Or_c is_c x] *)
        and ax_exhaustiveness =
+         let x = Var.makef ~ty:(U.const ety.ety_id) "v_%a" ID.print_name ety.ety_id in
          U.forall x
            (U.or_
               (List.map
@@ -244,7 +261,7 @@ let common_axioms etys =
               ))
            ety.ety_cstors
        in
-       ax_exhaustiveness :: ax_injectivity @ ax_projs @ ax_disjointness
+       ax_exhaustiveness :: ax_injectivity @ ax_cstors @ ax_disjointness
     )
     etys
 
@@ -420,8 +437,6 @@ let transform_pb pb =
   pb', state
 
 (** {2 Decoding} *)
-
-(* TODO: decode terms using values of Nil and Cons *)
 
 type fun_def = T.t Var.t list * (T.t, T.t) Model.DT.t * Model.symbol_kind
 
