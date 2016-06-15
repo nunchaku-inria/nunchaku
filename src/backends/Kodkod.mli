@@ -12,13 +12,11 @@ type problem = FO_rel.problem
 type res = (FO_rel.expr, FO_rel.expr) Problem.Res.t
 
 val call :
-  ?options:string ->
-  ?timeout:float ->
-  ?print:bool ->
+  ?print_model:bool ->
+  ?prio:int ->
+  print:bool ->
   problem ->
-  (res * Scheduling.shortcut) Scheduling.Fut.t
-(** [solve pb] returns a {b task} that, when executed, will return
-    a model or UNSAT (see {!Solver_intf.Res.t}). *)
+  res Scheduling.Task.t
 
 val is_available : unit -> bool
 (** test whether the solver is available (e.g. if the library is

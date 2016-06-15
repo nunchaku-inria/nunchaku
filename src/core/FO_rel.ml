@@ -92,6 +92,14 @@ let su_make su_name ~card:su_card =
   if su_card <= 0 then invalid_arg "su_make";
   { su_name; su_card }
 
+let su_hash s = ID.hash s.su_name
+let su_compare s1 s2 =
+  CCOrd.(
+    ID.compare s1.su_name s2.su_name
+    <?> (int_, s1.su_card, s2.su_card)
+  )
+let su_equal s1 s2 = su_compare s1 s2 = 0
+
 let ts_list l = TS_list l
 let ts_all s = TS_all s
 let ts_product l =

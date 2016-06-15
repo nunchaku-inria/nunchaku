@@ -93,6 +93,9 @@ val binop : binop -> expr -> expr -> expr
 val mult : mult -> expr -> form
 
 val su_make : ID.t -> card:int -> sub_universe
+val su_equal : sub_universe -> sub_universe -> bool
+val su_hash : sub_universe -> int
+val su_compare : sub_universe -> sub_universe -> int
 
 val ts_list : tuple list -> tuple_set
 val ts_all : sub_universe -> tuple_set
