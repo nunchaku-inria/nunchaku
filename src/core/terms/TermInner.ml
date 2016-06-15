@@ -305,8 +305,7 @@ module Builtin = struct
         str (CCFormat.sprintf "select-%s-%d" (ID.name id) n)
       | `Undefined_self (id,t) ->
         lst [str "?__"; str (ID.to_string id); cterm t]
-      | `Undefined_atom (id,_) ->
-        lst [str "?__"; str (ID.to_string id)]
+      | `Undefined_atom _ -> str "?__"
       | `Unparsable ty ->
         lst [str "?__unparsable"; cterm ty]
       | `Guard _ -> assert false (* TODO *)
