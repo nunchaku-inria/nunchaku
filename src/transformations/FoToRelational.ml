@@ -27,12 +27,10 @@ let errorf msg = Utils.exn_ksprintf ~f:error msg
 
 (** {2 Encoding} *)
 
-type tuple = ID.t list
-
 type fun_ = {
-  fun_ty_args: ID.Set.t list;
-  fun_low: tuple list;
-  fun_high: tuple list;
+  fun_ty_args: FO_rel.sub_universe list;
+  fun_low: FO_rel.tuple_set;
+  fun_high: FO_rel.tuple_set;
   fun_is_pred: bool; (* predicate? *)
 }
 
@@ -48,20 +46,16 @@ let decl_of_fun id f =
 type state = {
   domain_size: int;
     (* size of domains *)
-  domains: ID.Set.t ID.Tbl.t;
+  domains: FO_rel.sub_universe ID.Tbl.t;
     (* atomic type -> domain *)
-  mutable univ: ID.Set.t;
-    (* the whoooooole universe *)
   funs: fun_ ID.Tbl.t;
     (* function -> relation *)
 }
 
 let create_state ~size () =
-  let true_ = ID.make "true_" in
   let state = {
     domain_size=size;
     domains=ID.Tbl.create 16;
-    univ=ID.Set.singleton true_;
     funs=ID.Tbl.create 16;
   } in
   state
@@ -70,14 +64,10 @@ let create_state ~size () =
 let declare_ty state id =
   if ID.Tbl.mem state.domains id then errorf "type %a declared twice" ID.print id;
   (* TODO: handle cardinality constraints *)
-  let set =
-    CCList.init state.domain_size
-      (fun i -> ID.make_f "%a_%d" ID.print_name id i)
-    |> ID.Set.of_list
-  in
+  let su = FO_rel.su_make id ~card:state.domain_size in
   Utils.debugf ~section 3 "@[<2>declare type %a@ = {@[%a@]}@]"
-    (fun k->k ID.print id FO_rel.print_set set);
-  ID.Tbl.add state.domains id set
+    (fun k->k ID.print id FO_rel.print_sub_universe su);
+  ID.Tbl.add state.domains id su
 
 let domain_of_ty_id state id = ID.Tbl.find state.domains id
 
@@ -97,6 +87,9 @@ let declare_fun state id f =
 
 let ty_is_declared state id = ID.Tbl.mem state.domains id
 let fun_is_declared state id = ID.Tbl.mem state.funs id
+
+(* TODO: if [f] is a predicate, then last apply should not be [x · f]
+   but [x in f], as [f] should be encoded as a set of tables *)
 
 (* apply relation to list of arguments *)
 let rec app_ f l = match l with
@@ -149,10 +142,9 @@ and encode_form state t : FO_rel.form =
         (FO_rel.imply a b)
         (FO_rel.imply (FO_rel.not_ a) c)
     | FO.Eq (a,b) ->
-      (* double inclusion *)
       let a = encode_term state a in
       let b = encode_term state b in
-      FO_rel.and_ (FO_rel.in_ a b) (FO_rel.in_ b a)
+      FO_rel.eq a b
     | FO.True -> FO_rel.true_
     | FO.False -> FO_rel.false_
     | FO.And l -> FO_rel.and_l (List.map (encode_form state) l)
@@ -195,18 +187,12 @@ and encode_ty state ty : FO_rel.expr =
       FO_rel.const id
     | FO.TyApp (_, _::_) -> assert false (* TODO *)
 
-(* cartesian product of list of sets *)
-let rec product_l = function
-  | [] -> [[]]
-  | s :: tail ->
-    let tuples = product_l tail in
-    ID.Set.fold
-      (fun id acc ->
-         let l = List.rev_map (fun tup -> id::tup) tuples in
-         List.rev_append l acc)
-      s []
-
 let encode_statement state st =
+  let empty_domain = FO_rel.ts_list [] in
+  let fun_domain (args:FO_rel.sub_universe list) : FO_rel.tuple_set =
+    List.map FO_rel.ts_all args
+    |> FO_rel.ts_product
+  in
   match st with
     | FO.TyDecl (id,0) ->
       assert (not (ty_is_declared state id));
@@ -221,8 +207,8 @@ let encode_statement state st =
         | FO.TyBuiltin `Prop ->
           (* encode predicate as itself *)
           let fun_ty_args = List.map (domain_of_ty state) ty_args in
-          let fun_low = [] in
-          let fun_high = product_l fun_ty_args in
+          let fun_low = empty_domain in
+          let fun_high = fun_domain fun_ty_args in
           let f = {
             fun_is_pred=true;
             fun_ty_args;
@@ -237,8 +223,8 @@ let encode_statement state st =
             List.map (domain_of_ty state) ty_args @
               [domain_of_ty state ty_ret]
           in
-          let fun_low = [] in
-          let fun_high = product_l fun_ty_args in
+          let fun_low = empty_domain in
+          let fun_high = fun_domain fun_ty_args in
           let f = {
             fun_is_pred=false;
             fun_ty_args;
@@ -274,7 +260,6 @@ let encode_pb pb =
   let form =
     CCVector.filter_map (encode_statement state) (FO.Problem.statements pb)
     |> CCVector.to_list
-    |> FO_rel.and_l
   in
   (* extract declarations *)
   let decls =
@@ -283,20 +268,28 @@ let encode_pb pb =
     |> CCVector.of_seq ?init:None
     |> CCVector.freeze
   in
-  let pb' = {
-    FO_rel.
-    pb_meta=FO.Problem.meta pb;
-    pb_univ=state.univ;
-    pb_decls=decls;
-    pb_goal=form;
-  } in
+  (* the universe *)
+  let univ =
+    ID.Tbl.values state.domains
+    |> Sequence.to_list
+  in
+  let pb' =
+    FO_rel.mk_problem
+      ~meta:(FO.Problem.meta pb)
+      ~univ
+      ~decls
+      ~goal:form
+  in
   pb', state
 
 (** {2 Decoding} *)
 
+(* TODO *)
 let decode _state _m = assert false
 
 (** {2 Pipes} *)
+
+(* TODO: write spec *)
 
 let pipe_with ~decode ~print =
   let on_encoded =
