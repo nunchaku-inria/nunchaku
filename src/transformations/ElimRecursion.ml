@@ -463,7 +463,6 @@ let card_tys_ ~state l : Card.t = match l with
 let should_box_ ~state id ty : bool =
   let module Z = Card.Z in
   let _, args, _ = U.ty_unfold ty in
-  assert (args <> []);
   let card = card_tys_ ~state args in
   let res = match card with
     | Card.Unknown
