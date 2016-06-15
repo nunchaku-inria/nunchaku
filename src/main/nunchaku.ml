@@ -328,17 +328,18 @@ let make_model_pipeline () =
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
     fork
       (
-        Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
         Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
         Tr.ElimData.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
         Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
         Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
         Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+        Tr.Elim_prop_args.pipe ~print:(!print_elim_prop_args_ || !print_all_) ~check @@@
         fork
-        ( Tr.Elim_prop_args.pipe ~print:(!print_elim_prop_args_ || !print_all_) ~check @@@
+        ( 
           Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
           Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
           close_task (
@@ -356,9 +357,7 @@ let make_model_pipeline () =
             kodkod
           ))
       )
-      ( Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-        Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
-        Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+      ( Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
         Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
         Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
