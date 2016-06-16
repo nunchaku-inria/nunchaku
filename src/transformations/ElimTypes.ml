@@ -103,14 +103,7 @@ let rec encode_ty state ~top x t = match Ty.repr t with
     U.ty_unitype
 
 (* mangle the type into a valid identifier *)
-let rec mangle_ty_ out t = match Ty.repr t with
-  | TyI.Builtin b -> CCFormat.string out (TyI.Builtin.to_string b)
-  | TyI.Arrow _ -> assert false
-  | TyI.Const id -> ID.print_name out id
-  | TyI.App (_,[]) -> assert false
-  | TyI.App (a,l) ->
-    Format.fprintf out "%a_%a"
-      mangle_ty_ a (CCFormat.list ~start:"" ~stop:"" ~sep:"_" mangle_ty_) l
+let mangle_ty_ = Ty.mangle ~sep:"_"
 
 (* add binding [ty -> pred] *)
 let add_pred_ state ty pred =
@@ -150,7 +143,7 @@ let map_to_predicate state ty =
           if not (ID.Tbl.mem state.parametrized_ty id)
           then errorf_ "type constructor `%a`/%d has not been declared" ID.print id n;
           (* find name *)
-          let name = ID.make_f "@[<h>is_%a@]" mangle_ty_ ty in
+          let name = ID.make_f "@[<h>is_%s@]" (mangle_ty_ ty) in
           add_pred_ state ty name;
           Some name
     end
@@ -307,7 +300,7 @@ let rebuild_types state m : retyping =
         in
         let map =
           List.mapi
-            (fun i c -> c, ID.make_f "$%a_%d" mangle_ty_ ty i)
+            (fun i c -> c, ID.make_f "$%s_%d" (mangle_ty_ ty) i)
             uni_domain_sub
           |> ID.Map.of_list
         in

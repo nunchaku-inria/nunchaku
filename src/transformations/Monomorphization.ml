@@ -135,18 +135,10 @@ module Trav = Traversal.Make(T)(struct
    (so it can be used in [!ArgTuple.of_list ~mangled]).
    @param args already mangled arguments *)
 let mangle_ ~state id (args:term list) =
-  let pp_list p = CCFormat.list ~start:"" ~stop:"" ~sep:"_" p in
-  let rec flat_ty_ out (t:term) = match TyM.repr t with
-    | TyMI.Builtin b -> CCFormat.string out (TI.TyBuiltin.to_string b)
-    | TyMI.Const id -> ID.print_name out id
-    | TyMI.App (f,l) ->
-      fpf out "%a_%a" flat_ty_ f (pp_list flat_ty_) l
-    | TyMI.Arrow (a,b) -> fpf out "%a_to_%a" flat_ty_ a flat_ty_ b
-  in
   match args with
     | [] -> id, None
     | _::_ ->
-      let name = CCFormat.sprintf "@[<h>%a@]" flat_ty_ (U.app (U.const id) args) in
+      let name = TyM.mangle ~sep:"_" (U.app_const id args) in
       let mangled = St.save_mangled ~state id args ~mangled:name in
       mangled, Some mangled
 
