@@ -300,15 +300,18 @@ let decode _state _m = assert false
 
 (** {2 Pipes} *)
 
-(* TODO: write spec *)
-
 let pipe_with ~decode ~print =
+  let input_spec =
+    Transform.Features.(of_list [
+        Match, Absent; Fun, Absent; Copy, Absent; Ind_preds, Absent;
+        HOF, Absent; Prop_args, Absent])
+  in
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       Format.printf "@[<2>@{<Yellow>after %s@}:@ %a@]@."
         name FO_rel.print_problem)
   in
-  Transform.make ~name ~on_encoded ~encode:encode_pb ~decode ()
+  Transform.make ~name ~input_spec ~on_encoded ~encode:encode_pb ~decode ()
 
 let pipe ~print =
   pipe_with ~decode ~print

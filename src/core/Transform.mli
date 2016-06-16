@@ -32,6 +32,7 @@ module Features : sig
     | Data
     | Fun (* lambdas *)
     | HOF (* any higher-order fun *)
+    | Prop_args (* propositions as arguments to functions *)
     | Copy
 
   val empty : t

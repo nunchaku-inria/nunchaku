@@ -27,6 +27,7 @@ module Features = struct
     | Data
     | Fun (* lambdas *)
     | HOF (* any higher-order fun *)
+    | Prop_args (* propositions as arguments to functions *)
     | Copy
 
   module M = CCMap.Make(struct
@@ -46,6 +47,8 @@ module Features = struct
     ; Match, Present
     ; Data, Present
     ; Fun, Present
+    ; HOF, Present
+    ; Prop_args, Present
     ; Copy, Present
     ] |> M.of_list
 
@@ -79,6 +82,7 @@ module Features = struct
     | Data -> "data"
     | Fun -> "fun"
     | HOF -> "hof"
+    | Prop_args -> "prop_args"
     | Copy -> "copy"
 
   let print out (m:t) =

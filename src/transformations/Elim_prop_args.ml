@@ -224,6 +224,7 @@ let pipe_with ~decode ~print ~check =
     ~input_spec:Transform.Features.(of_list
           [Ind_preds, Absent; Ty, Mono; Eqn, Absent;
            If_then_else, Present; HOF, Absent])
+    ~map_spec:Transform.Features.(update Prop_args Absent)
     ~on_encoded
     ~encode:transform_problem
     ~decode

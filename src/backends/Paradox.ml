@@ -143,7 +143,7 @@ let pipe ?(print_model=false) ~print () =
   let input_spec =
     Transform.Features.(of_list [
         Ty, Absent; If_then_else, Absent; Match, Absent;
-        Fun, Absent; Copy, Absent; Ind_preds, Absent])
+        Fun, Absent; Copy, Absent; Ind_preds, Absent; Prop_args, Absent])
   in
   let encode pb =
     let prio = 25 in
