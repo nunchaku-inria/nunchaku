@@ -246,6 +246,7 @@ module ToFO(T : TI.S) = struct
               | St.Attr_card_min n -> Some (FO.CardBound (id, `Min, n))
               | St.Attr_infinite ->
                 failf "@[<2>infinite type `%a`@ should have been eliminated@]" ID.print id
+              | St.Attr_card_hint _
               | St.Attr_finite_approx _
               | St.Attr_infinite_upcast
               | St.Attr_abstract
