@@ -44,7 +44,8 @@ Library "nunchaku_parsers"
   Pack:             true
   Modules:          Parsing_utils, Lexer, Parser, TPTP_print,
                     TPTP_lexer, TPTP_parser, TPTP_preprocess,
-                    TPTP_model_ast, TPTP_model_lexer, TPTP_model_parser
+                    TPTP_model_ast, TPTP_model_lexer, TPTP_model_parser,
+                    Ast_kodkod, Lex_kodkod, Parse_kodkod
   Install:          true
   FindlibName:      parsers
   FindlibParent:    nunchaku_core

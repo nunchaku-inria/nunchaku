@@ -40,6 +40,8 @@ type state = {
     (* total size of the universe *)
 }
 
+let errorf msg = Utils.failwithf msg
+
 (* compute size of universe + offsets *)
 let compute_univ_ pb : int * offset SUMap.t =
   List.fold_left
@@ -97,11 +99,11 @@ let print_pb state pb out () : unit =
   let subst : (FO_rel.var_ty, string) Var.Subst.t ref = ref Var.Subst.empty in
   let id2name id =
     try ID.Map.find id state.name_of_id
-    with Not_found -> Utils.failwithf "kodkod: no name for `%a`" ID.print id
+    with Not_found -> errorf "kodkod: no name for `%a`" ID.print id
   and su2offset su =
     try SUMap.find su state.univ_offsets
     with Not_found ->
-      Utils.failwithf "kodkod: no offset for `%a`" FO_rel.print_sub_universe su
+      errorf "kodkod: no offset for `%a`" FO_rel.print_sub_universe su
   in
   (* print a sub-universe *)
   let rec pp_su out (su:FO_rel.sub_universe): unit =
@@ -160,7 +162,7 @@ let print_pb state pb out () : unit =
     | FO_rel.Tuple_set ts -> pp_ts out ts
     | FO_rel.Var v ->
       begin match Var.Subst.find ~subst:!subst v with
-        | None -> Utils.failwithf "var `%a` not in scope" Var.print_full v
+        | None -> errorf "var `%a` not in scope" Var.print_full v
         | Some s -> CCFormat.string out s
       end
     | FO_rel.Unop (FO_rel.Flip, e) -> fpf out "~ %a" pp_rel e
@@ -199,10 +201,77 @@ let print_pb state pb out () : unit =
     (pp_list ~sep:" &&" pp_form) pb.FO_rel.pb_goal;
   ()
 
-(* parse the result from the solver's stdout and errcode *)
-let parse_res state (s:string) (errcode:int) : res * S.shortcut =
-  (* TODO: if errcode <> 0, return error *)
+module A = Ast_kodkod
+
+(* convert the raw parse model into something more usable *)
+let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
   assert false
+
+module Parser = struct
+  module L = Lex_kodkod
+  module P = Parse_kodkod
+
+  let parse_errorf lexbuf msg =
+    let loc = Location.of_lexbuf lexbuf in
+    Parsing_utils.parse_error_ ~loc
+      ("kodkod: " ^^ msg)
+
+  type 'a t = Lexing.lexbuf -> 'a
+
+  let filter_ ~msg ~f lexbuf =
+    let t = L.token lexbuf in
+    match f t with
+      | Some x -> x
+      | None -> parse_errorf lexbuf "expected %s" msg
+
+  (* expect exactly [t] *)
+  let exactly ~msg t = filter_ ~msg ~f:(fun t' -> if t=t' then Some () else None)
+
+  let section : A.section t = 
+    filter_ ~msg:"outcome" ~f:(function P.SECTION s -> Some s | _ -> None)
+
+  let outcome lexbuf : unit = match section lexbuf with
+    | A.S_outcome -> ()
+    | _ -> parse_errorf lexbuf "wrong section, expected OUTCOME"
+
+  let instance lexbuf : unit = match section lexbuf with
+    | A.S_instance -> ()
+    | _ -> parse_errorf lexbuf "wrong section, expected INSTANCES"
+
+  let ident : string t =
+    filter_ ~msg:"ident" ~f:(function P.IDENT s -> Some s | _ -> None)
+
+  let colon : unit t = exactly ~msg:"`:`" P.COLON
+
+  (* parse the result from the solver's stdout and errcode *)
+  let res state (s:string) (errcode:int) : res * S.shortcut =
+    if errcode <> 0
+    then
+      let msg = CCFormat.sprintf "kodkod failed (errcode %d), stdout:@ `%s`@." errcode s in
+      Res.Error (Failure msg), S.No_shortcut
+    else (
+      let delim = "---OUTCOME---" in
+      let i = CCString.find ~sub:delim s in
+      assert (i>=0);
+      let s' = String.sub s i (String.length s - i) in
+      let lexbuf = Lexing.from_string s' in
+      outcome lexbuf;
+      match L.result lexbuf with
+        | A.Unsat ->
+          (* NOTE: we fixed a maximal cardinal, so maybe there's a bigger model *)
+          Res.Unknown, S.No_shortcut
+        | A.Sat ->
+          (* parse model *)
+          instance lexbuf;
+          let i = ident lexbuf in
+          if i <> "relations"
+          then parse_errorf lexbuf "expected `relations`, got `%s`" i;
+          colon lexbuf;
+          let m = Parse_kodkod.parse_model L.token lexbuf in
+          let m = convert_model state m in
+          Res.Sat m, S.Shortcut
+    )
+end
 
 let solve ~deadline state pb : res * Scheduling.shortcut =
   Utils.debug ~section 1 "calling kodkod";
@@ -234,7 +303,7 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         Utils.debugf ~lock:true ~section 2
           "@[<2>kodkod exited with %d, stdout:@ `%s`@]"
           (fun k->k errcode stdout);
-        parse_res state stdout errcode
+        Parser.res state stdout errcode
       | S.Fut.Done (E.Error e) ->
         Res.Error e, S.Shortcut
       | S.Fut.Stopped ->
