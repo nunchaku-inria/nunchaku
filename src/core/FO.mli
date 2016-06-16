@@ -108,6 +108,7 @@ module Ty : sig
 
   val equal : t -> t -> bool
   val compare : t -> t -> int
+  val hash : t -> int
 end
 
 module T : sig

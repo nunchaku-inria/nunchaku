@@ -32,7 +32,7 @@ val pipe :
   print:bool ->
   ( problem1,
     problem2,
-    (FO_rel.expr, FO_rel.expr) Problem.Res.t,
+    (FO_rel.expr, FO_rel.sub_universe) Problem.Res.t,
     (FO.T.t, FO.Ty.t) Problem.Res.t
   ) Transform.t
 

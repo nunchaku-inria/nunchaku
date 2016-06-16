@@ -15,7 +15,7 @@ let name = "kodkod"
 let section = Utils.Section.make name
 
 type problem = FO_rel.problem
-type res = (FO_rel.expr, FO_rel.expr) Problem.Res.t
+type res = (FO_rel.expr, FO_rel.sub_universe) Problem.Res.t
 
 module SUMap = CCMap.Make(struct
     type t = FO_rel.sub_universe
@@ -199,6 +199,11 @@ let print_pb state pb out () : unit =
     (pp_list ~sep:" &&" pp_form) pb.FO_rel.pb_goal;
   ()
 
+(* parse the result from the solver's stdout and errcode *)
+let parse_res state (s:string) (errcode:int) : res * S.shortcut =
+  (* TODO: if errcode <> 0, return error *)
+  assert false
+
 let solve ~deadline state pb : res * Scheduling.shortcut =
   Utils.debug ~section 1 "calling kodkod";
   let now = Unix.gettimeofday() in
@@ -229,7 +234,7 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         Utils.debugf ~lock:true ~section 2
           "@[<2>kodkod exited with %d, stdout:@ `%s`@]"
           (fun k->k errcode stdout);
-        assert false (* TODO : parse result *)
+        parse_res state stdout errcode
       | S.Fut.Done (E.Error e) ->
         Res.Error e, S.Shortcut
       | S.Fut.Stopped ->

@@ -9,7 +9,7 @@ module T = FO.T
 module Ty = FO.Ty
 
 type problem = FO_rel.problem
-type res = (FO_rel.expr, FO_rel.expr) Problem.Res.t
+type res = (FO_rel.expr, FO_rel.sub_universe) Problem.Res.t
 
 val call :
   ?print_model:bool ->

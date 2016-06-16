@@ -5,6 +5,8 @@
 
 open Nunchaku_core
 
+module TyTbl = CCHashtbl.Make(FO.Ty)
+
 let name = "fo_to_rel"
 
 type problem1 = (FO.T.t, FO.Ty.t) FO.Problem.t
@@ -43,10 +45,16 @@ let decl_of_fun id f =
     decl_high=f.fun_high;
   }
 
+type domain = {
+  dom_ty: FO.Ty.t;
+  dom_id: ID.t; (* ID corresponding to the type *)
+  dom_su: FO_rel.sub_universe;
+}
+
 type state = {
   domain_size: int;
     (* size of domains *)
-  domains: FO_rel.sub_universe ID.Tbl.t;
+  mutable domains: domain TyTbl.t;
     (* atomic type -> domain *)
   funs: fun_ ID.Tbl.t;
     (* function -> relation *)
@@ -55,37 +63,53 @@ type state = {
 let create_state ~size () =
   let state = {
     domain_size=size;
-    domains=ID.Tbl.create 16;
+    domains=TyTbl.create 16;
     funs=ID.Tbl.create 16;
   } in
   state
 
-(* ensure the type is declared *)
-let declare_ty state id =
-  if ID.Tbl.mem state.domains id then errorf "type %a declared twice" ID.print id;
-  (* TODO: handle cardinality constraints *)
-  let su = FO_rel.su_make id ~card:state.domain_size in
-  Utils.debugf ~section 3 "@[<2>declare type %a@ = {@[%a@]}@]"
-    (fun k->k ID.print id FO_rel.print_sub_universe su);
-  ID.Tbl.add state.domains id su
+let id_of_ty ty : ID.t =
+  let rec pp_ out t = match FO.Ty.view t with
+    | FO.TyBuiltin b -> FO.TyBuiltin.print out b
+    | FO.TyApp (a,[]) -> ID.print_name out a
+    | FO.TyApp (a,l) ->
+      Format.fprintf out "%a_%a"
+        ID.print_name a
+        (CCFormat.list ~start:"" ~stop:"" ~sep:"_" pp_) l
+  in
+  match FO.Ty.view ty with
+    | FO.TyApp (id,[]) -> id
+    | _ ->
+      let n = CCFormat.sprintf "@[<h>%a@]" pp_ ty in
+      ID.make n
 
-let domain_of_ty_id state id = ID.Tbl.find state.domains id
+(* ensure the type is declared *)
+let declare_ty state (ty:FO.Ty.t) =
+  if TyTbl.mem state.domains ty
+  then errorf "type `@[%a@]` declared twice" FO.print_ty ty;
+  (* TODO: handle cardinality constraints *)
+  let dom_id = id_of_ty ty in
+  let su = FO_rel.su_make dom_id ~card:state.domain_size in
+  let dom = { dom_id; dom_ty=ty; dom_su=su; } in
+  Utils.debugf ~section 3 "@[<2>declare type %a@ = {@[%a@]}@]"
+    (fun k->k FO.print_ty ty FO_rel.print_sub_universe su);
+  TyTbl.add state.domains ty dom;
+  dom
 
 (* type -> its domain *)
-let domain_of_ty state ty : FO_rel.sub_universe =
-  match FO.Ty.view ty with
-    | FO.TyApp (id,[]) ->
-      domain_of_ty_id state id
-    | FO.TyApp (_, _::_) -> assert false (* TODO *)
-    | FO.TyBuiltin `Prop -> assert false (* TODO *)
-    | FO.TyBuiltin `Unitype -> assert false (* TODO *)
+let domain_of_ty state (ty:FO.Ty.t) : domain =
+  try TyTbl.find state.domains ty
+  with Not_found -> declare_ty state ty
+
+let su_of_ty state ty : FO_rel.sub_universe =
+  (domain_of_ty state ty).dom_su
 
 let declare_fun state id f =
   Utils.debugf ~section 3 "@[<2>declare function@ `@[%a@]`@]"
     (fun k->k FO_rel.print_decl (decl_of_fun id f));
   ID.Tbl.add state.funs id f
 
-let ty_is_declared state id = ID.Tbl.mem state.domains id
+let ty_is_declared state ty: bool = TyTbl.mem state.domains ty
 
 let fun_is_declared state id = ID.Tbl.mem state.funs id
 
@@ -196,20 +220,16 @@ and encode_form state t : FO_rel.form =
       FO_rel.some (encode_term state t)
 
 and encode_var state v =
-  Var.update_ty v ~f:(domain_of_ty state)
+  Var.update_ty v ~f:(su_of_ty state)
 
-let encode_statement state st =
+let encode_statement state st : FO_rel.form option =
   let empty_domain = FO_rel.ts_list [] in
   let fun_domain (args:FO_rel.sub_universe list) : FO_rel.tuple_set =
     List.map FO_rel.ts_all args
     |> FO_rel.ts_product
   in
   match st with
-    | FO.TyDecl (id,0) ->
-      assert (not (ty_is_declared state id));
-      declare_ty state id;
-      None
-    | FO.TyDecl (_, _) -> assert false (* TODO?? *)
+    | FO.TyDecl _ -> None (* declared when used *)
     | FO.Decl (id, (ty_args, ty_ret)) ->
       assert (not (fun_is_declared state id));
       (* encoding differs for relations and functions *)
@@ -217,7 +237,7 @@ let encode_statement state st =
         | FO.TyBuiltin `Unitype -> assert false
         | FO.TyBuiltin `Prop ->
           (* encode predicate as itself *)
-          let fun_ty_args = List.map (domain_of_ty state) ty_args in
+          let fun_ty_args = List.map (su_of_ty state) ty_args in
           let fun_low = empty_domain in
           let fun_high = fun_domain fun_ty_args in
           let f = {
@@ -231,8 +251,8 @@ let encode_statement state st =
         | FO.TyApp _ ->
           (* function: encode as relation whose last argument is the return value *)
           let fun_ty_args =
-            List.map (domain_of_ty state) ty_args @
-              [domain_of_ty state ty_ret]
+            List.map (su_of_ty state) ty_args @
+              [su_of_ty state ty_ret]
           in
           let fun_low = empty_domain in
           let fun_high = fun_domain fun_ty_args in
@@ -248,7 +268,7 @@ let encode_statement state st =
           let ax =
             let vars =
               List.mapi
-                (fun i ty -> Var.makef ~ty:(domain_of_ty state ty) "x_%d" i)
+                (fun i ty -> Var.makef ~ty:(su_of_ty state ty) "x_%d" i)
                 ty_args
             in
             FO_rel.for_all_l vars
@@ -281,7 +301,8 @@ let encode_pb pb =
   in
   (* the universe *)
   let univ =
-    ID.Tbl.values state.domains
+    TyTbl.values state.domains
+    |> Sequence.map (fun d -> d.dom_su)
     |> Sequence.to_list
   in
   let pb' =

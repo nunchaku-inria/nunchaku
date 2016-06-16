@@ -120,6 +120,10 @@ module Ty = struct
     | TyApp _, _
     | TyBuiltin _, _ -> Pervasives.compare (to_int_ t1.view) (to_int_ t2.view)
 
+  let hash t = match t.view with
+    | TyBuiltin b -> 3
+    | TyApp (id, _) -> ID.hash id
+
   let compare = compare_ty
   let equal a b = compare a b = 0
 end
