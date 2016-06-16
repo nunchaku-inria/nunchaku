@@ -11,7 +11,7 @@ type problem1 = (FO.T.t, FO.Ty.t) FO.Problem.t
 type model1 = (FO.T.t, FO.Ty.t) Model.t
 
 type problem2 = FO_rel.problem
-type model2 = (FO_rel.expr, FO_rel.expr) Model.t
+type model2 = (FO_rel.expr, FO_rel.sub_universe) Model.t
 
 let section = Utils.Section.(make ~parent:root) name
 
@@ -72,7 +72,7 @@ let declare_ty state id =
 let domain_of_ty_id state id = ID.Tbl.find state.domains id
 
 (* type -> its domain *)
-let domain_of_ty state ty =
+let domain_of_ty state ty : FO_rel.sub_universe =
   match FO.Ty.view ty with
     | FO.TyApp (id,[]) ->
       domain_of_ty_id state id
@@ -86,15 +86,15 @@ let declare_fun state id f =
   ID.Tbl.add state.funs id f
 
 let ty_is_declared state id = ID.Tbl.mem state.domains id
+
 let fun_is_declared state id = ID.Tbl.mem state.funs id
 
-(* TODO: if [f] is a predicate, then last apply should not be [x · f]
-   but [x in f], as [f] should be encoded as a set of tables *)
+let find_fun_ state id : fun_ option = ID.Tbl.get state.funs id
 
-(* apply relation to list of arguments *)
-let rec app_ f l = match l with
-  | [] -> f
-  | x :: tail -> app_ (FO_rel.join x f) tail
+let app_fun_ id l =
+  List.fold_left
+    (fun f arg -> FO_rel.join arg f)
+    (FO_rel.const id) l
 
 (* term -> expr *)
 let rec encode_term state t : FO_rel.expr =
@@ -102,11 +102,16 @@ let rec encode_term state t : FO_rel.expr =
     | FO.Builtin _ -> assert false (* TODO *)
     | FO.Var v -> FO_rel.var (encode_var state v)
     | FO.App (f,l) ->
-      if not (fun_is_declared state f)
-      then errorf "function %a is undeclared" ID.print f;
-      let f = FO_rel.const f in
-      let l = List.map (encode_term state) l in
-      app_ f l
+      begin match find_fun_ state f with
+        | None ->
+          errorf "function %a is undeclared" ID.print f;
+        | Some {fun_is_pred=true; _} ->
+          errorf "cannot encode predicate application@ `@[%a@]` as relation"
+            FO.print_term t
+        | Some _ ->
+          let l = List.map (encode_term state) l in
+          app_fun_ f l
+      end
     | FO.DataTest (_,_)
     | FO.DataSelect (_,_,_) ->
       error "should have eliminated data{test/select} earlier"
@@ -162,30 +167,36 @@ and encode_form state t : FO_rel.form =
       FO_rel.for_all (encode_var state v) (encode_form state f)
     | FO.Exists (v,f) ->
       FO_rel.exists (encode_var state v) (encode_form state f)
+    | FO.App (f, l) ->
+      (* atomic formula. Two distinct encodings depending on whether
+         it's a predicate or a function *)
+      begin match find_fun_ state f with
+        | None -> errorf "function %a is undeclared" ID.print f;
+        | Some fun_ ->
+          assert fun_.fun_is_pred; (* typing *)
+          let l = List.map (encode_term state) l in
+          (* [pred a b c] becomes [c in (b · (a · pred))];
+             here we remove the last argument *)
+          let last, args = match List.rev l with
+            | [] -> assert false
+            | x :: l -> x, List.rev l
+          in
+          FO_rel.in_ last (app_fun_ f args)
+      end
     | FO.Builtin _
     | FO.Var _
     | FO.Mu (_,_)
     | FO.Undefined_atom _
     | FO.Unparsable _
+    | FO.Fun (_,_)
     | FO.DataTest (_,_)
     | FO.DataSelect (_,_,_)
-    | FO.Undefined (_,_)
-    | FO.Fun (_,_)
-    | FO.App _ ->
+    | FO.Undefined (_,_) ->
       (* atomic formula *)
       FO_rel.some (encode_term state t)
 
 and encode_var state v =
-  Var.update_ty v ~f:(encode_ty state)
-
-and encode_ty state ty : FO_rel.expr =
-  match FO.Ty.view ty with
-    | FO.TyBuiltin `Prop -> assert false
-    | FO.TyBuiltin `Unitype -> assert false
-    | FO.TyApp (id, []) ->
-      assert (ty_is_declared state id);
-      FO_rel.const id
-    | FO.TyApp (_, _::_) -> assert false (* TODO *)
+  Var.update_ty v ~f:(domain_of_ty state)
 
 let encode_statement state st =
   let empty_domain = FO_rel.ts_list [] in
@@ -237,12 +248,12 @@ let encode_statement state st =
           let ax =
             let vars =
               List.mapi
-                (fun i ty -> Var.makef ~ty:(encode_ty state ty) "x_%d" i)
+                (fun i ty -> Var.makef ~ty:(domain_of_ty state ty) "x_%d" i)
                 ty_args
             in
             FO_rel.for_all_l vars
               (FO_rel.one
-                 (app_ (FO_rel.const id) (List.map FO_rel.var vars)))
+                 (app_fun_ id (List.map FO_rel.var vars)))
           in
           Utils.debugf ~section 3 "@[<2>functionality axiom for %a:@ `@[%a@]`@]"
             (fun k->k ID.print id FO_rel.print_form ax);

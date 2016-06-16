@@ -9,7 +9,7 @@ type problem1 = (FO.T.t, FO.Ty.t) FO.Problem.t
 type model1 = (FO.T.t, FO.Ty.t) Model.t
 
 type problem2 = FO_rel.problem
-type model2 = (FO_rel.expr, FO_rel.expr) Model.t
+type model2 = (FO_rel.expr, FO_rel.sub_universe) Model.t
 
 (** {2 Encoding} *)
 

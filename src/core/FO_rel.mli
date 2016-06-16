@@ -50,11 +50,15 @@ type expr =
   | None_ (* empty set *)
   | Const of ID.t
   | Tuple_set of tuple_set
-  | Var of expr Var.t
+  | Var of var
   | Unop of unop * expr
   | Binop of binop * expr * expr
   | If of form * expr * expr
-  | Comprehension of expr Var.t * form
+  | Comprehension of var * form
+
+and var_ty = sub_universe
+
+and var = var_ty Var.t
 
 and form =
   | True
@@ -66,8 +70,8 @@ and form =
   | And of form * form
   | Or of form * form
   | Equiv of form * form
-  | Forall of expr Var.t * form
-  | Exists of expr Var.t * form
+  | Forall of var * form
+  | Exists of var * form
 
 type decl = {
   decl_id: ID.t;
@@ -106,7 +110,7 @@ val ts_product : tuple_set list -> tuple_set
 val flip : expr -> expr
 val trans : expr -> expr
 val const : ID.t -> expr
-val var : expr Var.t -> expr
+val var : var -> expr
 val tuple_set : tuple_set -> expr
 val union : expr -> expr -> expr
 val inter : expr -> expr -> expr
@@ -114,7 +118,7 @@ val diff : expr -> expr -> expr
 val join : expr -> expr -> expr
 val product : expr -> expr -> expr
 val if_ : form -> expr -> expr -> expr
-val comprehension : expr Var.t -> form -> expr
+val comprehension : var -> form -> expr
 
 val true_ : form
 val false_ : form
@@ -130,10 +134,10 @@ val or_ : form -> form -> form
 val or_l : form list -> form
 val imply : form -> form -> form
 val equiv : form -> form -> form
-val for_all : expr Var.t -> form -> form
-val for_all_l : expr Var.t list -> form -> form
-val exists : expr Var.t -> form -> form
-val exists_l : expr Var.t list -> form -> form
+val for_all : var -> form -> form
+val for_all_l : var list -> form -> form
+val exists : var -> form -> form
+val exists_l : var list -> form -> form
 
 val mk_problem :
   meta:ProblemMetadata.t ->
@@ -148,6 +152,7 @@ val print_atom : atom CCFormat.printer
 val print_tuple : tuple CCFormat.printer
 val print_tuple_set : tuple_set CCFormat.printer
 val print_sub_universe : sub_universe CCFormat.printer
+val print_var_ty : var_ty CCFormat.printer
 val print_universe : universe CCFormat.printer
 val print_expr : expr CCFormat.printer
 val print_form : form CCFormat.printer

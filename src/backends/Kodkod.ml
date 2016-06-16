@@ -48,21 +48,30 @@ let compute_univ_ pb : int * offset SUMap.t =
        n + su.FO_rel.su_card, map)
     (0, SUMap.empty) pb.FO_rel.pb_univ
 
+(* indices for naming constants by arity *)
+type name_map = int StrMap.t
+
+(* find a unique name for some ID of arity [n], update the offsets map *)
+let name_of_arity (m:name_map) n: name_map * string =
+  let prefix = match n with
+    | 0 -> assert false
+    | 1 -> "s"
+    | 2 -> "r"
+    | n -> Printf.sprintf "m%d_" n
+  in
+  let offset = StrMap.get_or ~or_:0 prefix m in
+  let m' = StrMap.add prefix (offset+1) m in
+  let name = prefix ^ string_of_int offset in
+  m', name
+
 (* map atom names to Kodkodi identifiers *)
 let translate_names_ pb =
   let _,n2id,id2n =
     CCVector.fold
-      (fun (offsets,n2id,id2n) decl ->
+      (fun (nm,n2id,id2n) decl ->
          let id = decl.FO_rel.decl_id in
-         let prefix = match decl.FO_rel.decl_arity with
-           | 0 -> "s"
-           | 1 -> "r"
-           | n -> Printf.sprintf "m%d_" n
-         in
-         let offset = StrMap.get_or ~or_:0 prefix offsets in
-         let offsets = StrMap.add prefix (offset+1) offsets in
-         let name = prefix ^ string_of_int offset in
-         offsets, StrMap.add name id n2id, ID.Map.add id name id2n
+         let nm, name = name_of_arity nm decl.FO_rel.decl_arity in
+         nm, StrMap.add name id n2id, ID.Map.add id name id2n
       )
       (StrMap.empty,StrMap.empty,ID.Map.empty)
       pb.FO_rel.pb_decls
@@ -84,6 +93,8 @@ let pp_list ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp
 
 (* print in kodkodi syntax *)
 let print_pb state pb out () : unit =
+  (* local substitution for renaming variables *)
+  let subst : (FO_rel.var_ty, string) Var.Subst.t ref = ref Var.Subst.empty in
   let id2name id =
     try ID.Map.find id state.name_of_id
     with Not_found -> Utils.failwithf "kodkod: no name for `%a`" ID.print id
@@ -103,20 +114,20 @@ let print_pb state pb out () : unit =
     let offset = su2offset a.FO_rel.a_sub_universe in
     fpf out "A%d" (offset + a.FO_rel.a_index)
   and pp_tuple out (tuple:FO_rel.tuple) =
-    fpf out "[%a]" (pp_list ~sep:", " pp_atom) tuple
+    fpf out "[@[%a@]]" (pp_list ~sep:", " pp_atom) tuple
   and pp_ts out (ts:FO_rel.tuple_set): unit = match ts with
     | FO_rel.TS_all su -> pp_su out su
     | FO_rel.TS_list l ->
-      fpf out "{%a}" (pp_list ~sep:", " pp_tuple) l
+      fpf out "{@[%a@]}" (pp_list ~sep:", " pp_tuple) l
     | FO_rel.TS_product l ->
       fpf out "%a" (pp_list ~sep:" -> " pp_ts) l
   and pp_form out = function
     | FO_rel.False -> assert false (* TODO *)
     | FO_rel.True -> assert false (* TODO *)
     | FO_rel.Eq (a,b) ->
-      fpf out "(%a = %a)" pp_rel a pp_rel b
+      fpf out "(@[<2>%a@ = %a@])" pp_rel a pp_rel b
     | FO_rel.In (a,b) ->
-      fpf out "(%a in %a)" pp_rel a pp_rel b
+      fpf out "(@[<2>%a@ in %a@])" pp_rel a pp_rel b
     | FO_rel.Mult (m,e) ->
       let s = match m with
         | FO_rel.M_no -> "no"
@@ -124,35 +135,49 @@ let print_pb state pb out () : unit =
         | FO_rel.M_lone -> "lone"
         | FO_rel.M_some -> "some"
       in
-      fpf out "%s %a" s pp_rel e
+      fpf out "@[<2>%s@ %a@]" s pp_rel e
     | FO_rel.Not f -> fpf out "(! %a)" pp_form f
     | FO_rel.And (a,b) ->
-      fpf out "(%a && %a)" pp_form a pp_form b
+      fpf out "(@[<2>%a@ && %a@])" pp_form a pp_form b
     | FO_rel.Or (a,b) ->
-      fpf out "(%a || %a)" pp_form a pp_form b
+      fpf out "(@[<2>%a@ || %a@])" pp_form a pp_form b
     | FO_rel.Equiv (a,b) ->
-      fpf out "(%a <=> %a)" pp_form a pp_form b
-    | FO_rel.Forall (v,f)
-    | FO_rel.Exists (v,f) -> assert false (* TODO *)
+      fpf out "(@[<2>%a@ <=> %a@])" pp_form a pp_form b
+    | FO_rel.Forall (v,f) -> pp_binder "all" out v f
+    | FO_rel.Exists (v,f) -> pp_binder "some" out v f
+  and pp_binder b out v f =
+    let n = Var.Subst.size !subst in
+    let name = Printf.sprintf "S%d'" n in
+    subst := Var.Subst.add ~subst:!subst v name;
+    CCFun.finally
+      ~h:(fun () -> subst := Var.Subst.remove ~subst:!subst v)
+      ~f:(fun () ->
+        fpf out "(@[<2>%s [%s : one %a]@ | %a@])"
+          b name pp_su (Var.ty v) pp_form f)
   and pp_rel out = function
     | FO_rel.Const id -> CCFormat.string out (id2name id )
     | FO_rel.None_  -> CCFormat.string out "none"
     | FO_rel.Tuple_set ts -> pp_ts out ts
-    | FO_rel.Var _ ->
-      assert false (* TODO: given type, choose prefix, add "'"; e.g. s0' or r3' *)
+    | FO_rel.Var v ->
+      begin match Var.Subst.find ~subst:!subst v with
+        | None -> Utils.failwithf "var `%a` not in scope" Var.print_full v
+        | Some s -> CCFormat.string out s
+      end
     | FO_rel.Unop (FO_rel.Flip, e) -> fpf out "~ %a" pp_rel e
     | FO_rel.Unop (FO_rel.Trans, e) -> fpf out "* %a" pp_rel e
     | FO_rel.Binop (FO_rel.Union, a, b) ->
-      fpf out "(%a +@ %a)" pp_rel a pp_rel b
+      fpf out "(@[<2>%a +@ %a@])" pp_rel a pp_rel b
     | FO_rel.Binop (FO_rel.Inter, a, b) ->
-      fpf out "(%a &@ %a)" pp_rel a pp_rel b
+      fpf out "(@[<2>%a &@ %a@])" pp_rel a pp_rel b
     | FO_rel.Binop (FO_rel.Diff, a, b) ->
-      fpf out "(%a \\@ %a)" pp_rel a pp_rel b
+      fpf out "(@[<2>%a \\@ %a@])" pp_rel a pp_rel b
     | FO_rel.Binop (FO_rel.Join, a, b) ->
-      fpf out "(%a . %a)" pp_rel a pp_rel b
+      fpf out "(@[<2>%a . %a@])" pp_rel a pp_rel b
     | FO_rel.Binop (FO_rel.Product, a, b) ->
-      fpf out "(%a ->@ %a)" pp_rel a pp_rel b
-    | FO_rel.If (_,_,_)
+      fpf out "(@[<2>%a ->@ %a@])" pp_rel a pp_rel b
+    | FO_rel.If (a,b,c) ->
+      fpf out "(@[<2>if %a@ then %a@ else %a@])"
+        pp_form a pp_rel b pp_rel c
     | FO_rel.Comprehension (_,_) -> assert false (* TODO *)
   in
   (* go! prelude first *)
@@ -170,8 +195,8 @@ let print_pb state pb out () : unit =
          name ID.print id pp_ts d.FO_rel.decl_low pp_ts d.FO_rel.decl_high)
     pb.FO_rel.pb_decls;
   (* goal *)
-  fpf out "@[<v>solve@ @[<v-3>%a@]@]@."
-    (pp_list ~sep:"&& " pp_form) pb.FO_rel.pb_goal;
+  fpf out "@[<v2>solve@ %a;@]@."
+    (pp_list ~sep:" &&" pp_form) pb.FO_rel.pb_goal;
   ()
 
 let solve ~deadline state pb : res * Scheduling.shortcut =
@@ -185,7 +210,7 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
     let kodkod_timeout = int_of_float (ceil ((deadline -. now) *. 1000.)) in
     let hard_timeout = (int_of_float (timeout +. 1.5)) in
     let cmd =
-      Printf.sprintf "ulimit -t %d; kodkodi -max-msecs %d"
+      Printf.sprintf "ulimit -t %d; kodkodi -max-msecs %d 2>&1"
         hard_timeout kodkod_timeout
     in
     (* call solver, get its stdout and errcode *)
@@ -195,14 +220,15 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
           (* send problem *)
           let fmt = Format.formatter_of_out_channel stdin in
           Format.fprintf fmt "%a@." (print_pb state pb) ();
+          flush stdin;
           close_out stdin;
-          (* read output *)
           CCIO.read_all stdout)
     in
     match S.Fut.get fut with
       | S.Fut.Done (E.Ok (stdout, errcode)) ->
         Utils.debugf ~lock:true ~section 2
-          "@[<2>kodkod exited with %d, stdout:@ `%s`@]" (fun k->k errcode stdout);
+          "@[<2>kodkod exited with %d, stdout:@ `%s`@]"
+          (fun k->k errcode stdout);
         assert false (* TODO : parse result *)
       | S.Fut.Done (E.Error e) ->
         Res.Error e, S.Shortcut

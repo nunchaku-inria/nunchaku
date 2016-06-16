@@ -47,11 +47,15 @@ type expr =
   | None_ (* empty set *)
   | Const of ID.t
   | Tuple_set of tuple_set
-  | Var of expr Var.t
+  | Var of var
   | Unop of unop * expr
   | Binop of binop * expr * expr
   | If of form * expr * expr
-  | Comprehension of expr Var.t * form
+  | Comprehension of var * form
+
+and var_ty = sub_universe
+
+and var = var_ty Var.t
 
 and form =
   | True
@@ -63,8 +67,9 @@ and form =
   | And of form * form
   | Or of form * form
   | Equiv of form * form
-  | Forall of expr Var.t * form
-  | Exists of expr Var.t * form
+  | Forall of var * form
+  | Exists of var * form
+
 
 type decl = {
   decl_id: ID.t;
@@ -277,9 +282,11 @@ and print_form_rec p out = function
     wrapf_ p P_f_quant out "@[<2>exists @[%a@].@ @[%a@]@]"
       print_typed_var v (print_form_rec P_f_quant) f
 
+and print_var_ty = print_sub_universe
+
 and print_typed_var out v =
   fpf out "(@[<2>%a :@ %a@])"
-    Var.print_full v (print_expr_rec P_top) (Var.ty v)
+    Var.print_full v print_var_ty (Var.ty v)
 
 let print_expr = print_expr_rec P_top
 let print_form = print_form_rec P_top
