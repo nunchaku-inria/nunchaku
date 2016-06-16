@@ -57,7 +57,7 @@ module Make(T : TI.S) = struct
 
   let save_ cache ty card =
     assert (not (TyTbl.mem cache.state ty));
-    TyTbl.add cache.state ty (Cached card)
+    TyTbl.replace cache.state ty (Cached card)
 
   (* enter the given state for [ty], calling [f ()], and returns the
      same as [f ()]. It cleans up the state afterwards *)
@@ -75,7 +75,7 @@ module Make(T : TI.S) = struct
     | Save
     | Do_not_save
 
-  (* evaluate the cardinality of [ty] *)
+  (* evaluate the cardinality of [ty], using the cache *)
   let rec eval_ty_
     : save_op -> _ env -> cache -> ty -> Card.t
     = fun op env cache ty ->
@@ -83,9 +83,19 @@ module Make(T : TI.S) = struct
       | Some (Cached c)
       | Some (Assume c) -> c
       | None ->
-        match T.repr ty with
-        | TI.Const id -> eval_id_ op env cache id
-        | _ -> Card.quasi_finite_nonzero (* approx *)
+        let res = match T.repr ty with
+          | TI.Const id -> eval_id_ op env cache id
+          | _ -> Card.quasi_finite_nonzero (* approx *)
+        in
+        (* maybe cache *)
+        begin match op with
+          | Save ->
+            Utils.debugf ~section 5 "@[<2>card `@[%a@]` =@ %a@]"
+              (fun k->k P.print ty Card.print res);
+            save_ cache ty res
+          | Do_not_save -> ()
+        end;
+        res
 
   (* compute the sum of products of cardinalities of [def]'s constructors
      type arguments, under the assumption [assume] for [def.ty_id] *)
@@ -161,18 +171,10 @@ module Make(T : TI.S) = struct
       | Env.Copy_abstract _
       | Env.Copy_concrete _ -> errorf_ "%a is not a type" ID.print id
     in
-    (* maybe cache *)
-    begin match op with
-      | Save ->
-          Utils.debugf ~section 5 "@[<2>card `@[%a@]` =@ %a@]"
-            (fun k->k ID.print id Card.print res);
-          save_ cache (U.ty_const id) res
-      | Do_not_save -> ()
-    end;
     res
 
   let cardinality_ty_id ?(cache=create_cache ()) env id =
-    eval_id_ Save env cache id
+    eval_ty_ Save env cache (U.ty_const id)
 
   let cardinality_ty ?(cache=create_cache()) env ty =
     eval_ty_ Save env cache ty
