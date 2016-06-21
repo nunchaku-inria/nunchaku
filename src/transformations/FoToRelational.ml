@@ -29,11 +29,27 @@ let errorf msg = Utils.exn_ksprintf ~f:error msg
 
 (** {2 Encoding} *)
 
-type fun_ = {
-  fun_ty_args: FO_rel.sub_universe list;
+type domain = {
+  dom_ty: FO.Ty.t;
+  dom_id: ID.t; (* ID corresponding to the type *)
+  dom_su: FO_rel.sub_universe;
+}
+
+type fun_encoding = {
+  fun_ty_args: domain list;
   fun_low: FO_rel.tuple_set;
   fun_high: FO_rel.tuple_set;
   fun_is_pred: bool; (* predicate? *)
+  fun_ty_ret: FO.Ty.t; (* return type, for decoding *)
+}
+
+type state = {
+  domain_size: int;
+    (* size of domains *)
+  mutable domains: domain TyTbl.t;
+    (* atomic type -> domain *)
+  funs: fun_encoding ID.Tbl.t;
+    (* function -> relation *)
 }
 
 (* declaration of this function/relation *)
@@ -44,21 +60,6 @@ let decl_of_fun id f =
     decl_low=f.fun_low;
     decl_high=f.fun_high;
   }
-
-type domain = {
-  dom_ty: FO.Ty.t;
-  dom_id: ID.t; (* ID corresponding to the type *)
-  dom_su: FO_rel.sub_universe;
-}
-
-type state = {
-  domain_size: int;
-    (* size of domains *)
-  mutable domains: domain TyTbl.t;
-    (* atomic type -> domain *)
-  funs: fun_ ID.Tbl.t;
-    (* function -> relation *)
-}
 
 let create_state ~size () =
   let state = {
@@ -113,7 +114,7 @@ let ty_is_declared state ty: bool = TyTbl.mem state.domains ty
 
 let fun_is_declared state id = ID.Tbl.mem state.funs id
 
-let find_fun_ state id : fun_ option = ID.Tbl.get state.funs id
+let find_fun_ state id : fun_encoding option = ID.Tbl.get state.funs id
 
 let app_fun_ id l =
   List.fold_left
@@ -224,8 +225,9 @@ and encode_var state v =
 
 let encode_statement state st : FO_rel.form option =
   let empty_domain = FO_rel.ts_list [] in
-  let fun_domain (args:FO_rel.sub_universe list) : FO_rel.tuple_set =
-    List.map FO_rel.ts_all args
+  let fun_domain (args:domain list) : FO_rel.tuple_set =
+    args
+    |> List.map (fun d -> FO_rel.ts_all d.dom_su)
     |> FO_rel.ts_product
   in
   match st with
@@ -237,7 +239,7 @@ let encode_statement state st : FO_rel.form option =
         | FO.TyBuiltin `Unitype -> assert false
         | FO.TyBuiltin `Prop ->
           (* encode predicate as itself *)
-          let fun_ty_args = List.map (su_of_ty state) ty_args in
+          let fun_ty_args = List.map (domain_of_ty state) ty_args in
           let fun_low = empty_domain in
           let fun_high = fun_domain fun_ty_args in
           let f = {
@@ -245,14 +247,15 @@ let encode_statement state st : FO_rel.form option =
             fun_ty_args;
             fun_low;
             fun_high;
+            fun_ty_ret=ty_ret;
           } in
           declare_fun state id f;
           None
         | FO.TyApp _ ->
           (* function: encode as relation whose last argument is the return value *)
           let fun_ty_args =
-            List.map (su_of_ty state) ty_args @
-              [su_of_ty state ty_ret]
+            List.map (domain_of_ty state) ty_args @
+              [domain_of_ty state ty_ret]
           in
           let fun_low = empty_domain in
           let fun_high = fun_domain fun_ty_args in
@@ -261,6 +264,7 @@ let encode_statement state st : FO_rel.form option =
             fun_ty_args;
             fun_low;
             fun_high;
+            fun_ty_ret=ty_ret;
           } in
           declare_fun state id f;
           (* return functionality axiom:
@@ -316,8 +320,160 @@ let encode_pb pb =
 
 (** {2 Decoding} *)
 
-(* TODO *)
-let decode _state _m = assert false
+let atoms_of_su su: FO_rel.atom Sequence.t =
+  let open Sequence.Infix in
+  0 -- (su.FO_rel.su_card-1)
+  |> Sequence.map (fun i -> FO_rel.atom su i)
+
+let rec tuples_of_ts ts: FO_rel.tuple Sequence.t = match ts with
+  | FO_rel.TS_list l -> Sequence.of_list l
+  | FO_rel.TS_product l ->
+    let open Sequence.Infix in
+    let rec aux l = match l with
+      | [] -> assert false
+      | [ts] -> tuples_of_ts ts
+      | ts :: l' ->
+        tuples_of_ts ts >>= fun tup ->
+        aux l' >|= fun tup' -> tup @ tup'
+    in
+    aux l
+  | FO_rel.TS_all su ->
+    atoms_of_su su |> Sequence.map CCList.return
+
+let atoms_of_ts ts: FO_rel.atom Sequence.t =
+  tuples_of_ts ts |> Sequence.flat_map Sequence.of_list
+
+let atoms_of_model m: FO_rel.atom Sequence.t =
+  fun yield ->
+    Model.iter m
+    ~constants:(fun (_,u,_) -> match u with
+      | FO_rel.Tuple_set set -> atoms_of_ts set yield
+      | _ -> assert false)
+
+module AM = CCMap.Make(struct
+    type t = FO_rel.atom
+    let compare = FO_rel.atom_cmp
+  end)
+
+let rename_atoms m: ID.t AM.t =
+  atoms_of_model m
+  |> Sequence.sort_uniq ~cmp:FO_rel.atom_cmp
+  |> Sequence.mapi (fun i a -> a, ID.make_f "atom_%d" i)
+  |> AM.of_seq
+
+let id_of_atom_ map a : ID.t =
+  try AM.find a map
+  with Not_found ->
+    errorf "could not find ID for atom `%a`" FO_rel.print_atom a
+
+(* transform the constant relations into FO constants/functions/predicates *)
+let decode_constants_ state (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t =
+  let module M = Model in
+  let mk_vars doms =
+    List.mapi (fun i d -> Var.makef "v_%d" i ~ty:d.dom_ty) doms
+  in
+  M.fold
+    ~constants:(fun m (t,u,_) -> match t, u with
+      | FO_rel.Const id, FO_rel.Tuple_set set ->
+        let fe = match find_fun_ state id with
+          | Some fe -> fe
+          | None -> assert false
+        in
+        let doms = fe.fun_ty_args in
+        if fe.fun_is_pred
+        then (
+          (* FIXME: constant predicate...? *)
+          (* predicate case *)
+          assert (doms <> []);
+          let vars = mk_vars doms in
+          (* the cases that lead to "true" *)
+          let cases =
+            tuples_of_ts set
+            |> Sequence.map
+              (fun tup ->
+                 assert (List.length tup = List.length vars);
+                 let test =
+                   List.map2
+                     (fun v a -> v, FO.T.const (id_of_atom_ map a))
+                     vars tup
+                 in
+                 test, FO.T.true_)
+            |> Sequence.to_list
+          and else_ =
+            FO.T.false_
+          in
+          let dt = M.DT.test cases ~else_ in
+          let t' = FO.T.const id in
+          Utils.debugf ~section 3
+            "@[<2>decode predicate `%a`@ as `@[%a@]`@]"
+            (fun k->k ID.print id (M.DT.print FO.print_term') dt);
+          M.add_fun m (t',vars,dt,M.Symbol_prop)
+        ) else begin match List.rev doms with
+          | [] -> assert false (* impossible, need at least return arg *)
+          | [_dom_ret] ->
+            (* constant: pick first element of the tuple(s) *)
+            begin match tuples_of_ts set |> Sequence.to_list with
+              | [[a]] ->
+                let t = FO.T.const id in
+                let u = FO.T.const (id_of_atom_ map a) in
+                M.add_const m (t,u,M.Symbol_fun)
+              | _ -> errorf "model for `%a` should have = 1 tuple" ID.print id
+            end
+          | _dom_ret :: args ->
+            let dom_args = List.rev args in
+            let vars = mk_vars dom_args in
+            (* now build the test tree. We know by construction that every
+               set of arguments has at most one return value *)
+            let cases =
+              tuples_of_ts set
+              |> Sequence.map
+                (fun tup -> match List.rev tup with
+                   | [] -> assert false
+                   | ret :: args ->
+                     let args = List.rev args in
+                     assert (List.length args = List.length dom_args);
+                     let test =
+                       List.map2
+                         (fun v a -> v, FO.T.const (id_of_atom_ map a))
+                         vars args
+                     in
+                     let ret = FO.T.const (id_of_atom_ map ret) in
+                     test, ret)
+              |> Sequence.to_list
+            and else_ =
+              FO.T.undefined_atom id fe.fun_ty_ret (List.map FO.T.var vars)
+            in
+            let dt = M.DT.test cases ~else_ in
+            let t' = FO.T.const id in
+            Utils.debugf ~section 3
+              "@[<2>decode function `%a`@ as `@[%a@]`@]"
+              (fun k->k ID.print id (M.DT.print FO.print_term') dt);
+            M.add_fun m (t',vars,dt,M.Symbol_fun)
+        end
+      | _ -> assert false)
+    M.empty
+    m
+
+(* declare the types, retaining only the atoms that actually appear in
+   the model *)
+let add_types state map m : _ Model.t =
+  TyTbl.to_seq state.domains
+  |> Sequence.map
+    (fun (ty, dom) ->
+       let dom' =
+         atoms_of_su dom.dom_su
+         |> Sequence.filter_map (fun a -> AM.get a map)
+         |> Sequence.to_rev_list
+       in
+       ty, dom')
+  |> Sequence.fold
+    (fun m (ty,dom) -> Model.add_finite_type m ty dom)
+    m
+
+let decode state m =
+  let map = rename_atoms m in
+  let m' = decode_constants_ state map m in
+  add_types state map m'
 
 (** {2 Pipes} *)
 
@@ -335,5 +491,6 @@ let pipe_with ~decode ~print =
   Transform.make ~name ~input_spec ~on_encoded ~encode:encode_pb ~decode ()
 
 let pipe ~print =
+  let decode state = Problem.Res.map_m ~f:(decode state) in
   pipe_with ~decode ~print
 

@@ -159,6 +159,11 @@ let exists v f = Exists (v,f)
 let exists_l = List.fold_right exists
 
 let atom su i = { a_sub_universe=su; a_index=i }
+let atom_cmp a1 a2 =
+  CCOrd.(
+    su_compare a1.a_sub_universe a2.a_sub_universe
+    <?> (int_, a1.a_index, a2.a_index)
+  )
 
 let mk_problem ~meta:pb_meta ~univ:pb_univ ~decls:pb_decls ~goal:pb_goal =
   { pb_meta; pb_univ; pb_decls; pb_goal; }
