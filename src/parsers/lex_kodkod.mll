@@ -14,6 +14,10 @@ rule token = parse
 | "---OUTCOME---" { SECTION A.S_outcome }
 | "---INSTANCE---" { SECTION A.S_instance }
 | "---STATS---" { SECTION A.S_stats }
+| "{" { L_BRACE }
+| "}" { R_BRACE }
+| "[" { L_BRACKET }
+| "]" { R_BRACKET }
 | ":" { COLON }
 | "=" { EQUAL }
 | "," { COMMA }

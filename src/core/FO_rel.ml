@@ -158,6 +158,8 @@ let for_all_l = List.fold_right for_all
 let exists v f = Exists (v,f)
 let exists_l = List.fold_right exists
 
+let atom su i = { a_sub_universe=su; a_index=i }
+
 let mk_problem ~meta:pb_meta ~univ:pb_univ ~decls:pb_decls ~goal:pb_goal =
   { pb_meta; pb_univ; pb_decls; pb_goal; }
 
@@ -176,7 +178,7 @@ let print_sub_universe out s =
     (s.su_card-1)
 
 let print_tuple out (t:tuple) =
-  fpf out "<@[%a@]>" (pp_list ~sep:"," print_atom) t
+  fpf out "(@[%a@])" (pp_list ~sep:"," print_atom) t
 
 let rec print_tuple_set out (s:tuple_set) = match s with
   | TS_product [] -> assert false

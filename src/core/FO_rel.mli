@@ -139,6 +139,8 @@ val for_all_l : var list -> form -> form
 val exists : var -> form -> form
 val exists_l : var list -> form -> form
 
+val atom : sub_universe -> int -> atom
+
 val mk_problem :
   meta:ProblemMetadata.t ->
   univ:universe ->

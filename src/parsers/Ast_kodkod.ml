@@ -12,16 +12,14 @@ type result =
   | Unsat
   | Sat
 
-type atom = int
-
-type relation = {
+type 'atom relation = {
   rel_name: string;
-  rel_dom: atom list list;
+  rel_dom: 'atom list list;
 }
 
 let make_rel name dom =
   { rel_name=name; rel_dom=dom }
 
 (* a model, as given by kodkod *)
-type model = relation list
+type model = int relation list
 

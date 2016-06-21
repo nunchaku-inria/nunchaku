@@ -4,6 +4,7 @@
 (** {1 Interface to Kodkod} *)
 
 open Nunchaku_core
+open Nunchaku_parsers
 
 module Res = Problem.Res
 module T = FO.T
@@ -23,6 +24,7 @@ module SUMap = CCMap.Make(struct
   end)
 
 module StrMap = CCMap.Make(String)
+module IntMap = CCMap.Make(CCInt)
 
 (* names used by kodkod, based on arity *)
 type kodkod_name = string
@@ -36,6 +38,8 @@ type state = {
     (* map kodkod names to IDs *)
   univ_offsets: offset SUMap.t;
     (* sub-universe -> its offset in the global universe *)
+  atom_of_offset: FO_rel.atom IntMap.t;
+    (* offset -> atom *)
   univ_size: int;
     (* total size of the universe *)
 }
@@ -43,12 +47,20 @@ type state = {
 let errorf msg = Utils.failwithf msg
 
 (* compute size of universe + offsets *)
-let compute_univ_ pb : int * offset SUMap.t =
+let compute_univ_ pb : int * offset SUMap.t * FO_rel.atom IntMap.t =
+  let open Sequence.Infix in
   List.fold_left
-    (fun (n,map) su ->
-       let map = SUMap.add su n map in
-       n + su.FO_rel.su_card, map)
-    (0, SUMap.empty) pb.FO_rel.pb_univ
+    (fun (n,map1,map2) su ->
+       let map1 = SUMap.add su n map1 in
+       (* add n+i-> atom(su,i) to map2 *)
+       let map2 =
+         0 -- (su.FO_rel.su_card-1)
+         |> Sequence.map (fun i -> n+i, FO_rel.atom su i)
+         |> IntMap.add_seq map2
+       in
+       n + su.FO_rel.su_card, map1, map2)
+    (0, SUMap.empty, IntMap.empty)
+    pb.FO_rel.pb_univ
 
 (* indices for naming constants by arity *)
 type name_map = int StrMap.t
@@ -82,10 +94,11 @@ let translate_names_ pb =
 
 (* initialize the state for this particular problem *)
 let create_state (pb:FO_rel.problem) : state =
-  let univ_size, univ_offsets = compute_univ_ pb in
+  let univ_size, univ_offsets, atom_of_offset = compute_univ_ pb in
   let id_of_name, name_of_id = translate_names_ pb in
   { name_of_id;
     id_of_name;
+    atom_of_offset;
     univ_size;
     univ_offsets;
   }
@@ -203,9 +216,33 @@ let print_pb state pb out () : unit =
 
 module A = Ast_kodkod
 
+let find_atom_ state (i:int) : FO_rel.atom =
+  try IntMap.find i state.atom_of_offset
+  with Not_found -> errorf "model parsing: could not find atom for A%d" i
+
 (* convert the raw parse model into something more usable *)
 let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
-  assert false
+  let module M = Model in
+  (* first, convert offsets to proper atoms *)
+  let m': FO_rel.atom A.relation list =
+    List.rev_map
+      (fun r ->
+         let rel_dom = List.map (List.map (find_atom_ state)) r.A.rel_dom in
+         {r with A.rel_dom; })
+      m
+  in
+  (* now build a proper model *)
+  List.fold_left
+    (fun m {A.rel_name; rel_dom} ->
+       let id =
+         try StrMap.find rel_name state.id_of_name
+         with Not_found -> errorf "could not find ID corresponding to `%s`" rel_name
+       in
+       let t = FO_rel.const id in
+       let u = FO_rel.tuple_set (FO_rel.ts_list rel_dom) in
+       M.add_const m (t,u,M.Symbol_prop))
+    M.empty
+    m'
 
 module Parser = struct
   module L = Lex_kodkod
@@ -227,7 +264,7 @@ module Parser = struct
   (* expect exactly [t] *)
   let exactly ~msg t = filter_ ~msg ~f:(fun t' -> if t=t' then Some () else None)
 
-  let section : A.section t = 
+  let section : A.section t =
     filter_ ~msg:"outcome" ~f:(function P.SECTION s -> Some s | _ -> None)
 
   let outcome lexbuf : unit = match section lexbuf with
@@ -327,7 +364,7 @@ let call ?(print_model=false) ?(prio=10) ~print pb =
        begin match res with
          | Res.Sat m when print_model ->
            let pp_ty oc _ = CCFormat.string oc "$i" in
-           Format.printf "@[<2>raw kodkod model:@ @[%a@]@]@."
+           Format.printf "@[<2>@{<Yellow>raw kodkod model@}:@ @[%a@]@]@."
              (Model.print (CCFun.const FO_rel.print_expr) pp_ty) m
          | _ -> ()
        end;
@@ -337,10 +374,7 @@ let is_available () =
   try Sys.command "which kodkodi > /dev/null" = 0
   with Sys_error _ -> false
 
-(* FIXME: will need state for decoding *)
-
 let pipe ?(print_model=false) ~print () =
-  (* TODO: deadline *)
   let encode pb = call ~print_model ~print pb, () in
   Transform.make
     ~name
