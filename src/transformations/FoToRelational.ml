@@ -200,13 +200,16 @@ and encode_form state t : FO_rel.form =
         | Some fun_ ->
           assert fun_.fun_is_pred; (* typing *)
           let l = List.map (encode_term state) l in
-          (* [pred a b c] becomes [c in (b · (a · pred))];
-             here we remove the last argument *)
-          let last, args = match List.rev l with
-            | [] -> assert false
-            | x :: l -> x, List.rev l
-          in
-          FO_rel.in_ last (app_fun_ f args)
+          begin match List.rev l with
+            | [] ->
+              (* [pred] becomes [some pred] *)
+              FO_rel.some (FO_rel.const f)
+            | last :: args ->
+              (* [pred a b c] becomes [c in (b · (a · pred))];
+                 here we remove the last argument *)
+              let args = List.rev args in
+              FO_rel.in_ last (app_fun_ f args)
+          end
       end
     | FO.Builtin _
     | FO.Var _

@@ -137,8 +137,8 @@ let print_pb state pb out () : unit =
     | FO_rel.TS_product l ->
       fpf out "%a" (pp_list ~sep:" -> " pp_ts) l
   and pp_form out = function
-    | FO_rel.False -> assert false (* TODO *)
-    | FO_rel.True -> assert false (* TODO *)
+    | FO_rel.False -> fpf out "false}"
+    | FO_rel.True -> fpf out "true"
     | FO_rel.Eq (a,b) ->
       fpf out "(@[<2>%a@ = %a@])" pp_rel a pp_rel b
     | FO_rel.In (a,b) ->

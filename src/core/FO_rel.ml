@@ -114,8 +114,8 @@ let ts_product l =
     | TS_product l -> l
   in
   match CCList.flat_map as_prod_ l with
-    | [] -> invalid_arg "ts_product: empty product forbidden"
     | [x] -> x
+    | [] -> TS_product []
     | l -> TS_product l
 
 let flip a = unop Flip a
@@ -186,7 +186,6 @@ let print_tuple out (t:tuple) =
   fpf out "(@[%a@])" (pp_list ~sep:"," print_atom) t
 
 let rec print_tuple_set out (s:tuple_set) = match s with
-  | TS_product [] -> assert false
   | TS_product l ->
     fpf out "(@[<hv>%a@])" (pp_list ~sep:" * " print_tuple_set) l
   | TS_list l ->
