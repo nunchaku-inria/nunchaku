@@ -34,20 +34,20 @@ type to_encode =
   | Test of ID.t
   | Select of ID.t * int
   | Axiom_rec (* recursive function used for eq_corec/acyclicity axioms *)
-  | Const of ID.t
+  | Cstor of ID.t (* constructor *)
 
 let equal_to_encode a b = match a, b with
   | Test a, Test b
-  | Const a, Const b -> ID.equal a b
+  | Cstor a, Cstor b -> ID.equal a b
   | Select (a,i), Select (b,j) -> i=j && ID.equal a b
   | Axiom_rec, Axiom_rec -> true
-  | Test _, _ | Const _, _ | Select _, _ | Axiom_rec, _ -> false
+  | Test _, _ | Cstor _, _ | Select _, _ | Axiom_rec, _ -> false
 
 let hash_to_encode = function
   | Test a -> Hashtbl.hash (ID.hash a, "test")
   | Select (a,i) -> Hashtbl.hash (ID.hash a, "select", i)
   | Axiom_rec -> Hashtbl.hash "axiom_rec"
-  | Const a -> Hashtbl.hash (ID.hash a, "const")
+  | Cstor a -> Hashtbl.hash (ID.hash a, "const")
 
 module Tbl = CCHashtbl.Make(struct
     type t = to_encode
@@ -74,7 +74,8 @@ type state = {
   tys: encoded_ty ID.Tbl.t;
     (* (co)data -> its encoding *)
   map: ID.t Tbl.t;
-    (* map constructors to be encoded, into fresh identifiers *)
+    (* map constructors/test/selectors to be encoded,
+       into corresponding identifiers *)
   env: (T.t, T.t) Env.t;
     (* environment *)
   at_cache: AT.cache;
@@ -94,25 +95,48 @@ let create_state ~env () = {
 (* FIXME: replace quantifiers over infinite datatypes with the proper
    approximation? (false, depending on polarity) *)
 
+let get_select_ state id i : ID.t =
+  try Tbl.find state.map (Select(id,i))
+  with Not_found -> errorf "could not find encoding of `select-%a-%d`" ID.print id i
+
+let get_test_ state id : ID.t =
+  try Tbl.find state.map (Test id)
+  with Not_found -> errorf "could not find encoding of `is-%a`" ID.print id
+
 let rec tr_term state t = match T.repr t with
   | TI.Const id ->
-    Tbl.get_or state.map (Const id) ~or_:id |> U.const
-  | TI.Builtin (`DataSelect (id,i)) ->
-    begin match Tbl.get state.map (Select(id,i)) with
-      | None -> t
-      | Some id' -> U.const id'
+    (* constant constructor, or unrelated ID *)
+    Tbl.get_or state.map (Cstor id) ~or_:id |> U.const
+  | TI.App (f, l) ->
+    begin match T.repr f with
+      | TI.Const f_id ->
+        let l' = List.map (tr_term state) l in
+        begin match Tbl.get state.map (Cstor f_id) with
+          | None ->
+            U.app_const f_id l'
+          | Some f_id' ->
+            (* id is a constructor, we introduce a guard stating
+               [is-id (id x1..xn) & And_k proj-id-k (id x1..xn) = x_k] *)
+            let t' = U.app_const f_id' l' in
+            let guard =
+              U.app_const (get_test_ state f_id) [t']
+              :: List.mapi
+                  (fun i arg -> U.eq arg (U.app_const (get_select_ state f_id i) [t']))
+                  l'
+            in
+            U.asserting t' guard
+        end
+      | _ -> tr_term_aux state t
     end
-  | TI.Builtin (`DataTest id) ->
-    begin match Tbl.get state.map (Test id) with
-      | None -> t
-      | Some id' -> U.const id'
-    end
+  | TI.Builtin (`DataSelect (id,i)) -> get_select_ state id i |> U.const
+  | TI.Builtin (`DataTest id) -> get_test_ state id |> U.const
   | TI.Match _ ->
     errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.print t
-  | _ ->
-    U.map () t
-      ~bind:(fun () v -> (), v)
-      ~f:(fun () -> tr_term state)
+  | _ -> tr_term_aux state t
+and tr_term_aux state t =
+  U.map () t
+    ~bind:(fun () v -> (), v)
+    ~f:(fun () -> tr_term state)
 
 let tr_ty = tr_term
 
@@ -124,15 +148,15 @@ let add_ state k id =
 
 (* create new IDs for selectors, testers, etc., add them to [state],
    and return a [encoded_ty] *)
-let ety_of_dataty state ty =
+let ety_of_dataty state ty : encoded_ty =
   let open Stmt in
   assert (ty.ty_vars=[] && U.ty_is_Type ty.ty_type);
-  add_ state (Const ty.ty_id) ty.ty_id;
   (* add destructors, testers, constructors *)
-  let ety_cstors = ID.Map.fold
+  let ety_cstors =
+    ID.Map.fold
       (fun _ cstor acc ->
          let c_id = cstor.cstor_name in
-         add_ state (Const c_id) c_id;
+         add_ state (Cstor c_id) c_id;
          let test = ID.make_f "is_%a" ID.print_name c_id in
          let ty_test = U.ty_arrow (U.const ty.ty_id) U.ty_prop in
          add_ state (Test c_id) test;
@@ -193,49 +217,19 @@ let common_axioms etys =
   (* axiomatize new constants *)
   CCList.flat_map
     (fun ety ->
-       (* define constructors:
-          [forall x1...xn,
-             let prop t :=
-                is_c t &&
-                And_i proj_i t = x_i
-             in
-             prop (c x1...xn) && forall t'. (prop t' => t = t')]
-
-          This is an encoding of [c := unique! prop] *)
-       let ax_cstors =
-         List.map
-           (fun ec ->
-              let c_id, c_ty = ec.ecstor_cstor in
-              let _, ty_args, ty_ret = U.ty_unfold c_ty in
-              let vars = List.mapi (fun i ty -> Var.makef ~ty "v_%d" i) ty_args in
-              let t = U.app_const c_id (List.map U.var vars) in
-              (* some variable that might be equal to [t] *)
-              let v' = Var.makef ~ty:ty_ret "%a" ID.print_name ety.ety_id in
-              let t' = U.var v' in
-              (* property satisfied by [c x1...xn], that defines it *)
-              let mk_prop t =
-                ( app_id_fst ec.ecstor_test [t]
-                  ::
-                    List.map2
-                      (fun v proj ->
-                         U.eq
-                           (app_id_fst proj [t])
-                           (U.var v))
-                      vars
-                      ec.ecstor_proj)
-                |> U.and_
-              in
-              U.forall_l vars
-                (U.and_
-                   [ mk_prop t
-                   ; U.forall v'
-                       (U.imply
-                          (mk_prop t')
-                          (U.eq t t'))
-                   ])
-              |> mk_ax
-           )
-           ety.ety_cstors
+       (* [forall x, not (is_c1 x & is_c2 x)] *)
+       let ax_disjointness =
+         let x = Var.makef ~ty:(U.const ety.ety_id) "v_%a" ID.print_name ety.ety_id in
+         U.forall x
+           (U.and_
+              (CCList.diagonal ety.ety_cstors
+               |> List.map
+                 (fun (c1,c2) ->
+                    U.not_
+                      (U.and_
+                         [ app_id_fst c1.ecstor_test [U.var x]
+                         ; app_id_fst c2.ecstor_test [U.var x]]))))
+         |> mk_ax
        (* [forall x, Or_c is_c x] *)
        and ax_exhaustiveness =
          let x = Var.makef ~ty:(U.const ety.ety_id) "v_%a" ID.print_name ety.ety_id in
@@ -245,28 +239,6 @@ let common_axioms etys =
                  (fun ec -> app_id_fst ec.ecstor_test [U.var x])
                  ety.ety_cstors))
          |> mk_ax
-       (* [forall x1...xn y1...ym. c1 x1...xn != c2 y1...ym] *)
-       and ax_disjointness =
-         CCList.diagonal ety.ety_cstors
-         |> List.map
-           (fun (c1,c2) ->
-              let proj_ty_arg ty = match T.repr ty with
-                | TI.TyArrow (_,ret) -> ret
-                | _ -> assert false
-              in
-              let mk_vars c =
-                List.mapi
-                  (fun i (_,ty) -> Var.makef ~ty:(proj_ty_arg ty) "l_%d" i)
-                  c.ecstor_proj
-              in
-              let vars1 = mk_vars c1 in
-              let vars2 = mk_vars c2 in
-              U.forall_l
-                (vars1 @ vars2)
-                (U.neq
-                   (app_id_fst c1.ecstor_cstor (List.map U.var vars1))
-                   (app_id_fst c2.ecstor_cstor (List.map U.var vars2)))
-              |> mk_ax)
        (* injectivity for each constructor [c]:
           [forall a1...an b1...bn.
             c(a1...an) = c(b1...bn) => a1=b1 & ... & an=bn]
@@ -295,7 +267,7 @@ let common_axioms etys =
               ))
            ety.ety_cstors
        in
-       ax_exhaustiveness :: ax_injectivity @ ax_cstors @ ax_disjointness
+       ax_exhaustiveness :: ax_disjointness :: ax_injectivity
     )
     etys
 
@@ -522,7 +494,7 @@ let build_decoding state m =
             let m = ID.Map.get_or ~or_:IntMap.empty c dec.dec_select in
             let m = IntMap.add i (vars,dt,k) m in
             {dec with dec_select=ID.Map.add c m dec.dec_select}
-          | Some (Const _ | Axiom_rec) -> dec
+          | Some (Cstor _ | Axiom_rec) -> dec
         end
       | _ -> dec)
 
