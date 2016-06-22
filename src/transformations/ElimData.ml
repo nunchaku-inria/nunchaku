@@ -103,7 +103,7 @@ let get_test_ state id : ID.t =
   try Tbl.find state.map (Test id)
   with Not_found -> errorf "could not find encoding of `is-%a`" ID.print id
 
-let rec tr_term state t = match T.repr t with
+let rec tr_term state t : T.t = match T.repr t with
   | TI.Const id ->
     (* constant constructor, or unrelated ID *)
     Tbl.get_or state.map (Cstor id) ~or_:id |> U.const
@@ -217,9 +217,10 @@ let common_axioms etys =
   (* axiomatize new constants *)
   CCList.flat_map
     (fun ety ->
+       let data_ty = U.const ety.ety_id in
        (* [forall x, not (is_c1 x & is_c2 x)] *)
        let ax_disjointness =
-         let x = Var.makef ~ty:(U.const ety.ety_id) "v_%a" ID.print_name ety.ety_id in
+         let x = Var.makef ~ty:data_ty "v_%a" ID.print_name ety.ety_id in
          U.forall x
            (U.and_
               (CCList.diagonal ety.ety_cstors
@@ -230,9 +231,32 @@ let common_axioms etys =
                          [ app_id_fst c1.ecstor_test [U.var x]
                          ; app_id_fst c2.ecstor_test [U.var x]]))))
          |> mk_ax
+       (* axiom
+          [forall x y,
+            (is-c x & is-c y & And_k proj-c-k x = proj-c-k y) => x=y] *)
+       and ax_functionality =
+         List.map
+           (fun ec ->
+              let x = Var.make ~name:"x" ~ty:data_ty in
+              let y = Var.make ~name:"y" ~ty:data_ty in
+              U.forall_l [x;y]
+                (U.imply
+                   (U.and_
+                      ( app_id_fst ec.ecstor_test [U.var x]
+                      :: app_id_fst ec.ecstor_test [U.var y]
+                      :: List.map
+                         (fun (proj,_) ->
+                            U.eq
+                              (U.app_const proj [U.var x])
+                              (U.app_const proj [U.var y]))
+                         ec.ecstor_proj))
+                   (U.eq (U.var x) (U.var y)))
+              |> mk_ax
+           )
+           ety.ety_cstors
        (* [forall x, Or_c is_c x] *)
        and ax_exhaustiveness =
-         let x = Var.makef ~ty:(U.const ety.ety_id) "v_%a" ID.print_name ety.ety_id in
+         let x = Var.makef ~ty:data_ty "v_%a" ID.print_name ety.ety_id in
          U.forall x
            (U.or_
               (List.map
@@ -240,34 +264,38 @@ let common_axioms etys =
                  ety.ety_cstors))
          |> mk_ax
        (* injectivity for each constructor [c]:
-          [forall a1...an b1...bn.
-            c(a1...an) = c(b1...bn) => a1=b1 & ... & an=bn]
+          [forall x y.
+            is-c x & x=y =>
+            And_k (select-c-k x = select-c-k y)]
        *)
        and ax_injectivity =
          CCList.filter_map
            (fun ec ->
-              let c_id, c_ty = ec.ecstor_cstor in
-              let _, args, _ = U.ty_unfold c_ty in
-              if args=[] then None
+              if ec.ecstor_proj = []
+              then None (* constant constructor *)
               else (
-                let vars1 = List.mapi (fun i ty -> Var.makef ~ty "x_%d" i) args
-                and vars2 = List.mapi (fun i ty -> Var.makef ~ty "y_%d" i) args
-                in
-                U.forall_l (vars1 @ vars2)
+                let x = Var.make ~name:"x" ~ty:data_ty in
+                let y = Var.make ~name:"y" ~ty:data_ty in
+                U.forall_l [x;y]
                   (U.imply
-                     (U.eq
-                        (U.app_const c_id (List.map U.var vars1))
-                        (U.app_const c_id (List.map U.var vars2)))
                      (U.and_
-                        (List.map2
-                           (fun v1 v2 -> U.eq (U.var v1) (U.var v2))
-                           vars1 vars2)))
+                        [ app_id_fst ec.ecstor_test [U.var x]
+                        ; U.eq (U.var x) (U.var y)
+                        ])
+                     (U.and_
+                        (List.map
+                           (fun (proj,_) ->
+                              U.eq
+                                (U.app_const proj [U.var x])
+                                (U.app_const proj [U.var y]))
+                           ec.ecstor_proj)))
                 |> mk_ax
                 |> CCOpt.return
               ))
            ety.ety_cstors
        in
-       ax_exhaustiveness :: ax_disjointness :: ax_injectivity
+       ax_exhaustiveness :: ax_disjointness
+       :: ax_functionality @ ax_injectivity
     )
     etys
 
