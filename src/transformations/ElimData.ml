@@ -530,17 +530,36 @@ let find_select_ dec c i =
     errorf "could not find, in model,@ the value for %d-th selector of `%a`"
       i ID.print c
 
-(* FIXME: detect looping constructs (i.e. cyclic codata).
-   -> maybe by partial memoization (put a variable + bool ref in the memo table) *)
+(* we are under this cstor, for which the variable [msc_var] was provisioned.
+   If we use [msc_var] we should set [msc_used] to true so that the
+   binder is effectively produced *)
+type mu_stack_cell = {
+  msc_cstor: ID.t;
+  msc_var: ty Var.t;
+  mutable msc_used: bool;
+}
+
+type mu_stack = mu_stack_cell list
 
 (* decode a term, recursively, replacing constants of uninterpreted
    domains by their value in the model *)
 let decode_term dec t =
-  let rec aux t = match T.repr t with
+  let find_in_stack stack id : mu_stack_cell option =
+    CCList.find_pred
+      (fun msc -> ID.equal msc.msc_cstor id)
+      stack
+  in
+  (* @param stack the list of cstors we are under *)
+  let rec aux (stack:mu_stack) t = match T.repr t with
     | TI.Const id ->
-      begin match ID.Map.get id dec.dec_constants with
-        | None -> t
-        | Some (ety,r) ->
+      begin match find_in_stack stack id, ID.Map.get id dec.dec_constants with
+        | None, None -> t
+        | Some msc, _ ->
+          (* we are already decoding [id] deeper in the stack, use the
+             appropriate variable and signal that we are using it *)
+          msc.msc_used <- true;
+          U.var msc.msc_var
+        | None, Some (ety,r) ->
           begin match !r with
             | Some t' -> t'
             | None ->
@@ -565,6 +584,14 @@ let decode_term dec t =
                 with Not_found ->
                   errorf "no constructor corresponds to `%a`" P.print t
               in
+              (* var in case we need to bind *)
+              let msc = {
+                msc_cstor=id;
+                msc_var=
+                  Var.makef "self_%d" (List.length stack)
+                    ~ty:(U.ty_const ety.ety_id);
+                msc_used=false;
+              } in
               (* evaluate the arguments to this constructor *)
               let cstor = fst ecstor.ecstor_cstor in
               let args =
@@ -572,10 +599,12 @@ let decode_term dec t =
                   (fun i _ ->
                      let fundef = find_select_ dec cstor i in
                      let arg = eval_fundef fundef [t] in
-                     aux arg)
+                     aux (msc::stack) arg)
                   ecstor.ecstor_proj
               in
               let t' = U.app_const cstor args in
+              (* add mu-binder if needed *)
+              let t' = if msc.msc_used then U.mu msc.msc_var t' else t' in
               Utils.debugf ~section 5 "@[<2>term `@[%a@]`@ is decoded into `@[%a@]`@]"
                 (fun k->k P.print t P.print t');
               (* memoize result *)
@@ -586,9 +615,9 @@ let decode_term dec t =
     | _ ->
       U.map () t
         ~bind:(fun () v -> (), v)
-        ~f:(fun () t -> aux t)
+        ~f:(fun () t -> aux stack t)
   in
-  aux t
+  aux [] t
 
 (* remove model of constructors/inductive types *)
 let decode_model state (m:(_,_) Model.t) : (_,_) Model.t =
