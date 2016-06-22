@@ -852,6 +852,7 @@ module type UTIL = sig
   val forall_l : t_ var list -> t_ -> t_
   val exists_l : t_ var list -> t_ -> t_
   val ty_forall_l : t_ var list -> t_ -> t_
+  val let_l : (t_ var * t_) list -> t_ -> t_
 
   val close_forall : t_ -> t_
   (** [close_forall t] universally quantifies over free variables of [t] *)
@@ -1033,8 +1034,15 @@ module Util(T : S)
     if ID.Map.is_empty l then invalid_arg "Term.case: empty list of cases";
     T.build (Match (t,l))
 
-  let forall v t = T.build (Bind(`Forall,v, t))
-  let exists v t = T.build (Bind(`Exists,v, t))
+  let forall v t = match T.repr t with
+    | Builtin `True
+    | Builtin `False -> t
+    | _ -> T.build (Bind(`Forall,v, t))
+
+  let exists v t = match T.repr t with
+    | Builtin `True
+    | Builtin `False -> t
+    | _ -> T.build (Bind(`Exists,v, t))
 
   exception FlattenExit of T.t
 
@@ -1169,6 +1177,7 @@ module Util(T : S)
   let forall_l = List.fold_right forall
   let exists_l = List.fold_right exists
   let ty_forall_l = List.fold_right ty_forall
+  let let_l l = List.fold_right (fun (v,t) u -> let_ v t u) l
 
   let close_forall t =
     let fvars = free_vars t |> VarSet.to_list in
