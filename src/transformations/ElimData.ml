@@ -106,7 +106,14 @@ let get_test_ state id : ID.t =
 let rec tr_term state t : T.t = match T.repr t with
   | TI.Const id ->
     (* constant constructor, or unrelated ID *)
-    Tbl.get_or state.map (Cstor id) ~or_:id |> U.const
+    begin match Tbl.get state.map (Cstor id) with
+      | None -> t
+      | Some id' ->
+        (* [c asserting is-c c] *)
+        let t' = U.const id' in
+        let guard = U.app_const (get_test_ state id) [t'] in
+        U.asserting t' [guard]
+    end
   | TI.App (f, l) ->
     begin match T.repr f with
       | TI.Const f_id ->
@@ -234,7 +241,7 @@ let common_axioms etys =
        (* axiom
           [forall x y,
             (is-c x & is-c y & And_k proj-c-k x = proj-c-k y) => x=y] *)
-       and ax_functionality =
+       and ax_uniqueness =
          List.map
            (fun ec ->
               let x = Var.make ~name:"x" ~ty:data_ty in
@@ -263,39 +270,8 @@ let common_axioms etys =
                  (fun ec -> app_id_fst ec.ecstor_test [U.var x])
                  ety.ety_cstors))
          |> mk_ax
-       (* injectivity for each constructor [c]:
-          [forall x y.
-            is-c x & x=y =>
-            And_k (select-c-k x = select-c-k y)]
-       *)
-       and ax_injectivity =
-         CCList.filter_map
-           (fun ec ->
-              if ec.ecstor_proj = []
-              then None (* constant constructor *)
-              else (
-                let x = Var.make ~name:"x" ~ty:data_ty in
-                let y = Var.make ~name:"y" ~ty:data_ty in
-                U.forall_l [x;y]
-                  (U.imply
-                     (U.and_
-                        [ app_id_fst ec.ecstor_test [U.var x]
-                        ; U.eq (U.var x) (U.var y)
-                        ])
-                     (U.and_
-                        (List.map
-                           (fun (proj,_) ->
-                              U.eq
-                                (U.app_const proj [U.var x])
-                                (U.app_const proj [U.var y]))
-                           ec.ecstor_proj)))
-                |> mk_ax
-                |> CCOpt.return
-              ))
-           ety.ety_cstors
        in
-       ax_exhaustiveness :: ax_disjointness
-       :: ax_functionality @ ax_injectivity
+       ax_exhaustiveness :: ax_disjointness :: ax_uniqueness
     )
     etys
 
@@ -304,7 +280,7 @@ let common_axioms etys =
      [occurs_in a b] is true iff [a] is a strict subterm of [b].
    - then, assert [forall a. not (occurs_in a a)]
 *)
-let acyclicity_ax state ety =
+let acyclicity_ax state ety : _ Stmt.t list =
   let id = ety.ety_id in
   (* is [ty = id]? *)
   let is_same_ty ty = match T.repr ty with
@@ -344,12 +320,16 @@ let acyclicity_ax state ety =
       ety.ety_cstors
     |> U.or_
   in
+  let ax_c =
+    U.imply ax_c (U.app_const id_c (List.map U.var vars))
+    |> U.forall_l vars
+  in
   let def_c =
-    Stmt.axiom_rec ~info:Stmt.info_default
-      [ { Stmt.rec_defined=def_c;
-          rec_vars=vars;
-          rec_eqns=Stmt.Eqn_single (vars, ax_c)
-        } ]
+    Stmt.axiom_spec ~info:Stmt.info_default
+      { Stmt.spec_defined=[def_c];
+        spec_vars=[];
+        spec_axioms=[ax_c];
+      }
   in
   (* also assert [forall x y. not (occurs_in x x)] *)
   let ax_no_cycle =
@@ -417,12 +397,16 @@ let eq_corec_axiom state ety =
       ety.ety_cstors
     |> U.or_
   in
+  let ax_c =
+    U.eq (U.app_const id_c (List.map U.var vars)) ax_c
+    |> U.forall_l vars
+  in
   let def_c =
-    Stmt.axiom_rec ~info:Stmt.info_default
-      [ { Stmt.rec_defined=def_c;
-          rec_vars=vars;
-          rec_eqns=Stmt.Eqn_single (vars, ax_c)
-        } ]
+    Stmt.axiom_spec ~info:Stmt.info_default
+      { Stmt.spec_defined=[def_c];
+        spec_vars=[];
+        spec_axioms=[ax_c];
+      }
   in
   (* also assert [forall x y. x=y <=> eq_corec x y] *)
   let ax_eq =
