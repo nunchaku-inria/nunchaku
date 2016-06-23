@@ -868,6 +868,14 @@ module type UTIL = sig
   val equal : t_ -> t_ -> bool
   (** Syntactic equality *)
 
+  (** {2 Misc} *)
+
+  module Tbl : CCHashtbl.S with type key = t_
+
+  val remove_dup : t_ list -> t_ list
+  (** Use a hashset to remove duplicates from the list. Order is
+      not preserved. *)
+
   (** {6 Traversal} *)
 
   val fold :
@@ -1285,6 +1293,24 @@ module Util(T : S)
     | TyMeta _,_ -> false
 
   let equal a b = equal_with ~subst:Subst.empty a b
+
+
+  module Tbl = CCHashtbl.Make(struct
+      type t = t_
+      let equal = equal
+      let hash = hash
+    end)
+
+  (* remove duplicates in [l] *)
+  let remove_dup l : t_ list =
+    match l with
+      | []
+      | [_] -> l
+      | [t1;t2] -> if equal t1 t2 then [t1] else l
+      | _ ->
+        let h = Tbl.create 16 in
+        List.iter (fun t -> Tbl.replace h t ()) l;
+        Tbl.keys_list h
 
   let fold ~f ~bind acc b_acc t =
     let rec fold_l ~f ~bind acc b_acc = function
