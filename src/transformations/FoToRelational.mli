@@ -24,6 +24,7 @@ val decode : state -> model2 -> model1
 (** {2 Pipes} *)
 
 val pipe_with :
+  ?on_decoded:('b -> unit) list ->
   decode:(state -> 'a -> 'b) ->
   print:bool ->
   (problem1, problem2, 'a, 'b) Transform.t

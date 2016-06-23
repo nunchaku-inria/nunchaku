@@ -50,10 +50,12 @@ type state = {
     (* atomic type -> domain *)
   funs: fun_encoding ID.Tbl.t;
     (* function -> relation *)
+  dom_of_id: domain ID.Tbl.t;
+    (* domain.dom_id -> domain *)
 }
 
 (* declaration of this function/relation *)
-let decl_of_fun id f =
+let decl_of_fun id f : FO_rel.decl =
   { FO_rel.
     decl_id=id;
     decl_arity=List.length f.fun_ty_args;
@@ -61,14 +63,26 @@ let decl_of_fun id f =
     decl_high=f.fun_high;
   }
 
+(* declaration for the type contained in this sub-universe, if considered
+   as a unary relation *)
+let decl_of_su su : FO_rel.decl =
+  { FO_rel.
+    decl_id = su.FO_rel.su_name;
+    decl_arity=1;
+    decl_low=FO_rel.ts_list [];
+    decl_high=FO_rel.ts_all su;
+  }
+
 let create_state ~size () =
   let state = {
     domain_size=size;
     domains=TyTbl.create 16;
     funs=ID.Tbl.create 16;
+    dom_of_id=ID.Tbl.create 16;
   } in
   state
 
+(* create a new ID that will "stand" for this type *)
 let id_of_ty ty : ID.t =
   let rec pp_ out t = match FO.Ty.view t with
     | FO.TyBuiltin b -> FO.TyBuiltin.print out b
@@ -95,6 +109,7 @@ let declare_ty state (ty:FO.Ty.t) =
   Utils.debugf ~section 3 "@[<2>declare type %a@ = {@[%a@]}@]"
     (fun k->k FO.print_ty ty FO_rel.print_sub_universe su);
   TyTbl.add state.domains ty dom;
+  ID.Tbl.add state.dom_of_id dom_id dom;
   dom
 
 (* type -> its domain *)
@@ -109,8 +124,6 @@ let declare_fun state id f =
   Utils.debugf ~section 3 "@[<2>declare function@ `@[%a@]`@]"
     (fun k->k FO_rel.print_decl (decl_of_fun id f));
   ID.Tbl.add state.funs id f
-
-let ty_is_declared state ty: bool = TyTbl.mem state.domains ty
 
 let fun_is_declared state id = ID.Tbl.mem state.funs id
 
@@ -143,7 +156,9 @@ let rec encode_term state t : FO_rel.expr =
     | FO.Undefined (_,_) -> assert false (* TODO? *)
     | FO.Fun (_,_) ->
       errorf "cannot translate function `@[%a@]` to FO_rel" FO.print_term t
-    | FO.Let (_,_,_) -> assert false (* TODO: expand *)
+    | FO.Let (v,t,u) ->
+      FO_rel.let_
+        (encode_var state v) (encode_term state t) (encode_term state u)
     | FO.Ite (a,b,c) ->
       FO_rel.if_ (encode_form state a) (encode_term state b) (encode_term state c)
     | FO.True
@@ -163,7 +178,6 @@ let rec encode_term state t : FO_rel.expr =
 
 and encode_form state t : FO_rel.form =
   match FO.T.view t with
-    | FO.Let (_,_,_) -> assert false (* TODO: expand *)
     | FO.Ite (a,b,c) ->
       let a = encode_form state a in
       let b = encode_form state b in
@@ -219,6 +233,7 @@ and encode_form state t : FO_rel.form =
     | FO.Fun (_,_)
     | FO.DataTest (_,_)
     | FO.DataSelect (_,_,_)
+    | FO.Let (_,_,_)
     | FO.Undefined (_,_) ->
       (* atomic formula *)
       FO_rel.some (encode_term state t)
@@ -299,10 +314,16 @@ let encode_pb pb =
     CCVector.filter_map (encode_statement state) (FO.Problem.statements pb)
     |> CCVector.to_list
   in
-  (* extract declarations *)
+  (* extract declarations: *)
   let decls =
-    ID.Tbl.to_seq state.funs
-    |> Sequence.map (CCFun.uncurry decl_of_fun)
+    let d_funs =
+      ID.Tbl.to_seq state.funs
+      |> Sequence.map (CCFun.uncurry decl_of_fun)
+    and d_types =
+      TyTbl.values state.domains
+      |> Sequence.map (fun d -> decl_of_su d.dom_su)
+    in
+    Sequence.append d_types d_funs
     |> CCVector.of_seq ?init:None
     |> CCVector.freeze
   in
@@ -369,118 +390,141 @@ let id_of_atom_ map a : ID.t =
   with Not_found ->
     errorf "could not find ID for atom `%a`" FO_rel.print_atom a
 
-(* transform the constant relations into FO constants/functions/predicates *)
-let decode_constants_ state (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t =
-  let module M = Model in
+module M = Model
+
+(* [id = set] is in the model, and we know [id] corresponds to the function
+   described in [fe] *)
+let decode_fun_ map m id (fe:fun_encoding) (set:FO_rel.tuple_set) : model1 =
   let mk_vars doms =
     List.mapi (fun i d -> Var.makef "v_%d" i ~ty:d.dom_ty) doms
   in
+  let doms = fe.fun_ty_args in
+  if fe.fun_is_pred
+  then (
+    (* FIXME: constant predicate...? *)
+    (* predicate case *)
+    assert (doms <> []);
+    let vars = mk_vars doms in
+    (* the cases that lead to "true" *)
+    let cases =
+      tuples_of_ts set
+      |> Sequence.map
+        (fun tup ->
+           assert (List.length tup = List.length vars);
+           let test =
+             List.map2
+               (fun v a -> v, FO.T.const (id_of_atom_ map a))
+               vars tup
+           in
+           test, FO.T.true_)
+      |> Sequence.to_list
+    and else_ =
+      FO.T.false_
+    in
+    let dt = M.DT.test cases ~else_ in
+    let t' = FO.T.const id in
+    Utils.debugf ~section 3
+      "@[<2>decode predicate `%a`@ as `@[%a@]`@]"
+      (fun k->k ID.print id (M.DT.print FO.print_term') dt);
+    M.add_fun m (t',vars,dt,M.Symbol_prop)
+  ) else begin match List.rev doms with
+    | [] -> assert false (* impossible, need at least return arg *)
+    | [_dom_ret] ->
+      (* constant: pick first element of the tuple(s) *)
+      begin match tuples_of_ts set |> Sequence.to_list with
+        | [[a]] ->
+          let t = FO.T.const id in
+          let u = FO.T.const (id_of_atom_ map a) in
+          M.add_const m (t,u,M.Symbol_fun)
+        | _ -> errorf "model for `%a` should have = 1 tuple" ID.print id
+      end
+    | _dom_ret :: args ->
+      let dom_args = List.rev args in
+      let vars = mk_vars dom_args in
+      (* now build the test tree. We know by construction that every
+         set of arguments has at most one return value *)
+      let cases =
+        tuples_of_ts set
+        |> Sequence.map
+          (fun tup -> match List.rev tup with
+             | [] -> assert false
+             | ret :: args ->
+               let args = List.rev args in
+               assert (List.length args = List.length dom_args);
+               let test =
+                 List.map2
+                   (fun v a -> v, FO.T.const (id_of_atom_ map a))
+                   vars args
+               in
+               let ret = FO.T.const (id_of_atom_ map ret) in
+               test, ret)
+        |> Sequence.to_list
+      and else_ =
+        FO.T.undefined_atom id fe.fun_ty_ret (List.map FO.T.var vars)
+      in
+      let dt = M.DT.test cases ~else_ in
+      let t' = FO.T.const id in
+      Utils.debugf ~section 3
+        "@[<2>decode function `%a`@ as `@[%a@]`@]"
+        (fun k->k ID.print id (M.DT.print FO.print_term') dt);
+      M.add_fun m (t',vars,dt,M.Symbol_fun)
+  end
+
+(* [id := set] is in the model, and we now [id] corresponds to the type
+   in [dom] *)
+let rec decode_dom_ map m id (dom:domain) (set:FO_rel.tuple_set) : model1 =
+  match set with
+    | FO_rel.TS_all su ->
+      assert (FO_rel.su_equal su dom.dom_su);
+      let l =
+        atoms_of_su su
+        |> Sequence.map (id_of_atom_ map)
+        |> Sequence.to_rev_list
+      in
+      M.add_finite_type m dom.dom_ty l
+    | FO_rel.TS_list tups ->
+      let l =
+        List.map
+          (function
+            | [a] -> id_of_atom_ map a
+            | _ as tup ->
+              errorf "expected unary tuple in model of `%a`, got `%a`"
+                FO.print_ty dom.dom_ty FO_rel.print_tuple tup)
+          tups
+      in
+      M.add_finite_type m dom.dom_ty l
+    | FO_rel.TS_product [set'] -> decode_dom_ map m id dom set'
+    | FO_rel.TS_product _ ->
+      (* should be a set of unary tuples *)
+      errorf "in model of `%a`, expected a set of unary tuples"
+        FO.print_ty dom.dom_ty
+
+(* transform the constant relations into FO constants/functions/predicates *)
+let decode_constants_ state (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t =
   M.fold
     ~constants:(fun m (t,u,_) -> match t, u with
       | FO_rel.Const id, FO_rel.Tuple_set set ->
-        let fe = match find_fun_ state id with
-          | Some fe -> fe
-          | None -> assert false
-        in
-        let doms = fe.fun_ty_args in
-        if fe.fun_is_pred
-        then (
-          (* FIXME: constant predicate...? *)
-          (* predicate case *)
-          assert (doms <> []);
-          let vars = mk_vars doms in
-          (* the cases that lead to "true" *)
-          let cases =
-            tuples_of_ts set
-            |> Sequence.map
-              (fun tup ->
-                 assert (List.length tup = List.length vars);
-                 let test =
-                   List.map2
-                     (fun v a -> v, FO.T.const (id_of_atom_ map a))
-                     vars tup
-                 in
-                 test, FO.T.true_)
-            |> Sequence.to_list
-          and else_ =
-            FO.T.false_
-          in
-          let dt = M.DT.test cases ~else_ in
-          let t' = FO.T.const id in
-          Utils.debugf ~section 3
-            "@[<2>decode predicate `%a`@ as `@[%a@]`@]"
-            (fun k->k ID.print id (M.DT.print FO.print_term') dt);
-          M.add_fun m (t',vars,dt,M.Symbol_prop)
-        ) else begin match List.rev doms with
-          | [] -> assert false (* impossible, need at least return arg *)
-          | [_dom_ret] ->
-            (* constant: pick first element of the tuple(s) *)
-            begin match tuples_of_ts set |> Sequence.to_list with
-              | [[a]] ->
-                let t = FO.T.const id in
-                let u = FO.T.const (id_of_atom_ map a) in
-                M.add_const m (t,u,M.Symbol_fun)
-              | _ -> errorf "model for `%a` should have = 1 tuple" ID.print id
+        begin match find_fun_ state id with
+          | Some fe ->
+            (* [id] is a function, decode it as such *)
+            decode_fun_ map m id fe set
+          | None ->
+            begin match ID.Tbl.get state.dom_of_id id with
+              | Some dom -> decode_dom_ map m id dom set
+              | None -> errorf "`%a` is neither a function nor a type" ID.print id
             end
-          | _dom_ret :: args ->
-            let dom_args = List.rev args in
-            let vars = mk_vars dom_args in
-            (* now build the test tree. We know by construction that every
-               set of arguments has at most one return value *)
-            let cases =
-              tuples_of_ts set
-              |> Sequence.map
-                (fun tup -> match List.rev tup with
-                   | [] -> assert false
-                   | ret :: args ->
-                     let args = List.rev args in
-                     assert (List.length args = List.length dom_args);
-                     let test =
-                       List.map2
-                         (fun v a -> v, FO.T.const (id_of_atom_ map a))
-                         vars args
-                     in
-                     let ret = FO.T.const (id_of_atom_ map ret) in
-                     test, ret)
-              |> Sequence.to_list
-            and else_ =
-              FO.T.undefined_atom id fe.fun_ty_ret (List.map FO.T.var vars)
-            in
-            let dt = M.DT.test cases ~else_ in
-            let t' = FO.T.const id in
-            Utils.debugf ~section 3
-              "@[<2>decode function `%a`@ as `@[%a@]`@]"
-              (fun k->k ID.print id (M.DT.print FO.print_term') dt);
-            M.add_fun m (t',vars,dt,M.Symbol_fun)
         end
       | _ -> assert false)
     M.empty
     m
 
-(* declare the types, retaining only the atoms that actually appear in
-   the model *)
-let add_types state map m : _ Model.t =
-  TyTbl.to_seq state.domains
-  |> Sequence.map
-    (fun (ty, dom) ->
-       let dom' =
-         atoms_of_su dom.dom_su
-         |> Sequence.filter_map (fun a -> AM.get a map)
-         |> Sequence.to_rev_list
-       in
-       ty, dom')
-  |> Sequence.fold
-    (fun m (ty,dom) -> Model.add_finite_type m ty dom)
-    m
-
 let decode state m =
   let map = rename_atoms m in
-  let m' = decode_constants_ state map m in
-  add_types state map m'
+  decode_constants_ state map m
 
 (** {2 Pipes} *)
 
-let pipe_with ~decode ~print =
+let pipe_with ?on_decoded ~decode ~print =
   let input_spec =
     Transform.Features.(of_list [
         Match, Absent; Fun, Absent; Copy, Absent; Ind_preds, Absent;
@@ -491,9 +535,16 @@ let pipe_with ~decode ~print =
       Format.printf "@[<2>@{<Yellow>after %s@}:@ %a@]@."
         name FO_rel.print_problem)
   in
-  Transform.make ~name ~input_spec ~on_encoded ~encode:encode_pb ~decode ()
+  Transform.make ~name ~input_spec ?on_decoded ~on_encoded
+    ~encode:encode_pb ~decode ()
 
 let pipe ~print =
+  let on_decoded = if print
+    then
+      [Format.printf "@[<2>@{<Yellow>res after %s@}:@ %a@]@."
+         name (Problem.Res.print FO.print_term' FO.print_ty)]
+    else []
+  in
   let decode state = Problem.Res.map_m ~f:(decode state) in
-  pipe_with ~decode ~print
+  pipe_with ~on_decoded ~decode ~print
 
