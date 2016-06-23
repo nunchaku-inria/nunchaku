@@ -527,7 +527,7 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
 
   let print_spec_defs out d =
     let printerms = pplist ~sep:";" Pt.print in
-    fpf out "@[<hv2>spec %a :=@ %a@]"
+    fpf out "@[<hv2>spec %a :=@ %a.@]"
       pp_defined_list d.spec_defined printerms d.spec_axioms
 
   let print_clause out (c:(_,_) pred_clause) =
