@@ -285,7 +285,7 @@ module Parser = struct
     if errcode <> 0
     then
       let msg = CCFormat.sprintf "kodkod failed (errcode %d), stdout:@ `%s`@." errcode s in
-      Res.Error (Failure msg), S.No_shortcut
+      Res.Error (Failure msg), S.Shortcut
     else (
       let delim = "---OUTCOME---" in
       let i = CCString.find ~sub:delim s in
@@ -347,7 +347,7 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         Res.Timeout, S.No_shortcut
       | S.Fut.Fail e ->
         (* return error *)
-        Utils.debugf ~lock:true ~section 1 "@[<2>kodkod failed with@ %s@]"
+        Utils.debugf ~lock:true ~section 1 "@[<2>kodkod failed with@ `%s`@]"
           (fun k->k (Printexc.to_string e));
         Res.Error e, S.Shortcut
   )
