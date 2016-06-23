@@ -349,10 +349,13 @@ let encode_data state l =
   let acyclicity_l = CCList.flat_map (acyclicity_ax state) etys in
   decl_l @ acyclicity_l @ ax_l
 
+(* FIXME: this axiom should be defined for all codata at the same
+   time *)
+
 (* axiomatization of equality of codatatypes:
   - declare a recursive fun [eq_corec : ty -> ty -> prop] such that
-    [eq_corec a b] is true iff [a] and [b] are structurally equal
-   - assert [forall a b. eq_corec a b <=> a=b] *)
+    [eq_corec a b] is true implies [a] and [b] are structurally equal ("bisimilar")
+   - assert [forall a b. eq_corec a b => a=b] *)
 let eq_corec_axiom state ety =
   let id = ety.ety_id in
   (* is [ty = id]? *)
@@ -408,14 +411,14 @@ let eq_corec_axiom state ety =
         spec_axioms=[ax_c];
       }
   in
-  (* also assert [forall x y. x=y <=> eq_corec x y] *)
+  (* also assert [forall x y. eq_corec x y => x=y] *)
   let ax_eq =
     let x = Var.make ~ty:(U.const id) ~name:"x" in
     let y = Var.make ~ty:(U.const id) ~name:"y" in
     U.forall_l [x;y]
-      (U.eq
-         (U.eq (U.var x) (U.var y))
-         (U.app_const id_c [U.var x; U.var y]))
+      (U.imply
+         (U.app_const id_c [U.var x; U.var y])
+         (U.eq (U.var x) (U.var y)))
   in
   [ def_c
   ; Stmt.axiom1 ~info:Stmt.info_default ax_eq
