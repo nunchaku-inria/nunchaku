@@ -371,17 +371,11 @@ let make_model_pipeline () =
   in
   pipe
 
-(* run the pipeline on this problem, then run tasks, and return the
-   result *)
-let run_tasks ~j ~deadline pipe pb =
+(* TODO: if list of tasks is empty, return UNKNOWN *)
+
+let process_res_ r =
   let module Res = Problem.Res in
-  let tasks =
-    Transform.run ~pipe pb
-    |> Lazy_list.map ~f:(fun (task,ret) -> Scheduling.Task.map ~f:ret task)
-    |> Lazy_list.to_list
-  in
-  let res = Scheduling.run ~j ~deadline tasks in
-  match res with
+  match r with
   | Scheduling.Res_fail e -> E.fail (Printexc.to_string e)
   | Scheduling.Res_list [] -> E.fail "no task succeeded"
   | Scheduling.Res_list l ->
@@ -394,6 +388,21 @@ let run_tasks ~j ~deadline pipe pb =
     let res = if List.mem Res.Timeout l then Res.Timeout else Res.Unknown in
     E.return res
   | Scheduling.Res_one r -> E.return r
+
+(* run the pipeline on this problem, then run tasks, and return the
+   result *)
+let run_tasks ~j ~deadline pipe pb =
+  let module Res = Problem.Res in
+  let tasks =
+    Transform.run ~pipe pb
+    |> Lazy_list.map ~f:(fun (task,ret) -> Scheduling.Task.map ~f:ret task)
+    |> Lazy_list.to_list
+  in
+  match tasks with
+    | [] -> E.return Res.Unknown
+    | _::_ ->
+      let res = Scheduling.run ~j ~deadline tasks in
+      process_res_ res
 
 (* negate the goal *)
 let negate_goal stmts =
