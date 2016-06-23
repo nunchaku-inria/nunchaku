@@ -479,11 +479,10 @@ module IntMap = CCMap.Make(CCInt)
 
 (* temporary structure used for decoding terms *)
 type decoding = {
-  dec_constants: (encoded_ty * T.t option ref) ID.Map.t;
+  dec_constants: encoded_ty ID.Map.t;
     (* set of constants whose type is a (co)data, and therefore
        that are to be removed by decoding.
-       Each constant maps to the corresponding {!encoded_ty}, and possibly
-       its cached value *)
+       Each constant maps to the corresponding {!encoded_ty} *)
   dec_test: fun_def ID.Map.t;
     (* tester -> definition of tester *)
   dec_select: fun_def IntMap.t ID.Map.t;
@@ -508,7 +507,7 @@ let build_decoding state m =
           let ety = ID.Tbl.find state.tys id in
           List.fold_left
             (fun dec c ->
-               let dec_constants = ID.Map.add c (ety,ref None) dec.dec_constants in
+               let dec_constants = ID.Map.add c ety dec.dec_constants in
                {dec with dec_constants;})
             dec dom
         | _ -> dec)
@@ -587,58 +586,52 @@ let decode_term dec t =
              appropriate variable and signal that we are using it *)
           msc.msc_used <- true;
           U.var msc.msc_var
-        | None, Some (ety,r) ->
-          begin match !r with
-            | Some t' -> t'
-            | None ->
-              (* [t] is something like [list_5], and we need to find which
+        | None, Some ety ->
+          (* [t] is something like [list_5], and we need to find which
                  constructor it actually is *)
-              Utils.debugf ~section 5
-                "@[<2>constant `%a`@ corresponds to (co)data `%a`@]"
-                (fun k->k ID.print id ID.print ety.ety_id);
-              (* find which constructor corresponds to [t] *)
-              let ecstor =
-                try
-                  CCList.find_pred_exn
-                    (fun ecstor ->
-                       let fundef = find_test_ dec (fst ecstor.ecstor_test) in
-                       match eval_bool_fundef fundef [t] with
-                         | None ->
-                           errorf "cannot evaluate whether `%a`@ \
-                                   starts with constructor `%a`"
-                             P.print t ID.print (fst ecstor.ecstor_cstor)
-                         | Some b -> b)
-                    ety.ety_cstors
-                with Not_found ->
-                  errorf "no constructor corresponds to `%a`" P.print t
-              in
-              (* var in case we need to bind *)
-              let msc = {
-                msc_cstor=id;
-                msc_var=
-                  Var.makef "self_%d" (List.length stack)
-                    ~ty:(U.ty_const ety.ety_id);
-                msc_used=false;
-              } in
-              (* evaluate the arguments to this constructor *)
-              let cstor = fst ecstor.ecstor_cstor in
-              let args =
-                List.mapi
-                  (fun i _ ->
-                     let fundef = find_select_ dec cstor i in
-                     let arg = eval_fundef fundef [t] in
-                     aux (msc::stack) arg)
-                  ecstor.ecstor_proj
-              in
-              let t' = U.app_const cstor args in
-              (* add mu-binder if needed *)
-              let t' = if msc.msc_used then U.mu msc.msc_var t' else t' in
-              Utils.debugf ~section 5 "@[<2>term `@[%a@]`@ is decoded into `@[%a@]`@]"
-                (fun k->k P.print t P.print t');
-              (* memoize result *)
-              r := Some t';
-              t'
-          end
+          Utils.debugf ~section 5
+            "@[<2>constant `%a`@ corresponds to (co)data `%a`@]"
+            (fun k->k ID.print id ID.print ety.ety_id);
+          (* find which constructor corresponds to [t] *)
+          let ecstor =
+            try
+              CCList.find_pred_exn
+                (fun ecstor ->
+                   let fundef = find_test_ dec (fst ecstor.ecstor_test) in
+                   match eval_bool_fundef fundef [t] with
+                     | None ->
+                       errorf "cannot evaluate whether `%a`@ \
+                               starts with constructor `%a`"
+                         P.print t ID.print (fst ecstor.ecstor_cstor)
+                     | Some b -> b)
+                ety.ety_cstors
+            with Not_found ->
+              errorf "no constructor corresponds to `%a`" P.print t
+          in
+          (* var in case we need to bind *)
+          let msc = {
+            msc_cstor=id;
+            msc_var=
+              Var.makef "self_%d" (List.length stack)
+                ~ty:(U.ty_const ety.ety_id);
+            msc_used=false;
+          } in
+          (* evaluate the arguments to this constructor *)
+          let cstor = fst ecstor.ecstor_cstor in
+          let args =
+            List.mapi
+              (fun i _ ->
+                 let fundef = find_select_ dec cstor i in
+                 let arg = eval_fundef fundef [t] in
+                 aux (msc::stack) arg)
+              ecstor.ecstor_proj
+          in
+          let t' = U.app_const cstor args in
+          (* add mu-binder if needed *)
+          let t' = if msc.msc_used then U.mu msc.msc_var t' else t' in
+          Utils.debugf ~section 5 "@[<2>term `@[%a@]`@ is decoded into `@[%a@]`@]"
+            (fun k->k P.print t P.print t');
+          t'
       end
     | _ ->
       U.map () t
