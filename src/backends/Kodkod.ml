@@ -118,20 +118,23 @@ let print_pb state pb out () : unit =
     with Not_found ->
       errorf "kodkod: no offset for `%a`" FO_rel.print_sub_universe su
   in
-  (* print a sub-universe *)
-  let rec pp_su out (su:FO_rel.sub_universe): unit =
+  (* print a sub-universe as a range *)
+  let rec pp_su_range out (su:FO_rel.sub_universe): unit =
     let offset = su2offset su in
     let card = su.FO_rel.su_card in
     if offset=0
     then fpf out "u%d" card
     else fpf out "u%d@%d" card offset
+  (* print a sub-universe's name *)
+  and pp_su_name out su: unit =
+    fpf out "%s" (id2name su.FO_rel.su_name)
   and pp_atom out (a:FO_rel.atom): unit =
     let offset = su2offset a.FO_rel.a_sub_universe in
     fpf out "A%d" (offset + a.FO_rel.a_index)
   and pp_tuple out (tuple:FO_rel.tuple) =
     fpf out "[@[%a@]]" (pp_list ~sep:", " pp_atom) tuple
   and pp_ts out (ts:FO_rel.tuple_set): unit = match ts with
-    | FO_rel.TS_all su -> pp_su out su
+    | FO_rel.TS_all su -> pp_su_range out su
     | FO_rel.TS_list l ->
       fpf out "{@[%a@]}" (pp_list ~sep:", " pp_tuple) l
     | FO_rel.TS_product l ->
@@ -160,15 +163,19 @@ let print_pb state pb out () : unit =
       fpf out "(@[<2>%a@ <=> %a@])" pp_form a pp_form b
     | FO_rel.Forall (v,f) -> pp_binder "all" out v f
     | FO_rel.Exists (v,f) -> pp_binder "some" out v f
-  and pp_binder b out v f =
+  (* rename [v] temporarily, giving its name to [f] *)
+  and within_rename v ~f =
     let n = Var.Subst.size !subst in
     let name = Printf.sprintf "S%d'" n in
     subst := Var.Subst.add ~subst:!subst v name;
-    CCFun.finally
+    CCFun.finally1
       ~h:(fun () -> subst := Var.Subst.remove ~subst:!subst v)
-      ~f:(fun () ->
+      f name
+  and pp_binder b out v f =
+    within_rename v
+      ~f:(fun name ->
         fpf out "(@[<2>%s [%s : one %a]@ | %a@])"
-          b name pp_su (Var.ty v) pp_form f)
+          b name pp_su_name (Var.ty v) pp_form f)
   and pp_rel out = function
     | FO_rel.Const id -> CCFormat.string out (id2name id )
     | FO_rel.None_  -> CCFormat.string out "none"
@@ -193,7 +200,14 @@ let print_pb state pb out () : unit =
     | FO_rel.If (a,b,c) ->
       fpf out "(@[<2>if %a@ then %a@ else %a@])"
         pp_form a pp_rel b pp_rel c
-    | FO_rel.Comprehension (_,_) -> assert false (* TODO *)
+    | FO_rel.Comprehension (v,f) ->
+      within_rename v
+        ~f:(fun name ->
+          fpf out "{@[<2>%s |@ %a@]}" name pp_form f)
+    | FO_rel.Let (v,t,u) ->
+      within_rename v
+        ~f:(fun name ->
+          fpf out "(@[<2<let@ @[%s := %a@]@ | %a@])" name pp_rel t pp_rel u)
   in
   (* go! prelude first *)
   fpf out "/* emitted from Nunchaku */@.";
