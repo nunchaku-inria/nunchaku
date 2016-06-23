@@ -52,6 +52,7 @@ type expr =
   | Binop of binop * expr * expr
   | If of form * expr * expr
   | Comprehension of var * form
+  | Let of var * expr * expr
 
 and var_ty = sub_universe
 
@@ -130,6 +131,7 @@ let join = binop Join
 let product = binop Product
 let if_ a b c = If (a,b,c)
 let comprehension v f = Comprehension (v,f)
+let let_ v t u = Let (v,t,u)
 
 let true_ = True
 let false_ = False
@@ -259,6 +261,9 @@ let rec print_expr_rec p out = function
       (print_form_rec P_top) a (print_expr_rec P_top) b (print_expr_rec P_top) c
   | Comprehension (v, f) ->
     fpf out "{@[<2> %a@ | %a@]}" print_typed_var v (print_form_rec P_top) f
+  | Let (v,t,u) ->
+    fpf out "@[<2>let @[%a := %a@]@ in @[%a@]@]" print_typed_var v
+      (print_expr_rec P_top) t (print_expr_rec p) u
 
 and print_form_rec p out = function
   | True -> CCFormat.string out "true"
@@ -295,7 +300,7 @@ and print_infix_list pform s out l = match l with
     fpf out "@[%a@]@ %s %a"
       pform t s (print_infix_list pform s) l'
 
-and print_var_ty = print_sub_universe
+and print_var_ty out su = ID.print out su.su_name
 
 and print_typed_var out v =
   fpf out "(@[<2>%a :@ %a@])"

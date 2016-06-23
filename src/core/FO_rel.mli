@@ -55,6 +55,7 @@ type expr =
   | Binop of binop * expr * expr
   | If of form * expr * expr
   | Comprehension of var * form
+  | Let of var * expr * expr
 
 and var_ty = sub_universe
 
@@ -119,6 +120,7 @@ val join : expr -> expr -> expr
 val product : expr -> expr -> expr
 val if_ : form -> expr -> expr -> expr
 val comprehension : var -> form -> expr
+val let_ : var -> expr -> expr -> expr
 
 val true_ : form
 val false_ : form
