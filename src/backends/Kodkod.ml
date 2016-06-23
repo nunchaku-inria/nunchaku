@@ -152,10 +152,10 @@ let print_pb state pb out () : unit =
       in
       fpf out "@[<2>%s@ %a@]" s pp_rel e
     | FO_rel.Not f -> fpf out "(! %a)" pp_form f
-    | FO_rel.And (a,b) ->
-      fpf out "(@[<2>%a@ && %a@])" pp_form a pp_form b
-    | FO_rel.Or (a,b) ->
-      fpf out "(@[<2>%a@ || %a@])" pp_form a pp_form b
+    | FO_rel.And l ->
+      fpf out "(@[<hv>%a@])" (pp_list ~sep:" && " pp_form) l
+    | FO_rel.Or l ->
+      fpf out "(@[<hv>%a@])" (pp_list ~sep:" || " pp_form) l
     | FO_rel.Equiv (a,b) ->
       fpf out "(@[<2>%a@ <=> %a@])" pp_form a pp_form b
     | FO_rel.Forall (v,f) -> pp_binder "all" out v f

@@ -67,8 +67,8 @@ and form =
   | In of expr * expr
   | Mult of mult * expr
   | Not of form
-  | And of form * form
-  | Or of form * form
+  | And of form list
+  | Or of form list
   | Equiv of form * form
   | Forall of var * form
   | Exists of var * form

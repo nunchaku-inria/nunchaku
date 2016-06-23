@@ -64,8 +64,8 @@ and form =
   | In of expr * expr
   | Mult of mult * expr
   | Not of form
-  | And of form * form
-  | Or of form * form
+  | And of form list
+  | Or of form list
   | Equiv of form * form
   | Forall of var * form
   | Exists of var * form
@@ -141,16 +141,16 @@ let some = mult M_some
 let not_ = function
   | Not a -> a
   | a -> Not a
-let and_ a b = And (a,b)
-let rec and_l = function
-  | [] -> invalid_arg "and_l"
+let and_l = function
+  | [] -> true_
   | [a] -> a
-  | a :: tl -> and_ a (and_l tl)
-let or_ a b = Or(a,b)
-let rec or_l = function
-  | [] -> invalid_arg "or_l"
+  | l -> And l
+let and_ a b = and_l [a;b]
+let or_l = function
+  | [] -> false_
   | [a] -> a
-  | a :: tl -> or_ a (or_l tl)
+  | l -> Or l
+let or_ a b = or_l [a;b]
 let imply a b = or_ (not_ a) b
 let equiv a b = Equiv (a,b)
 let for_all v f = Forall (v,f)
@@ -272,12 +272,12 @@ and print_form_rec p out = function
   | Mult (m, e) -> fpf out "@[<2>%a@ @[%a@]@]" print_mult m (print_expr_rec P_top) e
   | Not f ->
     wrapf_ p P_f_not out "@[<2>not@ @[%a@]@]" (print_form_rec P_f_not) f
-  | And (a,b) ->
-    wrapf_ p P_f_and out "@[@[%a@]@ && @[%a@]@]"
-      (print_form_rec P_f_and) a (print_form_rec P_f_and) b
-  | Or (a,b) ->
-    wrapf_ p P_f_or out "@[@[%a@]@ || %a@]"
-      (print_form_rec P_f_or) a (print_form_rec P_f_or) b
+  | And l ->
+    wrapf_ p P_f_and out "@[<hv>%a@]"
+      (print_infix_list (print_form_rec P_f_and) "&&") l
+  | Or l ->
+    wrapf_ p P_f_and out "@[<hv>%a@]"
+      (print_infix_list (print_form_rec P_f_or) "||") l
   | Equiv (a,b) ->
     wrapf_ p P_f_or out "@[@[%a@]@ <=> %a@]"
       (print_form_rec P_f_or) a (print_form_rec P_f_or) b
@@ -287,6 +287,13 @@ and print_form_rec p out = function
   | Exists (v,f) ->
     wrapf_ p P_f_quant out "@[<2>exists @[%a@].@ @[%a@]@]"
       print_typed_var v (print_form_rec P_f_quant) f
+
+and print_infix_list pform s out l = match l with
+  | [] -> assert false
+  | [t] -> pform out t
+  | t :: l' ->
+    fpf out "@[%a@]@ %s %a"
+      pform t s (print_infix_list pform s) l'
 
 and print_var_ty = print_sub_universe
 
