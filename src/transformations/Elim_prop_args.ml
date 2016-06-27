@@ -29,8 +29,8 @@ type state = {
   false_ : ID.t;
   pseudo_prop: ID.t;
   sigma: ty Signature.t;
-  mutable declared: bool;
-  mutable needed: bool;
+  mutable declared: bool; (* did we declare prop_? *)
+  mutable needed: bool; (* do we need prop_? *)
 }
 
 let create_state ~sigma () =
@@ -104,43 +104,74 @@ let rename_var state subst v =
      (careful with builtins, in particular boolean ones)
   *)
 
+(* does [t : prop]? *)
+let has_ty_prop_ state t : bool =
+  let ty = find_ty state t in
+  U.ty_is_Prop ty
+
+let get_true_ state : T.t = state.needed <- true; U.const state.true_
+let get_false_ state : T.t = state.needed <- true; U.const state.false_
+
 (* traverse a term, replacing any argument [a : prop]
    with [if a then pseudo_true else pseudo_false];
    also, change variables' types *)
 let transform_term state subst t =
+  (* translate [t], keeping its toplevel type  *)
   let rec aux subst t = match T.repr t with
     | TI.Var v ->
-      let v = Var.Subst.find_exn ~subst v in
-      U.var v
+      (* no toplevel propositional variable *)
+      if U.ty_is_Prop (Var.ty v)
+      then U.eq (aux_expect_prop' subst t) (get_true_ state)
+      else (
+        let v' = Var.Subst.find_exn ~subst v in
+        U.var v'
+      )
     | TI.App (f, l) ->
       let ty_f = find_ty state f in
       let _, ty_args, _ = U.ty_unfold ty_f in
       (* translate head and arguments *)
       let f' = aux subst f in
-      let l' = List.map (aux subst) l in
-      assert (List.length l' = List.length ty_args);
-      (* adjust types: if some argument is a [prop], insert a "ite" *)
+      assert (List.length l = List.length ty_args);
       let l' =
         List.map2
           (fun arg ty ->
              if U.ty_is_Prop ty
-             then (
-               state.needed <- true;
-               match T.repr arg with
-                 | TI.Var v ->
-                   assert (U.equal (Var.ty v) (U.const state.pseudo_prop));
-                   arg (* no casting needed *)
-                 | _ ->
-                   (* otherwise, we cast *)
-                   U.ite arg (U.const state.true_) (U.const state.false_)
-             ) else arg)
-          l'
+             then aux_expect_prop' subst arg
+             else aux subst arg)
+          l
           ty_args
       in
       U.app f' l'
+    | TI.Builtin (`Eq (a,b)) when has_ty_prop_ state a ->
+      (* transform [a <=> b] into [a = b] where [a:prop_] *)
+      U.eq (aux_expect_prop' subst a) (aux_expect_prop' subst b)
     | _ ->
       U.map subst t
         ~bind:(rename_var state) ~f:aux
+(* we expect [t] to have type [prop_] after translation *)
+  and aux_expect_prop' subst t = match T.repr t with
+    | TI.Var v ->
+      assert state.needed;
+      let v' = Var.Subst.find_exn ~subst v in
+      assert (U.equal (Var.ty v') (U.const state.pseudo_prop));
+      U.var v' (* no casting needed *)
+    | TI.Builtin `True -> get_true_ state
+    | TI.Builtin `False -> get_false_ state
+    | TI.Builtin (`Not _ | `And _ | `Or _ | `Imply _ | `Eq _) ->
+      (* prop: wrap in if/then/else *)
+      let t' = aux subst t in
+      wrap_prop t'
+    | TI.Builtin (`Guard (t,g)) ->
+      let t' = aux_expect_prop' subst t in
+      let g' = TI.Builtin.map_guard (aux subst) g in
+      U.guard t' g'
+    | TI.Builtin (`Ite _ | `DataTest _ | `DataSelect _
+                 | `Undefined_atom _ | `Undefined_self _ | `Unparsable _) ->
+      wrap_prop (aux subst t)
+    | _ ->
+      wrap_prop (aux subst t)
+  and wrap_prop t : T.t =
+    U.ite t (get_true_ state) (get_false_ state)
   in
   aux subst t
 
