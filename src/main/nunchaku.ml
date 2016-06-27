@@ -341,7 +341,7 @@ let make_model_pipeline () =
         fork
         ( 
           Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
-          Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
+          Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
           close_task (
             Step_tofo.pipe ~print:!print_all_ () @@@
             Tr.Elim_ite.pipe ~print:(!print_elim_ite_ || !print_all_) @@@
@@ -350,7 +350,7 @@ let make_model_pipeline () =
           )
         )
         (
-          Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
+          Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
           close_task (
             Step_tofo.pipe ~print:!print_all_ () @@@
             Tr.FoToRelational.pipe ~print:(!print_fo_to_rel_ || !print_all_) @@@
@@ -362,7 +362,7 @@ let make_model_pipeline () =
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
         Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
         Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
-        Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
+        Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
         close_task (
           Step_tofo.pipe ~print:!print_all_ () @@@
           Transform.Pipe.flatten cvc4

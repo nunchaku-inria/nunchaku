@@ -13,8 +13,10 @@ module P = T.P
 module Ty = TypeMono.Make(T)
 module Red = Reduce.Make(T)
 
+type model = (T.t, T.t) Model.t
+
 let fpf = Format.fprintf
-let name = "model_rename"
+let name = "model_clean"
 let section = Utils.Section.(make ~parent:root) name
 
 (* a kind of flat-form printing of [t] *)
@@ -143,13 +145,13 @@ let remove_recursion m : _ Model.t =
   in
   Model.map m ~term:eval_t ~ty:(fun ty->ty)
 
-let pipe_rename ~print:must_print =
+let pipe ~print:must_print =
   Transform.backward ~name
     (fun res ->
       let f m = m |> rename |> remove_recursion in
       let res' = Problem.Res.map_m ~f res in
       if must_print then (
         let module P = TI.Print(T) in
-        Format.printf "@[<v2>@{<Yellow>after model renaming@}:@ %a@]@."
-          (Problem.Res.print P.print' P.print) res');
+        Format.printf "@[<v2>@{<Yellow>after model %s@}:@ %a@]@."
+          name (Problem.Res.print P.print' P.print) res');
       res')

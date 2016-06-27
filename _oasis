@@ -78,7 +78,7 @@ Library "nunchaku_transformations"
                     Polarize,
                     Unroll,
                     IntroGuards,
-                    Model_rename,
+                    Model_clean,
                     ElimData,
                     ElimTypes,
                     Elim_prop_args,
