@@ -14,8 +14,8 @@ type 'a or_error = ('a, string) CCResult.t
 
 let fpf = Format.fprintf
 
-type ('t, 'ty, 'inv) t = {
-  statements : ('t, 'ty, 'inv) Statement.t CCVector.ro_vector;
+type ('t, 'ty) t = {
+  statements : ('t, 'ty) Statement.t CCVector.ro_vector;
   metadata: Metadata.t;
 }
 

@@ -11,16 +11,15 @@ open Nunchaku_core
 module T = TermInner.Default
 
 type term = T.t
-type inv = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
 
 val name : string
 
-val encode_pb : (term, term, inv) Problem.t -> (term, term, inv) Problem.t
+val encode_pb : (term, term) Problem.t -> (term, term) Problem.t
 
 (** Pipeline component *)
 val pipe :
   print:bool ->
   check:bool ->
-  ((term, term, inv) Problem.t,
-    (term, term, inv) Problem.t,
+  ((term, term) Problem.t,
+    (term, term) Problem.t,
     'ret, 'ret) Transform.t

@@ -15,7 +15,6 @@ module PStmt = Stmt.Print(P)(P)
 module Red = Reduce.Make(T)
 module VarSet = U.VarSet
 
-type 'a inv = <eqn:[`Single]; ty:[`Mono]; ind_preds:'a>
 type term = T.t
 type ty = T.t
 
@@ -197,7 +196,7 @@ type decode_state_fun = {
 
 type decode_state = decode_state_fun ID.Tbl.t
 
-type 'a state = {
+type state = {
   specializable_args : bool array ID.Tbl.t;
     (* function -> list of argument positions that can be specialized *)
   new_funs: [ `New of Arg.t * new_fun | `Same] list ID.Tbl.t;
@@ -207,13 +206,9 @@ type 'a state = {
         [f'] has a type that should allow it to be applied to [map snd args_i] *)
   mutable count: int;
     (* used for new names *)
-  mutable fun_ : (depth:int -> ID.t -> Arg.t -> unit);
-    (* the function used to specialize [id] on [arg] *)
-  mutable get_env : (unit -> (term, term, 'a inv) Env.t);
-    (* obtain the environment *)
   decode: decode_state;
     (* used for decoding new symbols *)
-  new_decls: (term, ty, 'a inv) Stmt.t CCVector.vector;
+  new_decls: (term, ty) Stmt.t CCVector.vector;
     (* vector of new declarations *)
 }
 
@@ -222,10 +217,11 @@ let create_state () = {
   new_funs=ID.Tbl.create 32;
   count=0;
   decode=ID.Tbl.create 32;
-  fun_ = (fun ~depth:_ _ _ -> assert false);
-  get_env = (fun _ -> assert false);
   new_decls=CCVector.create();
 }
+
+(* recursive traversal of the statement graph *)
+module Trav = Traversal.Make(T)(Arg)(struct type t = state end)
 
 (** {6 Analysis of Call Graph}
 
@@ -240,7 +236,7 @@ let create_state () = {
 (* state used for analysing the call graph of a block of mutual definitions *)
 type 'a call_graph_analyze_state = {
   cga_graph: CallGraph.t;
-  cga_env: (term,ty,'a inv) Env.t;
+  cga_env: (term,ty) Env.t;
   cga_ids: ID.Set.t; (* IDs defined in the same block of mutual definitions *)
   cga_explored: unit ID.Tbl.t; (* explored nodes *)
 }
@@ -326,10 +322,11 @@ and record_calls_def cga id def = match def.Stmt.rec_eqns with
       let args = Array.of_list vars in
       record_calls_term cga id args rhs;
       Array.length args
+  | Stmt.Eqn_app _
+  | Stmt.Eqn_nested _ -> assert false
 
 (* process one clause of a (co)inductive predicate *)
-and record_calls_clause (type a) cga id (c:(_,_,a inv) Stmt.pred_clause) =
-  let Stmt.Pred_clause c = c in
+and record_calls_clause cga id (c:(_,_) Stmt.pred_clause) =
   match T.repr c.Stmt.clause_concl with
     | TI.Const _ -> ()  (* no recursion is possible *)
     | TI.App (f, l) ->
@@ -370,7 +367,7 @@ and record_calls_pred cga id pred =
     pred |> Stmt.defined_of_pred |> Stmt.ty_of_defined |> U.ty_unfold in
   List.length ty_args
 
-let mk_cga_state ~env ids = {
+let mk_cga_state ~env ids : _ call_graph_analyze_state = {
   cga_graph=CallGraph.create();
   cga_explored=ID.Tbl.create 8;
   cga_ids=ids;
@@ -388,13 +385,14 @@ let bv_of_callgraph cg id n =
             (CallGraph.Arg(id,i))))
 
 (* compute the set of specializable arguments in each function of [defs] *)
-let compute_specializable_args_def ~state (defs : (_,_,<eqn:[`Single];..>) Stmt.rec_defs) =
+let compute_specializable_args_def ~self (defs : (_,_) Stmt.rec_defs) =
+  let state = Trav.state self in
   let ids =
     Stmt.defined_of_recs defs
     |> Sequence.map Stmt.id_of_defined
     |> ID.Set.of_seq
   in
-  let cga = mk_cga_state ~env:(state.get_env ()) ids in
+  let cga = mk_cga_state ~env:(Trav.env self) ids in
   (* process each definition *)
   List.iter
     (fun def ->
@@ -413,13 +411,14 @@ let compute_specializable_args_def ~state (defs : (_,_,<eqn:[`Single];..>) Stmt.
   ()
 
 (* similar to {!compute_specializable_args_def} *)
-let compute_specializable_args_pred ~state (preds : (_,_,_ inv) Stmt.pred_def list) =
+let compute_specializable_args_pred ~self (preds : (_,_) Stmt.pred_def list) =
+  let state = Trav.state self in
   let ids =
     Stmt.defined_of_preds preds
     |> Sequence.map Stmt.id_of_defined
     |> ID.Set.of_seq
   in
-  let cga = mk_cga_state ~env:(state.get_env ()) ids in
+  let cga = mk_cga_state ~env:(Trav.env self) ids in
   (* process each definition *)
   List.iter
     (fun pred ->
@@ -447,6 +446,15 @@ let can_specialize_ ~state f i =
   with Not_found ->
     errorf "could not find specializable_args[%a]" ID.print_full f
 
+(* before processing a statement, analyse the call graph *)
+let analyze_cg_st ~self stmt =
+  match Stmt.view stmt with
+    | Stmt.Axiom (Stmt.Axiom_rec defs) ->
+      compute_specializable_args_def ~self defs
+    | Stmt.Pred (_,_,preds) ->
+      compute_specializable_args_pred ~self preds
+    | _ -> ()
+
 (** {6 Specialization}
 
     The part where terms are traversed, and function calls specialized
@@ -467,9 +475,9 @@ let heuristic_should_specialize_arg a ty =
 
 (* shall we specialize the application of [f : ty] to [l], and on which
     subset of [l]? *)
-let decide_if_specialize ~state f ty l =
+let decide_if_specialize ~self f ty l =
   (* apply to type arguments *)
-  let info = Env.find_exn ~env:(state.get_env()) f in
+  let info = Env.find_exn ~env:(Trav.env self) f in
   match Env.def info with
     | Env.Fun_def _ ->
         (* only inline defined functions, not constructors or axiomatized symbols *)
@@ -483,7 +491,7 @@ let decide_if_specialize ~state f ty l =
                assert (i<Array.length ty_args);
                let ty = ty_args.(i) in
                (* can we specialize on [arg], and is it interesting? *)
-               if can_specialize_ ~state f i
+               if can_specialize_ ~state:(Trav.state self) f i
                && not (U.is_var arg)
                && heuristic_should_specialize_arg arg ty
                then `Specialize (i, arg) else `Keep arg)
@@ -523,8 +531,9 @@ let find_new_fun_exn ~state f args =
 
 (* require [f] to be defined in the output, but without specializing
    it on any of its arguments *)
-let require_without_specializing ~state ~depth f =
-  state.fun_ ~depth f Arg.empty;
+let require_without_specializing ~self ~depth f =
+  Trav.call_dep self ~depth f Arg.empty;
+  let state = Trav.state self in
   (* remember that [f] is used without specialization *)
   let l = try ID.Tbl.find state.new_funs f with Not_found -> [] in
   if not (List.mem `Same l)
@@ -535,23 +544,23 @@ let require_without_specializing ~state ~depth f =
    call site
     @param subst used to rename variables and, possibly, replace
     specialized variables by the corresponding constant *)
-let rec specialize_term ~state ~depth subst t =
+let rec specialize_term ~self ~depth subst t =
   match T.repr t with
   | TI.Var v -> Var.Subst.find_exn ~subst v
   | TI.Const f_id ->
-      require_without_specializing ~state ~depth f_id;
+      require_without_specializing ~self ~depth f_id;
       t
   | TI.App (f,l) ->
-      let l' = specialize_term_l ~state ~depth subst l in
+      let l' = specialize_term_l ~self ~depth subst l in
       begin match T.repr f with
       | TI.Const f_id ->
-          let info = Env.find_exn ~env:(state.get_env ()) f_id in
+          let info = Env.find_exn ~env:(Trav.env self) f_id in
           let ty = info.Env.ty in
           if Env.is_rec info
-          then match decide_if_specialize ~state f_id ty l' with
+          then match decide_if_specialize ~self f_id ty l' with
             | `No ->
                 (* still require [f]'s definition *)
-                require_without_specializing ~state ~depth f_id;
+                require_without_specializing ~self ~depth f_id;
                 U.app f l'
             | `Yes (spec_args, other_args, new_ty) ->
                 (* [spec_args] is a subset of [l'] on which we are going to
@@ -561,35 +570,36 @@ let rec specialize_term ~state ~depth subst t =
                 Utils.debugf ~section 5
                   "@[<2>@{<Cyan>specialize@} `@[%a@]`@ on @[%a@]@ with new type `@[%a@]`@]"
                   (fun k->k P.print t Arg.print spec_args P.print new_ty);
-                let nf = get_new_fun ~state ~depth f_id ~old_ty:ty ~new_ty spec_args in
+                let nf = get_new_fun ~self ~depth f_id ~old_ty:ty ~new_ty spec_args in
                 (* ensure that [nf] is defined *)
-                state.fun_ ~depth f_id spec_args;
+                Trav.call_dep self ~depth f_id spec_args;
                 (* apply newly specialized function to both the captured
                    variables [closure_args] and the non-specialized arguments. *)
                 let closure_args = List.map U.var (Arg.vars spec_args) in
-                U.app (U.const nf.nf_id) (closure_args @ other_args)
+                U.app_const nf.nf_id (closure_args @ other_args)
           else (
-            state.fun_ ~depth f_id Arg.empty;
+            Trav.call_dep self ~depth f_id Arg.empty;
             U.app f l'
           )
       | _ ->
-          U.app (specialize_term ~state ~depth subst f) l'
+          U.app (specialize_term ~self ~depth subst f) l'
       end
   | TI.TyBuiltin _
   | TI.Bind _
   | TI.Let _
   | TI.Builtin _
   | TI.Match _
-  | TI.TyArrow _ -> specialize_term' ~state ~depth subst t
+  | TI.TyArrow _ -> specialize_term' ~self ~depth subst t
   | TI.TyMeta _ -> assert false
-and specialize_term_l ~state ~depth subst l =
-  List.map (specialize_term ~state ~depth subst) l
-and specialize_term' ~state ~depth subst t =
-  U.map subst t ~bind:U.rename_var ~f:(specialize_term ~state ~depth)
+and specialize_term_l ~self ~depth subst l =
+  List.map (specialize_term ~self ~depth subst) l
+and specialize_term' ~self ~depth subst t =
+  U.map subst t ~bind:U.rename_var ~f:(specialize_term ~self ~depth)
 
 (* find or create a new function for [f args]
     @param new_ty the type of the new function *)
-and get_new_fun ~state ~depth f ~old_ty ~new_ty args =
+and get_new_fun ~self ~depth f ~old_ty ~new_ty args =
+  let state = Trav.state self in
   match find_new_fun ~state f args with
   | Some f -> f
   | None ->
@@ -611,7 +621,7 @@ and get_new_fun ~state ~depth f ~old_ty ~new_ty args =
         dsf_arg=args;
       } in
       ID.Tbl.replace state.decode nf.nf_id dsf;
-      state.fun_ ~depth:(depth+1) f args;
+      Trav.call_dep self ~depth:(depth+1) f args;
       nf
 
 let specialize_defined ~state d args =
@@ -626,17 +636,18 @@ let specialize_defined ~state d args =
     and compute SNF of body (no def expansion, only local β reductions)
     so as to inline *)
 let specialize_eqns
-: type a. state:a state -> depth:int -> ID.t ->
-  (term,term,a inv) Stmt.equations -> Arg.t -> (term,term,a inv) Stmt.equations
-= fun ~state ~depth id eqns args ->
+: self:Trav.t -> depth:int -> ID.t ->
+  (term,term) Stmt.equations -> Arg.t -> (term,term) Stmt.equations
+= fun ~self ~depth id eqns args ->
   Utils.debugf ~section 2 "@[<2>specialize@ `@[%a@]`@ on @[%a@]@]"
     (fun k->k (PStmt.print_eqns id) eqns Arg.print args);
+  let state = Trav.state self in
   match eqns with
   | Stmt.Eqn_single (vars, rhs) ->
       if Arg.is_empty args then (
         (* still need to traverse [rhs] *)
         let subst, vars = Utils.fold_map U.rename_var Subst.empty vars in
-        let rhs = specialize_term ~state ~depth:(depth+1) subst rhs in
+        let rhs = specialize_term ~self ~depth:(depth+1) subst rhs in
         Stmt.Eqn_single (vars, rhs)
       ) else (
         state.count <- state.count + 1;
@@ -665,25 +676,27 @@ let specialize_eqns
         let new_vars = CCList.filter_map CCFun.id new_vars in
         (* specialize the body, using the given substitution;
            then reduce newly introduced β-redexes, etc. *)
-        let rhs' = specialize_term ~state ~depth:(depth+1) subst rhs in
+        let rhs' = specialize_term ~self ~depth:(depth+1) subst rhs in
         let new_rhs = Red.snf rhs' in
         Stmt.Eqn_single (closure_vars @ new_vars, new_rhs)
       )
+  | Stmt.Eqn_app _
+  | Stmt.Eqn_nested _ -> assert false
 
 let specialize_clause
-: type a. state:a state -> depth:int -> ID.t ->
-  (term,term,a inv) Stmt.pred_clause -> Arg.t -> (term,term,a inv) Stmt.pred_clause
-= fun ~state ~depth id c args ->
+: self:Trav.t -> depth:int -> ID.t ->
+  (term,term) Stmt.pred_clause -> Arg.t -> (term,term) Stmt.pred_clause
+= fun ~self ~depth id c args ->
   Utils.debugf ~section 2 "@[<2>specialize@ `@[%a@]`@ on @[%a@]@]"
     (fun k->k PStmt.print_clause c Arg.print args);
-  let (Stmt.Pred_clause c) = c in
+  let state = Trav.state self in
   if Arg.is_empty args then (
     (* still need to traverse the clause *)
     let subst, vars = Utils.fold_map U.rename_var Subst.empty c.Stmt.clause_vars in
-    let spec_term = specialize_term ~state ~depth:(depth+1) subst in
+    let spec_term = specialize_term ~self ~depth:(depth+1) subst in
     let clause_guard = CCOpt.map spec_term c.Stmt.clause_guard in
     let clause_concl = spec_term c.Stmt.clause_concl in
-    Stmt.Pred_clause {Stmt.clause_vars=vars; clause_guard; clause_concl}
+    {Stmt.clause_vars=vars; clause_guard; clause_concl}
   ) else (
     (* specialize. Since we are allowed to do it, it means that positions
        of [args] designate arguments in the clause that are variables. *)
@@ -719,7 +732,7 @@ let specialize_clause
     let clause_guard =
       CCOpt.map
         (fun t ->
-           let t' = specialize_term ~state ~depth:(depth+1) subst t in
+           let t' = specialize_term ~self ~depth:(depth+1) subst t in
            Red.snf t')
         c.Stmt.clause_guard
     in
@@ -729,38 +742,25 @@ let specialize_clause
       CCOpt.map_or ~default:v1 (fun t -> VarSet.union (U.free_vars t) v1) clause_guard
       |> VarSet.to_list
     in
-    Stmt.Pred_clause {Stmt.clause_guard; clause_concl; clause_vars=new_vars}
+    {Stmt.clause_guard; clause_concl; clause_vars=new_vars}
   )
 
-let conf = {Traversal.
-  direct_tydef=true;
-  direct_spec=true;
-  direct_copy=true;
-  direct_mutual_types=true;
-}
+let dispatch = {
+  Trav.
 
-(* recursive traversal of the statement graph *)
-module Trav = Traversal.Make(T)(Arg)
+  do_term = (fun self ~depth t ->
+    specialize_term ~self ~depth Subst.empty t
+  );
 
-class ['a, 'c] traverse ?size ?depth_limit state = object (self)
-  inherit ['a inv, 'a inv, 'c] Trav.traverse ~conf ?size ?depth_limit ()
-
-  val st : _ = state
-
-  method setup =
-    st.fun_ <- self#do_statements_for_id;
-    st.get_env <- (fun () -> self#env);
-    ()
-
-  method do_term ~depth t =
-    specialize_term ~state:st ~depth Subst.empty t
+  do_goal_or_axiom = None;
 
   (* specialize mutual recursive definitions *)
-  method do_def ~depth def args =
+  do_def = (fun self ~depth def args ->
     Utils.debugf ~section 5 "@[<2>specialize def `@[%a@]`@ on `@[%a@]`@]"
       (fun k->k ID.print def.Stmt.rec_defined.Stmt.defined_head Arg.print args);
-    let id = def.Stmt.rec_defined.Stmt.defined_head in
-    let eqns = specialize_eqns ~state:st ~depth id def.Stmt.rec_eqns args in
+    let st = Trav.state self in
+    let id = def |> Stmt.defined_of_rec |> Stmt.id_of_defined in
+    let eqns = specialize_eqns ~self ~depth id def.Stmt.rec_eqns args in
     (* new (specialized) case *)
     let rec_defined = specialize_defined ~state:st def.Stmt.rec_defined args in
     let def' = {Stmt.
@@ -768,17 +768,19 @@ class ['a, 'c] traverse ?size ?depth_limit state = object (self)
       rec_defined;
       rec_eqns=eqns;
     } in
-    [def']
+    def'
+  );
 
   (* specialize (co)inductive predicates *)
-  method do_pred ~depth _wf _kind pred args =
+  do_pred = (fun self ~depth _wf _kind pred args ->
     Utils.debugf ~section 5 "@[<2>specialize pred `@[%a@]`@ on `@[%a@]`@]"
       (fun k->k ID.print pred.Stmt.pred_defined.Stmt.defined_head Arg.print args);
+    let st = Trav.state self in
     assert (pred.Stmt.pred_tyvars=[]);
     let id = pred.Stmt.pred_defined.Stmt.defined_head in
     let clauses =
       List.map
-        (fun c -> specialize_clause ~state:st ~depth id c args)
+        (fun c -> specialize_clause ~self ~depth id c args)
         pred.Stmt.pred_clauses in
     (* new (specialized) case *)
     let pred_defined = specialize_defined ~state:st pred.Stmt.pred_defined args in
@@ -787,10 +789,11 @@ class ['a, 'c] traverse ?size ?depth_limit state = object (self)
       pred_clauses=clauses;
       pred_tyvars=[];
     } in
-    [pred']
+    pred'
+  );
 
   (* should never happen, spec is fallthrough *)
-  method do_spec ~depth:_ ~loc:_ _ _ _ = assert false
+  do_spec = None;
 
   (* XXX direct translation of types/copy types/defs should be
      ok, because specializing doesn't remove the need for a given
@@ -798,23 +801,14 @@ class ['a, 'c] traverse ?size ?depth_limit state = object (self)
      identically) in the output. *)
 
   (* direct translation *)
-  method do_mutual_types ~depth: _ _ = assert false
+  do_data = None;
 
   (* direct translation *)
-  method do_copy ~depth:_ ~loc:_ _ _ = assert false
+  do_copy = None;
 
   (* direct translation *)
-  method do_ty_def ?loc:_ ~attrs:_ _ ~ty:_ _ = assert false
-
-  (* before processing a statement, analyse the call graph *)
-  method! before_do_stmt stmt =
-    match Stmt.view stmt with
-      | Stmt.Axiom (Stmt.Axiom_rec defs) ->
-          compute_specializable_args_def ~state defs
-      | Stmt.Pred (_,_,preds) ->
-          compute_specializable_args_pred ~state preds
-      | _ -> ()
-end
+  do_ty_def = None;
+}
 
 (** {6 Generation of Congruence Axioms}
 
@@ -985,25 +979,34 @@ let add_congruence_axioms push_stmt g =
 
 let specialize_problem pb =
   let state = create_state() in
-  let trav = new traverse state in
-  trav#setup;
+  let trav =
+    Trav.create
+      ~env:(Env.create())
+      ~dispatch
+      ~state
+      ()
+  in
   (* transform *)
-  Problem.iter_statements pb ~f:trav#do_stmt;
+  Problem.iter_statements pb
+    ~f:(fun st ->
+      Trav.traverse_stmt
+        ~after_env:(fun _ -> analyze_cg_st ~self:trav st)
+        trav st);
+  let res = Trav.get_statements trav in
   (* add congruence axioms for specialized functions *)
   ID.Tbl.iter
     (fun id l ->
-       let ty = Env.find_ty_exn ~env:trav#env id in
+       let ty = Env.find_ty_exn ~env:(Trav.env trav) id in
        let _, ty_args, _ = U.ty_unfold ty in
        let g = InstanceGraph.make id ty_args l in
        Utils.debugf ~section 2 "%a" (fun k->k InstanceGraph.print g);
-       add_congruence_axioms trav#push_res g;
+       add_congruence_axioms (CCVector.push res) g;
        ())
     state.new_funs;
   (* output new problem *)
   let pb' =
-    trav#output
-    |> CCVector.freeze
-    |> Problem.make ~meta:(Problem.metadata pb)  in
+    Problem.make ~meta:(Problem.metadata pb) (CCVector.freeze res)
+  in
   pb', state.decode
 
 (** {2 Decoding}
@@ -1296,10 +1299,11 @@ let pipe_with ?on_decoded ~decode ~print ~check =
     @
     Utils.singleton_if check () ~f:(fun () ->
       let module C = TypeCheck.Make(T) in
-      C.check_problem ?env:None)
+      C.empty () |> C.check_problem)
   in
   Transform.make
     ~name
+    ~input_spec:Transform.Features.(of_list [Ty, Mono; Eqn, Eqn_single; Match, Present])
     ~on_encoded ?on_decoded
     ~encode:(fun pb ->
       let pb, decode = specialize_problem pb in

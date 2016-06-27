@@ -12,9 +12,6 @@ module U = T.U
 module P = T.P
 module PStmt = Stmt.Print(P)(P)
 
-type inv1 = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Present]>
-type inv2 = <eqn:[`Single]; ty:[`Mono]; ind_preds:[`Absent]>
-
 let name = "elim_ind_pred"
 
 let section = Utils.Section.make name
@@ -96,9 +93,9 @@ let as_cstors ~env ~subst ~root t =
        || ....`
 *)
 let pred_to_def
-: env:(term, term, inv1) Env.t ->
-  (term, term, inv1) Stmt.pred_def ->
-  (term, term, inv2) Stmt.rec_def
+: env:(term, term) Env.t ->
+  (term, term) Stmt.pred_def ->
+  (term, term) Stmt.rec_def
 = fun ~env pred ->
   Utils.debugf ~section 3 "@[<2>pred_to_def@ `@[%a@]`@]"
     (fun k->k PStmt.print_pred_def pred);
@@ -121,7 +118,7 @@ let pred_to_def
    then take the disjunction *)
   let cases =
     List.map
-      (fun (Stmt.Pred_clause c) ->
+      (fun c ->
         (* the clause should be [guard => id args], here we extract [args] *)
         let args =
           let fail() =
@@ -184,8 +181,8 @@ let pred_to_def
   }
 
 let elim_ind_preds
-: (term, term, inv1) Problem.t ->
-  (term, term, inv2) Problem.t * decode_state
+: (term, term) Problem.t ->
+  (term, term) Problem.t * decode_state
 = fun pb ->
   let env = Problem.env pb in
   let pb' = Problem.flat_map_statements pb
@@ -205,8 +202,7 @@ let elim_ind_preds
         | Stmt.Copy c -> [Stmt.copy ~info c]
         | Stmt.Axiom (Stmt.Axiom_std l) -> [Stmt.axiom ~info l]
         | Stmt.Axiom (Stmt.Axiom_spec l) -> [Stmt.axiom_spec ~info l]
-        | Stmt.Axiom (Stmt.Axiom_rec l) ->
-            [Stmt.axiom_rec ~info (Stmt.cast_rec_defs l)]
+        | Stmt.Axiom (Stmt.Axiom_rec l) -> [Stmt.axiom_rec ~info l]
         | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l]
         | Stmt.Goal g -> [Stmt.goal ~info g]
       )
@@ -223,10 +219,13 @@ let pipe_with ~decode ~print ~check =
     @
     Utils.singleton_if check () ~f:(fun () ->
       let module C = TypeCheck.Make(T) in
-      C.check_problem ?env:None)
+      C.empty () |> C.check_problem)
   in
   Transform.make
     ~name
+    ~input_spec:Transform.Features.(of_list
+          [Ty, Mono; Ind_preds, Present; Eqn, Eqn_single])
+    ~map_spec:Transform.Features.(update Ind_preds Absent)
     ~on_encoded
     ~encode:(fun pb -> elim_ind_preds pb)
     ~decode

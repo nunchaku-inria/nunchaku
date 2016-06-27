@@ -7,8 +7,6 @@ open Nunchaku_core
 
 module T = TermInner.Default
 
-type ('a,'b) inv1 = <ty:'a; ind_preds:'b; eqn:[`Nested]>
-type ('a,'b) inv2 = <ty:'a; ind_preds:'b; eqn:[`Single]>
 type term = T.t
 
 val name : string
@@ -16,14 +14,14 @@ val name : string
 exception Error of string
 
 val uniq_eqns_pb :
-  (term, term, ('a,'b) inv1) Problem.t ->
-  (term, term, ('a,'b) inv2) Problem.t
+  (term, term) Problem.t ->
+  (term, term) Problem.t
 
 (** Pipeline component *)
 val pipe :
   decode:('c -> 'd) ->
   print:bool ->
   check:bool ->
-  ((term, term, ('a,'b) inv1) Problem.t,
-   (term, term, ('a,'b) inv2) Problem.t,
+  ((term, term) Problem.t,
+   (term, term) Problem.t,
    'c, 'd) Transform.t

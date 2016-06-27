@@ -100,6 +100,8 @@ module Builtin = struct
     ]
 
   let prec : _ t -> prec = function
+    | `True
+    | `False
     | `Undefined_atom _ -> P_bot
     | `Eq _ -> P_eq
     | `Not _ -> P_not
@@ -305,8 +307,7 @@ module Builtin = struct
         str (CCFormat.sprintf "select-%s-%d" (ID.name id) n)
       | `Undefined_self (id,t) ->
         lst [str "?__"; str (ID.to_string id); cterm t]
-      | `Undefined_atom (id,_) ->
-        lst [str "?__"; str (ID.to_string id)]
+      | `Undefined_atom _ -> str "?__"
       | `Unparsable ty ->
         lst [str "?__unparsable"; cterm ty]
       | `Guard _ -> assert false (* TODO *)
@@ -853,6 +854,7 @@ module type UTIL = sig
   val forall_l : t_ var list -> t_ -> t_
   val exists_l : t_ var list -> t_ -> t_
   val ty_forall_l : t_ var list -> t_ -> t_
+  val let_l : (t_ var * t_) list -> t_ -> t_
 
   val close_forall : t_ -> t_
   (** [close_forall t] universally quantifies over free variables of [t] *)
@@ -867,6 +869,14 @@ module type UTIL = sig
 
   val equal : t_ -> t_ -> bool
   (** Syntactic equality *)
+
+  (** {2 Misc} *)
+
+  module Tbl : CCHashtbl.S with type key = t_
+
+  val remove_dup : t_ list -> t_ list
+  (** Use a hashset to remove duplicates from the list. Order is
+      not preserved. *)
 
   (** {6 Traversal} *)
 
@@ -1034,8 +1044,15 @@ module Util(T : S)
     if ID.Map.is_empty l then invalid_arg "Term.case: empty list of cases";
     T.build (Match (t,l))
 
-  let forall v t = T.build (Bind(`Forall,v, t))
-  let exists v t = T.build (Bind(`Exists,v, t))
+  let forall v t = match T.repr t with
+    | Builtin `True
+    | Builtin `False -> t
+    | _ -> T.build (Bind(`Forall,v, t))
+
+  let exists v t = match T.repr t with
+    | Builtin `True
+    | Builtin `False -> t
+    | _ -> T.build (Bind(`Exists,v, t))
 
   exception FlattenExit of T.t
 
@@ -1170,6 +1187,7 @@ module Util(T : S)
   let forall_l = List.fold_right forall
   let exists_l = List.fold_right exists
   let ty_forall_l = List.fold_right ty_forall
+  let let_l l = List.fold_right (fun (v,t) u -> let_ v t u) l
 
   let close_forall t =
     let fvars = free_vars t |> VarSet.to_list in
@@ -1277,6 +1295,24 @@ module Util(T : S)
     | TyMeta _,_ -> false
 
   let equal a b = equal_with ~subst:Subst.empty a b
+
+
+  module Tbl = CCHashtbl.Make(struct
+      type t = t_
+      let equal = equal
+      let hash = hash
+    end)
+
+  (* remove duplicates in [l] *)
+  let remove_dup l : t_ list =
+    match l with
+      | []
+      | [_] -> l
+      | [t1;t2] -> if equal t1 t2 then [t1] else l
+      | _ ->
+        let h = Tbl.create 16 in
+        List.iter (fun t -> Tbl.replace h t ()) l;
+        Tbl.keys_list h
 
   let fold ~f ~bind acc b_acc t =
     let rec fold_l ~f ~bind acc b_acc = function

@@ -10,6 +10,8 @@ module S = Scheduling
 module Pa = Nunchaku_parsers
 module A = Pa.TPTP_model_ast
 
+type model = (T.term, T.ty) Model.t
+
 let name = "paradox"
 let section = Utils.Section.make name
 
@@ -43,7 +45,7 @@ let end_model = "SZS output end FiniteModel"
   constants are not included in the model *)
 
 (* parse a model from paradox' output [s] *)
-let parse_model s =
+let parse_model s : model =
   let i1 = CCString.find ~sub:begin_model s in
   let i1 = String.index_from s i1 '\n'+1 in (* skip full line *)
   let i2 = CCString.find ~start:i1 ~sub:end_model s in
@@ -140,9 +142,15 @@ let call ?(print_model=false) ?prio ~print problem =
        res, short)
 
 let pipe ?(print_model=false) ~print () =
+  let input_spec =
+    Transform.Features.(of_list [
+        Ty, Absent; If_then_else, Absent; Match, Absent;
+        Fun, Absent; Copy, Absent; Ind_preds, Absent; Prop_args, Absent])
+  in
   let encode pb =
     let prio = 25 in
     call ~print_model ~prio ~print pb, ()
   in
   Transform.make
+    ~input_spec
     ~name ~encode ~decode:(fun _ x -> x) ()

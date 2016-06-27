@@ -16,17 +16,14 @@ module U = T.U
 module P = T.P
 module PPb = Problem.Print(P)(P)
 
-
-type inv = <ty:[`Mono]; eqn:[`Absent]; ind_preds:[`Absent]>
-
 let name = "intro_guards"
 let section = Utils.Section.make name
 
 type term = T.t
 
-type 'inv state = {
+type state = {
   mutable lost_precision: bool;
-  env: (T.t, T.t, 'inv) Env.t;
+  env: (T.t, T.t) Env.t;
 }
 
 type +'a guard = 'a TI.Builtin.guard = {
@@ -41,13 +38,16 @@ let combine_guard g1 g2 =
     asserting=List.rev_append g1.asserting g2.asserting;
   }
 
+(* avoid duplicates *)
+let and_nodup l = U.remove_dup l |> U.and_
+
 let wrap_guard f g =
   let asserting = match g.asserting with
     | [] -> []
-    | l -> [f (U.and_ l)]
+    | l -> [f (and_nodup l)]
   and assuming = match g.assuming with
     | [] -> []
-    | l -> [f (U.and_ l)]
+    | l -> [f (and_nodup l)]
   in
   {assuming; asserting; }
 
@@ -67,8 +67,8 @@ let () = Printexc.register_printer
 
 let combine_polarized ~is_pos t g =
   if is_pos
-  then U.imply (U.and_ g.assuming) (U.and_ (t :: g.asserting))
-  else U.imply (U.and_ g.asserting) (U.and_ (t :: g.assuming))
+  then U.imply (and_nodup g.assuming) (and_nodup (t :: g.asserting))
+  else U.imply (and_nodup g.asserting) (and_nodup (t :: g.assuming))
 
 let add_asserting g p = { g with asserting = p::g.asserting }
 let add_assuming g p = { g with assuming = p::g.assuming }
@@ -292,7 +292,7 @@ let pipe ~print ~check =
     @
     Utils.singleton_if check () ~f:(fun () ->
       let module C = TypeCheck.Make(T) in
-      C.check_problem ?env:None)
+      C.empty () |> C.check_problem)
   in
   Transform.make
     ~on_encoded

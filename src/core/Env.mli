@@ -11,10 +11,10 @@ type id = ID.t
 type loc = Location.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-type (+'t, +'ty, 'inv) def =
+type (+'t, +'ty) def =
   | Fun_def of
-      ('t, 'ty, 'inv) Statement.rec_defs *
-      ('t, 'ty, 'inv) Statement.rec_def *
+      ('t, 'ty) Statement.rec_defs *
+      ('t, 'ty) Statement.rec_def *
       loc option
       (** ID is a defined fun/predicate. *)
 
@@ -37,8 +37,8 @@ type (+'t, +'ty, 'inv) def =
   | Pred of
       [`Wf | `Not_wf] *
       [`Pred | `Copred] *
-      ('t, 'ty, 'inv) Statement.pred_def *
-      ('t, 'ty, 'inv) Statement.pred_def list *
+      ('t, 'ty) Statement.pred_def *
+      ('t, 'ty) Statement.pred_def list *
       loc option
 
   | Copy_ty of ('t, 'ty) Statement.copy
@@ -54,16 +54,16 @@ type (+'t, +'ty, 'inv) def =
       (** Undefined symbol *)
 
 (** All information on a given symbol *)
-type (+'t, +'ty, 'inv) info = {
+type (+'t, +'ty) info = {
   ty: 'ty; (** type of symbol *)
   decl_attrs: Statement.decl_attr list;
   loc: loc option;
-  def: ('t, 'ty, 'inv) def;
+  def: ('t, 'ty) def;
 }
 
 (** Maps ID to their type and definitions *)
-type ('t, 'ty, 'inv) t = private {
-  infos: ('t, 'ty, 'inv) info ID.PerTbl.t;
+type ('t, 'ty) t = private {
+  infos: ('t, 'ty) info ID.PerTbl.t;
 }
 
 exception InvalidDef of id * string
@@ -74,13 +74,14 @@ val create: ?size:int -> unit -> _ t
 (** Create a new environment *)
 
 val loc: _ info -> loc option
-val def: ('t,'ty,'inv) info -> ('t,'ty,'inv) def
-val ty: (_,'ty,_) info -> 'ty
+val def: ('t,'ty) info -> ('t,'ty) def
+val ty: (_,'ty) info -> 'ty
 
 val is_fun : _ info -> bool (** spec/rec *)
 val is_rec : _ info -> bool (** rec *)
 val is_data : _ info -> bool
 val is_cstor : _ info -> bool
+val is_not_def : _ info -> bool
 
 val is_incomplete : _ info -> bool
 val is_abstract : _ info -> bool
@@ -88,82 +89,82 @@ val is_abstract : _ info -> bool
 val declare:
   ?loc:loc ->
   attrs:Statement.decl_attr list ->
-  env:('t, 'ty, 'inv) t ->
+  env:('t, 'ty) t ->
   id ->
   'ty ->
-  ('t, 'ty, 'inv) t
+  ('t, 'ty) t
 (** Declare a symbol's type (as undefined, for now) *)
 
 val rec_funs:
   ?loc:loc ->
-  env:('t, 'ty, 'inv) t ->
-  ('t, 'ty, 'inv) Statement.rec_defs ->
-  ('t, 'ty, 'inv) t
+  env:('t, 'ty) t ->
+  ('t, 'ty) Statement.rec_defs ->
+  ('t, 'ty) t
 (** Add a definition of functions/predicates. They must not be declared yet. *)
 
 val declare_rec_funs:
   ?loc:loc ->
-  env:('t, 'ty, <ty:'i;..> as 'inv) t ->
-  ('t, 'ty, <ty:'i;..>) Statement.rec_defs ->
-  ('t, 'ty, 'inv) t
+  env:('t, 'ty) t ->
+  ('t, 'ty) Statement.rec_defs ->
+  ('t, 'ty) t
 (** Similar to {!rec_funs}, but only declares the functions, without adding
     their definition *)
 
 val spec_funs:
   ?loc:loc ->
-  env:('t, 'ty, 'inv) t ->
+  env:('t, 'ty) t ->
   ('t, 'ty) Statement.spec_defs ->
-  ('t, 'ty, 'inv) t
+  ('t, 'ty) t
 (** Add a definition of functions/predicates. They can be already
     defined (or declared). *)
 
 val def_data:
   ?loc:loc ->
-  env:('t, 'ty, 'inv) t ->
+  env:('t, 'ty) t ->
   kind:[`Data | `Codata] ->
   'ty Statement.mutual_types ->
-  ('t, 'ty, 'inv) t
+  ('t, 'ty) t
 (** Define a new set of mutually recursive (co)data types.
     Also defines their constructors.
     @raise InvalidDef if some type/constructor already defined/declared *)
 
 val def_preds :
   ?loc:loc ->
-  env:('t, 'ty, 'inv) t ->
+  env:('t, 'ty) t ->
   wf:[`Wf | `Not_wf] ->
   kind:[`Pred | `Copred] ->
-  ('t, 'ty, 'inv) Statement.pred_def list ->
-  ('t, 'ty, 'inv) t
+  ('t, 'ty) Statement.pred_def list ->
+  ('t, 'ty) t
 
 val add_copy :
   ?loc:loc ->
-  env:('t, 'ty, 'inv) t ->
+  env:('t, 'ty) t ->
   ('t, 'ty) Statement.copy ->
-  ('t, 'ty, 'inv) t
+  ('t, 'ty) t
 
 val add_statement :
-  env:('t,'ty,'inv) t ->
-  ('t,'ty,'inv) Statement.t ->
-  ('t,'ty,'inv) t
+  env:('t,'ty) t ->
+  ('t,'ty) Statement.t ->
+  ('t,'ty) t
 (** Add any statement *)
 
-val find : env:('t, 'ty, 'inv) t -> id -> ('t, 'ty, 'inv) info option
+val find : env:('t, 'ty) t -> id -> ('t, 'ty) info option
 
 exception UndefinedID of ID.t
 
-val find_exn : env:('t, 'ty, 'inv) t -> id -> ('t, 'ty, 'inv) info
+val find_exn : env:('t, 'ty) t -> id -> ('t, 'ty) info
 (** @raise UndefinedID if ID not defined *)
 
-val find_ty_exn : env:('t, 'ty, _) t -> id -> 'ty
+val find_ty_exn : env:('t, 'ty) t -> id -> 'ty
 (** Find the type of a symbol
     @raise UndefinedID if the symbol is not declared *)
 
-val find_ty : env:('t, 'ty, _) t -> id -> 'ty option
+val find_ty : env:('t, 'ty) t -> id -> 'ty option
 (** Safe version of {!find_ty_exn} *)
 
 val mem : env:_ t -> id:id -> bool
 (** @return true if the symbol is at least declared *)
 
 module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
-  val print : (Pt.t, Pty.t, _) t printer
+  val print : (Pt.t, Pty.t) t printer
 end

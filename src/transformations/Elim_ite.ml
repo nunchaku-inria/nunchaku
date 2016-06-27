@@ -158,6 +158,8 @@ let pipe ~print =
   Transform.make
     ~name
     ~on_encoded
+    ~input_spec:Transform.Features.(of_list [Fun, Absent])
+    ~map_spec:Transform.Features.(update If_then_else Absent)
     ~encode:(fun pb -> transform_problem pb, ())
     ~decode:(fun () m -> m)
     ()

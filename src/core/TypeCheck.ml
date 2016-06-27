@@ -21,10 +21,18 @@ let errorf_ msg = CCFormat.ksprintf ~f:error_ msg
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
   module P = TI.Print(T)
+  module TyCard = AnalyzeType.Make(T)
 
-  type 'inv env = (T.t, T.t, 'inv) Env.t
+  type t = {
+    env: (T.t, T.t) Env.t;
+    cache: TyCard.cache option;
+  }
 
-  let empty_env () = Env.create ()
+  let empty ?(check_non_empty_tys=false) ?(env=Env.create()) () : t = {
+    env;
+    cache=
+      if check_non_empty_tys then Some (TyCard.create_cache ()) else None;
+  }
 
   let prop = U.ty_prop
 
@@ -210,7 +218,7 @@ module Make(T : TI.S) = struct
       then err_ty_mismatch t U.ty_type ty;
     ty
 
-  let check_eqns (type a) ~env ~bound id (eqn:(_,_,a) Stmt.equations) =
+  let check_eqns ~env ~bound id (eqn:(_,_) Stmt.equations) =
     match eqn with
       | Stmt.Eqn_single (vars, rhs) ->
           (* check that [freevars rhs ⊆ vars] *)
@@ -241,12 +249,17 @@ module Make(T : TI.S) = struct
           let bound' = List.fold_left (check_var ~env) bound vars in
           check_is_prop ~env bound' (U.eq lhs rhs)
 
-  let check_statement env st =
+  let check_statement t st =
     Utils.debugf ~section 2 "@[<2>type check@ `@[%a@]`@]"
       (fun k-> let module PStmt = Statement.Print(P)(P) in k PStmt.print st);
     (* update env *)
-    let env = Env.add_statement ~env st in
+    let env = Env.add_statement ~env:t.env st in
+    let t' = {t with env; } in
     let check_top env bound () t = ignore (check ~env bound t) in
+    (* check cardinalities *)
+    CCOpt.iter
+      (fun cache -> TyCard.check_non_zero ~cache env st)
+      t.cache;
     (* basic check *)
     let default_check st =
       Stmt.fold_bind VarSet.empty () st
@@ -287,9 +300,9 @@ module Make(T : TI.S) = struct
                  (U.ty_arrow c.Stmt.copy_to c.Stmt.copy_of));
       | _ -> default_check st
     end;
-    env
+    t'
 
-  let check_problem ?(env=empty_env ()) pb =
-    let _ = CCVector.fold check_statement env (Problem.statements pb) in
+  let check_problem t pb =
+    let _ = CCVector.fold check_statement t (Problem.statements pb) in
     ()
 end

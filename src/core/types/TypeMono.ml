@@ -40,6 +40,9 @@ module type S = sig
   (** representation that follows the substitution. Will
       fail on a variable, except if it is bound *)
 
+  val mangle : sep:string -> T.t -> string
+  (** serialize the whole type into a flat name *)
+
   module Map : CCMap.S with type key = T.t
   (** A map on terms that only accepts terms
       satisfying [is_ty] as keys *)
@@ -91,6 +94,19 @@ module Make(T : TI.REPR)
     | TI.Match _
     | TI.Let _
     | TI.Bind _ -> assert false
+
+  (* mangle the type into a valid identifier *)
+  let mangle ~sep t =
+    let rec pp_ out t = match repr t with
+      | Builtin b -> CCFormat.string out (Builtin.to_string b)
+      | Arrow (a,b) -> Format.fprintf out "%a_to_%a" pp_ a pp_ b
+      | Const id -> ID.print_name out id
+      | App (_,[]) -> assert false
+      | App (a,l) ->
+        Format.fprintf out "%a_%a"
+          pp_ a (CCFormat.list ~start:"" ~stop:"" ~sep pp_) l
+    in
+    CCFormat.sprintf "@[<h>%a@]" pp_ t
 
   let to_int_ = function
     | Builtin _ -> 0

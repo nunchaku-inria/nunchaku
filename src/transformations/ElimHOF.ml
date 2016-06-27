@@ -15,13 +15,12 @@ module P = T.P
 module PStmt = Stmt.Print(P)(P)
 module TM = TermMono.Make(T)
 module TMI = TermMono
+module TyI = TypeMono
+module Ty = TypeMono.Make(T)
 module Red = Reduce.Make(T)
 
 let name = "elim_hof"
 let section = Utils.Section.make name
-
-type inv1 = <ty:[`Mono]; eqn:[`Single]; ind_preds: [`Absent]>
-type inv2 = <ty:[`Mono]; eqn:[`App]; ind_preds: [`Absent]>
 
 let fpf = Format.fprintf
 
@@ -168,7 +167,7 @@ let compute_arities_term ~env m t =
    infinite cardinality (extensionality not strictly needed then). Problem
    is for [unit -> unit] and the likes. *)
 
-let compute_arities_stmt ~env m (stmt:(_,_,inv1) Stmt.t) =
+let compute_arities_stmt ~env m (stmt:(_,_) Stmt.t) =
   let f = compute_arities_term ~env in
   (* declare  that [id : ty] is fully applied *)
   let add_full_arity id ty m =
@@ -252,39 +251,6 @@ let rec pp_handle out = function
   | H_leaf ty -> Format.fprintf out "(@[leaf@ `@[%a@]`@])" P.print ty
   | H_arrow (a,b) -> Format.fprintf out "(@[arrow@ `@[%a@]`@ %a@])" P.print a pp_handle b
 
-(* map from handles to 'a *)
-module HandleMap = struct
-  type +'a t = {
-    leaves: (ty * 'a) list;  (* maps [H_leaf t] to a value, for various [t] *)
-    arrows: (ty * 'a t) list; (* maps [H_arrow (t, h')] to a subtree for [h'] *)
-  }
-
-  let empty = {leaves=[]; arrows=[];}
-
-  (* find binding for [h] in [m], or raise Not_found *)
-  let rec find_exn h m = match h with
-    | H_leaf t -> CCList.Assoc.get_exn ~eq:U.equal m.leaves t
-    | H_arrow (t, h') ->
-        let m' = CCList.Assoc.get_exn ~eq:U.equal m.arrows t in
-        find_exn h' m'
-
-  (* add [h -> v] to map [m] *)
-  let rec add h v m = match h with
-    | H_leaf t ->
-        let leaves = CCList.Assoc.set ~eq:U.equal m.leaves t v in
-        {m with leaves;}
-    | H_arrow (t, h') ->
-        let arrows =
-          try
-            let m' = CCList.Assoc.get_exn ~eq:U.equal m.arrows t in
-            let m' = add h' v m' in
-            CCList.Assoc.set ~eq:U.equal m.arrows t m'
-          with Not_found ->
-            (t, add h' v empty) :: m.arrows
-        in
-        {m with arrows; }
-end
-
 (** {2 State for Encoding and Decoding} *)
 
 (* application symbol (for partial application) *)
@@ -317,20 +283,20 @@ type decode_state = {
     (* identifier for reifying "->" in handles *)
   mutable fun_encodings: fun_encoding ID.Map.t;
     (* partially applied function/variable -> how to encode it *)
-  mutable app_symbols: apply_fun HandleMap.t;
-    (* handle type -> corresponding apply symbol *)
+  mutable app_symbols: apply_fun Ty.Map.t;
+    (* type -> corresponding apply symbol *)
   mutable dst_gensym: int;
     (* counter for new symbols *)
 }
 
 type state = {
-  env: (term, ty, inv1) Env.t;
+  env: (term, ty) Env.t;
     (* environment (to get signatures, etc.) *)
   arities: arity_set ID.Map.t;
     (* set of arities for partially applied symbols/variables *)
   mutable app_count: int;
     (* used for generating new names *)
-  mutable new_stmts : (term, ty, inv2) Stmt.t CCVector.vector;
+  mutable new_stmts : (term, ty) Stmt.t CCVector.vector;
     (* used for new declarations. [id, type, attribute list] *)
   mutable lost_completeness: bool;
     (* did we have to do some approximation? *)
@@ -363,13 +329,14 @@ let create_state ~env arities = {
     dst_gensym=0;
     dst_handle_id=None;
     fun_encodings=ID.Map.empty;
-    app_symbols=HandleMap.empty;
+    app_symbols=Ty.Map.empty;
   };
 }
 
 (** {2 Encoding} *)
 
-let get_handle_id_ ~state = match state.decode.dst_handle_id with
+let get_or_create_handle_id ~state : ID.t lazy_t =
+  lazy (match state.decode.dst_handle_id with
   | Some i -> i
   | None ->
       let id = ID.make "to" in
@@ -383,23 +350,29 @@ let get_handle_id_ ~state = match state.decode.dst_handle_id with
       let stmt = Stmt.decl ~info:Stmt.info_default ~attrs id ty_id in
       CCVector.push state.new_stmts stmt;
       id
+  )
+
+let get_handle_id_decode ~state : ID.t lazy_t =
+  match state.dst_handle_id with
+    | Some i -> Lazy.from_val i
+    | None -> assert false
 
 (* encode a type parameter so it becomes first-order (replace [->] with [to]) *)
-let encode_ty_ ~state t : encoded_ty =
+let encode_ty_ ~(handle_id:ID.t lazy_t) t : encoded_ty =
   let rec aux t = match T.repr t with
     | TI.TyArrow (a,b) ->
-        let to_ = get_handle_id_ ~state in
+        let to_ = Lazy.force handle_id in
         U.ty_app (U.ty_const to_) [aux a; aux b]
     | _ -> U.map () t ~bind:(fun () v ->(),v) ~f:(fun () -> aux)
   in
   aux t
 
 (* convert a handle to a proper encoded type *)
-let ty_of_handle_ ~state t : encoded_ty =
+let ty_of_handle_ ~(handle_id:ID.t lazy_t) t : encoded_ty =
   let rec aux = function
     | H_leaf t -> t
     | H_arrow (t, h') ->
-        let id = get_handle_id_ ~state in
+        let id = Lazy.force handle_id in
         U.ty_app (U.const id) [t; aux h']
   in
   aux t
@@ -411,7 +384,7 @@ let rec handle_arrow_l l h = match l with
 
 (* given an application function, generate the corresponding extensionality
    axiom: `forall f g. (f = g or exists x. f x != g x)` *)
-let extensionality_for_app_ app_fun : (_,_,_) Stmt.t =
+let extensionality_for_app_ app_fun : (_,_) Stmt.t =
   let app_id = app_fun.af_id in
   let _, args, _ = U.ty_unfold app_fun.af_ty in
   match args with
@@ -438,23 +411,24 @@ let extensionality_for_app_ app_fun : (_,_,_) Stmt.t =
       Stmt.axiom1 ~info:Stmt.info_default form
 
 (* handle -> application symbol for this handle *)
-let app_of_handle_ ~state args ret : apply_fun =
-  let h = handle_arrow_l args ret in
-  try HandleMap.find_exn h state.decode.app_symbols
+let app_of_handle_ ~(state:state) (args:ty list) (ret:handle) : apply_fun =
+  let handle_id = get_or_create_handle_id ~state in
+  let h = U.ty_arrow_l args (ty_of_handle_ ~handle_id ret) in
+  try Ty.Map.find h state.decode.app_symbols
   with Not_found ->
     let i = state.app_count in
     state.app_count <- i+1;
     let app_id = ID.make ("app_" ^ string_of_int i) in
-    let ty_app = U.ty_arrow_l args (ty_of_handle_ ~state ret) in
+    let ty_app = U.ty_arrow_l args (ty_of_handle_ ~handle_id ret) in
     Utils.debugf ~section 5 "@[<2>declare app_sym `@[%a :@ @[%a@]@]@ for handle @[%a@]@]`"
-      (fun k->k ID.print app_id P.print ty_app pp_handle h);
+      (fun k->k ID.print app_id P.print ty_app P.print h);
     (* save application symbol in [app_symbols] *)
     let app_fun = {
       af_id=app_id;
       af_ty=ty_app;
       af_arity=List.length args;
     } in
-    state.decode.app_symbols <- HandleMap.add h app_fun state.decode.app_symbols;
+    state.decode.app_symbols <- Ty.Map.add h app_fun state.decode.app_symbols;
     ID.Tbl.replace state.decode.dst_app_symbols app_id ();
     (* push declaration of [app_fun] and extensionality axiom *)
     let attrs = [Stmt.Attr_exn ElimRecursion.Attr_app_val] in
@@ -481,7 +455,8 @@ let pp_chunks out =
 (* introduce/get required app symbols for the given ID
    and store data structure that maps [arity -> sequence of apply symbs to use].
    @return the fun encoding for ID *)
-let introduce_apply_syms ~state id =
+let introduce_apply_syms ~state id : fun_encoding =
+  let handle_id = get_or_create_handle_id ~state in
   let {as_set=set; as_ty_args=ty_args; as_ty_ret=ty_ret; _} =
     ID.Map.find id state.arities
   in
@@ -491,11 +466,11 @@ let introduce_apply_syms ~state id =
   assert (List.length l <= n + 1); (* +1: arity 0 exists *)
 
   (* encode type arguments and return type *)
-  let ty_args = List.map (encode_ty_ ~state) ty_args in
-  let ty_ret = encode_ty_ ~state ty_ret in
+  let ty_args = List.map (encode_ty_ ~handle_id) ty_args in
+  let ty_ret = encode_ty_ ~handle_id ty_ret in
 
   let chunks = split_chunks_ 0 l ty_args in
-  Utils.debugf ~section 4 "@[<2>process %a :@ `@[%a@]`@ chunks: @[%a@]@]"
+  Utils.debugf ~section 4 "@[<2>process `%a :@ @[%a@]`@ chunks: @[%a@]@]"
     (fun k->k
       ID.print id P.print (U.ty_arrow_l ty_args ty_ret) pp_chunks chunks);
 
@@ -508,11 +483,11 @@ let introduce_apply_syms ~state id =
         (* first application: no app symbol, only the function itself *)
         let handle =
           handle_arrow_l remaining_args (H_leaf ty_ret)
-          |> ty_of_handle_ ~state |> handle_leaf in
+          |> ty_of_handle_ ~handle_id |> handle_leaf in
         (* initial stack of applications *)
         let arity = List.length args in
         let app_l = [TC_first_param (id, arity)] in
-        let m = IntMap.singleton (List.length args) app_l in
+        let m = IntMap.singleton arity app_l in
         args, handle, List.length args, app_l, m, chunks'
   in
   (* deal with remaining chunks. For each chunk we need the handle
@@ -525,9 +500,9 @@ let introduce_apply_syms ~state id =
         let args, remaining_args = chunk in
         (* not the initial application: need an app symbol.
            type of app symbol is
-            [handle :=  args -> (remaining_args to ty_ret)] *)
+            [handle := prev_handle -> args -> (remaining_args to ty_ret)] *)
         let handle_ret = handle_arrow_l remaining_args (H_leaf ty_ret) in
-        let args' = ty_of_handle_ ~state prev_handle :: args in
+        let args' = ty_of_handle_ ~handle_id prev_handle :: args in
         let app_fun = app_of_handle_ ~state args' handle_ret in
         let n_args' = List.length args + n_args in
         let app_l' = TC_app app_fun :: app_l in
@@ -552,7 +527,7 @@ let introduce_apply_syms ~state id =
   fe
 
 (* obtain or compute the fun encoding for [id] *)
-let fun_encoding_for ~state id =
+let fun_encoding_for ~state id : fun_encoding =
   try ID.Map.find id state.decode.fun_encodings
   with Not_found -> introduce_apply_syms ~state id
 
@@ -587,11 +562,13 @@ let rec apply_app_funs_ tower l =
       apply_app_funs_ tower' (closure :: l')
 
 let elim_hof_ty ~state subst ty =
-  encode_ty_ ~state (U.eval_renaming ~subst ty)
+  let handle_id = get_or_create_handle_id ~state in
+  encode_ty_ ~handle_id (U.eval_renaming ~subst ty)
 
 (* new type of the function that has this encoding *)
 let ty_of_fun_encoding_ ~state fe =
-  U.ty_arrow_l fe.fe_args (ty_of_handle_ ~state fe.fe_ret_handle)
+  let handle_id = get_or_create_handle_id ~state in
+  U.ty_arrow_l fe.fe_args (ty_of_handle_ ~handle_id fe.fe_ret_handle)
 
 let ty_term_ ~state t =
   U.ty_exn ~sigma:(Env.find_ty ~env:state.env) t
@@ -690,32 +667,34 @@ let elim_hof_term ~state subst pol t =
       ~f:aux
       ~bind:(bind_hof_var ~state)
   and aux_ty subst ty =
-    encode_ty_ ~state (U.eval_renaming ~subst ty)
+    let handle_id = get_or_create_handle_id ~state in
+    encode_ty_ ~handle_id (U.eval_renaming ~subst ty)
   in
   aux subst pol t
 
 (* given a (function) type, encode its arguments and return type but
    keeps the toplevel arrows *)
 let encode_toplevel_ty ~state ty =
+  let handle_id = get_or_create_handle_id ~state in
   let tyvars, args, ret = U.ty_unfold ty in
   assert (tyvars=[]);
-  let args = List.map (encode_ty_ ~state) args in
-  let ret = encode_ty_ ~state ret in
+  let args = List.map (encode_ty_ ~handle_id) args in
+  let ret = encode_ty_ ~handle_id ret in
   U.ty_arrow_l args ret
 
 (* OH MY.
    safe, because we only change the invariants *)
 let cast_stmt_unsafe_ :
-  (term, ty, inv1) Stmt.t -> (term, ty, inv2) Stmt.t = Obj.magic
+  (term, ty) Stmt.t -> (term, ty) Stmt.t = Obj.magic
 let cast_rec_unsafe_ :
-  (term, ty, inv1) Stmt.rec_def -> (term, ty, inv2) Stmt.rec_def = Obj.magic
+  (term, ty) Stmt.rec_def -> (term, ty) Stmt.rec_def = Obj.magic
 
 (* translate a "single rec" into an "app rec" *)
-let elim_hof_rec ~info ~state (defs:(_,_,inv1) Stmt.rec_defs)
-: (_, _, inv2) Stmt.t list
+let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
+: (_, _) Stmt.t list
 =
   let elim_eqn
-    : (term,ty,inv1) Stmt.rec_def -> (term,ty,inv2) Stmt.rec_def
+    : (term,ty) Stmt.rec_def -> (term,ty) Stmt.rec_def
     = fun def ->
       let id = def.Stmt.rec_defined.Stmt.defined_head in
       match def.Stmt.rec_eqns with
@@ -763,16 +742,19 @@ let elim_hof_rec ~info ~state (defs:(_,_,inv1) Stmt.rec_defs)
               ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
             |> cast_rec_unsafe_
           )
+      | Stmt.Eqn_nested _
+      | Stmt.Eqn_app _ -> assert false
   in
   let defs = List.map elim_eqn defs in
   [Stmt.axiom_rec ~info defs]
 
 (* eliminate partial applications in the given statement. Can return several
    statements because of the declarations of new application symbols. *)
-let elim_hof_statement ~state stmt : (_, _, inv2) Stmt.t list =
+let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
   let info = Stmt.info stmt in
   let tr_term pol subst = elim_hof_term ~state subst pol in
   let tr_type _subst ty = encode_toplevel_ty ~state ty in
+  let handle_id = get_or_create_handle_id ~state in
   Utils.debugf ~section 3 "@[<2>@{<cyan>> elim HOF in stmt@}@ `@[%a@]`@]" (fun k->k PStmt.print stmt);
   (* find the new type of the given partially applied function [id : ty] *)
   let encode_fun id =
@@ -782,7 +764,7 @@ let elim_hof_statement ~state stmt : (_, _, inv2) Stmt.t list =
     let fun_encoding = introduce_apply_syms ~state id in
     let ty' =
       U.ty_arrow_l fun_encoding.fe_args
-        (ty_of_handle_ ~state fun_encoding.fe_ret_handle) in
+        (ty_of_handle_ ~handle_id fun_encoding.fe_ret_handle) in
     Utils.debugf ~section 4 "@[<2>fun %a now has type `@[%a@]`@]"
       (fun k->k ID.print id P.print ty');
     ty'
@@ -829,7 +811,7 @@ let elim_hof_statement ~state stmt : (_, _, inv2) Stmt.t list =
                  ID.Map.map
                    (fun c ->
                       { c with
-                        cstor_args=List.map (encode_ty_ ~state) c.cstor_args;
+                        cstor_args=List.map (encode_ty_ ~handle_id) c.cstor_args;
                         cstor_type=encode_toplevel_ty ~state c.cstor_type;
                       })
                    tydef.ty_cstors;
@@ -840,8 +822,8 @@ let elim_hof_statement ~state stmt : (_, _, inv2) Stmt.t list =
       [Stmt.mk_ty_def ~info kind l]
   | Stmt.Copy c ->
       let subst, copy_vars = bind_hof_vars ~state Subst.empty c.Stmt.copy_vars in
-      let copy_of = encode_ty_ ~state c.Stmt.copy_of in
-      let copy_to = encode_ty_ ~state c.Stmt.copy_to in
+      let copy_of = encode_ty_ ~handle_id c.Stmt.copy_of in
+      let copy_to = encode_ty_ ~handle_id c.Stmt.copy_to in
       let c' = {
         c with Stmt.
           copy_pred = CCOpt.map (tr_term Pol.NoPol subst) c.Stmt.copy_pred;
@@ -880,12 +862,11 @@ let elim_hof pb =
     (fun k->k pp_arities arities);
   (* introduce application symbols and sorts *)
   let state = create_state ~env arities in
-  let pb' = Problem.flat_map_statements pb ~f:(elim_hof_statement ~state) in
   let pb' =
-    if state.lost_completeness
-    then Problem.set_unsat_means_unknown pb'
-    else pb'
+    Problem.flat_map_statements pb
+      ~f:(elim_hof_statement ~state)
   in
+  let pb' = Problem.add_unsat_means_unknown state.lost_completeness pb' in
   (* return new problem *)
   pb', state.decode
 
@@ -1059,15 +1040,6 @@ let as_handle_ ~state ty : handle option =
 
 let is_handle_ ~state ty : bool = CCOpt.is_some (as_handle_ ~state ty)
 
-(* handle -> decoded type *)
-let decode_handle ~state ~map h : ty =
-  let tr_ty = decode_term ~state ~map Subst.empty in
-  let rec aux h = match h with
-    | H_leaf a -> tr_ty a
-    | H_arrow (a,b) -> U.ty_arrow (tr_ty a) (aux b)
-  in
-  aux h
-
 (* all domain constants whose type is a handle *)
 let all_fun_consts_ ~state m : (ty * handle) ID.Map.t =
   Model.fold ID.Map.empty m
@@ -1142,16 +1114,18 @@ let map_ho_consts_to_funs ~state m : const_map * (unit -> _ Model.fun_def list) 
     = fun id -> match ID.Map.get id all_fun_const with
     | None -> U.const id
     | Some (ty,h) ->
-      (* find corresponding apply symbol *)
-      let h' = handle_arrow_l [ty] h in
+      (* find corresponding "apply" symbol *)
+      let handle_id = get_handle_id_decode ~state in
+      let ty' = decode_term ~state ~map:map_id Subst.empty ty in
+      let ty_app = U.ty_arrow (ty_of_handle_ ~handle_id h) ty' in
       let app =
         try
-          HandleMap.find_exn h' state.app_symbols
+          Ty.Map.find ty_app state.app_symbols
         with Not_found ->
-          errorf_ "cannot find app symbol for `@[%a@],@ handle %a,@ full handle %a`"
-            ID.print id pp_handle h pp_handle h'
+          errorf_
+            "cannot find app symbol for `@[%a@],@ handle `@[%a@]`,@ full type `@[%a@]``"
+            ID.print id pp_handle h P.print ty_app
       in
-      let ty' = decode_handle ~state ~map:map_id h in
       tr_functional_cst app.af_id ty' id
   in
   map_id, (fun () -> !fun_defs)
@@ -1262,11 +1236,14 @@ let pipe_with ?on_decoded ~decode ~print ~check =
     @
     Utils.singleton_if check () ~f:(fun () ->
       let module C = TypeCheck.Make(T) in
-      C.check_problem ?env:None)
+      C.empty () |> C.check_problem)
   in
   Transform.make
     ?on_decoded
     ~on_encoded
+    ~input_spec:Transform.Features.(of_list
+          [Ty, Mono; Ind_preds, Absent; Eqn, Eqn_single])
+    ~map_spec:Transform.Features.(update_l [Eqn, Eqn_app; HOF, Absent])
     ~name
     ~encode:(fun p ->
       let p, state = elim_hof p in

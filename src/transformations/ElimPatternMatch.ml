@@ -15,7 +15,6 @@ module TMono = TermMono.Make(T)
 
 let name = "elim_match"
 
-
 type term = T.t
 
 let mk_select_ = U.data_select
@@ -88,11 +87,13 @@ let pipe ~print ~check =
     @
     Utils.singleton_if check () ~f:(fun () ->
       let module C = TypeCheck.Make(T) in
-      C.check_problem ?env:None)
+      C.check_problem (C.empty ()))
   in
   let encode pb = tr_problem pb, () in
   make ~name
     ~encode
+    ~input_spec:Transform.Features.(empty |> update Ty Mono)
+    ~map_spec:Transform.Features.(update Match Absent)
     ~on_encoded
     ~decode:(fun () x -> x)
     ()

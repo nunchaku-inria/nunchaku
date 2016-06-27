@@ -12,11 +12,7 @@ module T = TermInner.Default
 module U = T.U
 module P = T.P
 module PStmt = Stmt.Print(P)(P)
-
-
-(* TODO: require elimination of pattern matching earlier, in types *)
-
-type inv = <ty:[`Mono]; ind_preds:[`Absent]; eqn:[`Single]>
+module AT = AnalyzeType.Make(T)
 
 let name = "elim_data"
 let section = Utils.Section.make name
@@ -38,20 +34,20 @@ type to_encode =
   | Test of ID.t
   | Select of ID.t * int
   | Axiom_rec (* recursive function used for eq_corec/acyclicity axioms *)
-  | Const of ID.t
+  | Cstor of ID.t (* constructor *)
 
 let equal_to_encode a b = match a, b with
   | Test a, Test b
-  | Const a, Const b -> ID.equal a b
+  | Cstor a, Cstor b -> ID.equal a b
   | Select (a,i), Select (b,j) -> i=j && ID.equal a b
   | Axiom_rec, Axiom_rec -> true
-  | Test _, _ | Const _, _ | Select _, _ | Axiom_rec, _ -> false
+  | Test _, _ | Cstor _, _ | Select _, _ | Axiom_rec, _ -> false
 
 let hash_to_encode = function
   | Test a -> Hashtbl.hash (ID.hash a, "test")
   | Select (a,i) -> Hashtbl.hash (ID.hash a, "select", i)
   | Axiom_rec -> Hashtbl.hash "axiom_rec"
-  | Const a -> Hashtbl.hash (ID.hash a, "const")
+  | Cstor a -> Hashtbl.hash (ID.hash a, "const")
 
 module Tbl = CCHashtbl.Make(struct
     type t = to_encode
@@ -69,6 +65,7 @@ type encoded_cstor = {
 type encoded_ty = {
   ety_id: ID.t;
   ety_cstors: encoded_cstor list;
+  ety_card: Cardinality.t;
 }
 
 type state = {
@@ -77,36 +74,76 @@ type state = {
   tys: encoded_ty ID.Tbl.t;
     (* (co)data -> its encoding *)
   map: ID.t Tbl.t;
-    (* map constructors to be encoded, into fresh identifiers *)
+    (* map constructors/test/selectors to be encoded,
+       into corresponding identifiers *)
+  env: (T.t, T.t) Env.t;
+    (* environment *)
+  at_cache: AT.cache;
+    (* used for computing type cardinalities *)
 }
 
 type decode_state = state
 
-let create_state() = {
+let create_state ~env () = {
   decode=ID.Tbl.create 16;
   tys=ID.Tbl.create 16;
   map=Tbl.create 16;
+  env;
+  at_cache=AT.create_cache();
 }
 
-let rec tr_term state t = match T.repr t with
+(* FIXME: replace quantifiers over infinite datatypes with the proper
+   approximation? (false, depending on polarity) *)
+
+let get_select_ state id i : ID.t =
+  try Tbl.find state.map (Select(id,i))
+  with Not_found -> errorf "could not find encoding of `select-%a-%d`" ID.print id i
+
+let get_test_ state id : ID.t =
+  try Tbl.find state.map (Test id)
+  with Not_found -> errorf "could not find encoding of `is-%a`" ID.print id
+
+let rec tr_term state t : T.t = match T.repr t with
   | TI.Const id ->
-    Tbl.get_or state.map (Const id) ~or_:id |> U.const
-  | TI.Builtin (`DataSelect (id,i)) ->
-    begin match Tbl.get state.map (Select(id,i)) with
+    (* constant constructor, or unrelated ID *)
+    begin match Tbl.get state.map (Cstor id) with
       | None -> t
-      | Some id' -> U.const id'
+      | Some id' ->
+        (* [c asserting is-c c] *)
+        let t' = U.const id' in
+        let guard = U.app_const (get_test_ state id) [t'] in
+        U.asserting t' [guard]
     end
-  | TI.Builtin (`DataTest id) ->
-    begin match Tbl.get state.map (Test id) with
-      | None -> t
-      | Some id' -> U.const id'
+  | TI.App (f, l) ->
+    begin match T.repr f with
+      | TI.Const f_id ->
+        let l' = List.map (tr_term state) l in
+        begin match Tbl.get state.map (Cstor f_id) with
+          | None ->
+            U.app_const f_id l'
+          | Some f_id' ->
+            (* id is a constructor, we introduce a guard stating
+               [is-id (id x1..xn) & And_k proj-id-k (id x1..xn) = x_k] *)
+            let t' = U.app_const f_id' l' in
+            let guard =
+              U.app_const (get_test_ state f_id) [t']
+              :: List.mapi
+                  (fun i arg -> U.eq arg (U.app_const (get_select_ state f_id i) [t']))
+                  l'
+            in
+            U.asserting t' guard
+        end
+      | _ -> tr_term_aux state t
     end
+  | TI.Builtin (`DataSelect (id,i)) -> get_select_ state id i |> U.const
+  | TI.Builtin (`DataTest id) -> get_test_ state id |> U.const
   | TI.Match _ ->
     errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.print t
-  | _ ->
-    U.map () t
-      ~bind:(fun () v -> (), v)
-      ~f:(fun () -> tr_term state)
+  | _ -> tr_term_aux state t
+and tr_term_aux state t =
+  U.map () t
+    ~bind:(fun () v -> (), v)
+    ~f:(fun () -> tr_term state)
 
 let tr_ty = tr_term
 
@@ -118,15 +155,15 @@ let add_ state k id =
 
 (* create new IDs for selectors, testers, etc., add them to [state],
    and return a [encoded_ty] *)
-let ety_of_dataty state ty =
+let ety_of_dataty state ty : encoded_ty =
   let open Stmt in
   assert (ty.ty_vars=[] && U.ty_is_Type ty.ty_type);
-  add_ state (Const ty.ty_id) ty.ty_id;
   (* add destructors, testers, constructors *)
-  let ety_cstors = ID.Map.fold
+  let ety_cstors =
+    ID.Map.fold
       (fun _ cstor acc ->
          let c_id = cstor.cstor_name in
-         add_ state (Const c_id) c_id;
+         add_ state (Cstor c_id) c_id;
          let test = ID.make_f "is_%a" ID.print_name c_id in
          let ty_test = U.ty_arrow (U.const ty.ty_id) U.ty_prop in
          add_ state (Test c_id) test;
@@ -144,7 +181,8 @@ let ety_of_dataty state ty =
            ecstor_cstor=(c_id, cstor.cstor_type)} :: acc)
       ty.ty_cstors []
   in
-  let res = { ety_id=ty.ty_id; ety_cstors } in
+  let ety_card = AT.cardinality_ty_id ~cache:state.at_cache state.env ty.ty_id in
+  let res = { ety_id=ty.ty_id; ety_cstors; ety_card; } in
   ID.Tbl.replace state.tys ty.ty_id res;
   res
 
@@ -155,9 +193,18 @@ let app_id_fst (id,_) l = app_id id l
 let common_decls etys =
   let mk_decl (id,ty) =
     Stmt.decl ~info:Stmt.info_default ~attrs:[] id ty
+  (* cardinality attribute  for this type *)
+  and attr_card ety =
+    let module C = Cardinality in
+    let module Z = C.Z in
+    Stmt.Attr_card_hint ety.ety_card
   in
   let tys =
-    List.map (fun ety -> mk_decl (ety.ety_id,U.ty_type)) etys
+    List.map
+      (fun ety ->
+         let attrs = [attr_card ety] in
+         Stmt.decl ~info:Stmt.info_default ~attrs ety.ety_id U.ty_type)
+      etys
   in
   let others =
     CCList.flat_map
@@ -177,79 +224,54 @@ let common_axioms etys =
   (* axiomatize new constants *)
   CCList.flat_map
     (fun ety ->
-       (* define projectors *)
-       let x = Var.makef ~ty:(U.const ety.ety_id) "v_%a" ID.print_name ety.ety_id in
-       (* [forall x, is_c x => x = c (select_c_1 x) ... (select_c_n x)] *)
-       let ax_projs =
+       let data_ty = U.const ety.ety_id in
+       (* [forall x, not (is_c1 x & is_c2 x)] *)
+       let ax_disjointness =
+         let x = Var.makef ~ty:data_ty "v_%a" ID.print_name ety.ety_id in
+         U.forall x
+           (U.and_
+              (CCList.diagonal ety.ety_cstors
+               |> List.map
+                 (fun (c1,c2) ->
+                    U.not_
+                      (U.and_
+                         [ app_id_fst c1.ecstor_test [U.var x]
+                         ; app_id_fst c2.ecstor_test [U.var x]]))))
+         |> mk_ax
+       (* axiom
+          [forall x y,
+            (is-c x & is-c y & And_k proj-c-k x = proj-c-k y) => x=y] *)
+       and ax_uniqueness =
          List.map
            (fun ec ->
-              U.forall x
+              let x = Var.make ~name:"x" ~ty:data_ty in
+              let y = Var.make ~name:"y" ~ty:data_ty in
+              U.forall_l [x;y]
                 (U.imply
-                   (app_id_fst ec.ecstor_test [U.var x])
-                   (U.eq (U.var x)
-                      (app_id_fst ec.ecstor_cstor
-                         (List.map (fun p -> app_id_fst p [U.var x]) ec.ecstor_proj))))
-              |> mk_ax)
+                   (U.and_
+                      ( app_id_fst ec.ecstor_test [U.var x]
+                      :: app_id_fst ec.ecstor_test [U.var y]
+                      :: List.map
+                         (fun (proj,_) ->
+                            U.eq
+                              (U.app_const proj [U.var x])
+                              (U.app_const proj [U.var y]))
+                         ec.ecstor_proj))
+                   (U.eq (U.var x) (U.var y)))
+              |> mk_ax
+           )
            ety.ety_cstors
        (* [forall x, Or_c is_c x] *)
        and ax_exhaustiveness =
+         let x = Var.makef ~ty:data_ty "v_%a" ID.print_name ety.ety_id in
          U.forall x
            (U.or_
               (List.map
                  (fun ec -> app_id_fst ec.ecstor_test [U.var x])
                  ety.ety_cstors))
          |> mk_ax
-       (* [forall x1...xn y1...ym. c1 x1...xn != c2 y1...ym] *)
-       and ax_disjointness =
-         CCList.diagonal ety.ety_cstors
-         |> List.map
-           (fun (c1,c2) ->
-              let proj_ty_arg ty = match T.repr ty with
-                | TI.TyArrow (_,ret) -> ret
-                | _ -> assert false
-              in
-              let mk_vars c =
-                List.mapi
-                  (fun i (_,ty) -> Var.makef ~ty:(proj_ty_arg ty) "l_%d" i)
-                  c.ecstor_proj
-              in
-              let vars1 = mk_vars c1 in
-              let vars2 = mk_vars c2 in
-              U.forall_l
-                (vars1 @ vars2)
-                (U.neq
-                   (app_id_fst c1.ecstor_cstor (List.map U.var vars1))
-                   (app_id_fst c2.ecstor_cstor (List.map U.var vars2)))
-              |> mk_ax)
-       (* injectivity for each constructor [c]:
-          [forall a1...an b1...bn.
-            c(a1...an) = c(b1...bn) => a1=b1 & ... & an=bn]
-       *)
-       and ax_injectivity =
-         CCList.filter_map
-           (fun ec ->
-              let c_id, c_ty = ec.ecstor_cstor in
-              let _, args, _ = U.ty_unfold c_ty in
-              if args=[] then None
-              else (
-                let vars1 = List.mapi (fun i ty -> Var.makef ~ty "x_%d" i) args
-                and vars2 = List.mapi (fun i ty -> Var.makef ~ty "y_%d" i) args
-                in
-                U.forall_l (vars1 @ vars2)
-                  (U.imply
-                     (U.eq
-                        (U.app_const c_id (List.map U.var vars1))
-                        (U.app_const c_id (List.map U.var vars2)))
-                     (U.and_
-                        (List.map2
-                           (fun v1 v2 -> U.eq (U.var v1) (U.var v2))
-                           vars1 vars2)))
-                |> mk_ax
-                |> CCOpt.return
-              ))
-           ety.ety_cstors
        in
-       ax_exhaustiveness :: ax_injectivity @ ax_projs @ ax_disjointness
+       ax_exhaustiveness :: ax_disjointness :: ax_uniqueness
     )
     etys
 
@@ -258,7 +280,7 @@ let common_axioms etys =
      [occurs_in a b] is true iff [a] is a strict subterm of [b].
    - then, assert [forall a. not (occurs_in a a)]
 *)
-let acyclicity_ax state ety =
+let acyclicity_ax state ety : _ Stmt.t list =
   let id = ety.ety_id in
   (* is [ty = id]? *)
   let is_same_ty ty = match T.repr ty with
@@ -298,12 +320,16 @@ let acyclicity_ax state ety =
       ety.ety_cstors
     |> U.or_
   in
+  let ax_c =
+    U.imply ax_c (U.app_const id_c (List.map U.var vars))
+    |> U.forall_l vars
+  in
   let def_c =
-    Stmt.axiom_rec ~info:Stmt.info_default
-      [ { Stmt.rec_defined=def_c;
-          rec_vars=vars;
-          rec_eqns=Stmt.Eqn_single (vars, ax_c)
-        } ]
+    Stmt.axiom_spec ~info:Stmt.info_default
+      { Stmt.spec_defined=[def_c];
+        spec_vars=[];
+        spec_axioms=[ax_c];
+      }
   in
   (* also assert [forall x y. not (occurs_in x x)] *)
   let ax_no_cycle =
@@ -323,10 +349,13 @@ let encode_data state l =
   let acyclicity_l = CCList.flat_map (acyclicity_ax state) etys in
   decl_l @ acyclicity_l @ ax_l
 
+(* FIXME: this axiom should be defined for all codata at the same
+   time *)
+
 (* axiomatization of equality of codatatypes:
   - declare a recursive fun [eq_corec : ty -> ty -> prop] such that
-    [eq_corec a b] is true iff [a] and [b] are structurally equal
-   - assert [forall a b. eq_corec a b <=> a=b] *)
+    [eq_corec a b] is true implies [a] and [b] are structurally equal ("bisimilar")
+   - assert [forall a b. eq_corec a b => a=b] *)
 let eq_corec_axiom state ety =
   let id = ety.ety_id in
   (* is [ty = id]? *)
@@ -371,21 +400,25 @@ let eq_corec_axiom state ety =
       ety.ety_cstors
     |> U.or_
   in
-  let def_c =
-    Stmt.axiom_rec ~info:Stmt.info_default
-      [ { Stmt.rec_defined=def_c;
-          rec_vars=vars;
-          rec_eqns=Stmt.Eqn_single (vars, ax_c)
-        } ]
+  let ax_c =
+    U.eq (U.app_const id_c (List.map U.var vars)) ax_c
+    |> U.forall_l vars
   in
-  (* also assert [forall x y. x=y <=> eq_corec x y] *)
+  let def_c =
+    Stmt.axiom_spec ~info:Stmt.info_default
+      { Stmt.spec_defined=[def_c];
+        spec_vars=[];
+        spec_axioms=[ax_c];
+      }
+  in
+  (* also assert [forall x y. eq_corec x y => x=y] *)
   let ax_eq =
     let x = Var.make ~ty:(U.const id) ~name:"x" in
     let y = Var.make ~ty:(U.const id) ~name:"y" in
     U.forall_l [x;y]
-      (U.eq
-         (U.eq (U.var x) (U.var y))
-         (U.app_const id_c [U.var x; U.var y]))
+      (U.imply
+         (U.app_const id_c [U.var x; U.var y])
+         (U.eq (U.var x) (U.var y)))
   in
   [ def_c
   ; Stmt.axiom1 ~info:Stmt.info_default ax_eq
@@ -417,13 +450,15 @@ let encode_stmt state stmt =
       [stmt]
 
 let transform_pb pb =
-  let state = create_state () in
-  let pb' = Problem.flat_map_statements pb ~f:(encode_stmt state) in
+  let env = Problem.env pb in
+  let state = create_state ~env () in
+  let pb' =
+    Problem.flat_map_statements pb
+      ~f:(encode_stmt state)
+  in
   pb', state
 
 (** {2 Decoding} *)
-
-(* TODO: decode terms using values of Nil and Cons *)
 
 type fun_def = T.t Var.t list * (T.t, T.t) Model.DT.t * Model.symbol_kind
 
@@ -431,11 +466,10 @@ module IntMap = CCMap.Make(CCInt)
 
 (* temporary structure used for decoding terms *)
 type decoding = {
-  dec_constants: (encoded_ty * T.t option ref) ID.Map.t;
+  dec_constants: encoded_ty ID.Map.t;
     (* set of constants whose type is a (co)data, and therefore
        that are to be removed by decoding.
-       Each constant maps to the corresponding {!encoded_ty}, and possibly
-       its cached value *)
+       Each constant maps to the corresponding {!encoded_ty} *)
   dec_test: fun_def ID.Map.t;
     (* tester -> definition of tester *)
   dec_select: fun_def IntMap.t ID.Map.t;
@@ -460,7 +494,7 @@ let build_decoding state m =
           let ety = ID.Tbl.find state.tys id in
           List.fold_left
             (fun dec c ->
-               let dec_constants = ID.Map.add c (ety,ref None) dec.dec_constants in
+               let dec_constants = ID.Map.add c ety dec.dec_constants in
                {dec with dec_constants;})
             dec dom
         | _ -> dec)
@@ -474,7 +508,7 @@ let build_decoding state m =
             let m = ID.Map.get_or ~or_:IntMap.empty c dec.dec_select in
             let m = IntMap.add i (vars,dt,k) m in
             {dec with dec_select=ID.Map.add c m dec.dec_select}
-          | Some (Const _ | Axiom_rec) -> dec
+          | Some (Cstor _ | Axiom_rec) -> dec
         end
       | _ -> dec)
 
@@ -510,65 +544,88 @@ let find_select_ dec c i =
     errorf "could not find, in model,@ the value for %d-th selector of `%a`"
       i ID.print c
 
-(* FIXME: detect looping constructs (i.e. cyclic codata).
-   -> maybe by partial memoization (put a variable + bool ref in the memo table) *)
+(* we are under this cstor, for which the variable [msc_var] was provisioned.
+   If we use [msc_var] we should set [msc_used] to true so that the
+   binder is effectively produced *)
+type mu_stack_cell = {
+  msc_cstor: ID.t;
+  msc_var: ty Var.t;
+  mutable msc_used: bool;
+}
+
+type mu_stack = mu_stack_cell list
 
 (* decode a term, recursively, replacing constants of uninterpreted
    domains by their value in the model *)
 let decode_term dec t =
-  let rec aux t = match T.repr t with
+  let find_in_stack stack id : mu_stack_cell option =
+    CCList.find_pred
+      (fun msc -> ID.equal msc.msc_cstor id)
+      stack
+  in
+  (* @param stack the list of cstors we are under *)
+  let rec aux (stack:mu_stack) t = match T.repr t with
     | TI.Const id ->
-      begin match ID.Map.get id dec.dec_constants with
-        | None -> t
-        | Some (ety,r) ->
-          begin match !r with
-            | Some t' -> t'
-            | None ->
-              (* [t] is something like [list_5], and we need to find which
+      begin match find_in_stack stack id, ID.Map.get id dec.dec_constants with
+        | None, None -> t
+        | Some msc, _ ->
+          (* we are already decoding [id] deeper in the stack, use the
+             appropriate variable and signal that we are using it *)
+          msc.msc_used <- true;
+          U.var msc.msc_var
+        | None, Some ety ->
+          (* [t] is something like [list_5], and we need to find which
                  constructor it actually is *)
-              Utils.debugf ~section 5
-                "@[<2>constant `%a`@ corresponds to (co)data `%a`@]"
-                (fun k->k ID.print id ID.print ety.ety_id);
-              (* find which constructor corresponds to [t] *)
-              let ecstor =
-                try
-                  CCList.find_pred_exn
-                    (fun ecstor ->
-                       let fundef = find_test_ dec (fst ecstor.ecstor_test) in
-                       match eval_bool_fundef fundef [t] with
-                         | None ->
-                           errorf "cannot evaluate whether `%a`@ \
-                                   starts with constructor `%a`"
-                             P.print t ID.print (fst ecstor.ecstor_cstor)
-                         | Some b -> b)
-                    ety.ety_cstors
-                with Not_found ->
-                  errorf "no constructor corresponds to `%a`" P.print t
-              in
-              (* evaluate the arguments to this constructor *)
-              let cstor = fst ecstor.ecstor_cstor in
-              let args =
-                List.mapi
-                  (fun i _ ->
-                     let fundef = find_select_ dec cstor i in
-                     let arg = eval_fundef fundef [t] in
-                     aux arg)
-                  ecstor.ecstor_proj
-              in
-              let t' = U.app_const cstor args in
-              Utils.debugf ~section 5 "@[<2>term `@[%a@]`@ is decoded into `@[%a@]`@]"
-                (fun k->k P.print t P.print t');
-              (* memoize result *)
-              r := Some t';
-              t'
-          end
+          Utils.debugf ~section 5
+            "@[<2>constant `%a`@ corresponds to (co)data `%a`@]"
+            (fun k->k ID.print id ID.print ety.ety_id);
+          (* find which constructor corresponds to [t] *)
+          let ecstor =
+            try
+              CCList.find_pred_exn
+                (fun ecstor ->
+                   let fundef = find_test_ dec (fst ecstor.ecstor_test) in
+                   match eval_bool_fundef fundef [t] with
+                     | None ->
+                       errorf "cannot evaluate whether `%a`@ \
+                               starts with constructor `%a`"
+                         P.print t ID.print (fst ecstor.ecstor_cstor)
+                     | Some b -> b)
+                ety.ety_cstors
+            with Not_found ->
+              errorf "no constructor corresponds to `%a`" P.print t
+          in
+          (* var in case we need to bind *)
+          let msc = {
+            msc_cstor=id;
+            msc_var=
+              Var.makef "self_%d" (List.length stack)
+                ~ty:(U.ty_const ety.ety_id);
+            msc_used=false;
+          } in
+          (* evaluate the arguments to this constructor *)
+          let cstor = fst ecstor.ecstor_cstor in
+          let args =
+            List.mapi
+              (fun i _ ->
+                 let fundef = find_select_ dec cstor i in
+                 let arg = eval_fundef fundef [t] in
+                 aux (msc::stack) arg)
+              ecstor.ecstor_proj
+          in
+          let t' = U.app_const cstor args in
+          (* add mu-binder if needed *)
+          let t' = if msc.msc_used then U.mu msc.msc_var t' else t' in
+          Utils.debugf ~section 5 "@[<2>term `@[%a@]`@ is decoded into `@[%a@]`@]"
+            (fun k->k P.print t P.print t');
+          t'
       end
     | _ ->
       U.map () t
         ~bind:(fun () v -> (), v)
-        ~f:(fun () t -> aux t)
+        ~f:(fun () t -> aux stack t)
   in
-  aux t
+  aux [] t
 
 (* remove model of constructors/inductive types *)
 let decode_model state (m:(_,_) Model.t) : (_,_) Model.t =
@@ -607,12 +664,16 @@ let pipe_with ?on_decoded ~decode ~print ~check =
     Utils.singleton_if check ()
       ~f:(fun () ->
          let module C = TypeCheck.Make(T) in
-         C.check_problem ?env:None)
+         C.empty () |> C.check_problem)
   in
   Transform.make
     ~name
     ~on_encoded
     ?on_decoded
+    ~input_spec:Transform.Features.(of_list
+          [Match, Absent; Ty, Mono; Data, Present;
+           Eqn, Eqn_single; Ind_preds, Absent])
+    ~map_spec:Transform.Features.(update Data Absent)
     ~encode:transform_pb
     ~decode
     ()

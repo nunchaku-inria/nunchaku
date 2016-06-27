@@ -11,8 +11,6 @@ module T = TermInner.Default
 module U = T.U
 module P = T.P
 
-type ('a,'b) inv = <eqn:'a; ind_preds:'b; ty:[`Mono]>
-
 let name = "elim_copy"
 
 type term = T.t
@@ -91,10 +89,12 @@ let pipe ~print ~check =
     @
     Utils.singleton_if check () ~f:(fun () ->
       let module C = TypeCheck.Make(T) in
-      C.check_problem ?env:None)
+      C.empty () |> C.check_problem)
   in
   Transform.make
     ~name
+    ~input_spec:Transform.Features.(of_list [Ty, Mono; Copy, Present])
+    ~map_spec:Transform.Features.(update Copy Absent)
     ~on_encoded
     ~encode:(fun pb -> elim pb, ())
     ~decode:(fun () x -> x)

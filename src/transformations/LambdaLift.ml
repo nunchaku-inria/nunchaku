@@ -11,8 +11,6 @@ module T = TermInner.Default
 module U = T.U
 module P = T.P
 
-type inv = <ty:[`Mono]; ind_preds:[`Absent]; eqn:[`Single]>
-
 let name = "lambda_lift"
 let section = Utils.Section.make name
 
@@ -55,14 +53,14 @@ type in_scope_of =
   | In_nothing
   | In_rec of
       ID.Set.t * (* ids locally declared *)
-      (T.t, T.t, inv) Stmt.rec_def list ref (* new definitions *)
+      (T.t, T.t) Stmt.rec_def list ref (* new definitions *)
   | In_spec of
       ID.Set.t *
       (ID.t * ty * term) list ref (* new axioms *)
 
 (* state for declaring the lambda lifted functions *)
 type local_state = {
-  new_decls: (term, ty, inv) Stmt.t CCVector.vector;
+  new_decls: (term, ty) Stmt.t CCVector.vector;
     (* toplevel statements to be added to the problem *)
   mutable in_scope : in_scope_of;
     (* if [local_ids] is not empty, we are in scope of "rec" or "spec" declarations *)
@@ -292,10 +290,13 @@ let pipe_with ~decode ~print ~check =
     Utils.singleton_if check ()
       ~f:(fun () ->
          let module C = TypeCheck.Make(T) in
-         C.check_problem ?env:None)
+         C.empty() |> C.check_problem)
   in
   Transform.make
     ~name
+    ~input_spec:Transform.Features.(of_list
+          [Ty, Mono; Ind_preds, Absent; Eqn, Eqn_single])
+    ~map_spec:Transform.Features.(update Fun Absent)
     ~on_encoded
     ~encode:tr_problem
     ~decode

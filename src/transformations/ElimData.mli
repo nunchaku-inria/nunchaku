@@ -11,15 +11,13 @@ open Nunchaku_core
 
 module T = TermInner.Default
 
-type inv = <ty:[`Mono]; ind_preds:[`Absent]; eqn:[`Single]>
-
 type decode_state
 
 val name : string
 
 val transform_pb :
-  (T.t, T.t, inv) Problem.t ->
-  (T.t, T.t, inv) Problem.t * decode_state
+  (T.t, T.t) Problem.t ->
+  (T.t, T.t) Problem.t * decode_state
 
 val decode_model :
   decode_state -> (T.t, T.t) Model.t -> (T.t, T.t) Model.t
@@ -27,8 +25,8 @@ val decode_model :
 val pipe :
   print:bool ->
   check:bool ->
-  ((T.t,T.t, inv) Problem.t,
-   (T.t,T.t, inv) Problem.t,
+  ((T.t,T.t) Problem.t,
+   (T.t,T.t) Problem.t,
    (T.t,T.t) Problem.Res.t, (T.t,T.t) Problem.Res.t
   ) Transform.t
 
@@ -37,6 +35,6 @@ val pipe_with :
   decode:(decode_state -> 'c -> 'd) ->
   print:bool ->
   check:bool ->
-  ((T.t,T.t, inv) Problem.t,
-   (T.t,T.t, inv) Problem.t, 'c, 'd
+  ((T.t,T.t) Problem.t,
+   (T.t,T.t) Problem.t, 'c, 'd
   ) Transform.t

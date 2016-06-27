@@ -16,56 +16,107 @@ module type ARG = sig
   val fail : ('a, Format.formatter, unit, 'b) format4 -> 'a
 end
 
-type conf = {
-  direct_tydef: bool;
-  direct_spec: bool;
-  direct_mutual_types: bool;
-  direct_copy: bool;
-}
-
-(* union-find list *)
-module UF_list = struct
-  type 'a t = {
-    mutable root: 'a t;
-    mutable res: 'a list;
-  }
-
-  let make res =
-    let rec l = { root=l; res; } in
-    l
-
-  let rec find x =
-    if x.root == x then x
-    else (
-      let root = find x.root in
-      x.root <- root; (* path compression *)
-      root
-    )
-
-  let find_res x = (find x).res
-
-  let same l1 l2 = find l1 == find l2
-
-  (* append [l] in [x] *)
-  let append l x =
-    let x = find x in
-    x.res <- List.rev_append l x.res
-
-  let merge a b =
-    let a = find a
-    and b = find b in
-    if a != b then (
-      (* merge b into a *)
-      a.res <- List.rev_append b.res a.res;
-      b.root <- a;
-    )
+module type SCC_arg = sig
+  type t
+  module Tbl : CCHashtbl.S with type key = t
+  val deps : t -> t Sequence.t
 end
 
-module Make(T : TermInner.S)(Arg : ARG) = struct
+(* Strongly Connected Components of the graph whose vertices' type is [X.t] *)
+module SCC(X : SCC_arg) : sig
+  val explore : X.t Sequence.t -> X.t list Sequence.t
+end = struct
+  module Tbl = X.Tbl
+
+  type cell = {
+    mutable min_id: int; (* min ID of the vertex' scc *)
+    id: int;  (* ID of the vertex *)
+    mutable on_stack: bool;
+    vertex: X.t;
+  }
+
+  let mk_cell v n = {
+    min_id=n;
+    id=n;
+    on_stack=false;
+    vertex=v;
+  }
+
+  (* pop elements of [stack] until we reach node with given [id] *)
+  let rec pop_down_to ~id acc stack =
+    assert (not(Stack.is_empty stack));
+    let cell = Stack.pop stack in
+    cell.on_stack <- false;
+    if cell.id = id then (
+      assert (cell.id = cell.min_id);
+      cell.vertex :: acc (* return SCC *)
+    ) else pop_down_to ~id (cell.vertex::acc) stack
+
+  type action =
+    | Enter of X.t
+    | Exit_ of X.t * cell
+
+  let explore
+  : X.t Sequence.t -> X.t list Sequence.t
+  = fun seq yield ->
+    (* stack of nodes being explored, for the DFS *)
+    let to_explore : action Stack.t = Stack.create() in
+    let tbl = Tbl.create 128 in
+    (* stack for Tarjan's algorithm itself *)
+    let stack = Stack.create () in
+    (* unique ID *)
+    let count = ref 0 in
+    (* exploration *)
+    Sequence.iter
+      (fun v ->
+         Stack.push (Enter v) to_explore;
+         while not (Stack.is_empty to_explore) do
+           match Stack.pop to_explore with
+             | Enter v ->
+               if not (Tbl.mem tbl v) then (
+                 (* remember unique ID for [v] *)
+                 let n = !count in
+                 incr count;
+                 let cell = mk_cell v n in
+                 cell.on_stack <- true;
+                 Tbl.add tbl v cell;
+                 Stack.push cell stack;
+                 Stack.push (Exit_ (v, cell)) to_explore;
+                 (* explore children *)
+                 Sequence.iter
+                   (fun e -> Stack.push (Enter e) to_explore)
+                   (X.deps v)
+               )
+             | Exit_ (v, cell) ->
+               (* update [min_id] *)
+               assert cell.on_stack;
+               Sequence.iter
+                 (fun e ->
+                    (* must not fail, [dest] already explored *)
+                    let dest_cell = Tbl.find tbl e in
+                    (* same SCC? yes if [dest] points to [cell.v] *)
+                    if dest_cell.on_stack
+                    then cell.min_id <- min cell.min_id dest_cell.min_id
+                 )
+                 (X.deps v);
+               (* pop from stack if SCC found *)
+               if cell.id = cell.min_id then (
+                 let scc = pop_down_to ~id:cell.id [] stack in
+                 yield scc
+               )
+         done
+      ) seq;
+    assert (Stack.is_empty stack);
+    ()
+end
+
+module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
   module P = TermInner.Print(T)
+  module U = TermInner.Util(T)
   module PStmt = Stmt.Print(P)(P)
 
   type term = T.t
+  type ty = T.t
 
   let section = Arg.section
 
@@ -75,399 +126,526 @@ module Make(T : TermInner.S)(Arg : ARG) = struct
     let hash (i,a) = Hashtbl.hash (ID.hash i, Arg.hash a)
   end)
 
-  (* a stack frame for building mutually recursive blocks *)
-  type 'a stack_frame = {
-    sf_id: ID.t;
-    sf_def: 'a;
-    mutable sf_is_root: bool;
+  type partial_statement_view =
+    | PS_rec of (term, ty) Stmt.rec_def
+    | PS_pred of [`Wf | `Not_wf] * [`Pred | `Copred] * (term, ty) Stmt.pred_def
+    | PS_spec of (term, ty) Stmt.spec_defs
+    | PS_decl of ID.t * ty * Stmt.decl_attr list
+    | PS_data of [`Data | `Codata] * ty Stmt.tydef
+    | PS_copy of (term, ty) Stmt.copy
+    | PS_goal of term
+    | PS_axiom of term list
+
+  type partial_statement = {
+    ps_view: partial_statement_view;
+      (* content *)
+    ps_id: int;
+      (* unique identifier for this partial statement *)
+    ps_info: Stmt.info;
+      (* partial statements that are mutually dependent with this one,
+         for dependency graph *)
   }
 
-  class virtual ['inv1, 'inv2, 'c] traverse ~conf ?(size=64) ?(depth_limit=256) () = object (self)
-    (* access definitions/declarations by ID *)
-    val mutable env : (term, term, 'inv1) Env.t = Env.create()
+  let ps_equal t1 t2 = t1.ps_id = t2.ps_id
+  let ps_hash t = t.ps_id land max_int
 
-    (* did we reach the maximal depth? *)
-    val mutable depth_reached: bool = false
+  (* fresh partial statement *)
+  let mk_ps_ =
+    let n = ref 0 in
+    fun view ~info ->
+      let ps_id = !n in
+      incr n;
+      { ps_view=view; ps_info=info; ps_id; }
 
-    (* resulting statements *)
-    val output: (term, term, 'inv2) Stmt.t CCVector.vector = CCVector.create()
+  module PSTbl = CCHashtbl.Make(struct
+      type t = partial_statement
+      let equal = ps_equal
+      let hash = ps_hash
+    end)
 
-    (* symbols already declared *)
-    val declared : unit IDArgTbl.t = IDArgTbl.create size
 
-    (* pairs (id, arg) that are either:
-       - being processed (with their stack frame)
-       - done being processed *)
-    val processed
-    : [>`Done | `In of 'c stack_frame] IDArgTbl.t
-    = IDArgTbl.create size
+  (* set of IDs defined in this (partial) statement *)
+  let id_defined_by_ps ps : ID.t Sequence.t =
+    let yield_defined d = Stmt.id_of_defined d |> Sequence.return in
+    match ps.ps_view with
+    | PS_rec d -> Stmt.defined_of_rec d |> yield_defined
+    | PS_pred (_,_,d) -> Stmt.defined_of_pred d |> yield_defined
+    | PS_spec l -> Stmt.defined_of_spec l |> Sequence.map Stmt.id_of_defined
+    | PS_decl (id,_,_) -> Sequence.return id
+    | PS_copy c -> Stmt.ids_of_copy c
+    | PS_data (_,l) -> Stmt.defined_of_data l |> Sequence.map Stmt.id_of_defined
+    | PS_goal _
+    | PS_axiom _ -> Sequence.empty
 
-    (* stack of blocks being traversed *)
-    val mutable stack : 'c stack_frame list = []
+  (* IDs used by the definition of this partial statement *)
+  let deps_of_ps (ps:partial_statement) : ID.t Sequence.t =
+    fun yield ->
+      let yield_var v = U.to_seq_consts (Var.ty v) yield in
+      let yield_vars = List.iter yield_var in
+      let yield_term t = U.to_seq_consts t yield in
+      let yield_defined d =
+        yield (Stmt.id_of_defined d);
+        yield_term (Stmt.ty_of_defined d)
+      in
+      begin match ps.ps_view with
+        | PS_rec d ->
+          begin match d.Stmt.rec_eqns with
+            | Stmt.Eqn_app (ids, vars, lhs, rhs) ->
+              List.iter yield ids;
+              yield_vars vars;
+              yield_term lhs;
+              yield_term rhs
+            | Stmt.Eqn_single (vars, rhs) ->
+              yield_vars vars;
+              yield_term rhs
+            | Stmt.Eqn_nested l ->
+              List.iter
+                (fun (vars, args, rhs, side) ->
+                   yield_vars vars;
+                   List.iter yield_term args;
+                   yield_term rhs;
+                   List.iter yield_term side)
+                l
+          end
+        | PS_pred (_,_,p) ->
+          yield_defined p.Stmt.pred_defined;
+          yield_vars p.Stmt.pred_tyvars;
+          List.iter
+            (fun c ->
+               yield_vars c.Stmt.clause_vars;
+               CCOpt.iter yield_term c.Stmt.clause_guard;
+               yield_term c.Stmt.clause_concl)
+            p.Stmt.pred_clauses
+        | PS_spec s ->
+          yield_vars s.Stmt.spec_vars;
+          List.iter yield_defined s.Stmt.spec_defined;
+          List.iter yield_term s.Stmt.spec_axioms;
+        | PS_decl (id,ty,_) ->
+          yield id;
+          yield_term ty
+        | PS_copy c ->
+          yield_vars c.Stmt.copy_vars;
+          Stmt.defined_of_copy c yield_defined;
+          CCOpt.iter yield_term c.Stmt.copy_pred
+        | PS_goal t -> yield_term t
+        | PS_axiom l -> List.iter yield_term l
+        | PS_data (_,d) ->
+          yield_vars d.Stmt.ty_vars;
+          Stmt.defined_of_data d yield_defined
+      end
 
-    method private check_depth d =
-      if d>depth_limit && not depth_reached then (
-        Utils.debugf ~section 1 "caution: depth limit reached" (fun k -> k);
-        depth_reached <- true;
-      )
+  let pp_ps out ps =
+    let pp_list pp = CCFormat.list ~start:"" ~stop:"" pp in
+    match ps.ps_view with
+      | PS_rec r ->
+        Format.fprintf out "@[%a@]" PStmt.print_rec_def r
+      | PS_pred (wf,k,p) ->
+        Format.fprintf out "@[%s%s %a@]"
+          (match k with `Pred -> "pred" | `Copred -> "copred")
+          (match wf with `Wf -> "[wf]" | `Not_wf -> "")
+          PStmt.print_pred_def p
+      | PS_spec s ->
+        Format.fprintf out "@[%a@]" PStmt.print_spec_defs s
+      | PS_decl (id,ty,_) ->
+        Format.fprintf out "@[val %a : %a@]" ID.print id P.print ty
+      | PS_data (k,d) ->
+        Format.fprintf out "%s %a"
+          (match k with `Data -> "data" | `Codata -> "codata")
+          PStmt.print_tydef d
+      | PS_copy c -> Format.fprintf out "@[copy %a@]" ID.print c.Stmt.copy_id
+      | PS_axiom l ->
+        Format.fprintf out "@[axiom@ %a@]" (pp_list P.print) l
+      | PS_goal t -> Format.fprintf out "@[goal %a@]" P.print t
 
-    method private push x = stack <- x :: stack
+  type t = {
+    max_depth: int;
+      (* max recursion depth *)
+    mutable env: (term, term) Env.t;
+      (* input definitions *)
+    state: State.t;
+      (* user-defined state *)
+    dispatch: dispatch;
+      (* functions to process definitions and terms *)
+    graph: unit IDArgTbl.t;
+      (* set of (id*arg) already processed *)
+    by_id: partial_statement ID.Tbl.t;
+      (* new ID -> its cell in the graph *)
+    new_stmts: unit PSTbl.t;
+      (* set of new (partial) statements *)
+    mutable depth_reached: bool;
+      (* max depth reached? *)
+    mutable res: (term,ty) Statement.t CCVector.vector option;
+      (* result, if any *)
+  }
 
-    method private pop = match stack with
-      | [] -> assert false
-      | _ :: l -> stack <- l
+  and dispatch = {
+    do_term:
+      (t -> depth:int -> term -> term);
 
-    (* are we already done with this (ID, value)? *)
-    method status: ID.t -> Arg.t -> [`Done | `In of 'c stack_frame | `New]
-      = fun id arg ->
-        try IDArgTbl.find processed (id, arg)
-        with Not_found -> `New
+    do_goal_or_axiom :
+      (t -> depth:int -> [`Goal | `Axiom] -> term -> term) option;
 
-    method has_processed id arg = self#status id arg = `Done
+    do_def:
+      (t -> depth:int ->
+       (term, ty) Statement.rec_def ->
+       Arg.t ->
+       (term, ty) Statement.rec_def);
 
-    (* have we declared this non-defined (id,arg) (axiom, opaque declarations…) *)
-    method has_declared: ID.t -> Arg.t -> bool
-      = fun id arg -> IDArgTbl.mem declared (id, arg)
+    do_pred:
+      (t -> depth:int ->
+       [`Wf | `Not_wf] -> [`Pred | `Copred] ->
+       (term, ty) Statement.pred_def -> Arg.t ->
+       (term, ty) Statement.pred_def);
 
-    (* processing of (id,arg) is finished *)
-    method done_processing : ID.t -> Arg.t -> unit
-      = fun id arg ->
-        Utils.debugf ~section 4 "done processing `%a` (%a)" (fun k->k ID.print id Arg.print arg);
-        IDArgTbl.replace processed (id, arg) `Done
+    do_copy:
+      (t -> depth:int -> loc:Location.t option ->
+       (term, ty) Statement.copy ->
+       Arg.t ->
+       (term, ty) Statement.copy)
+        option;
 
-    (* signal we are currently processing this (id,arg) in the given frame *)
-    method in_processing : ID.t -> Arg.t -> 'c stack_frame -> unit
-      = fun id arg f -> IDArgTbl.replace processed (id, arg) (`In f)
+    do_spec:
+      (t -> depth:int -> loc:Location.t option ->
+       ID.t ->
+       (term, ty) Statement.spec_defs ->
+       Arg.t ->
+       (term, ty) Statement.spec_defs)
+        option;
 
-    method done_declaring : ID.t -> Arg.t -> unit
-      = fun id arg -> IDArgTbl.replace declared (id, arg) ()
+    do_data:
+      (t ->
+       depth:int -> [`Data | `Codata] ->
+       term Statement.tydef ->
+       Arg.t ->
+       term Statement.tydef)
+      option;
 
-    method push_res : (term, term, 'inv2) Stmt.t -> unit
-      = fun stmt -> CCVector.push output stmt
+    do_ty_def:
+      (t ->
+       ?loc:Location.t ->
+       attrs:Statement.decl_attr list ->
+       ID.t ->
+       ty:ty->
+       Arg.t ->
+       (ID.t * ty * Statement.decl_attr list))
+      option;
+  }
 
-    method reached_depth_limit = depth_reached
-    method env = env
-    method output = output
-    method processed = processed
+  let env t = t.env
+  let state t = t.state
 
-    method declare_sym
-      : attrs:Stmt.decl_attr list ->
-        ID.t -> Arg.t -> as_:ID.t -> ty:term -> unit
-      = fun ~attrs id arg ~as_ ~ty ->
-        if not (self#has_declared id arg) then (
-          (* only declare once *)
-          self#done_declaring id arg;
-          let env_info = Env.find_exn ~env id in
-          let loc = env_info.Env.loc in
-          self#push_res
-            (Stmt.decl ~attrs ~info:{Stmt.loc; name=None} as_ ty);
-        )
+  let processed t =
+    IDArgTbl.to_seq t.graph
+    |> Sequence.map fst
 
-    (* recursive traversal of terms *)
-    method virtual do_term : depth:int -> term -> term
+  let check_depth_ t d =
+    if d>t.max_depth && not t.depth_reached then (
+      Utils.debugf ~section 1 "caution: depth limit reached" (fun k -> k);
+      t.depth_reached <- true;
+    )
 
-    method do_var
-    : depth:int -> term Var.t -> term Var.t
-    = fun ~depth v -> Var.update_ty v ~f:(self#do_term ~depth)
+  (* have we processed this (id,arg) tuple? (axiom, opaque declarations…) *)
+  let has_processed t (id:ID.t) (arg:Arg.t): bool =
+    IDArgTbl.mem t.graph (id, arg)
 
-    (* transformation of this particular definition *)
-    method virtual do_def
-      : depth:int -> (term, term, 'inv1) Stmt.rec_def -> Arg.t -> (term, term, 'inv2) Stmt.rec_def list
+  let mark_processed_ t (id:ID.t) (arg:Arg.t): unit =
+    assert (not (has_processed t id arg));
+    Utils.debugf ~section 4 "mark_processed `%a` (%a)"
+      (fun k->k ID.print id Arg.print arg);
+    IDArgTbl.add t.graph (id,arg) ()
 
-    method do_def_rec
-    : depth:int -> loc:Loc.t option ->
-      (term, term, 'inv1) Stmt.rec_defs ->
-      (term, term, 'inv1) Stmt.rec_def -> Arg.t -> unit
-    = fun ~depth ~loc _defs def arg ->
-      let id = def.Stmt.rec_defined.Stmt.defined_head in
-      Utils.debugf ~section 3
-        "@[<2>@{<Cyan>process rec case@} `%a` for@ (%a)@ at depth %d@]"
-        (fun k -> k ID.print id Arg.print arg depth);
-      let l = UF_list.make [] in
-      let frame = {
-        sf_id=id;
-        sf_def=`Defs l;
-        sf_is_root=true;
-      } in
-      self#push frame;
-      self#in_processing id arg frame;
-      (* transform [def] and push it into [l] *)
-      let new_defs = self#do_def ~depth def arg in
-      UF_list.append new_defs l;
-      if frame.sf_is_root then (
-        (* at root, make statement *)
-        let res = UF_list.find_res l in
-        Utils.debugf ~section 5
-          "@[<2>rec case `%a`@ is root of mutual block@ @[%a@]@]"
-          (fun k->k ID.print id (CCFormat.list PStmt.print_rec_def) res);
-        let stmt = Stmt.axiom_rec ~info:{Stmt.name=None; loc;} res in
-        self#push_res stmt
-      );
-      self#pop;
-      self#done_processing id arg;
-      ()
+  let mark_processed t id arg =
+    if not (has_processed t id arg)
+    then mark_processed_ t id arg
 
-    method virtual do_pred
-    : depth:int ->
-      [`Wf | `Not_wf] -> [`Pred | `Copred] ->
-      (term, term, 'inv1) Stmt.pred_def -> Arg.t ->
-      (term, term, 'inv2) Stmt.pred_def list
+  (* add to the graph the vertex [as_], annotated with [ps].
+     This vertex will be reachable via [id arg] *)
+  let add_graph_ t (ps:partial_statement) : unit =
+    PSTbl.replace t.new_stmts ps ();
+    id_defined_by_ps ps
+      |> Sequence.iter
+        (fun id -> ID.Tbl.replace t.by_id id ps);
+    ()
 
-    (* how does well-foundedness translate? *)
-    method pred_translate_wf
-      : [`Wf | `Not_wf] -> [`Wf | `Not_wf]
-      = fun wf -> wf
+  let do_var_ t ~depth v : ty Var.t =
+    Var.update_ty v ~f:(t.dispatch.do_term t ~depth)
 
-    method do_pred_rec
-    : depth:int -> loc:Loc.t option ->
-      [`Wf | `Not_wf] -> [`Pred | `Copred] ->
-      (term, term, 'inv1) Stmt.pred_def list ->
-      (term, term, 'inv1) Stmt.pred_def ->
-      Arg.t ->
-      unit
-    = fun ~depth ~loc wf kind _defs def arg ->
-      let id = def.Stmt.pred_defined.Stmt.defined_head in
-      Utils.debugf ~section 3
-        "@[<2>@{<Cyan>process pred@} `%a` for@ (%a %a)@ at depth %d@]"
-        (fun k -> k ID.print def.Stmt.pred_defined.Stmt.defined_head
-          ID.print id Arg.print arg depth);
-      let l = UF_list.make [] in
-      let frame = {
-        sf_id=id;
-        sf_def = `Preds (wf, kind, l);
-        sf_is_root=true;
-      } in
-      self#push frame;
-      self#in_processing id arg frame;
-      let new_preds = self#do_pred ~depth wf kind def arg in
-      UF_list.append new_preds l;
-      if frame.sf_is_root then (
-        let res = UF_list.find_res l in
-        Utils.debugf ~section 5
-          "@[<2>pred `%a`@ is root of mutual block@ @[%a@]@]"
-          (fun k->k ID.print id (CCFormat.list PStmt.print_pred_def) res);
-        let wf' = self#pred_translate_wf wf in
-        let stmt = Stmt.mk_pred ~info:{Stmt.name=None; loc;} ~wf:wf' kind res in
-        self#push_res stmt
-      );
-      self#pop;
-      self#done_processing id arg;
-      ()
+  (* translate this "rec" definition *)
+  let do_rec_ t ~depth ~loc (def : (_,_) Stmt.rec_def) (arg:Arg.t) : unit =
+    let id = def |> Stmt.defined_of_rec |> Stmt.id_of_defined in
+    Utils.debugf ~section 3
+      "@[<2>@{<Cyan>process rec case@} `%a` for@ (%a)@ at depth %d@]"
+      (fun k -> k ID.print id Arg.print arg depth);
+    let def' = t.dispatch.do_def t ~depth def arg in
+    let info = {Stmt.name=None; loc; } in
+    let ps = mk_ps_ ~info (PS_rec def') in
+    add_graph_ t ps;
+    ()
 
-    method virtual do_copy
-    : depth:int -> loc:Loc.t option ->
-      (term, term) Stmt.copy -> Arg.t -> unit
+  (* translate this "pred" definition *)
+  let do_pred_ t ~depth ~loc wf k (def : (_,_) Stmt.pred_def) (arg:Arg.t) : unit =
+    let id = def |> Stmt.defined_of_pred |> Stmt.id_of_defined in
+    Utils.debugf ~section 3
+      "@[<2>@{<Cyan>process pred case@} `%a` for@ (%a)@ at depth %d@]"
+      (fun k -> k ID.print id Arg.print arg depth);
+    let def' = t.dispatch.do_pred t ~depth wf k def arg in
+    let info = {Stmt.name=None; loc; } in
+    let ps = mk_ps_ ~info (PS_pred (wf,k,def')) in
+    add_graph_ t ps;
+    ()
 
-    method virtual do_spec
-    : depth:int -> loc:Loc.t option -> ID.t ->
-      (term, term) Stmt.spec_defs -> Arg.t ->
-      unit
+  (* translation of toplevel goal or axiom (default is {!do_term}) *)
+  let do_goal_or_axiom
+    : t -> [`Goal | `Axiom] -> term -> term
+    = fun t k term ->
+      match t.dispatch.do_goal_or_axiom with
+        | None -> t.dispatch.do_term t ~depth:0 term
+        | Some f -> f t ~depth:0 k term
 
-    method virtual do_mutual_types
-    : depth:int -> term Stmt.tydef -> Arg.t -> term Stmt.tydef list
+  exception CannotTraverse
 
-    (* specialize (co)inductive types *)
-    method do_mutual_types_rec
-    : depth:int -> loc:Loc.t option ->
-      [`Data | `Codata] ->
-      term Stmt.tydef list ->
-      term Stmt.tydef ->
-      Arg.t ->
-      unit
-    = fun ~depth ~loc kind _tydefs tydef arg ->
-      let id = tydef.Stmt.ty_id in
-      Utils.debugf ~section 3
-        "@[<2>process type decl `%a : %a`@ for %a@ at depth %d@]"
-        (fun k-> k ID.print id P.print tydef.Stmt.ty_type Arg.print arg depth);
-      let l = UF_list.make [] in
-      let frame = {
-        sf_id=id;
-        sf_def=`Types (kind, l);
-        sf_is_root=true;
-      } in
-      self#push frame;
-      self#in_processing id arg frame;
-      let tydefs' = self#do_mutual_types ~depth tydef arg in
-      UF_list.append tydefs' l;
-      if frame.sf_is_root then (
-        (* at the root! generate a new statement *)
-        let res = UF_list.find_res l in
-        let stmt = Stmt.mk_ty_def ~info:{Stmt.name=None; loc} kind res in
-        self#push_res stmt;
-      );
-      self#pop;
-      self#done_processing id arg;
-      ()
+  let traverse_stmt_ ~after_env t (st:(term,ty) Stmt.t) : unit =
+    Utils.debugf ~section 2 "@[<2>enter statement@ `%a`@]"
+      (fun k-> k PStmt.print st);
+    (* process statement *)
+    t.env <- Env.add_statement ~env:t.env st;
+    after_env t.env;
+    let info = Stmt.info st in
+    (* most basic processing: just traverse the terms to update dependencies *)
+    let tr_term () = t.dispatch.do_term t ~depth:0 in
+    let tr_type = tr_term in
+    let bind_var () v = (), do_var_ t ~depth:0 v in
+    begin match Stmt.view st with
+      | Stmt.Decl (id,ty,attrs) ->
+        begin match t.dispatch.do_ty_def with
+          | None ->
+            (* generic treatment *)
+            let ty = tr_type () ty in
+            let ps = mk_ps_ ~info (PS_decl (id,ty,attrs)) in
+            add_graph_ t ps
+          | Some _ -> ()
+        end
+      | Stmt.Goal g ->
+        (* convert goal *)
+        let g = do_goal_or_axiom t `Goal g in
+        let ps = mk_ps_ ~info (PS_goal g) in
+        add_graph_ t ps
+      | Stmt.Axiom (Stmt.Axiom_std l) ->
+        (* keep axioms *)
+        let l = List.map (do_goal_or_axiom t `Axiom) l in
+        let ps = mk_ps_ ~info (PS_axiom l) in
+        add_graph_ t ps
+      | Stmt.Pred _
+      | Stmt.Axiom (Stmt.Axiom_rec _) ->
+        () (* only processed if used *)
+      | Stmt.Axiom (Stmt.Axiom_spec l) ->
+        begin match t.dispatch.do_spec with
+          | None ->
+            let s = Stmt.map_spec_defs_bind () l
+                ~bind:bind_var ~term:tr_term ~ty:tr_type
+            in
+            let ps = mk_ps_ ~info (PS_spec s) in
+            add_graph_ t ps
+          | Some _ -> ()
+        end
+      | Stmt.Copy c ->
+        begin match t.dispatch.do_copy with
+          | None ->
+            let c = Stmt.map_copy c ~term:(tr_term ()) ~ty:(tr_type ()) in
+            let ps = mk_ps_ ~info (PS_copy c) in
+            add_graph_ t ps
+          | Some _ -> ()
+        end
+      | Stmt.TyDef (k, l) ->
+        begin match t.dispatch.do_ty_def with
+          | None ->
+            let l = Stmt.map_ty_defs ~ty:(tr_type ()) l in
+            List.iter
+              (fun d ->
+                 let ps = mk_ps_ ~info (PS_data (k,d)) in
+                 add_graph_ t ps)
+              l
+          | Some _ -> ()
+        end
+    end
 
-    method virtual do_ty_def
-    : ?loc:Loc.t -> attrs:Stmt.decl_attr list -> ID.t -> ty:term -> Arg.t -> unit
+  let traverse_stmt ?(after_env=fun _ -> ()) t st =
+    if t.res <> None then raise CannotTraverse;
+    traverse_stmt_ ~after_env t st
 
-    (* traverse the stack downward, merging every frame with [f] until we
-       reach [f] itself *)
-    method private merge_down_to f =
-      try
-        List.iter
-          (fun f' ->
-            (* stop if [f] and [f'] are the same frame *)
-            if f == f' then raise Exit;
-            f'.sf_is_root <- false; (* above [f] *)
-            match f.sf_def, f'.sf_def with
-            | `Types (k1, l1), `Types (k2, l2) ->
-                if k1=k2 then (
-                  if not (UF_list.same l1 l2)
-                  then Utils.debugf ~section 4
-                    "specialize %a and %a in same (co)data"
-                    (fun k -> k ID.print f.sf_id ID.print f'.sf_id);
-                  UF_list.merge l1 l2;
-                ) else
-                  Arg.fail
-                    "@[<2>cannot handle nested {(co)data, data}:@ @[<h>{%a, %a}@]@]"
-                    ID.print f.sf_id ID.print f'.sf_id;
-            | `Preds (wf1, k1, l1), `Preds (wf2, k2, l2) ->
-                if wf1=wf2 && k1=k2 then (
-                  if not (UF_list.same l1 l2)
-                  then Utils.debugf ~section 4
-                    "specialize %a and %a in same (co)predicate"
-                    (fun k -> k ID.print f.sf_id ID.print f'.sf_id);
-                  UF_list.merge l1 l2;
-                ) else
-                  Arg.fail "incompatible style of predicates for %a and %a"
-                    ID.print f.sf_id ID.print f'.sf_id
-            | `Defs l1, `Defs l2 ->
-                if not (UF_list.same l1 l2)
-                then Utils.debugf ~section 4
-                  "specialize %a and %a in same recursive functions"
-                  (fun k -> k ID.print f.sf_id ID.print f'.sf_id);
-                UF_list.merge l1 l2
-            | `Types _, _
-            | `Preds _, _
-            | `Defs _, _ ->
-                Arg.fail
-                  "@[<2>cannot make %a and %a mutually recursive,@ they \
-                    are not defined the same way@]"
-                  ID.print f.sf_id ID.print f'.sf_id;
-          )
-          stack;
-        assert false  (* should have found the frame *)
-      with Exit -> ()
+  (* [id,arg] not processed yet, traverse it depending on
+     what its definition looks like *)
 
-    (* traverse [id,arg] if depth is not too high and if
-       it is not already being processed *)
-    method private do_statements_for_id
-      : depth:int -> ID.t -> Arg.t -> unit
-      = fun ~depth id arg ->
-        (* check for depth limit *)
-        Utils.debugf ~section 5 "@[<2>traverse statement for@ %a (%a)@]"
-          (fun k->k ID.print id Arg.print arg);
-        self#check_depth depth;
-        if depth > depth_limit
-        then assert false (* TODO: only declare type *)
-        else match self#status id arg with
-        | `Done -> ()
-        | `In f ->
-            (* merge every frame more recent than [f] with [f], and do
-                nothing else *)
-            self#merge_down_to f;
-        | `New ->
-            self#do_new_statement_for_id ~depth id arg
-
-    (* [id,arg] not processed yet, traverse it depending on
-       what its definition looks like *)
-    method private do_new_statement_for_id
-      : depth:int -> ID.t -> Arg.t -> unit
-      = fun ~depth id arg ->
-        let env_info = match Env.find ~env id with
-          | None -> Arg.fail "could not find definition of %a" ID.print id
-          | Some i -> i
-        in
-        let loc = Env.loc env_info in
-        match Env.def env_info with
-        | Env.Fun_spec _ when conf.direct_spec -> ()
-        | Env.Fun_spec (spec,loc) ->
-            self#do_spec ~depth ~loc id spec arg;
-            assert (self#has_processed id arg);
-        | Env.Fun_def (defs, def, loc) ->
-            self#do_def_rec ~depth ~loc defs def arg;
-            assert (self#has_processed id arg);
-        | Env.Pred (wf, k, def, defs, loc) ->
-            self#do_pred_rec ~depth ~loc wf k defs def arg;
-            assert (self#has_processed id arg);
-        | (Env.Cstor _ | Env.Data _) when conf.direct_mutual_types -> ()
-        | Env.Cstor (_,_,tydef,_) ->
-            (* instead of processing the constructor, we should always
+  let rec do_new_statement_for_id_ t ~depth id arg : unit =
+    let env_info = match Env.find ~env:t.env id with
+      | None -> Arg.fail "could not find definition of %a" ID.print id
+      | Some i -> i
+    in
+    check_depth_ t depth;
+    let loc = Env.loc env_info in
+    match Env.def env_info with
+      | Env.Fun_spec (spec,loc) ->
+        begin match t.dispatch.do_spec with
+          | None -> ()
+          | Some f ->
+            let spec' = f t ~depth ~loc id spec arg in
+            let ps = mk_ps_ ~info:(Stmt.info_of_loc loc) (PS_spec spec') in
+            add_graph_ t ps;
+        end
+      | Env.Fun_def (_defs, def, loc) ->
+        do_rec_ t ~depth ~loc def arg;
+      | Env.Pred (wf, k, def, _defs, loc) ->
+        do_pred_ t ~depth ~loc wf k def arg;
+      | Env.Cstor (_,_,tydef,_) ->
+        (* instead of processing the constructor, we should always
                process the type it belongs to. *)
-            self#do_statements_for_id ~depth tydef.Stmt.ty_id arg
-        | Env.Data (k,tydefs,tydef) ->
+        call_dep t ~depth tydef.Stmt.ty_id arg
+      | Env.Data (k,_tydefs,tydef) ->
+        begin match t.dispatch.do_data with
+          | None -> ()
+          | Some f ->
             assert (ID.equal tydef.Stmt.ty_id id);
-            self#do_mutual_types_rec ~depth ~loc k tydefs tydef arg;
-            assert (self#has_processed id arg);
-        | Env.Copy_abstract c
-        | Env.Copy_concrete c
-        | Env.Copy_ty c ->
-            if not conf.direct_copy then (
-              self#do_copy ~depth ~loc c arg;
-              assert (self#has_processed c.Stmt.copy_id arg);
-            )
-        | Env.NoDef when conf.direct_tydef -> () (* already defined *)
-        | Env.NoDef ->
+            Utils.debugf ~section 3
+              "@[<2>@{<Cyan>process type decl@} `%a : %a`@ for %a@ at depth %d@]"
+              (fun k-> k ID.print id P.print tydef.Stmt.ty_type Arg.print arg depth);
+            let tydef' = f t ~depth k tydef arg in
+            let ps = mk_ps_ ~info:(Stmt.info_of_loc loc) (PS_data (k,tydef')) in
+            add_graph_ t ps;
+        end
+      | Env.Copy_abstract c
+      | Env.Copy_concrete c
+      | Env.Copy_ty c ->
+        begin match t.dispatch.do_copy with
+          | None -> ()
+          | Some f ->
+            let c' = f t ~depth ~loc c arg in
+            let ps = mk_ps_ ~info:(Stmt.info_of_loc loc) (PS_copy c') in
+            add_graph_ t ps;
+        end
+      | Env.NoDef ->
+        begin match t.dispatch.do_ty_def with
+          | None -> () (* already defined *)
+          | Some f ->
             let ty = env_info.Env.ty in
             let attrs = env_info.Env.decl_attrs in
             let loc = env_info.Env.loc in
-            self#do_ty_def ?loc ~attrs id ~ty arg
+            let id', ty', attrs' = f t ?loc ~attrs id ~ty arg in
+            let ps = mk_ps_ ~info:(Stmt.info_of_loc loc) (PS_decl (id', ty', attrs')) in
+            add_graph_ t ps;
+        end
 
-    method update_env f = env <- f env
+  (* same as {!do_new_statement_for_id_}, but check if [(id,arg)] has
+     been processed first *)
+  and call_dep t ~depth id arg =
+    if not (has_processed t id arg)
+    then (
+      mark_processed t id arg;
+      do_new_statement_for_id_ t ~depth id arg
+    )
 
-    (* called before {!do_stmt} does the job, but after it registers the
-       statement in {!env} *)
-    method before_do_stmt (_: (term, term, 'inv1) Stmt.t) = ()
+  let create ?(size=64) ?(max_depth=256) ~env ~state ~dispatch () =
+    { dispatch;
+      env;
+      state;
+      max_depth;
+      depth_reached=false;
+      graph=IDArgTbl.create size;
+      by_id=ID.Tbl.create size;
+      new_stmts=PSTbl.create size;
+      res=None;
+    }
 
-    (* translation of toplevel goal or axiom (default is {!do_term}) *)
-    method do_goal_or_axiom
-    : [`Goal | `Axiom] -> term -> term
-    = fun _ t -> self#do_term ~depth:0 t
+  let max_depth_reached t = t.depth_reached
 
-    (* register the statement into the state's [env], so that next statements
-      can refer to it. Some statements are automatically kept (goal and axiom) *)
-    method do_stmt
-    : (term, term, 'inv1) Stmt.t -> unit
-    = fun st ->
-      Utils.debugf ~section 2 "@[<2>enter statement@ `%a`@]"
-        (fun k-> k PStmt.print st);
-      (* process statement *)
-      let info = Stmt.info st in
-      env <- Env.add_statement ~env st;
-      self#before_do_stmt st;
-      (* most basic processing: just traverse the terms to update dependencies *)
-      let tr_term = self#do_term ~depth:0 in
-      let tr_type = tr_term in
-      begin match Stmt.view st with
-      | Stmt.Decl (id,ty,attrs) ->
-          if conf.direct_tydef then
-            let ty = tr_type ty in
-            self#push_res (Stmt.decl ~attrs ~info id ty)
-      | Stmt.Goal g ->
-          (* convert goal *)
-          let g = self#do_goal_or_axiom `Goal g in
-          self#push_res (Stmt.goal ~info g)
-      | Stmt.Axiom (Stmt.Axiom_std l) ->
-          (* keep axioms *)
-          let l = List.map (self#do_goal_or_axiom `Axiom) l in
-          self#push_res (Stmt.axiom ~info l)
-      | Stmt.Pred _
-      | Stmt.Axiom (Stmt.Axiom_rec _) ->
-          () (* only processed if used *)
-      | Stmt.Axiom (Stmt.Axiom_spec l) ->
-          if conf.direct_spec then
-            let l = Stmt.map_spec_defs ~term:tr_term ~ty:tr_type l in
-            self#push_res (Stmt.axiom_spec ~info l)
-      | Stmt.Copy c ->
-          if conf.direct_copy then
-            let c = Stmt.map_copy ~term:tr_term ~ty:tr_type c in
-            self#push_res (Stmt.copy ~info c);
-      | Stmt.TyDef (k, l) ->
-          if conf.direct_tydef then
-            let l = Stmt.map_ty_def ~ty:tr_type l in
-            self#push_res (Stmt.mk_ty_def ~info k l)
-      end
-  end
+  let can_merge_ ps1 ps2 =
+    Utils.debugf ~section 4
+      "can merge `@[%a@]`@ and `@[%a@]`" (fun k->k pp_ps ps1 pp_ps ps2)
+
+  let cannot_merge_ ps1 ps2 =
+    Arg.fail
+      "incompatible statements:@ `@[%a@]`@ and `@[%a@]`"
+      pp_ps ps1 pp_ps ps2
+
+  let merge_into_data k1 ps1 l ps = match ps.ps_view with
+    | PS_data (k2,d2) ->
+      if k1=k2 then (
+        can_merge_ ps1 ps;
+        d2 :: l
+      ) else cannot_merge_ ps1 ps
+    | _ -> cannot_merge_ ps1 ps
+
+  let merge_into_pred wf1 k1 ps1 l ps = match ps.ps_view with
+    | PS_pred (wf2,k2,d2) ->
+      if wf1=wf2 && k1=k2 then (
+        can_merge_ ps1 ps;
+        d2 :: l
+      ) else cannot_merge_ ps1 ps;
+    | _ -> cannot_merge_ ps1 ps
+
+  let merge_into_rec ps1 l ps = match ps.ps_view with
+    | PS_rec r ->
+      can_merge_ ps1 ps;
+      r  :: l
+    | _ -> cannot_merge_ ps1 ps
+
+  (* merge a list of [partial_statement] into one statement, or fail *)
+  let stmt_of_ps_list (l : partial_statement list): (_,_) Stmt.t = match l with
+    | [] -> assert false
+    | {ps_view=PS_data (k1,d1); ps_info=info; _} as ps1 :: tail ->
+      let l = List.fold_left (merge_into_data k1 ps1) [d1] tail in
+      Stmt.mk_ty_def ~info k1 l
+    | {ps_view=PS_pred (wf1,k1,p1); ps_info=info; _} as ps1 :: tail ->
+      let l = List.fold_left (merge_into_pred wf1 k1 ps1) [p1] tail in
+      Stmt.mk_pred ~info ~wf:wf1 k1 l
+    | {ps_view=PS_rec d; ps_info=info; _} as ps1 :: tail ->
+      let l = List.fold_left (merge_into_rec ps1) [d] tail in
+      Stmt.axiom_rec ~info l
+    | [{ps_view=PS_spec s; ps_info=info; _}] ->
+      Stmt.axiom_spec ~info s
+    | [{ps_view=PS_axiom l; ps_info=info; _}] ->
+      Stmt.axiom ~info l
+    | [{ps_view=PS_goal t; ps_info=info; _}] ->
+      Stmt.goal ~info t
+    | [{ps_view=PS_copy c; ps_info=info; _}] ->
+      Stmt.copy ~info c
+    | [{ps_view=PS_decl (id,ty,attrs); ps_info=info; _}] ->
+      Stmt.decl ~info ~attrs id ty
+    | {ps_view=(PS_decl _ | PS_axiom _ | PS_goal _ | PS_copy _ | PS_spec _); _} as ps1 :: ps2 :: _ ->
+      Arg.fail "statement `@[%a@]`@ cannot be mutually recursive with `@[%a@]`"
+        pp_ps ps1 pp_ps ps2
+
+  (* SCC + topo sort of t.graph, output into a vector *)
+  let get_statements_ t : (_,_) Stmt.t CCVector.vector =
+    let find_id_ id =
+      try ID.Tbl.find t.by_id id
+      with Not_found ->
+        Arg.fail "could not find `%a` in new graph" ID.print id
+    in
+    (* instantiate SCC module *)
+    let module Scc = SCC(struct
+        type t = partial_statement
+        module Tbl = PSTbl
+        let deps ps =
+          deps_of_ps ps
+          |> Sequence.map find_id_
+      end)
+    in
+    (* traverse the SCC *)
+    let res =
+      PSTbl.to_seq t.new_stmts
+      |> Sequence.map fst
+      |> Scc.explore
+      |> Sequence.map stmt_of_ps_list
+      |> CCVector.of_seq ?init:None
+    in
+    (* return result *)
+    res
+
+  (* cached version of {!get_statements_} *)
+  let get_statements t = match t.res with
+    | Some r -> r
+    | None ->
+      let res = get_statements_ t in
+      t.res <- Some res;
+      res
 end

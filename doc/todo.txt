@@ -12,15 +12,11 @@
 2015-11-16 simple narrowing without caching p:1 @feature
 2015-11-16 narrowing id:1 @feature
 (B) 2015-11-17 simple S-expr format from/to TermTyped @feature
-(B) 2015-12-02 printer: have binding power argument to put ( ) properly @cleanup
 (B) 2015-12-22 optional: simplifications  t = (ite a b c) → ite a (t=b)(t=c) @cleanup
 2016-01-06 make And/Or parametrized builtins @design
 (B) 2016-01-18 deal with empty sorts
 (B) 2016-01-21 compute type cardinalities to approximate exists/forall with top/bot in non polarized cases
-(A) 2016-04-14 do not propagate incompleteness flags, just change result back?
 (A) 2016-05-10 fix ElimTypes (for copy/spec statements); fix decoding
-(A) 2016-05-26 fix model parsing for paradox (see spec_inval_def2.nun)
 (A) 2016-06-01 decode models in ElimCopy (insert casts, change types)
 (A) 2016-06-01 repair, in ElimCopy, rec/pred statements (adjust num. of variables)
-(A) 2016-06-06 system of dependencies for passes (checked at pipeline-build time); replace old GADT
-(A) 2016-06-06 pass to eliminate predicate arguments (using pseudo-prop type + ite)
+(A) 2016-06-13 refactor Stmt to use `defined` more; also rename "tydef" into "data"

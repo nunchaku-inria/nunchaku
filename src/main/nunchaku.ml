@@ -66,6 +66,7 @@ let print_elim_ite_ = ref false
 let print_elim_prop_args_ = ref false
 let print_elim_types_ = ref false
 let print_fo_ = ref false
+let print_fo_to_rel_ = ref false
 let print_smt_ = ref false
 let print_raw_model_ = ref false
 let print_model_ = ref false
@@ -166,6 +167,7 @@ let options =
   ; "--print-" ^ Tr.ElimTypes.name, Arg.Set print_elim_types_,
       " print input after elimination of types"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
+  ; "--print-fo-to-rel", Arg.Set print_fo_to_rel_, " print first-order relational problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
@@ -280,6 +282,17 @@ let make_paradox () =
     @@@ id
   else fail
 
+let make_kodkod () =
+  let open Transform.Pipe in
+  if List.mem S_kodkod !solvers && Backends.Kodkod.is_available ()
+  then
+    Backends.Kodkod.pipe
+      ~print:!print_all_
+      ~print_model:(!print_all_ || !print_raw_model_)
+      ()
+    @@@ id
+  else fail
+
 (* build a pipeline, depending on options *)
 let make_model_pipeline () =
   let open Transform.Pipe in
@@ -289,6 +302,7 @@ let make_model_pipeline () =
   (* solvers *)
   let cvc4 = make_cvc4 ~j:!j () in
   let paradox = make_paradox () in
+  let kodkod = make_kodkod () in
   let pipe =
     Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
     Step_conv_ty.pipe () @@@
@@ -314,9 +328,9 @@ let make_model_pipeline () =
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
     fork
       (
-        Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
         Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
         Tr.ElimData.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
         Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
@@ -324,40 +338,44 @@ let make_model_pipeline () =
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
         Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
         Tr.Elim_prop_args.pipe ~print:(!print_elim_prop_args_ || !print_all_) ~check @@@
-        Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
-        Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
-        close_task (
-          Step_tofo.pipe ~print:!print_all_ () @@@
-          Tr.Elim_ite.pipe ~print:(!print_elim_ite_ || !print_all_) @@@
-          FO.pipe_tptp @@@
-          paradox
-        ))
-      (
-        Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-        Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+        fork
+        ( 
+          Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
+          Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
+          close_task (
+            Step_tofo.pipe ~print:!print_all_ () @@@
+            Tr.Elim_ite.pipe ~print:(!print_elim_ite_ || !print_all_) @@@
+            FO.pipe_tptp @@@
+            paradox
+          )
+        )
+        (
+          Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
+          close_task (
+            Step_tofo.pipe ~print:!print_all_ () @@@
+            Tr.FoToRelational.pipe ~print:(!print_fo_to_rel_ || !print_all_) @@@
+            kodkod
+          ))
+      )
+      ( Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
         Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
         Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
         Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
-        Tr.Model_rename.pipe_rename ~print:(!print_model_ || !print_all_) @@@
+        Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
         close_task (
           Step_tofo.pipe ~print:!print_all_ () @@@
           Transform.Pipe.flatten cvc4
-        ))
+        )
+      )
   in
   pipe
 
-(* run the pipeline on this problem, then run tasks, and return the
-   result *)
-let run_tasks ~j ~deadline pipe pb =
+(* TODO: if list of tasks is empty, return UNKNOWN *)
+
+let process_res_ r =
   let module Res = Problem.Res in
-  let tasks =
-    Transform.run ~pipe pb
-    |> Lazy_list.map ~f:(fun (task,ret) -> Scheduling.Task.map ~f:ret task)
-    |> Lazy_list.to_list
-  in
-  let res = Scheduling.run ~j ~deadline tasks in
-  match res with
+  match r with
   | Scheduling.Res_fail e -> E.fail (Printexc.to_string e)
   | Scheduling.Res_list [] -> E.fail "no task succeeded"
   | Scheduling.Res_list l ->
@@ -370,6 +388,21 @@ let run_tasks ~j ~deadline pipe pb =
     let res = if List.mem Res.Timeout l then Res.Timeout else Res.Unknown in
     E.return res
   | Scheduling.Res_one r -> E.return r
+
+(* run the pipeline on this problem, then run tasks, and return the
+   result *)
+let run_tasks ~j ~deadline pipe pb =
+  let module Res = Problem.Res in
+  let tasks =
+    Transform.run ~pipe pb
+    |> Lazy_list.map ~f:(fun (task,ret) -> Scheduling.Task.map ~f:ret task)
+    |> Lazy_list.to_list
+  in
+  match tasks with
+    | [] -> E.return Res.Unknown
+    | _::_ ->
+      let res = Scheduling.run ~j ~deadline tasks in
+      process_res_ res
 
 (* negate the goal *)
 let negate_goal stmts =
@@ -394,8 +427,8 @@ let main_model ~output statements =
   let module Res = Problem.Res in
   (* run pipeline *)
   let pipe = make_model_pipeline() in
-  if !print_pipeline_
-    then Format.printf "@[Pipeline: %a@]@." Transform.Pipe.print pipe;
+  Transform.Pipe.check pipe;
+  assert (not !print_pipeline_);
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   run_tasks ~j:!j ~deadline pipe statements
   >|= fun res ->
@@ -433,6 +466,7 @@ let main () =
   if !print_pipeline_ then (
     let pipe = make_model_pipeline() in
     Format.printf "@[Pipeline: %a@]@." Transform.Pipe.print pipe;
+    Transform.Pipe.check pipe;
     exit 0
   );
   (* parse *)

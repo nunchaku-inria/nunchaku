@@ -18,8 +18,6 @@ module M = Model
 let name = "elim_types"
 let section = Utils.Section.make name
 
-type inv = <eqn:[`Absent]; ty:[`Mono]; ind_preds:[`Absent]>
-
 type error = string
 exception Error of error
 let () = Printexc.register_printer
@@ -40,7 +38,7 @@ type state = {
     (* parametrized ty *)
   sigma: T.t Signature.t;
     (* signature, for decoding purpose *)
-  new_decls: (T.t, T.t, inv) Statement.t CCVector.vector;
+  new_decls: (T.t, T.t) Statement.t CCVector.vector;
     (* new declarations *)
 }
 
@@ -105,14 +103,7 @@ let rec encode_ty state ~top x t = match Ty.repr t with
     U.ty_unitype
 
 (* mangle the type into a valid identifier *)
-let rec mangle_ty_ out t = match Ty.repr t with
-  | TyI.Builtin b -> CCFormat.string out (TyI.Builtin.to_string b)
-  | TyI.Arrow _ -> assert false
-  | TyI.Const id -> ID.print_name out id
-  | TyI.App (_,[]) -> assert false
-  | TyI.App (a,l) ->
-    Format.fprintf out "%a_%a"
-      mangle_ty_ a (CCFormat.list ~start:"" ~stop:"" ~sep:"_" mangle_ty_) l
+let mangle_ty_ = Ty.mangle ~sep:"_"
 
 (* add binding [ty -> pred] *)
 let add_pred_ state ty pred =
@@ -152,7 +143,7 @@ let map_to_predicate state ty =
           if not (ID.Tbl.mem state.parametrized_ty id)
           then errorf_ "type constructor `%a`/%d has not been declared" ID.print id n;
           (* find name *)
-          let name = ID.make_f "@[<h>is_%a@]" mangle_ty_ ty in
+          let name = ID.make_f "@[<h>is_%s@]" (mangle_ty_ ty) in
           add_pred_ state ty name;
           Some name
     end
@@ -168,7 +159,7 @@ let ensure_maps_to_predicate state ty =
   aux ret;
   ()
 
-let encode_stmt_ state st : (_,_,_) Stmt.t list =
+let encode_stmt_ state st : (_,_) Stmt.t list =
   let info = Stmt.info st in
   match Stmt.view st with
   | Stmt.Decl (id, ty, attrs) when U.ty_returns_Type ty ->
@@ -251,10 +242,14 @@ let encode_stmt state st =
   CCVector.clear state.new_decls;
   res
 
+(* TODO: more accurate spec *)
 let transform_pb pb =
   let sigma = Problem.signature pb in
   let state = create_state ~sigma () in
-  let pb' = Problem.flat_map_statements pb ~f:(encode_stmt state) in
+  let pb' =
+    Problem.flat_map_statements pb
+      ~f:(encode_stmt state)
+  in
   pb', state
 
 (** {2 Decoding} *)
@@ -305,7 +300,7 @@ let rebuild_types state m : retyping =
         in
         let map =
           List.mapi
-            (fun i c -> c, ID.make_f "$%a_%d" mangle_ty_ ty i)
+            (fun i c -> c, ID.make_f "$%s_%d" (mangle_ty_ ty) i)
             uni_domain_sub
           |> ID.Map.of_list
         in
@@ -492,11 +487,15 @@ let pipe_with ?on_decoded ~decode ~print ~check =
     @
     Utils.singleton_if check () ~f:(fun () ->
       let module C = TypeCheck.Make(T) in
-      C.check_problem ?env:None)
+      C.empty () |> C.check_problem)
   in
   Transform.make
     ~name
     ?on_decoded
+    ~input_spec:Transform.Features.(of_list
+          [Ty, Mono; Fun, Absent; Match, Absent; Ind_preds, Absent
+          ])
+    ~map_spec:Transform.Features.(update Ty Absent)
     ~on_encoded
     ~encode:transform_pb
     ~decode

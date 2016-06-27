@@ -23,9 +23,6 @@ module T = TermInner.Default
 
 (* TODO: if depth limit reached, activate some "spuriousness" flag? *)
 
-type ('a,'b) inv1 = <ty:[`Poly]; eqn:'a; ind_preds:'b>
-type ('a,'b) inv2 = <ty:[`Mono]; eqn:'a; ind_preds:'b>
-
 val name : string
 
 exception InvalidProblem of string
@@ -37,8 +34,8 @@ type unmangle_state
 
 val monomorphize :
   ?depth_limit:int ->
-  (term, term, ('a,'b) inv1) Problem.t ->
-  (term, term, ('a,'b) inv2) Problem.t * unmangle_state
+  (term, term) Problem.t ->
+  (term, term) Problem.t * unmangle_state
 (** Filter and specialize definitions of the problem.
 
     First it finds a set of instances for each symbol
@@ -65,8 +62,8 @@ val unmangle_model :
 val pipe :
   print:bool ->
   check:bool ->
-  ((term, term, ('a,'b) inv1) Problem.t,
-   (term, term, ('a,'b) inv2) Problem.t,
+  ((term, term) Problem.t,
+   (term, term) Problem.t,
     (term,term) Problem.Res.t, (term,term) Problem.Res.t
   ) Transform.t
 (** Pipeline component *)
@@ -75,8 +72,8 @@ val pipe_with :
   decode:(unmangle_state -> 'c -> 'd) ->
   print:bool ->
   check:bool ->
-  ((term, term, ('a,'b) inv1) Problem.t,
-   (term, term, ('a,'b) inv2) Problem.t, 'c, 'd
+  ((term, term) Problem.t,
+   (term, term) Problem.t, 'c, 'd
   ) Transform.t
 (** Generic Pipe Component
     @param decode the decode function that takes an applied [(module S)]

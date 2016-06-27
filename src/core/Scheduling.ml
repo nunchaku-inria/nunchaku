@@ -214,6 +214,9 @@ let popen ?(on_res=[]) cmd ~f =
   let stdout, p_stdout = Unix.pipe () in
   let stderr, p_stderr = Unix.pipe () in
   let p_stdin, stdin = Unix.pipe () in
+  Unix.set_close_on_exec stdout;
+  Unix.set_close_on_exec stderr;
+  Unix.set_close_on_exec stdin;
   let stdout = Unix.in_channel_of_descr stdout in
   let stdin = Unix.out_channel_of_descr stdin in
   let pid = Unix.create_process

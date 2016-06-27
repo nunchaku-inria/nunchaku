@@ -22,7 +22,7 @@ module TyBuiltin : sig
     ]
   val equal : t -> t -> bool
   val compare : t -> t -> int
-  val print : Format.formatter -> t -> unit
+  val print : t printer
 end
 
 module Builtin : sig
@@ -31,7 +31,7 @@ module Builtin : sig
     ]
   val equal : t -> t -> bool
   val compare : t -> t -> int
-  val print : Format.formatter -> t -> unit
+  val print : t printer
 end
 
 (** Term *)
@@ -108,6 +108,7 @@ module Ty : sig
 
   val equal : t -> t -> bool
   val compare : t -> t -> int
+  val hash : t -> int
 end
 
 module T : sig

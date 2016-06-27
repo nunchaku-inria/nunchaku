@@ -109,6 +109,8 @@ atomic_form:
     { A.atom t }
   | t=term EQUIV FALSE
     { A.not_ (A.atom t) }
+  | t=term EQUIV u=term
+    { A.equiv t u }
   | TRUE { A.true_ }
   | FALSE { A.false_ }
   | error
@@ -119,13 +121,17 @@ atom:
   | f=atomic_form { f }
   | LEFT_PAREN f=atom RIGHT_PAREN { f }
   | NOT f=atom { A.not_ f }
+  | FORALL LEFT_BRACKET v=var RIGHT_BRACKET COLON f=atom
+    { A.forall v f }
 
 %inline forall_vars:
   | FORALL LEFT_BRACKET l=separated_nonempty_list(COMMA,var) RIGHT_BRACKET COLON { l }
 
 equation:
+  | FORALL LEFT_BRACKET v=var RIGHT_BRACKET COLON e=equation
+    { A.forall v e }
   | LEFT_PAREN e=equation RIGHT_PAREN { e }
-  | l=term EQUAL r=term { l, r }
+  | l=term EQUAL r=term { A.eq l r }
 
 equations:
   | LEFT_PAREN l=equations RIGHT_PAREN { l }

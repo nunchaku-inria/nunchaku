@@ -189,8 +189,7 @@ module ToFO(T : TI.S) = struct
     conv_term ~sigma f
 
   let convert_eqns
-  : type inv.
-    head:id -> sigma:T.t Sig.t -> (T.t,T.t,inv) Statement.equations -> FO.T.t list
+  : head:id -> sigma:T.t Sig.t -> (T.t,T.t) Statement.equations -> FO.T.t list
   = fun ~head ~sigma eqns ->
     let module St = Statement in
     let conv_eqn (vars, args, rhs, side) =
@@ -247,6 +246,7 @@ module ToFO(T : TI.S) = struct
               | St.Attr_card_min n -> Some (FO.CardBound (id, `Min, n))
               | St.Attr_infinite ->
                 failf "@[<2>infinite type `%a`@ should have been eliminated@]" ID.print id
+              | St.Attr_card_hint _
               | St.Attr_finite_approx _
               | St.Attr_infinite_upcast
               | St.Attr_abstract
