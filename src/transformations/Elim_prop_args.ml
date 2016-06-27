@@ -209,12 +209,42 @@ let transform_problem pb =
 
 (** {2 Decoding} *)
 
-(* decoding terms: just collapse pseudo-prop into prop *)
-let decode_term state t =
-  let rec aux t = match T.repr t with
-    | TI.Const id when ID.equal id state.true_ -> U.true_
-    | TI.Const id when ID.equal id state.false_ -> U.false_
-    | TI.Const id when ID.equal id state.pseudo_prop -> U.ty_prop
+type rewrite = {
+  rw_true: ID.t;
+  rw_false: ID.t;
+}
+
+let find_rewrite state m : rewrite option =
+  let id_true, id_false =
+    Model.fold (None,None) m
+      ~constants:(fun (id_true,id_false) (t,u,_) ->
+        match T.repr t, T.repr u with
+          | TI.Const id, TI.Const id' when ID.equal id state.true_ ->
+            assert (id_true = None);
+            Some id', id_false
+          | TI.Const id, TI.Const id' when ID.equal id state.false_ ->
+            assert (id_false = None);
+            id_true, Some id'
+          | _ -> id_true, id_false)
+  in
+  match id_true, id_false with
+    | None, None -> None
+    | Some id1, Some id2 -> Some { rw_true=id1; rw_false=id2; }
+    | Some _, None
+    | None, Some _ ->
+      failwith
+        "elim_prop_args: model contains one of true_,false_ but not both"
+
+(* decoding terms:
+   - find constants corresponding to pseudo-prop true and false
+   - collapse pseudo-prop into prop *)
+let decode_term state rw t =
+  let rec aux t = match T.repr t, rw with
+    | TI.Const id, _ when ID.equal id state.true_ -> U.true_
+    | TI.Const id, _ when ID.equal id state.false_ -> U.false_
+    | TI.Const id, _ when ID.equal id state.pseudo_prop -> U.ty_prop
+    | TI.Const id, Some rw when ID.equal id rw.rw_true -> U.true_
+    | TI.Const id, Some rw when ID.equal id rw.rw_false -> U.false_
     | _ ->
       U.map () t
         ~bind:(fun () v -> (), v)
@@ -223,7 +253,8 @@ let decode_term state t =
   aux t
 
 let decode_model state m =
-  let tr_term = decode_term state in
+  let rw = find_rewrite state m in
+  let tr_term = decode_term state rw in
   Model.filter_map m
     ~finite_types:(fun (ty,dom) -> match T.repr ty with
       | TI.Const id when ID.equal id state.pseudo_prop -> None
