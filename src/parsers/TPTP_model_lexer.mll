@@ -40,7 +40,7 @@ let upper_alpha = ['A' - 'Z']
 let alpha_numeric = lower_alpha | upper_alpha | numeric | '_'
 
 let upper_word = upper_alpha alpha_numeric*
-let lower_word = lower_alpha alpha_numeric*
+let lower_word = (lower_alpha | '_') alpha_numeric*
 let dollar_word = '$' lower_word
 
 rule token = parse
