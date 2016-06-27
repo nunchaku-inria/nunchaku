@@ -100,6 +100,8 @@ module Builtin = struct
     ]
 
   let prec : _ t -> prec = function
+    | `True
+    | `False
     | `Undefined_atom _ -> P_bot
     | `Eq _ -> P_eq
     | `Not _ -> P_not
