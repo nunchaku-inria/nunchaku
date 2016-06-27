@@ -31,7 +31,7 @@ let failf msg = Utils.exn_ksprintf ~f:fail_ msg
 type decode_state = unit
 
 type state = {
-  to_approx: ID.t option ID.Map.t; (* infinite type -> its approximation *)
+  to_approx: ID.t ID.Map.t; (* infinite type -> its approximation *)
   upcast: ID.Set.t; (* upcast functions *)
   mutable incomplete: bool; (* approximation? *)
 }
@@ -59,7 +59,12 @@ let find_types_st (map,set) st = match Stmt.view st with
       | None -> map, set
       | Some id' ->
         begin match ID.Map.get id' map with
-          | None -> failf "could not find infinite type `%a`" ID.print id'
+          | None ->
+            (* ignore *)
+            Utils.debugf ~section 3
+              "@[<2>could not find infinite type `%a`@ of which `%a` is an approx@]"
+              (fun k->k ID.print id' ID.print id);
+            map, set
           | Some None -> ID.Map.add id' (Some id) map, set
           | Some (Some id'') ->
             failf "cannot have two approximations `%a` and `%a` for `%a`"
@@ -97,10 +102,7 @@ let rec encode_term st subst pol t = match T.repr t with
   | TI.Const id ->
     begin match ID.Map.get id st.to_approx with
       | None -> t
-      | Some None ->
-        (* TODO: introduce a new approximation? *)
-        failf "universal type `@[%a@]`@ does not have an approximation" ID.print id
-      | Some (Some id') -> U.const id'
+      | Some id' -> U.const id'
     end
   | TI.Bind (`Forall, v, _)
     when ty_is_infinite_ st (Var.ty v) && (pol = Pol.Pos || pol = Pol.NoPol) ->
@@ -148,13 +150,35 @@ let encode_pb pb =
     CCVector.fold find_types_st (ID.Map.empty,ID.Set.empty)
       (Problem.statements pb)
   in
-  let st = {to_approx; upcast=set; incomplete=false; } in
-  let pb' =
-    Problem.flat_map_statements pb ~f:(encode_statement st)
+  (* declare approximation types if needed *)
+  let new_decls, to_approx =
+    ID.Map.fold
+      (fun id opt (decls,approx) ->
+         match opt with
+           | None ->
+             (* declare new approx *)
+             let id' = ID.make_f "alpha_%a" ID.print_name id in
+             let d =
+               Stmt.decl id' U.ty_type
+                 ~info:Stmt.info_default ~attrs:[Stmt.Attr_finite_approx id]
+             in
+             d :: decls, ID.Map.add id id' approx
+           | Some id' -> decls, ID.Map.add id id' approx)
+      to_approx
+      ([], ID.Map.empty)
   in
+  let state = {to_approx; upcast=set; incomplete=false; } in
+  let stmts = CCVector.create() in
+  CCVector.append_list stmts new_decls;
+  CCVector.iter
+    (fun st -> CCVector.append_list stmts (encode_statement state st))
+    (Problem.statements pb);
+  let pb' =
+    CCVector.freeze stmts
+    |> Problem.make ~meta:(Problem.metadata pb) in
   (* might have lost completeness *)
-  if st.incomplete
-  then Problem.set_sat_means_unknown pb'
+  if state.incomplete
+  then Problem.set_unsat_means_unknown pb'
   else pb'
 
 (* TODO: decoding (i.e. return a model for infinite types)? *)
