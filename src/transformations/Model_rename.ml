@@ -9,6 +9,7 @@ module TI = TermInner
 module DT = Model.DT
 module T = TermInner.Default
 module U = T.U
+module P = T.P
 module Ty = TypeMono.Make(T)
 module Red = Reduce.Make(T)
 
@@ -43,6 +44,9 @@ let renaming_rules_of_model_ m =
     ID.Map.empty
     m.Model.finite_types
 
+type rule = ID.t * ID.t
+type rules = ID.t ID.Map.t
+
 let pp_rule_ out (l,r) =
   fpf out "%a → @[%a@]" ID.print l ID.print r
 
@@ -53,7 +57,7 @@ let rename_copy_ subst v =
   Var.Subst.add ~subst v v', v'
 
 (* rewrite [t] using the set of rewrite rules *)
-let rec rewrite_term_ rules subst t =
+let rec rewrite_term_ (rules:rules) subst t =
   match T.repr t with
   | TI.Const id ->
       begin try
@@ -74,7 +78,7 @@ let rec rewrite_term_ rules subst t =
       (* reduce the term *)
       Red.whnf t
 
-let rename m =
+let rename m : _ Model.t =
   let rules = renaming_rules_of_model_ m in
   Utils.debugf 5 ~section "@[<2>apply rewrite rules@ @[<v>%a@]@]"
     (fun k->k (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_rule_) (ID.Map.to_seq rules));
@@ -104,10 +108,46 @@ let rename m =
       m.Model.funs;
   }
 
+module MU = Model.DT_util(T)
+
+(* remove recursion in models *)
+let remove_recursion m : _ Model.t =
+  let rec eval_t t : T.t = match T.repr t with
+    | TI.App(_,[]) -> assert false
+    | TI.App(f, l) ->
+      let l = List.map eval_t l in
+      begin match T.repr f with
+        | TI.Const id ->
+          let res =
+            CCList.find_map
+              (fun (lhs,vars,dt,_) ->
+                 match T.repr lhs with
+                   | TI.Const id' when ID.equal id id' ->
+                     assert (List.length vars=List.length l);
+                     Some (vars,dt)
+                   | _ -> None)
+              m.Model.funs
+          in
+          begin match res with
+            | None -> U.app f l
+            | Some (vars, dt) ->
+              let subst = Var.Subst.of_list vars l in
+              let t' = MU.eval ~subst dt in
+              Utils.debugf ~section 5 "@[<2>eval `@[%a@]`@ into `@[%a@]`@]"
+                (fun k->k P.print t P.print t');
+              eval_t t'
+          end
+        | _ -> U.app f l
+      end
+    | _ -> t
+  in
+  Model.map m ~term:eval_t ~ty:(fun ty->ty)
+
 let pipe_rename ~print:must_print =
   Transform.backward ~name
     (fun res ->
-      let res' = Problem.Res.map_m ~f:rename res in
+      let f m = m |> rename |> remove_recursion in
+      let res' = Problem.Res.map_m ~f res in
       if must_print then (
         let module P = TI.Print(T) in
         Format.printf "@[<v2>@{<Yellow>after model renaming@}:@ %a@]@."
