@@ -67,3 +67,10 @@ x 2016-03-24 2016-03-07 optional type-checking fence after each step
 x 2016-05-17 2016-05-10 fix bug in ElimHOF (need to declare more, earlier for ty_exn to work) --> polarity2
 x 2016-06-08 2016-01-19 µ terms, parse them from CVC4 and deal with them internally
 x 2016-06-13 2016-06-06 system of dependencies for passes (checked at pipeline-build time); replace old GADT
+x 2016-06-27 2016-06-06 pass to eliminate predicate arguments (using pseudo-prop type + ite)
+x 2016-06-27 2016-06-06 system of dependencies for passes (checked at pipeline-build time); replace old GADT
+x 2016-06-27 2015-12-02 printer: have binding power argument to put ( ) properly @cleanup
+x 2016-06-27 2016-05-26 fix model parsing for paradox (see spec_inval_def2.nun)
+x 2016-06-27 2016-06-06 improve Elim_prop_args (type-driven recursive traversal)
+x 2016-06-27 2016-06-13 refine ElimRec to avoid boxing small products of finite types (useful for paradox)
+x 2016-06-27 2016-06-13 ElimData: use asserting for defining cons/nil (see mockup)
