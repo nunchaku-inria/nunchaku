@@ -1,8 +1,7 @@
 # OASIS_START
 # OASIS_STOP
 
-true: use_menhir
-true: safe_string
+true: use_menhir, safe_string, color(always)
 
 <tests> or <tptp>: -traverse
 
