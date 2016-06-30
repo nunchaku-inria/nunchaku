@@ -12,7 +12,7 @@ type atom_name = ID.t
 (* the portion of the universe concerned with this atom name *)
 type sub_universe = {
   su_name: atom_name;
-  su_card: int;
+  su_card: int option; (* might not be fixed yet *)
 }
 
 (* an indexed atom. It lives in the sub-universe of the same name *)
@@ -82,7 +82,10 @@ type decl = {
 }
 
 (** A universe is a list of sub-universes, each with a different name *)
-type universe = sub_universe list
+type universe = {
+  univ_prop: sub_universe; (* a special sub-universe for pseudo-prop *)
+  univ_l: sub_universe list;
+}
 
 type problem = private {
   pb_univ: universe;
@@ -97,7 +100,7 @@ val unop : unop -> expr -> expr
 val binop : binop -> expr -> expr -> expr
 val mult : mult -> expr -> form
 
-val su_make : ID.t -> card:int -> sub_universe
+val su_make : ?card:int -> ID.t -> sub_universe
 val su_equal : sub_universe -> sub_universe -> bool
 val su_hash : sub_universe -> int
 val su_compare : sub_universe -> sub_universe -> int

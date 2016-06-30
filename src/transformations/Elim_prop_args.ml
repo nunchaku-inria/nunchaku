@@ -48,10 +48,14 @@ let create_state ~sigma () =
 let declare_ state : (_,_) Stmt.t list =
   assert (not state.declared);
   state.declared <- true;
-  let mk_decl id ty =
-    Stmt.decl ~info:Stmt.info_default ~attrs:[] id ty
+  let mk_decl ?(attrs=[]) id ty =
+    Stmt.decl ~info:Stmt.info_default ~attrs id ty
   in
-  let decl_ty = mk_decl state.pseudo_prop (U.ty_builtin `Type)
+  let decl_ty =
+    mk_decl
+      ~attrs:[Stmt.Attr_pseudo_prop;
+              Stmt.Attr_card_hint (Cardinality.of_int 2)]
+      state.pseudo_prop (U.ty_builtin `Type)
   and decl_true = mk_decl state.true_ (U.ty_const state.pseudo_prop)
   and decl_false = mk_decl state.false_ (U.ty_const state.pseudo_prop)
   and distinct_ax =

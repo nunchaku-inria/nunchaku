@@ -232,8 +232,15 @@ module ToFO(T : TI.S) = struct
         let st' =
           if U.ty_is_Type ret
           then
+            let attrs' =
+              CCList.filter_map
+                (function
+                  | Statement.Attr_pseudo_prop -> Some FO.Attr_pseudo_prop
+                  | _ -> None)
+                attrs
+            in
             let n = U.ty_num_param ty in
-            FO.TyDecl (id, n)
+            FO.TyDecl (id, n, attrs')
           else
             let ty = conv_top_ty ty in
             FO.Decl (id, ty)
@@ -251,6 +258,7 @@ module ToFO(T : TI.S) = struct
               | St.Attr_infinite_upcast
               | St.Attr_abstract
               | St.Attr_incomplete
+              | St.Attr_pseudo_prop
               | St.Attr_exn _ -> None)
             attrs
         in

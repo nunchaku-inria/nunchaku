@@ -10,7 +10,7 @@ type atom_name = ID.t
 (* the portion of the universe concerned with this atom name *)
 type sub_universe = {
   su_name: atom_name;
-  su_card: int;
+  su_card: int option; (* might not be fixed yet *)
 }
 
 (* an indexed atom. It lives in the sub-universe of the same name *)
@@ -79,7 +79,10 @@ type decl = {
   decl_high: tuple_set; (* higher bound *)
 }
 
-type universe = sub_universe list
+type universe = {
+  univ_prop: sub_universe; (* a special sub-universe for pseudo-prop *)
+  univ_l: sub_universe list;
+}
 
 type problem = {
   pb_univ: universe;
@@ -94,15 +97,18 @@ let unop o a = Unop (o,a)
 let binop o a b = Binop (o,a,b)
 let mult m a = Mult (m,a)
 
-let su_make su_name ~card:su_card =
-  if su_card <= 0 then invalid_arg "su_make";
+let su_make ?card:su_card su_name =
+  begin match su_card with
+    | Some n when n <= 0 -> invalid_arg "su_make"
+    | _ -> ()
+  end;
   { su_name; su_card }
 
 let su_hash s = ID.hash s.su_name
 let su_compare s1 s2 =
   CCOrd.(
     ID.compare s1.su_name s2.su_name
-    <?> (int_, s1.su_card, s2.su_card)
+    <?> (option int_, s1.su_card, s2.su_card)
   )
 let su_equal s1 s2 = su_compare s1 s2 = 0
 
@@ -180,9 +186,11 @@ let print_atom out a =
   fpf out "%a_%d" ID.print_name a.a_sub_universe.su_name a.a_index
 
 let print_sub_universe out s =
-  fpf out "%a_{0..%d}"
-    ID.print_name s.su_name
-    (s.su_card-1)
+  let pp_card out = function
+    | Some n -> Format.fprintf out "{0..%d}" (n-1)
+    | None -> CCFormat.string out "<no card>"
+  in
+  fpf out "%a_%a" ID.print_name s.su_name pp_card s.su_card
 
 let print_tuple out (t:tuple) =
   fpf out "(@[%a@])" (pp_list ~sep:"," print_atom) t
@@ -309,7 +317,8 @@ and print_typed_var out v =
 let print_expr = print_expr_rec P_top
 let print_form = print_form_rec P_top
 
-let print_universe out l =
+let print_universe out u =
+  let l = u.univ_prop :: u.univ_l in
   fpf out "@[%a@]" (pp_list ~sep:" + " print_sub_universe) l
 
 let print_decl out d =

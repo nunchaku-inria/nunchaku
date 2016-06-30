@@ -44,14 +44,14 @@ type fun_encoding = {
 }
 
 type state = {
-  domain_size: int;
-    (* size of domains *)
   mutable domains: domain TyTbl.t;
     (* atomic type -> domain *)
   funs: fun_encoding ID.Tbl.t;
     (* function -> relation *)
   dom_of_id: domain ID.Tbl.t;
     (* domain.dom_id -> domain *)
+  pprop_dom: domain;
+    (* specific domain for pseudo-prop *)
 }
 
 (* declaration of this function/relation *)
@@ -73,13 +73,21 @@ let decl_of_su su : FO_rel.decl =
     decl_high=FO_rel.ts_all su;
   }
 
-let create_state ~size () =
+let create_state () =
+  let pprop_id = ID.make "prop_" in
+  let pprop_ty = FO.Ty.const pprop_id in
+  let pprop_dom = {
+    dom_ty=pprop_ty;
+    dom_id=pprop_id;
+    dom_su=FO_rel.su_make ~card:2 pprop_id;
+  } in
   let state = {
-    domain_size=size;
     domains=TyTbl.create 16;
     funs=ID.Tbl.create 16;
     dom_of_id=ID.Tbl.create 16;
+    pprop_dom;
   } in
+  (* return *)
   state
 
 (* create a new ID that will "stand" for this type *)
@@ -99,18 +107,24 @@ let id_of_ty ty : ID.t =
       ID.make n
 
 (* ensure the type is declared *)
-let declare_ty state (ty:FO.Ty.t) =
+let declare_ty ?card state (ty:FO.Ty.t) =
   if TyTbl.mem state.domains ty
   then errorf "type `@[%a@]` declared twice" FO.print_ty ty;
   (* TODO: handle cardinality constraints *)
   let dom_id = id_of_ty ty in
-  let su = FO_rel.su_make dom_id ~card:state.domain_size in
+  let su = FO_rel.su_make ?card dom_id in
   let dom = { dom_id; dom_ty=ty; dom_su=su; } in
   Utils.debugf ~section 3 "@[<2>declare type %a@ = {@[%a@]}@]"
     (fun k->k FO.print_ty ty FO_rel.print_sub_universe su);
   TyTbl.add state.domains ty dom;
   ID.Tbl.add state.dom_of_id dom_id dom;
   dom
+
+(* [ty] is another pseudo-prop *)
+let add_pseudo_prop state ty : unit =
+  assert (not (TyTbl.mem state.domains ty));
+  TyTbl.add state.domains ty state.pprop_dom;
+  ()
 
 (* type -> its domain *)
 let domain_of_ty state (ty:FO.Ty.t) : domain =
@@ -137,7 +151,7 @@ let app_fun_ id l =
 (* term -> expr *)
 let rec encode_term state t : FO_rel.expr =
   match FO.T.view t with
-    | FO.Builtin _ -> assert false (* TODO *)
+    | FO.Builtin (`Int _) -> assert false (* TODO *)
     | FO.Var v -> FO_rel.var (encode_var state v)
     | FO.App (f,l) ->
       begin match find_fun_ state f with
@@ -241,7 +255,24 @@ and encode_form state t : FO_rel.form =
 and encode_var state v =
   Var.update_ty v ~f:(su_of_ty state)
 
-let encode_statement state st : FO_rel.form option =
+(* an axiom expressing the well-typedness of [f], if needed.
+   For instance, for [cons : i -> list -> list], it will return
+   [forall x:i y:list. some (y · x · cons · list)] *)
+let ty_axiom state (f_id:ID.t) (ty_args : FO.Ty.t list) (ty_ret:FO.Ty.t) : FO_rel.form =
+  assert (not (FO.Ty.is_prop ty_ret));
+  let vars =
+    List.mapi
+      (fun i ty ->
+         let d = domain_of_ty state ty in
+         Var.makef ~ty:d.dom_su "x_%d" i)
+      ty_args
+  in
+  let dom_ret = domain_of_ty state ty_ret in
+  let t_fun = app_fun_ f_id (List.map FO_rel.var vars) in
+  let t_ty = FO_rel.const dom_ret.dom_id in
+  FO_rel.for_all_l vars (FO_rel.in_ t_fun t_ty)
+
+let encode_statement state st : FO_rel.form list =
   let empty_domain = FO_rel.ts_list [] in
   let fun_domain (args:domain list) : FO_rel.tuple_set =
     args
@@ -249,12 +280,28 @@ let encode_statement state st : FO_rel.form option =
     |> FO_rel.ts_product
   in
   match st with
-    | FO.TyDecl _ -> None (* declared when used *)
+    | FO.TyDecl (id, 0, attrs) when List.mem FO.Attr_pseudo_prop attrs ->
+      add_pseudo_prop state (FO.Ty.const id);
+      []
+    | FO.TyDecl _ -> [] (* declared when used *)
     | FO.Decl (id, (ty_args, ty_ret)) ->
       assert (not (fun_is_declared state id));
       (* encoding differs for relations and functions *)
       begin match FO.Ty.view ty_ret with
         | FO.TyBuiltin `Unitype -> assert false
+        | FO.TyBuiltin `Prop when ty_args=[] ->
+          (* nullary predicate -> unary predicate on prop universe *)
+          let fun_low = empty_domain in
+          let fun_high = fun_domain [state.pprop_dom] in
+          let f = {
+            fun_is_pred=true;
+            fun_ty_args=[state.pprop_dom];
+            fun_low;
+            fun_high;
+            fun_ty_ret=ty_ret;
+          } in
+          declare_fun state id f;
+          []
         | FO.TyBuiltin `Prop ->
           (* encode predicate as itself *)
           let fun_ty_args = List.map (domain_of_ty state) ty_args in
@@ -268,7 +315,7 @@ let encode_statement state st : FO_rel.form option =
             fun_ty_ret=ty_ret;
           } in
           declare_fun state id f;
-          None
+          []
         | FO.TyApp _ ->
           (* function: encode as relation whose last argument is the return value *)
           let fun_ty_args =
@@ -285,9 +332,10 @@ let encode_statement state st : FO_rel.form option =
             fun_ty_ret=ty_ret;
           } in
           declare_fun state id f;
-          (* return functionality axiom:
-             [forall vars. one (id vars)] *)
-          let ax =
+          (* return:
+             - functionality axiom: [forall vars. one (id vars)]
+             - typing axiom: [forall vars. (id vars) in ty_ret] *)
+          let ax_functionality =
             let vars =
               List.mapi
                 (fun i ty -> Var.makef ~ty:(su_of_ty state ty) "x_%d" i)
@@ -296,22 +344,26 @@ let encode_statement state st : FO_rel.form option =
             FO_rel.for_all_l vars
               (FO_rel.one
                  (app_fun_ id (List.map FO_rel.var vars)))
+          and ax_typing =
+            ty_axiom state id ty_args ty_ret
           in
           Utils.debugf ~section 3 "@[<2>functionality axiom for %a:@ `@[%a@]`@]"
-            (fun k->k ID.print id FO_rel.print_form ax);
-          Some ax
+            (fun k->k ID.print id FO_rel.print_form ax_functionality);
+          Utils.debugf ~section 3 "@[<2>typing axiom for %a:@ `@[%a@]`@]"
+            (fun k->k ID.print id FO_rel.print_form ax_typing);
+          [ax_functionality; ax_typing]
       end
     | FO.Axiom f
     | FO.Goal f ->
-      Some (encode_form state f)
+      [encode_form state f]
     | FO.MutualTypes (_,_) ->
       errorf "unexpected (co)data@ `@[%a@]`" FO.print_statement st
     | FO.CardBound _ -> assert false (* TODO: merge with TyDecl...? *)
 
 let encode_pb pb =
-  let state = create_state ~size:10 () in
+  let state = create_state () in
   let form =
-    CCVector.filter_map (encode_statement state) (FO.Problem.statements pb)
+    CCVector.flat_map_list (encode_statement state) (FO.Problem.statements pb)
     |> CCVector.to_list
   in
   (* extract declarations: *)
@@ -329,9 +381,15 @@ let encode_pb pb =
   in
   (* the universe *)
   let univ =
-    TyTbl.values state.domains
-    |> Sequence.map (fun d -> d.dom_su)
-    |> Sequence.to_list
+    { FO_rel.
+      univ_prop=state.pprop_dom.dom_su;
+      univ_l=
+        TyTbl.values state.domains
+        |> Sequence.map (fun d -> d.dom_su)
+        |> Sequence.filter
+          (fun su -> not (FO_rel.su_equal state.pprop_dom.dom_su su))
+        |> Sequence.to_list
+    }
   in
   let pb' =
     FO_rel.mk_problem
@@ -343,11 +401,6 @@ let encode_pb pb =
   pb', state
 
 (** {2 Decoding} *)
-
-let atoms_of_su su: FO_rel.atom Sequence.t =
-  let open Sequence.Infix in
-  0 -- (su.FO_rel.su_card-1)
-  |> Sequence.map (fun i -> FO_rel.atom su i)
 
 let rec tuples_of_ts ts: FO_rel.tuple Sequence.t = match ts with
   | FO_rel.TS_list l -> Sequence.of_list l
@@ -361,8 +414,7 @@ let rec tuples_of_ts ts: FO_rel.tuple Sequence.t = match ts with
         aux l' >|= fun tup' -> tup @ tup'
     in
     aux l
-  | FO_rel.TS_all su ->
-    atoms_of_su su |> Sequence.map CCList.return
+  | FO_rel.TS_all _ -> assert false (* should not be in models *)
 
 let atoms_of_ts ts: FO_rel.atom Sequence.t =
   tuples_of_ts ts |> Sequence.flat_map Sequence.of_list
@@ -382,7 +434,13 @@ module AM = CCMap.Make(struct
 let rename_atoms m: ID.t AM.t =
   atoms_of_model m
   |> Sequence.sort_uniq ~cmp:FO_rel.atom_cmp
-  |> Sequence.mapi (fun i a -> a, ID.make_f "atom_%d" i)
+  |> Sequence.map
+    (fun a ->
+       let open FO_rel in
+       let id =
+         ID.make_f "%a_%d" ID.print_name a.a_sub_universe.su_name a.a_index
+       in
+       a, id)
   |> AM.of_seq
 
 let id_of_atom_ map a : ID.t =
@@ -474,14 +532,7 @@ let decode_fun_ map m id (fe:fun_encoding) (set:FO_rel.tuple_set) : model1 =
    in [dom] *)
 let rec decode_dom_ map m id (dom:domain) (set:FO_rel.tuple_set) : model1 =
   match set with
-    | FO_rel.TS_all su ->
-      assert (FO_rel.su_equal su dom.dom_su);
-      let l =
-        atoms_of_su su
-        |> Sequence.map (id_of_atom_ map)
-        |> Sequence.to_rev_list
-      in
-      M.add_finite_type m dom.dom_ty l
+    | FO_rel.TS_all _ -> assert false (* not in models *)
     | FO_rel.TS_list tups ->
       let l =
         List.map
@@ -511,7 +562,10 @@ let decode_constants_ state (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t =
           | None ->
             begin match ID.Tbl.get state.dom_of_id id with
               | Some dom -> decode_dom_ map m id dom set
-              | None -> errorf "`%a` is neither a function nor a type" ID.print id
+              | None ->
+                if ID.equal id state.pprop_dom.dom_id
+                then m (* ignore the pseudo-prop type *)
+                else errorf "`%a` is neither a function nor a type" ID.print id
             end
         end
       | _ -> assert false)

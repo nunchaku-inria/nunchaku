@@ -108,6 +108,7 @@ type decl_attr =
   | Attr_infinite (** infinite uninterpreted type *)
   | Attr_finite_approx of ID.t (** finite approximation of an infinite type *)
   | Attr_infinite_upcast (** cast finite approx to infinite type *)
+  | Attr_pseudo_prop (** encoding of [prop] *)
   | Attr_exn of exn (** open case *)
 
 type (+'term, +'ty) view =
@@ -475,6 +476,7 @@ let print_attr out = function
   | Attr_infinite -> CCFormat.string out "infinite"
   | Attr_finite_approx id -> fpf out "approx_of %a" ID.print id
   | Attr_infinite_upcast -> CCFormat.string out "upcast"
+  | Attr_pseudo_prop -> CCFormat.string out "pseudo_prop"
   | Attr_exn e -> CCFormat.string out (Printexc.to_string e)
 
 let print_attrs out = function

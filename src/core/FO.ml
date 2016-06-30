@@ -81,9 +81,12 @@ type 'ty mutual_types = {
   tys_defs : 'ty tydef list;
 }
 
+type attr =
+  | Attr_pseudo_prop
+
 (** Statement *)
 type ('t, 'ty) statement =
-  | TyDecl of id * int  (** number of arguments *)
+  | TyDecl of id * int * attr list (** number of arguments *)
   | Decl of id * 'ty toplevel_ty
   | Axiom of 't
   | CardBound of id * [`Max | `Min] * int (** cardinality bound *)
@@ -121,7 +124,7 @@ module Ty = struct
     | TyBuiltin _, _ -> Pervasives.compare (to_int_ t1.view) (to_int_ t2.view)
 
   let hash t = match t.view with
-    | TyBuiltin b -> 3
+    | TyBuiltin _ -> 3
     | TyApp (id, _) -> ID.hash id
 
   let compare = compare_ty
@@ -278,9 +281,16 @@ let print_model out m =
   fpf out "@[model {@,@[<hv>%a@]}@]"
     (CCFormat.list ~start:"" ~stop:"" ~sep:","  pp_pair) m
 
+let print_attr out = function
+  | Attr_pseudo_prop -> fpf out "pseudo_prop"
+
+let print_attrs out = function
+  | [] -> ()
+  | l -> fpf out " [@[%a@]]" (pp_list_ ~sep:"," print_attr) l
+
 let print_statement out s = match s with
-  | TyDecl (id, n) ->
-    fpf out "@[<2>type %a (arity %d).@]" ID.print id n
+  | TyDecl (id, n, attrs) ->
+    fpf out "@[<2>type %a (arity %d%a).@]" ID.print id n print_attrs attrs
   | Decl (v, ty) ->
     fpf out "@[<2>val %a@ : %a.@]" ID.print v print_toplevel_ty ty
   | Axiom t -> fpf out "@[<2>axiom %a.@]" print_term t
@@ -479,7 +489,7 @@ module Util = struct
   let problem_kinds pb =
     let module M = Model in
     let add_stmt m = function
-      | TyDecl (id, _) -> ID.Map.add id M.Symbol_utype m
+      | TyDecl (id, _, _) -> ID.Map.add id M.Symbol_utype m
       | Decl (id, (_, ret)) ->
           let k = match Ty.view ret with
             | TyBuiltin `Prop -> M.Symbol_prop

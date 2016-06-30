@@ -105,6 +105,7 @@ type decl_attr =
   | Attr_infinite (** infinite uninterpreted type *)
   | Attr_finite_approx of ID.t (** finite approximation of an infinite type *)
   | Attr_infinite_upcast (** cast finite approx to infinite type *)
+  | Attr_pseudo_prop (** encoding of [prop] *)
   | Attr_exn of exn (** open case *)
 
 type (+'term, +'ty) view =

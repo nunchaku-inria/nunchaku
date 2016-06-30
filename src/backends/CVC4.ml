@@ -322,7 +322,7 @@ let print_problem out (decode, pb) =
           Var.print_full v print_ty (Var.ty v) print_term f
 
   and print_statement out = function
-    | FO.TyDecl (id,arity) ->
+    | FO.TyDecl (id,arity,_) ->
         fpf out "(@[declare-sort@ %a@ %d@])" print_id id arity
     | FO.Decl (v,ty) ->
         fpf out "(@[<2>declare-fun@ %a@ %a@])"
@@ -749,7 +749,7 @@ let preprocess pb : processed_problem =
           (* if args contains composite types, add witnesses for them *)
           add_ty_witnesses stmt args
       | FO.CardBound (id,_,_)
-      | FO.TyDecl (id,0) ->
+      | FO.TyDecl (id,0,_) ->
           add_ty_witnesses stmt [gty_const id]
       | FO.MutualTypes (`Codata, l) ->
           List.iter

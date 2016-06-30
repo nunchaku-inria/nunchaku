@@ -82,9 +82,12 @@ type 'ty mutual_types = {
   tys_defs : 'ty tydef list;
 }
 
+type attr =
+  | Attr_pseudo_prop
+
 (** Statement *)
 type ('t, 'ty) statement =
-  | TyDecl of id * int  (** number of arguments *)
+  | TyDecl of id * int * attr list (** number of arguments *)
   | Decl of id * 'ty toplevel_ty
   | Axiom of 't
   | CardBound of id * [`Max | `Min] * int (** cardinality bound *)
