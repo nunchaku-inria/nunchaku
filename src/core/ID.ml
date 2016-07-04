@@ -15,6 +15,7 @@ let make_full =
   fun ?(pol=Polarity.NoPol) ~needs_at name ->
     if name="" then invalid_arg "ID.make";
     let id = !n in
+    if id < 0 then failwith "id counter overflow";
     incr n;
     {name; id; needs_at; pol; }
 
