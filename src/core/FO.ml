@@ -83,11 +83,12 @@ type 'ty mutual_types = {
 
 type attr =
   | Attr_pseudo_prop
+  | Attr_pseudo_true
 
 (** Statement *)
 type ('t, 'ty) statement =
   | TyDecl of id * int * attr list (** number of arguments *)
-  | Decl of id * 'ty toplevel_ty
+  | Decl of id * 'ty toplevel_ty * attr list
   | Axiom of 't
   | CardBound of id * [`Max | `Min] * int (** cardinality bound *)
   | MutualTypes of [`Data | `Codata] * 'ty mutual_types
@@ -283,6 +284,7 @@ let print_model out m =
 
 let print_attr out = function
   | Attr_pseudo_prop -> fpf out "pseudo_prop"
+  | Attr_pseudo_true -> fpf out "pseudo_true"
 
 let print_attrs out = function
   | [] -> ()
@@ -291,8 +293,8 @@ let print_attrs out = function
 let print_statement out s = match s with
   | TyDecl (id, n, attrs) ->
     fpf out "@[<2>type %a (arity %d%a).@]" ID.print id n print_attrs attrs
-  | Decl (v, ty) ->
-    fpf out "@[<2>val %a@ : %a.@]" ID.print v print_toplevel_ty ty
+  | Decl (v, ty, attrs) ->
+    fpf out "@[<2>val %a@ : %a%a.@]" ID.print v print_toplevel_ty ty print_attrs attrs
   | Axiom t -> fpf out "@[<2>axiom %a.@]" print_term t
   | CardBound (ty_id, which, n) ->
     let s = match which with `Max -> "max_card" | `Min -> "min_card" in
@@ -490,7 +492,7 @@ module Util = struct
     let module M = Model in
     let add_stmt m = function
       | TyDecl (id, _, _) -> ID.Map.add id M.Symbol_utype m
-      | Decl (id, (_, ret)) ->
+      | Decl (id, (_, ret), _) ->
           let k = match Ty.view ret with
             | TyBuiltin `Prop -> M.Symbol_prop
             | TyBuiltin `Unitype

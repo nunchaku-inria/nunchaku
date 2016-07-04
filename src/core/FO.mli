@@ -84,11 +84,12 @@ type 'ty mutual_types = {
 
 type attr =
   | Attr_pseudo_prop
+  | Attr_pseudo_true
 
 (** Statement *)
 type ('t, 'ty) statement =
   | TyDecl of id * int * attr list (** number of arguments *)
-  | Decl of id * 'ty toplevel_ty
+  | Decl of id * 'ty toplevel_ty * attr list
   | Axiom of 't
   | CardBound of id * [`Max | `Min] * int (** cardinality bound *)
   | MutualTypes of [`Data | `Codata] * 'ty mutual_types

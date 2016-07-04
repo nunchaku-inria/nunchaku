@@ -52,6 +52,8 @@ type state = {
     (* domain.dom_id -> domain *)
   pprop_dom: domain;
     (* specific domain for pseudo-prop *)
+  ptrue: ID.t;
+    (* pseudo-true : pseudo-prop *)
 }
 
 (* declaration of this function/relation *)
@@ -74,7 +76,8 @@ let decl_of_su su : FO_rel.decl =
   }
 
 let create_state () =
-  let pprop_id = ID.make "prop_" in
+  let pprop_id = ID.make "pseudo-prop" in
+  let ptrue = ID.make "pseudo-true" in
   let pprop_ty = FO.Ty.const pprop_id in
   let pprop_dom = {
     dom_ty=pprop_ty;
@@ -86,7 +89,17 @@ let create_state () =
     funs=ID.Tbl.create 16;
     dom_of_id=ID.Tbl.create 16;
     pprop_dom;
+    ptrue;
   } in
+  (* declare ptrue *)
+  let ptrue_fe = {
+    fun_is_pred=false;
+    fun_ty_args=[pprop_dom];
+    fun_low=FO_rel.ts_list [];
+    fun_high=FO_rel.ts_all pprop_dom.dom_su;
+    fun_ty_ret=pprop_ty;
+  } in
+  ID.Tbl.add state.funs ptrue ptrue_fe;
   (* return *)
   state
 
@@ -230,8 +243,8 @@ and encode_form state t : FO_rel.form =
           let l = List.map (encode_term state) l in
           begin match List.rev l with
             | [] ->
-              (* [pred] becomes [some pred] *)
-              FO_rel.some (FO_rel.const f)
+              (* nullary predicate: [pred] becomes [pred = ptrue_] *)
+              FO_rel.eq (FO_rel.const f) (FO_rel.const state.ptrue)
             | last :: args ->
               (* [pred a b c] becomes [c in (b · (a · pred))];
                  here we remove the last argument *)
@@ -284,18 +297,31 @@ let encode_statement state st : FO_rel.form list =
       add_pseudo_prop state (FO.Ty.const id);
       []
     | FO.TyDecl _ -> [] (* declared when used *)
-    | FO.Decl (id, (ty_args, ty_ret)) ->
+    | FO.Decl (id, ([], _), attrs) when List.mem FO.Attr_pseudo_true attrs ->
+      (* another pseudo-true *)
+      let fe = {
+        fun_is_pred=false;
+        fun_ty_args=[state.pprop_dom];
+        fun_low=FO_rel.ts_list [];
+        fun_high=FO_rel.ts_all state.pprop_dom.dom_su;
+        fun_ty_ret=state.pprop_dom.dom_ty;
+      } in
+      declare_fun state id fe;
+      (* additional axiom: [id = true_] *)
+      let ax = FO_rel.eq (FO_rel.const id) (FO_rel.const state.ptrue) in
+      [ax]
+    | FO.Decl (id, (ty_args, ty_ret), _) ->
       assert (not (fun_is_declared state id));
       (* encoding differs for relations and functions *)
       begin match FO.Ty.view ty_ret with
         | FO.TyBuiltin `Unitype -> assert false
         | FO.TyBuiltin `Prop when ty_args=[] ->
-          (* nullary predicate -> unary predicate on prop universe *)
+          (* nullary predicate -> unary predicate on pseudo-prop universe *)
           let fun_low = empty_domain in
           let fun_high = fun_domain [state.pprop_dom] in
           let f = {
             fun_is_pred=true;
-            fun_ty_args=[state.pprop_dom];
+            fun_ty_args=[];
             fun_low;
             fun_high;
             fun_ty_ret=ty_ret;
@@ -366,6 +392,8 @@ let encode_pb pb =
     CCVector.flat_map_list (encode_statement state) (FO.Problem.statements pb)
     |> CCVector.to_list
   in
+  (* axiom for ptrue: [one ptrue] *)
+  let form = FO_rel.one (FO_rel.const state.ptrue) :: form in
   (* extract declarations: *)
   let decls =
     let d_funs =
@@ -450,43 +478,75 @@ let id_of_atom_ map a : ID.t =
 
 module M = Model
 
+exception Found_ptrue of ID.t
+
+(* find the atom corresponding to [pseudo-true] *)
+let find_ptrue state map m : ID.t =
+  try
+    M.iter m
+      ~constants:(fun (t,set,_) -> match t with
+        | FO_rel.Const id when ID.equal id state.ptrue ->
+          begin match set with
+            | FO_rel.Tuple_set (FO_rel.TS_list [[a]]) ->
+              let res = id_of_atom_ map a in
+              raise (Found_ptrue res)
+            | _ ->
+              errorf "unexpected model for pseudo-true: `@[%a@]`"
+                FO_rel.print_expr set
+          end
+        | _ -> ()
+      );
+    errorf "could not find pseudo-true in model"
+  with Found_ptrue id -> id
+
 (* [id = set] is in the model, and we know [id] corresponds to the function
    described in [fe] *)
-let decode_fun_ map m id (fe:fun_encoding) (set:FO_rel.tuple_set) : model1 =
+let decode_fun_ ~ptrue map m id (fe:fun_encoding) (set:FO_rel.tuple_set) : model1 =
   let mk_vars doms =
     List.mapi (fun i d -> Var.makef "v_%d" i ~ty:d.dom_ty) doms
   in
   let doms = fe.fun_ty_args in
   if fe.fun_is_pred
-  then (
-    (* FIXME: constant predicate...? *)
-    (* predicate case *)
-    assert (doms <> []);
-    let vars = mk_vars doms in
-    (* the cases that lead to "true" *)
-    let cases =
-      tuples_of_ts set
-      |> Sequence.map
-        (fun tup ->
-           assert (List.length tup = List.length vars);
-           let test =
-             List.map2
-               (fun v a -> v, FO.T.const (id_of_atom_ map a))
-               vars tup
-           in
-           test, FO.T.true_)
-      |> Sequence.to_list
-    and else_ =
-      FO.T.false_
-    in
-    let dt = M.DT.test cases ~else_ in
-    let t' = FO.T.const id in
-    Utils.debugf ~section 3
-      "@[<2>decode predicate `%a`@ as `@[%a@]`@]"
-      (fun k->k ID.print id (M.DT.print FO.print_term') dt);
-    M.add_fun m (t',vars,dt,M.Symbol_prop)
-  ) else begin match List.rev doms with
-    | [] -> assert false (* impossible, need at least return arg *)
+  then begin match doms with
+    | [] ->
+      (* constant predicate, actually sent as a unary predicate on [prop_].
+         It is true iff it holds on [ptrue] *)
+      let as_bool =
+        tuples_of_ts set
+        |> Sequence.exists
+          (function
+            | [a] -> ID.equal ptrue (id_of_atom_ map a)
+            | _ -> false)
+        |> (fun b -> if b then FO.T.true_ else FO.T.false_)
+      in
+      M.add_const m (FO.T.const id,as_bool,M.Symbol_prop)
+    | _::_ ->
+      (* predicate case *)
+      let vars = mk_vars doms in
+      (* the cases that lead to "true" *)
+      let cases =
+        tuples_of_ts set
+        |> Sequence.map
+          (fun tup ->
+             assert (List.length tup = List.length vars);
+             let test =
+               List.map2
+                 (fun v a -> v, FO.T.const (id_of_atom_ map a))
+                 vars tup
+             in
+             test, FO.T.true_)
+        |> Sequence.to_list
+      and else_ =
+        FO.T.false_
+      in
+      let dt = M.DT.test cases ~else_ in
+      let t' = FO.T.const id in
+      Utils.debugf ~section 3
+        "@[<2>decode predicate `%a`@ as `@[%a@]`@]"
+        (fun k->k ID.print id (M.DT.print FO.print_term') dt);
+      M.add_fun m (t',vars,dt,M.Symbol_prop)
+  end else begin match List.rev doms with
+    | [] -> assert false (* impossible, needs at least to return arg *)
     | [_dom_ret] ->
       (* constant: pick first element of the tuple(s) *)
       begin match tuples_of_ts set |> Sequence.to_list with
@@ -528,7 +588,7 @@ let decode_fun_ map m id (fe:fun_encoding) (set:FO_rel.tuple_set) : model1 =
       M.add_fun m (t',vars,dt,M.Symbol_fun)
   end
 
-(* [id := set] is in the model, and we now [id] corresponds to the type
+(* [id := set] is in the model, and we know [id] corresponds to the type
    in [dom] *)
 let rec decode_dom_ map m id (dom:domain) (set:FO_rel.tuple_set) : model1 =
   match set with
@@ -551,14 +611,15 @@ let rec decode_dom_ map m id (dom:domain) (set:FO_rel.tuple_set) : model1 =
         FO.print_ty dom.dom_ty
 
 (* transform the constant relations into FO constants/functions/predicates *)
-let decode_constants_ state (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t =
+let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t =
   M.fold
     ~constants:(fun m (t,u,_) -> match t, u with
+      | FO_rel.Const id, _ when ID.equal id state.ptrue -> m (* remove from model *)
       | FO_rel.Const id, FO_rel.Tuple_set set ->
         begin match find_fun_ state id with
           | Some fe ->
             (* [id] is a function, decode it as such *)
-            decode_fun_ map m id fe set
+            decode_fun_ ~ptrue map m id fe set
           | None ->
             begin match ID.Tbl.get state.dom_of_id id with
               | Some dom -> decode_dom_ map m id dom set
@@ -574,7 +635,9 @@ let decode_constants_ state (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t =
 
 let decode state m =
   let map = rename_atoms m in
-  decode_constants_ state map m
+  let ptrue = find_ptrue state map m in
+  Utils.debugf ~section 3  "@[<2>pseudo-true := %a in model@]" (fun k->k ID.print ptrue);
+  decode_constants_ ~ptrue state map m
 
 (** {2 Pipes} *)
 

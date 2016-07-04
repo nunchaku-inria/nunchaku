@@ -56,7 +56,9 @@ let declare_ state : (_,_) Stmt.t list =
       ~attrs:[Stmt.Attr_pseudo_prop;
               Stmt.Attr_card_hint (Cardinality.of_int 2)]
       state.pseudo_prop (U.ty_builtin `Type)
-  and decl_true = mk_decl state.true_ (U.ty_const state.pseudo_prop)
+  and decl_true =
+    mk_decl state.true_ (U.ty_const state.pseudo_prop)
+      ~attrs:[Stmt.Attr_pseudo_true]
   and decl_false = mk_decl state.false_ (U.ty_const state.pseudo_prop)
   and distinct_ax =
     Stmt.axiom1 ~info:Stmt.info_default

@@ -324,7 +324,7 @@ let print_problem out (decode, pb) =
   and print_statement out = function
     | FO.TyDecl (id,arity,_) ->
         fpf out "(@[declare-sort@ %a@ %d@])" print_id id arity
-    | FO.Decl (v,ty) ->
+    | FO.Decl (v,ty,_) ->
         fpf out "(@[<2>declare-fun@ %a@ %a@])"
           print_id v print_ty_decl ty
     | FO.Axiom t ->
@@ -732,7 +732,7 @@ let preprocess pb : processed_problem =
           let ty_c = [], gty in
           decl state c (Q_type gty);
           state.witnesses <- gty_map_add state.witnesses gty c;
-          FO.Decl (c, ty_c) :: acc
+          FO.Decl (c, ty_c,[]) :: acc
         ))
       [stmt] l
     |> List.rev
@@ -740,7 +740,7 @@ let preprocess pb : processed_problem =
   let pb =
     FO.Problem.flat_map ~meta:(FO.Problem.meta pb)
     (fun stmt -> match stmt with
-      | FO.Decl (id,(args,_)) ->
+      | FO.Decl (id,(args,_),_) ->
           let len = List.length args in
           begin if len=0
             then decl state id Q_const
