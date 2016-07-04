@@ -264,14 +264,14 @@ let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
   in
   (* now build a proper model *)
   List.fold_left
-    (fun m {A.rel_name; rel_dom} ->
+    (fun m'' {A.rel_name; rel_dom} ->
        let id =
          try StrMap.find rel_name state.id_of_name
          with Not_found -> errorf "could not find ID corresponding to `%s`" rel_name
        in
        let t = FO_rel.const id in
        let u = FO_rel.tuple_set (FO_rel.ts_list rel_dom) in
-       M.add_const m (t,u,M.Symbol_prop))
+       M.add_const m'' (t,u,M.Symbol_prop))
     M.empty
     m'
 

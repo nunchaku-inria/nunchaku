@@ -167,7 +167,8 @@ let options =
   ; "--print-" ^ Tr.ElimTypes.name, Arg.Set print_elim_types_,
       " print input after elimination of types"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
-  ; "--print-fo-to-rel", Arg.Set print_fo_to_rel_, " print first-order relational problem"
+  ; "--print-" ^ Tr.FoToRelational.name, Arg.Set print_fo_to_rel_,
+      " print first-order relational problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
