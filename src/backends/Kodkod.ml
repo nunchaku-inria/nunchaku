@@ -14,6 +14,7 @@ module E = CCResult
 
 let name = "kodkod"
 let section = Utils.Section.make name
+let _kodkod_section = section
 
 type problem = FO_rel.problem
 type res = (FO_rel.expr, FO_rel.sub_universe) Problem.Res.t
@@ -313,11 +314,18 @@ module Parser = struct
 
   (* parse the result from the solver's stdout and errcode *)
   let res state (s:string) (errcode:int) : res * S.shortcut =
-    if errcode <> 0
-    then
+    if errcode = 137
+    then (
+      Utils.debugf ~section:_kodkod_section 1
+        "kodkod stopped with errcode %d, assume it timeouted; stdout:@ `%s`"
+        (fun k->k errcode s);
+      Res.Timeout, S.No_shortcut
+    )
+    else if errcode <> 0
+    then (
       let msg = CCFormat.sprintf "kodkod failed (errcode %d), stdout:@ `%s`@." errcode s in
       Res.Error (Failure msg), S.Shortcut
-    else (
+    ) else (
       let delim = "---OUTCOME---" in
       let i = CCString.find ~sub:delim s in
       assert (i>=0);
