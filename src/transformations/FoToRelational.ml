@@ -501,9 +501,29 @@ let find_ptrue state map m : ID.t =
 
 (* [id = set] is in the model, and we know [id] corresponds to the function
    described in [fe] *)
-let decode_fun_ ~ptrue map m id (fe:fun_encoding) (set:FO_rel.tuple_set) : model1 =
+let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_set) : model1 =
   let mk_vars doms =
     List.mapi (fun i d -> Var.makef "v_%d" i ~ty:d.dom_ty) doms
+  in
+  (* try to convert the atom into an ID, but return [None] if the atom
+     does not belong to its type's domain *)
+  let atom_to_id (a:FO_rel.atom) : ID.t option =
+    let su = a.FO_rel.a_sub_universe in
+    let id = id_of_atom_ map a in
+    let _, ids = ID.Map.find su.FO_rel.su_name ty_by_id in
+    if CCList.Set.mem ~eq:ID.equal id ids
+    then Some id
+    else None
+  in
+  let atom_to_id_exn a = match atom_to_id a with
+    | None -> raise Exit
+    | Some id -> id
+  in
+  (* convert a tuple to a list of ID, or None if the tuple was invalid
+     (out of domain) *)
+  let tup_to_ids (tup:FO_rel.tuple) : ID.t list option =
+    try List.map atom_to_id_exn tup |> CCOpt.return
+    with Exit -> None
   in
   let doms = fe.fun_ty_args in
   if fe.fun_is_pred
@@ -526,15 +546,14 @@ let decode_fun_ ~ptrue map m id (fe:fun_encoding) (set:FO_rel.tuple_set) : model
       (* the cases that lead to "true" *)
       let cases =
         tuples_of_ts set
-        |> Sequence.map
+        |> Sequence.filter_map
           (fun tup ->
              assert (List.length tup = List.length vars);
-             let test =
-               List.map2
-                 (fun v a -> v, FO.T.const (id_of_atom_ map a))
-                 vars tup
-             in
-             test, FO.T.true_)
+             match tup_to_ids tup with
+               | None -> None
+               | Some ids ->
+                 let test = List.map2 (fun v id -> v, FO.T.const id) vars ids in
+                 Some (test, FO.T.true_))
         |> Sequence.to_list
       and else_ =
         FO.T.false_
@@ -563,19 +582,23 @@ let decode_fun_ ~ptrue map m id (fe:fun_encoding) (set:FO_rel.tuple_set) : model
          set of arguments has at most one return value *)
       let cases =
         tuples_of_ts set
-        |> Sequence.map
+        |> Sequence.filter_map
           (fun tup -> match List.rev tup with
              | [] -> assert false
              | ret :: args ->
                let args = List.rev args in
                assert (List.length args = List.length dom_args);
-               let test =
-                 List.map2
-                   (fun v a -> v, FO.T.const (id_of_atom_ map a))
-                   vars args
-               in
-               let ret = FO.T.const (id_of_atom_ map ret) in
-               test, ret)
+               let test = match tup_to_ids args with
+                 | None -> None
+                 | Some ids ->
+                   let test = List.map2 (fun v id -> v, FO.T.const id) vars ids in
+                   Some test
+               and ret = atom_to_id ret in
+               match test, ret with
+                 | None, _ | _, None -> None
+                 | Some test, Some ret ->
+                   Some (test, FO.T.const ret)
+          )
         |> Sequence.to_list
       and else_ =
         FO.T.undefined_atom id fe.fun_ty_ret (List.map FO.T.var vars)
@@ -589,22 +612,19 @@ let decode_fun_ ~ptrue map m id (fe:fun_encoding) (set:FO_rel.tuple_set) : model
   end
 
 (* [id := set] is in the model, and we know [id] corresponds to the type
-   in [dom] *)
-let rec decode_dom_ map m id (dom:domain) (set:FO_rel.tuple_set) : model1 =
+   in [dom]; return the corresponding list of IDs *)
+let rec decode_ty_dom_ map id (dom:domain) (set:FO_rel.tuple_set) : ID.t list =
   match set with
     | FO_rel.TS_all _ -> assert false (* not in models *)
     | FO_rel.TS_list tups ->
-      let l =
-        List.map
-          (function
-            | [a] -> id_of_atom_ map a
-            | _ as tup ->
-              errorf "expected unary tuple in model of `%a`, got `%a`"
-                FO.print_ty dom.dom_ty FO_rel.print_tuple tup)
-          tups
-      in
-      M.add_finite_type m dom.dom_ty l
-    | FO_rel.TS_product [set'] -> decode_dom_ map m id dom set'
+      List.map
+        (function
+          | [a] -> id_of_atom_ map a
+          | _ as tup ->
+            errorf "expected unary tuple in model of `%a`, got `%a`"
+              FO.print_ty dom.dom_ty FO_rel.print_tuple tup)
+        tups
+    | FO_rel.TS_product [set'] -> decode_ty_dom_ map id dom set'
     | FO_rel.TS_product _ ->
       (* should be a set of unary tuples *)
       errorf "in model of `%a`, expected a set of unary tuples"
@@ -612,6 +632,21 @@ let rec decode_dom_ map m id (dom:domain) (set:FO_rel.tuple_set) : model1 =
 
 (* transform the constant relations into FO constants/functions/predicates *)
 let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t =
+  (* map finite types to their domain *)
+  let ty_by_id : (domain * ID.t list) ID.Map.t =
+    M.constants m
+    |> Sequence.filter_map
+      (fun (t,u,_) -> match t, u with
+         | FO_rel.Const id, FO_rel.Tuple_set set ->
+            begin match ID.Tbl.get state.dom_of_id id with
+              | Some dom ->
+                let ids = decode_ty_dom_ map id dom set in
+                Some (dom.dom_id, (dom, ids))
+              | None -> None
+            end
+         | _ -> None)
+    |> ID.Map.of_seq
+  in
   M.fold
     ~constants:(fun m (t,u,_) -> match t, u with
       | FO_rel.Const id, _ when ID.equal id state.ptrue -> m (* remove from model *)
@@ -619,15 +654,15 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
         begin match find_fun_ state id with
           | Some fe ->
             (* [id] is a function, decode it as such *)
-            decode_fun_ ~ptrue map m id fe set
+            decode_fun_ ~ptrue ~ty_by_id map m id fe set
           | None ->
-            begin match ID.Tbl.get state.dom_of_id id with
-              | Some dom -> decode_dom_ map m id dom set
+            if ID.equal id state.pprop_dom.dom_id
+            then m (* ignore the pseudo-prop type *)
+            else match ID.Map.get id ty_by_id with
+              | Some (_, ids) ->
+                M.add_finite_type m (FO.Ty.const id) ids
               | None ->
-                if ID.equal id state.pprop_dom.dom_id
-                then m (* ignore the pseudo-prop type *)
-                else errorf "`%a` is neither a function nor a type" ID.print id
-            end
+                errorf "`%a` is neither a function nor a type" ID.print id
         end
       | _ -> assert false)
     M.empty

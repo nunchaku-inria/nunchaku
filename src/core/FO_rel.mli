@@ -146,6 +146,7 @@ val exists_l : var list -> form -> form
 
 val atom : sub_universe -> int -> atom
 val atom_cmp : atom -> atom -> int
+val atom_eq : atom -> atom -> bool
 
 val mk_problem :
   meta:ProblemMetadata.t ->

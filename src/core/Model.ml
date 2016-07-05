@@ -172,6 +172,10 @@ let add_fun t f = {t with funs = f :: t.funs; }
 let add_finite_type t ty dom =
   {t with finite_types = (ty, dom) :: t.finite_types; }
 
+let constants m = m.constants |> Sequence.of_list
+let finite_types m = m.finite_types |> Sequence.of_list
+let funs m = m.funs |> Sequence.of_list
+
 let map ~term:fterm ~ty:fty m = {
   m with
   constants=CCList.map (fun (x,y,k) -> fterm x, fterm y, k) m.constants;

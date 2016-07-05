@@ -100,6 +100,10 @@ val add_fun : ('t,'ty) t -> 't * 'ty Var.t list * ('t,'ty) decision_tree * symbo
 val add_finite_type : ('t, 'ty) t -> 'ty -> ID.t list -> ('t, 'ty) t
 (** Map the type to its finite domain. *)
 
+val constants : ('t, _) t -> ('t * 't * symbol_kind) Sequence.t
+val finite_types : (_, 'ty) t -> ('ty * ID.t list) Sequence.t
+val funs : ('t, 'ty) t -> ('t * 'ty Var.t list * ('t, 'ty) decision_tree * symbol_kind) Sequence.t
+
 val fold :
   ?constants:('acc -> 'a * 'a * symbol_kind -> 'acc) ->
   ?funs:('acc -> 'a * 'b Var.t list * ('a,'b) decision_tree * symbol_kind -> 'acc) ->

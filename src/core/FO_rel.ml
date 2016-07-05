@@ -172,6 +172,7 @@ let atom_cmp a1 a2 =
     su_compare a1.a_sub_universe a2.a_sub_universe
     <?> (int_, a1.a_index, a2.a_index)
   )
+let atom_eq a1 a2 = atom_cmp a1 a2 = 0
 
 let mk_problem ~meta:pb_meta ~univ:pb_univ ~decls:pb_decls ~goal:pb_goal =
   { pb_meta; pb_univ; pb_decls; pb_goal; }
