@@ -10,6 +10,7 @@ type section =
 
 type result =
   | Unsat
+  | Trivially_unsat
   | Sat
 
 type 'atom relation = {

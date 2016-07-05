@@ -180,7 +180,7 @@ let rec encode_term state t : FO_rel.expr =
     | FO.DataTest (_,_)
     | FO.DataSelect (_,_,_) ->
       error "should have eliminated data{test/select} earlier"
-    | FO.Undefined (_,_) -> assert false (* TODO? *)
+    | FO.Undefined (_,t) -> encode_term state t
     | FO.Fun (_,_) ->
       errorf "cannot translate function `@[%a@]` to FO_rel" FO.print_term t
     | FO.Let (v,t,u) ->
