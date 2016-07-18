@@ -11,30 +11,43 @@ open Nunchaku_core
 
 module T = TermInner.Default
 
-type decode_state
+type mode =
+  | M_data
+  | M_codata
 
-val name : string
+val pp_mode : mode CCFormat.printer
 
-val transform_pb :
-  (T.t, T.t) Problem.t ->
-  (T.t, T.t) Problem.t * decode_state
+module type S = sig
+  type decode_state
 
-val decode_model :
-  decode_state -> (T.t, T.t) Model.t -> (T.t, T.t) Model.t
+  val mode : mode
 
-val pipe :
-  print:bool ->
-  check:bool ->
-  ((T.t,T.t) Problem.t,
-   (T.t,T.t) Problem.t,
-   (T.t,T.t) Problem.Res.t, (T.t,T.t) Problem.Res.t
-  ) Transform.t
+  val name : string
 
-val pipe_with :
-  ?on_decoded:('d -> unit) list ->
-  decode:(decode_state -> 'c -> 'd) ->
-  print:bool ->
-  check:bool ->
-  ((T.t,T.t) Problem.t,
-   (T.t,T.t) Problem.t, 'c, 'd
-  ) Transform.t
+  val transform_pb :
+    (T.t, T.t) Problem.t ->
+    (T.t, T.t) Problem.t * decode_state
+
+  val decode_model :
+    decode_state -> (T.t, T.t) Model.t -> (T.t, T.t) Model.t
+
+  val pipe :
+    print:bool ->
+    check:bool ->
+    ((T.t,T.t) Problem.t,
+     (T.t,T.t) Problem.t,
+     (T.t,T.t) Problem.Res.t, (T.t,T.t) Problem.Res.t
+    ) Transform.t
+
+  val pipe_with :
+    ?on_decoded:('d -> unit) list ->
+    decode:(decode_state -> 'c -> 'd) ->
+    print:bool ->
+    check:bool ->
+    ((T.t,T.t) Problem.t,
+     (T.t,T.t) Problem.t, 'c, 'd
+    ) Transform.t
+end
+
+module Data : S
+module Codata : S
