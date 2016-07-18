@@ -682,13 +682,6 @@ let encode_toplevel_ty ~state ty =
   let ret = encode_ty_ ~handle_id ret in
   U.ty_arrow_l args ret
 
-(* OH MY.
-   safe, because we only change the invariants *)
-let cast_stmt_unsafe_ :
-  (term, ty) Stmt.t -> (term, ty) Stmt.t = Obj.magic
-let cast_rec_unsafe_ :
-  (term, ty) Stmt.rec_def -> (term, ty) Stmt.rec_def = Obj.magic
-
 (* translate a "single rec" into an "app rec" *)
 let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
 : (_, _) Stmt.t list
@@ -740,7 +733,6 @@ let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
             let tr_type _subst ty = encode_toplevel_ty ~state ty in
             Stmt.map_rec_def_bind Subst.empty def
               ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
-            |> cast_rec_unsafe_
           )
       | Stmt.Eqn_nested _
       | Stmt.Eqn_app _ -> assert false
@@ -840,7 +832,6 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
       let stmt' =
         Stmt.map_bind Subst.empty stmt
           ~bind:(bind_hof_var ~state) ~term:(tr_term Pol.Pos) ~ty:tr_type
-        |> cast_stmt_unsafe_ (* XXX: hack, but shorter *)
       in
       [stmt']
   in
