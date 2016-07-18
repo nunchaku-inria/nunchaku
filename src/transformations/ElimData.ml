@@ -137,13 +137,17 @@ module Make(M : sig val mode : mode end) = struct
   (* FIXME: replace quantifiers over infinite datatypes with the proper
      approximation? (false, depending on polarity) *)
 
-  let get_select_ state id i : ID.t =
-    try Tbl.find state.map (Select(id,i))
-    with Not_found -> errorf "could not find encoding of `select-%a-%d`" ID.print id i
+  let get_select_ state id i : ID.t option = Tbl.get state.map (Select(id,i))
 
-  let get_test_ state id : ID.t =
-    try Tbl.find state.map (Test id)
-    with Not_found -> errorf "could not find encoding of `is-%a`" ID.print id
+  let get_select_exn_ state id i : ID.t = match get_select_ state id i with
+    | Some res -> res
+    | None -> errorf "could not find encoding of `select-%a-%d`" ID.print id i
+
+  let get_test_ state id : ID.t option = Tbl.get state.map (Test id)
+
+  let get_test_exn state id : ID.t = match get_test_ state id with
+    | Some res -> res
+    | None -> errorf "could not find encoding of `is-%a`" ID.print id
 
   let rec tr_term state t : T.t = match T.repr t with
     | TI.Const id ->
@@ -153,7 +157,7 @@ module Make(M : sig val mode : mode end) = struct
         | Some id' ->
           (* [c asserting is-c c] *)
           let t' = U.const id' in
-          let guard = U.app_const (get_test_ state id) [t'] in
+          let guard = U.app_const (get_test_exn state id) [t'] in
           U.asserting t' [guard]
       end
     | TI.App (f, l) ->
@@ -168,17 +172,32 @@ module Make(M : sig val mode : mode end) = struct
                  [is-id (id x1..xn) & And_k proj-id-k (id x1..xn) = x_k] *)
               let t' = U.app_const f_id' l' in
               let guard =
-                U.app_const (get_test_ state f_id) [t']
+                U.app_const (get_test_exn state f_id) [t']
                 :: List.mapi
-                    (fun i arg -> U.eq arg (U.app_const (get_select_ state f_id i) [t']))
+                    (fun i arg ->
+                       U.eq arg (U.app_const (get_select_exn_ state f_id i) [t']))
                     l'
               in
               U.asserting t' guard
           end
         | _ -> tr_term_aux state t
       end
-    | TI.Builtin (`DataSelect (id,i)) -> get_select_ state id i |> U.const
-    | TI.Builtin (`DataTest id) -> get_test_ state id |> U.const
+    | TI.Builtin (`DataSelect (id,i)) ->
+      begin match get_select_ state id i with
+        | Some id' -> U.const id'
+        | None ->
+          if mode = M_data
+          then errorf "could not find encoding of `select-%a-%d`" ID.print id i
+          else t
+      end
+    | TI.Builtin (`DataTest id) ->
+      begin match get_test_ state id with
+        | Some id' -> U.const id'
+        | None ->
+          if mode = M_data
+          then errorf "could not find encoding of `is-%a`" ID.print id
+          else t
+      end
     | TI.Match _ ->
       errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.print t
     | _ -> tr_term_aux state t
