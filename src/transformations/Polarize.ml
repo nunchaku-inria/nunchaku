@@ -422,13 +422,17 @@ let polarize
 
 (** {6 Decoding} *)
 
-module U_dt = Model.DT_util(T)
+module M = Model
+module DT = M.DT
+module DTU = Model.DT_util
+
+type rw_sys = ID.t ID.Map.t
 
 (* rewrite the term recursively.
    Rules are of the form [id -> id'], meaning [id] should
    be rewritten into [id']
   *)
-let rec rewrite ~subst sys t =
+let rec rewrite ~subst (sys:rw_sys) t =
   match T.repr t with
   | TI.Var v -> U.var (Subst.deref_rec ~subst v)
   | TI.Const id ->
@@ -455,62 +459,79 @@ and rewrite' ~subst sys t =
     ~f:(fun subst t -> rewrite ~subst sys t)
     ~bind:(fun s v -> s, v)
 
-(* filter [dt], the decision tree for [polarized], returning
-   only the cases that return [true] (if [is_pos]) or [false] (if [not is_pos]) *)
-let filter_dt_ ~is_pos ~polarized ~sys ~subst dt =
-  Utils.debugf ~section 5
-    "@[<v>retain branches that yield %B for `%a`@ from `@[%a@]`@]"
-    (fun k->k is_pos ID.print polarized (Model.DT.print P.print') dt);
-  CCList.filter_map
-    (fun (eqns, then_) ->
-      (* evaluate as fully as possible, hoping for [true] or [false] *)
-      let then_ = Red.whnf then_ in
-      match T.repr then_, is_pos with
-      | TI.Builtin `True, true
-      | TI.Builtin `False, false ->
-          let eqns' =
-            CCList.map
-              (fun (v, t) -> Subst.deref_rec ~subst v, rewrite ~subst sys t)
-              eqns
-          in
-          let then' = rewrite ~subst sys then_ in
-          Some (eqns', then')
-      | TI.Builtin `False, true
-      | TI.Builtin `True, false -> None
-      | _ ->
-          errorf_
-            "@[<2>expected decision tree for %a@ to yield only true/false@ \
-             but branch `@[%a@]`@ yields `@[%a@]`@]"
-             ID.print polarized (Model.DT.print_tests P.print') eqns P.print then_)
-    dt.Model.DT.tests
-
 let find_polarized_ ~(state:decode_state) id =
   try ID.Tbl.find state id
   with Not_found ->
     errorf_ "could not find polarized symbol `%a` when decoding" ID.print id
 
 (* build a rewrite system from the given model. The rewrite system erases
-   polarities and unrolling parameters.
-
-   NOTE: this rewrite system is also useful for knowing whether a
-   particular polarized symbol occurs in the model or not. *)
-let make_rw_sys_ ~state m =
+   polarized IDs into their non-polarized version. *)
+let make_rw_sys_ ~state m : rw_sys =
   Model.fold ID.Map.empty m
-    ~constants:(fun sys _ -> sys)
     ~finite_types:(fun sys _ -> sys)
-    ~funs:(fun sys (t,_,_,_) ->
-      match T.repr t with
+    ~values:(fun sys (t,_,_) -> match T.repr t with
       | TI.Const id when ID.is_polarized id ->
-          (* rewrite into the unpolarized version *)
-          let id', _is_pos, _, _p = find_polarized_ ~state id in
-          Utils.debugf ~section 4 "@[<2>decoding:@ rewrite %a into %a@]"
-            (fun k->k ID.print id ID.print id');
-          ID.Map.add id id' sys
+        (* rewrite into the unpolarized version *)
+        let id', _is_pos, _, _p = find_polarized_ ~state id in
+        Utils.debugf ~section 4 "@[<2>decoding:@ rewrite %a into %a@]"
+          (fun k->k ID.print id ID.print id');
+        ID.Map.add id id' sys
       | _ -> sys)
+
+let rewrite_dt ~sys dt : _ DT.t =
+  DT.map dt
+    ~term:(rewrite ~subst:Subst.empty sys)
+    ~ty:CCFun.id
+
+let rec is_undefined_ t = match T.repr t with
+  | TI.Builtin (`Undefined_atom _ | `Undefined_self _) -> true
+  | TI.App (f, _) -> is_undefined_ f
+  | _ -> false
+
+(* filter [dt], the decision tree for [polarized], returning
+   only the cases that return [true] (if [is_pos]) or [false] (if [not is_pos]) *)
+let filter_dt_ ~polarized ~default:d dt : _ DT.t =
+  let is_pos = ID.is_pos polarized in
+  Utils.debugf ~section 5
+    "@[<v>retain branches that yield %B for `%a`@ from `@[%a@]`@]"
+    (fun k->k is_pos ID.print polarized (Model.DT.print P.print') dt);
+  let rec aux dt = match dt with
+    | DT.Yield t ->
+      (* evaluate as fully as possible, hoping for [true] or [false] *)
+      let t = Red.whnf t in
+      begin match T.repr t, is_pos with
+        | TI.Builtin `True, true
+        | TI.Builtin `False, false -> Some (DT.yield t)
+        | TI.Builtin `False, true
+        | TI.Builtin `True, false -> None
+        | _ when is_undefined_ t ->
+          None (* undefined case, we drop, it will be added back later *)
+        | _ ->
+          errorf_
+            "@[<2>expected decision tree for %a@ to yield only true/false@ \
+             but branch `@[%a@]`@ yields `@[%a@]`@]"
+            ID.print polarized DTU.print dt P.print t
+      end
+    | DT.Cases {DT.var; tests; default} ->
+      let tests =
+        CCList.filter_map
+          (fun (lhs,rhs) -> match aux rhs with
+             | None -> None
+             | Some rhs' -> Some (lhs, rhs'))
+          tests
+      and default =
+        CCOpt.flat_map aux default
+      in
+      if tests=[] && default=None
+      then None (* empty *)
+      else Some (DT.cases var ~tests ~default)
+  in
+  CCOpt.get_lazy
+    (fun () -> DT.const (DT.vars dt) (DT.yield d))
+    (aux dt)
 
 (* decoding:
   - keep positive cases for p+, negative cases for p-, and undefined otherwise
-  - remove the additional parameter introduced by unrolling, if any
 *)
 let decode_model ~state m =
   (* compute a rewrite system for eliminating polarized IDs *)
@@ -518,58 +539,68 @@ let decode_model ~state m =
   (* this tables stores the half-decision tree for polarized IDs
      (when we have met one polarity but not the other, and we know the other
      is defined somewhere in the model) *)
-  let partial_map = ID.Tbl.create 32 in
+  let partial_map : _ DT.t ID.Tbl.t = ID.Tbl.create 32 in
   Model.filter_map m
-    ~constants:(fun (t,u,k) ->
-          let u = rewrite ~subst:Subst.empty sys u in
-          Some (t,u,k))
     ~finite_types:(fun (t,dom) -> Some (t,dom))
-    ~funs:(fun (t,vars,dt,k) ->
-      match T.repr t with
+    ~values:(fun (t,dt,k) -> match T.repr t with
       | TI.Const id when ID.is_polarized id ->
           (* unpolarize. id' is the unpolarized ID. *)
-          let id', is_pos, ty, p = find_polarized_ ~state id in
-          begin try
-            (* if [id' in partial_map], we already met its other polarized
-               version, so we can merge the decision trees and push [id']
-               in the model. *)
-            let vars', cases' = ID.Tbl.find partial_map id' in
-            (* use the same variables for both halves of DT *)
-            let subst = Subst.add_list ~subst:Subst.empty vars vars' in
-            let cases = filter_dt_ ~polarized:id ~is_pos ~sys ~subst dt in
-            (* merge the two partial decision trees — they should not overlap *)
-            let else_ = U.app (U.undefined_atom ~ty) (List.map U.var vars') in
-            let new_dt =
-              Model.DT.test
-                (List.rev_append cases cases')
-                ~else_
-            in
-            (* emit model for [id'] *)
-            Some (U.const id', vars', new_dt, k)
-          with Not_found ->
-            let opp_id = if is_pos then p.neg else p.pos in
-            let cases = filter_dt_ ~polarized:id ~is_pos ~sys ~subst:Subst.empty dt in
-            if ID.Map.mem opp_id sys
-            then (
-              (* store the decision tree in [partial_map]; [id'] will
-                 be added to the model when its second polarized version
-                 is met *)
-              ID.Tbl.add partial_map id' (vars,cases);
-              None
-            ) else (
-              (* the other polarized version of [id'] is not defined in the
-                 model, we can emit this function now *)
-              let else_ = U.app (U.undefined_atom ~ty) (List.map U.var vars) in
-              let new_dt = Model.DT.test cases ~else_ in
-              Some (U.const id', vars, new_dt, k)
-            )
+          let id_non_pol, is_pos, ty, p = find_polarized_ ~state id in
+          let opp_id = if is_pos then p.neg else p.pos in
+          begin match ID.Tbl.get partial_map id_non_pol with
+            | Some dt' ->
+              (* if [id' in partial_map], we already met its other polarized
+                 version, so we can merge the decision trees and push [id']
+                 in the model. *)
+              let vars' = DT.vars dt' in
+              (* use the same variables for both halves of DT *)
+              let vars = DT.vars dt in
+              let subst = Subst.of_list vars vars' in
+              let dt = DTU.map_vars ~subst dt in
+              let default = U.app (U.undefined_atom ~ty) (List.map U.var vars') in
+              (* only keep branches that return true/false (depending on pol) *)
+              let dt =
+                filter_dt_ ~polarized:id ~default dt
+                |> rewrite_dt ~sys
+              and dt' =
+                filter_dt_ ~polarized:opp_id ~default dt'
+                |> rewrite_dt ~sys
+              in
+              (* merge the two partial decision trees — they should not overlap *)
+              let new_dt = DTU.merge dt dt' in
+              (* add default case *)
+              let new_dt = DT.add_default default new_dt in
+              (* emit model for [id'] *)
+              Some (U.const id_non_pol, new_dt, k)
+            | None ->
+              if ID.Map.mem opp_id sys
+              then (
+                (* store the decision tree in [partial_map]; [id'] will
+                   be added to the model when its second polarized version
+                   is met *)
+                ID.Tbl.add partial_map id_non_pol dt;
+                None
+              ) else (
+                (* the other polarized version of [id'] is not defined in the
+                   model, we can emit this function now *)
+                let default =
+                  let vars = DT.vars dt in
+                  U.app (U.undefined_atom ~ty) (List.map U.var vars)
+                in
+                let new_dt =
+                  filter_dt_ ~polarized:id ~default dt
+                  |> rewrite_dt ~sys
+                in
+                (* add default case *)
+                let new_dt = DT.add_default default new_dt in
+                Some (U.const id_non_pol, new_dt, k)
+              )
           end
       | _ ->
-          (* remove polarized IDs *)
-          let dt = Model.DT.map dt
-            ~term:(rewrite ~subst:Subst.empty sys)
-            ~ty:CCFun.id in
-          Some (t,vars,dt,k))
+        (* rewrite polarized IDs *)
+        let t = rewrite ~subst:Subst.empty sys t in
+        let dt = rewrite_dt ~sys dt in
+        Some (t,dt,k))
 
 (** {6 Pipes} *)
 

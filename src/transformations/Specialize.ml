@@ -212,7 +212,7 @@ type state = {
     (* vector of new declarations *)
 }
 
-let create_state () = {
+let create_state () : state = {
   specializable_args=ID.Tbl.create 32;
   new_funs=ID.Tbl.create 32;
   count=0;
@@ -1014,13 +1014,17 @@ let specialize_problem pb =
     Decoding the model, that is, glue together the valuations of specialized
     functions to obtain the model of the function *)
 
-let is_spec_fun state id = ID.Tbl.mem state id
+module M = Model
+module DT = M.DT
+module DTU = M.DT_util
 
-let is_spec_const state t = match T.repr t with
+let is_spec_fun (state:decode_state) id = ID.Tbl.mem state id
+
+let is_spec_const (state:decode_state) (t:T.t) = match T.repr t with
   | TI.Const id -> is_spec_fun state id
   | _ -> false
 
-let find_spec state id =
+let find_spec (state:decode_state) id : decode_state_fun =
   try ID.Tbl.find state id
   with Not_found -> errorf "could not find the decoding data for %a" ID.print id
 
@@ -1028,7 +1032,7 @@ let find_spec state id =
    preconds:
    - [l] is large enough for every index of [arg]
    - [arg] is sorted by increasing index *)
-let insert_pos l args =
+let insert_pos l args : _ list =
   let rec aux i l args = match l, args with
     | [], [] -> []
     | [], (j,a)::args' when i=j -> a :: aux (i+1) [] args'
@@ -1046,7 +1050,7 @@ let pp_dsf out dsf =
 
 (* convert a specialized function into a λ-term that evaluates to the
    non-specialized function when fully applied *)
-let dsf_to_fun (dsf:decode_state_fun) =
+let dsf_to_fun (dsf:decode_state_fun) : T.t =
   let _, ty_args, _ = U.ty_unfold dsf.dsf_ty_of in
   let arg = dsf.dsf_arg in
   (* arguments the unspecialized function will be applied to *)
@@ -1076,12 +1080,6 @@ let dsf_to_fun (dsf:decode_state_fun) =
     (fun k->k pp_dsf dsf P.print res);
   assert (U.is_closed res);
   res
-
-let find_var_ ~subst v =
-  try Subst.find_exn ~subst v
-  with Not_found ->
-    errorf "could not find var `%a`@ in `@[%a@]`"
-      Var.print_full v (Subst.print Var.print_full) subst
 
 (* traverse the term and use reverse table to replace specialized
    functions by their definition *)
@@ -1114,129 +1112,102 @@ let rec decode_term_rec (state:decode_state) subst t =
 and decode_term_rec' state subst t =
   U.map subst t ~bind:U.rename_var ~f:(decode_term_rec state)
 
-let decode_term state t =
+let decode_term state t : T.t =
   let t' = decode_term_rec state Subst.empty t in
   Utils.debugf ~section 5
     "@[<2>decode_term `@[%a@]`@ into `@[%a@]`@]" (fun k->k P.print t P.print t');
   t'
 
+type aggregate_model = {
+  am_kind: Model.symbol_kind;
+  am_ty: ty; (* type of the function *)
+  am_models: ((term, term) DT.t * decode_state_fun) list;
+}
+
+type aggregate_models = aggregate_model ID.Map.t
+
+let am_empty k ty = {am_kind=k; am_ty=ty; am_models=[]}
+
 (* gather models of specialized functions *)
-let gather_spec_funs state m =
+let gather_spec_funs state m : aggregate_models =
   Model.fold ID.Map.empty m
-    ~constants:(fun map (t,u,kind) ->
-      match T.repr t with
-        | TI.Const f_id when is_spec_fun state f_id ->
-            (* add model of [f_id] into the list of partial models of the
-                function it was specialized from.
-                Here the discrimination tree is simply a constant. *)
-            let dsf = find_spec state f_id in
-            let id = dsf.dsf_spec_of in
-            let kind, ty, l =
-              ID.Map.get_or id map
-                ~or_:(kind,dsf.dsf_ty_of,[])
-            in
-            ID.Map.add id (kind,ty,([],Model.DT.yield u,dsf)::l) map
-        | _ -> map)
-    ~finite_types:(fun map _ -> map)
-    ~funs:(fun map (f,vars,dt,kind) ->
-      match T.repr f with
-        | TI.Const f_id when is_spec_fun state f_id ->
-            (* add model of [f_id] into the list of partial models of the
-                function it was specialized from *)
-            let dsf = find_spec state f_id in
-            let id = dsf.dsf_spec_of in
-            let kind, ty, l =
-              ID.Map.get_or id map
-                ~or_:(kind,dsf.dsf_ty_of,[])
-            in
-            ID.Map.add id (kind,ty,(vars,dt,dsf)::l) map
-        | _ -> map)
+    ~values:(fun map (t,dt,kind) -> match T.repr t with
+      | TI.Const f_id when is_spec_fun state f_id ->
+        (* add model of [f_id] into the list of partial models of the
+           function it was specialized from *)
+        let dsf = find_spec state f_id in
+        let id = dsf.dsf_spec_of in
+        let am =
+          ID.Map.get_or id map ~or_:(am_empty kind dsf.dsf_ty_of)
+        in
+        let am = { am with am_models = (dt,dsf) :: am.am_models } in
+        ID.Map.add id am map
+      | _ -> map)
 
-(* function that converts a specialized DT into a non-specialized DT, by:
-   - gathering closure_vars
-   - in each branch:
-     * let subst = value of closure_vars
-     * introduce new variables for specialized args
-     * evaluate other vars of equation, specialized args, + rhs, under this substitution
-   - converting else_ case *)
-let dt_of_spec_dt state vars (dt_vars,dt,dsf) =
+(* function that converts a specialized DT into a non-specialized DT,
+   where terms are decoded *)
+let dt_of_spec_dt state ~vars (dt,dsf) : _ DT.t =
   Utils.debugf ~section 5
-    "@[<2>generalize dt@ `@[<2>%a ->@ @[%a@]@]`@ on vars @[%a@]@ with arg %a@]"
-    (fun k->k (CCFormat.list Var.print_full) dt_vars
-        (Model.DT.print P.print') dt
-        (CCFormat.list Var.print_full) vars Arg.print dsf.dsf_arg);
+    "@[<2>generalize dt@ `@[<2>@[%a@]@]`@ on vars @[%a@]@ with arg %a@]"
+    (fun k->k
+        DTU.print dt (CCFormat.list Var.print_full) vars
+        Arg.print dsf.dsf_arg);
   let n_closure_vars = List.length (Arg.vars dsf.dsf_arg) in
-  assert (List.length dt_vars
+  assert (List.length (DT.vars dt)
     = List.length vars - Arg.length dsf.dsf_arg + n_closure_vars);
-  let closure_vars, non_spec_vars = CCList.take_drop n_closure_vars dt_vars in
-  (* map [non_spec_vars] to the corresponding elements of [vars] *)
-  let renaming =
-    let spec_args = Arg.to_list dsf.dsf_arg |> List.map (fun (i,_) -> i, `Spec) in
-    let l = List.map (fun v -> `Var v) non_spec_vars in
-    let l = insert_pos l spec_args in
-    let subst =
-      CCList.Idx.foldi
-      (fun subst i -> function
-         | `Spec -> subst
-         | `Var v -> Subst.add ~subst v (List.nth vars i))
-      Subst.empty l
-    in
-    Subst.add_list ~subst (Arg.vars dsf.dsf_arg) closure_vars
+  let closure_vars, non_spec_vars =
+    CCList.take_drop n_closure_vars (DT.vars dt)
   in
-  (* base substitution, valid in all branches *)
-  let subst0 = U.renaming_to_subst renaming in
-  (* condition that holds for this whole DT: [subset of vars = specialized args] *)
-  let base_eqns =
-    CCList.Idx.foldi
-      (fun acc i v ->
-         try
-           let t = Arg.get i dsf.dsf_arg in
-           (v,t) :: acc
-         with Not_found -> acc)
-      [] vars
+  (* add the specialized vars in front of [dt], in one single branch *)
+  let spec_args =
+    Arg.to_list dsf.dsf_arg
+    |> List.map (fun (i,arg) -> i, List.nth vars i, arg)
   in
-  (* the new list of tests *)
-  let then_ =
-    dt.Model.DT.tests
-    |> List.rev_map
-      (fun (eqns, then_) ->
-         let subst, eqns' =
-           CCList.fold_flat_map
-             (fun subst (v,t) ->
-                if CCList.Set.mem ~eq:Var.equal v closure_vars
-                then
-                  (* test on closure var [v=t]: replace [v] with [t]
-                     in this branch *)
-                  Subst.add ~subst v t, []
-                else subst, [v,t])
-             subst0
-             eqns
-         in
-         (* all "closure vars" should be bound in subst, for they should
-            occur in test? *)
-         assert (List.for_all (fun v -> Subst.mem ~subst v) closure_vars);
-         let eqns' = base_eqns @ eqns' in
-         (* translate a term and apply substitution on the fly *)
-         let tr_term = decode_term_rec state subst in
-         List.map
-           (fun (v,t) -> Subst.find_or ~default:v ~subst:renaming v, tr_term t)
-           eqns',
-         tr_term then_)
-  and else_ =
-    if U.is_undefined dt.Model.DT.else_ then []
-    else [base_eqns, decode_term_rec state subst0 dt.Model.DT.else_]
+  let dt =
+    List.fold_right
+      (fun (_,v,arg) dt ->
+         DT.cases v ~default:None ~tests:[arg, dt])
+      spec_args dt
   in
-  let res = List.rev_append then_ else_ in
+  (* now pivot so that:
+     - the closure vars come first
+     - the remaining vars are in the pre-specialization order *)
+  let vars' =
+    insert_pos non_spec_vars (List.map (fun (i,v,_) ->i,v) spec_args)
+  in
+  assert (List.length vars' = List.length vars);
+  let dt = DTU.reorder (closure_vars @ vars') dt in
+  (* eliminate closure_vars *)
+  let dt = DTU.remove_vars closure_vars dt in
+  (* rename [vars'] into [vars], so we can merge later with other
+     specialized trees *)
+  let subst = Subst.of_list vars' vars in
+  let dt = DTU.map_vars ~subst dt in
+  (* decode terms *)
+  let dt = DT.map dt ~ty:CCFun.id ~term:(decode_term state) in
   Utils.debugf ~section 5 "@[<2>... obtaining@ `@[<v>%a@]`@]"
-    (fun k->k CCFormat.(list (Model.DT.print_case P.print')) res);
-  res
+    (fun k->k DTU.print dt);
+  dt
 
-let merge_dts ty vars l =
-  let else_ =
-    U.app (U.undefined_atom ~ty) (List.map U.var vars)
+(* TODO: if the function is also non-specialized, only take its model? *)
+
+(* convert a set of specialized models, into a model of the
+   non-specialized function *)
+let dt_of_am state (am:aggregate_model) : _ DT.t =
+  let _, ty_args, _ = U.ty_unfold am.am_ty in
+  let vars = List.mapi (fun i ty -> Var.makef ~ty "x_%d" i) ty_args in
+  (* convert each specialized DT into a partial DT ranging over [vars] *)
+  let dt_l =
+    List.map
+      (fun (dt, dsf) -> dt_of_spec_dt state ~vars (dt, dsf))
+      am.am_models
   in
-  let cases = CCList.flatten l in
-  Model.DT.test cases ~else_
+  let dt = DTU.merge_l dt_l in
+  (* specialization is incomplete, so we might need a default case *)
+  let default =
+    U.app (U.undefined_atom ~ty:am.am_ty) (List.map U.var vars)
+  in
+  DT.add_default default dt
 
 (* - merge models of specialized functions (possibly with main function)
    - remove specialized functions from the model
@@ -1246,48 +1217,36 @@ let decode_model state m =
   (* remove specialized functions from model *)
   let m' =
     Model.filter_map m
-    ~finite_types:(fun (t,l) ->
-      match T.repr t with
-        | TI.TyArrow (_,_) -> None (* remove arrow types, not finite types anymore *)
+      ~finite_types:(fun (t,l) -> match T.repr t with
+        | TI.TyArrow (_,_) ->
+          None (* remove arrow types, not finite types anymore *)
         | _ -> Some (t,l))
-    ~constants:(fun (t,u,kind) ->
-      if is_spec_const state t
-      then None
-      else (* simply translate terms *)
-        Some (decode_term state t, decode_term state u, kind))
-    ~funs:(fun (f,vars,dt,kind) ->
-      match T.repr f with
-        | TI.Const f_id when is_spec_fun state f_id ->
-            None (* drop models of specialized funs *)
-        | _ ->
-            let renaming, vars = Utils.fold_map Subst.rename_var Subst.empty vars in
-            let subst = U.renaming_to_subst renaming in
-            Utils.debugf ~section 5
-              "@[<2>decode DT `@[%a@]`@ with @[%a@]@]"
-              (fun k->k (Model.DT.print P.print') dt (Subst.print P.print) subst);
-            let dt =
-              Model.DT.map dt
-                ~var:(fun v -> Some (find_var_ ~subst:renaming v))
-                ~ty:CCFun.id ~term:(decode_term_rec state subst) in
-            Some (f, vars, dt, kind))
+    ~values:(fun (t,dt,k) -> match T.repr t with
+      | _ when is_spec_const state t -> None
+      | TI.Const f_id when is_spec_fun state f_id ->
+        None (* drop models of specialized funs *)
+      | _ ->
+        Utils.debugf ~section 5
+          "@[<2>decode DT `@[%a@]`@]" (fun k->k DTU.print dt);
+        let dt =
+          DTU.rename_vars dt
+          |> DT.map ~term:(decode_term_rec state Subst.empty) ~ty:CCFun.id
+        in
+        Some (t, dt, k)
+    )
   in
   (* add functions that were specialized, after recombining their
      partial models *)
-  let new_funs =
-    ID.Map.fold
-      (fun f_id (kind,ty_f,models) acc ->
-         (* introduce new variables for [f_id] *)
-         let _, ty_args, _ = U.ty_unfold ty_f in
-         let new_vars =
-           List.mapi (fun i ty -> Var.make ~ty ~name:(Printf.sprintf "v_%d" i)) ty_args
-         in
-         let spec_dt_l = List.map (dt_of_spec_dt state new_vars) models in
-         let dt = merge_dts ty_f new_vars spec_dt_l in
-         (U.const f_id, new_vars, dt, kind) :: acc)
-      spec_funs
-      []
-  in
-  List.fold_left Model.add_fun m' new_funs
+  ID.Map.fold
+    (fun f_id am m ->
+       let t = U.const f_id in
+       let dt = dt_of_am state am in
+       Utils.debugf ~section 3
+         "@[<2>decoded DT for %a:@ %a@]"
+         (fun k->k ID.print f_id DTU.print dt);
+       Model.add_value m (t, dt, am.am_kind))
+    spec_funs
+    m'
 
 (** {6 Integration in Transform} *)
 

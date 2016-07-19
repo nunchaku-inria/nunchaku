@@ -533,7 +533,10 @@ module Make(M : sig val mode : mode end) = struct
 
   (** {2 Decoding} *)
 
-  type fun_def = T.t Var.t list * (T.t, T.t) Model.DT.t * Model.symbol_kind
+  module DT = Model.DT
+  module DTU = Model.DT_util
+
+  type fun_def = (T.t, T.t) DT.t * Model.symbol_kind
 
   module IntMap = CCMap.Make(CCInt)
 
@@ -571,32 +574,28 @@ module Make(M : sig val mode : mode end) = struct
                  {dec with dec_constants;})
               dec dom
           | _ -> dec)
-      ~funs:(fun dec (t,vars,dt,k) -> match T.repr t with
+      ~values:(fun dec (t,dt,k) -> match T.repr t with
         | TI.Const id ->
           begin match ID.Tbl.get state.decode id with
             | None -> dec
             | Some (Test _) ->
-              {dec with dec_test=ID.Map.add id (vars,dt,k) dec.dec_test}
+              {dec with dec_test=ID.Map.add id (dt,k) dec.dec_test}
             | Some (Select (c,i)) ->
               let m = ID.Map.get_or ~or_:IntMap.empty c dec.dec_select in
-              let m = IntMap.add i (vars,dt,k) m in
+              let m = IntMap.add i (dt,k) m in
               {dec with dec_select=ID.Map.add c m dec.dec_select}
             | Some (Cstor _ | Axiom_rec) -> dec
           end
         | _ -> dec)
 
-  module DTU = Model.DT_util(T)
-
   let eval_fundef (f:fun_def) (args:T.t list) : T.t =
-    let vars, dt, _ = f in
-    assert (List.length vars = List.length args);
-    let subst = Var.Subst.empty in
-    let subst = Var.Subst.add_list ~subst vars args in
-    DTU.eval ~subst dt
+    let dt, _ = f in
+    assert (DT.num_vars dt >= List.length args);
+    DTU.apply_l dt args |> DTU.to_term
 
   (* evaluate a boolean function def *)
   let eval_bool_fundef (f:fun_def) (args:T.t list) : bool option =
-    let _, _, k = f in
+    let _, k = f in
     assert (k = Model.Symbol_prop);
     let res = eval_fundef f args in
     match T.repr res with
@@ -710,20 +709,14 @@ module Make(M : sig val mode : mode end) = struct
           | TI.Const id when ID.Tbl.mem state.tys id ->
             None (* drop (co)data domains from model *)
           | _ -> Some tup)
-      ~constants:(fun (t,u,k) ->
-        match T.repr t with
-          | TI.Const id when ID.Tbl.mem state.decode id ->
-            None (* drop the domain constants *)
-          | _ ->
-            let t = tr_term t in
-            let u = tr_term u in
-            Some (t,u,k))
-      ~funs:(fun (f,vars,dt,k) -> match T.repr f with
-        | TI.Const id when ID.Tbl.mem state.decode id -> None
+      ~values:(fun (t,dt,k) -> match T.repr t with
+        | TI.Const id when ID.Tbl.mem state.decode id ->
+          None (* drop the domain constants *)
         | _ ->
-          let f = tr_term f in
-          let dt = Model.DT.map dt ~term:tr_term ~ty:tr_term in
-          Some (f,vars,dt,k))
+          let t = tr_term t in
+          let dt = DT.map dt ~term:tr_term ~ty:tr_term in
+          Some (t,dt,k)
+      )
 
   (** {2 Pipeline} *)
 

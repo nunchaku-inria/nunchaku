@@ -205,7 +205,7 @@ let find_id_def ~state id =
 let decode_model ~skolems_in_model ~state m =
   Model.filter_map m
     ~finite_types:(fun (ty,dom) -> Some (ty,dom))
-    ~funs:(fun ((t,vars,body,k) as tup) ->
+    ~values:(fun ((t,dt,k) as tup) ->
       match T.repr t with
         | TI.Const id ->
             begin match find_id_def ~state id with
@@ -214,24 +214,10 @@ let decode_model ~skolems_in_model ~state m =
                 if sym.sym_decode && skolems_in_model
                 then
                   let t' = U.app_const epsilon [sym.sym_defines] in
-                  Some (t',vars,body,k)
+                  Some (t',dt,k)
                 else None (* ignore  this symbol *)
             end
         | _ -> Some tup)
-    ~constants:(fun (t,u,k) ->
-        match T.repr t with
-        | TI.Const id ->
-            begin match find_id_def ~state id with
-              | None -> Some (t, u, k)
-              | Some sym ->
-                if sym.sym_decode && skolems_in_model
-                then
-                  let t' = U.app_const epsilon [sym.sym_defines] in
-                  Some (t',u,k)
-                else None
-            end
-        | _ -> Some (t, u, k)
-      )
 
 let pipe_with ~mode ~decode ~print ~check =
   let on_encoded =

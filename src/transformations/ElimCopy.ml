@@ -65,7 +65,7 @@ let elim pb =
           | Stmt.Copy c ->
             begin match c.Stmt.copy_pred with
               | None -> copy_as_data ~info c
-              | Some _ -> assert false (* TODO *)
+              | Some _ -> assert false (* TODO: encoding as finite type *)
             end
           | _ -> [stmt]
       )
@@ -75,7 +75,7 @@ let elim pb =
 let decode_model (st:decode_state) m : _ Model.t =
   let env = st in
   Model.filter m
-    ~funs:(fun (t,_,_,_) -> match T.repr t with
+    ~values:(fun (t,_,_) -> match T.repr t with
       | TI.Const id ->
         begin match Env.find ~env id with
           | Some {Env.def=Env.Copy_concrete c; _} ->

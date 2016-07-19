@@ -49,6 +49,21 @@ let var v = Var v
 let true_ = True
 let false_ = False
 
+let term_hash = function
+  | App (f, _) -> ID.hash f
+  | Var v -> Var.id v |> ID.hash
+  | True
+  | False 
+  | Undefined_atom _ -> 42
+
+let rec term_equal a b = match a, b with
+  | True, True
+  | False, False -> true
+  | Var v1, Var v2 -> Var.equal v1 v2
+  | App (f1,l1), App (f2,l2) -> ID.equal f1 f2 && CCList.equal term_equal l1 l2
+  | Undefined_atom l1, Undefined_atom l2 -> CCList.equal term_equal l1 l2
+  | True, _ | False, _ | Var _, _ | App _, _ | Undefined_atom _, _ -> false
+
 let and_ = function
   | [] -> Atom True
   | [x] -> x

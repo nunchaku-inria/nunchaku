@@ -430,6 +430,8 @@ let encode_pb pb =
 
 (** {2 Decoding} *)
 
+module DT = Model.DT
+
 let rec tuples_of_ts ts: FO_rel.tuple Sequence.t = match ts with
   | FO_rel.TS_list l -> Sequence.of_list l
   | FO_rel.TS_product l ->
@@ -450,8 +452,8 @@ let atoms_of_ts ts: FO_rel.atom Sequence.t =
 let atoms_of_model m: FO_rel.atom Sequence.t =
   fun yield ->
     Model.iter m
-    ~constants:(fun (_,u,_) -> match u with
-      | FO_rel.Tuple_set set -> atoms_of_ts set yield
+    ~values:(fun (_,dt,_) -> match dt with
+      | DT.Yield (FO_rel.Tuple_set set) -> atoms_of_ts set yield
       | _ -> assert false)
 
 module AM = CCMap.Make(struct
@@ -484,15 +486,15 @@ exception Found_ptrue of ID.t
 let find_ptrue state map m : ID.t =
   try
     M.iter m
-      ~constants:(fun (t,set,_) -> match t with
+      ~values:(fun (t,set,_) -> match t with
         | FO_rel.Const id when ID.equal id state.ptrue ->
           begin match set with
-            | FO_rel.Tuple_set (FO_rel.TS_list [[a]]) ->
+            | DT.Yield (FO_rel.Tuple_set (FO_rel.TS_list [[a]])) ->
               let res = id_of_atom_ map a in
               raise (Found_ptrue res)
             | _ ->
               errorf "unexpected model for pseudo-true: `@[%a@]`"
-                FO_rel.print_expr set
+                (DT.print (fun _ -> FO_rel.print_expr)) set
           end
         | _ -> ()
       );
@@ -544,7 +546,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
       (* predicate case *)
       let vars = mk_vars doms in
       (* the cases that lead to "true" *)
-      let cases =
+      let tests =
         tuples_of_ts set
         |> Sequence.filter_map
           (fun tup ->
@@ -552,18 +554,25 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
              match tup_to_ids tup with
                | None -> None
                | Some ids ->
-                 let test = List.map2 (fun v id -> v, FO.T.const id) vars ids in
+                 let test =
+                   List.map2
+                     (fun v id -> DT.mk_flat_test v (FO.T.const id)) vars ids
+                 in
                  Some (test, FO.T.true_))
         |> Sequence.to_list
-      and else_ =
-        FO.T.false_
       in
-      let dt = M.DT.test cases ~else_ in
+      let fdt =
+        {M.DT.
+          fdt_vars=vars;
+          fdt_cases=tests;
+          fdt_default=None;
+        } in
+      let dt = M.DT.of_flat ~equal:FO.T.equal ~hash:FO.T.hash fdt in
       let t' = FO.T.const id in
       Utils.debugf ~section 3
         "@[<2>decode predicate `%a`@ as `@[%a@]`@]"
         (fun k->k ID.print id (M.DT.print FO.print_term') dt);
-      M.add_fun m (t',vars,dt,M.Symbol_prop)
+      M.add_value m (t', dt, M.Symbol_prop)
   end else begin match List.rev doms with
     | [] -> assert false (* impossible, needs at least to return arg *)
     | [_dom_ret] ->
@@ -580,7 +589,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
       let vars = mk_vars dom_args in
       (* now build the test tree. We know by construction that every
          set of arguments has at most one return value *)
-      let cases =
+      let tests =
         tuples_of_ts set
         |> Sequence.filter_map
           (fun tup -> match List.rev tup with
@@ -591,7 +600,11 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
                let test = match tup_to_ids args with
                  | None -> None
                  | Some ids ->
-                   let test = List.map2 (fun v id -> v, FO.T.const id) vars ids in
+                   let test =
+                     List.map2
+                       (fun v id -> DT.mk_flat_test v (FO.T.const id))
+                       vars ids
+                   in
                    Some test
                and ret = atom_to_id ret in
                match test, ret with
@@ -600,15 +613,19 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
                    Some (test, FO.T.const ret)
           )
         |> Sequence.to_list
-      and else_ =
-        FO.T.undefined_atom id fe.fun_ty_ret (List.map FO.T.var vars)
       in
-      let dt = M.DT.test cases ~else_ in
+      let fdt =
+        {M.DT.
+          fdt_vars=vars;
+          fdt_cases=tests;
+          fdt_default=None;
+        } in
+      let dt = M.DT.of_flat ~equal:FO.T.equal ~hash:FO.T.hash fdt in
       let t' = FO.T.const id in
       Utils.debugf ~section 3
         "@[<2>decode function `%a`@ as `@[%a@]`@]"
         (fun k->k ID.print id (M.DT.print FO.print_term') dt);
-      M.add_fun m (t',vars,dt,M.Symbol_fun)
+      M.add_value m (t', dt, M.Symbol_fun)
   end
 
 (* [id := set] is in the model, and we know [id] corresponds to the type
@@ -634,10 +651,10 @@ let rec decode_ty_dom_ map id (dom:domain) (set:FO_rel.tuple_set) : ID.t list =
 let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t =
   (* map finite types to their domain *)
   let ty_by_id : (domain * ID.t list) ID.Map.t =
-    M.constants m
+    M.values m
     |> Sequence.filter_map
-      (fun (t,u,_) -> match t, u with
-         | FO_rel.Const id, FO_rel.Tuple_set set ->
+      (fun (t,dt,_) -> match t, dt with
+         | FO_rel.Const id, DT.Yield (FO_rel.Tuple_set set) ->
             begin match ID.Tbl.get state.dom_of_id id with
               | Some dom ->
                 let ids = decode_ty_dom_ map id dom set in
@@ -648,9 +665,9 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
     |> ID.Map.of_seq
   in
   M.fold
-    ~constants:(fun m (t,u,_) -> match t, u with
+    ~values:(fun m (t,dt,_) -> match t, dt with
       | FO_rel.Const id, _ when ID.equal id state.ptrue -> m (* remove from model *)
-      | FO_rel.Const id, FO_rel.Tuple_set set ->
+      | FO_rel.Const id, DT.Yield (FO_rel.Tuple_set set) ->
         begin match find_fun_ state id with
           | Some fe ->
             (* [id] is a function, decode it as such *)

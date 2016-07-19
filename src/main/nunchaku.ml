@@ -456,10 +456,10 @@ let main_model ~output statements =
         (Model.print P.print' P.print) m;
   | Res.Sat m, O_nunchaku ->
       Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]@."
-        (Model.print P.print' P.print) m;
+        Model.Default.print_standard m;
   | Res.Sat m, O_tptp ->
       (* XXX: if potentially spurious, what should we print? *)
-      let module PM = Nunchaku_parsers.TPTP_print.Make(T) in
+      let module PM = Nunchaku_parsers.TPTP_print in
       Format.printf "@[<v2>%a@]@,@." PM.print_model m
   | Res.Unsat, O_nunchaku ->
       Format.printf "@[UNSAT@]@."

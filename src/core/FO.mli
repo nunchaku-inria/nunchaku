@@ -126,6 +126,9 @@ module T : sig
       There is no guarantee that two terms that are only structurally equal,
       but that have been built independently, will compare to 0 *)
 
+  val equal : t -> t -> bool
+  val hash : t -> int
+
   val builtin : Builtin.t -> t
   val const : id -> t
   val app : id -> t list -> t
