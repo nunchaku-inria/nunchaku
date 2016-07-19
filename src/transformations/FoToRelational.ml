@@ -270,7 +270,7 @@ and encode_var state v =
 
 (* an axiom expressing the well-typedness of [f], if needed.
    For instance, for [cons : i -> list -> list], it will return
-   [forall x:i y:list. some (y · x · cons · list)] *)
+   [forall x:i y:list. in (y · x · cons) list] *)
 let ty_axiom state (f_id:ID.t) (ty_args : FO.Ty.t list) (ty_ret:FO.Ty.t) : FO_rel.form =
   assert (not (FO.Ty.is_prop ty_ret));
   let vars =

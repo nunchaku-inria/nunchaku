@@ -587,18 +587,25 @@ module Make(M : sig val mode : mode end) = struct
 
   module DTU = Model.DT_util(T)
 
-  let eval_fundef (f:fun_def) (args:T.t list) : T.t =
+  let eval_fundef (f:fun_def) (arg:T.t) : T.t =
     let vars, dt, _ = f in
-    assert (List.length vars = List.length args);
-    let subst = Var.Subst.empty in
-    let subst = Var.Subst.add_list ~subst vars args in
-    DTU.eval ~subst dt
+    match vars with
+      | [] -> assert false
+      | [v] ->
+        let subst = Var.Subst.singleton v arg in
+        DTU.eval ~subst dt
+      | v :: other_vars ->
+        (* 'tis a function, mate! *)
+        let subst = Var.Subst.singleton v arg in
+        let subst, other_vars' = CCList.fold_map U.rename_var subst other_vars in
+        let body = DTU.eval ~subst dt in
+        U.fun_l other_vars' body
 
   (* evaluate a boolean function def *)
-  let eval_bool_fundef (f:fun_def) (args:T.t list) : bool option =
+  let eval_bool_fundef (f:fun_def) (arg:T.t) : bool option =
     let _, _, k = f in
     assert (k = Model.Symbol_prop);
-    let res = eval_fundef f args in
+    let res = eval_fundef f arg in
     match T.repr res with
       | TI.Builtin `True -> Some true
       | TI.Builtin `False -> Some false
@@ -658,7 +665,7 @@ module Make(M : sig val mode : mode end) = struct
                 CCList.find_pred_exn
                   (fun ecstor ->
                      let fundef = find_test_ dec (fst ecstor.ecstor_test) in
-                     match eval_bool_fundef fundef [t] with
+                     match eval_bool_fundef fundef t with
                        | None ->
                          errorf "cannot evaluate whether `%a`@ \
                                  starts with constructor `%a`"
@@ -682,7 +689,7 @@ module Make(M : sig val mode : mode end) = struct
               List.mapi
                 (fun i _ ->
                    let fundef = find_select_ dec cstor i in
-                   let arg = eval_fundef fundef [t] in
+                   let arg = eval_fundef fundef t in
                    aux (msc::stack) arg)
                 ecstor.ecstor_proj
             in
