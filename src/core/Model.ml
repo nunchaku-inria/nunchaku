@@ -483,30 +483,31 @@ module DT_util = struct
     | [] -> invalid_arg "DT_util.remove_first_var: constant tree"
     | v :: _ -> remove_vars [v] dt
 
-  let rec to_term dt: T.t = match dt with
-    | DT.Yield t -> t
-    | DT.Cases {DT.tests=[]; default=None; _} -> assert false
-    | DT.Cases {DT.var; tests=[]; default=Some d} ->
-      U.fun_ var (to_term d)
-    | DT.Cases {DT.var; tests; default=Some d} ->
-      let default = to_term d in
-      let tests = to_term_ite_ var tests default in
-      U.fun_ var tests
-    | DT.Cases {DT.var; tests; default=None} ->
-      (* NOTE: it would be better to have some "unreachable" here, but we
-         do not have the return type *)
-      let last = match List.rev tests with (_,t)::_ -> t | []-> assert false in
-      let tests = to_term_ite_ var tests (to_term last) in
-      U.fun_ var tests
-
-  (* make a if/then/else tree *)
-  and to_term_ite_ var l default =
-    List.fold_right
-      (fun (lhs,rhs) else_ ->
-         U.ite (U.eq (U.var var) lhs)
-           (to_term rhs)
-           else_)
-      l default
+  let to_term dt: T.t =
+    let vars = DT.vars dt in
+    (* make the nested-if tree *)
+    let rec aux dt = match dt with
+      | DT.Yield t -> t
+      | DT.Cases {DT.tests=[]; default=None; _} -> assert false
+      | DT.Cases {DT.tests=[]; default=Some d; _} -> aux d
+      | DT.Cases {DT.var; tests; default=Some d} ->
+        let default = aux d in
+        aux_ite_l var tests default
+      | DT.Cases {DT.var; tests; default=None} ->
+        (* NOTE: it would be better to have some "unreachable" here, but we
+           do not have the return type *)
+        let last = match List.rev tests with (_,t)::_ -> t | []-> assert false in
+        aux_ite_l var tests (aux last)
+    (* make a if/then/else tree *)
+    and aux_ite_l var l default =
+      List.fold_right
+        (fun (lhs,rhs) else_ ->
+           U.ite (U.eq (U.var var) lhs)
+             (aux rhs)
+             else_)
+        l default
+    in
+    U.fun_l vars (aux dt)
 
   let print : dt printer = DT.print P.print'
 end
