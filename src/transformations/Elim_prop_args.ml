@@ -48,6 +48,9 @@ let create_state ~sigma () =
 let declare_ state : (_,_) Stmt.t list =
   assert (not state.declared);
   state.declared <- true;
+  let ty_pprop = U.ty_const state.pseudo_prop in
+  let ptrue = U.const state.true_ in
+  let pfalse = U.const state.false_ in
   let mk_decl ?(attrs=[]) id ty =
     Stmt.decl ~info:Stmt.info_default ~attrs id ty
   in
@@ -57,15 +60,19 @@ let declare_ state : (_,_) Stmt.t list =
               Stmt.Attr_card_hint (Cardinality.of_int 2)]
       state.pseudo_prop (U.ty_builtin `Type)
   and decl_true =
-    mk_decl state.true_ (U.ty_const state.pseudo_prop)
+    mk_decl state.true_ ty_pprop
       ~attrs:[Stmt.Attr_pseudo_true]
-  and decl_false = mk_decl state.false_ (U.ty_const state.pseudo_prop)
+  and decl_false = mk_decl state.false_ ty_pprop
   and distinct_ax =
     Stmt.axiom1 ~info:Stmt.info_default
-      (U.not_
-         (U.eq (U.const state.true_) (U.const state.false_)))
+      (U.neq ptrue pfalse)
+  and exhaustive_ax =
+    let x = Var.make ~name:"x" ~ty:ty_pprop in
+    Stmt.axiom1 ~info:Stmt.info_default
+      (U.forall x
+         (U.or_ [U.eq (U.var x) ptrue; U.eq (U.var x) pfalse]))
   in
-  [ decl_ty; decl_true; decl_false; distinct_ax ]
+  [ decl_ty; decl_true; decl_false; distinct_ax; exhaustive_ax ]
 
 let find_ty state (t:term) : ty =
   U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) t
