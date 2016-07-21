@@ -1399,9 +1399,10 @@ module Util(T : S)
     | Var v -> var (Var.update_ty ~f:(f b_acc P.NoPol) v)
     | App (hd,l) ->
         begin match T.repr hd, l with
-        | Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
+        | Builtin (`DataTest _ | `DataSelect _), [t] ->
+            let hd = f b_acc pol hd in
             let t = f b_acc pol t in
-            app_builtin b [t]
+            app hd [t]
         | _ ->
             let hd = f b_acc pol hd in
             let l = List.map (f b_acc P.NoPol) l in
