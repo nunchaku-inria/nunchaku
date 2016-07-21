@@ -54,7 +54,7 @@ let create_state ~sigma () = {
 
 (* find predicate for this type
    precondition: [t] a type for which we created a new predicate *)
-let find_pred state t =
+let find_pred state (t:T.t): ID.t =
   assert (Ty.is_ty t);
   try Ty.Map.find t state.ty_to_pred
   with Not_found ->
@@ -161,6 +161,49 @@ let ensure_maps_to_predicate state ty =
   aux ret;
   ()
 
+(* type of pred [p] has at most [n] elements, return axiom
+   [exists x1...xn. p x_i & forall y. p y => (y = x1 | .... | y = xn)] *)
+let encode_max_card_ ~(pred:ID.t) n =
+  let mk_pred = U.app_const pred in
+  let xs =
+    CCList.init n
+      (fun i -> Var.makef ~ty:U.ty_unitype "x_%d" i)
+  and y =
+    Var.make ~name:"y" ~ty:U.ty_unitype
+  in
+  let guard_pred_x = U.and_ (List.map (fun x -> mk_pred [U.var x]) xs) in
+  let form_y_belongs_xs =
+    U.forall y
+      (U.imply
+         (mk_pred [U.var y])
+         (U.or_
+            (List.map (fun x -> U.eq (U.var x) (U.var y)) xs)))
+  in
+  let ax =
+    U.forall_l xs
+      (U.and_ [guard_pred_x; form_y_belongs_xs])
+  in
+  [Stmt.axiom1 ~info:Stmt.info_default ax]
+
+(* the type of [pred] has at least [n] elements, return list of axiom
+   [exists x1...xn. pred x_i & xi != xj] *)
+let encode_min_card_ ~(pred:ID.t) n =
+  let mk_pred = U.app_const pred in
+  let xs =
+    CCList.init n
+      (fun i -> Var.makef ~ty:U.ty_unitype "x_%d" i)
+  in
+  let guard_pred_x = U.and_ (List.map (fun x -> mk_pred [U.var x]) xs) in
+  let pairwise_distinct =
+    CCList.diagonal xs
+    |> List.map (fun (x1,x2) -> U.neq (U.var x1) (U.var x2))
+  in
+  let ax =
+    U.forall_l xs
+      (U.and_ (guard_pred_x :: pairwise_distinct))
+  in
+  [Stmt.axiom1 ~info:Stmt.info_default ax]
+
 let encode_stmt_ state st : (_,_) Stmt.t list =
   let info = Stmt.info st in
   match Stmt.view st with
@@ -168,25 +211,25 @@ let encode_stmt_ state st : (_,_) Stmt.t list =
     (* type declaration *)
     let _, args, _ = U.ty_unfold ty in
     assert (List.for_all U.ty_is_Type args);
+    (* remove statement, but we might have some specific axioms
+       related to cardinalities *)
     begin match args with
       | [] ->
-        (* TODO: combine the min/max of cardinalities for unitype,
-           OR emit some constraint on the predicate *)
-        List.iter
-          (function
-            | Stmt.Attr_card_max _
-            | Stmt.Attr_card_min _ ->
-              errorf_ "cannot encode cardinality bounds of %a to TPTP" ID.print id
-            | _ -> ())
-          attrs;
         (* atomic type, easy *)
         let p = ID.make_f "is_%a" ID.print_name id in
-        add_pred_ state (U.const id) p
+        add_pred_ state (U.const id) p;
+        (* emit some constraint on the predicate for cardinalities *)
+        CCList.flat_map
+          (function
+            | Stmt.Attr_card_max i -> encode_max_card_ ~pred:p i
+            | Stmt.Attr_card_min i -> encode_min_card_ ~pred:p i
+            | _ -> [])
+          attrs
       | _::_ ->
         (* not atomic, we need to declare each instance later *)
         ID.Tbl.add state.parametrized_ty id ();
-    end;
-    [] (* remove statement *)
+        []
+    end
   | Stmt.Decl (id, ty, attrs) when U.ty_returns_Prop ty ->
     (* symbol declaration *)
     ensure_maps_to_predicate state ty;
