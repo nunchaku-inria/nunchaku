@@ -103,6 +103,8 @@ module Builtin = struct
   let prec : _ t -> prec = function
     | `True
     | `False
+    | `DataSelect _
+    | `DataTest _
     | `Undefined_atom _ -> P_bot
     | `Eq _ -> P_eq
     | `Not _ -> P_not
@@ -110,8 +112,6 @@ module Builtin = struct
     | `Or _ -> P_or
     | `And _ -> P_and
     | `Guard _ -> P_guard
-    | `DataSelect _
-    | `DataTest _
     | `Undefined_self _ -> P_app
     | _ -> P_top
 
