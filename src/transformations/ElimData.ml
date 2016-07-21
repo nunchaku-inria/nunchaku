@@ -13,6 +13,7 @@ module U = T.U
 module P = T.P
 module PStmt = Stmt.Print(P)(P)
 module AT = AnalyzeType.Make(T)
+module Pol = Polarity
 
 type mode =
   | M_data
@@ -122,6 +123,10 @@ module Make(M : sig val mode : mode end) = struct
     (* environment *)
     at_cache: AT.cache;
     (* used for computing type cardinalities *)
+    mutable sat_means_unknown: bool;
+    (* completeness? *)
+    mutable unsat_means_unknown: bool;
+    (* completeness? *)
   }
 
   type decode_state = state
@@ -132,6 +137,8 @@ module Make(M : sig val mode : mode end) = struct
     map=Tbl.create 16;
     env;
     at_cache=AT.create_cache();
+    sat_means_unknown=false;
+    unsat_means_unknown=false;
   }
 
   (* FIXME: replace quantifiers over infinite datatypes with the proper
@@ -149,7 +156,25 @@ module Make(M : sig val mode : mode end) = struct
     | Some res -> res
     | None -> errorf "could not find encoding of `is-%a`" ID.print id
 
-  let rec tr_term state t : T.t = match T.repr t with
+  (* is [ty] an infinite type that is being encoded? *)
+  let is_infinite_and_encoded_ state (ty:T.t): bool = match T.repr ty with
+    | TI.Const id ->
+      begin match Env.find ~env:state.env id, mode with
+        | Some {Env.def=Env.Data (`Data, _, _); _}, M_data
+        | Some {Env.def=Env.Data (`Codata, _, _); _}, M_codata ->
+          let card = AT.cardinality_ty_id ~cache:state.at_cache state.env id in
+          begin match card with
+            | Cardinality.Unknown
+            | Cardinality.Infinite -> true
+            | Cardinality.Exact _
+            | Cardinality.QuasiFiniteGEQ _ -> false
+          end
+        | Some _, _ -> false
+        | None, _ -> assert false
+      end
+    | _ -> false
+
+  let rec tr_term state (pol:Pol.t) t : T.t = match T.repr t with
     | TI.Const id ->
       (* constant constructor, or unrelated ID *)
       begin match Tbl.get state.map (Cstor id) with
@@ -163,7 +188,7 @@ module Make(M : sig val mode : mode end) = struct
     | TI.App (f, l) ->
       begin match T.repr f with
         | TI.Const f_id ->
-          let l' = List.map (tr_term state) l in
+          let l' = List.map (tr_term state Pol.NoPol) l in
           begin match Tbl.get state.map (Cstor f_id) with
             | None ->
               U.app_const f_id l'
@@ -180,7 +205,7 @@ module Make(M : sig val mode : mode end) = struct
               in
               U.asserting t' guard
           end
-        | _ -> tr_term_aux state t
+        | _ -> tr_term_aux state Pol.NoPol t
       end
     | TI.Builtin (`DataSelect (id,i)) ->
       begin match get_select_ state id i with
@@ -198,11 +223,45 @@ module Make(M : sig val mode : mode end) = struct
           then errorf "could not find encoding of `is-%a`" ID.print id
           else t
       end
+    | TI.Bind ((`Forall | `Exists) as b, v, f)
+      when is_infinite_and_encoded_ state (Var.ty v) ->
+      (* quantifier over an infinite (co)data, must approximate
+         depending on the polarity *)
+      begin match b, pol with
+        | `Forall, Pol.Neg
+        | `Exists, Pol.Pos ->
+          let res = U.mk_bind b v (tr_term state pol f) in
+          state.unsat_means_unknown <- true;
+          Utils.debugf ~section 3
+            "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
+             quantifying over type `@[%a@]`@]"
+            (fun k->k P.print t P.print res Pol.pp pol P.print (Var.ty v));
+          res
+        | `Forall, Pol.Pos
+        | `Exists, Pol.Neg ->
+          let res = if pol=Pol.Pos then U.false_ else U.true_ in
+          state.unsat_means_unknown <- true;
+          Utils.debugf ~section 3
+            "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
+             quantifying over type `@[%a@]`@]"
+            (fun k->k P.print t P.print res Pol.pp pol P.print (Var.ty v));
+          res
+        | _, Pol.NoPol ->
+          (* aww. no idea, just avoid this branch if possible *)
+          let res = U.asserting U.false_ [U.false_] in
+          state.sat_means_unknown <- true;
+          state.unsat_means_unknown <- true;
+          Utils.debugf ~section 3
+            "@[<2>encode `@[%a@]`@ as `@[%a@]` in pol %a,@ \
+             quantifying over type `@[%a@]`@]"
+            (fun k->k P.print t P.print res Pol.pp pol P.print (Var.ty v));
+          res
+      end
     | TI.Match _ ->
       errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.print t
-    | _ -> tr_term_aux state t
-  and tr_term_aux state t =
-    U.map () t
+    | _ -> tr_term_aux state pol t
+  and tr_term_aux state pol t =
+    U.map_pol () pol t
       ~bind:(fun () v -> (), v)
       ~f:(fun () -> tr_term state)
 
@@ -518,7 +577,7 @@ module Make(M : sig val mode : mode end) = struct
       encode_data state l
     | _ ->
       let stmt =
-        Stmt.map stmt ~term:(tr_term state) ~ty:(tr_ty state)
+        Stmt.map stmt ~term:(tr_term state Pol.Pos) ~ty:(tr_ty state Pol.NoPol)
       in
       [stmt]
 
@@ -528,6 +587,11 @@ module Make(M : sig val mode : mode end) = struct
     let pb' =
       Problem.flat_map_statements pb
         ~f:(encode_stmt state)
+    in
+    let pb' =
+      pb'
+      |> Problem.add_unsat_means_unknown state.unsat_means_unknown
+      |> Problem.add_sat_means_unknown state.sat_means_unknown
     in
     pb', state
 
