@@ -26,6 +26,7 @@ type prec =
   | P_arrow
   | P_eq
   | P_not
+  | P_ite
   | P_bind
   | P_and
   | P_or
@@ -423,6 +424,7 @@ module Print(T : REPR)
     | P_top
     | P_not
     | P_arrow
+    | P_ite
     | P_bind -> true
 
   (* put "()" around [fmt] if needed *)
@@ -442,16 +444,16 @@ module Print(T : REPR)
     | Builtin (`Ite (a,b,c)) when is_if_ c ->
         (* special case to avoid deep nesting of ifs *)
         let pp_middle out (a,b) =
-          wrap P_top p out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]"
-            print  a print b
+          fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]"
+            (print' P_ite) a (print' P_ite) b
         in
         let middle, last = unroll_if_ c in
         assert (not (is_if_ last));
-        wrap P_top p out
+        wrap P_ite p out
           "@[<hv>@[<2>if@ @[%a@]@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
-          print a print b
+          (print' P_ite) a (print' P_ite) b
           (pp_list_ ~sep:"" pp_middle) middle
-          print last
+          (print' P_ite) last
     | Builtin b ->
         let p' = Builtin.prec b in
         wrap p' p out "%a" (Builtin.pp (print' p')) b
