@@ -82,10 +82,14 @@ type 'ty mutual_types = {
   tys_defs : 'ty tydef list;
 }
 
+type attr =
+  | Attr_pseudo_prop
+  | Attr_pseudo_true
+
 (** Statement *)
 type ('t, 'ty) statement =
-  | TyDecl of id * int  (** number of arguments *)
-  | Decl of id * 'ty toplevel_ty
+  | TyDecl of id * int * attr list (** number of arguments *)
+  | Decl of id * 'ty toplevel_ty * attr list
   | Axiom of 't
   | CardBound of id * [`Max | `Min] * int (** cardinality bound *)
   | MutualTypes of [`Data | `Codata] * 'ty mutual_types
@@ -121,6 +125,9 @@ module T : sig
       {b NOT} structural comparison!
       There is no guarantee that two terms that are only structurally equal,
       but that have been built independently, will compare to 0 *)
+
+  val equal : t -> t -> bool
+  val hash : t -> int
 
   val builtin : Builtin.t -> t
   val const : id -> t

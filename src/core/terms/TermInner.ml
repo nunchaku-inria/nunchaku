@@ -26,6 +26,7 @@ type prec =
   | P_arrow
   | P_eq
   | P_not
+  | P_ite
   | P_bind
   | P_and
   | P_or
@@ -102,6 +103,8 @@ module Builtin = struct
   let prec : _ t -> prec = function
     | `True
     | `False
+    | `DataSelect _
+    | `DataTest _
     | `Undefined_atom _ -> P_bot
     | `Eq _ -> P_eq
     | `Not _ -> P_not
@@ -109,8 +112,6 @@ module Builtin = struct
     | `Or _ -> P_or
     | `And _ -> P_and
     | `Guard _ -> P_guard
-    | `DataSelect _
-    | `DataTest _
     | `Undefined_self _ -> P_app
     | _ -> P_top
 
@@ -423,6 +424,7 @@ module Print(T : REPR)
     | P_top
     | P_not
     | P_arrow
+    | P_ite
     | P_bind -> true
 
   (* put "()" around [fmt] if needed *)
@@ -442,16 +444,16 @@ module Print(T : REPR)
     | Builtin (`Ite (a,b,c)) when is_if_ c ->
         (* special case to avoid deep nesting of ifs *)
         let pp_middle out (a,b) =
-          wrap P_top p out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]"
-            print  a print b
+          fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]"
+            (print' P_ite) a (print' P_ite) b
         in
         let middle, last = unroll_if_ c in
         assert (not (is_if_ last));
-        wrap P_top p out
+        wrap P_ite p out
           "@[<hv>@[<2>if@ @[%a@]@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
-          print a print b
+          (print' P_ite) a (print' P_ite) b
           (pp_list_ ~sep:"" pp_middle) middle
-          print last
+          (print' P_ite) last
     | Builtin b ->
         let p' = Builtin.prec b in
         wrap p' p out "%a" (Builtin.pp (print' p')) b
@@ -1397,9 +1399,10 @@ module Util(T : S)
     | Var v -> var (Var.update_ty ~f:(f b_acc P.NoPol) v)
     | App (hd,l) ->
         begin match T.repr hd, l with
-        | Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
+        | Builtin (`DataTest _ | `DataSelect _), [t] ->
+            let hd = f b_acc pol hd in
             let t = f b_acc pol t in
-            app_builtin b [t]
+            app hd [t]
         | _ ->
             let hd = f b_acc pol hd in
             let l = List.map (f b_acc P.NoPol) l in

@@ -30,6 +30,7 @@ module Features : sig
     | Ind_preds
     | Match
     | Data
+    | Codata
     | Fun (* lambdas *)
     | HOF (* any higher-order fun *)
     | Prop_args (* propositions as arguments to functions *)

@@ -275,7 +275,7 @@ let tr_problem pb =
 
 let decode_model ~state m =
   Model.filter m
-    ~funs:(fun (t,_,_,_) -> match T.repr t with
+    ~values:(fun (t,_,_) -> match T.repr t with
       | TI.Const id when ID.Tbl.mem state.new_ids id ->
         false (* drop anonymous funs from model *)
       | _ -> true)

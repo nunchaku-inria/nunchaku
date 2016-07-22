@@ -224,19 +224,27 @@ module ToFO(T : TI.S) = struct
             conv_eqn (vars, List.map (conv_term ~sigma) args, rhs, side))
           l
 
+let conv_attrs =
+  CCList.filter_map
+    (function
+      | Statement.Attr_pseudo_prop -> Some FO.Attr_pseudo_prop
+      | Statement.Attr_pseudo_true -> Some FO.Attr_pseudo_true
+      | _ -> None)
+
   let convert_statement ~sigma st =
     let module St = Statement in
     match St.view st with
     | St.Decl (id, ty, attrs) ->
         let _, _, ret = U.ty_unfold ty in
+        let attrs' = conv_attrs attrs in
         let st' =
           if U.ty_is_Type ret
           then
             let n = U.ty_num_param ty in
-            FO.TyDecl (id, n)
+            FO.TyDecl (id, n, attrs')
           else
             let ty = conv_top_ty ty in
-            FO.Decl (id, ty)
+            FO.Decl (id, ty, attrs')
         in
         (* additional statements, obtained from attributes *)
         let others =
@@ -251,6 +259,8 @@ module ToFO(T : TI.S) = struct
               | St.Attr_infinite_upcast
               | St.Attr_abstract
               | St.Attr_incomplete
+              | St.Attr_pseudo_prop
+              | St.Attr_pseudo_true
               | St.Attr_exn _ -> None)
             attrs
         in
@@ -266,7 +276,7 @@ module ToFO(T : TI.S) = struct
               (fun def ->
                 let ty = conv_top_ty def.St.defined_ty in
                 let head = def.St.defined_head in
-                FO.Decl (head, ty))
+                FO.Decl (head, ty, []))
               s.St.spec_defined
             and ax = List.map
               (fun ax -> ax |> conv_form ~sigma |> mk_ax)
@@ -282,7 +292,7 @@ module ToFO(T : TI.S) = struct
                   let d = def.St.rec_defined in
                   let ty = conv_top_ty d.St.defined_ty in
                   let head = d.St.defined_head in
-                  FO.Decl (head, ty))
+                  FO.Decl (head, ty, []))
                 s
             and axioms =
               CCList.flat_map

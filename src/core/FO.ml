@@ -81,10 +81,14 @@ type 'ty mutual_types = {
   tys_defs : 'ty tydef list;
 }
 
+type attr =
+  | Attr_pseudo_prop
+  | Attr_pseudo_true
+
 (** Statement *)
 type ('t, 'ty) statement =
-  | TyDecl of id * int  (** number of arguments *)
-  | Decl of id * 'ty toplevel_ty
+  | TyDecl of id * int * attr list (** number of arguments *)
+  | Decl of id * 'ty toplevel_ty * attr list
   | Axiom of 't
   | CardBound of id * [`Max | `Min] * int (** cardinality bound *)
   | MutualTypes of [`Data | `Codata] * 'ty mutual_types
@@ -121,7 +125,7 @@ module Ty = struct
     | TyBuiltin _, _ -> Pervasives.compare (to_int_ t1.view) (to_int_ t2.view)
 
   let hash t = match t.view with
-    | TyBuiltin b -> 3
+    | TyBuiltin _ -> 3
     | TyApp (id, _) -> ID.hash id
 
   let compare = compare_ty
@@ -140,6 +144,45 @@ module T = struct
       let t = {view; id= !n } in
       incr n;
       t
+
+  (* very naive hash *)
+  let hash t = match t.view with
+    | Var v -> ID.hash (Var.id v)
+    | App (id,_) -> ID.hash id
+    | _ -> 42
+
+  let rec equal t1 t2 = match t1.view, t2.view with
+    | True, True
+    | False, False -> true
+    | App (f1,l1), App (f2,l2) ->
+      ID.equal f1 f2 && CCList.equal equal l1 l2
+    | Var v1, Var v2 -> Var.equal v1 v2
+    | Undefined (i1,t1), Undefined (i2,t2)
+    | DataTest (i1,t1), DataTest(i2,t2) -> ID.equal i1 i2 && equal t1 t2
+    | DataSelect (i1,n1,t1), DataSelect(i2,n2,t2) ->
+      ID.equal i1 i2 && n1=n2 && equal t1 t2
+    | Undefined_atom (i1,_,l1), Undefined_atom (i2,_,l2) ->
+      ID.equal i1 i2 && CCList.equal equal l1 l2
+    | Builtin b1, Builtin b2 -> Builtin.equal b1 b2
+    | Unparsable ty1, Unparsable ty2 -> Ty.equal ty1 ty2
+    | Forall (v1,t1), Forall (v2,t2)
+    | Exists (v1,t1), Exists (v2,t2)
+    | Mu (v1,t1), Mu (v2,t2)
+    | Fun (v1,t1), Fun (v2,t2) -> Var.equal v1 v2 && equal t1 t2
+    | Let (v1,t1,u1), Let (v2,t2,u2) ->
+      Var.equal v1 v2 && equal t1 t2 && equal u1 u2
+    | Ite (a1,b1,c1), Ite (a2,b2,c2) ->
+      equal a1 a2 && equal b1 b2 && equal c1 c2
+    | And l1, And l2
+    | Or l1, Or l2 -> CCList.equal equal l1 l2
+    | Not a, Not b -> equal a b
+    | Imply (a1,b1), Imply (a2,b2)
+    | Equiv (a1,b1), Equiv (a2,b2) -> equal a1 a2 && equal b1 b2
+    | True, _ | False, _ | App _, _ | Var _, _ | Undefined _, _
+    | Undefined_atom _, _ | DataSelect _, _ | DataTest _, _
+    | Forall _, _ | Exists _, _ | Mu _, _ | Fun _, _
+    | Let _, _ | Ite _, _ | And _, _ | Or _, _ | Not _, _
+    | Imply _, _ | Equiv _, _ | Eq _, _ | Builtin _, _ | Unparsable _, _ -> false
 
   let builtin b = make_ (Builtin b)
   let app id l = make_ (App(id,l))
@@ -278,11 +321,19 @@ let print_model out m =
   fpf out "@[model {@,@[<hv>%a@]}@]"
     (CCFormat.list ~start:"" ~stop:"" ~sep:","  pp_pair) m
 
+let print_attr out = function
+  | Attr_pseudo_prop -> fpf out "pseudo_prop"
+  | Attr_pseudo_true -> fpf out "pseudo_true"
+
+let print_attrs out = function
+  | [] -> ()
+  | l -> fpf out " [@[%a@]]" (pp_list_ ~sep:"," print_attr) l
+
 let print_statement out s = match s with
-  | TyDecl (id, n) ->
-    fpf out "@[<2>type %a (arity %d).@]" ID.print id n
-  | Decl (v, ty) ->
-    fpf out "@[<2>val %a@ : %a.@]" ID.print v print_toplevel_ty ty
+  | TyDecl (id, n, attrs) ->
+    fpf out "@[<2>type %a (arity %d%a).@]" ID.print id n print_attrs attrs
+  | Decl (v, ty, attrs) ->
+    fpf out "@[<2>val %a@ : %a%a.@]" ID.print v print_toplevel_ty ty print_attrs attrs
   | Axiom t -> fpf out "@[<2>axiom %a.@]" print_term t
   | CardBound (ty_id, which, n) ->
     let s = match which with `Max -> "max_card" | `Min -> "min_card" in
@@ -318,11 +369,16 @@ let print_problem out pb =
 
 (** {2 Utils} *)
 module Util = struct
+  module DT = Model.DT
+
   (* condition: var = term *)
-  type cond = Ty.t Var.t * T.t
+  type cond = (T.t, Ty.t) DT.flat_test
 
   exception Parse_err of unit lazy_t
   (* evaluate the lazy -> print a warning *)
+
+  let mk_eq = DT.mk_flat_test
+  let mk_true v = mk_eq v T.true_
 
   (* split [t] into a list of equations [var = t'] where [var in vars] *)
   let rec get_eqns_exn ~vars t : cond list =
@@ -339,14 +395,13 @@ module Util = struct
     | And l -> CCList.flat_map (get_eqns_exn ~vars) l
     | Eq (t1, t2) ->
         begin match T.view t1, T.view t2 with
-          | Var v, _ when List.exists (Var.equal v) vars ->
-              [v, t2]
-          | _, Var v when List.exists (Var.equal v) vars ->
-              [v, t1]
+          | Var v, _ when List.exists (Var.equal v) vars -> [mk_eq v t2]
+          | _, Var v when List.exists (Var.equal v) vars -> [mk_eq v t1]
           | _ -> fail()
         end
     | Var v when List.exists (Var.equal v) vars ->
-        [v, T.true_] (* boolean variable *)
+      assert (Ty.is_prop (Var.ty v));
+      [mk_true v]
     | Var _ ->
         let msg = lazy (
           Utils.warningf Utils.Warn_model_parsing_error
@@ -359,8 +414,6 @@ module Util = struct
   let get_eqns ~vars t : cond list option =
     try Some (get_eqns_exn ~vars t)
     with Parse_err _ -> None
-
-  module DT = Model.DT
 
   module Ite_M = struct
     (* returns a sequence of (conditions, 'a).
@@ -387,26 +440,50 @@ module Util = struct
     let case
     : type a. cond list -> a t -> a t -> a t
     = fun cond a b ->
-      Sequence.append
-        (Sequence.map (fun (cond',a') -> List.rev_append cond cond', a') a)
-        b
+      (* remove trivial tests [v=v] *)
+      let cond =
+        List.filter
+          (fun {DT.ft_var=v; ft_term=t} -> match T.view t with
+             | Var v' -> not (Var.equal v v')
+             | _ -> true)
+          cond
+      in
+      let a' =
+        Sequence.map
+           (fun (cond',ret) -> List.rev_append cond cond', ret)
+           a
+      in
+      Sequence.append a' b
+
+    let ite
+      : type a. Ty.t Var.t -> a t -> a t -> a t
+      = fun v a b -> case [mk_true v] a b
 
     let rec fold_m f acc l = match l with
       | [] -> return acc
       | x :: tail ->
-          f acc x >>= fun acc -> fold_m f acc tail
+        f acc x >>= fun acc -> fold_m f acc tail
 
-    (* convert to a decision tree. Careful with the order of cases,
-       we reverse twice. *)
-    let to_dt t : _ DT.t =
-      let l = Sequence.to_rev_list t in
-      match l with
-      | [] -> assert false
-      | (_::_,_)::_ -> assert false
-      | ([], else_) :: cases ->
-          (* last case must have empty condition *)
-          let cases = List.rev cases in
-          DT.test cases ~else_
+    (* convert to a decision tree. *)
+    let to_dt ~vars t : _ DT.t =
+      (* tests must have >= 1 condition; otherwise they are default *)
+      let tests, others =
+        Sequence.to_list t
+        |> List.partition (fun (tests,_) -> tests<>[])
+      in
+      let default = match others with
+        | [] -> None
+        | ([],t)::_ -> Some t
+        | _ -> assert false
+      in
+      let fdt =
+        {DT.
+          fdt_vars=vars;
+          fdt_cases=tests;
+          fdt_default=default;
+        }
+      in
+      DT.of_flat ~equal:T.equal ~hash:T.hash fdt
   end
 
   let dt_of_term ~vars t =
@@ -429,7 +506,7 @@ module Util = struct
       | Exists (_,_) -> return t
       | Var v when Ty.is_prop (Var.ty v)  ->
           (* boolean variable: perform a test on it *)
-          case [v, T.true_] (return T.true_) (return T.false_)
+          ite v (return T.true_) (return T.false_)
       | Var _ -> return t
       | Eq (a,b) ->
         begin match get_eqns ~vars t with
@@ -470,7 +547,7 @@ module Util = struct
     in
     try
       let res = aux t in
-      Ite_M.to_dt res
+      Ite_M.to_dt ~vars res
     with Parse_err msg ->
       (* return "unparsable" *)
       Lazy.force msg;
@@ -479,8 +556,8 @@ module Util = struct
   let problem_kinds pb =
     let module M = Model in
     let add_stmt m = function
-      | TyDecl (id, _) -> ID.Map.add id M.Symbol_utype m
-      | Decl (id, (_, ret)) ->
+      | TyDecl (id, _, _) -> ID.Map.add id M.Symbol_utype m
+      | Decl (id, (_, ret), _) ->
           let k = match Ty.view ret with
             | TyBuiltin `Prop -> M.Symbol_prop
             | TyBuiltin `Unitype

@@ -6,6 +6,7 @@
 open Nunchaku_core
 
 module TI = TermInner
+module M = Model
 module DT = Model.DT
 module T = TermInner.Default
 module U = T.U
@@ -46,39 +47,39 @@ let renaming_rules_of_model_ m =
     ID.Map.empty
     m.Model.finite_types
 
-type rule = ID.t * ID.t
 type rules = ID.t ID.Map.t
 
 let pp_rule_ out (l,r) =
   fpf out "%a → @[%a@]" ID.print l ID.print r
 
+let rename_ i v =
+  let name = Format.sprintf "v_%d" i in
+  Var.make ~ty:(Var.ty v) ~name
+
 (* rename [v] and add the renaming to [subst] *)
 let rename_copy_ subst v =
-  let name = Format.sprintf "v_%d" (Var.Subst.size subst) in
-  let v' = Var.make ~ty:(Var.ty v) ~name in
+  let v' = rename_ (Var.Subst.size subst) v in
   Var.Subst.add ~subst v v', v'
 
 (* rewrite [t] using the set of rewrite rules *)
-let rec rewrite_term_ (rules:rules) subst t =
-  match T.repr t with
+let rec rewrite_term_ (rules:rules) subst t : T.t = match T.repr t with
   | TI.Const id ->
-      begin try
-        let id' = ID.Map.find id rules in
-        U.const id'
-      with Not_found -> t
-      end
+    begin match ID.Map.get id rules with
+      | Some id' -> U.const id'
+      | None -> t
+    end
   | TI.Var v ->
-      begin try U.var (Var.Subst.find_exn ~subst v)
+    begin try U.var (Var.Subst.find_exn ~subst v)
       with Not_found -> t
-      end
+    end
   | _ ->
-      let t =
-        U.map subst t
-          ~f:(rewrite_term_ rules)
-          ~bind:rename_copy_
-      in
-      (* reduce the term *)
-      Red.whnf t
+    let t =
+      U.map subst t
+        ~f:(rewrite_term_ rules)
+        ~bind:rename_copy_
+    in
+    (* reduce the term *)
+    Red.whnf t
 
 let rename m : _ Model.t =
   let rules = renaming_rules_of_model_ m in
@@ -86,10 +87,7 @@ let rename m : _ Model.t =
     (fun k->k (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_rule_) (ID.Map.to_seq rules));
   (* update domains *)
   let finite_types =
-    let rename_id id =
-      try ID.Map.find id rules
-      with Not_found -> id
-    in
+    let rename_id id = ID.Map.get_or ~or_:id id rules in
     List.map
       (fun (t, dom) -> t, List.map rename_id dom)
       m.Model.finite_types
@@ -98,19 +96,20 @@ let rename m : _ Model.t =
   let rw_nil = rewrite_term_ rules Var.Subst.empty in
   { m with Model.
     finite_types;
-    constants=List.map
-      (fun (t,u,k) -> rw_nil t, rw_nil u, k)
-      m.Model.constants;
-    funs=List.map
-      (fun (t,vars,rhs, k) ->
+    values=List.map
+      (fun (t,dt,k) ->
         let t = rw_nil t in
-        let subst, vars = Utils.fold_map rename_copy_ Var.Subst.empty vars in
-        let rw_subst t = rewrite_term_ rules subst t in
-        t, vars, DT.map ~var:(Var.Subst.find ~subst) ~term:rw_subst ~ty:rw_subst rhs, k)
-      m.Model.funs;
+        let dt = DT.map ~term:rw_nil ~ty:rw_nil dt in
+        let subst =
+          let vars = DT.vars dt in
+          let vars' = List.mapi rename_ vars in
+          Var.Subst.of_list vars vars'
+        in
+        let dt = M.DT_util.map_vars ~subst dt in
+        t, dt, k
+      )
+      m.Model.values;
   }
-
-module MU = Model.DT_util(T)
 
 (* remove recursion in models *)
 let remove_recursion m : _ Model.t =
@@ -122,22 +121,22 @@ let remove_recursion m : _ Model.t =
         | TI.Const id ->
           let res =
             CCList.find_map
-              (fun (lhs,vars,dt,_) ->
-                 match T.repr lhs with
-                   | TI.Const id' when ID.equal id id' ->
-                     assert (List.length vars=List.length l);
-                     Some (vars,dt)
-                   | _ -> None)
-              m.Model.funs
+              (fun (lhs,dt,_) -> match T.repr lhs with
+                 | TI.Const id' when ID.equal id id' ->
+                   assert (DT.num_vars dt >= List.length l);
+                   Some dt
+                 | _ -> None)
+              m.Model.values
           in
           begin match res with
             | None -> U.app f l
-            | Some (vars, dt) ->
-              let subst = Var.Subst.of_list vars l in
-              let t' = MU.eval ~subst dt in
+            | Some dt ->
+              let dt' = M.DT_util.apply_l dt l in
               Utils.debugf ~section 5 "@[<2>eval `@[%a@]`@ into `@[%a@]`@]"
-                (fun k->k P.print t P.print t');
-              eval_t t'
+                (fun k->k P.print t M.DT_util.print dt');
+              (* if there remain arguments, consider the [dt] as a function
+                 anyway *)
+              eval_t (M.DT_util.to_term dt')
           end
         | _ -> U.app f l
       end
@@ -145,10 +144,39 @@ let remove_recursion m : _ Model.t =
   in
   Model.map m ~term:eval_t ~ty:(fun ty->ty)
 
+(* remove trivial tests [x = x] *)
+let remove_trivial_tests m : _ Model.t =
+  let rec aux dt = match dt with
+    | DT.Yield _ -> dt
+    | DT.Cases {DT.var; tests; default=d} ->
+      let others, tests =
+        CCList.fold_filter_map
+          (fun o (lhs,rhs) ->
+             let rhs = aux rhs in
+             match T.repr lhs with
+               | TI.Var v' when Var.equal var v' ->
+                 rhs :: o, None
+               | _ -> o, Some (lhs, rhs))
+          [] tests
+      in
+      (* if some tests became trivial, they might replace [default] *)
+      let default = match d, others with
+        | None, [] -> None
+        | None, o1 :: _ -> Some o1
+        | Some d, _ -> Some (aux d)
+      in
+      DT.cases var ~tests ~default
+  in
+  Model.filter_map m
+    ~finite_types:(fun tup -> Some tup)
+    ~values:(fun (t,dt,k) ->
+      let dt = aux dt in
+      Some (t,dt,k))
+
 let pipe ~print:must_print =
   Transform.backward ~name
     (fun res ->
-      let f m = m |> rename |> remove_recursion in
+      let f m = m |> remove_recursion |> remove_trivial_tests |> rename in
       let res' = Problem.Res.map_m ~f res in
       if must_print then (
         let module P = TI.Print(T) in

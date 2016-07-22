@@ -25,6 +25,7 @@ module Features = struct
     | Ind_preds
     | Match
     | Data
+    | Codata
     | Fun (* lambdas *)
     | HOF (* any higher-order fun *)
     | Prop_args (* propositions as arguments to functions *)
@@ -46,6 +47,7 @@ module Features = struct
     ; Ind_preds, Present
     ; Match, Present
     ; Data, Present
+    ; Codata, Present
     ; Fun, Present
     ; HOF, Present
     ; Prop_args, Present
@@ -80,6 +82,7 @@ module Features = struct
     | Ind_preds -> "ind_preds"
     | Match -> "match"
     | Data -> "data"
+    | Codata -> "codata"
     | Fun -> "fun"
     | HOF -> "hof"
     | Prop_args -> "prop_args"

@@ -467,11 +467,15 @@ let dispatch = {
     Utils.debugf ~section 3
       "@[<2>monomorphize copy type@ `@[%a@]`@ on (%a)@ at depth %d@]"
       (fun k->k PStmt.print_copy c ArgTuple.print tup depth);
+    (* ensure we do not encode this several times, from type/abstract/concrete *)
+    Trav.mark_processed self c.Stmt.copy_id tup;
+    Trav.mark_processed self c.Stmt.copy_abstract tup;
+    Trav.mark_processed self c.Stmt.copy_concrete tup;
+    (* mangle ID, functions and definition, possibly monomorphizing
+       other types in the process *)
     let subst =
       Subst.add_list ~subst:Subst.empty
         c.Stmt.copy_vars (ArgTuple.m_args tup) in
-    (* mangle ID, functions and definition, possibly monomorphizing
-       other types in the process *)
     let id', _ = mangle_ ~state:st c.Stmt.copy_id (ArgTuple.m_args tup) in
     let local_state = mk_local_state ~subst depth in
     let of_' = mono_type ~self ~local_state c.Stmt.copy_of in

@@ -14,6 +14,8 @@ module P = T.P
 module Ty = TypeMono.Make(T)
 module PStmt = Stmt.Print(P)(P)
 module M = Model
+module DT = M.DT
+module Subst = Var.Subst
 
 let name = "elim_types"
 let section = Utils.Section.make name
@@ -52,7 +54,7 @@ let create_state ~sigma () = {
 
 (* find predicate for this type
    precondition: [t] a type for which we created a new predicate *)
-let find_pred state t =
+let find_pred state (t:T.t): ID.t =
   assert (Ty.is_ty t);
   try Ty.Map.find t state.ty_to_pred
   with Not_found ->
@@ -159,6 +161,49 @@ let ensure_maps_to_predicate state ty =
   aux ret;
   ()
 
+(* type of pred [p] has at most [n] elements, return axiom
+   [exists x1...xn. p x_i & forall y. p y => (y = x1 | .... | y = xn)] *)
+let encode_max_card_ ~(pred:ID.t) n =
+  let mk_pred = U.app_const pred in
+  let xs =
+    CCList.init n
+      (fun i -> Var.makef ~ty:U.ty_unitype "x_%d" i)
+  and y =
+    Var.make ~name:"y" ~ty:U.ty_unitype
+  in
+  let guard_pred_x = U.and_ (List.map (fun x -> mk_pred [U.var x]) xs) in
+  let form_y_belongs_xs =
+    U.forall y
+      (U.imply
+         (mk_pred [U.var y])
+         (U.or_
+            (List.map (fun x -> U.eq (U.var x) (U.var y)) xs)))
+  in
+  let ax =
+    U.forall_l xs
+      (U.and_ [guard_pred_x; form_y_belongs_xs])
+  in
+  [Stmt.axiom1 ~info:Stmt.info_default ax]
+
+(* the type of [pred] has at least [n] elements, return list of axiom
+   [exists x1...xn. pred x_i & xi != xj] *)
+let encode_min_card_ ~(pred:ID.t) n =
+  let mk_pred = U.app_const pred in
+  let xs =
+    CCList.init n
+      (fun i -> Var.makef ~ty:U.ty_unitype "x_%d" i)
+  in
+  let guard_pred_x = U.and_ (List.map (fun x -> mk_pred [U.var x]) xs) in
+  let pairwise_distinct =
+    CCList.diagonal xs
+    |> List.map (fun (x1,x2) -> U.neq (U.var x1) (U.var x2))
+  in
+  let ax =
+    U.forall_l xs
+      (U.and_ (guard_pred_x :: pairwise_distinct))
+  in
+  [Stmt.axiom1 ~info:Stmt.info_default ax]
+
 let encode_stmt_ state st : (_,_) Stmt.t list =
   let info = Stmt.info st in
   match Stmt.view st with
@@ -166,25 +211,25 @@ let encode_stmt_ state st : (_,_) Stmt.t list =
     (* type declaration *)
     let _, args, _ = U.ty_unfold ty in
     assert (List.for_all U.ty_is_Type args);
+    (* remove statement, but we might have some specific axioms
+       related to cardinalities *)
     begin match args with
       | [] ->
-        (* TODO: combine the min/max of cardinalities for unitype,
-           OR emit some constraint on the predicate *)
-        List.iter
-          (function
-            | Stmt.Attr_card_max _
-            | Stmt.Attr_card_min _ ->
-              errorf_ "cannot encode cardinality bounds of %a to TPTP" ID.print id
-            | _ -> ())
-          attrs;
         (* atomic type, easy *)
         let p = ID.make_f "is_%a" ID.print_name id in
-        add_pred_ state (U.const id) p
+        add_pred_ state (U.const id) p;
+        (* emit some constraint on the predicate for cardinalities *)
+        CCList.flat_map
+          (function
+            | Stmt.Attr_card_max i -> encode_max_card_ ~pred:p i
+            | Stmt.Attr_card_min i -> encode_min_card_ ~pred:p i
+            | _ -> [])
+          attrs
       | _::_ ->
         (* not atomic, we need to declare each instance later *)
         ID.Tbl.add state.parametrized_ty id ();
-    end;
-    [] (* remove statement *)
+        []
+    end
   | Stmt.Decl (id, ty, attrs) when U.ty_returns_Prop ty ->
     (* symbol declaration *)
     ensure_maps_to_predicate state ty;
@@ -254,8 +299,6 @@ let transform_pb pb =
 
 (** {2 Decoding} *)
 
-module DTU = M.DT_util(T)
-
 type retyping = {
   rety_domains: ID.t list Ty.Map.t; (* type -> domain *)
   rety_map: ID.t ID.Map.t Ty.Map.t; (* type -> (uni_const -> const) *)
@@ -276,18 +319,19 @@ let rebuild_types state m : retyping =
   M.fold
     {rety_domains=Ty.Map.empty; rety_map=Ty.Map.empty}
     m
-    ~constants:(fun rety _ -> rety)
     ~finite_types:(fun rety _ -> rety)
-    ~funs:(fun rety (t,vars,dt,_) -> match vars, T.repr t with
-      | [v], TI.Const pred_id when ID.Map.mem pred_id state.pred_to_ty ->
+    ~values:(fun rety (t,dt,_) -> match T.repr t with
+      | TI.Const pred_id when ID.Map.mem pred_id state.pred_to_ty ->
         (* (unary) type predicate: evaluate it on [uni_domain] to find
            the actual subset, then make new constants *)
+        assert (DT.num_vars dt >= 1);
         let ty = ID.Map.find pred_id state.pred_to_ty in
         let uni_domain_sub =
           CCList.filter_map
             (fun id ->
-               let subst = Var.Subst.add ~subst:Var.Subst.empty v (U.const id) in
-               let image = DTU.eval ~subst dt in
+               let image =
+                 M.DT_util.apply dt (U.const id) |> M.DT_util.to_term
+               in
                match T.repr image with
                  | TI.Builtin `True ->
                    (* belongs to domain! *)
@@ -396,85 +440,67 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
   in
   aux t ty
 
-(* transform unityped variables into typed variables *)
-let decode_vars ?(subst=Var.Subst.empty) ty vars =
+(* transform unityped variables of [dt] into typed variables *)
+let decode_vars ty dt =
   let _, args, _ = U.ty_unfold ty in
+  let vars = DT.vars dt in
   assert (List.length args = List.length vars);
   (* map each variable to the corresponding type *)
-  Utils.fold_map
-    (fun subst (v,ty) ->
-       let v' = Var.set_ty v ~ty in
-       Var.Subst.add ~subst v v', v')
-    subst (List.combine vars args)
-
-exception Dead_branch
+  let subst =
+    List.fold_left2
+      (fun subst v ty ->
+         let v' = Var.set_ty v ~ty |> Var.fresh_copy in
+         Subst.add ~subst v v')
+      Subst.empty
+      vars
+      args
+  in
+  M.DT_util.map_vars ~subst dt
 
 let decode_model ~state m =
   let rety = rebuild_types state m in
   let dec_t ?subst t ty = decode_term state rety ?subst t ty in
   let m =
     M.filter_map m
-      ~constants:(fun (t,u,k) ->
-        let ty = expected_ty state t in
-        Some (dec_t t ty, dec_t u ty, k))
       ~finite_types:(fun (t,_) ->
         (* only one possible choice: unitype, and we remove it *)
         assert (U.equal t U.ty_unitype);
         None)
-      ~funs:(fun (t,vars,dt,k) -> match T.repr t with
+      ~values:(fun (t,dt,k) -> match T.repr t with
         | TI.Const p_id when ID.Map.mem p_id state.pred_to_ty ->
           None (* remove typing predicates from model *)
         | _ ->
           Utils.debugf ~section 5
-            "@[<2>decode @[%a %a@]@ := `@[%a@]@]"
-            (fun k->k P.print t (CCFormat.list Var.print) vars
-                (M.DT.print P.print') dt);
+            "@[<2>decode @[%a@]@ := `@[%a@]@]"
+            (fun k->k P.print t (M.DT.print P.print') dt);
           let ty = expected_ty state t in
           let ty_ret = U.ty_returns ty in
-          let subst, vars = decode_vars ty vars in
+          let dt = decode_vars ty dt in
           let dt' =
-            M.DT.test
-              (CCList.filter_map
-                 (fun (tests,then_) ->
-                    try
-                      let tests' =
-                        List.map
-                          (fun (v,t) ->
-                             let v' = Var.Subst.find_exn ~subst v in
-                             let ty_v = Var.ty v' in
-                             begin match T.repr t, retype_find rety ty_v with
-                               | TI.Const id, Some map when not (ID.Map.mem id map) ->
-                                 (* [ty_v] is a finite type whose elements
-                                    have been encoded into [domain map].
-                                    Since [t] is a constant outside this
-                                    domain, the test is necessarily false
-                                    and must be removed *)
-                                 raise Dead_branch
-                               | _ -> ()
-                             end;
-                             let t' = dec_t ~subst t ty_v in
-                             v', t')
-                          tests
-                      in
-                      let then_' = dec_t ~subst then_ ty_ret in
-                      Some (tests', then_')
-                    with Dead_branch ->
-                      (* this branch of the DT is useless, as it performs
-                         impossible tests *)
-                      None
-                 )
-                 dt.M.DT.tests)
-              ~else_:(dec_t ~subst dt.M.DT.else_ ty_ret)
+            DT.filter_map dt
+              ~test:(fun v t ->
+                 let ty_v = Var.ty v in
+                 match T.repr t, retype_find rety ty_v with
+                   | TI.Const id, Some map when not (ID.Map.mem id map) ->
+                     (* [ty_v] is a finite type whose elements
+                            have been encoded into [domain map].
+                            Since [t] is a constant outside this
+                            domain, the test is necessarily false
+                            and must be removed *)
+                     None
+                   | _ ->
+                     Some (dec_t t ty_v))
+              ~yield:(fun t -> dec_t t ty_ret)
           in
           let t' = dec_t t ty in
-          Some (t', vars, dt', k)
+          Some (t', dt', k)
       )
   in
   (* add new types' domains *)
   Ty.Map.to_seq rety.rety_domains
-    |> Sequence.fold
-      (fun m (ty,dom) -> M.add_finite_type m ty dom)
-      m
+  |> Sequence.fold
+    (fun m (ty,dom) -> M.add_finite_type m ty dom)
+    m
 
 (** {2 Pipe} *)
 

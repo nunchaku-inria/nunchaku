@@ -18,7 +18,7 @@ let section = Utils.Section.make name
 let is_available () =
   try
     let res = Sys.command "which paradox > /dev/null" = 0 in
-    if res then Utils.debug ~section 3 "CVC4 is available";
+    if res then Utils.debug ~section 3 "paradox is available";
     res
   with Sys_error _ -> false
 

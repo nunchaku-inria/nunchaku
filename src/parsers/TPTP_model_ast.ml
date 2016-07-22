@@ -201,7 +201,7 @@ let to_model (l:statement list) : (T.term, T.ty) Model.t =
     then match l with
       | [_, [], rhs] ->
         let subst v = Conv.failf "variable %s not in scope" v in
-        `Const (term_to_tptp subst rhs)
+        M.DT.yield (term_to_tptp subst rhs)
       | _ -> assert false
     else (
       let l =
@@ -223,13 +223,17 @@ let to_model (l:statement list) : (T.term, T.ty) Model.t =
              in
              let args = List.mapi (fun i -> term_to_tptp (subst i)) args in
              let rhs = term_to_tptp (subst ~-1) rhs in
-             let conds = List.combine vars args in
+             let conds = List.map2 M.DT.mk_flat_test vars args in
              conds, rhs)
           l
       in
-      let else_ = T.undefined_atom (List.map T.var vars) in
-      let dt = M.DT.test l ~else_ in
-      `Fun (vars, dt)
+      let fdt =
+        { M.DT.
+          fdt_vars=vars;
+          fdt_cases=l;
+          fdt_default=None; (* should be complete *)
+        } in
+      M.DT.of_flat ~equal:T.term_equal ~hash:T.term_hash fdt
     )
   in
   (* add one statement to the model *)
@@ -244,11 +248,8 @@ let to_model (l:statement list) : (T.term, T.ty) Model.t =
           Utils.debugf 2 "failed to map `%s` to a known ID" (fun k->k name);
           m
         | Some id ->
-          begin match cases_to_dt vars l with
-            | `Const rhs -> M.add_const m (T.const id, rhs, M.Symbol_fun)
-            | `Fun (vars, dt) ->
-              M.add_fun m (T.const id, vars, dt, M.Symbol_fun)
-          end
+          let dt = cases_to_dt vars l in
+          M.add_value m (T.const id, dt, M.Symbol_fun)
       end
     | Fi_predicates (_, name, vars, l) ->
       begin match id_of_name_ name with
@@ -256,11 +257,8 @@ let to_model (l:statement list) : (T.term, T.ty) Model.t =
           Utils.debugf 2 "failed to map `%s` to a known ID" (fun k->k name);
           m
         | Some id ->
-          begin match cases_to_dt vars l with
-            | `Const rhs -> M.add_const m (T.const id, rhs, M.Symbol_prop)
-            | `Fun (vars, dt) ->
-              M.add_fun m (T.const id, vars, dt, M.Symbol_prop)
-          end
+          let dt = cases_to_dt vars l in
+          M.add_value m (T.const id, dt, M.Symbol_prop)
       end
   in
   List.fold_left add_st M.empty l

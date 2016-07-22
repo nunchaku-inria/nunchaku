@@ -3,8 +3,6 @@
 
 open Nunchaku_core
 
-module ID = ID
-module Var = Var
 module TI = TermInner
 module Stmt = Statement
 module T = TermInner.Default
@@ -575,6 +573,9 @@ let elim_recursion pb =
   domain where their projections were defined (the domain on which it
   is not garbage) *)
 
+module M = Model
+module DT = M.DT
+
 type finite_domain = {
   dom_fun: fun_encoding;
     (* function *)
@@ -597,15 +598,7 @@ let pp_domain out d =
     ID.print d.dom_fun.fun_encoded_fun
     (CCFormat.seq ~start:"" ~stop:"" ~sep:" " pp_tuple) (ID.Map.to_seq d.dom_args)
 
-type proj_fun = {
-  proj_var: T.t Var.t;
-    (* argument to the projection function *)
-
-  proj_tree: (T.t, T.t) Model.decision_tree;
-    (* decision tree for the variable *)
-}
-
-module DT_util = Model.DT_util(T)
+type proj_fun = (T.t, T.t) DT.t
 
 (*
    - gather definitions of projections
@@ -615,17 +608,12 @@ let pass1_ ~state m =
   let projs : proj_fun ID.Tbl.t = ID.Tbl.create 16 in
   let doms  : finite_domain ID.Tbl.t = ID.Tbl.create 16 in
   Model.iter m
-    ~constants:(fun (t,_,_) -> match T.repr t with
-      | TI.Const id ->
-          (* a function should not be modeled by a constant *)
-          assert (not (ID.Tbl.mem state.approx_fun id));
+    ~values:(fun (t,dt,_) -> match T.repr t with
+      | TI.Const id when ID.Tbl.mem state.approx_fun id ->
+        (* register the model for this approximated function *)
+        assert (DT.num_vars dt>=1);
+        ID.Tbl.add projs id dt
       | _ -> ())
-    ~funs:(fun (t,vars,body,_) -> match T.repr t, vars with
-      | TI.Const id, [v] ->
-          (* register the model for this approximated function *)
-          if ID.Tbl.mem state.approx_fun id
-          then ID.Tbl.add projs id {proj_var=v; proj_tree=body; }
-      | _, _ -> ())
     ~finite_types:(fun (ty,dom) -> match T.repr ty with
       | TI.Const id ->
           begin try
@@ -649,14 +637,15 @@ let pass2_ projs (doms:finite_domains) =
             |> sort_concretization
             |> List.map
               (fun (_,f_id,_) ->
-                let proj =
+                let proj : proj_fun =
                   try ID.Tbl.find projs f_id
                   with Not_found ->
                     fail_decode_ "could not find value of projection function %a on %a"
                       ID.print f_id ID.print val_id
                 in
-                let subst = Var.Subst.singleton proj.proj_var (U.const val_id) in
-                DT_util.eval ~subst proj.proj_tree)
+                (* evaluate *)
+                M.DT_util.apply proj (U.const val_id) |> M.DT_util.to_term
+              )
           in
           fdom.dom_args <- ID.Map.add val_id args fdom.dom_args)
         fdom.dom_dom)
@@ -669,58 +658,64 @@ let pass2_ projs (doms:finite_domains) =
 *)
 let pass3_ ~state doms m =
   (* decode a function. *)
-  let decode_fun_ dom vars body =
+  let decode_fun_ (dom:finite_domain) (dt:_ DT.t) : _ DT.t =
     let arity = List.length dom.dom_fun.fun_concretization in
-    if List.length vars <> arity
-      then fail_decode_
-        ~term:(U.fun_l vars (DT_util.to_term body))
-        "expected a function of %d arguments" arity;
+    if DT.num_vars dt < arity
+    then fail_decode_
+        ~term:(M.DT_util.to_term dt)
+        "expected a function of ≥ %d arguments" arity;
+    let vars = DT.vars dt in
     (* compute value of the function applied to [tup] *)
-    let apply_to tup =
-      let subst = Subst.add_list ~subst:Subst.empty vars tup in
-      DT_util.eval ~subst body
+    let apply_to tup : T.t =
+      M.DT_util.apply_l dt tup
+      |> M.DT_util.to_term
     in
     (* set of tuples on which the function is defined *)
-    let dom_tuples = ID.Map.to_list dom.dom_args |> List.map snd in
-      (* default case: undefined
-        TODO: if initial domain was finite, this might be unecessary,
-          because CVC4 could model the whole domain? *)
-    let default =
-      U.app (U.undefined_atom ~ty:dom.dom_fun.fun_ty) (List.map U.var vars)
-    in
-    let new_body =
+    let dom_tuples = ID.Map.values dom.dom_args |> Sequence.to_rev_list in
+    let tests =
       List.map
         (fun tup ->
-          let test = List.combine vars tup in
-          let then_ = apply_to tup in
-          test, then_)
+           let test = List.map2 DT.mk_flat_test vars tup in
+           let then_ = apply_to tup in
+           test, then_)
         dom_tuples
+    (* default case: undefined
+       TODO: if initial domain was finite, this might be unecessary,
+          because CVC4 could model the whole domain? *)
+    and default =
+      U.app (U.undefined_atom ~ty:dom.dom_fun.fun_ty) (List.map U.var vars)
     in
-    Model.DT.test new_body ~else_:default
+    let fdt =
+      { DT.
+        fdt_vars=vars;
+        fdt_cases=tests;
+        fdt_default=Some default;
+      } in
+    Model.DT.of_flat ~equal:U.equal ~hash:U.hash fdt
   in
   (* now remove projections and filter recursion functions's values *)
   Model.filter_map m
-    ~constants:(fun (t,u,k) -> match T.repr t with
+    ~values:(fun (t,dt,k) -> match T.repr t with
       | TI.Const id when ID.Tbl.mem state.approx_fun id ->
-          None (* drop approximation functions *)
-      | _ -> Some (t,u,k))
-    ~funs:(fun (t,vars,body,k) -> match T.repr t with
-      | TI.Const id when ID.Tbl.mem state.approx_fun id ->
-          None (* drop approximation functions *)
+        None (* drop approximation functions *)
       | TI.Const f_id when ID.Tbl.mem state.encoded_fun f_id ->
-          (* remove junk from the definition of [t] *)
-          let body' = decode_fun_ (ID.Tbl.find doms f_id) vars body in
-          Utils.debugf ~section 3
-            "@[<hv2>decoding of recursive fun @[%a %a@] :=@ `@[%a@]`@ is `@[%a@]`@]"
-            (fun k->k ID.print f_id (CCFormat.list Var.print_full) vars
-            (Model.DT.print P.print') body (Model.DT.print P.print') body');
-          Some (t, vars, body',k)
-      | _ ->
-          (* keep *)
-          Some (t,vars,body,k))
+        (* remove junk from the definition of [t] *)
+        let dom =
+          try ID.Tbl.find doms f_id
+          with Not_found -> errorf_ "could not find domain for %a" ID.print f_id
+        in
+        Utils.debugf ~section 3
+          "@[<hv2>decoding recursive fun @[%a@] :=@ `@[%a@]`…@]"
+          (fun k->k ID.print f_id M.DT_util.print dt);
+        let dt' = decode_fun_ dom dt in
+        Utils.debugf ~section 3
+          "@[<hv2>decoding of recursive fun @[%a@] :=@ `@[%a@]`@ is `@[%a@]`@]"
+          (fun k->k ID.print f_id M.DT_util.print dt M.DT_util.print dt');
+        Some (t, dt', k)
+      | _ -> Some (t,dt,k))
     ~finite_types:(fun ((ty,_) as pair) -> match T.repr ty with
       | TI.Const id when ID.Tbl.mem state.abstract_ty id ->
-          None (* remove abstraction types *)
+        None (* remove abstraction types *)
       | _ -> Some pair)
 
 let decode_model ~state m =

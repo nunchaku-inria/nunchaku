@@ -159,7 +159,7 @@ let pred_to_def
             (Var.Subst.empty, [])
             vars args
         in
-        let conds = List.rev_map (U.eval ~subst) conds in
+        let conds = List.rev_map (U.eval ~rec_:false ~subst) conds in
         (* add guard, if any *)
         let res = match c.Stmt.clause_guard with
           | None -> U.and_ conds

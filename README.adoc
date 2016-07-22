@@ -30,7 +30,7 @@ Releases can be found on https://gforge.inria.fr/projects/nunchaku .
 === Opam
 
 The easiest way is to use http://opam.ocaml.org/[opam], the package manager for
-OCaml. Once opam is installed (don't forget to run `eval \`opam config env\``
+OCaml. Once opam is installed (don't forget to run `eval `opam config env``
 when you want to use opam), the following should suffice:
 
     opam pin add -k git nunchaku https://github.com/nunchaku-inria/nunchaku.git#master

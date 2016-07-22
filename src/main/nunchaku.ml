@@ -60,6 +60,7 @@ let print_polarize_ = ref false
 let print_unroll_ = ref false
 let print_elim_preds_ = ref false
 let print_elim_data_ = ref false
+let print_elim_codata_ = ref false
 let print_copy_ = ref false
 let print_intro_guards_ = ref false
 let print_elim_ite_ = ref false
@@ -155,8 +156,11 @@ let options =
   ; "--print-" ^ Tr.Polarize.name , Arg.Set print_polarize_, " print input after polarization"
   ; "--print-" ^ Tr.Unroll.name, Arg.Set print_unroll_, " print input after unrolling"
   ; "--print-" ^ Tr.ElimCopy.name, Arg.Set print_copy_, " print input after elimination of copy types"
-  ; "--print-" ^ Tr.ElimData.name
+  ; "--print-" ^ Tr.ElimData.Data.name
       , Arg.Set print_elim_data_
+      , " print input after elimination of (co)datatypes"
+  ; "--print-" ^ Tr.ElimData.Codata.name
+      , Arg.Set print_elim_codata_
       , " print input after elimination of (co)datatypes"
   ; "--print-" ^ Tr.IntroGuards.name, Arg.Set print_intro_guards_,
       " print input after introduction of guards"
@@ -167,7 +171,8 @@ let options =
   ; "--print-" ^ Tr.ElimTypes.name, Arg.Set print_elim_types_,
       " print input after elimination of types"
   ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
-  ; "--print-fo-to-rel", Arg.Set print_fo_to_rel_, " print first-order relational problem"
+  ; "--print-" ^ Tr.FoToRelational.name, Arg.Set print_fo_to_rel_,
+      " print first-order relational problem"
   ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
   ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
   ; "--print-model", Arg.Set print_model_, " print model after cleanup"
@@ -319,20 +324,20 @@ let make_model_pipeline () =
      then Tr.Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check
      else Transform.nop ())
     @@@
-    (if !enable_polarize_
-      then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
-        ~check ~polarize_rec:!polarize_rec_
-      else Transform.nop ())
-    @@@
-    Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
-    Tr.Skolem.pipe
-      ~skolems_in_model:!skolems_in_model_
-      ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
     fork
       (
-        Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
-        Tr.ElimData.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
+        Tr.ElimData.Codata.pipe ~print:(!print_elim_codata_ || !print_all_) ~check @@@
+        (if !enable_polarize_
+         then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
+             ~check ~polarize_rec:!polarize_rec_
+         else Transform.nop ()) @@@
+        Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+        Tr.Skolem.pipe
+          ~skolems_in_model:!skolems_in_model_
+          ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+        Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+        Tr.ElimData.Data.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
         Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
         Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
@@ -357,7 +362,17 @@ let make_model_pipeline () =
             kodkod
           ))
       )
-      ( Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+      ( 
+        (if !enable_polarize_
+         then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
+             ~check ~polarize_rec:!polarize_rec_
+         else Transform.nop ()) @@@
+        Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+        Tr.Skolem.pipe
+          ~skolems_in_model:!skolems_in_model_
+          ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+        Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+        Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
         Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
         Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
@@ -441,10 +456,10 @@ let main_model ~output statements =
         (Model.print P.print' P.print) m;
   | Res.Sat m, O_nunchaku ->
       Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]@."
-        (Model.print P.print' P.print) m;
+        Model.Default.print_standard m;
   | Res.Sat m, O_tptp ->
       (* XXX: if potentially spurious, what should we print? *)
-      let module PM = Nunchaku_parsers.TPTP_print.Make(T) in
+      let module PM = Nunchaku_parsers.TPTP_print in
       Format.printf "@[<v2>%a@]@,@." PM.print_model m
   | Res.Unsat, O_nunchaku ->
       Format.printf "@[UNSAT@]@."

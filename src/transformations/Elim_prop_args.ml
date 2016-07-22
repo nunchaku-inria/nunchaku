@@ -48,18 +48,31 @@ let create_state ~sigma () =
 let declare_ state : (_,_) Stmt.t list =
   assert (not state.declared);
   state.declared <- true;
-  let mk_decl id ty =
-    Stmt.decl ~info:Stmt.info_default ~attrs:[] id ty
+  let ty_pprop = U.ty_const state.pseudo_prop in
+  let ptrue = U.const state.true_ in
+  let pfalse = U.const state.false_ in
+  let mk_decl ?(attrs=[]) id ty =
+    Stmt.decl ~info:Stmt.info_default ~attrs id ty
   in
-  let decl_ty = mk_decl state.pseudo_prop (U.ty_builtin `Type)
-  and decl_true = mk_decl state.true_ (U.ty_const state.pseudo_prop)
-  and decl_false = mk_decl state.false_ (U.ty_const state.pseudo_prop)
+  let decl_ty =
+    mk_decl
+      ~attrs:[Stmt.Attr_pseudo_prop;
+              Stmt.Attr_card_hint (Cardinality.of_int 2)]
+      state.pseudo_prop (U.ty_builtin `Type)
+  and decl_true =
+    mk_decl state.true_ ty_pprop
+      ~attrs:[Stmt.Attr_pseudo_true]
+  and decl_false = mk_decl state.false_ ty_pprop
   and distinct_ax =
     Stmt.axiom1 ~info:Stmt.info_default
-      (U.not_
-         (U.eq (U.const state.true_) (U.const state.false_)))
+      (U.neq ptrue pfalse)
+  and exhaustive_ax =
+    let x = Var.make ~name:"x" ~ty:ty_pprop in
+    Stmt.axiom1 ~info:Stmt.info_default
+      (U.forall x
+         (U.or_ [U.eq (U.var x) ptrue; U.eq (U.var x) pfalse]))
   in
-  [ decl_ty; decl_true; decl_false; distinct_ax ]
+  [ decl_ty; decl_true; decl_false; distinct_ax; exhaustive_ax ]
 
 let find_ty state (t:term) : ty =
   U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) t
@@ -209,6 +222,9 @@ let transform_problem pb =
 
 (** {2 Decoding} *)
 
+module M = Model
+module DT = M.DT
+
 type rewrite = {
   rw_true: ID.t;
   rw_false: ID.t;
@@ -217,15 +233,19 @@ type rewrite = {
 let find_rewrite state m : rewrite option =
   let id_true, id_false =
     Model.fold (None,None) m
-      ~constants:(fun (id_true,id_false) (t,u,_) ->
-        match T.repr t, T.repr u with
-          | TI.Const id, TI.Const id' when ID.equal id state.true_ ->
-            assert (id_true = None);
-            Some id', id_false
-          | TI.Const id, TI.Const id' when ID.equal id state.false_ ->
-            assert (id_false = None);
-            id_true, Some id'
-          | _ -> id_true, id_false)
+      ~values:(fun (id_true,id_false) (t,dt,_) -> match dt with
+        | DT.Yield u ->
+          begin match T.repr t, T.repr u with
+            | TI.Const id, TI.Const id' when ID.equal id state.true_ ->
+              assert (id_true = None);
+              Some id', id_false
+            | TI.Const id, TI.Const id' when ID.equal id state.false_ ->
+              assert (id_false = None);
+              id_true, Some id'
+            | _ -> id_true, id_false
+          end
+        | _ -> id_true, id_false
+      )
   in
   match id_true, id_false with
     | None, None -> None
@@ -259,14 +279,14 @@ let decode_model state m =
     ~finite_types:(fun (ty,dom) -> match T.repr ty with
       | TI.Const id when ID.equal id state.pseudo_prop -> None
       | _ -> Some (tr_term ty, dom))
-    ~constants:(fun (t,u,k) -> match T.repr t with
+    ~values:(fun (t,dt,k) -> match T.repr t with
       | TI.Const id when (ID.equal id state.true_ || ID.equal id state.false_) ->
         None (* drop pseudo-booleans from model *)
-      | _ -> Some (tr_term t, tr_term u, k))
-    ~funs:(fun (t,vars,dt,k) ->
-      let vars = List.map (Var.update_ty ~f:tr_term) vars in
-      let dt = Model.DT.map dt ~ty:tr_term ~term:tr_term in
-      Some (tr_term t, vars, dt, k))
+      | _ ->
+        let t = tr_term t in
+        let dt = DT.map dt ~ty:tr_term ~term:tr_term in
+        Some (t, dt, k)
+    )
 
 (** {2 Pipes} *)
 

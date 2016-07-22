@@ -33,6 +33,7 @@ and result = parse
   | [' ' '\t' '\r'] { result lexbuf }
   | '\n' { Lexing.new_line lexbuf; result lexbuf }
   | "UNSATISFIABLE" { A.Unsat }
+  | "TRIVIALLY_UNSATISFIABLE" { A.Trivially_unsat }
   | "SATISFIABLE" { A.Sat }
   | _ as c
     { let loc = Location.of_lexbuf lexbuf in

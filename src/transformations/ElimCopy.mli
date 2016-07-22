@@ -10,14 +10,18 @@ module T = TermInner.Default
 val name : string
 
 type term = T.t
+type ty = T.t
+
+type decode_state
 
 val elim :
   (term, term) Problem.t ->
-  (term, term) Problem.t
+  (term, term) Problem.t * decode_state
 
 val pipe :
   print:bool ->
   check:bool ->
-  ((term, term) Problem.t,
-   (term, term) Problem.t,
-   'c, 'c) Transform.t
+  ((term, ty) Problem.t,
+   (term, ty) Problem.t,
+   (term, ty) Problem.Res.t,
+   (term, ty) Problem.Res.t) Transform.t

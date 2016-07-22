@@ -322,9 +322,9 @@ let print_problem out (decode, pb) =
           Var.print_full v print_ty (Var.ty v) print_term f
 
   and print_statement out = function
-    | FO.TyDecl (id,arity) ->
+    | FO.TyDecl (id,arity,_) ->
         fpf out "(@[declare-sort@ %a@ %d@])" print_id id arity
-    | FO.Decl (v,ty) ->
+    | FO.Decl (v,ty,_) ->
         fpf out "(@[<2>declare-fun@ %a@ %a@])"
           print_id v print_ty_decl ty
     | FO.Axiom t ->
@@ -555,7 +555,7 @@ let parse_fun_ ~decode ~arity:n term =
   let dt = FO.Util.dt_of_term ~vars body in
   Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
     (fun k->k FO.print_term body (Model.DT.print FO.print_term') dt);
-  vars, dt
+  dt
 
 let sym_get_const_ ~decode id = match ID.Tbl.find decode.symbols id with
   | Q_const -> `Const
@@ -588,8 +588,8 @@ let parse_model_ ~decode : CCSexp.t -> _ Model.t = function
                 let t = parse_term_ ~decode term in
                 Model.add_const m (T.const id, t, kind)
             | `Fun n ->
-                let vars, t = parse_fun_ ~decode ~arity:n term in
-                Model.add_fun m (T.const id, vars, t, kind)
+                let dt = parse_fun_ ~decode ~arity:n term in
+                Model.add_value m (T.const id, dt, kind)
             end
         | `List [`List [`Atom "fmf.card.val"; (`Atom _ as s)]; n] ->
             (* finite domain *)
@@ -644,8 +644,7 @@ let get_model_ ~print_model ~decode s : _ Model.t =
       let m = parse_model_ ~decode sexp in
       (* check all symbols are defined *)
       let ok =
-        List.length m.Model.constants
-          + List.length m.Model.funs
+        List.length m.Model.values
           + List.length m.Model.finite_types
         =
         ID.Tbl.length decode.symbols
@@ -732,7 +731,7 @@ let preprocess pb : processed_problem =
           let ty_c = [], gty in
           decl state c (Q_type gty);
           state.witnesses <- gty_map_add state.witnesses gty c;
-          FO.Decl (c, ty_c) :: acc
+          FO.Decl (c, ty_c,[]) :: acc
         ))
       [stmt] l
     |> List.rev
@@ -740,7 +739,7 @@ let preprocess pb : processed_problem =
   let pb =
     FO.Problem.flat_map ~meta:(FO.Problem.meta pb)
     (fun stmt -> match stmt with
-      | FO.Decl (id,(args,_)) ->
+      | FO.Decl (id,(args,_),_) ->
           let len = List.length args in
           begin if len=0
             then decl state id Q_const
@@ -749,7 +748,7 @@ let preprocess pb : processed_problem =
           (* if args contains composite types, add witnesses for them *)
           add_ty_witnesses stmt args
       | FO.CardBound (id,_,_)
-      | FO.TyDecl (id,0) ->
+      | FO.TyDecl (id,0,_) ->
           add_ty_witnesses stmt [gty_const id]
       | FO.MutualTypes (`Codata, l) ->
           List.iter

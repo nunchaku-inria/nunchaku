@@ -258,7 +258,8 @@ let unroll pb =
 
 (** {6 Decoding} *)
 
-module U_dt = Model.DT_util(T)
+module M = Model
+module DT = M.DT
 
 (* rewrite the term recursively by removing the first argument to every
    term that is in the table *)
@@ -282,64 +283,42 @@ and rewrite' ~state t =
     ~f:(fun () t -> rewrite ~state t)
     ~bind:(fun () v -> (), v)
 
-    (* remove the tests for the unrolling variable in [dt] *)
-let filter_dt_ ~state ~removed_var dt =
-  Utils.debugf ~section 5
-    "@[<v>remove var @[%a@]@ from `@[%a@]`@]"
-    (fun k->k Var.print_full removed_var (Model.DT.print P.print') dt);
-  let tests =
-    CCList.filter_map
-      (fun (eqns, then_) ->
-          let eqns' =
-            CCList.filter_map
-              (fun (v, t) ->
-                if Var.equal v removed_var
-                then None
-                else Some (v, rewrite ~state t))
-              eqns
-          in
-          let then' = rewrite ~state then_ in
-          Some (eqns', then'))
-      dt.Model.DT.tests
-  in
-  let else_ = rewrite ~state dt.Model.DT.else_ in
-  Model.DT.test tests ~else_
+(* remove the tests for the unrolling variable in [dt] *)
+let filter_dt_ dt : _ DT.t =
+  (* check that [removed_var] is the first var *)
+  begin match DT.vars dt with
+    | removed_var :: _ ->
+      Utils.debugf ~section 5
+        "@[<v>remove var @[%a@]@ from `@[%a@]`@]"
+        (fun k->k Var.print_full removed_var (Model.DT.print P.print') dt);
+    | [] -> assert false
+  end;
+  M.DT_util.remove_first_var dt
 
 (* remove the additional parameter introduced by unrolling, if any *)
 let decode_model ~state m =
   Model.filter_map m
-    ~constants:(fun (t,u,k) ->
-      match T.repr t with
+    ~values:(fun (t,dt,k) -> match T.repr t with
       | TI.Const id
         when ID.equal id state.nat_ty.zero
+          || ID.equal id state.nat_ty.succ
           || ID.Tbl.mem state.decr id ->
-          None (* remove "zero" and decreasing witnesses *)
-      | _ ->
-          let u = rewrite ~state u in
-          Some (t,u,k))
-    ~finite_types:(fun (t,dom) ->
-      match T.repr t with
-      | TI.Const id when ID.equal id state.nat_ty.nat ->
-          None (* remove "nat" *)
-      | _ -> Some (t,dom))
-    ~funs:(fun (t,vars,dt,k) ->
-      match T.repr t with
-      | TI.Const id when ID.equal id state.nat_ty.succ ->
-          None (* remove "succ" *)
+        None (* remove "zero", "succ" and decreasing witnesses *)
       | TI.Const id when ID.Tbl.mem state.map id ->
-          (* id is unrolled, remove the additional variable *)
-          let removed_var, vars = match vars with
-            | [] -> assert false
-            | v :: l -> v, l
-          in
-          Utils.debugf ~section 5 "@[<2>remove var %a from DT of %a@]"
-            (fun k->k Var.print_full removed_var ID.print id);
-          let dt = filter_dt_ ~state ~removed_var dt in
-          Some (t,vars,dt,k)
+        (* id is unrolled, remove the additional variable *)
+        let dt =
+          filter_dt_ dt
+          |> DT.map ~term:(rewrite ~state) ~ty:CCFun.id
+        in
+        Some (t,dt,k)
       | _ ->
-          (* simply rewrite *)
-          let dt = Model.DT.map dt ~term:(rewrite ~state) ~ty:CCFun.id in
-          Some (t,vars,dt,k))
+        let dt = DT.map dt ~term:(rewrite ~state) ~ty:CCFun.id in
+        Some (t,dt,k)
+    )
+    ~finite_types:(fun (t,dom) -> match T.repr t with
+      | TI.Const id when ID.equal id state.nat_ty.nat ->
+        None (* remove "nat" *)
+      | _ -> Some (t,dom))
 
 (** {6 Pipes} *)
 

@@ -11,6 +11,8 @@ type model1 = (FO.T.t, FO.Ty.t) Model.t
 type problem2 = FO_rel.problem
 type model2 = (FO_rel.expr, FO_rel.sub_universe) Model.t
 
+val name: string
+
 (** {2 Encoding} *)
 
 type state

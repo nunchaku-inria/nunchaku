@@ -14,6 +14,7 @@ module E = CCResult
 
 let name = "kodkod"
 let section = Utils.Section.make name
+let _kodkod_section = section
 
 type problem = FO_rel.problem
 type res = (FO_rel.expr, FO_rel.sub_universe) Problem.Res.t
@@ -32,6 +33,8 @@ type kodkod_name = string
 type offset = int
 
 type state = {
+  default_size: int;
+    (* cardinal for sub-universes in which it's unspecified *)
   name_of_id: kodkod_name ID.Map.t;
     (* map names to kodkod names *)
   id_of_name: ID.t StrMap.t;
@@ -42,25 +45,41 @@ type state = {
     (* offset -> atom *)
   univ_size: int;
     (* total size of the universe *)
+  mutable trivially_unsat: bool;
+    (* hack: was last "unsat" actually "trivially_unsat"? *)
 }
 
 let errorf msg = Utils.failwithf msg
 
 (* compute size of universe + offsets *)
-let compute_univ_ pb : int * offset SUMap.t * FO_rel.atom IntMap.t =
+let compute_univ_ ~default_size pb : int * offset SUMap.t * FO_rel.atom IntMap.t =
   let open Sequence.Infix in
+  let univ = pb.FO_rel.pb_univ in
+  let univ_prop = univ.FO_rel.univ_prop in
+  (* sub-universe for prop *)
+  assert (univ_prop.FO_rel.su_card = Some 2);
+  let su_map0 = SUMap.singleton univ_prop 0 in
+  let intmap0 =
+    IntMap.of_list
+      [0, FO_rel.atom univ_prop 0; 1, FO_rel.atom univ_prop 1]
+  in
+  (* add other sub-universes *)
   List.fold_left
     (fun (n,map1,map2) su ->
        let map1 = SUMap.add su n map1 in
+       let card = match su.FO_rel.su_card with
+         | Some n -> n
+         | None -> default_size
+       in
        (* add n+i-> atom(su,i) to map2 *)
        let map2 =
-         0 -- (su.FO_rel.su_card-1)
+         0 -- (card-1)
          |> Sequence.map (fun i -> n+i, FO_rel.atom su i)
          |> IntMap.add_seq map2
        in
-       n + su.FO_rel.su_card, map1, map2)
-    (0, SUMap.empty, IntMap.empty)
-    pb.FO_rel.pb_univ
+       n + card, map1, map2)
+    (2, su_map0, intmap0)
+    univ.FO_rel.univ_l
 
 (* indices for naming constants by arity *)
 type name_map = int StrMap.t
@@ -68,7 +87,7 @@ type name_map = int StrMap.t
 (* find a unique name for some ID of arity [n], update the offsets map *)
 let name_of_arity (m:name_map) n: name_map * string =
   let prefix = match n with
-    | 0 -> assert false
+    | 0 (* will be encoded as unary predicate *)
     | 1 -> "s"
     | 2 -> "r"
     | n -> Printf.sprintf "m%d_" n
@@ -93,14 +112,16 @@ let translate_names_ pb =
   n2id, id2n
 
 (* initialize the state for this particular problem *)
-let create_state (pb:FO_rel.problem) : state =
-  let univ_size, univ_offsets, atom_of_offset = compute_univ_ pb in
+let create_state ~default_size (pb:FO_rel.problem) : state =
+  let univ_size, univ_offsets, atom_of_offset = compute_univ_ ~default_size pb in
   let id_of_name, name_of_id = translate_names_ pb in
-  { name_of_id;
+  { default_size;
+    name_of_id;
     id_of_name;
     atom_of_offset;
     univ_size;
     univ_offsets;
+    trivially_unsat=false;
   }
 
 let fpf = Format.fprintf
@@ -121,7 +142,7 @@ let print_pb state pb out () : unit =
   (* print a sub-universe as a range *)
   let rec pp_su_range out (su:FO_rel.sub_universe): unit =
     let offset = su2offset su in
-    let card = su.FO_rel.su_card in
+    let card = CCOpt.get state.default_size su.FO_rel.su_card in
     if offset=0
     then fpf out "u%d" card
     else fpf out "u%d@%d" card offset
@@ -140,7 +161,7 @@ let print_pb state pb out () : unit =
     | FO_rel.TS_product l ->
       fpf out "%a" (pp_list ~sep:" -> " pp_ts) l
   and pp_form out = function
-    | FO_rel.False -> fpf out "false}"
+    | FO_rel.False -> fpf out "false"
     | FO_rel.True -> fpf out "true"
     | FO_rel.Eq (a,b) ->
       fpf out "(@[<2>%a@ = %a@])" pp_rel a pp_rel b
@@ -247,14 +268,14 @@ let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
   in
   (* now build a proper model *)
   List.fold_left
-    (fun m {A.rel_name; rel_dom} ->
+    (fun m'' {A.rel_name; rel_dom} ->
        let id =
          try StrMap.find rel_name state.id_of_name
          with Not_found -> errorf "could not find ID corresponding to `%s`" rel_name
        in
        let t = FO_rel.const id in
        let u = FO_rel.tuple_set (FO_rel.ts_list rel_dom) in
-       M.add_const m (t,u,M.Symbol_prop))
+       M.add_const m'' (t,u,M.Symbol_prop))
     M.empty
     m'
 
@@ -296,11 +317,18 @@ module Parser = struct
 
   (* parse the result from the solver's stdout and errcode *)
   let res state (s:string) (errcode:int) : res * S.shortcut =
-    if errcode <> 0
-    then
+    if errcode = 137
+    then (
+      Utils.debugf ~section:_kodkod_section 1
+        "kodkod stopped with errcode %d, assume it timeouted; stdout:@ `%s`"
+        (fun k->k errcode s);
+      Res.Timeout, S.No_shortcut
+    )
+    else if errcode <> 0
+    then (
       let msg = CCFormat.sprintf "kodkod failed (errcode %d), stdout:@ `%s`@." errcode s in
       Res.Error (Failure msg), S.Shortcut
-    else (
+    ) else (
       let delim = "---OUTCOME---" in
       let i = CCString.find ~sub:delim s in
       assert (i>=0);
@@ -309,8 +337,10 @@ module Parser = struct
       outcome lexbuf;
       match L.result lexbuf with
         | A.Unsat ->
-          (* NOTE: we fixed a maximal cardinal, so maybe there's a bigger model *)
-          Res.Unknown, S.No_shortcut
+          Res.Unsat, S.Shortcut
+        | A.Trivially_unsat ->
+          state.trivially_unsat <- true; (* will stop iterating *)
+          Res.Unsat, S.Shortcut
         | A.Sat ->
           (* parse model *)
           instance lexbuf;
@@ -366,15 +396,37 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         Res.Error e, S.Shortcut
   )
 
-let call ?(print_model=false) ?(prio=10) ~print pb =
-  let state = create_state pb in
+(* call {!solve} with increasingly big problems, until we run out of time
+   or obtain "sat" *)
+let rec call_rec ~print ~default_size ~deadline pb : res * Scheduling.shortcut =
+  let state = create_state ~default_size pb in
   if print
     then Format.printf "@[<v>kodkod problem:@ ```@ %a@,```@]@." (print_pb state pb) ();
+    let res, short = solve ~deadline state pb in
+    Utils.debugf ~section 2 "@[<2>kodkod result for size %d:@ %a@]"
+      (fun k->k default_size Res.print_head res);
+    match res with
+      | Res.Unsat when state.trivially_unsat ->
+        (* stop increasing the size *)
+        Res.Unknown, S.No_shortcut
+      | Res.Unsat ->
+        let now = Unix.gettimeofday () in
+        if deadline -. now  > 0.5
+        then
+          (* unsat, and we still have some time: retry with a bigger size *)
+          call_rec ~print ~default_size:(default_size + 5) ~deadline pb
+        else
+          (* we fixed a maximal cardinal, so maybe there's an even bigger
+             model, but we cannot know for sure *)
+          Res.Unknown, S.No_shortcut
+      | _ -> res, short
+
+let call ?(print_model=false) ?(prio=10) ~print pb =
   S.Task.make ~prio
     (fun ~deadline () ->
-       let res, short = solve ~deadline state pb in
-       Utils.debugf ~section 2 "@[<2>kodkod result:@ %a@]"
-         (fun k->k Res.print_head res);
+       let res, short =
+         call_rec ~print ~deadline ~default_size:5 pb
+       in
        begin match res with
          | Res.Sat m when print_model ->
            let pp_ty oc _ = CCFormat.string oc "$i" in
