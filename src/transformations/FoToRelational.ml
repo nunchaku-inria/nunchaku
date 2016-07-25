@@ -569,7 +569,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
         {M.DT.
           fdt_vars=vars;
           fdt_cases=tests;
-          fdt_default=None;
+          fdt_default=Some FO.T.false_;
         } in
       let dt = M.DT.of_flat ~equal:FO.T.equal ~hash:FO.T.hash fdt in
       let t' = FO.T.const id in
