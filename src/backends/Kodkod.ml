@@ -413,15 +413,18 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         Res.Error e, S.Shortcut
   )
 
+let default_size_ = 2
+let default_increment_ = 2
+
 (* call {!solve} with increasingly big problems, until we run out of time
    or obtain "sat" *)
-let rec call_rec ~print ~default_size ~deadline pb : res * Scheduling.shortcut =
-  let state = create_state ~default_size pb in
+let rec call_rec ~print ~size ~deadline pb : res * Scheduling.shortcut =
+  let state = create_state ~default_size:size pb in
   if print
     then Format.printf "@[<v>kodkod problem:@ ```@ %a@,```@]@." (print_pb state pb) ();
     let res, short = solve ~deadline state pb in
     Utils.debugf ~section 2 "@[<2>kodkod result for size %d:@ %a@]"
-      (fun k->k default_size Res.print_head res);
+      (fun k->k size Res.print_head res);
     match res with
       | Res.Unsat when state.trivially_unsat ->
         (* stop increasing the size *)
@@ -431,7 +434,7 @@ let rec call_rec ~print ~default_size ~deadline pb : res * Scheduling.shortcut =
         if deadline -. now  > 0.5
         then
           (* unsat, and we still have some time: retry with a bigger size *)
-          call_rec ~print ~default_size:(default_size + 5) ~deadline pb
+          call_rec ~print ~size:(size + default_increment_) ~deadline pb
         else
           (* we fixed a maximal cardinal, so maybe there's an even bigger
              model, but we cannot know for sure *)
@@ -442,7 +445,7 @@ let call ?(print_model=false) ?(prio=10) ~print pb =
   S.Task.make ~prio
     (fun ~deadline () ->
        let res, short =
-         call_rec ~print ~deadline ~default_size:5 pb
+         call_rec ~print ~deadline ~size:default_size_ pb
        in
        begin match res with
          | Res.Sat m when print_model ->
