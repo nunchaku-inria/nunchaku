@@ -304,8 +304,8 @@ let rec print_term out t = match T.view t with
   | True -> CCFormat.string out "true"
   | False -> CCFormat.string out "false"
   | Eq (a,b) -> fpf out "(@[%a =@ %a@])" print_term a print_term b
-  | And l -> fpf out "(@[and@ %a@])" (pp_list_ print_term) l
-  | Or l ->  fpf out "(@[and@ %a@])" (pp_list_ print_term) l
+  | And l -> fpf out "(@[<hv1>and@ %a@])" (pp_list_ print_term) l
+  | Or l ->  fpf out "(@[<hv1>or@ %a@])" (pp_list_ print_term) l
   | Not f -> fpf out "(@[not@ %a@])" print_term f
   | Imply (a,b) -> fpf out "(@[%a =>@ %a@])" print_term a print_term b
   | Equiv (a,b) -> fpf out "(@[%a <=>@ %a@])" print_term a print_term b
