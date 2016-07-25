@@ -235,8 +235,8 @@ module Make(T : TI.S) = struct
       | TI.TyMeta _ -> assert false
 
     and whnf ?(subst=Subst.empty) t args =
-      let st = whnf_ (State.make ~subst t args) in
-      st.head, st.args, st.subst
+      let {head; args; subst; guard} = whnf_ (State.make ~subst t args) in
+      head, args, subst, guard
 
     (* strong normal form *)
     let rec snf_ st =
