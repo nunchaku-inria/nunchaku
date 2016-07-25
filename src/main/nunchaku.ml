@@ -344,7 +344,7 @@ let make_model_pipeline () =
         Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
         Tr.Elim_prop_args.pipe ~print:(!print_elim_prop_args_ || !print_all_) ~check @@@
         fork
-        ( 
+        (
           Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
           Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
           close_task (
@@ -362,7 +362,7 @@ let make_model_pipeline () =
             kodkod
           ))
       )
-      ( 
+      (
         (if !enable_polarize_
          then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
              ~check ~polarize_rec:!polarize_rec_

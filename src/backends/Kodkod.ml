@@ -184,6 +184,8 @@ let print_pb state pb out () : unit =
       fpf out "(@[<hv>%a@])" (pp_list ~sep:" && " pp_form) l
     | FO_rel.Or l ->
       fpf out "(@[<hv>%a@])" (pp_list ~sep:" || " pp_form) l
+    | FO_rel.Imply (a,b) ->
+      fpf out "(@[<2>%a@ => %a@])" pp_form a pp_form b
     | FO_rel.Equiv (a,b) ->
       fpf out "(@[<2>%a@ <=> %a@])" pp_form a pp_form b
     | FO_rel.Forall (v,f) -> pp_binder "all" out v f
@@ -192,6 +194,9 @@ let print_pb state pb out () : unit =
       within_rename ~k:(R_let `Rel) v
         ~f:(fun name ->
           fpf out "(@[<2>let@ [@[%s := %a@]]@ | %a@])" name pp_rel a pp_form b)
+    | FO_rel.F_if (a,b,c) ->
+      fpf out "(@[<2>if %a@ then %a@ else %a@])"
+        pp_form a pp_form b pp_form c
   (* rename [v] temporarily, giving its name to [f] *)
   and within_rename ~(k:rename_kind) v ~f =
     let n = Var.Subst.size !subst in

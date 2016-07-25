@@ -209,9 +209,7 @@ and encode_form state t : FO_rel.form =
       let a = encode_form state a in
       let b = encode_form state b in
       let c = encode_form state c in
-      FO_rel.or_
-        (FO_rel.imply a b)
-        (FO_rel.imply (FO_rel.not_ a) c)
+      FO_rel.f_if a b c
     | FO.Eq (a,b) ->
       let a = encode_term state a in
       let b = encode_term state b in

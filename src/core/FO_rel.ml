@@ -67,10 +67,12 @@ and form =
   | Not of form
   | And of form list
   | Or of form list
+  | Imply of form * form
   | Equiv of form * form
   | Forall of var * form
   | Exists of var * form
   | F_let of var * expr * form
+  | F_if of form * form * form
 
 type decl = {
   decl_id: ID.t;
@@ -159,13 +161,14 @@ let or_l = function
   | [a] -> a
   | l -> Or l
 let or_ a b = or_l [a;b]
-let imply a b = or_ (not_ a) b
+let imply a b = Imply (a,b)
 let equiv a b = Equiv (a,b)
 let for_all v f = Forall (v,f)
 let for_all_l = List.fold_right for_all
 let exists v f = Exists (v,f)
 let exists_l = List.fold_right exists
 let f_let v a b = F_let (v,a,b)
+let f_if a b c = F_if (a,b,c)
 
 let atom su i = { a_sub_universe=su; a_index=i }
 let atom_cmp a1 a2 =
@@ -293,6 +296,9 @@ and print_form_rec p out = function
   | Or l ->
     wrapf_ p P_f_and out "@[<hv>%a@]"
       (print_infix_list (print_form_rec P_f_or) "||") l
+  | Imply (a,b) ->
+    wrapf_ p P_f_or out "(@[<hv>%a@ => %a@]"
+      (print_form_rec P_f_or) a (print_form_rec P_f_or) b
   | Equiv (a,b) ->
     wrapf_ p P_f_or out "@[@[%a@]@ <=> %a@]"
       (print_form_rec P_f_or) a (print_form_rec P_f_or) b
@@ -305,6 +311,11 @@ and print_form_rec p out = function
   | F_let (v,a,b) ->
     wrapf_ p P_f_quant out "@[<2>let @[%a := %a@].@ @[%a@]@]"
       print_typed_var v (print_expr_rec P_top) a (print_form_rec P_f_quant) b
+  | F_if (a,b,c) ->
+    wrapf_ p P_f_and out "@[<hv2>if %a@ then %a@ else %a@]"
+      (print_form_rec P_top) a
+      (print_form_rec P_top) b
+      (print_form_rec P_f_and) c
 
 and print_infix_list pform s out l = match l with
   | [] -> assert false

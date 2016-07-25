@@ -22,10 +22,10 @@ let print_undefined_id : bool ref = ref false
 type prec =
   | P_bot
   | P_app
-  | P_guard
   | P_arrow
   | P_eq
   | P_not
+  | P_guard
   | P_ite
   | P_bind
   | P_and
