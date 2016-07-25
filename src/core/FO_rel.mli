@@ -73,6 +73,7 @@ and form =
   | Equiv of form * form
   | Forall of var * form
   | Exists of var * form
+  | F_let of var * expr * form
 
 type decl = {
   decl_id: ID.t;
@@ -143,6 +144,7 @@ val for_all : var -> form -> form
 val for_all_l : var list -> form -> form
 val exists : var -> form -> form
 val exists_l : var list -> form -> form
+val f_let : var -> expr -> form -> form
 
 val atom : sub_universe -> int -> atom
 val atom_cmp : atom -> atom -> int

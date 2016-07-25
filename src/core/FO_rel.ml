@@ -70,7 +70,7 @@ and form =
   | Equiv of form * form
   | Forall of var * form
   | Exists of var * form
-
+  | F_let of var * expr * form
 
 type decl = {
   decl_id: ID.t;
@@ -165,6 +165,7 @@ let for_all v f = Forall (v,f)
 let for_all_l = List.fold_right for_all
 let exists v f = Exists (v,f)
 let exists_l = List.fold_right exists
+let f_let v a b = F_let (v,a,b)
 
 let atom su i = { a_sub_universe=su; a_index=i }
 let atom_cmp a1 a2 =
@@ -301,6 +302,9 @@ and print_form_rec p out = function
   | Exists (v,f) ->
     wrapf_ p P_f_quant out "@[<2>exists @[%a@].@ @[%a@]@]"
       print_typed_var v (print_form_rec P_f_quant) f
+  | F_let (v,a,b) ->
+    wrapf_ p P_f_quant out "@[<2>let @[%a := %a@].@ @[%a@]@]"
+      print_typed_var v (print_expr_rec P_top) a (print_form_rec P_f_quant) b
 
 and print_infix_list pform s out l = match l with
   | [] -> assert false

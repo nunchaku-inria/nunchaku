@@ -252,6 +252,11 @@ and encode_form state t : FO_rel.form =
               FO_rel.in_ last (app_fun_ f args)
           end
       end
+    | FO.Let (v,a,b) ->
+      let v = encode_var state v in
+      let a = encode_term state a in
+      let b = encode_form state b in
+      FO_rel.f_let v a b
     | FO.Builtin _
     | FO.Var _
     | FO.Mu (_,_)
@@ -260,7 +265,6 @@ and encode_form state t : FO_rel.form =
     | FO.Fun (_,_)
     | FO.DataTest (_,_)
     | FO.DataSelect (_,_,_)
-    | FO.Let (_,_,_)
     | FO.Undefined (_,_) ->
       (* atomic formula *)
       FO_rel.some (encode_term state t)

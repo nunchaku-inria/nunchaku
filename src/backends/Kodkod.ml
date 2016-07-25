@@ -127,6 +127,10 @@ let create_state ~default_size (pb:FO_rel.problem) : state =
 let fpf = Format.fprintf
 let pp_list ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp
 
+type rename_kind =
+  | R_quant (* quantifier *)
+  | R_let of [`Form | `Rel] (* let binding *)
+
 (* print in kodkodi syntax *)
 let print_pb state pb out () : unit =
   (* local substitution for renaming variables *)
@@ -184,16 +188,24 @@ let print_pb state pb out () : unit =
       fpf out "(@[<2>%a@ <=> %a@])" pp_form a pp_form b
     | FO_rel.Forall (v,f) -> pp_binder "all" out v f
     | FO_rel.Exists (v,f) -> pp_binder "some" out v f
+    | FO_rel.F_let (v,a,b) ->
+      within_rename ~k:(R_let `Rel) v
+        ~f:(fun name ->
+          fpf out "(@[<2>let@ [@[%s := %a@]]@ | %a@])" name pp_rel a pp_form b)
   (* rename [v] temporarily, giving its name to [f] *)
-  and within_rename v ~f =
+  and within_rename ~(k:rename_kind) v ~f =
     let n = Var.Subst.size !subst in
-    let name = Printf.sprintf "S%d'" n in
+    let name = match k with
+      | R_quant -> Printf.sprintf "S%d'" n
+      | R_let `Form -> Printf.sprintf "$f%d" n
+      | R_let `Rel -> Printf.sprintf "$e%d" n
+    in
     subst := Var.Subst.add ~subst:!subst v name;
     CCFun.finally1
       ~h:(fun () -> subst := Var.Subst.remove ~subst:!subst v)
       f name
   and pp_binder b out v f =
-    within_rename v
+    within_rename ~k:R_quant v
       ~f:(fun name ->
         fpf out "(@[<2>%s [%s : one %a]@ | %a@])"
           b name pp_su_name (Var.ty v) pp_form f)
@@ -222,13 +234,13 @@ let print_pb state pb out () : unit =
       fpf out "(@[<2>if %a@ then %a@ else %a@])"
         pp_form a pp_rel b pp_rel c
     | FO_rel.Comprehension (v,f) ->
-      within_rename v
+      within_rename ~k:R_quant v
         ~f:(fun name ->
           fpf out "{@[<2>%s |@ %a@]}" name pp_form f)
     | FO_rel.Let (v,t,u) ->
-      within_rename v
+      within_rename ~k:(R_let `Rel) v
         ~f:(fun name ->
-          fpf out "(@[<2<let@ @[%s := %a@]@ | %a@])" name pp_rel t pp_rel u)
+          fpf out "(@[<2>let@ [@[%s := %a@]]@ | %a@])" name pp_rel t pp_rel u)
   in
   (* go! prelude first *)
   fpf out "/* emitted from Nunchaku */@.";
