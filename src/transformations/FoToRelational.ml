@@ -100,7 +100,6 @@ let create_state () =
     fun_ty_ret=pprop_ty;
   } in
   ID.Tbl.add state.funs ptrue ptrue_fe;
-  ID.Tbl.add state.dom_of_id pprop_id pprop_dom;
   (* return *)
   state
 
@@ -305,9 +304,10 @@ let encode_statement state st : FO_rel.form list =
         fun_ty_ret=state.pprop_dom.dom_ty;
       } in
       declare_fun state id fe;
-      (* additional axiom: [id = true_] *)
-      let ax = FO_rel.eq (FO_rel.const id) (FO_rel.const state.ptrue) in
-      [ax]
+      (* additional axioms: [id = true_], [one id] *)
+      let ax_eq = FO_rel.eq (FO_rel.const id) (FO_rel.const state.ptrue) in
+      let ax_some = FO_rel.one (FO_rel.const id) in
+      [ax_some; ax_eq]
     | FO.Decl (id, (ty_args, ty_ret), _) ->
       assert (not (fun_is_declared state id));
       (* encoding differs for relations and functions *)
@@ -399,8 +399,12 @@ let encode_pb pb =
     CCVector.flat_map_list (encode_statement state) (FO.Problem.statements pb)
     |> CCVector.to_list
   in
-  (* axiom for ptrue: [one ptrue] *)
-  let form = FO_rel.one (FO_rel.const state.ptrue) :: form in
+  (* axiom for ptrue: [one ptrue], [ptrue in pprop] *)
+  let form =
+    FO_rel.one (FO_rel.const state.ptrue)
+    :: FO_rel.in_ (FO_rel.const state.ptrue) (FO_rel.const state.pprop_dom.dom_id)
+    :: form
+  in
   (* extract declarations: *)
   let decls =
     let d_funs =
@@ -678,6 +682,9 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
               | Some dom ->
                 let ids = decode_ty_dom_ map id dom set in
                 Some (dom.dom_id, ids)
+              | None when ID.equal id state.pprop_dom.dom_id ->
+                let ids = decode_ty_dom_ map id state.pprop_dom set in
+                Some (id, ids)
               | None -> None
             end
          | _ -> None)
