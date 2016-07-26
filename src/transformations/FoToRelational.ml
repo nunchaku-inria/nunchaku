@@ -100,6 +100,7 @@ let create_state () =
     fun_ty_ret=pprop_ty;
   } in
   ID.Tbl.add state.funs ptrue ptrue_fe;
+  TyTbl.add state.domains pprop_ty pprop_dom;
   (* return *)
   state
 
@@ -412,7 +413,9 @@ let encode_pb pb =
       |> Sequence.map (CCFun.uncurry decl_of_fun)
     and d_types =
       TyTbl.values state.domains
-      |> Sequence.map (fun d -> decl_of_su d.dom_su)
+      |> Sequence.map (fun d -> d.dom_su)
+      |> Sequence.sort_uniq ~cmp:FO_rel.su_compare
+      |> Sequence.map decl_of_su
     in
     Sequence.append d_types d_funs
     |> CCVector.of_seq ?init:None
