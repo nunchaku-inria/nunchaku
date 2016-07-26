@@ -100,6 +100,7 @@ let create_state () =
     fun_ty_ret=pprop_ty;
   } in
   ID.Tbl.add state.funs ptrue ptrue_fe;
+  ID.Tbl.add state.dom_of_id pprop_id pprop_dom;
   (* return *)
   state
 
@@ -223,7 +224,7 @@ let rec encode state (t:FO.T.t) : encode_res = match FO.T.view t with
        it's a predicate or a function *)
     begin match find_fun_ state f with
       | None -> errorf "function %a is undeclared" ID.print f;
-      | Some ({fun_is_pred=true; _} as fun_) ->
+      | Some {fun_is_pred=true; _} ->
         let l = List.map (encode_term state) l in
         begin match List.rev l with
           | [] ->
@@ -518,7 +519,13 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
   let atom_to_id (a:FO_rel.atom) : ID.t option =
     let su = a.FO_rel.a_sub_universe in
     let id = id_of_atom_ map a in
-    let _, ids = ID.Map.find su.FO_rel.su_name ty_by_id in
+    let ids =
+      try ID.Map.find su.FO_rel.su_name ty_by_id
+      with Not_found ->
+        errorf "could not find domain of type %a@ in @[%a@]"
+          ID.print su.FO_rel.su_name
+          (ID.Map.print ID.print (CCFormat.list ID.print)) ty_by_id
+    in
     if CCList.Set.mem ~eq:ID.equal id ids
     then Some id
     else None
@@ -662,7 +669,7 @@ let rec decode_ty_dom_ map id (dom:domain) (set:FO_rel.tuple_set) : ID.t list =
 (* transform the constant relations into FO constants/functions/predicates *)
 let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t =
   (* map finite types to their domain *)
-  let ty_by_id : (domain * ID.t list) ID.Map.t =
+  let ty_by_id : ID.t list ID.Map.t =
     M.values m
     |> Sequence.filter_map
       (fun (t,dt,_) -> match t, dt with
@@ -670,7 +677,7 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
             begin match ID.Tbl.get state.dom_of_id id with
               | Some dom ->
                 let ids = decode_ty_dom_ map id dom set in
-                Some (dom.dom_id, (dom, ids))
+                Some (dom.dom_id, ids)
               | None -> None
             end
          | _ -> None)
@@ -688,7 +695,7 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
             if ID.equal id state.pprop_dom.dom_id
             then m (* ignore the pseudo-prop type *)
             else match ID.Map.get id ty_by_id with
-              | Some (_, ids) ->
+              | Some ids ->
                 M.add_finite_type m (FO.Ty.const id) ids
               | None ->
                 errorf "`%a` is neither a function nor a type" ID.print id

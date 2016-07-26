@@ -355,7 +355,10 @@ module Parser = struct
       Res.Error (Failure msg), S.Shortcut
     ) else (
       let delim = "---OUTCOME---" in
-      let i = CCString.find ~sub:delim s in
+      let i =
+        try CCString.find ~sub:delim s
+        with Not_found -> errorf "could not find end delimiter in Kodkod's output"
+      in
       assert (i>=0);
       let s' = String.sub s i (String.length s - i) in
       let lexbuf = Lexing.from_string s' in
@@ -421,8 +424,8 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         Res.Error e, S.Shortcut
   )
 
-let default_size_ = 2
-let default_increment_ = 2
+let default_size_ = 2 (* FUDGE *)
+let default_increment_ = 2 (* FUDGE *)
 
 (* call {!solve} with increasingly big problems, until we run out of time
    or obtain "sat" *)
