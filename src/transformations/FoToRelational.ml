@@ -161,114 +161,109 @@ let app_fun_ id l =
     (fun f arg -> FO_rel.join arg f)
     (FO_rel.const id) l
 
-(* term -> expr *)
-let rec encode_term state t : FO_rel.expr =
-  match FO.T.view t with
-    | FO.Builtin (`Int _) -> assert false (* TODO *)
-    | FO.Var v -> FO_rel.var (encode_var state v)
-    | FO.App (f,l) ->
-      begin match find_fun_ state f with
-        | None ->
-          errorf "function %a is undeclared" ID.print f;
-        | Some {fun_is_pred=true; _} ->
-          errorf "cannot encode predicate application@ `@[%a@]` as relation"
-            FO.print_term t
-        | Some _ ->
-          let l = List.map (encode_term state) l in
-          app_fun_ f l
-      end
-    | FO.DataTest (_,_)
-    | FO.DataSelect (_,_,_) ->
-      error "should have eliminated data{test/select} earlier"
-    | FO.Undefined (_,t) -> encode_term state t
-    | FO.Fun (_,_) ->
-      errorf "cannot translate function `@[%a@]` to FO_rel" FO.print_term t
-    | FO.Let (v,t,u) ->
-      FO_rel.let_
-        (encode_var state v) (encode_term state t) (encode_term state u)
-    | FO.Ite (a,b,c) ->
-      FO_rel.if_ (encode_form state a) (encode_term state b) (encode_term state c)
-    | FO.True
-    | FO.False
-    | FO.Eq (_,_)
-    | FO.And _
-    | FO.Or _
-    | FO.Not _
-    | FO.Imply (_,_)
-    | FO.Equiv (_,_)
-    | FO.Forall (_,_)
-    | FO.Exists (_,_) ->
-      errorf "expected term,@ but `@[%a@]` is a formula" FO.print_term t
-    | FO.Mu (_,_)
-    | FO.Undefined_atom _
-    | FO.Unparsable _ -> assert false
+type ('e, 'f) encode_res_p =
+  | R_expr of 'e
+  | R_form of 'f
 
-and encode_form state t : FO_rel.form =
-  match FO.T.view t with
-    | FO.Ite (a,b,c) ->
-      let a = encode_form state a in
-      let b = encode_form state b in
-      let c = encode_form state c in
-      FO_rel.f_if a b c
-    | FO.Eq (a,b) ->
-      let a = encode_term state a in
-      let b = encode_term state b in
-      FO_rel.eq a b
-    | FO.True -> FO_rel.true_
-    | FO.False -> FO_rel.false_
-    | FO.And l -> FO_rel.and_l (List.map (encode_form state) l)
-    | FO.Or l -> FO_rel.or_l (List.map (encode_form state) l)
-    | FO.Not f -> FO_rel.not_ (encode_form state f)
-    | FO.Imply (a,b) ->
-      let a = encode_form state a in
-      let b = encode_form state b in
-      FO_rel.imply a b
-    | FO.Equiv (a,b) ->
-      let a = encode_form state a in
-      let b = encode_form state b in
-      FO_rel.equiv a b
-    | FO.Forall (v,f) ->
-      FO_rel.for_all (encode_var state v) (encode_form state f)
-    | FO.Exists (v,f) ->
-      FO_rel.exists (encode_var state v) (encode_form state f)
-    | FO.App (f, l) ->
-      (* atomic formula. Two distinct encodings depending on whether
-         it's a predicate or a function *)
-      begin match find_fun_ state f with
-        | None -> errorf "function %a is undeclared" ID.print f;
-        | Some fun_ ->
-          assert fun_.fun_is_pred; (* typing *)
-          let l = List.map (encode_term state) l in
-          begin match List.rev l with
-            | [] ->
-              (* nullary predicate: [pred] becomes [pred = ptrue_] *)
-              FO_rel.eq (FO_rel.const f) (FO_rel.const state.ptrue)
-            | last :: args ->
-              (* [pred a b c] becomes [c in (b · (a · pred))];
-                 here we remove the last argument *)
-              let args = List.rev args in
-              FO_rel.in_ last (app_fun_ f args)
-          end
-      end
-    | FO.Let (v,a,b) ->
-      let v = encode_var state v in
-      let a = encode_term state a in
-      let b = encode_form state b in
-      FO_rel.f_let v a b
-    | FO.Builtin _
-    | FO.Var _
-    | FO.Mu (_,_)
-    | FO.Undefined_atom _
-    | FO.Unparsable _
-    | FO.Fun (_,_)
-    | FO.DataTest (_,_)
-    | FO.DataSelect (_,_,_)
-    | FO.Undefined (_,_) ->
-      (* atomic formula *)
-      FO_rel.some (encode_term state t)
+let ret_form f = R_form f
+let ret_expr e = R_expr e
+
+type encode_res = (FO_rel.expr, FO_rel.form) encode_res_p
+
+let as_pair_ (r1: encode_res) (r2: encode_res) : _ encode_res_p = match r1, r2 with
+  | R_expr e1, R_expr e2 -> R_expr (e1, e2)
+  | R_expr e, R_form f -> R_form (FO_rel.some e, f)
+  | R_form f, R_expr e -> R_form (f, FO_rel.some e)
+  | R_form f1, R_form f2 -> R_form (f1, f2)
+
+(* encode this term into a relation expression or formula *)
+let rec encode state (t:FO.T.t) : encode_res = match FO.T.view t with
+  | FO.Ite (a,b,c) ->
+    let a = encode_form state a in
+    let b = encode state b in
+    let c = encode state c in
+    begin match as_pair_ b c with
+      | R_expr (b,c) -> R_expr (FO_rel.if_ a b c)
+      | R_form (b,c) -> R_form (FO_rel.f_if a b c)
+    end
+  | FO.Eq (a,b) ->
+    let a = encode state a in
+    let b = encode state b in
+    begin match as_pair_ a b with
+      | R_expr (a,b) -> FO_rel.eq a b |> ret_form
+      | R_form (a,b) -> FO_rel.equiv a b |> ret_form
+    end
+  | FO.Let (v,a,b) ->
+    let v = encode_var state v in
+    let a = encode_term state a in
+    let b = encode state b in
+    begin match b with
+      | R_expr b -> FO_rel.let_ v a b |> ret_expr
+      | R_form b -> FO_rel.f_let v a b |> ret_form
+    end
+  | FO.True -> ret_form FO_rel.true_
+  | FO.False -> ret_form FO_rel.false_
+  | FO.And l -> FO_rel.and_l (List.map (encode_form state) l) |> ret_form
+  | FO.Or l -> FO_rel.or_l (List.map (encode_form state) l) |> ret_form
+  | FO.Not f -> FO_rel.not_ (encode_form state f) |> ret_form
+  | FO.Imply (a,b) ->
+    let a = encode_form state a in
+    let b = encode_form state b in
+    FO_rel.imply a b |> ret_form
+  | FO.Equiv (a,b) ->
+    let a = encode_form state a in
+    let b = encode_form state b in
+    FO_rel.equiv a b |> ret_form
+  | FO.Forall (v,f) ->
+    FO_rel.for_all (encode_var state v) (encode_form state f) |> ret_form
+  | FO.Exists (v,f) ->
+    FO_rel.exists (encode_var state v) (encode_form state f) |> ret_form
+  | FO.App (f, l) ->
+    (* atomic formula. Two distinct encodings depending on whether
+       it's a predicate or a function *)
+    begin match find_fun_ state f with
+      | None -> errorf "function %a is undeclared" ID.print f;
+      | Some ({fun_is_pred=true; _} as fun_) ->
+        let l = List.map (encode_term state) l in
+        begin match List.rev l with
+          | [] ->
+            (* nullary predicate: [pred] becomes [pred = ptrue_] *)
+            FO_rel.eq (FO_rel.const f) (FO_rel.const state.ptrue) |> ret_form
+          | last :: args ->
+            (* [pred a b c] becomes [c in (b · (a · pred))];
+               here we remove the last argument *)
+            let args = List.rev args in
+            FO_rel.in_ last (app_fun_ f args) |> ret_form
+        end
+      | Some _ ->
+        let l = List.map (encode_term state) l in
+        app_fun_ f l |> ret_expr
+    end
+  | FO.Builtin (`Int _) -> assert false (* TODO *)
+  | FO.Var v -> FO_rel.var (encode_var state v) |> ret_expr
+  | FO.DataTest (_,_)
+  | FO.DataSelect (_,_,_) ->
+    error "should have eliminated data{test/select} earlier"
+  | FO.Undefined (_,t) -> encode state t
+  | FO.Fun (_,_) ->
+    errorf "cannot translate function `@[%a@]` to FO_rel" FO.print_term t
+  | FO.Mu (_,_)
+  | FO.Undefined_atom _
+  | FO.Unparsable _ -> assert false
 
 and encode_var state v =
   Var.update_ty v ~f:(su_of_ty state)
+
+and encode_form state t: FO_rel.form =
+  match encode state t with
+    | R_form f -> f
+    | R_expr e -> FO_rel.some e
+
+and encode_term state t: FO_rel.expr =
+  match encode state t with
+    | R_expr e -> e
+    | R_form _ ->
+      errorf "@[<2>expected term,@ got formula @[%a@]@]" FO.print_term t
 
 (* an axiom expressing the well-typedness of [f], if needed.
    For instance, for [cons : i -> list -> list], it will return
