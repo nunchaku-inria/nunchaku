@@ -48,11 +48,15 @@ module Make(T : TI.S) = struct
   type cache = {
     state: cache_state TyTbl.t; (** main state *)
     non_zero: unit ID.Tbl.t; (** types we know are non-empty data *)
+    default_card: int option;
+    map_hint: (Card.t -> Card.t option);
   }
 
-  let create_cache () = {
+  let create_cache ?default_card ?(map_hint=CCOpt.return) () = {
     state=TyTbl.create 16;
     non_zero=ID.Tbl.create 8;
+    default_card;
+    map_hint;
   }
 
   let save_ cache ty card =
@@ -154,16 +158,27 @@ module Make(T : TI.S) = struct
           | None -> eval_ty_ op env cache c.Stmt.copy_of (* cardinality of definition *)
           end
       | Env.NoDef ->
+          (* uninterpreted datatype: use hints and other specific params *)
           let attrs = info.Env.decl_attrs in
+          (* default case *)
+          let default = match cache.default_card with
+            | None -> Card.quasi_finite_nonzero
+            | Some i -> Card.of_int i
+          in
           CCList.find_map
             (function
               | Stmt.Attr_card_min n ->
                 Some (Card.QuasiFiniteGEQ (Z.of_int n))
               | Stmt.Attr_infinite -> Some Card.infinite
-              | Stmt.Attr_card_hint c -> Some c
+              | Stmt.Attr_card_hint c ->
+                (* first, check if the hint is valuable *)
+                begin match cache.map_hint c with
+                  | None -> None
+                  | Some _ as res -> res
+                end
               | _ -> None)
             attrs
-          |> CCOpt.get Card.quasi_finite_nonzero
+          |> CCOpt.get_or ~default
       | Env.Cstor _
       | Env.Fun_def (_,_,_)
       | Env.Fun_spec (_,_)
