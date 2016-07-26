@@ -197,6 +197,8 @@ let print_pb state pb out () : unit =
     | FO_rel.F_if (a,b,c) ->
       fpf out "(@[<2>if %a@ then %a@ else %a@])"
         pp_form a pp_form b pp_form c
+    | FO_rel.Int_op (FO_rel.IO_leq, a, b) ->
+      fpf out "(@[<>%a@ <= %a@])" pp_ie a pp_ie b
   (* rename [v] temporarily, giving its name to [f] *)
   and within_rename ~(k:rename_kind) v ~f =
     let n = Var.Subst.size !subst in
@@ -214,6 +216,10 @@ let print_pb state pb out () : unit =
       ~f:(fun name ->
         fpf out "(@[<2>%s [%s : one %a]@ | %a@])"
           b name pp_su_name (Var.ty v) pp_form f)
+  and pp_ie out (e:FO_rel.int_expr): unit = match e with
+    | FO_rel.IE_cst n -> fpf out "%d" n
+    | FO_rel.IE_card e -> fpf out "#(@[%a@])" pp_rel e
+    | FO_rel.IE_sum e -> fpf out "sum(@[%a@])" pp_rel e
   and pp_rel out = function
     | FO_rel.Const id -> CCFormat.string out (id2name id )
     | FO_rel.None_  -> CCFormat.string out "none"
@@ -251,6 +257,8 @@ let print_pb state pb out () : unit =
   fpf out "/* emitted from Nunchaku */@.";
   (* settings *)
   fpf out "solver: \"Lingeling\"@.";
+  let n_digits = 4 in (* TODO: compute from [log_2 (max (max_card ty))] *)
+  fpf out "bit_width : %d@." n_digits;
   (* universe *)
   fpf out "univ: u%d@." state.univ_size;
   (* decls *)

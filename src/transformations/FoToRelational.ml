@@ -386,7 +386,16 @@ let encode_statement state st : FO_rel.form list =
       [encode_form state f]
     | FO.MutualTypes (_,_) ->
       errorf "unexpected (co)data@ `@[%a@]`" FO.print_statement st
-    | FO.CardBound _ -> assert false (* TODO: merge with TyDecl...? *)
+    | FO.CardBound (id, k, n) ->
+      (* the relation representing this type *)
+      let dom = domain_of_ty state (FO.Ty.const id) in
+      let card_expr = FO_rel.int_card (FO_rel.const dom.dom_id) in
+      let n = FO_rel.int_const n in
+      let ax_card = match k with
+        | `Max -> FO_rel.int_leq card_expr n
+        | `Min -> FO_rel.int_leq n card_expr
+      in
+      [ax_card]
 
 let encode_pb pb =
   let state = create_state () in

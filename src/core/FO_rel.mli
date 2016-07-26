@@ -76,6 +76,17 @@ and form =
   | Exists of var * form
   | F_let of var * expr * form
   | F_if of form * form * form
+  | Int_op of int_op * int_expr * int_expr
+
+(* NOTE: only the subset we're interested in *)
+and int_op =
+  | IO_leq
+
+(* NOTE: only the subset we're interested in *)
+and int_expr =
+  | IE_card of expr
+  | IE_sum of expr
+  | IE_cst of int
 
 type decl = {
   decl_id: ID.t;
@@ -149,6 +160,13 @@ val exists_l : var list -> form -> form
 val f_let : var -> expr -> form -> form
 val f_if : form -> form -> form -> form
 
+val int_op : int_op -> int_expr -> int_expr -> form
+val int_leq : int_expr -> int_expr -> form
+
+val int_sum : expr -> int_expr
+val int_card : expr -> int_expr
+val int_const : int -> int_expr
+
 val atom : sub_universe -> int -> atom
 val atom_cmp : atom -> atom -> int
 val atom_eq : atom -> atom -> bool
@@ -169,6 +187,7 @@ val print_sub_universe : sub_universe CCFormat.printer
 val print_var_ty : var_ty CCFormat.printer
 val print_universe : universe CCFormat.printer
 val print_expr : expr CCFormat.printer
+val print_int_expr : int_expr CCFormat.printer
 val print_form : form CCFormat.printer
 val print_decl : decl CCFormat.printer
 val print_problem : problem CCFormat.printer
