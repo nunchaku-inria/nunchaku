@@ -136,7 +136,7 @@ module ToFO(T : TI.S) = struct
     | Builtin (`Undefined_self (c,t)) ->
         FO.T.undefined c (conv_term ~sigma t)
     | Builtin (`Undefined_atom (c,ty)) ->
-        FO.T.undefined_atom c (conv_ty ty) []
+        FO.T.undefined_atom c (conv_top_ty ty) []
     | Builtin (`Unparsable ty) -> FO.T.unparsable (conv_ty ty)
     | Builtin `True -> FO.T.true_
     | Builtin `False -> FO.T.false_
@@ -161,7 +161,7 @@ module ToFO(T : TI.S) = struct
         | Const id, _ -> FO.T.app id (List.map (conv_term ~sigma) l)
         | Builtin (`Undefined_atom (c,ty)), _ ->
             let l = List.map (conv_term ~sigma) l in
-            FO.T.undefined_atom c (conv_ty ty) l
+            FO.T.undefined_atom c (conv_top_ty ty) l
         | Builtin (`DataTest c), [t] ->
             FO.T.data_test c (conv_term ~sigma t)
         | Builtin (`DataSelect (c,n)), [t] ->
@@ -355,6 +355,11 @@ module OfFO(T:TI.S) = struct
         let l = List.map convert_ty l in
         U.ty_app (U.ty_const f) l
 
+  let convert_top_ty (l,ret): T.t =
+    let args = List.map convert_ty l in
+    let ret = convert_ty ret in
+    U.ty_arrow_l args ret
+
   let rec convert_term t =
     match FO.T.view t with
     | FO.Builtin b ->
@@ -383,7 +388,7 @@ module OfFO(T:TI.S) = struct
     | FO.Undefined_atom (c,ty,l) ->
         let l = List.map convert_term l in
         U.app
-          (U.builtin (`Undefined_atom (c,convert_ty ty)))
+          (U.builtin (`Undefined_atom (c,convert_top_ty ty)))
           l
     | FO.Unparsable ty ->
         U.unparsable ~ty:(convert_ty ty)

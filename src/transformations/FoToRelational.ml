@@ -625,11 +625,17 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
           )
         |> Sequence.to_list
       in
+      (* default case: undefined *)
+      let default =
+        let id = ID.make "_" in
+        let ty = List.map (fun d-> d.dom_ty) fe.fun_ty_args, fe.fun_ty_ret in
+        FO.T.undefined_atom id ty (List.map FO.T.var vars)
+      in
       let fdt =
         {M.DT.
           fdt_vars=vars;
           fdt_cases=tests;
-          fdt_default=None;
+          fdt_default=Some default;
         } in
       let dt = M.DT.of_flat ~equal:FO.T.equal ~hash:FO.T.hash fdt in
       let t' = FO.T.const id in

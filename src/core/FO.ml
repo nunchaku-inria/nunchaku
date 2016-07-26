@@ -41,7 +41,7 @@ type ('t, 'ty) view =
   | DataTest of id * 't
   | DataSelect of id * int * 't
   | Undefined of id * 't (** ['t] is not defined here *)
-  | Undefined_atom of id * 'ty * 't list (** some undefined term of given type, + args *)
+  | Undefined_atom of id * 'ty toplevel_ty * 't list (** some undefined term of given type, + args *)
   | Unparsable of 'ty (** could not parse term *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Mu of 'ty var * 't   (** caution, not supported everywhere *)
@@ -58,13 +58,13 @@ type ('t, 'ty) view =
   | Forall of 'ty var * 't
   | Exists of 'ty var * 't
 
+(** Toplevel type: an arrow of atomic types *)
+and 'ty toplevel_ty = 'ty list * 'ty
+
 (** Type *)
 type 'ty ty_view =
   | TyBuiltin of TyBuiltin.t
   | TyApp of id * 'ty list
-
-(** Toplevel type: an arrow of atomic types *)
-type 'ty toplevel_ty = 'ty list * 'ty
 
 type 'ty constructor = {
   cstor_name: id;
@@ -289,10 +289,10 @@ let rec print_term out t = match T.view t with
   | Undefined (c,t) ->
     fpf out "(@[<2>undefined-%a@ %a@])" ID.print c print_term t
   | Undefined_atom (c,ty,[]) ->
-    fpf out "(@[<2>undefined-%a@ ty:%a@])" ID.print c print_ty ty
+    fpf out "(@[<2>undefined-%a@ ty:%a@])" ID.print c print_toplevel_ty ty
   | Undefined_atom (c,ty,l) ->
     fpf out "(@[<2>undefined-%a@ ty:%a@ %a@])"
-      ID.print c print_ty ty (pp_list_ print_term) l
+      ID.print c print_toplevel_ty ty (pp_list_ print_term) l
   | Unparsable ty ->
     fpf out "(@[<2>unparsable ty:%a@])" print_ty ty
   | Let (v,t,u) ->
@@ -700,7 +700,7 @@ module Of_tptp = struct
     | TT.Undefined_atom l ->
       (* a new undefined atom of type "unitype" *)
       let l = List.map conv_term l in
-      T.undefined_atom (gen_undefined_ ()) (Ty.builtin `Unitype) l
+      T.undefined_atom (gen_undefined_ ()) ([], Ty.builtin `Unitype) l
 
   let conv_form _ = assert false (* TODO *)
 end
