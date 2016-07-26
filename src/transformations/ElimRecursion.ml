@@ -90,12 +90,7 @@ let create_state ~hof ~env () =
   let at_cache =
     (* by default, we assume uninterpreted types have size 4 *)
     let default_card_ = 4 (* FUDGE *) in
-    let map_hint_ = function
-      | Card.Unknown
-      | Card.Infinite -> None (* drop those hints *)
-      | (Card.Exact _ | Card.QuasiFiniteGEQ _) as c -> Some c
-    in
-    AT.create_cache ~default_card:default_card_ ~map_hint:map_hint_ ()
+    AT.create_cache ~default_card:default_card_ ()
   in
   { decode={
       approx_fun=ID.Tbl.create 16;
