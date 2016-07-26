@@ -257,7 +257,7 @@ let print_pb state pb out () : unit =
   fpf out "/* emitted from Nunchaku */@.";
   (* settings *)
   fpf out "solver: \"Lingeling\"@.";
-  let n_digits = 4 in (* TODO: compute from [log_2 (max (max_card ty))] *)
+  let n_digits = 32 in
   fpf out "bit_width : %d@." n_digits;
   (* universe *)
   fpf out "univ: u%d@." state.univ_size;
