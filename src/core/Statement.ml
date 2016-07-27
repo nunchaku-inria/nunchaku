@@ -176,7 +176,7 @@ let mk_mutual_ty id ~ty_vars ~cstors ~ty =
   in
   {ty_id=id; ty_type=ty; ty_vars; ty_cstors; }
 
-let mk_copy ?pred ~of_ ~to_ ~ty ~abstract ~concrete ~vars id =
+let mk_copy ~pred ~of_ ~to_ ~ty ~abstract ~concrete ~vars id =
   let copy_abstract, copy_abstract_ty = abstract in
   let copy_concrete, copy_concrete_ty = concrete in
   { copy_id=id;

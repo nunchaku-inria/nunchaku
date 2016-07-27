@@ -487,6 +487,7 @@ let dispatch = {
       mangle_ ~state:st c.Stmt.copy_concrete (ArgTuple.m_args tup) in
     let ty_abstract' = U.ty_arrow of_' to_' in
     let ty_concrete' = U.ty_arrow to_' of_' in
+    let pred = CCOpt.map (mono_term ~self ~local_state) c.Stmt.copy_pred in
     let ty' = U.ty_type in
     (* create new copy type *)
     let c' =
@@ -494,6 +495,7 @@ let dispatch = {
         ~of_:of_' ~to_:to_' ~ty:ty' ~vars:[]
         ~abstract:(abstract', ty_abstract')
         ~concrete:(concrete', ty_concrete')
+        ~pred
         id'
     in
     c'

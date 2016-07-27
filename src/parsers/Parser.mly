@@ -327,6 +327,10 @@ decl_attributes:
     { l }
   | { [] }
 
+copy_pred:
+  | { None }
+  | PRED t=atomic_term { Some t }
+
 statement:
   | VAL v=raw_var COLON t=term attrs=decl_attributes DOT
     {
@@ -381,12 +385,13 @@ statement:
   | COPY id=raw_var vars=raw_var* EQDEF u=term
     ABSTRACT abs=raw_var
     CONCRETE conc=raw_var
+    pred=copy_pred
     DOT
     {
       (* TODO: instead, parse list of "fields" and validate after parsing?
          better once we get more possible (optional) fields, in random order *)
       let loc = L.mk_pos $startpos $endpos in
-      A.copy ~loc ~of_:u ~abstract:abs ~concrete:conc id vars
+      A.copy ~loc ~of_:u ~abstract:abs ~concrete:conc ~pred id vars
     }
   | error
     {
