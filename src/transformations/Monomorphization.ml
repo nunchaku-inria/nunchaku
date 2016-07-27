@@ -198,15 +198,15 @@ let rec mono_term ~self ~local_state (t:term) : term =
       end
     | TI.App (f,l) ->
       (* first, beta-reduce locally; can possibly enrich [subst] *)
-      let f, l, subst = Red.Full.whnf ~subst:local_state.subst f l in
+      let f, l, subst, guard = Red.Full.whnf ~subst:local_state.subst f l in
       let local_state = {local_state with subst; } in
-      begin match T.repr f with
+      let t' = match T.repr f with
         | TI.Bind (`Fun, _, _) -> assert false (* beta-reduction failed? *)
         | TI.Builtin _ ->
           (* builtins are defined, but examine their args *)
           let f = mono_term ~self ~local_state f in
           let l = List.map (mono_term ~self ~local_state) l in
-          U.app f l
+          U.guard (U.app f l) guard
         | TI.Const id ->
           (* find type arguments *)
           let info = Env.find_exn ~env:(Trav.env self) id in
@@ -252,7 +252,8 @@ let rec mono_term ~self ~local_state (t:term) : term =
           end
         | _ ->
           failf_ "@[<2>cannot monomorphize application term@ `@[%a@]`@]" print_term t
-      end
+      in
+      U.guard t' guard
     | TI.Bind ((`Fun | `Forall | `Exists | `Mu) as b, v, t) ->
       U.mk_bind b
         (mono_var ~self ~local_state v)

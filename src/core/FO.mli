@@ -42,7 +42,7 @@ type ('t, 'ty) view =
   | DataTest of id * 't
   | DataSelect of id * int * 't
   | Undefined of id * 't (** ['t] is not defined here *)
-  | Undefined_atom of id * 'ty * 't list (** some undefined term of given type, + args *)
+  | Undefined_atom of id * 'ty toplevel_ty * 't list (** some undefined term of given topleveltype, + args *)
   | Unparsable of 'ty (** could not parse term *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Mu of 'ty var * 't   (** caution, not supported everywhere *)
@@ -59,13 +59,13 @@ type ('t, 'ty) view =
   | Forall of 'ty var * 't
   | Exists of 'ty var * 't
 
+(** Toplevel type: an arrow of atomic types *)
+and 'ty toplevel_ty = 'ty list * 'ty
+
 (** Type *)
 type 'ty ty_view =
   | TyBuiltin of TyBuiltin.t
   | TyApp of id * 'ty list
-
-(** Toplevel type: an arrow of atomic types *)
-type 'ty toplevel_ty = 'ty list * 'ty
 
 type 'ty constructor = {
   cstor_name: id;
@@ -135,7 +135,7 @@ module T : sig
   val data_test : id -> t -> t
   val data_select : id -> int -> t -> t
   val undefined : id -> t -> t
-  val undefined_atom : id -> Ty.t -> t list -> t
+  val undefined_atom : id -> Ty.toplevel_ty -> t list -> t
   val unparsable : Ty.t -> t
   val var : Ty.t var -> t
   val let_ : Ty.t var -> t -> t -> t

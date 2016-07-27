@@ -67,10 +67,23 @@ and form =
   | Not of form
   | And of form list
   | Or of form list
+  | Imply of form * form
   | Equiv of form * form
   | Forall of var * form
   | Exists of var * form
+  | F_let of var * expr * form
+  | F_if of form * form * form
+  | Int_op of int_op * int_expr * int_expr
 
+(* NOTE: only the subset we're interested in *)
+and int_op =
+  | IO_leq
+
+(* NOTE: only the subset we're interested in *)
+and int_expr =
+  | IE_card of expr
+  | IE_sum of expr
+  | IE_cst of int
 
 type decl = {
   decl_id: ID.t;
@@ -159,12 +172,21 @@ let or_l = function
   | [a] -> a
   | l -> Or l
 let or_ a b = or_l [a;b]
-let imply a b = or_ (not_ a) b
+let imply a b = Imply (a,b)
 let equiv a b = Equiv (a,b)
 let for_all v f = Forall (v,f)
 let for_all_l = List.fold_right for_all
 let exists v f = Exists (v,f)
 let exists_l = List.fold_right exists
+let f_let v a b = F_let (v,a,b)
+let f_if a b c = F_if (a,b,c)
+
+let int_op op a b = Int_op (op, a, b)
+let int_leq = int_op IO_leq
+
+let int_sum e = IE_sum e
+let int_card e = IE_card e
+let int_const i = IE_cst i
 
 let atom su i = { a_sub_universe=su; a_index=i }
 let atom_cmp a1 a2 =
@@ -274,6 +296,11 @@ let rec print_expr_rec p out = function
     fpf out "@[<2>let @[%a := %a@]@ in @[%a@]@]" print_typed_var v
       (print_expr_rec P_top) t (print_expr_rec p) u
 
+and print_int_expr out = function
+  | IE_sum e -> fpf out "(@[<1>sum@ %a@])" (print_expr_rec P_top) e
+  | IE_card e -> fpf out "#(@[%a@])" (print_expr_rec P_top) e
+  | IE_cst i -> fpf out "%d" i
+
 and print_form_rec p out = function
   | True -> CCFormat.string out "true"
   | False -> CCFormat.string out "false"
@@ -292,6 +319,9 @@ and print_form_rec p out = function
   | Or l ->
     wrapf_ p P_f_and out "@[<hv>%a@]"
       (print_infix_list (print_form_rec P_f_or) "||") l
+  | Imply (a,b) ->
+    wrapf_ p P_f_or out "(@[<hv>%a@ => %a@]"
+      (print_form_rec P_f_or) a (print_form_rec P_f_or) b
   | Equiv (a,b) ->
     wrapf_ p P_f_or out "@[@[%a@]@ <=> %a@]"
       (print_form_rec P_f_or) a (print_form_rec P_f_or) b
@@ -301,6 +331,16 @@ and print_form_rec p out = function
   | Exists (v,f) ->
     wrapf_ p P_f_quant out "@[<2>exists @[%a@].@ @[%a@]@]"
       print_typed_var v (print_form_rec P_f_quant) f
+  | F_let (v,a,b) ->
+    wrapf_ p P_f_quant out "@[<2>let @[%a := %a@].@ @[%a@]@]"
+      print_typed_var v (print_expr_rec P_top) a (print_form_rec P_f_quant) b
+  | F_if (a,b,c) ->
+    wrapf_ p P_f_and out "@[<hv2>if %a@ then %a@ else %a@]"
+      (print_form_rec P_top) a
+      (print_form_rec P_top) b
+      (print_form_rec P_f_and) c
+  | Int_op (IO_leq, a, b) ->
+    fpf out "(@[%a@ =< %a@])" print_int_expr a print_int_expr b
 
 and print_infix_list pform s out l = match l with
   | [] -> assert false

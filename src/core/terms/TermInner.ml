@@ -21,11 +21,11 @@ let print_undefined_id : bool ref = ref false
 (* precedence. Order matters, as it defines priorities *)
 type prec =
   | P_bot
-  | P_guard
   | P_app
   | P_arrow
   | P_eq
   | P_not
+  | P_guard
   | P_ite
   | P_bind
   | P_and

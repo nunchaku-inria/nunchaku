@@ -86,17 +86,22 @@ type state = {
     (* for computing cardinalities of types *)
 }
 
-let create_state ~hof ~env () = {
-  decode={
-    approx_fun=ID.Tbl.create 16;
-    encoded_fun=ID.Tbl.create 16;
-    abstract_ty=ID.Tbl.create 16;
-    hof;
-  };
-  new_statements=CCVector.create();
-  env;
-  at_cache=AT.create_cache ();
-}
+let create_state ~hof ~env () =
+  let at_cache =
+    (* by default, we assume uninterpreted types have size 4 *)
+    let default_card_ = 4 (* FUDGE *) in
+    AT.create_cache ~default_card:default_card_ ()
+  in
+  { decode={
+      approx_fun=ID.Tbl.create 16;
+      encoded_fun=ID.Tbl.create 16;
+      abstract_ty=ID.Tbl.create 16;
+      hof;
+    };
+    new_statements=CCVector.create();
+    env;
+    at_cache;
+  }
 
 exception Error of string
 
@@ -455,6 +460,8 @@ let card_tys_ ~state l : Card.t = match l with
   | [] -> Card.one
   | _ -> Card.product (List.map (card_ty_ ~state) l)
 
+let box_threshold_ = 257 (* FUDGE *)
+
 (* given [id : ty] a recursive function, should we encode its domain?
    This is a heuristic if [ty = a1 -> a2 -> ... -> ak -> ret] where
     each [a_i] is finite; otherwise we MUST box. *)
@@ -467,8 +474,8 @@ let should_box_ ~state id ty : bool =
     | Card.Infinite -> true
     | Card.Exact c
     | Card.QuasiFiniteGEQ c ->
-      (* should box if [z >= 30] *)
-      Z.compare c (Z.of_int 30) >= 0
+      (* should box if [z >= box_threshold] *)
+      Z.compare c (Z.of_int box_threshold_) >= 0
   in
   Utils.debugf ~section 2
     "@[<2>@{<Cyan>decision to box@} `@[%a : %a@]`:@ %B (card of domain = %a)@]"

@@ -127,6 +127,10 @@ let create_state ~default_size (pb:FO_rel.problem) : state =
 let fpf = Format.fprintf
 let pp_list ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp
 
+type rename_kind =
+  | R_quant (* quantifier *)
+  | R_let of [`Form | `Rel] (* let binding *)
+
 (* print in kodkodi syntax *)
 let print_pb state pb out () : unit =
   (* local substitution for renaming variables *)
@@ -180,23 +184,42 @@ let print_pb state pb out () : unit =
       fpf out "(@[<hv>%a@])" (pp_list ~sep:" && " pp_form) l
     | FO_rel.Or l ->
       fpf out "(@[<hv>%a@])" (pp_list ~sep:" || " pp_form) l
+    | FO_rel.Imply (a,b) ->
+      fpf out "(@[<2>%a@ => %a@])" pp_form a pp_form b
     | FO_rel.Equiv (a,b) ->
       fpf out "(@[<2>%a@ <=> %a@])" pp_form a pp_form b
     | FO_rel.Forall (v,f) -> pp_binder "all" out v f
     | FO_rel.Exists (v,f) -> pp_binder "some" out v f
+    | FO_rel.F_let (v,a,b) ->
+      within_rename ~k:(R_let `Rel) v
+        ~f:(fun name ->
+          fpf out "(@[<2>let@ [@[%s := %a@]]@ | %a@])" name pp_rel a pp_form b)
+    | FO_rel.F_if (a,b,c) ->
+      fpf out "(@[<2>if %a@ then %a@ else %a@])"
+        pp_form a pp_form b pp_form c
+    | FO_rel.Int_op (FO_rel.IO_leq, a, b) ->
+      fpf out "(@[<>%a@ <= %a@])" pp_ie a pp_ie b
   (* rename [v] temporarily, giving its name to [f] *)
-  and within_rename v ~f =
+  and within_rename ~(k:rename_kind) v ~f =
     let n = Var.Subst.size !subst in
-    let name = Printf.sprintf "S%d'" n in
+    let name = match k with
+      | R_quant -> Printf.sprintf "S%d'" n
+      | R_let `Form -> Printf.sprintf "$f%d" n
+      | R_let `Rel -> Printf.sprintf "$e%d" n
+    in
     subst := Var.Subst.add ~subst:!subst v name;
     CCFun.finally1
       ~h:(fun () -> subst := Var.Subst.remove ~subst:!subst v)
       f name
   and pp_binder b out v f =
-    within_rename v
+    within_rename ~k:R_quant v
       ~f:(fun name ->
         fpf out "(@[<2>%s [%s : one %a]@ | %a@])"
           b name pp_su_name (Var.ty v) pp_form f)
+  and pp_ie out (e:FO_rel.int_expr): unit = match e with
+    | FO_rel.IE_cst n -> fpf out "%d" n
+    | FO_rel.IE_card e -> fpf out "#(@[%a@])" pp_rel e
+    | FO_rel.IE_sum e -> fpf out "sum(@[%a@])" pp_rel e
   and pp_rel out = function
     | FO_rel.Const id -> CCFormat.string out (id2name id )
     | FO_rel.None_  -> CCFormat.string out "none"
@@ -222,18 +245,20 @@ let print_pb state pb out () : unit =
       fpf out "(@[<2>if %a@ then %a@ else %a@])"
         pp_form a pp_rel b pp_rel c
     | FO_rel.Comprehension (v,f) ->
-      within_rename v
+      within_rename ~k:R_quant v
         ~f:(fun name ->
           fpf out "{@[<2>%s |@ %a@]}" name pp_form f)
     | FO_rel.Let (v,t,u) ->
-      within_rename v
+      within_rename ~k:(R_let `Rel) v
         ~f:(fun name ->
-          fpf out "(@[<2<let@ @[%s := %a@]@ | %a@])" name pp_rel t pp_rel u)
+          fpf out "(@[<2>let@ [@[%s := %a@]]@ | %a@])" name pp_rel t pp_rel u)
   in
   (* go! prelude first *)
   fpf out "/* emitted from Nunchaku */@.";
   (* settings *)
   fpf out "solver: \"Lingeling\"@.";
+  let n_digits = 32 in
+  fpf out "bit_width : %d@." n_digits;
   (* universe *)
   fpf out "univ: u%d@." state.univ_size;
   (* decls *)
@@ -330,7 +355,10 @@ module Parser = struct
       Res.Error (Failure msg), S.Shortcut
     ) else (
       let delim = "---OUTCOME---" in
-      let i = CCString.find ~sub:delim s in
+      let i =
+        try CCString.find ~sub:delim s
+        with Not_found -> errorf "could not find end delimiter in Kodkod's output"
+      in
       assert (i>=0);
       let s' = String.sub s i (String.length s - i) in
       let lexbuf = Lexing.from_string s' in
@@ -396,15 +424,18 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         Res.Error e, S.Shortcut
   )
 
+let default_size_ = 2 (* FUDGE *)
+let default_increment_ = 2 (* FUDGE *)
+
 (* call {!solve} with increasingly big problems, until we run out of time
    or obtain "sat" *)
-let rec call_rec ~print ~default_size ~deadline pb : res * Scheduling.shortcut =
-  let state = create_state ~default_size pb in
+let rec call_rec ~print ~size ~deadline pb : res * Scheduling.shortcut =
+  let state = create_state ~default_size:size pb in
   if print
     then Format.printf "@[<v>kodkod problem:@ ```@ %a@,```@]@." (print_pb state pb) ();
     let res, short = solve ~deadline state pb in
     Utils.debugf ~section 2 "@[<2>kodkod result for size %d:@ %a@]"
-      (fun k->k default_size Res.print_head res);
+      (fun k->k size Res.print_head res);
     match res with
       | Res.Unsat when state.trivially_unsat ->
         (* stop increasing the size *)
@@ -414,7 +445,7 @@ let rec call_rec ~print ~default_size ~deadline pb : res * Scheduling.shortcut =
         if deadline -. now  > 0.5
         then
           (* unsat, and we still have some time: retry with a bigger size *)
-          call_rec ~print ~default_size:(default_size + 5) ~deadline pb
+          call_rec ~print ~size:(size + default_increment_) ~deadline pb
         else
           (* we fixed a maximal cardinal, so maybe there's an even bigger
              model, but we cannot know for sure *)
@@ -425,7 +456,7 @@ let call ?(print_model=false) ?(prio=10) ~print pb =
   S.Task.make ~prio
     (fun ~deadline () ->
        let res, short =
-         call_rec ~print ~deadline ~default_size:5 pb
+         call_rec ~print ~deadline ~size:default_size_ pb
        in
        begin match res with
          | Res.Sat m when print_model ->

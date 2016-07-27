@@ -20,7 +20,15 @@ module Make(T : TI.S) : sig
   type cache
   (** Cache for memoizing cardinality computations *)
 
-  val create_cache : unit -> cache
+  val create_cache :
+    ?default_card:int ->
+    ?map_hint:(Cardinality.t -> Cardinality.t option) ->
+    unit ->
+    cache
+  (** @param default_card if provided, the uninterpreted types we
+        know nothing about will be considered as having this card
+      @param map_hint if provided, will be applied to filter_map any
+        type hint associated with uninterpreted types *)
 
   val cardinality_ty : ?cache:cache -> _ env -> ty -> Cardinality.t
   (** [cardinality_ty ty] computes the cardinality of the type [ty], which
