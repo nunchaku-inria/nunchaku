@@ -33,7 +33,7 @@ type decode_state = unit
 type state = {
   to_approx: ID.t ID.Map.t; (* infinite type -> its approximation *)
   upcast: ID.Set.t; (* upcast functions *)
-  mutable incomplete: bool; (* approximation? *)
+  mutable unsat_means_unknown: bool; (* approximation? *)
 }
 
 let has_infinite_attr_ =
@@ -78,10 +78,10 @@ let ty_is_infinite_ st ty = match T.repr ty with
   | TI.Const id when ID.Map.mem id st.to_approx -> true
   | _ -> false
 
-let declare_incomplete_ st =
-  if not st.incomplete then (
+let declare_unsat_means_unknown_ st =
+  if not st.unsat_means_unknown then (
     Utils.debug ~section 1 "translation is incomplete";
-    st.incomplete <- true;
+    st.unsat_means_unknown <- true;
   )
 
 (* FIXME: stronger criterion for quantifiers (types with infinite card,
@@ -107,11 +107,11 @@ let rec encode_term st subst pol t = match T.repr t with
   | TI.Bind (`Forall, v, _)
     when ty_is_infinite_ st (Var.ty v) && (pol = Pol.Pos || pol = Pol.NoPol) ->
     (* quantification on infinite type: false *)
-    declare_incomplete_ st;
+    declare_unsat_means_unknown_ st;
     U.false_ (* TODO: warning? *)
   | TI.Bind (`Exists, v, _)
     when ty_is_infinite_ st (Var.ty v) && (pol = Pol.Neg || pol = Pol.NoPol) ->
-    declare_incomplete_ st;
+    declare_unsat_means_unknown_ st;
     U.false_
   | TI.App (f, [x]) when is_upcast_ st f ->
     (* erase the "upcast" operator, because it becomes id *)
@@ -167,7 +167,7 @@ let encode_pb pb =
       to_approx
       ([], ID.Map.empty)
   in
-  let state = {to_approx; upcast=set; incomplete=false; } in
+  let state = {to_approx; upcast=set; unsat_means_unknown=false; } in
   let stmts = CCVector.create() in
   CCVector.append_list stmts new_decls;
   CCVector.iter
@@ -177,9 +177,8 @@ let encode_pb pb =
     CCVector.freeze stmts
     |> Problem.make ~meta:(Problem.metadata pb) in
   (* might have lost completeness *)
-  if state.incomplete
-  then Problem.set_unsat_means_unknown pb'
-  else pb'
+  pb'
+  |> Problem.add_unsat_means_unknown state.unsat_means_unknown
 
 (* TODO: decoding (i.e. return a model for infinite types)? *)
 

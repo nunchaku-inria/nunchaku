@@ -341,7 +341,7 @@ type state = {
     (* used for generating new names *)
   mutable new_stmts : (term, ty) Stmt.t CCVector.vector;
     (* used for new declarations. [id, type, attribute list] *)
-  mutable lost_completeness: bool;
+  mutable unsat_means_unknown: bool;
     (* did we have to do some approximation? *)
   decode: decode_state;
     (* bookkeeping for, later, decoding *)
@@ -366,7 +366,7 @@ let create_state ~env arities = {
   arities;
   app_count=0;
   new_stmts=CCVector.create();
-  lost_completeness=false;
+  unsat_means_unknown=false;
   decode={
     dst_app_symbols=ID.Tbl.create 16;
     dst_gensym=0;
@@ -672,7 +672,7 @@ let elim_hof_term ~state subst pol t =
             "@[<2>encode `@[%a@]`@ as `@[%a@]``,@ \
              quantifying over type `@[%a@]`@]"
             (fun k->k P.print t P.print res P.print (Var.ty v));
-          state.lost_completeness <- true;
+          state.unsat_means_unknown <- true;
           res
         | `Forall, Pol.Pos
         | `Exists, Pol.Neg ->
@@ -681,7 +681,7 @@ let elim_hof_term ~state subst pol t =
           Utils.debugf ~section 3
             "@[<2>encode `@[%a@]`@ as `@[%a@]`,@ quantifying over type `@[%a@]`@]"
             (fun k->k P.print t P.print res P.print (Var.ty v));
-          state.lost_completeness <- true;
+          state.unsat_means_unknown <- true;
           res
       end
     | TI.Builtin (`Eq (a,_)) when ty_is_ho_ (ty_term_ ~state a) ->
@@ -694,7 +694,7 @@ let elim_hof_term ~state subst pol t =
           Utils.debugf ~section 3
             "@[<2>encode HO equality `@[%a@]`@ as `@[%a@]`@]"
             (fun k->k P.print t P.print res);
-          state.lost_completeness <- true;
+          state.unsat_means_unknown <- true;
           res
         | Pol.Pos ->
           (* [a = b && has_proto a] *)
@@ -702,7 +702,7 @@ let elim_hof_term ~state subst pol t =
           Utils.debugf ~section 3
             "@[<2>encode HO equality `@[%a@]`@ as `@[%a@]`@]"
             (fun k->k P.print t P.print res);
-          state.lost_completeness <- true;
+          state.unsat_means_unknown <- true;
           res
       end
     | TI.Let _
@@ -908,7 +908,7 @@ let elim_hof pb =
     Problem.flat_map_statements pb
       ~f:(elim_hof_statement ~state)
   in
-  let pb' = Problem.add_unsat_means_unknown state.lost_completeness pb' in
+  let pb' = Problem.add_unsat_means_unknown state.unsat_means_unknown pb' in
   (* return new problem *)
   pb', state.decode
 

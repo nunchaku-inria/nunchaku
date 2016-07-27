@@ -123,8 +123,6 @@ module Make(M : sig val mode : mode end) = struct
     (* environment *)
     at_cache: AT.cache;
     (* used for computing type cardinalities *)
-    mutable sat_means_unknown: bool;
-    (* completeness? *)
     mutable unsat_means_unknown: bool;
     (* completeness? *)
   }
@@ -137,7 +135,6 @@ module Make(M : sig val mode : mode end) = struct
     map=Tbl.create 16;
     env;
     at_cache=AT.create_cache();
-    sat_means_unknown=false;
     unsat_means_unknown=false;
   }
 
@@ -231,11 +228,6 @@ module Make(M : sig val mode : mode end) = struct
         | `Forall, Pol.Neg
         | `Exists, Pol.Pos ->
           let res = U.mk_bind b v (tr_term state pol f) in
-          state.unsat_means_unknown <- true;
-          Utils.debugf ~section 3
-            "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
-             quantifying over type `@[%a@]`@]"
-            (fun k->k P.print t P.print res Pol.pp pol P.print (Var.ty v));
           res
         | `Forall, Pol.Pos
         | `Exists, Pol.Neg ->
@@ -249,7 +241,6 @@ module Make(M : sig val mode : mode end) = struct
         | _, Pol.NoPol ->
           (* aww. no idea, just avoid this branch if possible *)
           let res = U.asserting U.false_ [U.false_] in
-          state.sat_means_unknown <- true;
           state.unsat_means_unknown <- true;
           Utils.debugf ~section 3
             "@[<2>encode `@[%a@]`@ as `@[%a@]` in pol %a,@ \
@@ -591,7 +582,6 @@ module Make(M : sig val mode : mode end) = struct
     let pb' =
       pb'
       |> Problem.add_unsat_means_unknown state.unsat_means_unknown
-      |> Problem.add_sat_means_unknown state.sat_means_unknown
     in
     pb', state
 
