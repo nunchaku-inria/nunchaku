@@ -410,6 +410,7 @@ let parse_id_ ~decode s = match parse_atom_ ~decode s with
 
 (* parse an atomic type *)
 let rec parse_ty_ ~decode = function
+  | `Atom "Bool" -> Ty.builtin `Prop
   | `Atom _ as f ->
       let id = parse_id_ ~decode f in
       Ty.const id
