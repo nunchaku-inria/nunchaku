@@ -250,7 +250,7 @@ module DT = struct
     check_ res;
     res
 
-  let to_sexp ft t : CCSexp.t =
+  let to_sexp ft fty t : CCSexp.t =
     let lst = CCSexp.of_list in
     let str = CCSexp.atom in
     let eqn_to_sexp {ft_var=v; ft_term=t} =
@@ -269,13 +269,20 @@ module DT = struct
         (fun else_ (eqns, then_) ->
            lst [str "if"; eqns_to_sexp eqns; ft then_; else_])
         else_ l
+    and mk_fun vars body =
+      List.fold_right
+        (fun v body ->
+           lst [str "fun";
+                lst [str (Var.to_string_full v); fty (Var.ty v)];
+                body])
+        vars body
     in
     match fdt.fdt_default, List.rev fdt.fdt_cases with
-      | Some d, l -> mk_ite l (ft d)
+      | Some d, l -> mk_fun fdt.fdt_vars (mk_ite l (ft d))
       | None, ((eqns, rhs) :: tail) ->
         (* last "if" has no "else" *)
         let d = lst [str "if"; eqns_to_sexp eqns; ft rhs] in
-        mk_ite tail d
+        mk_fun fdt.fdt_vars (mk_ite tail d)
       | None, [] -> assert false
 
   let print_flat_test pt out {ft_var=v; ft_term=t} =
@@ -624,7 +631,7 @@ let to_sexp ft fty m : CCSexp.t =
   let ty_to_sexp (ty,dom) =
     lst [str "type"; fty ty; lst (List.map id_to_sexp dom)] in
   let value_to_sexp (t,dt,_) =
-    let fun_ = DT.to_sexp ft dt in
+    let fun_ = DT.to_sexp ft fty dt in
     lst [str "val"; ft t; fun_]
   in
   lst

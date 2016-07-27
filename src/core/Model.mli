@@ -107,7 +107,7 @@ module DT : sig
   val print_flat_test : 't prec_printer -> ('t, _) flat_test printer
   val print_flat : 't prec_printer -> ('t, _) flat_dt printer
 
-  val to_sexp : 't to_sexp -> ('t, _) t to_sexp
+  val to_sexp : 't to_sexp -> 'ty to_sexp ->('t, 'ty) t to_sexp
   (** for model display *)
 end
 
