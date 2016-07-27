@@ -24,6 +24,7 @@ type ty = T.t
 type state = {
   env: (term, ty) Env.t;
   approximate_types: unit TyTbl.t; (* copy types that are approximate *)
+  copy_as_uninterpreted: unit ID.Tbl.t; (* copy types mapped to uninterpreted types *)
   at_cache: AT.cache;
   mutable unsat_means_unknown: bool;
 }
@@ -34,8 +35,14 @@ let create_state ~env = {
   env;
   at_cache=AT.create_cache ();
   approximate_types=TyTbl.create 16;
+  copy_as_uninterpreted=ID.Tbl.create 16;
   unsat_means_unknown=false;
 }
+
+let error msg = failwith ("in " ^ name ^ ": " ^ msg)
+let errorf msg = Utils.exn_ksprintf ~f:error msg
+
+(** {2 Encoding} *)
 
 (* encode the copy type as a datatype *)
 let copy_as_data ~info (c:_ Stmt.copy): _ Stmt.t list =
@@ -94,6 +101,7 @@ let copy_as_finite_ty state ~info ~(pred:term) c : _ Stmt.t list =
   in
   let id_c = c.Stmt.copy_id in
   let ty_c = U.ty_const id_c in
+  ID.Tbl.add state.copy_as_uninterpreted id_c ();
   Utils.debugf ~section 3 "@[copy type %a:@ should_approx=%B@]"
     (fun k->k ID.print id_c should_approx);
   (* be sure to register approximated types *)
@@ -191,32 +199,104 @@ let elim pb =
             in
             [stmt']
       )
-
   in
   let pb' = Problem.add_unsat_means_unknown state.unsat_means_unknown pb' in
   pb', state
 
+(** {2 Decoding} *)
+
+module M = Model
+module DT_util = M.DT_util
+
+(* find, in the model, the concretization functions of copy types
+   that were translated to uninterpreted types.
+
+   Say [a := copy r] became uninterpreted and, in the model,
+   [a := {a0, a1}]. Then we find the value of [r_of_a] (concretization fun),
+   and build the map
+   [a0 -> a_of_r (eval (r_of_a a0)); a1 -> a_of_r (eval (r_of_a a1))]
+*)
+let decode_concrete_ st m : term ID.Map.t =
+  (* map [copy_id -> model of copy_concretize] *)
+  let concrete_funs : (_ Stmt.copy * _ M.DT.t) ID.Map.t  =
+    M.fold ID.Map.empty m
+      ~values:(fun map (t,dt,_) -> match T.repr t with
+        | TI.Const id ->
+          begin match Env.find ~env:st.env id with
+            | Some {Env.def=Env.Copy_concrete c; _}
+              when ID.Tbl.mem st.copy_as_uninterpreted c.Stmt.copy_id ->
+              assert (not (ID.Map.mem c.Stmt.copy_id map));
+              ID.Map.add c.Stmt.copy_id (c, dt) map
+            | _ -> map
+          end
+        | _ -> map
+      )
+  in
+  M.fold ID.Map.empty m
+    ~finite_types:(fun map (t,dom) -> match T.repr t with
+      | TI.Const id when ID.Tbl.mem st.copy_as_uninterpreted id ->
+        (* copy type as finite! *)
+        let c, dt =
+          try ID.Map.find id concrete_funs
+          with Not_found ->
+            errorf "could not find concretize function for %a in model" ID.print id
+        in
+        List.fold_left
+          (fun map dom_id ->
+             let r = DT_util.apply dt (U.const dom_id) |> DT_util.to_term in
+             let a = U.app_const c.Stmt.copy_abstract [r] in
+             ID.Map.add dom_id a map)
+          map dom
+      | _ -> map
+    )
+
+(* decode a term, substituting the IDs in [map] *)
+let decode_term (map:term ID.Map.t) (t:term): term =
+  let rec aux t = match T.repr t with
+    | TI.Const id ->
+      begin match ID.Map.get id map with
+        | None -> t
+          | Some t' -> t'
+      end
+    | TI.App (f, l) ->
+      let f = aux f in
+      let l = List.map aux l in
+      Red.app_whnf f l
+    | _ -> aux' t
+  and aux' t =
+    U.map () t ~f:(fun () -> aux) ~bind:(fun () v->(), v)
+  in
+  aux t
+
 let decode_model (st:decode_state) m : _ Model.t =
   let env = st.env in
-  Model.filter m
-    ~values:(fun (t,_,_) -> match T.repr t with
+  let map = decode_concrete_ st m in
+  Utils.debugf ~section 3
+    "@[<2>decode model with map@ @[<hv>%a@]@]"
+    (fun k->k (ID.Map.print ID.print P.print) map);
+  let tr_term = decode_term map in
+  Model.filter_map m
+    ~finite_types:(fun (ty,dom) -> match T.repr ty with
+      | TI.Const id when ID.Tbl.mem st.copy_as_uninterpreted id ->
+        None (* drop copy types from model *)
+      | _ -> Some (ty,dom))
+    ~values:(fun (t,dt,k) -> match T.repr t with
       | TI.Const id ->
         begin match Env.find ~env id with
-          | Some {Env.def=Env.Copy_concrete c; _} ->
-            (* drop `concrete` functions *)
-            begin match c.Stmt.copy_pred with
-              | None -> false
-              | Some _ ->
-                assert false
-                (* TODO:
-                   set of rewrite rules on constants:
-                   - read the model of the "concrete" function to compute it
-                   - replace "abstract" by a mere constant *)
-            end
-          | _ -> true
+          | Some {Env.def=(Env.Copy_concrete _ | Env.Copy_abstract _); _} ->
+            None (* drop `concrete` and `abstract` functions *)
+          | _ ->
+            let t = tr_term t in
+            let dt = M.DT.map ~ty:CCFun.id ~term:tr_term dt in
+            Some (t,dt,k)
         end
-      | _ -> true
+      | _ ->
+        let t = tr_term t in
+        let dt = M.DT.map ~ty:CCFun.id ~term:tr_term dt in
+        Some (t,dt,k)
     )
+
+(** {2 Pipe} *)
 
 let pipe ~print ~check =
   let on_encoded =
