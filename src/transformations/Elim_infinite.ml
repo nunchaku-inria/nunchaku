@@ -78,12 +78,6 @@ let ty_is_infinite_ st ty = match T.repr ty with
   | TI.Const id when ID.Map.mem id st.to_approx -> true
   | _ -> false
 
-let declare_unsat_means_unknown_ st =
-  if not st.unsat_means_unknown then (
-    Utils.debug ~section 1 "translation is incomplete";
-    st.unsat_means_unknown <- true;
-  )
-
 (* FIXME: stronger criterion for quantifiers (types with infinite card,
    not just the infinite atomic type) *)
 
@@ -104,15 +98,15 @@ let rec encode_term st subst pol t = match T.repr t with
       | None -> t
       | Some id' -> U.const id'
     end
-  | TI.Bind (`Forall, v, _)
-    when ty_is_infinite_ st (Var.ty v) && (pol = Pol.Pos || pol = Pol.NoPol) ->
-    (* quantification on infinite type: false *)
-    declare_unsat_means_unknown_ st;
-    U.false_ (* TODO: warning? *)
-  | TI.Bind (`Exists, v, _)
-    when ty_is_infinite_ st (Var.ty v) && (pol = Pol.Neg || pol = Pol.NoPol) ->
-    declare_unsat_means_unknown_ st;
-    U.false_
+  | TI.Bind ((`Forall | `Exists) as q, v, body)
+    when ty_is_infinite_ st (Var.ty v) ->
+    begin match U.approx_infinite_quant_pol q pol with
+      | `Keep -> U.mk_bind q v (encode_term st subst pol body)
+      | `Unsat_means_unknown res ->
+        (* quantification on infinite type: false *)
+        st.unsat_means_unknown <- true;
+        res
+    end
   | TI.App (f, [x]) when is_upcast_ st f ->
     (* erase the "upcast" operator, because it becomes id *)
     encode_term st subst pol x

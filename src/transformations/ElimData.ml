@@ -220,31 +220,17 @@ module Make(M : sig val mode : mode end) = struct
           then errorf "could not find encoding of `is-%a`" ID.print id
           else t
       end
-    | TI.Bind ((`Forall | `Exists) as b, v, f)
+    | TI.Bind ((`Forall | `Exists) as q, v, f)
       when is_infinite_and_encoded_ state (Var.ty v) ->
       (* quantifier over an infinite (co)data, must approximate
          depending on the polarity *)
-      begin match b, pol with
-        | `Forall, Pol.Neg
-        | `Exists, Pol.Pos ->
-          let res = U.mk_bind b v (tr_term state pol f) in
-          res
-        | `Forall, Pol.Pos
-        | `Exists, Pol.Neg ->
-          let res = if pol=Pol.Pos then U.false_ else U.true_ in
+      begin match U.approx_infinite_quant_pol q pol with
+        | `Keep -> U.mk_bind q v (tr_term state pol f)
+        | `Unsat_means_unknown res ->
           state.unsat_means_unknown <- true;
           Utils.debugf ~section 3
             "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
-             quantifying over type `@[%a@]`@]"
-            (fun k->k P.print t P.print res Pol.pp pol P.print (Var.ty v));
-          res
-        | _, Pol.NoPol ->
-          (* aww. no idea, just avoid this branch if possible *)
-          let res = U.asserting U.false_ [U.false_] in
-          state.unsat_means_unknown <- true;
-          Utils.debugf ~section 3
-            "@[<2>encode `@[%a@]`@ as `@[%a@]` in pol %a,@ \
-             quantifying over type `@[%a@]`@]"
+                  quantifying over infinite encoded type `@[%a@]`@]"
             (fun k->k P.print t P.print res Pol.pp pol P.print (Var.ty v));
           res
       end
