@@ -1248,10 +1248,23 @@ module Convert(Term : TermTyped.S) = struct
       TyEnv.add_decl ~env c.A.abstract ~id:abstract ty_abstract in
     let env =
       TyEnv.add_decl ~env c.A.concrete ~id:concrete ty_concrete in
+    (* handle optional pred *)
+    let pred =
+      CCOpt.map
+        (fun p ->
+           let p = convert_term_exn ~env p in
+           (* [p : concrete -> prop] *)
+           unify_in_ctx_ ~stack:[] (U.ty_exn p) (U.ty_arrow ty_of U.ty_prop);
+           p)
+        c.A.pred
+    in
+    (* create statement *)
     let c = Stmt.mk_copy
-      ~of_:ty_of ~to_:ty_new ~vars ~ty:ty_id
-      ~abstract:(abstract,ty_abstract)
-      ~concrete:(concrete,ty_concrete) id in
+        ~of_:ty_of ~to_:ty_new ~vars ~ty:ty_id
+        ~abstract:(abstract,ty_abstract)
+        ~concrete:(concrete,ty_concrete)
+        ~pred
+        id in
     env, c
 
   module PStmt = Stmt.Print(P)(P)

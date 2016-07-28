@@ -349,6 +349,8 @@ module Parser = struct
         (fun k->k errcode s);
       Res.Timeout, S.No_shortcut
     )
+    else if errcode <> 0 && CCString.mem s ~sub:"Ran out of time"
+    then Res.Timeout, S.No_shortcut
     else if errcode <> 0
     then (
       let msg = CCFormat.sprintf "kodkod failed (errcode %d), stdout:@ `%s`@." errcode s in

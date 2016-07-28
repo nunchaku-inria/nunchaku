@@ -92,7 +92,7 @@ type (+'t, +'ty) copy = {
   copy_abstract_ty: 'ty;
   copy_concrete: ID.t; (* [id vars -> of] *)
   copy_concrete_ty: 'ty;
-  copy_pred: 't option; (* invariant (prop) *)
+  copy_pred: 't option; (* invariant (copy_of -> prop) *)
 }
 
 (** Attribute on declarations *)
@@ -189,7 +189,7 @@ val mk_mutual_ty:
 (** Constructor for {!tydef} *)
 
 val mk_copy :
-  ?pred:'t ->
+  pred:'t option ->
   of_:'ty ->
   to_:'ty ->
   ty:'ty ->

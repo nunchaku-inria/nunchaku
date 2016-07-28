@@ -298,6 +298,15 @@ module Make(T : TI.S) = struct
             c.Stmt.copy_concrete_ty
               (U.ty_forall_l c.Stmt.copy_vars
                  (U.ty_arrow c.Stmt.copy_to c.Stmt.copy_of));
+          begin match c.Stmt.copy_pred with
+            | None -> ()
+            | Some p ->
+              (* check that [p : copy_of -> prop] *)
+              let ty_p = check ~env VarSet.empty p in
+              check_same_ty
+                (U.ty_arrow c.Stmt.copy_of U.ty_prop)
+                ty_p
+          end;
       | _ -> default_check st
     end;
     t'

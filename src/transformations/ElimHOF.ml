@@ -341,7 +341,7 @@ type state = {
     (* used for generating new names *)
   mutable new_stmts : (term, ty) Stmt.t CCVector.vector;
     (* used for new declarations. [id, type, attribute list] *)
-  mutable lost_completeness: bool;
+  mutable unsat_means_unknown: bool;
     (* did we have to do some approximation? *)
   decode: decode_state;
     (* bookkeeping for, later, decoding *)
@@ -366,7 +366,7 @@ let create_state ~env arities = {
   arities;
   app_count=0;
   new_stmts=CCVector.create();
-  lost_completeness=false;
+  unsat_means_unknown=false;
   decode={
     dst_app_symbols=ID.Tbl.create 16;
     dst_gensym=0;
@@ -661,48 +661,28 @@ let elim_hof_term ~state subst pol t =
           | None ->
             aux' subst pol t
         end
-    | TI.Bind ((`Forall | `Exists) as b, v, _) when var_is_ho_ v ->
-      begin match b, pol with
-        | `Forall, Pol.Neg
-        | `Exists, Pol.Pos -> aux' subst pol t  (* ok *)
-        | _, Pol.NoPol ->
-          (* aww. no idea, just avoid this branch if possible *)
-          let res = U.asserting U.false_ [U.false_] in
-          Utils.debugf ~section 3
-            "@[<2>encode `@[%a@]`@ as `@[%a@]``,@ \
-             quantifying over type `@[%a@]`@]"
-            (fun k->k P.print t P.print res P.print (Var.ty v));
-          state.lost_completeness <- true;
-          res
-        | `Forall, Pol.Pos
-        | `Exists, Pol.Neg ->
-          (* approximation required: we can never evaluate `forall v. t` *)
-          let res = if pol=Pol.Neg then U.true_ else U.false_ in
+    | TI.Bind ((`Forall | `Exists) as q, v, _) when var_is_ho_ v ->
+      begin match U.approx_infinite_quant_pol q pol with
+        | `Keep -> aux' subst pol t  (* ok *)
+        | `Unsat_means_unknown res ->
+          state.unsat_means_unknown <- true;
           Utils.debugf ~section 3
             "@[<2>encode `@[%a@]`@ as `@[%a@]`,@ quantifying over type `@[%a@]`@]"
             (fun k->k P.print t P.print res P.print (Var.ty v));
-          state.lost_completeness <- true;
           res
       end
     | TI.Builtin (`Eq (a,_)) when ty_is_ho_ (ty_term_ ~state a) ->
       (* higher-order comparison --> requires approximation *)
-      begin match pol with
-        | Pol.Neg -> aux' subst pol t (* fine *)
-        | Pol.NoPol ->
-          (* [a = b asserting has_proto a] *)
-          let res = U.asserting t [U.false_] in
+      (* TODO:
+         [a = b asserting has_proto a] for noPol,
+         [a = b && has_proto a] for Pos*)
+      begin match U.approx_infinite_quant_pol `Eq pol with
+        | `Keep -> aux' subst pol t (* fine *)
+        | `Unsat_means_unknown res ->
+          state.unsat_means_unknown <- true;
           Utils.debugf ~section 3
             "@[<2>encode HO equality `@[%a@]`@ as `@[%a@]`@]"
             (fun k->k P.print t P.print res);
-          state.lost_completeness <- true;
-          res
-        | Pol.Pos ->
-          (* [a = b && has_proto a] *)
-          let res = U.false_ in
-          Utils.debugf ~section 3
-            "@[<2>encode HO equality `@[%a@]`@ as `@[%a@]`@]"
-            (fun k->k P.print t P.print res);
-          state.lost_completeness <- true;
           res
       end
     | TI.Let _
@@ -908,7 +888,7 @@ let elim_hof pb =
     Problem.flat_map_statements pb
       ~f:(elim_hof_statement ~state)
   in
-  let pb' = Problem.add_unsat_means_unknown state.lost_completeness pb' in
+  let pb' = Problem.add_unsat_means_unknown state.unsat_means_unknown pb' in
   (* return new problem *)
   pb', state.decode
 

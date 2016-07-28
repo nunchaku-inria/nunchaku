@@ -929,6 +929,16 @@ module type UTIL = sig
     t_
   (** Similar to {!map} but also keeping the subterm polarity *)
 
+  val approx_infinite_quant_pol :
+    [`Forall|`Exists|`Eq] ->
+    Polarity.t ->
+    [`Unsat_means_unknown of t_ | `Keep]
+  (** Approximation of [q] under the polarity [pol]: either
+
+      - [`Unsat_means_unknown replacement] means that we lost completeness,
+          and should return [replacement] instead
+      - [`Keep] means to keep the quantifier as is *)
+
   val size : t_ -> int
   (** Number of AST nodes *)
 
@@ -1390,9 +1400,9 @@ module Util(T : S)
 
   let map ~f ~bind b_acc t = T.build (map' ~f ~bind b_acc t)
 
-  let map_pol ~f ~bind b_acc pol t =
-    let module P = Polarity in
-    match T.repr t with
+  module P = Polarity
+
+  let map_pol ~f ~bind b_acc pol t = match T.repr t with
     | TyBuiltin _
     | Const _
     | TyMeta _ -> t
@@ -1473,6 +1483,24 @@ module Util(T : S)
         let a = f b_acc pol a in
         let b = f b_acc pol b in
         ty_arrow a b
+
+  let approx_infinite_quant_pol
+      (q:[`Forall|`Exists|`Eq])
+      (pol:Polarity.t)
+    : [`Unsat_means_unknown of t_ | `Keep] =
+    match q, pol with
+      | `Forall, P.Neg
+      | `Eq, P.Neg
+      | `Exists, P.Pos -> `Keep
+      | `Forall, P.Pos
+      | `Eq, P.Pos
+      | `Exists, P.Neg ->
+        let res = if pol=P.Pos then false_ else true_ in
+        `Unsat_means_unknown res
+      | _, P.NoPol ->
+        (* aww. no idea, just avoid this branch if possible *)
+        let res = asserting false_ [false_] in
+        `Unsat_means_unknown res
 
   let size t =
     let n = ref 0 in
