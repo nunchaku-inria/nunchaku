@@ -40,7 +40,7 @@ type state = {
     (* parametrized ty *)
   sigma: T.t Signature.t;
     (* signature, for decoding purpose *)
-  new_decls: (T.t, T.t) Statement.t CCVector.vector;
+  side_axioms: (T.t, T.t) Statement.t CCVector.vector;
     (* new declarations *)
 }
 
@@ -49,7 +49,7 @@ let create_state ~sigma () = {
   pred_to_ty=ID.Map.empty;
   parametrized_ty=ID.Tbl.create 16;
   sigma;
-  new_decls=CCVector.create();
+  side_axioms=CCVector.create();
 }
 
 (* find predicate for this type
@@ -113,9 +113,19 @@ let add_pred_ state ty pred =
   state.pred_to_ty <- ID.Map.add pred ty state.pred_to_ty;
   Utils.debugf ~section 3 "@[<2>map type `@[%a@]`@ to predicate `%a`@]"
     (fun k->k P.print ty ID.print pred);
-  let ty = U.ty_arrow U.ty_unitype U.ty_prop in
-  CCVector.push state.new_decls
-    (Stmt.decl ~info:Stmt.info_default ~attrs:[] pred ty);
+  let ty_pred = U.ty_arrow U.ty_unitype U.ty_prop in
+  (* declare the predicate *)
+  let decl_pred = 
+    Stmt.decl ~info:Stmt.info_default ~attrs:[] pred ty_pred
+      in
+  (* witness that the type is inhabited.  *)
+  let ax_inhabited =
+    let v = Var.makef ~ty:U.ty_unitype "witness_%s" (mangle_ty_ ty) in
+    U.exists v (U.app_const pred [U.var v])
+    |> Stmt.axiom1 ~info:Stmt.info_default
+  in
+  CCVector.push state.side_axioms decl_pred;
+  CCVector.push state.side_axioms ax_inhabited;
   ()
 
 let as_id_ ty = match T.repr ty with
@@ -280,11 +290,11 @@ let encode_stmt state st =
     (fun k->k PStmt.print st);
   let st' = encode_stmt_ state st in
   let res =
-    List.rev_append
-      (CCVector.to_list state.new_decls)
+    CCList.append
+      (CCVector.to_list state.side_axioms)
       st'
   in
-  CCVector.clear state.new_decls;
+  CCVector.clear state.side_axioms;
   res
 
 (* TODO: more accurate spec *)
