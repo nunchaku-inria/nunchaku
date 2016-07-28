@@ -101,7 +101,9 @@ let rec encode_term st subst pol t = match T.repr t with
   | TI.Bind ((`Forall | `Exists) as q, v, body)
     when ty_is_infinite_ st (Var.ty v) ->
     begin match U.approx_infinite_quant_pol q pol with
-      | `Keep -> U.mk_bind q v (encode_term st subst pol body)
+      | `Keep ->
+        let subst, v = bind_var st subst v in
+        U.mk_bind q v (encode_term st subst pol body)
       | `Unsat_means_unknown res ->
         (* quantification on infinite type: false *)
         st.unsat_means_unknown <- true;
