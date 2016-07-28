@@ -115,7 +115,7 @@ let add_pred_ state ty pred =
     (fun k->k P.print ty ID.print pred);
   let ty_pred = U.ty_arrow U.ty_unitype U.ty_prop in
   (* declare the predicate *)
-  let decl_pred = 
+  let decl_pred =
     Stmt.decl ~info:Stmt.info_default ~attrs:[] pred ty_pred
       in
   (* witness that the type is inhabited.  *)
@@ -190,7 +190,7 @@ let encode_max_card_ ~(pred:ID.t) n =
             (List.map (fun x -> U.eq (U.var x) (U.var y)) xs)))
   in
   let ax =
-    U.forall_l xs
+    U.exists_l xs
       (U.and_ [guard_pred_x; form_y_belongs_xs])
   in
   [Stmt.axiom1 ~info:Stmt.info_default ax]
@@ -209,7 +209,7 @@ let encode_min_card_ ~(pred:ID.t) n =
     |> List.map (fun (x1,x2) -> U.neq (U.var x1) (U.var x2))
   in
   let ax =
-    U.forall_l xs
+    U.exists_l xs
       (U.and_ (guard_pred_x :: pairwise_distinct))
   in
   [Stmt.axiom1 ~info:Stmt.info_default ax]
