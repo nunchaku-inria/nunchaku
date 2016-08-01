@@ -509,9 +509,11 @@ module DT_util = struct
     and aux_ite_l var l default =
       List.fold_right
         (fun (lhs,rhs) else_ ->
-           U.ite (U.eq (U.var var) lhs)
-             (aux rhs)
-             else_)
+           let then_ = aux rhs in
+           (* eliminate redundancies: [if a b b --> b] *)
+           if U.equal then_ else_ then else_
+           else U.ite (U.eq (U.var var) lhs) then_ else_
+        )
         l default
     in
     U.fun_l vars (aux dt)
