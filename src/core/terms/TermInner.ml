@@ -832,6 +832,8 @@ module type UTIL = sig
   val data_select : ID.t -> int -> t_ -> t_
   val unparsable : ty:t_ -> t_
 
+  val and_nodup : t_ list -> t_
+
   val asserting : t_ -> t_ list -> t_
   val assuming : t_ -> t_ list -> t_
   val guard : t_ -> t_ Builtin.guard -> t_
@@ -875,6 +877,7 @@ module type UTIL = sig
   (** {2 Misc} *)
 
   module Tbl : CCHashtbl.S with type key = t_
+  (** Hashtbl with terms as key. The hash function is modulo α-equiv *)
 
   val remove_dup : t_ list -> t_ list
   (** Use a hashset to remove duplicates from the list. Order is
@@ -1308,11 +1311,10 @@ module Util(T : S)
 
   let equal a b = equal_with ~subst:Subst.empty a b
 
-
   module Tbl = CCHashtbl.Make(struct
       type t = t_
       let equal = equal
-      let hash = hash
+      let hash = hash_alpha_eq
     end)
 
   (* remove duplicates in [l] *)
@@ -1325,6 +1327,11 @@ module Util(T : S)
         let h = Tbl.create 16 in
         List.iter (fun t -> Tbl.replace h t ()) l;
         Tbl.keys_list h
+
+  let and_nodup l =
+    flatten `And l
+    |> remove_dup
+    |> and_
 
   let fold ~f ~bind acc b_acc t =
     let rec fold_l ~f ~bind acc b_acc = function
