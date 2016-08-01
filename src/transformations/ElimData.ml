@@ -384,7 +384,7 @@ module Make(M : sig val mode : mode end) = struct
       | TI.Const id' -> ID.equal id id'
       | _ -> false
     in
-    (* [id_c : id -> id -> prop] *)
+    (* [id_c : id -> id -> prop], with negative polarity *)
     let id_c = ID.make_f "occurs_in_%a" ID.print_name id in
     let ty_c = U.ty_arrow_l [U.const id; U.const id] U.ty_prop in
     let def_c = Stmt.mk_defined id_c ty_c in
@@ -404,13 +404,14 @@ module Make(M : sig val mode : mode end) = struct
            let test = U.app_const (fst cstor.ecstor_test) [U.var y] in
            let subcases =
              CCList.flat_map
-               (fun (proj,proj_ty) -> match U.ty_unfold proj_ty with
-                  | _, [_], ret when is_same_ty ret ->
+               (fun (proj,proj_ty) ->
+                  if is_same_ty (U.ty_returns proj_ty)
+                  then
                     (* this is a recursive argument, hence a possible case *)
-                    [ U.eq (U.var x) (U.app_const proj [U.var y])
-                    ; U.app_const id_c [U.var x; U.app_const proj [U.var y]]
+                    [ U.eq (U.var x) (U.app_const proj [U.var y]);
+                      U.app_const id_c [U.var x; U.app_const proj [U.var y]];
                     ]
-                  | _ -> [])
+                  else [])
                cstor.ecstor_proj
            in
            U.and_ [test; U.or_ subcases])
