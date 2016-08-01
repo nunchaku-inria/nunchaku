@@ -110,9 +110,7 @@ let transform_term t =
   and ite_to_term t = match t with
     | Yield x -> x
     | Ite (conds,a,b) ->
-      let conds =
-        conds |> TSet.remove T.true_  |> TSet.elements |> T.and_
-      in
+      let conds = and_set_ conds in
       T.and_
         [ T.imply conds (ite_to_term a);
           T.imply (T.not_ conds) (ite_to_term b);
