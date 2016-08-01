@@ -37,6 +37,7 @@ type domain = {
 
 type fun_encoding = {
   fun_ty_args: domain list;
+  fun_encoded_args: FO_rel.sub_universe list; (* for decoding *)
   fun_low: FO_rel.tuple_set;
   fun_high: FO_rel.tuple_set;
   fun_is_pred: bool; (* predicate? *)
@@ -61,6 +62,7 @@ let decl_of_fun id f : FO_rel.decl =
   { FO_rel.
     decl_id=id;
     decl_arity=List.length f.fun_ty_args;
+    decl_dom=f.fun_encoded_args;
     decl_low=f.fun_low;
     decl_high=f.fun_high;
   }
@@ -71,6 +73,7 @@ let decl_of_su su : FO_rel.decl =
   { FO_rel.
     decl_id = su.FO_rel.su_name;
     decl_arity=1;
+    decl_dom=[su];
     decl_low=FO_rel.ts_list [];
     decl_high=FO_rel.ts_all su;
   }
@@ -94,6 +97,7 @@ let create_state () =
   (* declare ptrue *)
   let ptrue_fe = {
     fun_is_pred=false;
+    fun_encoded_args=[pprop_dom.dom_su];
     fun_ty_args=[pprop_dom];
     fun_low=FO_rel.ts_list [];
     fun_high=FO_rel.ts_all pprop_dom.dom_su;
@@ -300,6 +304,7 @@ let encode_statement state st : FO_rel.form list =
       let fe = {
         fun_is_pred=false;
         fun_ty_args=[state.pprop_dom];
+        fun_encoded_args=[state.pprop_dom.dom_su];
         fun_low=FO_rel.ts_list [];
         fun_high=FO_rel.ts_all state.pprop_dom.dom_su;
         fun_ty_ret=state.pprop_dom.dom_ty;
@@ -315,12 +320,15 @@ let encode_statement state st : FO_rel.form list =
       begin match FO.Ty.view ty_ret with
         | FO.TyBuiltin `Unitype -> assert false
         | FO.TyBuiltin `Prop when ty_args=[] ->
-          (* nullary predicate -> unary predicate on pseudo-prop universe *)
+          (* nullary predicate: encoded unary predicate on pseudo-prop
+             universe.
+             NOTE: ty_args=[], but encoded_args=[pprop] *)
           let fun_low = empty_domain in
           let fun_high = fun_domain [state.pprop_dom] in
           let f = {
             fun_is_pred=true;
             fun_ty_args=[];
+            fun_encoded_args=[state.pprop_dom.dom_su];
             fun_low;
             fun_high;
             fun_ty_ret=ty_ret;
@@ -335,6 +343,7 @@ let encode_statement state st : FO_rel.form list =
           let f = {
             fun_is_pred=true;
             fun_ty_args;
+            fun_encoded_args=List.map (fun d->d.dom_su) fun_ty_args;
             fun_low;
             fun_high;
             fun_ty_ret=ty_ret;
@@ -352,6 +361,7 @@ let encode_statement state st : FO_rel.form list =
           let f = {
             fun_is_pred=false;
             fun_ty_args;
+            fun_encoded_args=List.map (fun d->d.dom_su) fun_ty_args;
             fun_low;
             fun_high;
             fun_ty_ret=ty_ret;
@@ -418,8 +428,8 @@ let encode_pb pb =
       |> Sequence.map decl_of_su
     in
     Sequence.append d_types d_funs
-    |> CCVector.of_seq ?init:None
-    |> CCVector.freeze
+    |> Sequence.map (fun d -> d.FO_rel.decl_id, d)
+    |> ID.Map.of_seq
   in
   (* the universe *)
   let univ =

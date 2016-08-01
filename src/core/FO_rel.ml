@@ -88,6 +88,7 @@ and int_expr =
 type decl = {
   decl_id: ID.t;
   decl_arity: int;
+  decl_dom: sub_universe list;
   decl_low: tuple_set; (* lower bound *)
   decl_high: tuple_set; (* higher bound *)
 }
@@ -99,7 +100,7 @@ type universe = {
 
 type problem = {
   pb_univ: universe;
-  pb_decls: decl CCVector.ro_vector;
+  pb_decls: decl ID.Map.t;
   pb_goal: form list; (* conjunction *)
   pb_meta: ProblemMetadata.t;
 }
@@ -371,7 +372,7 @@ let print_decl out d =
 let print_problem out pb =
   fpf out "@[<v2>problem {@,univ=%a@,decls=[@[<v>%a@]]@,goal=@[<hv>%a@]@,@]}"
     print_universe pb.pb_univ
-    (CCVector.print ~start:"" ~stop:"" print_decl) pb.pb_decls
+    (CCFormat.seq ~start:"" ~stop:"" print_decl) (ID.Map.values pb.pb_decls)
     (pp_list ~sep:" && " print_form) pb.pb_goal
 
 
