@@ -1,0 +1,24 @@
+# OASIS_START
+# DO NOT EDIT (digest: 5be4fb73732832b786be51ea59c1e2df)
+Skolem
+TypeInference
+ElimPatternMatch
+Monomorphization
+Specialize
+LambdaLift
+ElimHOF
+ElimRecursion
+ElimMultipleEqns
+ElimIndPreds
+ElimCopy
+Polarize
+Unroll
+IntroGuards
+Model_clean
+ElimData
+ElimTypes
+Elim_prop_args
+Elim_ite
+Elim_infinite
+FoToRelational
+# OASIS_STOP

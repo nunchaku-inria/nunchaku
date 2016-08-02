@@ -178,15 +178,15 @@ with the following abbreviation:
 
 ----
 HAS_PROTO h :=
-  exists b : alpha. gamma1 b = h && gamma2 b = proto h
+  exists b : alpha. gamma1 b = h && gamma2 b = proto h.
 
 APP h j :=
   if exists b : alpha. gamma1 b = h && gamma2 b = j then
     app h j
-  else if HAS_PROTO h then
-    app h (proto h)
   else
-    GUARD false.
+    app h (proto h)
+    asserting HAS_PROTO h.
+
 ----
 
 === Translation
@@ -308,7 +308,7 @@ In unpolarized contexts, we can have
 
 ----
 f = g
-WITH GUARD
+asserting
 HAS_PROTO f
 ----
 
@@ -320,7 +320,7 @@ definition, and then it becomes first-order thanks to the introduction of a
 handle.
 
 If the quantification is of the form "\forall x. f x = g x" (for some terms "f
-x" and "g x" that may contain "x", it can be rewritten into "f = g", and then
+x" and "g x" that may contain "x"), it can be rewritten into "f = g", and then
 the techniques for partially applied functions as arguments to equality apply.
 
 The remaining cases are:
@@ -334,3 +334,52 @@ The remaining cases are:
 
 * _The quantification is over an infinite domain._ E.g. "nat -> nat".
   This is generally hopeless.
+
+== Epsilon and Iota
+
+Predefine the following (or export "asserting" to users):
+
+----
+rec epsilon : pi a. (a -> prop) -> prop :=
+  epsilon Q = epsilon Q asserting
+       Q (epsilon Q)
+    || (Q = fun x. false)
+
+rec iota : pi a. (a -> prop) -> prop :=
+  iota Q = iota Q asserting
+       Q (iota Q)
+    || (Q = fun x. false)
+    || (exists x y. ~ (x = y) && Q x && Q y).
+----
+
+Other possible names:
+
+----
+some / the
+indefinite_desc / definite_desc
+choice / ???
+----
+
+"definite_choice" is not a good name -- the word "choice" is normally reserved
+for "epsilon".
+
+"epsilon" and "iota" would be specializable (but congruence rules would be
+necessary in general).
+
+It might be useful to define two other symbols, which can be used internally
+(e.g., to encode quotients) or by some frontend when it is certain that there
+exists at least one element satisfying "Q" (in place of "epsilon") or exactly
+one (in place of "iota").
+
+----
+rec epsilon! : pi a. (a -> prop) -> prop :=
+  epsilon! Q = epsilon! Q asserting
+       Q (epsilon! Q)
+
+rec iota! : pi a. (a -> prop) -> prop :=
+  iota! Q = iota! Q asserting
+       Q (iota! Q)
+----
+
+No congruence rules are needed for "iota!" when specializing; otherwise,
+"epsilon!" and "iota!" are identical.

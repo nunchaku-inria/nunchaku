@@ -12,155 +12,183 @@ module Subst = Var.Subst
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
 
-  module Full = struct
-    type subst = (T.t, T.t) Subst.t
+  type subst = (T.t, T.t) Subst.t
 
+  module State : sig
     (* head applied to args, in environment subst *)
-    type state = {
+    type t = private {
+      head: T.t; (* invariant: not an App *)
+      args: T.t list;
+      subst: subst;
+      guard: T.t TI.Builtin.guard;
+    }
+    val make : subst:subst -> T.t -> T.t list -> t
+    val const : subst:subst -> T.t -> t
+    val set_head : t -> T.t -> t
+    val map_guard : (T.t -> T.t) -> t -> t
+    val to_term : ?rec_:bool -> t -> T.t
+  end = struct
+    type t = {
       head: T.t;
       args: T.t list;
       subst: subst;
+      guard: T.t TI.Builtin.guard;
     }
 
-    let push_args ~st l = l @ st.args
+    let app_ a b = if b=[] then a else a @ b
+
+    (* enforce the invariant about `head` not being an `App` *)
+    let rec norm_st st = match T.repr st.head with
+      | TI.App (f, l) -> norm_st {st with head=f; args=app_ l st.args}
+      | TI.Builtin (`Guard (t,g)) ->
+        norm_st {st with head=t; guard=TI.Builtin.merge_guard g st.guard}
+      | _ -> st
+
+    (* build a state and enforce invariant *)
+    let make ~subst f l =
+      norm_st {head=f; args=l; subst; guard=TI.Builtin.empty_guard; }
+
+    let const ~subst t = make ~subst t []
+
+    let set_head st t = norm_st {st with head=t}
+
+    let map_guard f st = {st with guard=TI.Builtin.map_guard f st.guard}
 
     (* convert a state back to a term *)
-    let term_of_state st =
-      let head = U.eval ~subst:st.subst st.head in
-      match st.args with
-        | [] -> head
-        | l ->
-            let l = List.map (U.eval ~subst:st.subst) l in
-            U.app head l
+    let to_term ?rec_ st =
+      let t = U.guard (U.app st.head st.args) st.guard in
+      U.eval ?rec_ ~subst:st.subst t
+  end
+
+  module Full = struct
+    open State
 
     type bool_ =
       | BTrue
       | BFalse
       | BPartial of T.t
 
-    (* evaluate boolean operators. Subterms are evaluated with [eval] *)
-    let rec eval_bool ~eval ~subst t =
-      (* base case *)
-      let basic ~subst t =
-        let t' = eval ~subst t in
-        match T.repr t' with
-        | TI.Builtin `True -> BTrue
-        | TI.Builtin `False -> BFalse
-        | _ -> BPartial t'
-      in
-      match T.repr t with
+    let as_bool_ t = match T.repr t with
       | TI.Builtin `True -> BTrue
       | TI.Builtin `False -> BFalse
-      | TI.Builtin (`Undefined _ | `Guard _) ->
-          BPartial t (* undefined term doesn't evaluate *)
-      | TI.Builtin (`Ite (_,_,_) | `DataSelect _ | `DataTest _) ->
+      | _ -> BPartial t
+
+    let rec eval_and_l ~eval ~subst ~acc l = match l with
+      | [] -> U.and_ (List.rev acc)
+      | t :: l' ->
+          match eval ~subst t |> as_bool_ with
+          | BTrue -> eval_and_l ~eval ~subst ~acc l'
+          | BFalse -> U.false_
+          | BPartial t' -> eval_and_l ~eval ~subst ~acc:(t'::acc) l'
+
+    let rec eval_or_l ~eval ~subst ~acc l = match l with
+      | [] -> U.or_ (List.rev acc)
+      | t :: l' ->
+          match eval ~subst t |> as_bool_ with
+          | BTrue -> U.true_
+          | BFalse -> eval_or_l ~eval ~subst ~acc l'
+          | BPartial t' -> eval_or_l ~eval ~subst ~acc:(t'::acc) l'
+
+    (* Evaluate boolean operators [app_builtin b].
+       Subterms are evaluated with [eval] *)
+    let eval_bool_builtin ~eval ~subst (b : _ TI.Builtin.t) =
+      match b with
+      | `True -> U.true_
+      | `False -> U.false_
+      | `Unparsable _ | `Undefined_self _ | `Undefined_atom _ | `Guard _ ->
+          U.builtin b (* undefined term doesn't evaluate *)
+      | `Ite (_,_,_) | `DataSelect _ | `DataTest _ ->
           invalid_arg "not boolean operators"
-      | TI.Builtin (`Equiv (a,b)) ->
-          (* truth table *)
-          begin match eval_bool ~eval ~subst a, eval_bool ~eval ~subst b with
-          | BTrue, BTrue
-          | BFalse, BFalse -> BTrue
-          | BTrue, BFalse
-          | BFalse, BTrue -> BFalse
-          | BPartial _, _
-          | _, BPartial _ -> BPartial t
-          end
-      | TI.Builtin (`Eq (a,b)) ->
+      | `Eq (a,b) ->
           let a = eval ~subst a in
           let b = eval ~subst b in
           (* TODO: if [a] and [b] fully evaluated, return False? *)
-          if U.equal_with ~subst a b
-          then BTrue
-          else BPartial (U.eq a b)
-      | TI.App (f, l) ->
-          begin match T.repr f, l with
-          | TI.Builtin `And, l ->
-              eval_and_l ~eval ~default:t ~subst l
-          | TI.Builtin `Or, l ->
-              eval_or_l ~eval ~default:t ~subst l
-          | TI.Builtin `Imply, [a;b] ->
-              (* truth table *)
-              begin match eval_bool ~eval ~subst a, eval_bool ~eval ~subst b with
-              | _, BTrue
-              | BFalse, _ -> BTrue
-              | BTrue, BFalse -> BFalse
-              | BPartial _, _
-              | _, BPartial _ -> BPartial t
-              end
-          | TI.Builtin `Not, [f] ->
-              begin match eval_bool ~eval ~subst f with
-              | BTrue -> BFalse
-              | BFalse -> BTrue
-              | BPartial t -> BPartial (U.not_ t)
-              end
-          | TI.Builtin _, _ -> BPartial t
-          | _ -> BPartial t
+          begin match as_bool_ a, as_bool_ b with
+          | BTrue, BTrue
+          | BFalse, BFalse -> U.true_
+          | BTrue, BFalse
+          | BFalse, BTrue -> U.false_
+          | BPartial _, _
+          | _, BPartial _ ->
+            if U.equal_with ~subst a b
+            then U.true_
+            else U.eq a b
           end
-      | TI.Builtin (`Imply | `Not | `And | `Or) ->
-          BPartial t (* partially applied *)
-      | TI.Bind _ -> basic ~subst t
-      | TI.Const _
-      | TI.Var _
-      | TI.Let _
-      | TI.Match _
-      | TI.TyBuiltin _
-      | TI.TyArrow (_,_) -> basic ~subst t
-      | TI.TyMeta _ -> BPartial t
+      | `And l -> eval_and_l ~eval ~subst ~acc:[] l
+      | `Or l -> eval_or_l ~eval ~subst ~acc:[] l
+      | `Imply (a,b) ->
+          (* truth table *)
+          let a' = eval ~subst a in
+          let b' = eval ~subst b in
+          begin match as_bool_ a', as_bool_ b' with
+            | _, BTrue
+            | BFalse, _ -> U.true_
+            | BTrue, BFalse -> U.false_
+            | BPartial _, _
+            | _, BPartial _ -> U.imply a' b'
+          end
+      | `Not f' ->
+          begin match eval ~subst f' |> as_bool_ with
+            | BTrue -> U.false_
+            | BFalse -> U.true_
+            | BPartial t -> U.not_ t
+          end
 
-    and eval_and_l ~eval ~default ~subst l = match l with
-      | [] -> BTrue
-      | t :: l' ->
-          match eval_bool ~eval ~subst t with
-          | BTrue -> eval_and_l ~eval ~default ~subst l'
-          | BFalse -> BFalse
-          | BPartial _ -> BPartial default
-
-    and eval_or_l ~eval ~default ~subst l = match l with
-      | [] -> BFalse
-      | t :: l' ->
-          match eval_bool ~eval ~subst t with
-          | BTrue -> BTrue
-          | BFalse -> eval_or_l ~eval ~default ~subst l'
-          | BPartial _ -> BPartial default
-
-    (* evaluate [b] using [eval] *)
-    let eval_app_builtin ~eval (b:T.t TI.Builtin.t) ~st =
+    (* evaluate [b] using [eval]. *)
+    let eval_app_builtin ~eval ~subst (b:T.t TI.Builtin.t) args =
       (* auxiliary function to evaluate subterms *)
       let eval_term ~subst t =
-        term_of_state (eval {args=[]; head=t; subst}) in
+        State.make ~subst t []
+        |> eval
+        |> State.to_term ~rec_:true
+      in
       match b with
-      | `True | `False -> st (* normal form *)
-      | `And | `Imply | `Not | `Or | `Eq _ | `Equiv _ ->
-          begin match eval_bool ~eval:eval_term ~subst:st.subst st.head with
-          | BTrue -> {st with head=U.true_; }
-          | BFalse -> {st with head=U.false_; }
-          | BPartial t -> {st with head=t}
+      | `True | `False ->
+          assert (args=[]);
+          State.const ~subst (U.builtin b)(* normal form *)
+      | `And _ | `Imply _ | `Not _ | `Or _ | `Eq _ ->
+          assert (args = []);
+          begin match
+              eval_bool_builtin ~eval:eval_term ~subst b
+              |> as_bool_
+          with
+          | BTrue -> State.const ~subst U.true_
+          | BFalse -> State.const ~subst U.false_
+          | BPartial t -> State.const ~subst t
           end
       | `Ite (a,b,c) ->
           (* special case: ite can reduce further if [a] reduces to
             a boolean, because then branches can be functions *)
-          begin match eval_bool ~eval:eval_term ~subst:st.subst a with
-          | BTrue -> eval {st with head=b}
-          | BFalse -> eval {st with head=c}
-          | BPartial a' -> {st with head=U.ite a' b c}
+          begin match
+              eval_term ~subst a |> as_bool_
+          with
+          | BTrue -> eval (State.make ~subst b args)
+          | BFalse -> eval (State.make ~subst c args)
+          | BPartial a' -> State.make ~subst (U.ite a' b c) args
           end
-      | `Guard _ ->
-          Utils.not_implemented "evaluation of Guard"
       | `DataTest _ ->
           Utils.not_implemented "evaluation of DataTest"
       | `DataSelect (_,_) ->
           Utils.not_implemented "evaluation of DataSelect"
-      | `Undefined _ -> st (* no evaluation *)
+      | `Unparsable _
+      | `Undefined_self _
+      | `Undefined_atom _
+      | `Guard _ ->
+          (* no evaluation *)
+          State.make ~subst (U.builtin b) args
 
     (* see whether [st] matches a case in [m] *)
     let lookup_case_ st m = match T.repr st.head with
       | TI.Const id ->
           begin try
             let vars, rhs = ID.Map.find id m in
+            let n = List.length vars in
             (* it matches! arity should match too, otherwise the
              term is ill-typed *)
-            let subst = Subst.add_list ~subst:st.subst vars st.args in
-            Some (rhs, subst)
+            if n>List.length st.args then failwith "partial application of match";
+            let matched_args, other_args = CCList.take_drop n st.args in
+            let subst = Subst.add_list ~subst:st.subst vars matched_args in
+            Some (rhs, other_args, subst)
           with Not_found ->
             None
           end
@@ -173,63 +201,55 @@ module Make(T : TI.S) = struct
       | TI.Const _ -> st
       | TI.Builtin (`False | `True) -> st
       | TI.Builtin b ->
-          eval_app_builtin ~eval:whnf_ ~st b
+          eval_app_builtin ~eval:whnf_ ~subst:st.subst b st.args
       | TI.Var v ->
           (* dereference, if any *)
           begin match Subst.find ~subst:st.subst v with
           | None -> st
-          | Some t -> whnf_ {st with head=t}
+          | Some t -> whnf_ (State.set_head st t)
           end
-      | TI.App (f, l) ->
-          whnf_ {st with head=f; args=push_args ~st l}
-      | TI.Bind (`Fun, v,body) ->
+      | TI.App _ -> assert false (* broken invariant *)
+      | TI.Bind (`Fun, v, body) ->
           begin match st.args with
           | [] -> st
           | a :: args' ->
               (* beta-redex *)
-              whnf_ {
-                head=body;
-                args=args';
-                subst=Subst.add ~subst:st.subst v a
-              }
+              let subst = Subst.add ~subst:st.subst v a in
+              whnf_ (State.make ~subst body args')
           end
-      | TI.Bind (`Mu, v, body) ->
-          (* [µ v. t] --> [t with v:= µv. t] *)
-          whnf_ {st with
-            head=body;
-            subst=Subst.add ~subst:st.subst v head;
-          }
       | TI.Match (t, l) ->
-          let st_t = whnf_ {head=t; args=[]; subst=st.subst; } in
+          let st_t = whnf_ (State.const ~subst:st.subst t) in
           (* see whether [st] matches some case *)
           begin match lookup_case_ st_t l with
             | None ->
                 (* just replace the head *)
-                { st with head=U.match_with (term_of_state st_t) l }
-            | Some (rhs, subst) ->
-                whnf_ {st with head=rhs; subst; }
+                State.set_head st (U.match_with (State.to_term st_t) l)
+            | Some (rhs, args, subst) ->
+                whnf_ (State.make ~subst rhs args)
           end
       | TI.Bind (`TyForall, _, _) -> assert false
-      | TI.Bind ((`Forall | `Exists), _, _) -> st
+      | TI.Bind ((`Forall | `Exists | `Mu), _, _) -> st
       | TI.Let _
       | TI.TyBuiltin _
       | TI.TyArrow _ -> st
       | TI.TyMeta _ -> assert false
 
-    let whnf ?(subst=Subst.empty) t args =
-      let st = whnf_ {head=t; args; subst; } in
-      st.head, st.args, st.subst
+    and whnf ?(subst=Subst.empty) t args =
+      let {head; args; subst; guard} = whnf_ (State.make ~subst t args) in
+      head, args, subst, guard
 
     (* strong normal form *)
     let rec snf_ st =
       (* first, head reduction *)
       let st = whnf_ st in
+      let st = State.map_guard (snf_term ~subst:st.subst) st in
       (* then, reduce subterms *)
       match T.repr st.head with
       | TI.TyBuiltin _
       | TI.Const _ -> st
+      | TI.Builtin (`Guard _) -> assert false
       | TI.Builtin b ->
-          eval_app_builtin ~eval:snf_ ~st b
+          eval_app_builtin ~eval:snf_ ~subst:st.subst b st.args
       | TI.Bind (`TyForall,_,_) -> st
       | TI.TyArrow (_,_) ->
           st (* NOTE: depend types might require beta-reduction in types *)
@@ -246,50 +266,109 @@ module Make(T : TI.S) = struct
           let t = snf_term ~subst:st.subst t in
           enter_snf_ st v u (fun v u -> U.let_ v t u)
       | TI.Match (t,l) ->
-          let st_t = snf_ {head=t; args=[]; subst=st.subst; } in
+          let st_t = snf_ (State.const ~subst:st.subst t) in
           (* see whether [st] matches some case *)
           begin match lookup_case_ st_t l with
             | None ->
                 (* just replace the head and evaluate each branch *)
                 let l = ID.Map.map
                   (fun (vars,rhs) ->
-                    let vars' = Var.fresh_copies vars in
-                    let subst' = Subst.add_list ~subst:st.subst vars
-                      (List.map U.var vars') in
+                    let subst', vars' = Utils.fold_map U.rename_var st.subst vars in
                     let rhs' = snf_term rhs ~subst:subst' in
-                    vars',rhs'
-                  )
+                    vars',rhs')
                   l
                 in
-                { st with head=U.match_with (term_of_state st_t) l }
-            | Some (rhs, subst) ->
-                whnf_ {st with head=rhs; subst; }
+                State.set_head st (U.match_with (State.to_term st_t) l)
+            | Some (rhs, args, subst) ->
+                whnf_ (State.make ~subst rhs args)
           end
       | TI.TyMeta _ -> assert false
 
     (* compute the SNF of this term in [subst] *)
     and snf_term ~subst t =
-      term_of_state (snf_ {head=t; subst; args=[]})
+      State.to_term ~rec_:true (snf_ (State.const ~subst t))
 
     (* enter the scope of [v] and compute [snf t] *)
     and enter_snf_ st v t f =
       let v' = Var.fresh_copy v in
       let head = snf_term t
         ~subst:(Subst.add ~subst:st.subst v (U.var v')) in
-      {st with head=f v' head; }
+      State.set_head st (f v' head)
   end
 
   (* NOTE: when dependent types are added, substitution in types is needed *)
 
   (** {6 Reduction State} *)
 
-  let whnf t =
-    let st = Full.whnf_ {Full.subst=Subst.empty; head=t; args=[]} in
-    Full.term_of_state st
+  let whnf ?(subst=Subst.empty) t =
+    let st = Full.whnf_ (State.const ~subst t) in
+    State.to_term st
 
-  let snf t =
-    let st = Full.snf_ {Full.subst=Subst.empty; head=t; args=[]} in
-    Full.term_of_state st
+  let app_whnf ?(subst=Subst.empty) f l =
+    let st = Full.whnf_ (State.make ~subst f l) in
+    State.to_term st
+
+  let snf ?(subst=Subst.empty) t =
+    let st = Full.snf_ (State.const ~subst t) in
+    State.to_term ~rec_:true st
+
+  (* if [t = f x1...xn var], this returns [Some (f x1...xn)] *)
+  let as_app_to_ ~var:v t = match T.repr t with
+    | TI.App (f, l) ->
+        begin match List.rev l with
+          | last :: l' ->
+              (* sequence of free variables in [f (rev l')] *)
+              let fvars =
+                Sequence.of_list (f :: l')
+                |> Sequence.flat_map (U.to_seq_free_vars ?bound:None)
+              in
+              begin match T.repr last with
+                | TI.Var v' when Var.equal v v'
+                              && not (Sequence.mem ~eq:Var.equal v fvars)  ->
+                    (* so, [t = f (rev l' @ [v])], and neither [f] nor [l']
+                       contain [v], so we can reduce to [f (rev l')] *)
+                    Some (U.app f (List.rev l'))
+                | _ -> None
+              end
+          | [] -> assert false
+        end
+    | _ -> None
+
+  let rec eta_reduce t = match T.repr t with
+    | TI.Bind (`Fun, v, body) ->
+        begin match as_app_to_ ~var:v body with
+          | None -> t
+          | Some t' -> eta_reduce t'
+        end
+    | _ -> t
 end
+
+(*$inject
+  module T = Term_random.T
+  module U = TermInner.Util(T)
+  module Red = Make(T)
+  module P = TermInner.Print(T)
+*)
+
+(* idempotence of WHNF *)
+(*$QR
+  (Q.map_keep_input ~print:P.to_string Red.whnf Term_random.arbitrary)
+    (fun (t, t') -> U.equal t' (Red.whnf t'))
+*)
+
+(* WHNF/SNF type is identity *)
+(*$Q
+  Term_random.arbitrary_ty (fun ty -> U.equal ty (Red.whnf ty))
+  Term_random.arbitrary_ty (fun ty -> U.equal ty (Red.snf ty))
+*)
+
+
+(* idempotence of SNF *)
+(*$QR
+  (Q.map_keep_input ~print:P.to_string Red.snf Term_random.arbitrary)
+    (fun (t, t_norm) ->
+      U.equal t_norm (Red.snf t_norm))
+*)
+
 
 

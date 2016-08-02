@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 6f5584e7a298a6f504d61660990e631b)
+# DO NOT EDIT (digest: d3ab6bd5cbce6c2db9729c55d0512443)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -29,15 +29,20 @@ true: annot, bin_annot
 "src/core/Problem.cmx": for-pack(Nunchaku_core)
 "src/core/FO.cmx": for-pack(Nunchaku_core)
 "src/core/Reduce.cmx": for-pack(Nunchaku_core)
-"src/core/Solver_intf.cmx": for-pack(Nunchaku_core)
 "src/core/Env.cmx": for-pack(Nunchaku_core)
 "src/core/Signature.cmx": for-pack(Nunchaku_core)
 "src/core/Statement.cmx": for-pack(Nunchaku_core)
+"src/core/FO_tptp.cmx": for-pack(Nunchaku_core)
+"src/core/FO_rel.cmx": for-pack(Nunchaku_core)
+"src/core/Cardinality.cmx": for-pack(Nunchaku_core)
 "src/core/Scheduling.cmx": for-pack(Nunchaku_core)
-"src/core/CVC4.cmx": for-pack(Nunchaku_core)
 "src/core/Polarity.cmx": for-pack(Nunchaku_core)
 "src/core/Traversal.cmx": for-pack(Nunchaku_core)
 "src/core/ProblemMetadata.cmx": for-pack(Nunchaku_core)
+"src/core/AnalyzeType.cmx": for-pack(Nunchaku_core)
+"src/core/Prelude.cmx": for-pack(Nunchaku_core)
+"src/core/TypeCheck.cmx": for-pack(Nunchaku_core)
+"src/core/Lazy_list.cmx": for-pack(Nunchaku_core)
 "src/core/terms/TermInner.cmx": for-pack(Nunchaku_core)
 "src/core/terms/TermTyped.cmx": for-pack(Nunchaku_core)
 "src/core/terms/TermPoly.cmx": for-pack(Nunchaku_core)
@@ -45,101 +50,160 @@ true: annot, bin_annot
 "src/core/terms/Pattern.cmx": for-pack(Nunchaku_core)
 "src/core/types/TypePoly.cmx": for-pack(Nunchaku_core)
 "src/core/types/TypeMono.cmx": for-pack(Nunchaku_core)
-"src/core/transformations/Skolem.cmx": for-pack(Nunchaku_core)
-"src/core/transformations/TypeInference.cmx": for-pack(Nunchaku_core)
-"src/core/transformations/ElimPatternMatch.cmx": for-pack(Nunchaku_core)
-"src/core/transformations/Monomorphization.cmx": for-pack(Nunchaku_core)
-"src/core/transformations/ElimRecursion.cmx": for-pack(Nunchaku_core)
-"src/core/transformations/ElimMultipleEqns.cmx": for-pack(Nunchaku_core)
-"src/core/transformations/ElimIndPreds.cmx": for-pack(Nunchaku_core)
-"src/core/transformations/ElimCopy.cmx": for-pack(Nunchaku_core)
-"src/core/transformations/Polarize.cmx": for-pack(Nunchaku_core)
-"src/core/transformations/Unroll.cmx": for-pack(Nunchaku_core)
-"src/core/transformations/IntroGuards.cmx": for-pack(Nunchaku_core)
 <src/core/*.ml{,i,y}>: package(containers)
 <src/core/*.ml{,i,y}>: package(containers.data)
-<src/core/*.ml{,i,y}>: package(containers.iter)
 <src/core/*.ml{,i,y}>: package(containers.sexp)
+<src/core/*.ml{,i,y}>: package(num)
 <src/core/*.ml{,i,y}>: package(sequence)
 <src/core/*.ml{,i,y}>: package(threads)
 <src/core/*.ml{,i,y}>: package(unix)
 <src/core/terms/*.ml{,i,y}>: package(containers)
 <src/core/terms/*.ml{,i,y}>: package(containers.data)
-<src/core/terms/*.ml{,i,y}>: package(containers.iter)
 <src/core/terms/*.ml{,i,y}>: package(containers.sexp)
+<src/core/terms/*.ml{,i,y}>: package(num)
 <src/core/terms/*.ml{,i,y}>: package(sequence)
 <src/core/terms/*.ml{,i,y}>: package(threads)
 <src/core/terms/*.ml{,i,y}>: package(unix)
-<src/core/transformations/*.ml{,i,y}>: package(containers)
-<src/core/transformations/*.ml{,i,y}>: package(containers.data)
-<src/core/transformations/*.ml{,i,y}>: package(containers.iter)
-<src/core/transformations/*.ml{,i,y}>: package(containers.sexp)
-<src/core/transformations/*.ml{,i,y}>: package(sequence)
-<src/core/transformations/*.ml{,i,y}>: package(threads)
-<src/core/transformations/*.ml{,i,y}>: package(unix)
 <src/core/types/*.ml{,i,y}>: package(containers)
 <src/core/types/*.ml{,i,y}>: package(containers.data)
-<src/core/types/*.ml{,i,y}>: package(containers.iter)
 <src/core/types/*.ml{,i,y}>: package(containers.sexp)
+<src/core/types/*.ml{,i,y}>: package(num)
 <src/core/types/*.ml{,i,y}>: package(sequence)
 <src/core/types/*.ml{,i,y}>: package(threads)
 <src/core/types/*.ml{,i,y}>: package(unix)
 # Library nunchaku_parsers
 "src/parsers/nunchaku_parsers.cmxs": use_nunchaku_parsers
+"src/parsers/Parsing_utils.cmx": for-pack(Nunchaku_parsers)
+"src/parsers/Lexer.cmx": for-pack(Nunchaku_parsers)
+"src/parsers/Parser.cmx": for-pack(Nunchaku_parsers)
+"src/parsers/TPTP_print.cmx": for-pack(Nunchaku_parsers)
+"src/parsers/TPTP_lexer.cmx": for-pack(Nunchaku_parsers)
+"src/parsers/TPTP_parser.cmx": for-pack(Nunchaku_parsers)
+"src/parsers/TPTP_preprocess.cmx": for-pack(Nunchaku_parsers)
+"src/parsers/TPTP_model_ast.cmx": for-pack(Nunchaku_parsers)
+"src/parsers/TPTP_model_lexer.cmx": for-pack(Nunchaku_parsers)
+"src/parsers/TPTP_model_parser.cmx": for-pack(Nunchaku_parsers)
+"src/parsers/Ast_kodkod.cmx": for-pack(Nunchaku_parsers)
+"src/parsers/lex_kodkod.cmx": for-pack(Nunchaku_parsers)
+"src/parsers/Parse_kodkod.cmx": for-pack(Nunchaku_parsers)
 <src/parsers/*.ml{,i,y}>: package(containers)
 <src/parsers/*.ml{,i,y}>: package(containers.data)
-<src/parsers/*.ml{,i,y}>: package(containers.iter)
 <src/parsers/*.ml{,i,y}>: package(containers.sexp)
+<src/parsers/*.ml{,i,y}>: package(num)
 <src/parsers/*.ml{,i,y}>: package(sequence)
 <src/parsers/*.ml{,i,y}>: package(threads)
 <src/parsers/*.ml{,i,y}>: package(unix)
 <src/parsers/*.ml{,i,y}>: use_nunchaku_core
+# Library nunchaku_backends
+"src/backends/nunchaku_backends.cmxs": use_nunchaku_backends
+"src/backends/CVC4.cmx": for-pack(Nunchaku_backends)
+"src/backends/Kodkod.cmx": for-pack(Nunchaku_backends)
+"src/backends/Paradox.cmx": for-pack(Nunchaku_backends)
+<src/backends/*.ml{,i,y}>: package(containers)
+<src/backends/*.ml{,i,y}>: package(containers.data)
+<src/backends/*.ml{,i,y}>: package(containers.sexp)
+<src/backends/*.ml{,i,y}>: package(num)
+<src/backends/*.ml{,i,y}>: package(sequence)
+<src/backends/*.ml{,i,y}>: package(threads)
+<src/backends/*.ml{,i,y}>: package(unix)
+<src/backends/*.ml{,i,y}>: use_nunchaku_core
+<src/backends/*.ml{,i,y}>: use_nunchaku_parsers
+# Library nunchaku_transformations
+"src/transformations/nunchaku_transformations.cmxs": use_nunchaku_transformations
+"src/transformations/Skolem.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/TypeInference.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/ElimPatternMatch.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/Monomorphization.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/Specialize.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/LambdaLift.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/ElimHOF.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/ElimRecursion.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/ElimMultipleEqns.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/ElimIndPreds.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/ElimCopy.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/Polarize.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/Unroll.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/IntroGuards.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/Model_clean.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/ElimData.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/ElimTypes.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/Elim_prop_args.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/Elim_ite.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/Elim_infinite.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/FoToRelational.cmx": for-pack(Nunchaku_transformations)
+<src/transformations/*.ml{,i,y}>: package(containers)
+<src/transformations/*.ml{,i,y}>: package(containers.data)
+<src/transformations/*.ml{,i,y}>: package(containers.sexp)
+<src/transformations/*.ml{,i,y}>: package(num)
+<src/transformations/*.ml{,i,y}>: package(sequence)
+<src/transformations/*.ml{,i,y}>: package(threads)
+<src/transformations/*.ml{,i,y}>: package(unix)
+<src/transformations/*.ml{,i,y}>: use_nunchaku_core
+# Library nunchaku_random
+"src/random/nunchaku_random.cmxs": use_nunchaku_random
+"src/random/Term_random.cmx": for-pack(Nunchaku_random)
+<src/random/*.ml{,i,y}>: package(containers)
+<src/random/*.ml{,i,y}>: package(containers.data)
+<src/random/*.ml{,i,y}>: package(containers.sexp)
+<src/random/*.ml{,i,y}>: package(num)
+<src/random/*.ml{,i,y}>: package(qcheck)
+<src/random/*.ml{,i,y}>: package(sequence)
+<src/random/*.ml{,i,y}>: package(threads)
+<src/random/*.ml{,i,y}>: package(unix)
+<src/random/*.ml{,i,y}>: use_nunchaku_core
 # Executable nunchaku
 "src/main/nunchaku.native": package(containers)
 "src/main/nunchaku.native": package(containers.data)
-"src/main/nunchaku.native": package(containers.iter)
 "src/main/nunchaku.native": package(containers.sexp)
+"src/main/nunchaku.native": package(num)
 "src/main/nunchaku.native": package(sequence)
 "src/main/nunchaku.native": package(threads)
 "src/main/nunchaku.native": package(unix)
+"src/main/nunchaku.native": use_nunchaku_backends
 "src/main/nunchaku.native": use_nunchaku_core
 "src/main/nunchaku.native": use_nunchaku_parsers
+"src/main/nunchaku.native": use_nunchaku_transformations
 <src/main/*.ml{,i,y}>: package(containers)
 <src/main/*.ml{,i,y}>: package(containers.data)
-<src/main/*.ml{,i,y}>: package(containers.iter)
 <src/main/*.ml{,i,y}>: package(containers.sexp)
+<src/main/*.ml{,i,y}>: package(num)
 <src/main/*.ml{,i,y}>: package(sequence)
 <src/main/*.ml{,i,y}>: package(threads)
 <src/main/*.ml{,i,y}>: package(unix)
+<src/main/*.ml{,i,y}>: use_nunchaku_backends
 <src/main/*.ml{,i,y}>: use_nunchaku_core
 <src/main/*.ml{,i,y}>: use_nunchaku_parsers
+<src/main/*.ml{,i,y}>: use_nunchaku_transformations
 # Executable run_qtest
-"qtest/run_qtest.native": package(QTest2Lib)
 "qtest/run_qtest.native": package(containers)
 "qtest/run_qtest.native": package(containers.data)
-"qtest/run_qtest.native": package(containers.iter)
 "qtest/run_qtest.native": package(containers.sexp)
+"qtest/run_qtest.native": package(num)
 "qtest/run_qtest.native": package(oUnit)
+"qtest/run_qtest.native": package(qcheck)
 "qtest/run_qtest.native": package(sequence)
 "qtest/run_qtest.native": package(threads)
 "qtest/run_qtest.native": package(unix)
 "qtest/run_qtest.native": use_nunchaku_core
 "qtest/run_qtest.native": use_nunchaku_parsers
-<qtest/*.ml{,i,y}>: package(QTest2Lib)
+"qtest/run_qtest.native": use_nunchaku_random
+"qtest/run_qtest.native": use_nunchaku_transformations
 <qtest/*.ml{,i,y}>: package(containers)
 <qtest/*.ml{,i,y}>: package(containers.data)
-<qtest/*.ml{,i,y}>: package(containers.iter)
 <qtest/*.ml{,i,y}>: package(containers.sexp)
+<qtest/*.ml{,i,y}>: package(num)
 <qtest/*.ml{,i,y}>: package(oUnit)
+<qtest/*.ml{,i,y}>: package(qcheck)
 <qtest/*.ml{,i,y}>: package(sequence)
 <qtest/*.ml{,i,y}>: package(threads)
 <qtest/*.ml{,i,y}>: package(unix)
 <qtest/*.ml{,i,y}>: use_nunchaku_core
 <qtest/*.ml{,i,y}>: use_nunchaku_parsers
+<qtest/*.ml{,i,y}>: use_nunchaku_random
+<qtest/*.ml{,i,y}>: use_nunchaku_transformations
 # OASIS_STOP
 
-true: use_menhir
-true: safe_string
+true: use_menhir, safe_string, color(always)
 
 <tests> or <tptp>: -traverse
 
@@ -147,7 +211,7 @@ true: safe_string
 <src/parsers/nunTPTPParser.*>: warn(-20)
 
 # more warnings
-<src/**/*.ml>: warn(+a), warn(-4), warn(-44), warn(-50)
+<src/**/*.ml>: warn(+a-4-44-50-29-58)
 
 <src/core/Utils.cm*>: inline(15)
 

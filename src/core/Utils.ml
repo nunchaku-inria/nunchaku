@@ -2,7 +2,7 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 type 'a sequence = ('a -> unit) -> unit
-type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a or_error = ('a, string) CCResult.t
 
 module Time = struct
   (** Time elapsed since initialization of the program, and time of start *)
@@ -98,23 +98,25 @@ let set_debug = Section.set_debug Section.root
 let get_debug () = Section.root.Section.level
 
 let debug_fmt_ = Format.err_formatter
+let debug_lock_ = Mutex.create()
 
-let debugf_real section msg k =
+let debugf_real lock section msg k =
+  if lock then Mutex.lock debug_lock_;
   let now = Time.total () in
   if section == Section.root
-  then Format.fprintf debug_fmt_ "@[<hov 3>%.3f[]@ " now
-  else Format.fprintf debug_fmt_ "@[<hov 3>%.3f[%s]:@ "
+  then Format.fprintf debug_fmt_ "@[<hov 3>@{<Black>%.3f[]@}@ " now
+  else Format.fprintf debug_fmt_ "@[<hov 3>@{<Black>%.3f[%s]@}@ "
     now section.Section.full_name;
   k (Format.kfprintf
-      (fun fmt -> Format.fprintf fmt "@]@.")
+      (fun fmt -> Format.fprintf fmt "@]@."; if lock then Mutex.unlock debug_lock_)
       debug_fmt_ msg)
 
 (* inlinable function *)
-let debugf ?(section=Section.root) l msg k =
+let debugf ?(lock=false) ?(section=Section.root) l msg k =
   if l <= Section.cur_level section
-  then debugf_real section msg k
+  then debugf_real lock section msg k
 
-let debug ?section l msg = debugf ?section l "%s" (fun k->k msg)
+let debug ?lock ?section l msg = debugf ?lock ?section l "%s" (fun k->k msg)
 
 module Callback = struct
   type callback_id = int
@@ -167,23 +169,53 @@ let vec_fold_map f acc v =
 
 (** {2 Lists} *)
 
-let rec fold_map f acc l = match l with
-  | [] -> acc, []
-  | x :: tail ->
-      let acc, y = f acc x in
-      let acc, tail' = fold_map f acc tail in
-      acc, y :: tail'
+let fold_mapi ~f ~x:acc l =
+  let rec aux f acc i l = match l with
+    | [] -> acc, []
+    | x :: tail ->
+        let acc, y = f i acc x in
+        let acc, tail' = aux f acc (i+1) tail in
+        acc, y :: tail'
+  in
+  aux f acc 0 l
+
+let fold_map f acc l = fold_mapi ~f:(fun _ -> f) ~x:acc l
+
+let filteri f l =
+  let rec aux i = function
+    | [] -> []
+    | x :: tl ->
+        let tl' = aux (i+1) tl in
+        if f i x then x::tl' else tl'
+  in
+  aux 0 l
+
+let singleton_if check ~f x = if check then [f x] else []
+
+(** {2 Arg} *)
+
+let arg_choice l f =
+  let pick s =
+    let s = s |> String.trim |> String.lowercase in
+    try f (List.assoc s l)
+    with Not_found -> assert false
+  in
+  Arg.Symbol (List.map fst l, pick)
 
 (** {2 Warnings} *)
 
 type warning =
   | Warn_overlapping_match
+  | Warn_model_parsing_error
 
 let pp_warn out = function
   | Warn_overlapping_match -> CCFormat.string out "overlapping pattern-match"
+  | Warn_model_parsing_error -> CCFormat.string out "error when parsing model"
 
 (* list of enabled warnings *)
-let warnings_ = ref []
+let warnings_ =
+  ref
+    [ Warn_model_parsing_error ]
 
 let is_warning_enabled w = List.mem w !warnings_
 
@@ -208,23 +240,33 @@ let warningf w msg =
 let warning b msg = warningf b "%s" msg
 
 let enable_warn_ w () = toggle_warning w true
-
 let options_warnings_ =
   [ "--warn-overlapping-match"
       , Arg.Unit (enable_warn_ Warn_overlapping_match)
       , " enable warning on overlapping cases of pattern-matching"
   ; "-W1"
-      , Arg.Unit (enable_warn_ Warn_overlapping_match)
-      , " shortcut for --warn-overlapping-match"
+      , Arg.Bool (toggle_warning Warn_overlapping_match)
+      , " <bool>: enable/disable --warn-overlapping-match"
+  ; "-W2"
+      , Arg.Bool (toggle_warning Warn_model_parsing_error)
+      , " <bool>: enable/disable warnings on model parsing errors"
   ]
 
 (** {2 Misc} *)
 
 exception NotImplemented of string
 
+(* print error prefix *)
+let pp_error_prefix out () = Format.fprintf out "@{<Red>Error@}: "
+
+let err_sprintf fmt =
+  CCFormat.ksprintf fmt
+    ~f:(fun s -> CCFormat.sprintf "@[<2>%a%s@]" pp_error_prefix () s)
+
 let () = Printexc.register_printer
   (function
-    | NotImplemented s -> Some ("error: feature `" ^ s ^ "` is not implemented")
+    | NotImplemented s ->
+        Some (CCFormat.sprintf "%a feature `%s` is not implemented" pp_error_prefix () s)
     | _ -> None
   )
 
@@ -232,19 +274,20 @@ let not_implemented feat = raise (NotImplemented feat)
 
 let err_of_exn e =
   let trace = Printexc.get_backtrace () in
-  let msg = Printexc.to_string e in
-  CCError.fail (msg ^ "\n" ^ trace)
+  let msg = CCFormat.sprintf "%s\n%s" (Printexc.to_string e) trace in
+  CCResult.fail msg
 
 let exn_ksprintf ~f fmt =
   let buf = Buffer.create 32 in
   let out = Format.formatter_of_buffer buf in
+  Format.fprintf out "@[<2>";
   Format.kfprintf
-    (fun _ -> Format.pp_print_flush out (); raise (f (Buffer.contents buf)))
+    (fun _ -> Format.fprintf out "@]@?"; raise (f (Buffer.contents buf)))
     out fmt
 
 let not_implementedf fmt = exn_ksprintf fmt ~f:not_implemented
+let failwithf fmt = exn_ksprintf fmt ~f:failwith
 
 let ignore_catch f x =
   try ignore (f x)
   with _ -> ()
-

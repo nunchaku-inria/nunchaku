@@ -1,24 +1,15 @@
-(A) 2015-10-07 afficher modèle dans syntaxe TPTP correspondante id:1
-(B) 2015-10-05 narrowing pipeline + basic (FO) symbolic evaluation+refinement
-2015-10-13 printer/parser in some easy S-expr format
+(A) 2015-10-07 afficher modèle dans syntaxe TPTP correspondante
 2015-10-14 detect some WF defs in TPTP
 2015-10-15 create a logo; push it on github team
 2015-10-20 add let in THF
-(B) 2015-10-23 printTPTP: need types (differentiate type args from term args; 1 domain decl per type) p:1
 (B) 2015-10-29 flag to print signature (post-ty inference)
-(A) 2016-01-19 µ terms, parse them from CVC4 and deal with them internally
 2015-11-10 run larger scale tests @test
 2015-11-10 think about clean distinction term/type @design
 (B) 2015-11-10 think about adding dependent type (+ encoding step before mono) @design @feature
-2015-11-16 Earley algo with caching, based on pre-matching of terms p:1 @feature
-2015-11-16 simple narrowing without caching p:1 @feature
-2015-11-16 narrowing id:1 @feature
 (B) 2015-11-17 simple S-expr format from/to TermTyped @feature
-(B) 2015-11-30 finish specialization @feature
-(B) 2015-12-02 printer: have binding power argument to put ( ) properly @cleanup
-(B) 2015-12-22 optional: simplifications  t = (ite a b c) → ite a (t=b)(t=c) @cleanup
-2016-01-06 make And/Or parametrized builtins @design
-(B) 2016-01-11 print models in TPTP properly @feature
 (B) 2016-01-18 deal with empty sorts
 (B) 2016-01-21 compute type cardinalities to approximate exists/forall with top/bot in non polarized cases
-(A) 2016-01-26 release
+(B) 2016-06-01 decode models in ElimCopy (insert casts, change types)
+(B) 2016-06-01 repair, in ElimCopy, rec/pred statements (adjust num. of variables)
+2016-06-13 refactor Stmt to use `defined` more; also rename "tydef" into "data"
+(B) 2015-10-05 narrowing pipeline to SMBC

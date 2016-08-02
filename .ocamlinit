@@ -6,6 +6,7 @@
 #require "containers.data";;
 #require "unix";;
 #require "sequence";;
+#require "zarith";;
 
 print_endline "load nunchaku..." ;;
 #directory "_build/src/core";;
@@ -17,5 +18,11 @@ open Nunchaku_core;;
 
 #directory "_build/src/parsers/";;
 #load "nunchaku_parsers.cma";;
+
+#require "qcheck";;
+#directory "_build/src/random/";;
+#load "nunchaku_random.cma";;
+open Nunchaku_random;;
+#install_printer Term_random.print_term;;
 
 print_endline "done.";;

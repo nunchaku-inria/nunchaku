@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 9ffdba65d97eebfcd816635f34cb5eff)
+# DO NOT EDIT (digest: 2bfb645684dd63a1e93833dbd993d595)
 ID
 Var
 MetaVar
@@ -13,15 +13,20 @@ TypeUnify
 Problem
 FO
 Reduce
-Solver_intf
 Env
 Signature
 Statement
+FO_tptp
+FO_rel
+Cardinality
 Scheduling
-CVC4
 Polarity
 Traversal
 ProblemMetadata
+AnalyzeType
+Prelude
+TypeCheck
+Lazy_list
 terms/TermInner
 terms/TermTyped
 terms/TermPoly
@@ -29,15 +34,4 @@ terms/TermMono
 terms/Pattern
 types/TypePoly
 types/TypeMono
-transformations/Skolem
-transformations/TypeInference
-transformations/ElimPatternMatch
-transformations/Monomorphization
-transformations/ElimRecursion
-transformations/ElimMultipleEqns
-transformations/ElimIndPreds
-transformations/ElimCopy
-transformations/Polarize
-transformations/Unroll
-transformations/IntroGuards
 # OASIS_STOP

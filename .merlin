@@ -1,19 +1,19 @@
 S src/core
 S src/core/terms
 S src/core/types
-S src/core/transformations/
+S src/transformations/
+S src/backends/
 S src/main/
 S src/parsers/
-B _build/src/core
-B _build/src/core/terms
-B _build/src/core/types
-B _build/src/core/transformations/
-B _build/src/main/
-B _build/src/parsers
+S src/random/
+B _build/src/**
 PKG containers
 PKG containers.iter
 PKG containers.data
+PKG containers.sexp
 PKG sequence
 PKG unix
+PKG num
+PKG qcheck
 B +threads
-FLG -w +a -w -4 -w -44
+FLG -w +a-4-44-29-58 -short-paths

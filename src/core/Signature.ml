@@ -17,7 +17,12 @@ let find ~sigma id =
 
 let declare ~sigma id ty = ID.Map.add id ty sigma
 
-let add_pred (type inv) ~sigma (pred:(_,_,inv) Stmt.pred_def) =
+let add_list ~sigma l =
+  List.fold_left (fun sigma (id,ty) -> declare ~sigma id ty) sigma l
+
+let of_list l = add_list ~sigma:empty l
+
+let add_pred ~sigma (pred:(_,_) Stmt.pred_def) =
   let d = pred.Stmt.pred_defined in
   declare ~sigma d.Stmt.defined_head d.Stmt.defined_ty
 
@@ -25,7 +30,7 @@ let add_preds ~sigma preds =
   List.fold_left (fun sigma d -> add_pred ~sigma d) sigma preds
 
 let add_statement ~sigma st = match Stmt.view st with
-  | Stmt.Decl (id,_,ty) -> declare ~sigma id ty
+  | Stmt.Decl (id,ty,_) -> declare ~sigma id ty
   | Stmt.Axiom (Stmt.Axiom_rec l) ->
       List.fold_left
         (fun sigma def ->
@@ -43,7 +48,7 @@ let add_statement ~sigma st = match Stmt.view st with
   | Stmt.Copy c ->
       let sigma = declare ~sigma c.Stmt.copy_id c.Stmt.copy_ty in
       let sigma = declare ~sigma c.Stmt.copy_abstract c.Stmt.copy_abstract_ty in
-      let sigma = declare ~sigma c.Stmt.copy_concretize c.Stmt.copy_concretize_ty in
+      let sigma = declare ~sigma c.Stmt.copy_concrete c.Stmt.copy_concrete_ty in
       sigma
   | Stmt.TyDef (_,l) ->
       List.fold_left

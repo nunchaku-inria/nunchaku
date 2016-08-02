@@ -7,52 +7,43 @@ type loc = Location.t
 type 'a var = 'a Var.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-type decl =
-  | Decl_type
-  | Decl_fun
-  | Decl_prop
-
 type 'ty defined = {
   defined_head: id; (* symbol being defined *)
   defined_ty: 'ty; (* type of the head symbol *)
 }
 
-type ('t, 'ty, 'kind) equations =
-  | Eqn_linear :
-      ('ty var list (* universally quantified vars, also arguments to [f] *)
-      * 't (* right-hand side of equation *)
-      * 't list (* side conditions *)
-      ) list
-      -> ('t, 'ty, <eqn:[`Linear];..>) equations
-  | Eqn_nested :
+type (+'t, +'ty) equations =
+  | Eqn_nested of
       ('ty var list (* universally quantified vars *)
       * 't list (* arguments (patterns) to the defined term *)
       * 't  (* right-hand side of equation *)
       * 't list (* additional conditions *)
       ) list
-      -> ('t, 'ty, <eqn:[`Nested];..>) equations
-  | Eqn_single :
+  | Eqn_single of
       'ty var list (* function arguments *)
       *  't (* RHS *)
-      -> ('t, 'ty, <eqn:[`Single];..>) equations
+  | Eqn_app of
+      ID.t list (* application symbols *)
+      * 'ty var list (* quantified vars *)
+      * 't (* LHS of equation *)
+      * 't (* RHS of equation *)
 
-type ('t,'ty,'kind) rec_def = {
+type (+'t,+'ty) rec_def = {
   rec_defined: 'ty defined;
-  rec_kind: decl;
   rec_vars: 'ty var list; (* type variables in definitions *)
-  rec_eqns: ('t, 'ty,'kind) equations; (* list of equations defining the term *)
+  rec_eqns: ('t, 'ty) equations; (* list of equations defining the term *)
 }
 
-type ('t, 'ty,'kind) rec_defs = ('t, 'ty,'kind) rec_def list
+type (+'t, +'ty) rec_defs = ('t, 'ty) rec_def list
 
-type ('t, 'ty) spec_defs = {
+type (+'t, +'ty) spec_defs = {
   spec_vars: 'ty var list; (* type variables used by defined terms *)
   spec_defined: 'ty defined list;  (* terms being specified together *)
   spec_axioms: 't list;  (* free-form axioms *)
 }
 
 (** A type constructor: name + type of arguments *)
-type 'ty ty_constructor = {
+type +'ty ty_constructor = {
   cstor_name: id; (** Name *)
   cstor_args: 'ty list; (** type arguments *)
   cstor_type: 'ty; (** type of the constructor (shortcut) *)
@@ -60,7 +51,7 @@ type 'ty ty_constructor = {
 
 (** A (co)inductive type. The type variables [ty_vars] occur freely in
     the constructors' types. *)
-type 'ty tydef = {
+type +'ty tydef = {
   ty_id : id;
   ty_vars : 'ty Var.t list;
   ty_type : 'ty; (** shortcut for [type -> type -> ... -> type] *)
@@ -68,51 +59,61 @@ type 'ty tydef = {
 }
 
 (** Mutual definitions of several types *)
-type 'ty mutual_types = 'ty tydef list
+type +'ty mutual_types = 'ty tydef list
 
 (** Flavour of axiom *)
-type ('t,'ty,'kind) axiom =
+type (+'t,+'ty) axiom =
   | Axiom_std of 't list
     (** Axiom list that can influence consistency (no assumptions) *)
   | Axiom_spec of ('t,'ty) spec_defs
     (** Axioms can be safely ignored, they are consistent *)
-  | Axiom_rec of ('t,'ty,'kind) rec_defs
+  | Axiom_rec of ('t,'ty) rec_defs
     (** Axioms are part of an admissible (partial) definition *)
 
-type ('t, 'ty) pred_clause_cell = {
+type (+'t, +'ty) pred_clause = {
   clause_vars: 'ty var list; (* universally quantified vars *)
   clause_guard: 't option;
   clause_concl: 't;
 }
 
-type (_, _, _) pred_clause =
-  | Pred_clause :
-    ('t, 'ty) pred_clause_cell ->
-    ('t, 'ty, <ind_preds:[`Present];..>) pred_clause
-
-type ('t, 'ty, 'inv) pred_def = {
+type (+'t, +'ty) pred_def = {
   pred_defined: 'ty defined;
   pred_tyvars: 'ty var list;
-  pred_clauses: ('t, 'ty, 'inv) pred_clause list;
+  pred_clauses: ('t, 'ty) pred_clause list;
 }
 
-type ('t, 'ty) copy = {
+type (+'t, +'ty) copy = {
   copy_id: ID.t; (* new name *)
   copy_vars: 'ty Var.t list; (* list of type variables *)
   copy_ty: 'ty;  (* type of [copy_id], of the form [type -> type -> ... -> type] *)
   copy_of: 'ty; (* [id vars] is a copy of [of_]. Set of variables = vars *)
-  copy_abstract: ID.t; (* [of_ -> id vars] *)
+  copy_to: 'ty; (* [id vars] *)
+  copy_abstract: ID.t; (* [of -> id vars] *)
   copy_abstract_ty: 'ty;
-  copy_concretize: ID.t; (* [id vars -> of] *)
-  copy_concretize_ty: 'ty;
-  copy_pred: 't option; (* invariant (prop) *)
+  copy_concrete: ID.t; (* [id vars -> of] *)
+  copy_concrete_ty: 'ty;
+  copy_pred: 't option; (* invariant (copy_of -> prop) *)
 }
 
-type ('term, 'ty, 'inv) view =
-  | Decl of id * decl * 'ty
-  | Axiom of ('term, 'ty, 'inv) axiom
+(** Attribute on declarations *)
+type decl_attr =
+  | Attr_card_max of int (** maximal cardinality of type *)
+  | Attr_card_min of int (** minimal cardinality of type *)
+  | Attr_card_hint of Cardinality.t (** hint on the card of a type *)
+  | Attr_incomplete (** encoding of some type with some values removed *)
+  | Attr_abstract (** encoding of some type where some values are conflated *)
+  | Attr_infinite (** infinite uninterpreted type *)
+  | Attr_finite_approx of ID.t (** finite approximation of an infinite type *)
+  | Attr_infinite_upcast (** cast finite approx to infinite type *)
+  | Attr_pseudo_prop (** encoding of [prop] *)
+  | Attr_pseudo_true (** encoding of [true_ : pseudo_prop] *)
+  | Attr_exn of exn (** open case *)
+
+type (+'term, +'ty) view =
+  | Decl of id * 'ty * decl_attr list
+  | Axiom of ('term, 'ty) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
-  | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty, 'inv) pred_def list
+  | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty) pred_def list
   | Copy of ('term, 'ty) copy
   | Goal of 'term
 
@@ -122,12 +123,14 @@ type info = {
   name: string option;
 }
 
-type ('term, 'ty, 'inv) t = private {
-  view: ('term, 'ty, 'inv) view;
+type (+'term, +'ty) t = private {
+  view: ('term, 'ty) view;
   info: info;
 }
 
-type ('t, 'ty, 'inv) statement = ('t, 'ty, 'inv) t
+type (+'t, +'ty) statement = ('t, 'ty) t
+
+val mk_defined : ID.t -> 'ty -> 'ty defined
 
 val tydef_vars : 'ty tydef -> 'ty Var.t list
 val tydef_id : _ tydef -> id
@@ -135,52 +138,46 @@ val tydef_type : 'ty tydef -> 'ty
 val tydef_cstors : 'ty tydef -> 'ty ty_constructor ID.Map.t
 
 val info_default : info
+val info_of_loc : Location.t option -> info
 
-val view : ('term,'ty,'inv) t -> ('term, 'ty,'inv) view
+val view : ('term,'ty) t -> ('term, 'ty) view
 val loc : _ t -> loc option
 val name : _ t -> string option
 val info : _ t -> info
 
-val mk_decl : info:info  -> id -> decl -> 'ty -> ('t,'ty,'inv) t
-val mk_axiom : info:info -> ('a,'ty,'inv) axiom -> ('a, 'ty,'inv) t
-val mk_ty_def : info:info -> [`Data | `Codata] -> 'ty mutual_types -> (_, 'ty,_) t
+val mk_axiom : info:info -> ('a,'ty) axiom -> ('a, 'ty) t
+val mk_ty_def : info:info -> [`Data | `Codata] -> 'ty mutual_types -> (_, 'ty) t
 
-val ty_decl : info:info -> id -> 'a -> (_, 'a, _) t
-(** declare a type constructor *)
+val decl : info:info -> attrs:decl_attr list -> id -> 'a -> (_, 'a) t
+(** declare a type/function/predicate *)
 
-val decl : info:info -> id -> 'a -> (_, 'a, _) t
-(** declare a function symbol *)
-
-val prop_decl : info:info -> id -> 'a -> (_, 'a, _) t
-(** Declare a proposition ([prop] must be provided) *)
-
-val axiom : info:info -> 'a list -> ('a,_,_) t
+val axiom : info:info -> 'a list -> ('a,_) t
 (** Axioms without additional assumptions *)
 
-val axiom1 : info:info -> 'a -> ('a,_,_) t
+val axiom1 : info:info -> 'a -> ('a,_) t
 
-val axiom_spec : info:info -> ('a,'ty) spec_defs -> ('a,'ty,_) t
+val axiom_spec : info:info -> ('a,'ty) spec_defs -> ('a,'ty) t
 (** Axiom that can be ignored if not explicitely depended upon by the goal *)
 
-val axiom_rec : info:info -> ('a,'ty,'inv) rec_defs -> ('a,'ty,'inv) t
+val axiom_rec : info:info -> ('a,'ty) rec_defs -> ('a,'ty) t
 (** Axiom that is part of an admissible (mutual, partial) definition. *)
 
-val data : info:info -> 'ty mutual_types -> (_, 'ty, _) t
+val data : info:info -> 'ty mutual_types -> (_, 'ty) t
 
-val codata : info:info -> 'ty mutual_types -> (_, 'ty, _) t
+val codata : info:info -> 'ty mutual_types -> (_, 'ty) t
 
 val pred : info:info -> wf:[`Wf | `Not_wf] ->
-  ('t, 'ty, 'inv) pred_def list -> ('t, 'ty, 'inv) t
+  ('t, 'ty) pred_def list -> ('t, 'ty) t
 
 val copred : info:info -> wf:[`Wf | `Not_wf] ->
-  ('t, 'ty, 'inv) pred_def list -> ('t, 'ty, 'inv) t
+  ('t, 'ty) pred_def list -> ('t, 'ty) t
 
 val mk_pred : info:info -> wf:[`Wf | `Not_wf] -> [`Pred | `Copred] ->
-  ('t, 'ty, 'inv) pred_def list -> ('t, 'ty, 'inv) t
+  ('t, 'ty) pred_def list -> ('t, 'ty) t
 
-val copy : info:info -> ('t, 'ty) copy -> ('t, 'ty, 'inv) t
+val copy : info:info -> ('t, 'ty) copy -> ('t, 'ty) t
 
-val goal : info:info -> 'a -> ('a,_,_) t
+val goal : info:info -> 'a -> ('a,_) t
 (** The goal of the problem *)
 
 val mk_mutual_ty:
@@ -192,20 +189,25 @@ val mk_mutual_ty:
 (** Constructor for {!tydef} *)
 
 val mk_copy :
-  ?pred:'t ->
+  pred:'t option ->
   of_:'ty ->
+  to_:'ty ->
   ty:'ty ->
   abstract:(ID.t * 'ty) ->
-  concretize:(ID.t * 'ty) ->
+  concrete:(ID.t * 'ty) ->
   vars:'ty Var.t list ->
   ID.t ->
   ('t, 'ty) copy
+(** Invariants:
+    [to_ = app id vars]
+    [snd abstract = of_ -> to_]
+    [snd concrete = to_ -> of_] *)
 
-val find_rec_def : defs:('a, 'b, 'c) rec_def list -> ID.t -> ('a, 'b, 'c) rec_def option
+val find_rec_def : defs:('a, 'b) rec_def list -> ID.t -> ('a, 'b) rec_def option
 
 val find_tydef : defs:'a tydef list -> ID.t -> 'a tydef option
 
-val find_pred : defs:('a, 'b, 'inv) pred_def list -> ID.t -> ('a, 'b, 'inv) pred_def option
+val find_pred : defs:('a, 'b) pred_def list -> ID.t -> ('a, 'b) pred_def option
 
 val map_defined:
   f:('ty -> 'ty2) ->
@@ -215,41 +217,55 @@ val map_defined:
 val map_eqns:
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, <eqn:'inv;..>) equations ->
-  ('t2, 'ty2, <eqn:'inv;..>) equations
+  ('t, 'ty) equations ->
+  ('t2, 'ty2) equations
+
+val map_eqns_bind :
+  bind:('acc -> 'ty Var.t -> 'acc * 'ty1 Var.t) ->
+  term:('acc -> 'term -> 'term1) ->
+  'acc ->
+  ('term,'ty) equations ->
+  ('term1,'ty1) equations
 
 val map_clause:
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, <ind_preds:'inv;..>) pred_clause ->
-  ('t2, 'ty2, <ind_preds:'inv;..>) pred_clause
+  ('t, 'ty) pred_clause ->
+  ('t2, 'ty2) pred_clause
 
-val cast_eqns:
-  ('t, 'ty, <eqn:'inv;..>) equations ->
-  ('t, 'ty, <eqn:'inv;..>) equations
-(** Useful to change the invariants that are not related to equations *)
+val map_clause_bind :
+  bind:('acc -> 'ty Var.t -> 'acc * 'ty1 Var.t) ->
+  term:('acc -> 'term -> 'term1) ->
+  'acc ->
+  ('term,'ty) pred_clause ->
+  ('term1,'ty1) pred_clause
 
 val map_rec_def :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, <eqn:'inv;..>) rec_def ->
-  ('t2, 'ty2, <eqn:'inv;..>) rec_def
+  ('t, 'ty) rec_def ->
+  ('t2, 'ty2) rec_def
 
-val cast_rec_def:
-  ('t, 'ty, <eqn:'inv;..>) rec_def ->
-  ('t, 'ty, <eqn:'inv;..>) rec_def
+val map_rec_def_bind :
+  bind:('a -> 'b Var.t -> 'a * 'c Var.t) ->
+  term:('a -> 'd -> 'e) ->
+  ty:('a -> 'b -> 'c) ->
+  'a ->
+  ('d, 'b) rec_def ->
+  ('e, 'c) rec_def
 
 val map_rec_defs :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, <eqn:'inv;..>) rec_defs ->
-  ('t2, 'ty2, <eqn:'inv;..>) rec_defs
-
-val cast_rec_defs:
-  ('t, 'ty, <eqn:'inv;..>) rec_defs ->
-  ('t, 'ty, <eqn:'inv;..>) rec_defs
+  ('t, 'ty) rec_defs ->
+  ('t2, 'ty2) rec_defs
 
 val map_ty_def :
+  ty:('ty -> 'ty2) ->
+  'ty tydef ->
+  'ty2 tydef
+
+val map_ty_defs :
   ty:('ty -> 'ty2) ->
   'ty mutual_types ->
   'ty2 mutual_types
@@ -260,15 +276,31 @@ val map_spec_defs :
   ('t, 'ty) spec_defs ->
   ('t2, 'ty2) spec_defs
 
+val map_spec_defs_bind :
+  bind:('b_acc -> 'ty Var.t -> 'b_acc * 'ty2 Var.t) ->
+  term:('b_acc -> 't -> 't2) ->
+  ty:('b_acc -> 'ty -> 'ty2) ->
+  'b_acc ->
+  ('t, 'ty) spec_defs ->
+  ('t2, 'ty2) spec_defs
+
 val map_pred :
   term:('a -> 'a1) -> ty:('b -> 'b1) ->
-  ('a,'b,<ind_preds:'inv;..>) pred_def  ->
-  ('a1,'b1,<ind_preds:'inv;..>) pred_def
+  ('a,'b) pred_def  ->
+  ('a1,'b1) pred_def
+
+val map_pred_bind :
+  bind:('acc -> 'ty Var.t -> 'acc * 'ty2 Var.t) ->
+  term:('acc -> 'term -> 'term2) ->
+  ty:('acc -> 'ty -> 'ty2) ->
+  'acc ->
+  ('term, 'ty) pred_def ->
+  ('term2, 'ty2) pred_def
 
 val map_preds :
   term:('a -> 'a1) -> ty:('b -> 'b1) ->
-  ('a,'b,<ind_preds:'inv;..>) pred_def list ->
-  ('a1,'b1,<ind_preds:'inv;..>) pred_def list
+  ('a,'b) pred_def list ->
+  ('a1,'b1) pred_def list
 
 val map_copy :
   term:('t1 -> 't2) ->
@@ -276,34 +308,69 @@ val map_copy :
   ('t1,'ty1) copy ->
   ('t2,'ty2) copy
 
-val cast_pred :
-  ('t, 'ty, <ind_preds:'inv;..>) pred_def ->
-  ('t, 'ty, <ind_preds:'inv;..>) pred_def
-
-val cast_preds :
-  ('t, 'ty, <ind_preds:'inv;..>) pred_def list ->
-  ('t, 'ty, <ind_preds:'inv;..>) pred_def list
-
 val map :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
-  ('t, 'ty, <eqn:'inv;ind_preds:'inv2;..>) t ->
-  ('t2, 'ty2, <eqn:'inv;ind_preds:'inv2;..>) t
+  ('t, 'ty) t ->
+  ('t2, 'ty2) t
+
+val map_bind :
+  bind:('b_acc -> 'ty Var.t -> 'b_acc * 'ty2 Var.t) ->
+  term:('b_acc -> 't -> 't2) ->
+  ty:('b_acc -> 'ty -> 'ty2) ->
+  'b_acc ->
+  ('t, 'ty) t ->
+  ('t2, 'ty2) t
+(** Similar to {!map}, but accumulating some value of type [b_acc] when
+    entering binders *)
+
+val fold_bind :
+  bind:('b_acc -> 'ty Var.t -> 'b_acc) ->
+  term:('b_acc -> 'a -> 't -> 'a) ->
+  ty:('b_acc -> 'a -> 'ty -> 'a) ->
+  'b_acc -> 'a -> ('t, 'ty) t -> 'a
 
 val fold :
   term:('a -> 't -> 'a) ->
   ty:('a -> 'ty -> 'a) ->
-  'a -> ('t, 'ty, 'inv) t -> 'a
+  'a -> ('t, 'ty) t -> 'a
+
+val iter :
+  term:('t -> unit) ->
+  ty:('ty -> unit) ->
+  ('t, 'ty) t -> unit
+
+val id_of_defined : _ defined -> ID.t
+val ty_of_defined : 'ty defined -> 'ty
+val defined_of_rec : (_, 'ty) rec_def -> 'ty defined
+val defined_of_recs : (_, 'ty) rec_defs -> 'ty defined Sequence.t
+val defined_of_spec : (_, 'ty) spec_defs -> 'ty defined Sequence.t
+val defined_of_pred : (_, 'ty) pred_def -> 'ty defined
+val defined_of_preds : (_, 'ty) pred_def list -> 'ty defined Sequence.t
+val defined_of_cstor : 'ty ty_constructor -> 'ty defined
+val defined_of_data : 'ty tydef -> 'ty defined Sequence.t
+val defined_of_datas : 'ty mutual_types -> 'ty defined Sequence.t
+val defined_of_copy : (_, 'ty) copy -> 'ty defined Sequence.t
+
+val ids_of_copy : (_,_) copy -> ID.t Sequence.t
 
 (** {2 Print} *)
 
+val print_attr : decl_attr printer
+val print_attrs : decl_attr list printer
+
 module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
   val print_spec_defs : (Pt.t, Pty.t) spec_defs printer
-  val print_pred_def : (Pt.t, Pty.t, _) pred_def printer
-  val print_pred_defs : (Pt.t, Pty.t, _) pred_def list printer
-  val print_rec_def : (Pt.t, Pty.t, _) rec_def printer
-  val print_rec_defs : (Pt.t, Pty.t, _) rec_def list printer
+  val print_clause : (Pt.t, Pty.t) pred_clause printer
+  val print_clauses : (Pt.t, Pty.t) pred_clause list printer
+  val print_pred_def : (Pt.t, Pty.t) pred_def printer
+  val print_pred_defs : (Pt.t, Pty.t) pred_def list printer
+  val print_eqns : ID.t -> (Pt.t, Pty.t) equations printer
+  val print_rec_def : (Pt.t, Pty.t) rec_def printer
+  val print_rec_defs : (Pt.t, Pty.t) rec_def list printer
+  val print_tydef : Pty.t tydef printer
+  val print_tydefs : ([`Data | `Codata] * Pty.t tydef list) printer
   val print_copy : (Pt.t, Pty.t) copy printer
-  val print : (Pt.t, Pty.t, _) t printer
+  val print : (Pt.t, Pty.t) t printer
 end
 

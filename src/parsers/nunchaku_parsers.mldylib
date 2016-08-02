@@ -1,10 +1,4 @@
 # OASIS_START
-# DO NOT EDIT (digest: 60129d6f5a9bd85e940320f1442382be)
-NunParsingUtils
-NunLexer
-NunParser
-NunPrintTPTP
-NunTPTPLexer
-NunTPTPParser
-NunTPTPPreprocess
+# DO NOT EDIT (digest: d519542d42040d252ec889c4e5081142)
+Nunchaku_parsers
 # OASIS_STOP

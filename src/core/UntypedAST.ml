@@ -32,6 +32,7 @@ module Builtin : sig
     | `Equiv
     | `Imply
     | `Undefined of string
+    | `Unitype
     ]
 
   include Intf.PRINT with type t := t
@@ -50,9 +51,10 @@ end = struct
     | `Equiv
     | `Imply
     | `Undefined of string
+    | `Unitype
     ]
 
-  let fixity = function
+  let fixity : t -> [`Infix | `Prefix] = function
     | `Type
     | `True
     | `False
@@ -63,9 +65,10 @@ end = struct
     | `Imply
     | `Equiv
     | `Eq
+    | `Unitype
     | `Undefined _ -> `Infix
 
-  let to_string = function
+  let to_string : t -> string = function
     | `Type -> "type"
     | `Prop -> "prop"
     | `Not -> "~"
@@ -77,6 +80,7 @@ end = struct
     | `Equiv -> "="
     | `Imply -> "=>"
     | `Undefined s -> "?_" ^ s
+    | `Unitype -> "<unitype>"
 
   let print out s = Format.pp_print_string out (to_string s)
 end
@@ -98,6 +102,7 @@ and term_node =
   | Mu of typed_var * term
   | TyArrow of ty * ty
   | TyForall of var * ty
+  | Asserting of term * term list
 
 (* we mix terms and types because it is hard to know, in
   [@cons a b c], which ones of [a, b, c] are types, and which ones
@@ -128,12 +133,16 @@ type copy = {
   copy_vars: var list; (* type variables *)
   of_: term; (* the definition *)
   abstract: var; (* abstract function *)
-  concretize: var; (* concretize function *)
+  concrete: var; (* concrete function *)
+  pred: term option; (* the predicate *)
 }
+
+type attribute = string list
+(** one attribute = list of strings separated by spaces *)
 
 type statement_node =
   | Include of string * (string list) option (* file, list of symbols *)
-  | Decl of var * ty (* declaration of uninterpreted symbol *)
+  | Decl of var * ty * attribute list (* declaration of uninterpreted symbol *)
   | Axiom of term list (* axiom *)
   | Spec of spec_defs (* spec *)
   | Rec of rec_defs (* mutual rec *)
@@ -168,8 +177,15 @@ let ty_type = builtin `Type
 let true_ = builtin `True
 let false_ = builtin `False
 let not_ ?loc f = app ?loc (builtin ?loc `Not) [f]
-let and_ ?loc l = app ?loc (builtin ?loc `And) l
-let or_ ?loc l = app ?loc (builtin ?loc `Or) l
+
+(* apply [b], an infix operator, to [l], in an associative way *)
+let rec app_infix_l ?loc f l = match l with
+  | [] -> assert false
+  | [t] -> t
+  | a :: tl -> app ?loc f [a; app_infix_l ?loc f tl]
+
+let and_ ?loc l = app_infix_l ?loc (builtin ?loc `And) l
+let or_ ?loc l = app_infix_l ?loc (builtin ?loc `Or) l
 let imply ?loc a b = app ?loc (builtin ?loc `Imply) [a;b]
 let equiv ?loc a b = app ?loc (builtin ?loc `Equiv) [a;b]
 let eq ?loc a b = app ?loc (builtin ?loc `Eq) [a;b]
@@ -177,6 +193,9 @@ let neq ?loc a b = not_ ?loc (eq ?loc a b)
 let forall ?loc v t = Loc.with_loc ?loc (Forall (v, t))
 let exists ?loc v t = Loc.with_loc ?loc (Exists (v, t))
 let mu ?loc v t = Loc.with_loc ?loc (Mu (v,t))
+let asserting ?loc t l = match l with
+  | [] -> t
+  | _::_ -> Loc.with_loc ?loc (Asserting (t,l))
 let ty_arrow ?loc a b = Loc.with_loc ?loc (TyArrow (a,b))
 let ty_forall ?loc v t = Loc.with_loc ?loc (TyForall (v,t))
 
@@ -194,7 +213,7 @@ let mk_stmt_ ?loc ?name st =
   {stmt_loc=loc; stmt_name=name; stmt_value=st }
 
 let include_ ?name ?loc ?which f = mk_stmt_ ?name ?loc (Include(f,which))
-let decl ?name ?loc v t = mk_stmt_ ?name ?loc (Decl(v,t))
+let decl ?name ?loc ~attrs v t = mk_stmt_ ?name ?loc (Decl(v,t,attrs))
 let axiom ?name ?loc l = mk_stmt_ ?name ?loc (Axiom l)
 let spec ?name ?loc l = mk_stmt_ ?name ?loc (Spec l)
 let rec_ ?name ?loc l = mk_stmt_ ?name ?loc (Rec l)
@@ -203,12 +222,13 @@ let data ?name ?loc l = mk_stmt_ ?name ?loc (Data l)
 let codata ?name ?loc l = mk_stmt_ ?name ?loc (Codata l)
 let pred ?name ?loc ~wf l = mk_stmt_ ?name ?loc (Pred (wf, l))
 let copred ?name ?loc ~wf l = mk_stmt_ ?name ?loc (Copred (wf, l))
-let copy ?name ?loc ~of_ ~abstract ~concretize id vars =
-  mk_stmt_ ?name ?loc (Copy {id; copy_vars=vars; of_; abstract; concretize; })
+let copy ?name ?loc ~of_ ~abstract ~concrete ~pred id vars =
+  mk_stmt_ ?name ?loc (Copy {id; copy_vars=vars; of_; abstract; concrete; pred })
 let goal ?name ?loc t = mk_stmt_ ?name ?loc (Goal t)
 
 let rec head t = match Loc.get t with
   | Var (`Var v) | AtVar v | MetaVar v -> v
+  | Asserting (f,_)
   | App (f,_) -> head f
   | Var `Wildcard | Builtin _ | TyArrow (_,_)
   | Fun (_,_) | Let _ | Match _ | Ite (_,_,_)
@@ -216,8 +236,6 @@ let rec head t = match Loc.get t with
       invalid_arg "untypedAST.head"
 
 let fpf = Format.fprintf
-
-let pp_list_ ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
 
 let pp_var_or_wildcard out = function
   | `Var v -> CCFormat.string out v
@@ -228,6 +246,8 @@ let rec unroll_if_ t = match Loc.get t with
       let l, last = unroll_if_ c in
       (a,b) :: l, last
   | _ -> [], t
+
+let pp_list_ ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
 
 let rec print_term out term = match Loc.get term with
   | Builtin s -> Builtin.print out s
@@ -273,13 +293,17 @@ let rec print_term out term = match Loc.get term with
       fpf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
   | Exists (v, t) ->
       fpf out "@[<2>exists %a.@ %a@]" print_typed_var v print_term t
+  | Asserting (_, []) -> assert false
+  | Asserting (t, l) ->
+      fpf out "@[<2>%a@ @[<2>asserting @[%a@]@]@]"
+        print_term_inner t (pp_list_ ~sep:" && " print_term_inner) l
   | TyArrow (a, b) ->
       fpf out "@[<2>%a ->@ %a@]"
         print_term_in_arrow a print_term b
   | TyForall (v, t) ->
       fpf out "@[<2>pi %s:type.@ %a@]" v print_term t
 and print_term_inner out term = match Loc.get term with
-  | App _ | Fun _ | Let _ | Ite _ | Match _
+  | App _ | Fun _ | Let _ | Ite _ | Match _ | Asserting _
   | Forall _ | Exists _ | TyForall _ | Mu _ | TyArrow _ ->
       fpf out "(%a)" print_term term
   | Builtin _ | AtVar _ | Var _ | MetaVar _ -> print_term out term
@@ -293,14 +317,13 @@ and print_term_in_arrow out t = match Loc.get t with
   | Exists (_,_)
   | Mu _
   | Fun (_,_)
+  | Asserting _
   | TyArrow (_,_)
   | TyForall (_,_) -> fpf out "@[(%a)@]" print_term t
 
 and print_typed_var out (v,ty) = match ty with
   | None -> fpf out "%s" v
   | Some ty -> fpf out "(%s:%a)" v print_term ty
-
-let pp_list_ ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
 
 let pp_rec_defs out l =
   let ppterms = pp_list_ ~sep:";" print_term in
@@ -337,11 +360,16 @@ let pp_mutual_preds out l =
   in
   pp_list_ ~sep:" and " pp_def out l
 
+let pp_attr out l = fpf out "@[%a@]" (pp_list_ ~sep:" " CCFormat.string) l
+let pp_attrs out = function
+  | [] -> ()
+  | l -> fpf out "@ [@[%a@]]" (pp_list_ ~sep:"," pp_attr) l
+
 let print_statement out st = match st.stmt_value with
   | Include (f, None) -> fpf out "@[include %s.@]" f
   | Include (f, Some l) -> fpf out "@[include (%a) from %s.@]"
       (pp_list_ ~sep:"," CCFormat.string) l f
-  | Decl (v, t) -> fpf out "@[val %s : %a.@]" v print_term t
+  | Decl (v, t, attrs) -> fpf out "@[val %s : %a%a.@]" v print_term t pp_attrs attrs
   | Axiom l -> fpf out "@[axiom @[%a@].@]" (pp_list_ ~sep:";" print_term) l
   | Spec l -> fpf out "@[spec %a.@]" pp_spec_defs l
   | Rec l -> fpf out "@[rec %a.@]" pp_rec_defs l
@@ -352,9 +380,13 @@ let print_statement out st = match st.stmt_value with
   | Goal t -> fpf out "@[goal %a.@]" print_term t
   | Pred (k, preds) -> fpf out "@[pred%a %a.@]" pp_wf k pp_mutual_preds preds
   | Copy c ->
-      fpf out "@[<v2>@[copy @[%s%a@] :=@ @[%a@]@]@,abstract = %s@,concretize = %s@]"
+      let pp_pred out = function
+        | None -> ()
+        | Some p -> fpf out "@ @[pred %a@]" print_term p
+      in
+      fpf out "@[<v2>@[copy @[%s%a@] :=@ @[%a@]@]@,abstract = %s@,concrete = %s%a@]"
         c.id (pp_list_ ~sep:" " CCFormat.string) c.copy_vars
-        print_term c.of_ c.abstract c.concretize
+        print_term c.of_ c.abstract c.concrete pp_pred c.pred
   | Copred (k, preds) -> fpf out "@[copred%a %a.@]" pp_wf k pp_mutual_preds preds
 
 let print_statement_list out l =
@@ -365,10 +397,9 @@ module TPTP = struct
   (* additional statements for any TPTP problem *)
   let prelude =
     let (==>) = ty_arrow in
-    let ty_term = var "$i" in
-    [ decl "$i" ty_type
-    ; decl "!!" ((ty_term ==> ty_prop) ==> ty_prop)
-    ; decl "??" ((ty_term ==> ty_prop) ==> ty_prop)
+    let ty_term = builtin `Unitype in
+    [ decl ~attrs:[] "!!" ((ty_term ==> ty_prop) ==> ty_prop)
+    ; decl ~attrs:[] "??" ((ty_term ==> ty_prop) ==> ty_prop)
     ]
 
   (* meta-data used in TPTP `additional_info` *)

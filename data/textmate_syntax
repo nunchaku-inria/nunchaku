@@ -1,0 +1,22 @@
+{	scopeName = 'source.nun';
+	fileTypes = ( 'nun' );
+	patterns = (
+		{	name = 'keyword.control.nun';
+			match = '\b(include|data|codata|val|rec|spec|axiom|goal|and|wf|pred|copred|copy|quotient)\b';
+		},
+		{	name = 'keyword.control.nun.fake';
+			match = '\b(abbreviation)\b';
+		},
+		{	name = 'markup.list.nun';
+			match = '\b(fun|match|with|end|let|in|if|then|else|forall|exists|pi)\b';
+		},
+		{	name = 'entity.other.inherited-class.nun';
+			match = '\b(true|false|type|prop)\b';
+		},
+		{	name = 'comment.line.double-slash.nun';
+			begin = '#';
+			end = '$\n?';
+		},
+	);
+}
+

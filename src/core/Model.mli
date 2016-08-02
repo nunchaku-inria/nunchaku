@@ -3,6 +3,8 @@
 (** {1 Model} *)
 
 type 'a printer = Format.formatter -> 'a -> unit
+type 'a prec_printer = TermInner.prec -> 'a printer
+type 'a to_sexp = 'a -> CCSexp.t
 
 (** {2 Decision Trees}
 
@@ -10,95 +12,240 @@ type 'a printer = Format.formatter -> 'a -> unit
     over finite domains. *)
 
 module DT : sig
-  type ('t, 'ty) test = 'ty Var.t * 't (** Equation var=term *)
+  (* a decision tree *)
+  type (+'t, +'ty) t = private
+    | Yield of 't
+    | Cases of ('t, 'ty) cases
 
-  val print_test : 't CCFormat.printer -> ('t, _) test CCFormat.printer
-  val print_tests : 't CCFormat.printer -> ('t, _) test list CCFormat.printer
-
-  type (+'t, +'ty) t = private {
-    tests: (('t, 'ty) test list * 't) list;
-      (* [(else) if v_1 = t_1 & ... & v_n = t_n then ...] *)
-
-    else_ : 't;
-      (* else t *)
+  (* a nested if/then/else on a given variable *)
+  and (+'t, +'ty) cases = {
+    var: 'ty Var.t;
+    (* the variable being tested *)
+    tests: ('t, 'ty) case list;
+    (* list of [if var=term, then sub-dt] *)
+    default: ('t, 'ty) t option;
+    (* sub-dt by default *)
   }
 
-  val yield : 't -> ('t, 'ty) t
-  val ite : ('ty Var.t * 't) list -> 't -> ('t, 'ty) t -> ('t, 'ty) t
-  val test : (('t, 'ty) test list * 't) list -> else_:'t -> ('t, 'ty) t
-  val test_flatten : (('t,'ty) test list * 't) list -> else_:('t,'ty) t -> ('t,'ty) t
+  and ('t, 'ty) case = 't * ('t, 'ty) t
+
+  val yield : 't -> ('t, _) t
+  (** DT on 0 variables, that returns its argument *)
+
+  val const : 'ty Var.t list -> ('t,'ty) t -> ('t,'ty) t
+  (** [const vars ret] is the constant function over [vars], that
+      always return [ret] *)
+
+  val cases :
+    'ty Var.t ->
+    tests:('t, 'ty) case list ->
+    default:('t, 'ty) t option ->
+    ('t, 'ty) t
+  (** @raise Invalid_argument if [tests= [] && default = None] *)
 
   val map :
-    ?var:('ty1 Var.t -> 'ty2 Var.t option) ->
     term:('t1 -> 't2) ->
     ty:('ty1 -> 'ty2) ->
     ('t1,'ty1) t ->
     ('t2,'ty2) t
 
-  val print : 't printer -> ('t,_) t printer
-end
+  val filter_map :
+    test:('ty Var.t -> 't1 -> 't2 option) ->
+    yield:('t1 -> 't2) ->
+    ('t1,'ty) t ->
+    ('t2,'ty) t
+  (** [filter_map ~test ~yield dt] filters the branches of [dt]
+      using [test v lhs] on every test [v=lhs], and maps the
+      leaves using [yield] *)
 
-type ('t,'ty) decision_tree = ('t,'ty) DT.t
+  val ty_args : (_, 'ty) t -> 'ty list
+  (** Type of the discrimination tree arguments, seen as a function *)
+
+  val vars : (_, 'ty) t -> 'ty Var.t list
+  (** List of variables decided upon *)
+
+  val num_vars : _ t -> int
+
+  val add_default : 't -> ('t, 'ty) t -> ('t, 'ty) t
+  (** [add_default term dt] adds [term] as a default case for every
+      sub-case of [dt] that does not already have a default value *)
+
+  (** A test for the flat model *)
+  type ('t, 'ty) flat_test = {
+    ft_var: 'ty Var.t;
+    ft_term: 't;
+  }
+
+  (** A flat model *)
+  type ('t, 'ty) flat_dt = {
+    fdt_vars: 'ty Var.t list;
+    fdt_cases: (('t, 'ty) flat_test list * 't) list;
+    fdt_default: 't option;
+  }
+
+  val mk_flat_test : 'ty Var.t -> 't -> ('t, 'ty) flat_test
+
+  val of_flat :
+    equal:('t -> 't -> bool) ->
+    hash:('t -> int) ->
+    ('t, 'ty) flat_dt ->
+    ('t, 'ty) t
+  (** [of_flat vars ~tests ~default ] builds a  decision tree on [vars], in
+      that order, asssuming [tests] only range over [vars].
+      @param eq equality on terms *)
+
+  val flatten :
+    ('t, 'ty) t ->
+    ('t, 'ty) flat_dt
+  (** Flatten as an old style flat decision tree *)
+
+  val check_ : _ t -> unit
+  (** check some invariants *)
+
+  val print : 't prec_printer -> ('t, _) t printer
+
+  val print_flat_test : 't prec_printer -> ('t, _) flat_test printer
+  val print_flat : 't prec_printer -> ('t, _) flat_dt printer
+
+  val to_sexp : 't to_sexp -> 'ty to_sexp ->('t, 'ty) t to_sexp
+  (** for model display *)
+end
 
 (** {2 Helpers for Decision Trees} *)
 
-module DT_util(T : TermInner.S) : sig
-  val eval : subst:(T.t,T.t) Var.Subst.t -> (T.t, T.t) DT.t -> T.t
-  (** Evaluate a decision tree on the given substitution.
-      @raise Not_found if some variable in [dt.vars] is not bound. *)
+module DT_util : sig
+  module T = TermInner.Default
 
-  val to_term : (T.t, T.t) DT.t -> T.t
+  type dt = (T.t, T.t) DT.t
+  type subst = (T.t, T.t) Var.Subst.t
+
+  val ite : T.t Var.t -> then_: dt -> else_: dt -> dt
+
+  val eval_subst : subst:subst -> dt -> dt
+  (** Eval the tree with the given substitution (which does not capture
+      the tree's variables)
+      @raise Assert_failure if the substitution binds some of [dt]'s variables *)
+
+  val map_vars : subst:(T.t, T.t Var.t) Var.Subst.t -> dt -> dt
+  (** Apply the substitution to the tree's variables and terms *)
+
+  val rename_vars : dt -> dt
+  (** Rename all variables in [dt] *)
+
+  val apply : dt -> T.t -> dt
+  (** [apply dt arg] returns the sub-tree of [dt] for when [dt]'s variable
+      is equal to [arg].
+      @raise Invalid_argument if the [dt] is not a function *)
+
+  val apply_l : dt -> T.t list -> dt
+  (** apply the [dt] to a list of arguments
+      @raise Invalid_argument if the [dt] is not a function with enough arguments *)
+
+  val join : dt -> dt -> dt
+  (** [join a b] applies [b] to every leaf of [a], grafting the
+      resulting sub-tree in place of the leaf, using {!apply}.
+
+      assumes the return type of [a] is the same as the first
+      argument of [b]. *)
+
+  val merge : dt -> dt -> dt
+  (** [merge a b] concatenates the cases of [a] and [b],
+      merging the common cases recursively, favoring [a] over [b]
+      when needed. The new default/else is [a.default].
+
+      not commutative. *)
+
+  val merge_l : dt list -> dt
+  (** n-ary version of {!merge}
+      @raise Invalid_argument if the list is empty *)
+
+  val reorder : T.t Var.t list -> dt -> dt
+  (** [reorder vars dt] rebalances [dt] so it has the given order of
+      variables. It is assumed that [vars] is a permutation of [DT.vars dt]
+      @raise Invalid_argument if [vars] is not a permutation of the
+        variables of [dt] *)
+
+  val remove_vars : T.t Var.t list -> dt -> dt
+  (** Remove the given variables, using {!merge_l} to merge their sub-cases.
+      If those variables occur in tests in variables that come earlier
+      in [DT.vars dt], they will not be substituted properly *)
+
+  val remove_first_var : dt -> dt
+  (** remove the first variable, using {!remove_vars}.
+      @raise Invalid_argument if the tree is constant *)
+
+  exception Case_not_found of T.t
+
+  val find_cases : ?subst:subst -> T.t -> (T.t, T.t) DT.cases -> subst * dt
+  (** @raise Case_not_found if the term is not found *)
+
+  val to_term : dt -> T.t
   (** Convert the decision tree to a term *)
+
+  val print : dt printer
 end
 
 (** {2 Models} *)
 
-type (+'t, +'ty) t = {
-  constants: ('t * 't) list;
-    (* constant -> its interpretation *)
+type symbol_kind =
+  | Symbol_prop
+  | Symbol_fun
+  | Symbol_utype
+  | Symbol_data
+  | Symbol_codata
 
-  funs: ('t * 'ty Var.t list * ('t,'ty) decision_tree) list;
-    (* fun * var list -> body *)
+type (+'t, +'ty) value_def = 't * ('t, 'ty) DT.t * symbol_kind
+
+(** A model *)
+type (+'t, +'ty) t = {
+  values: ('t, 'ty) value_def list;
+  (* term -> its interpretation *)
 
   finite_types: ('ty * ID.t list) list;
-    (* type -> finite domain *)
+  (* type -> finite domain *)
 
   potentially_spurious: bool;
-    (** the model might be spurious, i.e. some approximation made the
+  (** the model might be spurious, i.e. some approximation made the
         translation unsound *)
 }
+
+type ('a,'b) model = ('a,'b) t
 
 val empty : (_,_) t
 (** Empty model *)
 
-val add_const : ('t,'ty) t -> 't * 't -> ('t,'ty) t
-(** Add a term interpretation *)
+val empty_copy : ('t, 'ty) t -> ('t, 'ty) t
+(** [empty_copy m] is a empty model that has the same additional information
+    (such as {!potentially_spurious}) as [m] *)
 
-val add_fun : ('t,'ty) t -> 't * 'ty Var.t list * ('t,'ty) decision_tree -> ('t,'ty) t
-(** Add a function interpretation *)
+val add_const : ('t,'ty) t -> 't * 't * symbol_kind -> ('t,'ty) t
+(** Add a constant term interpretation *)
+
+val add_value : ('t,'ty) t -> 't * ('t, 'ty) DT.t * symbol_kind -> ('t,'ty) t
+(** Add a value interpretation *)
 
 val add_finite_type : ('t, 'ty) t -> 'ty -> ID.t list -> ('t, 'ty) t
 (** Map the type to its finite domain. *)
 
+val values : ('t, 'ty) t -> ('t * ('t, 'ty) DT.t * symbol_kind) Sequence.t
+val finite_types : (_, 'ty) t -> ('ty * ID.t list) Sequence.t
+
 val fold :
-  constants:('acc -> 'a * 'a -> 'acc) ->
-  funs:('acc -> 'a * 'b Var.t list * ('a,'b) decision_tree -> 'acc) ->
-  finite_types:('acc -> 'b * ID.t list -> 'acc) ->
+  ?values:('acc -> 'a * ('a, 'b) DT.t * symbol_kind -> 'acc) ->
+  ?finite_types:('acc -> 'b * ID.t list -> 'acc) ->
   'acc ->
   ('a,'b) t ->
   'acc
 
 val iter :
-  constants:('a * 'a -> unit) ->
-  funs:('a * 'b Var.t list * ('a,'b) decision_tree -> unit) ->
-  finite_types:('b * ID.t list -> unit) ->
+  ?values:('a * ('a, 'b) DT.t * symbol_kind -> unit) ->
+  ?finite_types:('b * ID.t list -> unit) ->
   ('a,'b) t ->
   unit
 
 val filter_map :
-  constants:('t1 * 't1 -> ('t2 * 't2) option) ->
-  funs:('t1 * 'ty1 Var.t list * ('t1,'ty1) decision_tree ->
-         ('t2 * 'ty2 Var.t list * ('t2,'ty2) decision_tree) option) ->
+  values:('t1 * ('t1, 'ty1) DT.t * symbol_kind ->
+    ('t2 * ('t2, 'ty2) DT.t * symbol_kind) option) ->
   finite_types:('ty1 * ID.t list -> ('ty2 * ID.t list) option) ->
   ('t1, 'ty1) t ->
   ('t2, 'ty2) t
@@ -109,16 +256,25 @@ val map :
   ('t1, 'ty1) t ->
   ('t2, 'ty2) t
 
-val print : 't printer -> 'ty printer -> ('t,'ty) t printer
+val filter :
+  ?values:('t * ('t, 'ty) DT.t * symbol_kind -> bool) ->
+  ?finite_types:('ty * ID.t list -> bool) ->
+  ('t, 'ty) t ->
+  ('t, 'ty) t
 
-module Util(T : TermInner.S) : sig
-  val rename : (T.t, T.t) t -> (T.t, T.t) t
-  (** [rename m] performs a renaming of domain constants and bound variables
-      that should be regular and readable.
-      Assumes the types that have finite domains are ground types.
-      @raise Invalid_argument if some assumption is invalidated *)
+val print : 't prec_printer -> 'ty printer -> ('t,'ty) t printer
+(** Debug printing *)
 
-  val pipe_rename :
-    print:bool ->
-    ('a, 'a, (T.t, T.t) t, (T.t, T.t) t) Transform.t
+val to_sexp : 't to_sexp -> 'ty to_sexp -> ('t,'ty) t to_sexp
+(** S-expr output suitable for parsing from the caller *)
+
+module Default : sig
+  module T = TermInner.Default
+
+  type t = (T.t, T.t) model
+
+  val to_sexp : t to_sexp
+
+  val print_standard : t printer
+  (** Printer suitable for parsing from the caller *)
 end

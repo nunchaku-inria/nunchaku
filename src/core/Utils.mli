@@ -4,7 +4,7 @@
 (** {1 Utils} *)
 
 type 'a sequence = ('a -> unit) -> unit
-type 'a or_error = [`Ok of 'a | `Error of string]
+type 'a or_error = ('a, string) CCResult.t
 
 (** {2 Time} *)
 
@@ -54,12 +54,12 @@ end
 val set_debug : int -> unit     (** Set debug level of [Section.root] *)
 val get_debug : unit -> int     (** Current debug level for [Section.root] *)
 
-val debugf : ?section:Section.t -> int ->
+val debugf : ?lock:bool -> ?section:Section.t -> int ->
             ('a, Format.formatter, unit, unit) format4 -> ('a -> unit) -> unit
 (** Print a debug message, with the given section and verbosity level.
     The message might be dropped if its level is too high. *)
 
-val debug : ?section:Section.t -> int -> string -> unit
+val debug : ?lock:bool -> ?section:Section.t -> int -> string -> unit
 
 (** {2 Callbacks} *)
 
@@ -96,10 +96,24 @@ val vec_fold_map :  ('b -> 'a -> 'b * 'c) -> 'b -> ('a,_) CCVector.t -> 'b * ('c
 
 val fold_map : ('b -> 'a -> 'b * 'c) -> 'b -> 'a list -> 'b * 'c list
 
+val fold_mapi : f:(int -> 'b -> 'a -> 'b * 'c) -> x:'b -> 'a list -> 'b * 'c list
+
+val filteri : (int -> 'a -> bool) -> 'a list -> 'a list
+
+val singleton_if : bool -> f:('a -> 'b) -> 'a -> 'b list
+
+(** {2 Arg}
+    Small overlay on top of {!Arg} *)
+
+val arg_choice : (string * 'a) list -> ('a -> unit) -> Arg.spec
+(** [arg_choice ~kind l f] picks a CLI option among the string in [l],
+    and apply [f] to the result. *)
+
 (** {2 Warnings} *)
 
 type warning =
   | Warn_overlapping_match
+  | Warn_model_parsing_error
 
 val toggle_warning : warning -> bool -> unit
 (** Enable/disable the given warning *)
@@ -118,11 +132,18 @@ val options_warnings_ : (Arg.key * Arg.spec * Arg.doc) list
 
 exception NotImplemented of string
 
+val pp_error_prefix : unit CCFormat.printer
+
+val err_sprintf : ('a, Format.formatter, unit, string) format4 -> 'a
+
 val not_implemented: string -> 'a
 (** Raise an exception saying the given feature is not implemented *)
 
 val not_implementedf: ('a, Format.formatter, unit, 'b) format4 -> 'a
 (** Format-based version of {!not_implemented} *)
+
+val failwithf : ('a, Format.formatter, unit, 'b) format4 -> 'a
+(** Format version of {!failwith} *)
 
 val err_of_exn: exn -> _ or_error
 (** Make an error out of an exception, with the stack trace *)

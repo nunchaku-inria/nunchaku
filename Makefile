@@ -51,6 +51,10 @@ QTESTABLE=$(filter-out $(DONTTEST), \
 	$(wildcard src/core/*.mli) \
 	$(wildcard src/parsers/*.ml) \
 	$(wildcard src/parsers/*.mli) \
+	$(wildcard src/transformations/*.ml) \
+	$(wildcard src/transformations/*.mli) \
+	$(wildcard src/random/*.ml) \
+	$(wildcard src/random/*.mli) \
 	)
 
 qtest-clean:
