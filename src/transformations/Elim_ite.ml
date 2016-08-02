@@ -24,40 +24,36 @@ let and_set_ s =
   s |> TSet.remove T.true_ |> TSet.elements |> T.and_
 
 module Ite_M = struct
-  (* returns a sequence of (conditions, 'a).
-     Invariant: The last case is the only one to have an empty list of conditions *)
-  type +'a t = (cond * 'a) Sequence.t
+  (* a decision tree that can be moved "outside" the terms by using a monad *)
+  type +'a t =
+    | Yield of 'a
+    | Ite of cond * 'a t * 'a t
 
-  let return x = Sequence.return (TSet.empty, x)
+  let return x = Yield x
 
-  let (>|=)
+  (* add a test; if the test holds yield [b], else yield [c] *)
+  let ite
+    : cond -> 'a t -> 'a t -> 'a t
+    = fun a b c -> Ite (a, b, c)
+
+  let rec (>|=)
     : 'a t -> ('a -> 'b) -> 'b t
-    = fun x f ->
-      let open Sequence.Infix in
-      x >|= fun (conds, t) -> conds, f t
+    = fun x f -> match x with
+      | Yield x -> return (f x)
+      | Ite (cond,a,b) -> ite cond (a >|= f) (b >|= f)
+
+  let rec (>>=)
+    : 'a t -> ('a -> 'b t) -> 'b t
+    = fun x f -> match x with
+      | Yield y -> f y
+      | Ite (cond, a, b) ->
+        ite cond (a >>= f) (b >>= f)
 
   let (<*>)
     : ('a -> 'b) t -> 'a t -> 'b t
     = fun f x ->
-      let open Sequence.Infix in
-      f >>= fun (conds_f,f') ->
-      x >|= fun (conds_x,x') ->
-      TSet.union conds_f conds_x, f' x'
-
-  let (>>=)
-    : 'a t -> ('a -> 'b t) -> 'b t
-    = fun x f ->
-      let open Sequence.Infix in
-      x >>= fun (conds, t) ->
-      f t >|= fun (conds', t') -> TSet.union conds' conds, t'
-
-  (* add a test; if the test holds yield [b], else yield [c] *)
-  let guard
-    : cond -> 'a t -> 'a t -> 'a t
-    = fun a b c ->
-      Sequence.append
-        (Sequence.map (fun (a',b') -> TSet.union a a', b') b)
-        c
+      f >>= fun f ->
+      x >|= fun x -> f x
 
   let rec fold_m f acc l = match l with
     | [] -> return acc
@@ -79,13 +75,13 @@ let transform_term t =
     | FO.True
     | FO.False -> return t
     | FO.Var v ->
-      return (CCOpt.get t (Var.Subst.find ~subst v))
+      return (CCOpt.get_or ~default:t (Var.Subst.find ~subst v))
     | FO.Eq (a,b) -> return T.eq <*> aux subst a <*> aux subst b
     | FO.Equiv (a,b) -> return T.equiv <*> aux subst a <*> aux subst b
     | FO.Imply (a,b) -> return T.imply <*> aux subst a <*> aux subst b
     | FO.Ite (a,b,c) ->
       aux subst a >>= fun a ->
-      guard (TSet.singleton a)
+      ite (TSet.singleton a)
         (aux subst b)
         (aux subst c)
     | FO.And l -> aux_l subst l >|= T.and_
@@ -110,24 +106,15 @@ let transform_term t =
     >|= List.rev
   (* transform a toplevel property *)
   and aux_top subst t =
-    aux subst t
-    |> Sequence.to_list
-    |> CCList.fold_map
-      (fun prev_conds (cond,t) ->
-         (* if there are some previous conditions, require their negation
-            so the current case is orthogonal to the previous cases *)
-         let prev_conds' = TSet.diff prev_conds cond |> TSet.remove T.true_ in
-         let cond' =
-           if TSet.is_empty prev_conds'
-           then cond
-           else (* cond && not (prev_conds \ cond) *)
-             TSet.add (T.not_ (and_set_ prev_conds')) cond
-         in
-         let t' = T.imply (and_set_ cond') t in
-         TSet.union cond prev_conds, t')
-      TSet.empty
-    |> snd (* drop the list of conditions *)
-    |> T.and_
+    aux subst t |> ite_to_term
+  and ite_to_term t = match t with
+    | Yield x -> x
+    | Ite (conds,a,b) ->
+      let conds = and_set_ conds in
+      T.and_
+        [ T.imply conds (ite_to_term a);
+          T.imply (T.not_ conds) (ite_to_term b);
+        ]
   in
   let res = aux_top Var.Subst.empty t in
   Utils.debugf ~section 5 "@[<2>encoded `@[%a@]`@ into `@[%a@]@]"

@@ -39,12 +39,14 @@ type state = {
     (* map names to kodkod names *)
   id_of_name: ID.t StrMap.t;
     (* map kodkod names to IDs *)
-  univ_offsets: offset SUMap.t;
-    (* sub-universe -> its offset in the global universe *)
-  atom_of_offset: FO_rel.atom IntMap.t;
-    (* offset -> atom *)
+  univ_map: (offset * FO_rel.atom IntMap.t) SUMap.t;
+  (* sub-universe ->
+       its offset in the global universe
+       a map from offsets to atoms of the sub-universe *)
   univ_size: int;
     (* total size of the universe *)
+  decls: FO_rel.decl ID.Map.t;
+    (* declarations *)
   mutable trivially_unsat: bool;
     (* hack: was last "unsat" actually "trivially_unsat"? *)
 }
@@ -52,34 +54,54 @@ type state = {
 let errorf msg = Utils.failwithf msg
 
 (* compute size of universe + offsets *)
-let compute_univ_ ~default_size pb : int * offset SUMap.t * FO_rel.atom IntMap.t =
+let compute_univ_ ~default_size pb : int * (offset * FO_rel.atom IntMap.t) SUMap.t =
   let open Sequence.Infix in
   let univ = pb.FO_rel.pb_univ in
   let univ_prop = univ.FO_rel.univ_prop in
   (* sub-universe for prop *)
   assert (univ_prop.FO_rel.su_card = Some 2);
-  let su_map0 = SUMap.singleton univ_prop 0 in
-  let intmap0 =
-    IntMap.of_list
-      [0, FO_rel.atom univ_prop 0; 1, FO_rel.atom univ_prop 1]
+  let su_map0 =
+    let a_to_i0 =
+      IntMap.of_list
+        [0, FO_rel.atom univ_prop 0; 1, FO_rel.atom univ_prop 1]
+    in
+    SUMap.singleton univ_prop (0,a_to_i0)
   in
   (* add other sub-universes *)
-  List.fold_left
-    (fun (n,map1,map2) su ->
-       let map1 = SUMap.add su n map1 in
-       let card = match su.FO_rel.su_card with
-         | Some n -> n
-         | None -> default_size
-       in
-       (* add n+i-> atom(su,i) to map2 *)
-       let map2 =
-         0 -- (card-1)
-         |> Sequence.map (fun i -> n+i, FO_rel.atom su i)
-         |> IntMap.add_seq map2
-       in
-       n + card, map1, map2)
-    (2, su_map0, intmap0)
-    univ.FO_rel.univ_l
+  let n, su_map, _ =
+    List.fold_left
+      (fun (n,map,default_range) su ->
+         (* add to [map1, map2] the fact that [su] will be represented
+            by the range [offset, ..., offset+card-1] *)
+         let add_range ~su ~offset ~card =
+           (* map [n+i -> atom(su,i) for i=0...card-1] *)
+           let a_to_i =
+             0 -- (card-1)
+             |> Sequence.map (fun i -> offset+i, FO_rel.atom su i)
+             |> IntMap.of_seq
+           in
+           SUMap.add su (offset, a_to_i) map
+         in
+         match su.FO_rel.su_card, default_range with
+           | Some c, _ ->
+             let map = add_range ~su ~card:c ~offset:n in
+             n+c, map, default_range
+           | None, None ->
+             (* add domain of card [default_size], and set it as the domain
+                for other sub-universes of unknown size *)
+             let card = default_size in
+             let map' = add_range ~su ~card ~offset:n in
+             n + card, map', Some (n, card)
+           | None, Some (offset, card) ->
+             (* there is already a domain for sub-universes of default size,
+                use it! *)
+             let map' = add_range ~su ~card ~offset in
+             n, map', default_range
+      )
+      (2, su_map0, None)
+      univ.FO_rel.univ_l
+  in
+  n, su_map
 
 (* indices for naming constants by arity *)
 type name_map = int StrMap.t
@@ -100,27 +122,27 @@ let name_of_arity (m:name_map) n: name_map * string =
 (* map atom names to Kodkodi identifiers *)
 let translate_names_ pb =
   let _,n2id,id2n =
-    CCVector.fold
-      (fun (nm,n2id,id2n) decl ->
+    ID.Map.fold
+      (fun _ decl (nm,n2id,id2n) ->
          let id = decl.FO_rel.decl_id in
          let nm, name = name_of_arity nm decl.FO_rel.decl_arity in
          nm, StrMap.add name id n2id, ID.Map.add id name id2n
       )
-      (StrMap.empty,StrMap.empty,ID.Map.empty)
       pb.FO_rel.pb_decls
+      (StrMap.empty,StrMap.empty,ID.Map.empty)
   in
   n2id, id2n
 
 (* initialize the state for this particular problem *)
 let create_state ~default_size (pb:FO_rel.problem) : state =
-  let univ_size, univ_offsets, atom_of_offset = compute_univ_ ~default_size pb in
+  let univ_size, univ_map = compute_univ_ ~default_size pb in
   let id_of_name, name_of_id = translate_names_ pb in
   { default_size;
     name_of_id;
     id_of_name;
-    atom_of_offset;
     univ_size;
-    univ_offsets;
+    univ_map;
+    decls= pb.FO_rel.pb_decls;
     trivially_unsat=false;
   }
 
@@ -139,7 +161,7 @@ let print_pb state pb out () : unit =
     try ID.Map.find id state.name_of_id
     with Not_found -> errorf "kodkod: no name for `%a`" ID.print id
   and su2offset su =
-    try SUMap.find su state.univ_offsets
+    try SUMap.find su state.univ_map |> fst
     with Not_found ->
       errorf "kodkod: no offset for `%a`" FO_rel.print_sub_universe su
   in
@@ -262,8 +284,8 @@ let print_pb state pb out () : unit =
   (* universe *)
   fpf out "univ: u%d@." state.univ_size;
   (* decls *)
-  CCVector.iter
-    (fun d ->
+  ID.Map.iter
+    (fun _ d ->
        let id = d.FO_rel.decl_id in
        let name = ID.Map.find id state.name_of_id in
        fpf out "@[<h>bounds %s /* %a */ : [%a, %a] @."
@@ -276,21 +298,16 @@ let print_pb state pb out () : unit =
 
 module A = Ast_kodkod
 
-let find_atom_ state (i:int) : FO_rel.atom =
-  try IntMap.find i state.atom_of_offset
+let find_atom_ state (su:FO_rel.sub_universe) (i:int) : FO_rel.atom =
+  try
+    SUMap.find su state.univ_map
+    |> snd
+    |> IntMap.find i
   with Not_found -> errorf "model parsing: could not find atom for A%d" i
 
 (* convert the raw parse model into something more usable *)
 let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
   let module M = Model in
-  (* first, convert offsets to proper atoms *)
-  let m': FO_rel.atom A.relation list =
-    List.rev_map
-      (fun r ->
-         let rel_dom = List.map (List.map (find_atom_ state)) r.A.rel_dom in
-         {r with A.rel_dom; })
-      m
-  in
   (* now build a proper model *)
   List.fold_left
     (fun m'' {A.rel_name; rel_dom} ->
@@ -298,11 +315,28 @@ let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
          try StrMap.find rel_name state.id_of_name
          with Not_found -> errorf "could not find ID corresponding to `%s`" rel_name
        in
+       (* find the [FO_rel.decl], then use it to decode atoms depending
+          on their type *)
+       let decl =
+         try ID.Map.find id state.decls
+         with Not_found -> errorf "could not find declaration for %a" ID.print id
+       in
+       (* convert offsets to proper atoms *)
+       let tuples =
+         rel_dom
+         |> List.map
+           (fun l ->
+              assert (List.length l = List.length decl.FO_rel.decl_dom);
+              List.map2 (find_atom_ state)
+                decl.FO_rel.decl_dom
+                l)
+       in
+       (* add to model *)
        let t = FO_rel.const id in
-       let u = FO_rel.tuple_set (FO_rel.ts_list rel_dom) in
+       let u = FO_rel.tuple_set (FO_rel.ts_list tuples) in
        M.add_const m'' (t,u,M.Symbol_prop))
     M.empty
-    m'
+    m
 
 module Parser = struct
   module L = Lex_kodkod

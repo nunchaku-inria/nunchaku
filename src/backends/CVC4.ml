@@ -338,7 +338,9 @@ let print_problem out (decode, pb) =
             errorf_ "no witness declared for cardinality bound on %a" ID.print ty_id
         in
         begin match which with
+          | `Max when n < 1 -> fpf out "(assert false)" (* absurd *)
           | `Max -> fpf out "(@[assert (fmf.card %a %d)@])" print_id witness n
+          | `Min when n <= 1 -> ()  (* obvious *)
           | `Min -> fpf out "(@[assert (not (fmf.card %a %d))@])" print_id witness (n-1)
         end
     | FO.MutualTypes (k, l) ->
@@ -673,7 +675,7 @@ let read_res_ ~print_model ~decode s =
       Utils.debugf ~section 5 "@[<2>CVC4 returned `error %s`@]" (fun k->k s);
       Res.Error (CVC4_error s)
   | `Ok sexp ->
-      let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ %a@]"
+      let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ `%a`@]"
         CCSexpM.print sexp
       in
       Res.Error (Error msg)

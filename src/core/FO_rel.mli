@@ -91,6 +91,7 @@ and int_expr =
 type decl = {
   decl_id: ID.t;
   decl_arity: int;
+  decl_dom: sub_universe list;
   decl_low: tuple_set; (* lower bound *)
   decl_high: tuple_set; (* higher bound *)
 }
@@ -103,7 +104,7 @@ type universe = {
 
 type problem = private {
   pb_univ: universe;
-  pb_decls: decl CCVector.ro_vector;
+  pb_decls: decl ID.Map.t;
   pb_goal: form list; (* conjunction *)
   pb_meta: ProblemMetadata.t;
 }
@@ -174,7 +175,7 @@ val atom_eq : atom -> atom -> bool
 val mk_problem :
   meta:ProblemMetadata.t ->
   univ:universe ->
-  decls:decl CCVector.ro_vector ->
+  decls:decl ID.Map.t ->
   goal:form list ->
   problem
 

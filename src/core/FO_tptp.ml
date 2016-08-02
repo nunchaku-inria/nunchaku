@@ -53,7 +53,7 @@ let term_hash = function
   | App (f, _) -> ID.hash f
   | Var v -> Var.id v |> ID.hash
   | True
-  | False 
+  | False
   | Undefined_atom _ -> 42
 
 let rec term_equal a b = match a, b with
@@ -135,49 +135,25 @@ let rec print_term_tptp out = function
   | True -> CCFormat.string out "$true"
   | False -> CCFormat.string out "$false"
 
-(* precedence. Order matters, as it defines priorities *)
-type prec =
-  | P_not
-  | P_bind
-  | P_and
-  | P_eq
-  | P_or
-
-let right_assoc_ = function
-  | P_and
-  | P_eq
-  | P_or -> false
-  | P_not
-  | P_bind -> true
-
-(* put () if needed *)
-let wrap p1 p2 out fmt =
-  if p1>p2 || (p1 = p2 && (not (right_assoc_ p1)))
-  then (
-    CCFormat.string out "(";
-    Format.kfprintf (fun _ -> CCFormat.string out ")") out fmt
-  )
-  else Format.kfprintf (fun _ -> ()) out fmt
-
 let print_form_tptp out f =
-  let rec aux p out = function
+  let rec aux out = function
     | Atom t -> print_term_tptp out t
     | And [] | Or [] -> assert false
-    | And l -> wrap P_and p out "@[<hv>%a@]" (pp_list ~sep:" & " (aux P_and)) l
-    | Or l -> wrap P_or p out "@[<hv>%a@]" (pp_list ~sep:" | " (aux P_or)) l
-    | Not f -> wrap P_not p out "@[~@ @[%a@]@]" (aux P_not) f
+    | And l -> fpf out "(@[<hv>%a@])" (pp_list ~sep:" & " aux) l
+    | Or l -> fpf out "(@[<hv>%a@])" (pp_list ~sep:" | " aux) l
+    | Not f -> fpf out "(@[~@ @[%a@]@])" aux f
     | Imply (a,b) ->
-      wrap P_or p out "@[@[%a@] =>@ @[%a@]@]" (aux P_or) a (aux P_or) b
+      fpf out "(@[@[%a@] =>@ @[%a@]@])" aux a aux b
     | Equiv (a,b) ->
-      wrap P_or p out "@[@[%a@] <=>@ @[%a@]@]" (aux P_or) a (aux P_or) b
+      fpf out "(@[@[%a@] <=>@ @[%a@]@])" aux a aux b
     | Eq (a,b) ->
-      wrap P_eq p out "@[@[%a@] =@ @[%a@]@]" print_term_tptp a print_term_tptp b
+      fpf out "(@[@[%a@] =@ @[%a@]@])" print_term_tptp a print_term_tptp b
     | Neq (a,b) ->
-      wrap P_eq p out "@[@[%a@] !=@ @[%a@]@]" print_term_tptp a print_term_tptp b
-    | Forall (v,f) -> wrap P_bind p out "@[![%a]:@ @[%a@]@]" pp_var v (aux P_bind) f
-    | Exists (v,f) -> wrap P_bind p out "@[?[%a]:@ @[%a@]@]" pp_var v (aux P_bind) f
+      fpf out "(@[@[%a@] !=@ @[%a@]@])" print_term_tptp a print_term_tptp b
+    | Forall (v,f) -> fpf out "(@[![%a]:@ @[%a@]@])" pp_var v aux f
+    | Exists (v,f) -> fpf out "(@[?[%a]:@ @[%a@]@])" pp_var v aux f
   in
-  aux P_bind out f
+  aux out f
 
 let print_statement_tptp out st =
   fpf out "@[<2>fof(@[%s, %a,@ @[%a@]@]).@]"

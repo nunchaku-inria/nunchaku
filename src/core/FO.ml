@@ -307,8 +307,8 @@ let rec print_term out t = match T.view t with
   | And l -> fpf out "(@[<hv1>and@ %a@])" (pp_list_ print_term) l
   | Or l ->  fpf out "(@[<hv1>or@ %a@])" (pp_list_ print_term) l
   | Not f -> fpf out "(@[not@ %a@])" print_term f
-  | Imply (a,b) -> fpf out "(@[%a =>@ %a@])" print_term a print_term b
-  | Equiv (a,b) -> fpf out "(@[%a <=>@ %a@])" print_term a print_term b
+  | Imply (a,b) -> fpf out "(@[<hv>%a@ =>@ %a@])" print_term a print_term b
+  | Equiv (a,b) -> fpf out "(@[<hv>%a@ <=>@ %a@])" print_term a print_term b
   | Forall (v,f) ->
     fpf out "(@[forall %a@ %a@])" Var.print_full v print_term f
   | Exists (v,f) ->

@@ -38,16 +38,13 @@ let combine_guard g1 g2 =
     asserting=List.rev_append g1.asserting g2.asserting;
   }
 
-(* avoid duplicates *)
-let and_nodup l = U.remove_dup l |> U.and_
-
 let wrap_guard f g =
   let asserting = match g.asserting with
     | [] -> []
-    | l -> [f (and_nodup l)]
+    | l -> [f (U.and_nodup l)]
   and assuming = match g.assuming with
     | [] -> []
-    | l -> [f (and_nodup l)]
+    | l -> [f (U.and_nodup l)]
   in
   {assuming; asserting; }
 
@@ -67,8 +64,8 @@ let () = Printexc.register_printer
 
 let combine_polarized ~is_pos t g =
   if is_pos
-  then U.imply (and_nodup g.assuming) (and_nodup (t :: g.asserting))
-  else U.imply (and_nodup g.asserting) (and_nodup (t :: g.assuming))
+  then U.imply (U.and_nodup g.assuming) (U.and_nodup (t :: g.asserting))
+  else U.imply (U.and_nodup g.asserting) (U.and_nodup (t :: g.assuming))
 
 let add_asserting g p = { g with asserting = p::g.asserting }
 let add_assuming g p = { g with assuming = p::g.assuming }
@@ -172,10 +169,10 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
         combine_polarized ~is_pos (U.ite a b c) g_a, empty_guard
       ) else (
         let asserting =
-          U.ite a (U.and_ g_b.asserting) (U.and_ g_c.asserting)
+          U.ite a (U.and_nodup g_b.asserting) (U.and_nodup g_c.asserting)
           :: g_a.asserting
         and assuming =
-          U.ite a (U.and_ g_b.assuming) (U.and_ g_c.assuming)
+          U.ite a (U.and_nodup g_b.assuming) (U.and_nodup g_c.assuming)
           :: g_a.assuming
         in
         U.ite a b c, {assuming; asserting;}
