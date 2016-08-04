@@ -504,7 +504,7 @@ let call ?(print_model=false) ?(prio=10) ~print pb =
        res, short)
 
 let is_available () =
-  try Sys.command "which kodkodi > /dev/null" = 0
+  try Sys.command "which kodkodi > /dev/null 2> /dev/null" = 0
   with Sys_error _ -> false
 
 let pipe ?(print_model=false) ~print () =

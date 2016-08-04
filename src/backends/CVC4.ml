@@ -825,7 +825,7 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
 
 let is_available () =
   try
-    let res = Sys.command "which cvc4 > /dev/null" = 0 in
+    let res = Sys.command "which cvc4 > /dev/null 2> /dev/null" = 0 in
     if res then Utils.debug ~section 3 "CVC4 is available";
     res
   with Sys_error _ -> false
