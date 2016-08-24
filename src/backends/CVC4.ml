@@ -231,7 +231,7 @@ let rec pp_gty ~decode out g =
 
 (* the prefix used by CVC4 for constants of the given type *)
 let const_of_ty ~decode gty =
-  CCFormat.sprintf "@[<h>@uc_%a@]" (pp_gty ~decode) gty
+  CCFormat.sprintf "@[<h>@@uc_%a@]" (pp_gty ~decode) gty
 
 (* the i-th constant of the given type *)
 let const_of_ty_nth ~decode gty i =
