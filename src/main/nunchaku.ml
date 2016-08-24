@@ -121,7 +121,7 @@ let call_with x f = Arg.Unit (fun () -> f x)
 
 let options =
   let open CCFun in
-  Arg.align ?limit:None @@ List.sort Pervasives.compare @@ (
+  Arg.align @@ List.sort Pervasives.compare @@ (
   options_debug_ @
   Utils.options_warnings_ @
   [ "--print-input", Arg.Set print_, " print input"

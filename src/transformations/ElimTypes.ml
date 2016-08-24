@@ -17,6 +17,8 @@ module M = Model
 module DT = M.DT
 module Subst = Var.Subst
 
+type term = T.t
+
 let name = "elim_types"
 let section = Utils.Section.make name
 

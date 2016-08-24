@@ -3,15 +3,13 @@
 
 (** {1 Analyze Types : Cardinalities, Abstract, Incomplete} *)
 
-module TI = TermInner
-
 exception Error of string
 
 exception Polymorphic
 
 exception EmptyData of ID.t
 
-module Make(T : TI.S) : sig
+module Make(T : TermInner.S) : sig
   type ty = T.t
 
   type 'a env = ('a, ty) Env.t

@@ -64,7 +64,7 @@ module DT : sig
   val vars : (_, 'ty) t -> 'ty Var.t list
   (** List of variables decided upon *)
 
-  val num_vars : _ t -> int
+  val num_vars : (_,_) t -> int
 
   val add_default : 't -> ('t, 'ty) t -> ('t, 'ty) t
   (** [add_default term dt] adds [term] as a default case for every
@@ -99,7 +99,7 @@ module DT : sig
     ('t, 'ty) flat_dt
   (** Flatten as an old style flat decision tree *)
 
-  val check_ : _ t -> unit
+  val check_ : (_,_) t -> unit
   (** check some invariants *)
 
   val print : 't prec_printer -> ('t, _) t printer
@@ -114,30 +114,30 @@ end
 (** {2 Helpers for Decision Trees} *)
 
 module DT_util : sig
-  module T = TermInner.Default
+  type term = TermInner.Default.t
 
-  type dt = (T.t, T.t) DT.t
-  type subst = (T.t, T.t) Var.Subst.t
+  type dt = (term, term) DT.t
+  type subst = (term, term) Var.Subst.t
 
-  val ite : T.t Var.t -> then_: dt -> else_: dt -> dt
+  val ite : term Var.t -> then_: dt -> else_: dt -> dt
 
   val eval_subst : subst:subst -> dt -> dt
   (** Eval the tree with the given substitution (which does not capture
       the tree's variables)
       @raise Assert_failure if the substitution binds some of [dt]'s variables *)
 
-  val map_vars : subst:(T.t, T.t Var.t) Var.Subst.t -> dt -> dt
+  val map_vars : subst:(term, term Var.t) Var.Subst.t -> dt -> dt
   (** Apply the substitution to the tree's variables and terms *)
 
   val rename_vars : dt -> dt
   (** Rename all variables in [dt] *)
 
-  val apply : dt -> T.t -> dt
+  val apply : dt -> term -> dt
   (** [apply dt arg] returns the sub-tree of [dt] for when [dt]'s variable
       is equal to [arg].
       @raise Invalid_argument if the [dt] is not a function *)
 
-  val apply_l : dt -> T.t list -> dt
+  val apply_l : dt -> term list -> dt
   (** apply the [dt] to a list of arguments
       @raise Invalid_argument if the [dt] is not a function with enough arguments *)
 
@@ -159,13 +159,13 @@ module DT_util : sig
   (** n-ary version of {!merge}
       @raise Invalid_argument if the list is empty *)
 
-  val reorder : T.t Var.t list -> dt -> dt
+  val reorder : term Var.t list -> dt -> dt
   (** [reorder vars dt] rebalances [dt] so it has the given order of
       variables. It is assumed that [vars] is a permutation of [DT.vars dt]
       @raise Invalid_argument if [vars] is not a permutation of the
         variables of [dt] *)
 
-  val remove_vars : T.t Var.t list -> dt -> dt
+  val remove_vars : term Var.t list -> dt -> dt
   (** Remove the given variables, using {!merge_l} to merge their sub-cases.
       If those variables occur in tests in variables that come earlier
       in [DT.vars dt], they will not be substituted properly *)
@@ -174,12 +174,12 @@ module DT_util : sig
   (** remove the first variable, using {!remove_vars}.
       @raise Invalid_argument if the tree is constant *)
 
-  exception Case_not_found of T.t
+  exception Case_not_found of term
 
-  val find_cases : ?subst:subst -> T.t -> (T.t, T.t) DT.cases -> subst * dt
+  val find_cases : ?subst:subst -> term -> (term, term) DT.cases -> subst * dt
   (** @raise Case_not_found if the term is not found *)
 
-  val to_term : dt -> T.t
+  val to_term : dt -> term
   (** Convert the decision tree to a term *)
 
   val print : dt printer
@@ -269,9 +269,9 @@ val to_sexp : 't to_sexp -> 'ty to_sexp -> ('t,'ty) t to_sexp
 (** S-expr output suitable for parsing from the caller *)
 
 module Default : sig
-  module T = TermInner.Default
+  type term = TermInner.Default.t
 
-  type t = (T.t, T.t) model
+  type t = (term, term) model
 
   val to_sexp : t to_sexp
 

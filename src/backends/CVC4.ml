@@ -576,7 +576,7 @@ let get_kind ~decode id =
     errorf_ "could not find kind of %a" ID.print id
 
 (* state: decode_state *)
-let parse_model_ ~decode : CCSexp.t -> _ Model.t = function
+let parse_model_ ~decode : CCSexp.t -> (_,_) Model.t = function
   | `Atom _ -> error_ "expected model, got atom"
   | `List assoc ->
     (* parse model *)
@@ -633,7 +633,7 @@ let send_get_model_ out decode =
     (ID.Tbl.to_seq decode.symbols)
 
 (* read model from CVC4 instance [s] *)
-let get_model_ ~print_model ~decode s : _ Model.t =
+let get_model_ ~print_model ~decode s : (_,_) Model.t =
   Utils.debugf ~section 3 "@[<2>ask for model with@ %a@]"
     (fun k -> k send_get_model_ decode);
   fpf s.fmt "%a@." send_get_model_ decode;

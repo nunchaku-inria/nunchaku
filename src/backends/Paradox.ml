@@ -10,6 +10,9 @@ module S = Scheduling
 module Pa = Nunchaku_parsers
 module A = Pa.TPTP_model_ast
 
+type term = FO_tptp.term
+type ty = FO_tptp.ty
+type problem = FO_tptp.problem
 type model = (T.term, T.ty) Model.t
 
 let name = "paradox"

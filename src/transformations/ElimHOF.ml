@@ -1005,9 +1005,9 @@ let new_fun_name_ ~state =
 (* compute a map from constants of type "to a (to b c)" to fresh names
    of type "a -> b -> c", defined on the side.
    @return the map, and a list of definitions *)
-let map_ho_consts_to_funs ~state m : const_map * (unit -> _ M.value_def list) =
+let map_ho_consts_to_funs ~state m : const_map * (unit -> (_,_) M.value_def list) =
   let const_tbl : T.t ID.Tbl.t = ID.Tbl.create 16 in
-  let fun_defs : _ M.value_def list ref = ref [] in
+  let fun_defs : (_,_) M.value_def list ref = ref [] in
   let all_fun_const = all_fun_consts_ ~state m in
   (* find the function corresponding to
      the constant [c] of type [to 'a (to 'b 'c)];
@@ -1036,7 +1036,7 @@ let map_ho_consts_to_funs ~state m : const_map * (unit -> _ M.value_def list) =
         (fun k->k ID.print c ID.print c' M.DT_util.print dt);
       t'
   (* compute a decision tree for this constant *)
-  and compute_dt app (c:ID.t) : _ DT.t =
+  and compute_dt app (c:ID.t) : (_,_) DT.t =
     let dt, _ = find_dt_ m app in
     M.DT_util.apply dt (U.const c)
     |> tr_dt ~subst:Subst.empty ~state ~map:map_id
@@ -1068,7 +1068,7 @@ let map_ho_consts_to_funs ~state m : const_map * (unit -> _ M.value_def list) =
    the model [m] by flattening/filtering discrimination trees for functions
    of [tower].
    @return new discrimination tree, function kind *)
-let extract_subtree_ m f_id tower : _ DT.t * M.symbol_kind =
+let extract_subtree_ m f_id tower : (_,_) DT.t * M.symbol_kind =
   Utils.debugf ~section 5 "@[<2>extract subtree for @[%a@]@]" (fun k->k pp_fe_tower tower);
   (* @param hd: first parameter, that is, the partial function being applied *)
   let rec aux hd tower = match tower with

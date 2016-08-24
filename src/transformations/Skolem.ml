@@ -13,6 +13,8 @@ module T = TI.Default
 module U = T.U
 module P = T.P
 
+type term = TermInner.Default.t
+
 let name = "skolem"
 let section = Utils.Section.make name
 

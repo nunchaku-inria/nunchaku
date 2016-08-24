@@ -7,13 +7,12 @@
   sent to some SMT solver. Types are monomorphic, formulas are first-order
 *)
 
-module Metadata = ProblemMetadata
-module Res = Problem.Res
-
 type id = ID.t
 type 'a var = 'a Var.t
 type 'a printer = Format.formatter -> 'a -> unit
 type 'a or_error = ('a, string) CCResult.t
+type metadata = ProblemMetadata.t
+type ('a,'b) res = ('a,'b) Problem.Res.t
 
 module TyBuiltin : sig
   type t =
@@ -158,25 +157,25 @@ end
 module Problem : sig
   type ('t, 'ty) t = {
     statements: ('t, 'ty) statement CCVector.ro_vector;
-    meta: Metadata.t;
+    meta: metadata;
   }
 
-  val make : meta:Metadata.t -> ('t, 'ty) statement CCVector.ro_vector -> ('t, 'ty) t
-  val of_list : meta:Metadata.t -> ('t, 'ty) statement list -> ('t, 'ty) t
+  val make : meta:metadata -> ('t, 'ty) statement CCVector.ro_vector -> ('t, 'ty) t
+  val of_list : meta:metadata -> ('t, 'ty) statement list -> ('t, 'ty) t
   val statements : ('t, 'ty) t -> ('t, 'ty) statement CCVector.ro_vector
-  val meta : _ t -> Metadata.t
+  val meta : (_,_) t -> metadata
   val map :
-    meta:Metadata.t ->
+    meta:metadata ->
     (('t, 'ty) statement -> ('t2, 'ty2) statement) ->
     ('t, 'ty) t ->
     ('t2, 'ty2) t
   val flat_map :
-    meta:Metadata.t ->
+    meta:metadata ->
     (('t, 'ty) statement -> ('t2, 'ty2) statement list) ->
     ('t, 'ty) t ->
     ('t2, 'ty2) t
   val fold_flat_map :
-    meta:Metadata.t ->
+    meta:metadata ->
     ('acc -> ('t, 'ty) statement -> 'acc * ('t2, 'ty2) statement list) ->
     'acc ->
     ('t, 'ty) t ->
@@ -231,5 +230,5 @@ end
 
 val pipe_tptp :
   ((T.t, Ty.t) Problem.t, FO_tptp.problem,
-    (FO_tptp.term, FO_tptp.ty) Res.t,
-    (T.t, Ty.t) Res.t) Transform.t
+    (FO_tptp.term, FO_tptp.ty) res,
+    (T.t, Ty.t) res) Transform.t

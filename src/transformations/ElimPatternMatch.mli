@@ -16,13 +16,11 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
+type term = TermInner.Default.t
 
 val name : string
 
-type term = T.t
-
-val elim_match : T.t -> T.t
+val elim_match : term -> term
 
 val tr_problem:
   (term, term) Problem.t ->

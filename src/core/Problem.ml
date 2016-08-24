@@ -11,6 +11,7 @@ type id = ID.t
 type 'a printer = Format.formatter -> 'a -> unit
 type 'a to_sexp = 'a -> CCSexp.t
 type 'a or_error = ('a, string) CCResult.t
+type metadata = ProblemMetadata.t
 
 let fpf = Format.fprintf
 

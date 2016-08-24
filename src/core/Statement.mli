@@ -141,9 +141,9 @@ val info_default : info
 val info_of_loc : Location.t option -> info
 
 val view : ('term,'ty) t -> ('term, 'ty) view
-val loc : _ t -> loc option
-val name : _ t -> string option
-val info : _ t -> info
+val loc : (_,_) t -> loc option
+val name : (_,_) t -> string option
+val info : (_,_) t -> info
 
 val mk_axiom : info:info -> ('a,'ty) axiom -> ('a, 'ty) t
 val mk_ty_def : info:info -> [`Data | `Codata] -> 'ty mutual_types -> (_, 'ty) t

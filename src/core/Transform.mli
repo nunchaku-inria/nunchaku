@@ -177,12 +177,12 @@ module Pipe : sig
     ('a, 'b, 'd1, 'e) transformation list ->
     ('b, 'b2, 'c, 'd1) t -> ('a, 'b2, 'c, 'e) t
 
-  val check : _ t -> unit
+  val check : (_,_,_,_) t -> unit
   (** [check pipe] checks that the features of each component of
       the pipeline fit with their input.
       It is assumed we start with {!Features.full} *)
 
-  val print : _ t printer
+  val print : (_,_,_,_) t printer
 end
 
 val run : pipe:('a, 'b, 'c, 'd) Pipe.t ->

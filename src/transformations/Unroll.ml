@@ -284,7 +284,7 @@ and rewrite' ~state t =
     ~bind:(fun () v -> (), v)
 
 (* remove the tests for the unrolling variable in [dt] *)
-let filter_dt_ dt : _ DT.t =
+let filter_dt_ dt : (_,_) DT.t =
   (* check that [removed_var] is the first var *)
   begin match DT.vars dt with
     | removed_var :: _ ->

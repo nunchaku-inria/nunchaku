@@ -5,8 +5,6 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
-
 (* summary:
     - detect polymorphic functions
     - specialize them on some ground type (skolem?)
@@ -27,7 +25,7 @@ val name : string
 
 exception InvalidProblem of string
 
-type term = T.t
+type term = TermInner.Default.t
 
 type unmangle_state
 (** State used to un-mangle specialized symbols *)

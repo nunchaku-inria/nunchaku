@@ -68,9 +68,9 @@ module Subst : sig
   type (+'ty, +'a) t
   (** A substitution for variables of type ['ty], to terms ['a] *)
 
-  val empty : _ t
-  val is_empty : _ t -> bool
-  val size : _ t -> int
+  val empty : (_,_) t
+  val is_empty : (_,_) t -> bool
+  val size : (_,_) t -> int
 
   val singleton : 'ty var -> 'a -> ('ty, 'a) t
 

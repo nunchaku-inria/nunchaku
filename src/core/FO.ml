@@ -10,6 +10,8 @@ type id = ID.t
 type 'a var = 'a Var.t
 type 'a printer = Format.formatter -> 'a -> unit
 type 'a or_error = ('a, string) CCResult.t
+type ('a,'b) res = ('a,'b) Res.t
+type metadata = Metadata.t
 
 module TyBuiltin = struct
   type t =
@@ -465,7 +467,7 @@ module Util = struct
         f acc x >>= fun acc -> fold_m f acc tail
 
     (* convert to a decision tree. *)
-    let to_dt ~vars t : _ DT.t =
+    let to_dt ~vars t : (_,_) DT.t =
       (* tests must have >= 1 condition; otherwise they are default *)
       let tests, others =
         Sequence.to_list t

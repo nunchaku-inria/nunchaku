@@ -478,7 +478,7 @@ let make_rw_sys_ ~state m : rw_sys =
         ID.Map.add id id' sys
       | _ -> sys)
 
-let rewrite_dt ~sys dt : _ DT.t =
+let rewrite_dt ~sys dt : (_,_) DT.t =
   DT.map dt
     ~term:(rewrite ~subst:Subst.empty sys)
     ~ty:CCFun.id
@@ -490,7 +490,7 @@ let rec is_undefined_ t = match T.repr t with
 
 (* filter [dt], the decision tree for [polarized], returning
    only the cases that return [true] (if [is_pos]) or [false] (if [not is_pos]) *)
-let filter_dt_ ~polarized ~default:d dt : _ DT.t =
+let filter_dt_ ~polarized ~default:d dt : (_,_) DT.t =
   let is_pos = ID.is_pos polarized in
   Utils.debugf ~section 5
     "@[<v>retain branches that yield %B for `%a`@ from `@[%a@]`@]"
@@ -539,7 +539,7 @@ let decode_model ~state m =
   (* this tables stores the half-decision tree for polarized IDs
      (when we have met one polarity but not the other, and we know the other
      is defined somewhere in the model) *)
-  let partial_map : _ DT.t ID.Tbl.t = ID.Tbl.create 32 in
+  let partial_map : (_,_) DT.t ID.Tbl.t = ID.Tbl.create 32 in
   Model.filter_map m
     ~finite_types:(fun (t,dom) -> Some (t,dom))
     ~values:(fun (t,dt,k) -> match T.repr t with

@@ -14,6 +14,7 @@ module P = T.P
 module Ty = TypeMono.Make(T)
 module Red = Reduce.Make(T)
 
+type term = T.t
 type model = (T.t, T.t) Model.t
 
 let fpf = Format.fprintf
@@ -81,7 +82,7 @@ let rec rewrite_term_ (rules:rules) subst t : T.t = match T.repr t with
     (* reduce the term *)
     Red.whnf t
 
-let rename m : _ Model.t =
+let rename m : (_,_) Model.t =
   let rules = renaming_rules_of_model_ m in
   Utils.debugf 5 ~section "@[<2>apply rewrite rules@ @[<v>%a@]@]"
     (fun k->k (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_rule_) (ID.Map.to_seq rules));
@@ -112,7 +113,7 @@ let rename m : _ Model.t =
   }
 
 (* remove recursion in models *)
-let remove_recursion m : _ Model.t =
+let remove_recursion m : (_,_) Model.t =
   let rec eval_t t : T.t = match T.repr t with
     | TI.App(_,[]) -> assert false
     | TI.App(f, l) ->
@@ -145,7 +146,7 @@ let remove_recursion m : _ Model.t =
   Model.map m ~term:eval_t ~ty:(fun ty->ty)
 
 (* remove trivial tests [x = x] *)
-let remove_trivial_tests m : _ Model.t =
+let remove_trivial_tests m : (_,_) Model.t =
   let rec aux dt = match dt with
     | DT.Yield _ -> dt
     | DT.Cases {DT.var; tests; default=d} ->

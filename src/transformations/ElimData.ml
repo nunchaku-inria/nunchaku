@@ -15,6 +15,8 @@ module PStmt = Stmt.Print(P)(P)
 module AT = AnalyzeType.Make(T)
 module Pol = Polarity
 
+type term = T.t
+
 type mode =
   | M_data
   | M_codata
@@ -377,7 +379,7 @@ module Make(M : sig val mode : mode end) = struct
        [occurs_in a b] is true iff [a] is a strict subterm of [b].
      - then, assert [forall a. not (occurs_in a a)]
   *)
-  let acyclicity_ax state ety : _ Stmt.t list =
+  let acyclicity_ax state ety : (_,_) Stmt.t list =
     let id = ety.ety_id in
     (* is [ty = id]? *)
     let is_same_ty ty = match T.repr ty with
@@ -451,7 +453,7 @@ module Make(M : sig val mode : mode end) = struct
      - declare inductive predicate(s) [eq_corec : ty -> ty -> prop] such that
       [eq_corec a b] is true implies [a] and [b] are structurally equal ("bisimilar")
      - assert [forall a b. eq_corec a b => a=b] *)
-  let eq_corec_axioms state (etys:encoded_ty list): _ Stmt.t list =
+  let eq_corec_axioms state (etys:encoded_ty list): (_,_) Stmt.t list =
     (* is [ty = id]? *)
     let is_same_ty id ty = match T.repr ty with
       | TI.Const id' -> ID.equal id id'

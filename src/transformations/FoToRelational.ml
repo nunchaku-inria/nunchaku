@@ -175,7 +175,7 @@ let ret_expr e = R_expr e
 
 type encode_res = (FO_rel.expr, FO_rel.form) encode_res_p
 
-let as_pair_ (r1: encode_res) (r2: encode_res) : _ encode_res_p = match r1, r2 with
+let as_pair_ (r1: encode_res) (r2: encode_res) : (_,_) encode_res_p = match r1, r2 with
   | R_expr e1, R_expr e2 -> R_expr (e1, e2)
   | R_expr e, R_form f -> R_form (FO_rel.some e, f)
   | R_form f, R_expr e -> R_form (f, FO_rel.some e)

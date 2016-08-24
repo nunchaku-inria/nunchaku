@@ -133,8 +133,8 @@ module DT = struct
 
   let mk_flat_test v t = {ft_var=v; ft_term=t}
 
-  let flatten t : _ flat_dt =
-    let rec aux t : (_ flat_test list * 't) Sequence.t = match t with
+  let flatten t : (_,_) flat_dt =
+    let rec aux t : ((_,_) flat_test list * 't) Sequence.t = match t with
       | Yield t -> Sequence.return ([], t)
       | Cases {var; tests; default} ->
         let sub_tests =
@@ -309,6 +309,7 @@ module DT_util = struct
   module U = T.U
   module P = T.P
 
+  type term = T.t
   type dt = (T.t, T.t) DT.t
   type subst = (T.t, T.t) Var.Subst.t
 
@@ -398,7 +399,7 @@ module DT_util = struct
     | DT.Yield _ as res :: _ -> res (* arbitrary… *)
     | DT.Cases {DT.var; tests=t; default} :: tail ->
       let module TTbl = U.Tbl in
-      let tbl : _ DT.t list TTbl.t = TTbl.create 32 in
+      let tbl : (_,_) DT.t list TTbl.t = TTbl.create 32 in
       (* add one case to the table *)
       let merge_into_tbl (lhs,rhs) =
         TTbl.add_list tbl lhs rhs
@@ -644,6 +645,7 @@ module Default = struct
   module T = TermInner.Default
   module P = T.P
 
+  type term = T.t
   type t = (T.t, T.t) model
 
   let to_sexp = to_sexp P.to_sexp P.to_sexp

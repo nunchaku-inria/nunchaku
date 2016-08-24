@@ -3,7 +3,7 @@
 
 (** {1 Top-Level Statements (with locations)} *)
 
-module Metadata = ProblemMetadata
+type metadata = ProblemMetadata.t
 
 type loc = Location.t
 type id = ID.t
@@ -15,24 +15,24 @@ type 'a or_error = ('a, string) CCResult.t
 
 type ('t, 'ty) t = private {
   statements : ('t, 'ty) Statement.t CCVector.ro_vector;
-  metadata: Metadata.t;
+  metadata: metadata;
 }
 
 val make :
-  meta:Metadata.t ->
+  meta:metadata ->
   ('t, 'ty) Statement.t CCVector.ro_vector ->
   ('t, 'ty) t
 (** Build a problem from statements *)
 
 val of_list :
-  meta:Metadata.t ->
+  meta:metadata ->
   ('t, 'ty) Statement.t list ->
   ('t, 'ty) t
 
 val statements : ('t, 'ty) t -> ('t, 'ty) Statement.t CCVector.ro_vector
-val metadata : _ t -> Metadata.t
+val metadata : (_,_) t -> metadata
 
-val update_meta : ('t,'ty) t -> (Metadata.t -> Metadata.t) -> ('t,'ty) t
+val update_meta : ('t,'ty) t -> (metadata -> metadata) -> ('t,'ty) t
 
 val add_sat_means_unknown : bool -> ('t,'ty) t -> ('t,'ty) t
 val set_sat_means_unknown : ('t,'ty) t -> ('t,'ty) t

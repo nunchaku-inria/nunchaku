@@ -76,10 +76,10 @@ module type S = sig
   val statement_of_string_exn : string -> statement
 
   module HO : sig
-    module T = TermInner.Default
+    type term = TermInner.Default.t
 
-    val term_of_str : string -> T.t or_error
-    val term_of_str_exn : string -> T.t
+    val term_of_str : string -> term or_error
+    val term_of_str_exn : string -> term
   end
 end
 
@@ -168,6 +168,7 @@ module Make(P : PARSER) : S = struct
   module HO = struct
     module T = TermInner.Default
     module Conv = TermPoly.OfUntyped(T)
+    type term = T.t
 
     let term_of_str_exn s =
       let t = term_of_string_exn s in

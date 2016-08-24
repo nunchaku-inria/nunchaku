@@ -45,7 +45,7 @@ let errorf msg = Utils.exn_ksprintf ~f:error msg
 (** {2 Encoding} *)
 
 (* encode the copy type as a datatype *)
-let copy_as_data ~info (c:_ Stmt.copy): _ Stmt.t list =
+let copy_as_data ~info (c:(_,_) Stmt.copy): (_,_) Stmt.t list =
   (* the datatype itself, whose cstor is [c.copy_abstract] *)
   let cstor =
     { Stmt.
@@ -86,7 +86,7 @@ let approx_threshold_ = 30 (* FUDGE *)
 (* [c] is a copy type with predicate [pred]; encode it as a new uninterpreted
    type [c], where [abstract] and [concrete] are regular functions with
    some axioms, and [pred] is valid all over [concrete c] *)
-let copy_as_finite_ty state ~info ~(pred:term) c : _ Stmt.t list =
+let copy_as_finite_ty state ~info ~(pred:term) c : (_,_) Stmt.t list =
   let card_concrete =
     AT.cardinality_ty ~cache:state.at_cache state.env c.Stmt.copy_of
   in
@@ -218,7 +218,7 @@ module DT_util = M.DT_util
 *)
 let decode_concrete_ st m : term ID.Map.t =
   (* map [copy_id -> model of copy_concretize] *)
-  let concrete_funs : (_ Stmt.copy * _ M.DT.t) ID.Map.t  =
+  let concrete_funs : ((_,_) Stmt.copy * (_,_) M.DT.t) ID.Map.t  =
     M.fold ID.Map.empty m
       ~values:(fun map (t,dt,_) -> match T.repr t with
         | TI.Const id ->
@@ -268,7 +268,7 @@ let decode_term (map:term ID.Map.t) (t:term): term =
   in
   aux t
 
-let decode_model (st:decode_state) m : _ Model.t =
+let decode_model (st:decode_state) m : (_,_) Model.t =
   let env = st.env in
   let map = decode_concrete_ st m in
   Utils.debugf ~section 3

@@ -1433,7 +1433,7 @@ module Convert(Term : TermTyped.S) = struct
     let res = CCVector.freeze res in
     let pb =
       Problem.make res
-        ~meta:Problem.Metadata.default
+        ~meta:ProblemMetadata.default
     in
     pb, env
 

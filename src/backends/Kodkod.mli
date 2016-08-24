@@ -5,9 +5,6 @@
 
 open Nunchaku_core
 
-module T = FO.T
-module Ty = FO.Ty
-
 type problem = FO_rel.problem
 type res = (FO_rel.expr, FO_rel.sub_universe) Problem.Res.t
 

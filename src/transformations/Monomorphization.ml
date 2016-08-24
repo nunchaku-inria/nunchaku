@@ -550,7 +550,7 @@ let monomorphize ?(depth_limit=256) pb =
   (* output result. If depth limit reached we might be incomplete *)
   let meta =
     Problem.metadata pb
-    |> Problem.Metadata.add_sat_means_unknown
+    |> ProblemMetadata.add_sat_means_unknown
       (Trav.max_depth_reached traverse)
   in
   let res = Trav.get_statements traverse |> CCVector.freeze in
