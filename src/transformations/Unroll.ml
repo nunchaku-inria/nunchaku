@@ -1,7 +1,7 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(** {1 Unrolling of (co)inductive Predicates} *)
+(** {1 Unrolling of (Co)inductive Predicates} *)
 
 open Nunchaku_core
 
