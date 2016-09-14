@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Relational FO Logic}
@@ -192,4 +191,3 @@ val print_int_expr : int_expr CCFormat.printer
 val print_form : form CCFormat.printer
 val print_decl : decl CCFormat.printer
 val print_problem : problem CCFormat.printer
-

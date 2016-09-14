@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Interface to Kodkod} *)
@@ -514,4 +513,3 @@ let pipe ?(print_model=false) ~print () =
     ~encode
     ~decode:(fun _ res -> res)
     ()
-

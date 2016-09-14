@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Interface to Kodkod} *)
@@ -25,7 +24,6 @@ val pipe :
   unit ->
   ( problem,
     res Scheduling.Task.t,
-    'c, 'c) Transform.transformation
+    'c, 'c) Transform.t
 (** Transformation corresponding to calling Kodkod on
     the input problem *)
-
