@@ -15,11 +15,11 @@ Synopsis:    A model finder for higher-order logic
 
 XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain' -j 0"
 
-Flag "random"
+Flag random
   Description:      enable the library for generating random data
   Default:          true
 
-Library "nunchaku_core"
+Library nunchaku_core
   Path:             src/core/
   Pack:             true
   Modules:          ID, Var, MetaVar, Location, Intf, Utils, Transform,
@@ -39,7 +39,7 @@ Library "nunchaku_core"
   BuildDepends:     containers, containers.data, containers.sexp, sequence,
                     num, unix, threads
 
-Library "nunchaku_parsers"
+Library nunchaku_parsers
   Path:             src/parsers/
   Pack:             true
   Modules:          Parsing_utils, Lexer, Parser, TPTP_print,
@@ -52,7 +52,7 @@ Library "nunchaku_parsers"
   BuildTools:       menhir
   BuildDepends:     nunchaku
 
-Library "nunchaku_backends"
+Library nunchaku_backends
   Path:             src/backends
   Pack:             true
   Modules:          CVC4, Kodkod, Paradox
@@ -61,7 +61,7 @@ Library "nunchaku_backends"
   FindlibParent:    nunchaku_core
   BuildDepends:     nunchaku, nunchaku.parsers, containers.sexp
 
-Library "nunchaku_transformations"
+Library nunchaku_transformations
   Path:             src/transformations
   Pack:             true
   Modules:          Skolem,
@@ -90,7 +90,7 @@ Library "nunchaku_transformations"
   FindlibParent:    nunchaku_core
   BuildDepends:     containers, nunchaku
 
-Library "nunchaku_random"
+Library nunchaku_random
   Path:             src/random
   Pack:             true
   Modules:          Term_random
