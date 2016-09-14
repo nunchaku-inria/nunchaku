@@ -143,7 +143,7 @@ let options =
       , Arg.Set print_specialize_
       , " print input after specialization"
   ; "--print-" ^ Tr.LambdaLift.name, Arg.Set print_lambda_lift_, " print after λ-lifting"
-  ; "--print-" ^ Tr.ElimHOF.name
+  ; "--print-" ^ Tr.Elim_HOF.name
       , Arg.Set print_elim_hof_
       , " print input after elimination of higher-order/partial functions"
   ; "--print-" ^ Tr.ElimMultipleEqns.name
@@ -339,7 +339,7 @@ let make_model_pipeline () =
         Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
         Tr.ElimData.Data.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
         Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
-        Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+        Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
         Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
         Tr.Elim_prop_args.pipe ~print:(!print_elim_prop_args_ || !print_all_) ~check @@@
@@ -373,7 +373,7 @@ let make_model_pipeline () =
           ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
         Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
         Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
-        Tr.ElimHOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+        Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
         Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
         Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
         Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@

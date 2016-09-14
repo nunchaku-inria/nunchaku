@@ -11,7 +11,7 @@ BuildTools:  ocamlbuild
 FilesAB:     src/main/const.ml.ab
 AlphaFeatures: compiled_setup_ml, ocamlbuild_more_args
 
-Synopsis:    A counter-example finder for higher-order logic
+Synopsis:    A model finder for higher-order logic
 
 XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain' -j 0"
 
@@ -70,7 +70,7 @@ Library "nunchaku_transformations"
                     Monomorphization,
                     Specialize,
                     LambdaLift,
-                    ElimHOF,
+                    Elim_HOF,
                     ElimRecursion,
                     ElimMultipleEqns,
                     ElimIndPreds,

@@ -42,7 +42,7 @@ Var
 {2 Transformations}
 {!modules:
 ElimCopy
-ElimHOF
+Elim_HOF
 ElimIndPreds
 ElimMultipleEqns
 ElimPatternMatch
