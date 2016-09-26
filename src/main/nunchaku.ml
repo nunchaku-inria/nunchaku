@@ -11,12 +11,15 @@ module Backends = Nunchaku_backends
 module Tr = Nunchaku_transformations
 
 type input =
+  | I_guess
   | I_nunchaku
   | I_tptp
+  | I_tip
 
 let inputs_ =
   [ "nunchaku", I_nunchaku
   ; "tptp", I_tptp
+  ; "tip", I_tip
   ]
 
 type output =
@@ -39,7 +42,7 @@ let list_solvers_ () = "(available choices: cvc4 kodkod paradox)"
 
 (** {2 Options} *)
 
-let input_ = ref I_nunchaku
+let input_ = ref I_guess
 let output_ = ref O_nunchaku
 let check_all_ = ref true
 let polarize_rec_ = ref true
@@ -213,16 +216,28 @@ let print_version_if_needed () =
 let parse_file ~into ~input () =
   let open E.Infix in
   let src = if !file = "" then `Stdin else `File !file in
+  let rec by_input = function
+    | I_guess ->
+      begin match src with
+        | `Stdin -> by_input I_nunchaku
+        | `File f when CCString.suffix ~suf:".nun" f -> by_input I_nunchaku
+        | `File f when CCString.suffix ~suf:".p" f -> by_input I_tptp
+        | `File f when CCString.suffix ~suf:".smt2" f -> by_input I_tip
+        | `File f -> raise (Arg.Bad ("cannot guess format of " ^ f))
+      end
+    | I_nunchaku ->
+      Nunchaku_parsers.Lexer.parse ~into src
+      >|= CCVector.freeze
+    | I_tptp ->
+      Nunchaku_parsers.TPTP_lexer.parse ~into ~mode:(`Env "TPTP") src
+      >|= CCVector.to_seq
+      >>= Nunchaku_parsers.TPTP_preprocess.preprocess
+    | I_tip ->
+      Nunchaku_parsers.Parse_tip.parse ~into src
+      >|= CCVector.freeze
+  in
   let res =
-    try
-      match input with
-      | I_nunchaku ->
-          Nunchaku_parsers.Lexer.parse ~into src
-          >|= CCVector.freeze
-      | I_tptp ->
-          Nunchaku_parsers.TPTP_lexer.parse ~into ~mode:(`Env "TPTP") src
-          >|= CCVector.to_seq
-          >>= Nunchaku_parsers.TPTP_preprocess.preprocess
+    try by_input input
     with e -> Utils.err_of_exn e
   in
   E.map_err

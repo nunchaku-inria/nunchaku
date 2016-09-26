@@ -45,12 +45,12 @@ Library nunchaku_parsers
   Modules:          Parsing_utils, Lexer, Parser, TPTP_print,
                     TPTP_lexer, TPTP_parser, TPTP_preprocess,
                     TPTP_model_ast, TPTP_model_lexer, TPTP_model_parser,
-                    Ast_kodkod, Lex_kodkod, Parse_kodkod
+                    Ast_kodkod, Lex_kodkod, Parse_kodkod, Parse_tip
   Install:          true
   FindlibName:      parsers
   FindlibParent:    nunchaku_core
   BuildTools:       menhir
-  BuildDepends:     nunchaku
+  BuildDepends:     nunchaku, tip_parser
 
 Library nunchaku_backends
   Path:             src/backends
