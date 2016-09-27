@@ -125,6 +125,7 @@ module Res : sig
     | Sat of ('t,'ty) Model.t
     | Unknown
     | Timeout
+    | Out_of_scope
     | Error of exn
 
   val map : term:('t1 -> 't2) -> ty:('ty1 -> 'ty2) -> ('t1,'ty1) t -> ('t2, 'ty2) t

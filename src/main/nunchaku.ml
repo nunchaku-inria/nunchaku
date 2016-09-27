@@ -412,7 +412,7 @@ let process_res_ r =
     assert
       (List.for_all
          (function
-           | Res.Timeout | Res.Unknown -> true
+           | Res.Timeout | Res.Unknown | Res.Out_of_scope -> true
            | Res.Error _ | Res.Sat _ | Res.Unsat -> false)
          l);
     let res = if List.mem Res.Timeout l then Res.Timeout else Res.Unknown in
@@ -480,6 +480,8 @@ let main_model ~output statements =
       Format.printf "@[UNSAT@]@."
   | Res.Unsat, O_tptp ->
       Format.printf "@[SZS Status: Unsatisfiable@]@."
+  | Res.Out_of_scope, _ ->
+      Format.printf "@[OUT_OF_SCOPE@]@."
   | Res.Unknown, _ ->
       Format.printf "@[UNKNOWN@]@."
   | Res.Timeout, _ ->

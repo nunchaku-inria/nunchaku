@@ -148,6 +148,7 @@ module Res = struct
     | Sat of ('t,'ty) Model.t
     | Unknown
     | Timeout
+    | Out_of_scope
     | Error of exn
 
   let map_m ~f t =  match t with
@@ -155,6 +156,7 @@ module Res = struct
     | Timeout -> Timeout
     | Error e -> Error e
     | Unknown -> Unknown
+    | Out_of_scope -> Out_of_scope
     | Sat m -> Sat (f m)
 
   let map ~term ~ty t =
@@ -167,6 +169,7 @@ module Res = struct
     | Timeout -> fpf out "TIMEOUT"
     | Error e -> fpf out "ERROR %s" (Printexc.to_string e)
     | Unknown -> fpf out "UNKNOWN"
+    | Out_of_scope -> fpf out "OUT_OF_SCOPE"
     | Sat _ -> fpf out "SAT"
 
   let print pt pty out = function
@@ -174,6 +177,7 @@ module Res = struct
     | Timeout -> fpf out "TIMEOUT"
     | Error e -> fpf out "ERROR %s" (Printexc.to_string e)
     | Unknown -> fpf out "UNKNOWN"
+    | Out_of_scope -> fpf out "OUT_OF_SCOPE"
     | Sat m ->
         fpf out "@[<hv>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]" (Model.print pt pty) m
 
@@ -185,5 +189,6 @@ module Res = struct
     | Timeout -> str "TIMEOUT"
     | Error e -> lst [str "ERROR"; str (Printexc.to_string e)]
     | Unknown -> str "UNKNOWN"
+    | Out_of_scope -> str "OUT_OF_SCOPE"
     | Sat m -> lst [str "SAT"; Model.to_sexp ft fty m]
 end

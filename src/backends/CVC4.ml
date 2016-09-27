@@ -809,6 +809,7 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
             if pb.FO.Problem.meta.ProblemMetadata.unsat_means_unknown
             then Res.Unknown, S.No_shortcut
             else Res.Unsat, S.Shortcut
+          | Res.Out_of_scope
           | Res.Timeout
           | Res.Unknown -> r, S.No_shortcut
           | Res.Error e ->
