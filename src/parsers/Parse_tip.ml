@@ -91,6 +91,9 @@ let rec conv_term (t:A.term): UA.term = match t with
     UA.exists_list vars (conv_term body)
   | A.Cast (a,_) -> conv_term a
 
+let convert_term = conv_term
+let convert_ty = conv_ty
+
 let conv_decl (d:A.ty A.fun_decl): string * UA.ty =
   let tyvars = d.A.fun_ty_vars in
   let ty_args = List.map conv_ty d.A.fun_args in
@@ -107,7 +110,7 @@ let conv_def (d:A.typed_var A.fun_decl): string * UA.typed_var list * UA.ty =
   let ty = UA.ty_forall_list tyvars (UA.ty_arrow_list ty_args ty_ret) in
   d.A.fun_name, List.map (fun v->v, Some UA.ty_type) tyvars @ vars, ty
 
-let convert (st:A.statement): UA.statement list =
+let convert_st (st:A.statement): UA.statement list =
   Utils.debugf 3 "convert TIP statement@ @[%a@]" (fun k->k A.pp_stmt st);
   let loc = CCOpt.map conv_loc st.A.loc in
   match st.A.stmt with
@@ -154,8 +157,8 @@ let convert (st:A.statement): UA.statement list =
       ->
       assert false (* TODO *)
 
-let convert_l ?(into=CCVector.create()) l =
-  List.iter (fun st -> CCVector.append_list into (convert st)) l;
+let convert_st_l ?(into=CCVector.create()) l =
+  List.iter (fun st -> CCVector.append_list into (convert_st st)) l;
   into
 
 (** {2 Parse + convert} *)
@@ -166,4 +169,4 @@ let parse ?mode:_ ?(into=CCVector.create()) src
   begin match src with
     | `Stdin -> parse_stdin ()
     | `File f -> parse_file f
-  end >|= convert_l ~into
+  end >|= convert_st_l ~into

@@ -13,9 +13,12 @@ val parse_file : string -> Tip_ast.statement list or_error
 
 val parse_stdin : unit -> Tip_ast.statement list or_error
 
-val convert : Tip_ast.statement -> UntypedAST.statement list
+val convert_ty : Tip_ast.ty -> UntypedAST.ty
+val convert_term : Tip_ast.term -> UntypedAST.term
 
-val convert_l :
+val convert_st : Tip_ast.statement -> UntypedAST.statement list
+
+val convert_st_l :
   ?into:UntypedAST.statement CCVector.vector ->
   Tip_ast.statement list ->
   UntypedAST.statement CCVector.vector

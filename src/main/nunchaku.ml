@@ -22,6 +22,8 @@ let inputs_ =
   ; "tip", I_tip
   ]
 
+(* TODO: tip output? *)
+
 type output =
   | O_nunchaku
   | O_tptp
@@ -37,8 +39,9 @@ type solver =
   | S_CVC4
   | S_kodkod
   | S_paradox
+  | S_smbc
 
-let list_solvers_ () = "(available choices: cvc4 kodkod paradox)"
+let list_solvers_ () = "(available choices: cvc4 kodkod paradox smbc)"
 
 (** {2 Options} *)
 
@@ -80,7 +83,7 @@ let skolems_in_model_ = ref true
 let timeout_ = ref 30
 let version_ = ref false
 let file = ref ""
-let solvers = ref [S_CVC4; S_kodkod; S_paradox]
+let solvers = ref [S_CVC4; S_kodkod; S_paradox; S_smbc]
 let j = ref 3
 let prelude_ = ref []
 
@@ -103,6 +106,7 @@ let parse_solvers_ s =
       | "cvc4" -> S_CVC4
       | "paradox" -> S_paradox
       | "kodkod" -> S_kodkod
+      | "smbc" -> S_smbc
       | s ->
         failwith (Utils.err_sprintf "unknown solver `%s` %s" s (list_solvers_())))
     l
@@ -313,6 +317,17 @@ let make_kodkod () =
     @@@ id
   else fail
 
+let make_smbc () =
+  let open Transform.Pipe in
+  if List.mem S_smbc !solvers && Backends.Smbc.is_available ()
+  then
+    Backends.Smbc.pipe
+      ~print:!print_all_
+      ~print_model:(!print_all_ || !print_raw_model_)
+      ()
+    @@@ id
+  else fail
+
 (* build a pipeline, depending on options *)
 let make_model_pipeline () =
   let open Transform.Pipe in
@@ -323,13 +338,17 @@ let make_model_pipeline () =
   let cvc4 = make_cvc4 ~j:!j () in
   let paradox = make_paradox () in
   let kodkod = make_kodkod () in
-  let pipe =
+  let smbc = make_smbc () in
+  let pipe_common k =
     Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
     Step_conv_ty.pipe () @@@
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~check ~mode:`Sk_types @@@
-    Tr.Monomorphization.pipe ~print:(!print_mono_ || !print_all_) ~check @@@
+    k
+  and pipe_mono_common k =
+    Tr.Monomorphization.pipe
+      ~always_mangle:false ~print:(!print_mono_ || !print_all_) ~check @@@
     Tr.Elim_infinite.pipe ~print:(!print_elim_infinite || !print_all_) ~check @@@
     Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
     Tr.ElimMultipleEqns.pipe
@@ -337,71 +356,92 @@ let make_model_pipeline () =
       ~print:(!print_elim_multi_eqns || !print_all_) @@@
     (if !enable_specialize_
      then Tr.Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check
-     else Transform.nop ())
-    @@@
+     else Transform.nop ()) @@@
+    k
+  and pipe_common_paradox_kodkod k =
+    Tr.ElimData.Codata.pipe ~print:(!print_elim_codata_ || !print_all_) ~check @@@
+    (if !enable_polarize_
+     then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
+         ~check ~polarize_rec:!polarize_rec_
+     else Transform.nop ()) @@@
+    Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+    Tr.Skolem.pipe
+      ~skolems_in_model:!skolems_in_model_
+      ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Tr.ElimData.Data.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
+    Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+    Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+    Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
+    Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+    Tr.Elim_prop_args.pipe ~print:(!print_elim_prop_args_ || !print_all_) ~check @@@
+    k
+  and pipe_paradox =
+    Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
+    Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
+    close_task (
+      Step_tofo.pipe ~print:!print_all_ () @@@
+      Tr.Elim_ite.pipe ~print:(!print_elim_ite_ || !print_all_) @@@
+      FO.pipe_tptp @@@
+      paradox
+    )
+  and pipe_kodkod =
+    Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
+    close_task (
+      Step_tofo.pipe ~print:!print_all_ () @@@
+      Tr.FoToRelational.pipe ~print:(!print_fo_to_rel_ || !print_all_) @@@
+      kodkod
+    )
+  and pipe_smbc =
+    Tr.Monomorphization.pipe
+      ~always_mangle:true ~print:(!print_mono_ || !print_all_) ~check @@@
+    Tr.Elim_infinite.pipe ~print:(!print_elim_infinite || !print_all_) ~check @@@
+    Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
+    Tr.ElimMultipleEqns.pipe
+      ~decode:(fun x->x) ~check
+      ~print:(!print_elim_multi_eqns || !print_all_) @@@
+    (if !enable_specialize_
+     then Tr.Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check
+     else Transform.nop ()) @@@
+    Tr.Skolem.pipe
+      ~skolems_in_model:!skolems_in_model_
+      ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+    Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
+    close_task smbc
+  and pipe_cvc4 =
+    (if !enable_polarize_
+     then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
+         ~check ~polarize_rec:!polarize_rec_
+     else Transform.nop ()) @@@
+    Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+    Tr.Skolem.pipe
+      ~skolems_in_model:!skolems_in_model_
+      ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+    Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+    Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
     Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
-    fork
-      (
-        Tr.ElimData.Codata.pipe ~print:(!print_elim_codata_ || !print_all_) ~check @@@
-        (if !enable_polarize_
-         then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
-             ~check ~polarize_rec:!polarize_rec_
-         else Transform.nop ()) @@@
-        Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
-        Tr.Skolem.pipe
-          ~skolems_in_model:!skolems_in_model_
-          ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-        Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-        Tr.ElimData.Data.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
-        Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
-        Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
-        Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
-        Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
-        Tr.Elim_prop_args.pipe ~print:(!print_elim_prop_args_ || !print_all_) ~check @@@
-        fork
-        (
-          Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
-          Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
-          close_task (
-            Step_tofo.pipe ~print:!print_all_ () @@@
-            Tr.Elim_ite.pipe ~print:(!print_elim_ite_ || !print_all_) @@@
-            FO.pipe_tptp @@@
-            paradox
-          )
-        )
-        (
-          Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
-          close_task (
-            Step_tofo.pipe ~print:!print_all_ () @@@
-            Tr.FoToRelational.pipe ~print:(!print_fo_to_rel_ || !print_all_) @@@
-            kodkod
-          ))
-      )
-      (
-        (if !enable_polarize_
-         then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
-             ~check ~polarize_rec:!polarize_rec_
-         else Transform.nop ()) @@@
-        Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
-        Tr.Skolem.pipe
-          ~skolems_in_model:!skolems_in_model_
-          ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-        Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-        Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
-        Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
-        Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
-        Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
-        Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
-        Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
-        close_task (
-          Step_tofo.pipe ~print:!print_all_ () @@@
-          Transform.Pipe.flatten cvc4
-        )
-      )
+    Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+    Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
+    close_task (
+      Step_tofo.pipe ~print:!print_all_ () @@@
+      Transform.Pipe.flatten cvc4
+    )
+  in
+  let pipe =
+    pipe_common
+      (fork
+        pipe_smbc
+        (pipe_mono_common @@
+         Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
+         fork
+           (pipe_common_paradox_kodkod (fork pipe_paradox pipe_kodkod))
+           pipe_cvc4))
   in
   pipe
-
-(* TODO: if list of tasks is empty, return UNKNOWN *)
 
 let process_res_ r =
   let module Res = Problem.Res in
