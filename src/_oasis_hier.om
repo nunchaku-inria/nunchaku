@@ -1,0 +1,7 @@
+OASIS_SUBDIRS[] =
+    $"main"
+    $"random"
+    $"transformations"
+    $"backends"
+    $"parsers"
+    $"core"

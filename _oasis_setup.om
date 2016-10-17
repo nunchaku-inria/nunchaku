@@ -1,0 +1,143 @@
+oasis_ocamlfind() =
+    value /home/simon/.opam/4.02.3/bin/ocamlfind
+oasis_ocamlc() =
+    value /home/simon/.opam/4.02.3/bin/ocamlc.opt
+oasis_ocamlopt() =
+    value /home/simon/.opam/4.02.3/bin/ocamlopt.opt
+oasis_ocamlbuild() =
+    value /home/simon/.opam/4.02.3/bin/ocamlbuild
+oasis_pkg_name() =
+    value nunchaku
+oasis_pkg_version() =
+    value 0.1
+oasis_os_type() =
+    value Unix
+oasis_system() =
+    value linux
+oasis_architecture() =
+    value amd64
+oasis_ccomp_type() =
+    value cc
+oasis_ocaml_version() =
+    value 4.02.3
+oasis_standard_library_default() =
+    value /home/simon/.opam/4.02.3/lib/ocaml
+oasis_standard_library() =
+    value /home/simon/.opam/4.02.3/lib/ocaml
+oasis_standard_runtime() =
+    value /home/simon/.opam/4.02.3/bin/ocamlrun
+oasis_bytecomp_c_compiler() =
+    value gcc\ -O\ -fno-defer-pop\ -Wall\ -D_FILE_OFFSET_BITS=64\ -D_REENTRANT\ -O\ -fPIC
+oasis_native_c_compiler() =
+    value gcc\ -O\ -Wall\ -D_FILE_OFFSET_BITS=64\ -D_REENTRANT
+oasis_model() =
+    value default
+oasis_ext_obj() =
+    value .o
+oasis_ext_asm() =
+    value .s
+oasis_ext_lib() =
+    value .a
+oasis_ext_dll() =
+    value .so
+oasis_default_executable_name() =
+    value a.out
+oasis_systhread_supported() =
+    value true
+oasis_prefix() =
+    value /usr/local
+oasis_exec_prefix() =
+    value $(apply $(getvar oasis_prefix))
+oasis_bindir() =
+    value $(apply $(getvar oasis_exec_prefix))/bin
+oasis_sbindir() =
+    value $(apply $(getvar oasis_exec_prefix))/sbin
+oasis_libexecdir() =
+    value $(apply $(getvar oasis_exec_prefix))/libexec
+oasis_sysconfdir() =
+    value $(apply $(getvar oasis_prefix))/etc
+oasis_sharedstatedir() =
+    value $(apply $(getvar oasis_prefix))/com
+oasis_localstatedir() =
+    value $(apply $(getvar oasis_prefix))/var
+oasis_libdir() =
+    value $(apply $(getvar oasis_exec_prefix))/lib
+oasis_datarootdir() =
+    value $(apply $(getvar oasis_prefix))/share
+oasis_datadir() =
+    value $(apply $(getvar oasis_datarootdir))
+oasis_infodir() =
+    value $(apply $(getvar oasis_datarootdir))/info
+oasis_localedir() =
+    value $(apply $(getvar oasis_datarootdir))/locale
+oasis_mandir() =
+    value $(apply $(getvar oasis_datarootdir))/man
+oasis_docdir() =
+    value $(apply $(getvar oasis_datarootdir))/doc/$(apply $(getvar oasis_pkg_name))
+oasis_htmldir() =
+    value $(apply $(getvar oasis_docdir))
+oasis_dvidir() =
+    value $(apply $(getvar oasis_docdir))
+oasis_pdfdir() =
+    value $(apply $(getvar oasis_docdir))
+oasis_psdir() =
+    value $(apply $(getvar oasis_docdir))
+oasis_findlib_version() =
+    value 1.6.2
+oasis_is_native() =
+    value true
+oasis_suffix_program() =
+    value 
+oasis_rm() =
+    value rm\ -f
+oasis_rmdir() =
+    value rm\ -rf
+oasis_debug() =
+    value true
+oasis_profile() =
+    value false
+oasis_native_dynlink() =
+    value true
+oasis_ocamlbuildflags() =
+    value 
+oasis_random() =
+    value true
+oasis_docs() =
+    value true
+oasis_tests() =
+    value false
+oasis_ocaml_version_ge_4_01() =
+    value 4.02.3
+oasis_pkg_containers() =
+    value /home/simon/.opam/4.02.3/lib/containers
+oasis_pkg_containers_data() =
+    value /home/simon/.opam/4.02.3/lib/containers
+oasis_pkg_containers_sexp() =
+    value /home/simon/.opam/4.02.3/lib/containers
+oasis_pkg_sequence() =
+    value /home/simon/.opam/4.02.3/lib/sequence
+oasis_pkg_num() =
+    value /home/simon/.opam/4.02.3/lib/num
+oasis_pkg_unix() =
+    value /home/simon/.opam/4.02.3/lib/ocaml
+oasis_pkg_threads() =
+    value /home/simon/.opam/4.02.3/lib/ocaml
+oasis_menhir() =
+    value /home/simon/.opam/4.02.3/bin/menhir
+oasis_pkg_tip_parser() =
+    value /home/simon/.opam/4.02.3/lib/tip_parser
+oasis_pkg_qcheck() =
+    value /home/simon/.opam/4.02.3/lib/qcheck
+oasis_ocamldoc() =
+    value /home/simon/.opam/4.02.3/bin/ocamldoc
+oasis_ocaml_version_ge_4_00_1() =
+    value 4.02.3
+USE_OCAMLFIND = true
+BYTE_ENABLED = true
+NATIVE_ENABLED = $(OCAMLOPT_EXISTS)
+OCAMLDEP_MODULES_ENABLED = true
+CMXS_ENABLED = $(oasis_native_dynlink)
+OCAMLFLAGS = -g
+INCLUDES = $(oasis_standard_library)
+CC = $(nth-hd 1, $(split $(oasis_bytecomp_c_compiler)))
+CFLAGS = $(nth-tl 1, $(split $(oasis_bytecomp_c_compiler)))

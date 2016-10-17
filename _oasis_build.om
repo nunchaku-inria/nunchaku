@@ -1,0 +1,61 @@
+BUILD_TARGETS[] =
+BUILD_DOC_TARGETS[] =
+DEFINE_RULES[] =
+ACCU_OCAMLINCLUDES[] =
+    $"."
+ACCU_OCAMLPACKS[] =
+ACCU_CFLAGS[] =
+ACCU_OCAMLCFLAGS[] =
+ACCU_OCAMLOPTFLAGS[] =
+ACCU_SYNTAX_CAMLP4O = $"false"
+
+section
+    if $(not $(defined SKIP_DOC_nunchaku))
+        SKIP_DOC_nunchaku = false
+        export SKIP_DOC_nunchaku
+    if $(not $(SKIP_DOC_nunchaku))
+        NAME = $"nunchaku"
+        FORMAT = $"html"
+        MODULES[] =
+            $(OASIS_getvar EXTRA_MODULES)
+        TEXTS[] =
+            $(OASIS_getvar EXTRA_TEXTS)
+        INTRO[] =
+        OCAML_LIBS[] =
+            $"src/core/nunchaku"
+            $"src/parsers/nunchaku_parsers"
+            $"src/transformations/nunchaku_transformations"
+            $(OASIS_getvar EXTRA_OCAML_LIBS)
+        OCAMLDOCFLAGS[] =
+            $(OASIS_getvar EXTRA_OCAMLDOCFLAGS)
+        OCAMLDOCFLAGS_HTML[] =
+            $(OASIS_getvar EXTRA_OCAMLDOCFLAGS_HTML)
+        OCAMLDOCFLAGS_LATEX[] =
+            $(OASIS_getvar EXTRA_OCAMLDOCFLAGS_LATEX)
+        OCAMLFINDFLAGS[] =
+            $(OASIS_getvar EXTRA_OCAMLFINDFLAGS)
+        TEXINPUTS[] +=
+            $(NAME).doc/latex
+        DefineRules() =
+            OASIS_build_OCamlDoc($(NAME), $(MODULES), $(TEXTS))
+        if $(and $(not $(not $(oasis_docs))), $(and $(not $(oasis_docs)), $(or $(and $(oasis_docs), $(oasis_docs)), false)))
+            BUILD_DOC_TARGETS[] +=
+                $(OASIS_target_OCamlDoc $(NAME), $(FORMAT))
+            export BUILD_DOC_TARGETS
+        DEFINE_RULES[] +=
+            $(DefineRules)
+        export BUILD_DOC_TARGETS DEFINE_RULES
+    export
+
+
+DefineBuildRules() =
+    OASIS_run($(DEFINE_RULES))
+OCAMLINCLUDES = $(set $(ACCU_OCAMLINCLUDES))
+OCAMLPACKS = $(set $(ACCU_OCAMLPACKS))
+CFLAGS += $(ACCU_CFLAGS)
+OCAMLCFLAGS += $(ACCU_OCAMLCFLAGS)
+OCAMLOPTFLAGS += $(ACCU_OCAMLOPTFLAGS)
+if $(ACCU_SYNTAX_CAMLP4O)
+    OCAMLFINDFLAGS += -syntax camlp4o
+    export OCAMLFINDFLAGS
+

@@ -28,8 +28,8 @@ depends: [
     "sequence"
     "base-unix"
     "base-threads"
+    "omake" {build}
     "oasis" {build}
-    "ocamlbuild" {build}
 ]
 depopts: [
     "qtest" {test}

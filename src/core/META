@@ -1,23 +1,56 @@
 # OASIS_START
-# DO NOT EDIT (digest: 58f1ac9453978f48bf2d2e37802e7716)
+# DO NOT EDIT (digest: cb096c7ddabd0f25406eca105522634d)
 version = "0.1"
-description = "A counter-example finder for higher-order logic"
+description = "A model finder for higher-order logic"
 requires =
-"containers containers.sexp containers.iter containers.data sequence unix threads"
-archive(byte) = "nunchaku_core.cma"
-archive(byte, plugin) = "nunchaku_core.cma"
-archive(native) = "nunchaku_core.cmxa"
-archive(native, plugin) = "nunchaku_core.cmxs"
-exists_if = "nunchaku_core.cma"
+"containers containers.data containers.sexp sequence num unix threads"
+archive(byte) = "nunchaku.cma"
+archive(byte, plugin) = "nunchaku.cma"
+archive(native) = "nunchaku.cmxa"
+archive(native, plugin) = "nunchaku.cmxs"
+exists_if = "nunchaku.cma"
+package "transformations" (
+ version = "0.1"
+ description = "A model finder for higher-order logic"
+ requires = "containers nunchaku"
+ archive(byte) = "nunchaku_transformations.cma"
+ archive(byte, plugin) = "nunchaku_transformations.cma"
+ archive(native) = "nunchaku_transformations.cmxa"
+ archive(native, plugin) = "nunchaku_transformations.cmxs"
+ exists_if = "nunchaku_transformations.cma"
+)
+
+package "random" (
+ version = "0.1"
+ description = "A model finder for higher-order logic"
+ requires = "nunchaku qcheck"
+ archive(byte) = "nunchaku_random.cma"
+ archive(byte, plugin) = "nunchaku_random.cma"
+ archive(native) = "nunchaku_random.cmxa"
+ archive(native, plugin) = "nunchaku_random.cmxs"
+ exists_if = "nunchaku_random.cma"
+)
+
 package "parsers" (
  version = "0.1"
- description = "A counter-example finder for higher-order logic"
- requires = "nunchaku"
+ description = "A model finder for higher-order logic"
+ requires = "nunchaku tip_parser"
  archive(byte) = "nunchaku_parsers.cma"
  archive(byte, plugin) = "nunchaku_parsers.cma"
  archive(native) = "nunchaku_parsers.cmxa"
  archive(native, plugin) = "nunchaku_parsers.cmxs"
  exists_if = "nunchaku_parsers.cma"
+)
+
+package "backends" (
+ version = "0.1"
+ description = "A model finder for higher-order logic"
+ requires = "nunchaku nunchaku.parsers containers.sexp"
+ archive(byte) = "nunchaku_backends.cma"
+ archive(byte, plugin) = "nunchaku_backends.cma"
+ archive(native) = "nunchaku_backends.cmxa"
+ archive(native, plugin) = "nunchaku_backends.cmxs"
+ exists_if = "nunchaku_backends.cma"
 )
 # OASIS_STOP
 

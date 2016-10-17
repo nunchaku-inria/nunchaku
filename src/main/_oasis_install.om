@@ -1,0 +1,34 @@
+INSTALL_TARGETS[] =
+UNINSTALL_TARGETS[] =
+REINSTALL_TARGETS[] =
+DEFINE_RULES[] =
+
+section
+    if $(not $(defined SKIP_INSTALL_nunchaku))
+        SKIP_INSTALL_nunchaku = false
+        export SKIP_INSTALL_nunchaku
+    if $(not $(SKIP_INSTALL_nunchaku))
+        NAME = $"nunchaku"
+        BYTE_ENABLED = $"false"
+        INSTALL_FILE = $(OASIS_expand_file_Executable $(NAME))
+        DefineRules() =
+            OASIS_install_Executable($(NAME), $(INSTALL_FILE))
+            OASIS_uninstall_Executable($(NAME))
+            OASIS_reinstall_Executable($(NAME), $(INSTALL_FILE))
+            OASIS_uninstall_data_Executable($(NAME))
+        if true
+            INSTALL_TARGETS[] +=
+                $(OASIS_installtarget_Executable $(NAME))
+            UNINSTALL_TARGETS[] +=
+                $(OASIS_uninstalltarget_Executable $(NAME))
+            REINSTALL_TARGETS[] +=
+                $(OASIS_reinstalltarget_Executable $(NAME))
+            export INSTALL_TARGETS UNINSTALL_TARGETS REINSTALL_TARGETS
+        DEFINE_RULES[] +=
+            $(DefineRules)
+        export INSTALL_TARGETS UNINSTALL_TARGETS REINSTALL_TARGETS DEFINE_RULES
+    export
+
+
+DefineInstallRules() =
+    OASIS_run($(DEFINE_RULES))

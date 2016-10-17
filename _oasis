@@ -6,20 +6,20 @@ Authors:     Simon Cruanes, Jasmin Blanchette
 License:     BSD-2-clause
 LicenseFile: LICENSE
 Plugins:     META (0.3), DevFiles (0.3)
-OCamlVersion: >= 4.00.1
-BuildTools:  ocamlbuild
+OCamlVersion: >= 4.01
+BuildType:   OMake (0.4)
 FilesAB:     src/main/const.ml.ab
-AlphaFeatures: compiled_setup_ml, ocamlbuild_more_args
+AlphaFeatures: compiled_setup_ml
 
 Synopsis:    A model finder for higher-order logic
 
-XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain' -j 0"
+XOMakeExtraArgs: "-c 'OCAMLYACC = menhir --dump --explain'"
 
 Flag random
   Description:      enable the library for generating random data
   Default:          true
 
-Library nunchaku_core
+Library nunchaku
   Path:             src/core/
   Pack:             true
   Modules:          ID, Var, MetaVar, Location, Intf, Utils, Transform,
@@ -27,13 +27,8 @@ Library nunchaku_core
                     Env, Signature, Statement, FO_tptp, FO_rel, Cardinality,
                     Scheduling, Polarity, Traversal, ProblemMetadata,
                     AnalyzeType, Prelude, TypeCheck, Lazy_list,
-                    terms/TermInner,
-                    terms/TermTyped,
-                    terms/TermPoly,
-                    terms/TermMono,
-                    terms/Pattern,
-                    types/TypePoly,
-                    types/TypeMono
+                    TermInner, TermTyped, TermPoly, TermMono, Pattern,
+                    TypePoly, TypeMono
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.data, containers.sexp, sequence,
@@ -48,7 +43,7 @@ Library nunchaku_parsers
                     Ast_kodkod, Lex_kodkod, Parse_kodkod, Parse_tip
   Install:          true
   FindlibName:      parsers
-  FindlibParent:    nunchaku_core
+  FindlibParent:    nunchaku
   BuildTools:       menhir
   BuildDepends:     nunchaku, tip_parser
 
@@ -58,7 +53,7 @@ Library nunchaku_backends
   Modules:          CVC4, Kodkod, Paradox
   Install:          true
   FindlibName:      backends
-  FindlibParent:    nunchaku_core
+  FindlibParent:    nunchaku
   BuildDepends:     nunchaku, nunchaku.parsers, containers.sexp
 
 Library nunchaku_transformations
@@ -87,7 +82,7 @@ Library nunchaku_transformations
                     FoToRelational
   Install:          true
   FindlibName:      transformations
-  FindlibParent:    nunchaku_core
+  FindlibParent:    nunchaku
   BuildDepends:     containers, nunchaku
 
 Library nunchaku_random
@@ -96,7 +91,7 @@ Library nunchaku_random
   Modules:          Term_random
   Install$:         flag(random)
   Build$:           flag(random)
-  FindlibParent:    nunchaku_core
+  FindlibParent:    nunchaku
   FindlibName:      random
   BuildDepends:     nunchaku, qcheck
 
@@ -126,13 +121,12 @@ Test all
 
 Document nunchaku
   Title:                Documentation of Nunchaku
-  Type:                 ocamlbuild (0.3)
+  Type:                 omake (0.4)
   BuildTools+:          ocamldoc
   Build$:               flag(docs)
   Install:              true
-  XOCamlbuildPath:      .
-  XOCamlbuildExtraArgs:
-    "-docflags '-colorize-code -short-functors -charset utf-8'"
-  XOCamlbuildLibraries:
+  XOMakePath:           .
+  XOMakeFlags:          -colorize-code -short-functors -charset utf-8'
+  XOMakeLibraries:
     nunchaku, nunchaku.parsers, nunchaku.transformations
 

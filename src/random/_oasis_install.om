@@ -1,0 +1,45 @@
+INSTALL_TARGETS[] =
+UNINSTALL_TARGETS[] =
+REINSTALL_TARGETS[] =
+DEFINE_RULES[] =
+
+section
+    if $(not $(defined SKIP_INSTALL_nunchaku_random))
+        SKIP_INSTALL_nunchaku_random = false
+        export SKIP_INSTALL_nunchaku_random
+    if $(not $(SKIP_INSTALL_nunchaku_random))
+        NAME = $"nunchaku_random"
+        FINDLIB_NAME = $"nunchaku.random"
+        FINDLIB_PARENT = $"../core/nunchaku"
+        INSTALL_MODULES[] =
+            $"Term_random"
+            $(OASIS_getvar EXTRA_INSTALL_MODULES)
+        INSTALL_FILES[] =
+            $(OASIS_expand_module_files_OCamlLibrary $(INSTALL_MODULES))
+            $(OASIS_expand_library_files_OCamlLibrary $(NAME))
+            $(OASIS_getvar EXTRA_INSTALL_FILES)
+        INSTALL_OPTIONAL_FILES[] =
+            $(OASIS_expand_optional_module_files_OCamlLibrary $(INSTALL_MODULES))
+            $(OASIS_expand_optional_library_files_OCamlLibrary $(NAME))
+            $(OASIS_getvar EXTRA_INSTALL_OPTIONAL_FILES)
+        DefineRules() =
+            OASIS_install_OCamlLibrary($(NAME), $(FINDLIB_NAME), $(FINDLIB_PARENT), $(INSTALL_FILES), $(INSTALL_OPTIONAL_FILES))
+            OASIS_uninstall_OCamlLibrary($(NAME), $(FINDLIB_NAME), $(FINDLIB_PARENT))
+            OASIS_reinstall_OCamlLibrary($(NAME), $(FINDLIB_NAME), $(FINDLIB_PARENT), $(INSTALL_FILES), $(INSTALL_OPTIONAL_FILES))
+            OASIS_uninstall_data_OCamlLibrary($(NAME))
+        if $(and $(not true), $(or $(oasis_random), false))
+            INSTALL_TARGETS[] +=
+                $(OASIS_installtarget_OCamlLibrary $(NAME))
+            UNINSTALL_TARGETS[] +=
+                $(OASIS_uninstalltarget_OCamlLibrary $(NAME))
+            REINSTALL_TARGETS[] +=
+                $(OASIS_reinstalltarget_OCamlLibrary $(NAME))
+            export INSTALL_TARGETS UNINSTALL_TARGETS REINSTALL_TARGETS
+        DEFINE_RULES[] +=
+            $(DefineRules)
+        export INSTALL_TARGETS UNINSTALL_TARGETS REINSTALL_TARGETS DEFINE_RULES
+    export
+
+
+DefineInstallRules() =
+    OASIS_run($(DEFINE_RULES))

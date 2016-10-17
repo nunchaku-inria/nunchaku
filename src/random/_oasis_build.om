@@ -1,0 +1,102 @@
+BUILD_TARGETS[] =
+BUILD_DOC_TARGETS[] =
+DEFINE_RULES[] =
+ACCU_OCAMLINCLUDES[] =
+    $"."
+ACCU_OCAMLPACKS[] =
+ACCU_CFLAGS[] =
+ACCU_OCAMLCFLAGS[] =
+ACCU_OCAMLOPTFLAGS[] =
+ACCU_SYNTAX_CAMLP4O = $"false"
+
+section
+    if $(not $(defined SKIP_BUILD_nunchaku_random))
+        SKIP_BUILD_nunchaku_random = false
+        export SKIP_BUILD_nunchaku_random
+    if $(not $(SKIP_BUILD_nunchaku_random))
+        NAME = $"nunchaku_random"
+        CNAME = $"Nunchaku_random"
+        MODULES[] =
+            $"Term_random"
+            $(OASIS_getvar EXTRA_MODULES)
+        MODULES_nunchaku_random[] =
+            $(MODULES)
+        OCAML_LIBS[] =
+            $"../core/nunchaku"
+            $(OASIS_getvar EXTRA_OCAML_LIBS)
+        C_SOURCES[] =
+        C_OBJECTS = $(replacesuffixes .c, $(EXT_OBJ), $(C_SOURCES))
+        C_OBJECTS += $(OASIS_getvar EXTRA_C_OBJECTS)
+        C_SOURCES_nunchaku_random[] =
+            $(C_SOURCES)
+        if true
+            OCAML_LIB_CCLIB[] =
+            export OCAML_LIB_CCLIB
+        OCAML_LIB_CCLIB[] +=
+            $(OASIS_getvar EXTRA_OCAML_LIB_CCLIB)
+        if true
+            OCAML_LIB_DLLIB[] =
+            export OCAML_LIB_DLLIB
+        OCAML_LIB_DLLIB[] +=
+            $(OASIS_getvar EXTRA_OCAML_LIB_DLLIB)
+        if true
+            OCAML_LIB_DLLPATH[] =
+            export OCAML_LIB_DLLPATH
+        OCAML_LIB_DLLPATH[] +=
+            $(OASIS_getvar EXTRA_OCAML_LIB_DLLPATH)
+        OCAML_LIB_FLAGS[] =
+            $(OASIS_getvar EXTRA_OCAML_LIB_FLAGS)
+        OCAMLFINDFLAGS[] =
+            $(OASIS_getvar EXTRA_OCAMLFINDFLAGS)
+        if true
+            cflags[] =
+            export cflags
+        if true
+            ocamlcflags[] =
+            export ocamlcflags
+        if true
+            ocamloptflags[] =
+            export ocamloptflags
+        ocamloptflags_late[] =
+            -for-pack
+            $(CNAME)
+        OCAMLCFLAGS += $(ocamlcflags)
+        OCAMLOPTFLAGS += $(ocamloptflags)
+        DefineRules() =
+            OASIS_build_OCamlPack($(NAME), $(MODULES))
+            OASIS_build_OCamlLibrary($(NAME), $(NAME), $(C_OBJECTS))
+        if $(and $(not true), $(or $(oasis_random), false))
+            BUILD_TARGETS[] +=
+                $(OASIS_target_OCamlLibrary $(NAME))
+            export BUILD_TARGETS
+        DEFINE_RULES[] +=
+            $(DefineRules)
+        ACCU_OCAMLINCLUDES[] +=
+            $"../core"
+            $(OASIS_getvar EXTRA_OCAMLINCLUDES)
+        ACCU_OCAMLPACKS[] +=
+            $"qcheck"
+            $(OASIS_getvar EXTRA_OCAMLPACKS)
+        ACCU_CFLAGS[] +=
+            $(cflags)
+        ACCU_OCAMLCFLAGS[] +=
+            $(ocamlcflags)
+        ACCU_OCAMLOPTFLAGS[] +=
+            $(ocamloptflags)
+        ACCU_OCAMLOPTFLAGS[] +=
+            $(ocamloptflags_late)
+        export BUILD_TARGETS DEFINE_RULES ACCU_OCAMLINCLUDES ACCU_OCAMLPACKS ACCU_OCAMLCFLAGS ACCU_OCAMLOPTFLAGS ACCU_CFLAGS ACCU_SYNTAX_CAMLP4O MODULES_nunchaku_random C_SOURCES_nunchaku_random
+    export
+
+
+DefineBuildRules() =
+    OASIS_run($(DEFINE_RULES))
+OCAMLINCLUDES = $(set $(ACCU_OCAMLINCLUDES))
+OCAMLPACKS = $(set $(ACCU_OCAMLPACKS))
+CFLAGS += $(ACCU_CFLAGS)
+OCAMLCFLAGS += $(ACCU_OCAMLCFLAGS)
+OCAMLOPTFLAGS += $(ACCU_OCAMLOPTFLAGS)
+if $(ACCU_SYNTAX_CAMLP4O)
+    OCAMLFINDFLAGS += -syntax camlp4o
+    export OCAMLFINDFLAGS
+

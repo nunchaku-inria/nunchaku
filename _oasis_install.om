@@ -1,0 +1,37 @@
+INSTALL_TARGETS[] =
+UNINSTALL_TARGETS[] =
+REINSTALL_TARGETS[] =
+DEFINE_RULES[] =
+
+section
+    if $(not $(defined SKIP_DOC_INSTALL_nunchaku))
+        SKIP_DOC_INSTALL_nunchaku = false
+        export SKIP_DOC_INSTALL_nunchaku
+    if $(not $(SKIP_DOC_INSTALL_nunchaku))
+        NAME = $"nunchaku"
+        FORMAT = $"html"
+        DEST = $(oasis_docdir)
+        INSTALL_FILES[] =
+            $(OASIS_expand_files_Document $(NAME), $(FORMAT))
+            $(OASIS_getvar EXTRA_INSTALL_FILES)
+        DefineRules() =
+            OASIS_install_Document($(NAME), $(INSTALL_FILES), $(DEST))
+            OASIS_uninstall_Document($(NAME))
+            OASIS_reinstall_Document($(NAME), $(INSTALL_FILES), $(DEST))
+            OASIS_uninstall_data_Document($(NAME))
+        if true
+            INSTALL_TARGETS[] +=
+                $(OASIS_installtarget_Document $(NAME))
+            UNINSTALL_TARGETS[] +=
+                $(OASIS_uninstalltarget_Document $(NAME))
+            REINSTALL_TARGETS[] +=
+                $(OASIS_reinstalltarget_Document $(NAME))
+            export INSTALL_TARGETS UNINSTALL_TARGETS REINSTALL_TARGETS
+        DEFINE_RULES[] +=
+            $(DefineRules)
+        export INSTALL_TARGETS UNINSTALL_TARGETS REINSTALL_TARGETS DEFINE_RULES
+    export
+
+
+DefineInstallRules() =
+    OASIS_run($(DEFINE_RULES))

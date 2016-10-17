@@ -1,0 +1,132 @@
+BUILD_TARGETS[] =
+BUILD_DOC_TARGETS[] =
+DEFINE_RULES[] =
+ACCU_OCAMLINCLUDES[] =
+    $"."
+ACCU_OCAMLPACKS[] =
+ACCU_CFLAGS[] =
+ACCU_OCAMLCFLAGS[] =
+ACCU_OCAMLOPTFLAGS[] =
+ACCU_SYNTAX_CAMLP4O = $"false"
+
+section
+    if $(not $(defined SKIP_BUILD_nunchaku))
+        SKIP_BUILD_nunchaku = false
+        export SKIP_BUILD_nunchaku
+    if $(not $(SKIP_BUILD_nunchaku))
+        NAME = $"nunchaku"
+        BYTE_ENABLED = $"false"
+        MAIN_MODULE = $"nunchaku"
+        OCAMLPACKS[] =
+            $"threads"
+            $"unix"
+            $"num"
+            $"sequence"
+            $"containers.data"
+            $"containers.sexp"
+            $"containers"
+            $"threads"
+            $"unix"
+            $"num"
+            $"sequence"
+            $"containers.data"
+            $"containers.sexp"
+            $"containers"
+            $"threads"
+            $"unix"
+            $"num"
+            $"sequence"
+            $"containers.data"
+            $"tip_parser"
+            $"containers.sexp"
+            $"containers"
+            $"threads"
+            $"unix"
+            $"num"
+            $"sequence"
+            $"containers.data"
+            $"tip_parser"
+            $"containers.sexp"
+            $"containers"
+            $(OASIS_getvar EXTRA_OCAMLPACKS)
+        OCAML_LIBS[] =
+            $"../backends/nunchaku_backends"
+            $"../core/nunchaku"
+            $"../parsers/nunchaku_parsers"
+            $"../transformations/nunchaku_transformations"
+            $(OASIS_getvar EXTRA_OCAML_LIBS)
+        C_SOURCES[] =
+        C_OBJECTS = $(replacesuffixes .c, $(EXT_OBJ), $(C_SOURCES))
+        C_OBJECTS += $(OASIS_getvar EXTRA_C_OBJECTS)
+        if true
+            OCAML_LINK_CCLIB[] =
+            export OCAML_LINK_CCLIB
+        OCAML_LINK_CCLIB[] +=
+            $(OASIS_getvar EXTRA_OCAML_LINK_CCLIB)
+        if true
+            OCAML_LINK_DLLIB[] =
+            export OCAML_LINK_DLLIB
+        OCAML_LINK_DLLIB[] +=
+            $(OASIS_getvar EXTRA_OCAML_LINK_DLLIB)
+        if true
+            OCAML_LINK_DLLPATH[] =
+            export OCAML_LINK_DLLPATH
+        OCAML_LINK_DLLPATH[] +=
+            $(OASIS_getvar EXTRA_OCAML_LINK_DLLPATH)
+        OCAML_LINK_FLAGS[] =
+            $"-linkpkg"
+            $(OASIS_getvar EXTRA_OCAML_LINK_FLAGS)
+        OCAMLFINDFLAGS[] =
+            $(OASIS_getvar EXTRA_OCAMLFINDFLAGS)
+        if true
+            cflags[] =
+            export cflags
+        if true
+            ocamlcflags[] =
+            export ocamlcflags
+        if true
+            ocamloptflags[] =
+            export ocamloptflags
+        OCAMLCFLAGS += $(ocamlcflags)
+        OCAMLOPTFLAGS += $(ocamloptflags)
+        DefineRules() =
+            OASIS_build_OCamlExecutable($(NAME), $(MAIN_MODULE), $(C_OBJECTS))
+        if true
+            BUILD_TARGETS[] +=
+                $(OASIS_target_OCamlExecutable $(NAME))
+            export BUILD_TARGETS
+        DEFINE_RULES[] +=
+            $(DefineRules)
+        ACCU_OCAMLINCLUDES[] +=
+            $"../backends"
+            $"../core"
+            $"../parsers"
+            $"../transformations"
+            $(OASIS_getvar EXTRA_OCAMLINCLUDES)
+        ACCU_OCAMLPACKS[] +=
+            $(OCAMLPACKS)
+        ACCU_CFLAGS[] +=
+            $(cflags)
+        ACCU_OCAMLCFLAGS[] +=
+            $(ocamlcflags)
+        ACCU_OCAMLOPTFLAGS[] +=
+            $(ocamloptflags)
+        OASIS_clean_list[] +=
+            $(NAME)
+            $(NAME).run
+            $(NAME).opt
+        export BUILD_TARGETS DEFINE_RULES ACCU_OCAMLINCLUDES ACCU_OCAMLPACKS ACCU_OCAMLCFLAGS ACCU_OCAMLOPTFLAGS ACCU_CFLAGS ACCU_SYNTAX_CAMLP4O OASIS_clean_list
+    export
+
+
+DefineBuildRules() =
+    OASIS_run($(DEFINE_RULES))
+OCAMLINCLUDES = $(set $(ACCU_OCAMLINCLUDES))
+OCAMLPACKS = $(set $(ACCU_OCAMLPACKS))
+CFLAGS += $(ACCU_CFLAGS)
+OCAMLCFLAGS += $(ACCU_OCAMLCFLAGS)
+OCAMLOPTFLAGS += $(ACCU_OCAMLOPTFLAGS)
+if $(ACCU_SYNTAX_CAMLP4O)
+    OCAMLFINDFLAGS += -syntax camlp4o
+    export OCAMLFINDFLAGS
+

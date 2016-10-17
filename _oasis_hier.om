@@ -1,0 +1,3 @@
+OASIS_SUBDIRS[] =
+    $"qtest"
+    $"src"
