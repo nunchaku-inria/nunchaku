@@ -1,4 +1,6 @@
 src/core/Reduce
+src/core/terms/TermPoly
+src/core/terms/TermTyped
 src/core/TypeUnify
 src/core/Scheduling
 src/parsers/TPTP_preprocess

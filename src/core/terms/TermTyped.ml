@@ -10,10 +10,8 @@ module MetaVar = MetaVar
 module ID = ID
 
 (*$inject
-  module Var = Var
-  module TyI = Type_intf
+  module TI = TermInner
   module U = Util(Default)
-
 *)
 
 type 'a view = 'a TI.view
@@ -183,9 +181,9 @@ end = struct
 end
 
 (*$T
-  TyI.returns_Type ~repr:U.as_ty U.ty_type
-  TyI.returns_Type ~repr:U.as_ty U.(ty_arrow ty_prop ty_type)
-  not (TyI.returns_Type ~repr:U.as_ty U.(ty_arrow ty_type ty_prop))
+  U.ty_returns_Type U.ty_type
+  U.ty_returns_Type U.(ty_arrow ty_prop ty_type)
+  not (U.ty_returns_Type U.(ty_arrow ty_type ty_prop))
 *)
 
 module AsPoly(T : REPR)

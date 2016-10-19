@@ -7,11 +7,10 @@
 *)
 
 (*$inject
+  module TI = TermInner
   let pterm = Lexer.HO.term_of_str_exn
 
-  module U = Util(Default)
-  module Su = SubstUtil(Default)
-  module TyI = Type_intf
+  module U = TI.Util(TI.Default)
 *)
 
 module ID = ID
@@ -73,9 +72,9 @@ end
 module Default = Make(TI.Default)
 
 (*$T
-  TyI.returns_Type ~repr:U.as_ty (U.ty_type())
-  TyI.returns_Type ~repr:U.as_ty U.(ty_arrow (ty_prop()) (ty_type()))
-  not (TyI.returns_Type ~repr:U.as_ty U.(ty_arrow (ty_type()) (ty_prop())))
+  U.ty_returns_Type U.ty_type
+  U.ty_returns_Type U.(ty_arrow ty_prop ty_type)
+  not (U.ty_returns_Type U.(ty_arrow ty_type ty_prop))
 *)
 
 let default = (module Default : S with type T.t = TI.Default.t)
