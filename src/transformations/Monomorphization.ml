@@ -95,16 +95,20 @@ type unmangle_state = (ID.t * term list) ID.Tbl.t
 
 module St = struct
   type t = {
+    always_mangle: bool;
     mangle : (string, ID.t) Hashtbl.t;
     (* mangled name -> mangled ID *)
     unmangle : unmangle_state;
     (* mangled name -> (id, args) *)
   }
 
-  let create () = {
+  let create ~always_mangle () = {
+    always_mangle;
     mangle=Hashtbl.create 64;
     unmangle=ID.Tbl.create 64;
   }
+
+  let always_mangle st = st.always_mangle
 
   (* remember that (id,tup) -> mangled *)
   let save_mangled ~state id tup ~mangled =
@@ -179,9 +183,7 @@ type local_state = {
 
 (* monomorphize term *)
 let rec mono_term ~self ~local_state (t:term) : term =
-  (*
   Utils.debugf ~section 5 "@[<2>mono term@ `@[%a@]`@]" (fun k->k P.print t);
-  *)
   match T.repr t with
     | TI.Builtin b ->
       U.builtin (TI.Builtin.map b ~f:(mono_term ~self ~local_state))
@@ -211,10 +213,12 @@ let rec mono_term ~self ~local_state (t:term) : term =
           (* find type arguments *)
           let info = Env.find_exn ~env:(Trav.env self) id in
           let ty = info.Env.ty in
-          if U.ty_returns_Type ty && Env.is_not_def info
+          if U.ty_returns_Type ty
+          && Env.is_not_def info
+          && not (St.always_mangle (Trav.state self))
           then (
             (* do not change undefined type constructors, such as [pair],
-               keep them parametric; do not mangle! *)
+               keep them parametric; do not mangle (unless [always_mangle=true])! *)
             Trav.call_dep self ~depth:local_state.depth id ArgTuple.empty;
             let l' = List.map (mono_type ~self ~local_state) l in
             U.app_const id l'
@@ -225,7 +229,8 @@ let rec mono_term ~self ~local_state (t:term) : term =
             let mangled_tup = List.map (mono_type ~self ~local_state) unmangled_tup in
             (* mangle? *)
             let new_id, mangled =
-              if should_be_mangled_ ~env:(Trav.env self) id
+              if St.always_mangle (Trav.state self)
+              || should_be_mangled_ ~env:(Trav.env self) id
               then mangle_ ~state:(Trav.state self) id mangled_tup
               else id, None
             in
@@ -534,8 +539,8 @@ let mono_statement t st =
   end;
   Trav.traverse_stmt t st
 
-let monomorphize ?(depth_limit=256) pb =
-  let state = St.create () in
+let monomorphize ?(depth_limit=256) ?(always_mangle=false) pb =
+  let state = St.create ~always_mangle () in
   (* create the state used for monomorphization. Toplevel function
     for specializing (id,tup) is [mono_statements_for_id] *)
   let traverse = Trav.create
@@ -590,7 +595,7 @@ let unmangle_term ~(state:unmangle_state) (t:term):term =
 let unmangle_model ~state =
   Model.map ~term:(unmangle_term ~state) ~ty:(unmangle_term ~state)
 
-let pipe_with ~decode ~print ~check =
+let pipe_with ~decode ~always_mangle ~print ~check =
   let on_encoded =
     Utils.singleton_if print ()
       ~f:(fun () ->
@@ -608,14 +613,10 @@ let pipe_with ~decode ~print ~check =
     ~input_spec:Transform.Features.(empty |> update Ty Poly)
     ~map_spec:Transform.Features.(update Ty Mono)
     ~name
-    ~encode:(fun p ->
-      let p, state = monomorphize p in
-      p, state
-      (* TODO mangling of types, as an option *)
-    )
+    ~encode:(fun p -> monomorphize ~always_mangle p)
     ~decode
     ()
 
-let pipe ~print ~check =
+let pipe ~always_mangle ~print ~check =
   let decode state = Problem.Res.map_m ~f:(unmangle_model ~state) in
-  pipe_with ~print ~decode ~check
+  pipe_with ~always_mangle ~print ~decode ~check
