@@ -108,8 +108,6 @@ Executable nunchaku
   BuildDepends:     nunchaku, nunchaku.transformations, nunchaku.parsers,
                     nunchaku.backends
 
-PreBuildCommand:    make qtest-gen
-
 Executable run_qtest
   Path:             qtest/
   Install:          false
