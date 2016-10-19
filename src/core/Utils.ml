@@ -107,9 +107,13 @@ let debugf_real lock section msg k =
   then Format.fprintf debug_fmt_ "@[<hov 3>@{<Black>%.3f[]@}@ " now
   else Format.fprintf debug_fmt_ "@[<hov 3>@{<Black>%.3f[%s]@}@ "
     now section.Section.full_name;
-  k (Format.kfprintf
-      (fun fmt -> Format.fprintf fmt "@]@."; if lock then Mutex.unlock debug_lock_)
-      debug_fmt_ msg)
+  try
+    k (Format.kfprintf
+        (fun fmt -> Format.fprintf fmt "@]@."; if lock then Mutex.unlock debug_lock_)
+        debug_fmt_ msg)
+  with e ->
+    if lock then Mutex.unlock debug_lock_;
+    raise e
 
 (* inlinable function *)
 let debugf ?(lock=false) ?(section=Section.root) l msg k =
