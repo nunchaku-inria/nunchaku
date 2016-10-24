@@ -13,8 +13,6 @@ AlphaFeatures: compiled_setup_ml
 
 Synopsis:    A model finder for higher-order logic
 
-XOMakeExtraArgs: "-c 'OCAMLYACC = menhir --dump --explain'"
-
 Flag random
   Description:      enable the library for generating random data
   Default:          true
@@ -29,6 +27,8 @@ Library nunchaku
                     AnalyzeType, Prelude, TypeCheck, Lazy_list,
                     TermInner, TermTyped, TermPoly, TermMono, Pattern,
                     TypePoly, TypeMono
+  ByteOpt:          -thread
+  NativeOpt:        -thread
   Install:          true
   FindlibName:      nunchaku
   BuildDepends:     containers, containers.data, containers.sexp, sequence,
@@ -45,7 +45,7 @@ Library nunchaku_parsers
   FindlibName:      parsers
   FindlibParent:    nunchaku
   BuildTools:       menhir
-  BuildDepends:     nunchaku, tip_parser
+  BuildDepends:     nunchaku, tip_parser, containers, sequence
 
 Library nunchaku_backends
   Path:             src/backends
@@ -54,7 +54,7 @@ Library nunchaku_backends
   Install:          true
   FindlibName:      backends
   FindlibParent:    nunchaku
-  BuildDepends:     nunchaku, nunchaku.parsers, containers.sexp
+  BuildDepends:     nunchaku, nunchaku.parsers, containers, sequence, containers.sexp
 
 Library nunchaku_transformations
   Path:             src/transformations
@@ -83,7 +83,7 @@ Library nunchaku_transformations
   Install:          true
   FindlibName:      transformations
   FindlibParent:    nunchaku
-  BuildDepends:     containers, nunchaku
+  BuildDepends:     containers, sequence, nunchaku
 
 Library nunchaku_random
   Path:             src/random
@@ -93,13 +93,15 @@ Library nunchaku_random
   Build$:           flag(random)
   FindlibParent:    nunchaku
   FindlibName:      random
-  BuildDepends:     nunchaku, qcheck
+  BuildDepends:     nunchaku, containers, sequence, qcheck
 
 Executable nunchaku
   Path:             src/main/
   Install:          true
   CompiledObject:   native
-  MainIs:           nunchaku.ml
+  MainIs:           nunchaku_main.ml
+  ByteOpt:          -thread
+  NativeOpt:        -thread
   BuildDepends:     nunchaku, nunchaku.transformations, nunchaku.parsers,
                     nunchaku.backends
 

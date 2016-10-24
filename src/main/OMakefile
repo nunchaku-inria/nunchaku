@@ -16,6 +16,11 @@ include _oasis_install.om
 DefineBuildRules()
 DefineInstallRules()
 
+OCAMLDEPS_MODULES_ENABLED = true
+
+GitVersion.ml:
+        echo "let id = \"(commit `git rev-parse HEAD`\"" > $@
+
 build-here: $(BUILD_TARGETS)
 doc-here: $(BUILD_DOC_TARGETS)
 install-here: $(INSTALL_TARGETS)
