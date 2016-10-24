@@ -423,7 +423,6 @@ let make_model_pipeline () =
     Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
     Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
-    Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
     Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
     Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
     close_task (
