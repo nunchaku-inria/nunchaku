@@ -1,0 +1,77 @@
+x 2015-10-02 2015-09-30 scoping and type inference from AST
+x 2015-10-05 2015-09-30 basic printing to CVC4
+x 2015-10-05 2015-10-02 distinct cases Var/Meta (one unifies, the other doesn't) due:2015-10-05
+x 2015-10-06 2015-10-05 conversion term_typed -> term_ho
+x 2015-10-07 2015-10-05 add a notion of goal?
+x 2015-10-07 2015-09-30 basic parsing of CVC4
+x 2015-10-07 2015-10-06 conversion ho -> fo
+x 2015-10-12 2015-10-08 parser/problem: axiomes [def,spec], avec plusieurs cas (équations rec); merger def/def_prop, decl/ty_decl
+x 2015-10-12 2015-10-12 fix conflicts in parser
+x 2015-10-12 2015-10-05 basic monomorphization term_ho -> term_fo
+x 2015-10-12 2015-09-30 pipeline parsing -> scoping/type infer -> cvc4
+x 2015-10-12 2015-10-07 interdire re-definition de symboles
+x 2015-10-14 2015-10-12 refactor AST (make Eq,Ite builtins; factor binders together)
+x 2015-10-14 2015-10-14 fix/check typing in syntax.nun
+x 2015-10-15 2015-10-14 extend monomorphization to (co)data
+x 2015-10-16 2015-10-15 sanity checks on (co)inductive types at type inference
+x 2015-10-16 2015-10-14 send (co)data to CVC4
+x 2015-10-20 2015-10-19 search for included files in same dir as problem
+x 2015-10-20 2015-10-16 restrictions on typing: prenex polymorphism
+x 2015-10-20 2015-10-19 parse THF fragment
+x 2015-10-21 2015-10-07 parser TPTP
+x 2015-10-21 2015-10-20 add ite in THF
+x 2015-10-22 2015-10-20 use vector instead of list for statements?
+x 2015-10-23 2015-10-22 make `pipe` operators that take `decode` as arg
+x 2015-10-27 2015-10-15 un-nesting/mutualization of (co)data
+x 2016-01-19 2016-01-19 fix skolemization
+x 2016-01-19 2015-10-02 recursive definitions (with well-foundedness check)
+x 2016-01-19 2015-10-30 fix mangling
+x 2016-01-19 2016-01-19 split unrolling off polarize?
+x 2016-01-19 2016-01-19 fix polarization (use same var in whole block, with table)
+x 2015-11-09 2015-11-04 continue refactor
+x 2015-11-10 2015-11-04 continue elim of recursion (by removing nested eqns first)
+x 2015-11-10 2015-11-09 fix tests back
+x 2015-11-13 2015-11-09 improve printing (especially _in_app stuff)
+x 2015-11-13 2015-11-10 remove useless translation after type inference
+x 2015-11-19 2015-11-18 accept non-atomic terms in RHS of definitions (no ambiguity)
+x 2015-11-19 2015-11-18 allow declaration+definition in one statement
+x 2015-12-02 2015-12-01 fix bug in elim_multi_eqns due:2015-12-02
+x 2015-12-07 2015-12-03 try several CLI flags for CVC4 (see mail)
+x 2015-12-07 2015-12-07 include statement due:2015-12-08
+x 2015-12-08 2015-12-07 run several instances of CVC4 in parallel (portfolio)
+x 2015-12-08 2015-12-07 find a clean way to do scheduling
+x 2015-12-08 2015-11-13 parametrize builtins by their arguments?
+x 2015-12-09 2015-12-08 add builtins for polarized functions
+x 2015-12-09 2015-12-09 syntax for (co)ind predicates
+x 2015-12-10 2015-12-09 put polarization in ID, remove it from builtin
+x 2015-12-22 2015-12-10 after monomorphization, IDs do not need `@` anymore
+x 2016-01-05 2015-12-09 polarization of (co)ind predicates
+x 2016-01-06 2015-12-09 translation of (co)ind predicates to recursive functions
+x 2016-01-07 2015-11-16 inductive propositions due:2015-12-10
+x 2016-01-11 2015-12-22 print models like problems
+x 2016-01-11 2015-12-22 fix issues in model translation (see doc/)
+x 2016-01-12 2016-01-06 do not unroll/encode inductive preds with 0 args
+x 2016-01-12 2016-01-07 decoding of polarized symbols
+x 2016-01-14 2016-01-12 add type aliases (with conversion functions) @feature
+x 2016-01-18 2016-01-14 split skolemization into 1/ early skolemization of types  2/ late sk. of terms (maybe only HO vars)
+x 2016-01-20 2016-01-14 a constant rec is a spec
+x 2016-01-21 2016-01-19 allow ambiguous matching, resolved by order (ML-like)
+x 2016-01-26 2016-01-11 harmonize names in debug/print CLI options @cleanup
+x 2016-01-26 2016-01-11 use bisect for test coverage http://bisect.x9c.fr/distrib/bisect.html#htoc10 @test
+x 2016-01-28 2016-01-26 release
+x 2016-03-01 2015-10-23 printTPTP: need types (differentiate type args from term args; 1 domain decl per type)
+x 2016-03-08 2016-01-11 print models in TPTP properly @feature
+x 2016-03-24 2015-11-30 finish specialization (emit extensionality axioms) @feature
+x 2016-03-24 2016-03-22 make specialize handle ind. preds.
+x 2016-03-24 2016-03-07 optional type-checking fence after each step
+x 2016-05-17 2016-05-10 fix bug in ElimHOF (need to declare more, earlier for ty_exn to work) --> polarity2
+x 2016-06-08 2016-01-19 µ terms, parse them from CVC4 and deal with them internally
+x 2016-06-13 2016-06-06 system of dependencies for passes (checked at pipeline-build time); replace old GADT
+x 2016-06-27 2016-06-06 pass to eliminate predicate arguments (using pseudo-prop type + ite)
+x 2016-06-27 2016-06-06 system of dependencies for passes (checked at pipeline-build time); replace old GADT
+x 2016-06-27 2015-12-02 printer: have binding power argument to put ( ) properly @cleanup
+x 2016-06-27 2016-05-26 fix model parsing for paradox (see spec_inval_def2.nun)
+x 2016-06-27 2016-06-06 improve Elim_prop_args (type-driven recursive traversal)
+x 2016-06-27 2016-06-13 refine ElimRec to avoid boxing small products of finite types (useful for paradox)
+x 2016-06-27 2016-06-13 ElimData: use asserting for defining cons/nil (see mockup)
+x 2016-07-18 2015-11-16 narrowing @feature

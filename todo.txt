@@ -1,0 +1,15 @@
+(A) 2015-10-07 afficher modèle dans syntaxe TPTP correspondante
+2015-10-14 detect some WF defs in TPTP
+2015-10-15 create a logo; push it on github team
+2015-10-20 add let in THF
+(B) 2015-10-29 flag to print signature (post-ty inference)
+2015-11-10 run larger scale tests @test
+2015-11-10 think about clean distinction term/type @design
+(B) 2015-11-10 think about adding dependent type (+ encoding step before mono) @design @feature
+(B) 2015-11-17 simple S-expr format from/to TermTyped @feature
+(B) 2016-01-18 deal with empty sorts
+(B) 2016-01-21 compute type cardinalities to approximate exists/forall with top/bot in non polarized cases
+(B) 2016-06-01 decode models in ElimCopy (insert casts, change types)
+(B) 2016-06-01 repair, in ElimCopy, rec/pred statements (adjust num. of variables)
+2016-06-13 refactor Stmt to use `defined` more; also rename "tydef" into "data"
+(B) 2015-10-05 narrowing pipeline to SMBC
