@@ -16,3 +16,12 @@ doc/
 done.txt
 todo.txt
 *.omc
+*.cmo
+*.cmi
+*.cma
+*.cmx*
+*.cmt*
+*.o
+*.a
+*.opt
+*.annot
