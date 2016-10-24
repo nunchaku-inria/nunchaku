@@ -3,7 +3,7 @@
 
 (** {1 Generation of Random Terms} *)
 
-open Nunchaku_core
+open Nunchaku
 module TI = TermInner
 
 type rstate = Random.State.t

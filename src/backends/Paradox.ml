@@ -1,7 +1,7 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-open Nunchaku_core
+open Nunchaku
 
 module T = FO_tptp
 module Res = Problem.Res

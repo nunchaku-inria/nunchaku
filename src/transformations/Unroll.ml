@@ -3,7 +3,7 @@
 
 (** {1 Unrolling of (Co)inductive Predicates} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module TI = TermInner
 module Stmt = Statement

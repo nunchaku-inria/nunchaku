@@ -5,7 +5,7 @@
 *)
 
 %{
-  open Nunchaku_core
+  open Nunchaku
 %}
 
 %token<Ast_kodkod.section> SECTION

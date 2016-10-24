@@ -3,7 +3,7 @@
 
 (** {1 Skolemization} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module TI = TermInner
 module Pol = Polarity

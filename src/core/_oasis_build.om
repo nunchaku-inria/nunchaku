@@ -85,9 +85,11 @@ section
             export cflags
         if true
             ocamlcflags[] =
+                $"-thread"
             export ocamlcflags
         if true
             ocamloptflags[] =
+                $"-thread"
             export ocamloptflags
         ocamloptflags_late[] =
             -for-pack

@@ -3,7 +3,7 @@
 
 (** {1 Encoding of Datatypes} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module TI = TermInner
 module Subst = Var.Subst

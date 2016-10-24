@@ -3,7 +3,7 @@
 
 (** {1 Encoding of Simple Types} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module TI = TermInner
 module TyI = TypeMono

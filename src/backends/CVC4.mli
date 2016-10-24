@@ -3,7 +3,7 @@
 
 (** {1 Interface to CVC4} *)
 
-open Nunchaku_core
+open Nunchaku
 
 type model_term = FO.T.t
 type model_ty = FO.Ty.t

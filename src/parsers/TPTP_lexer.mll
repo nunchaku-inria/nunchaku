@@ -3,7 +3,7 @@
 (** {1 Lexer for TPTP} *)
 
 {
-  open Nunchaku_core
+  open Nunchaku
   open TPTP_parser
 }
 

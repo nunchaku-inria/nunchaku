@@ -6,7 +6,7 @@
 
 %{
 
-  open Nunchaku_core
+  open Nunchaku
 
   module L = Location
   module A = TPTP_model_ast

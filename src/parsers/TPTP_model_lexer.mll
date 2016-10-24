@@ -1,6 +1,6 @@
 
 {
-  open Nunchaku_core
+  open Nunchaku
   open TPTP_model_parser
 }
 

@@ -3,7 +3,7 @@
 
 (** {1 Lambda Lifting} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module TI = TermInner
 module Stmt = Statement

@@ -2,7 +2,7 @@
 
 (** {1 Interface to Kodkod} *)
 
-open Nunchaku_core
+open Nunchaku
 
 type problem = FO_rel.problem
 type res = (FO_rel.expr, FO_rel.sub_universe) Problem.Res.t

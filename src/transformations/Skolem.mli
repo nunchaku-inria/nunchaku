@@ -3,7 +3,7 @@
 
 (** {1 Skolemization} *)
 
-open Nunchaku_core
+open Nunchaku
 
 type term = TermInner.Default.t
 

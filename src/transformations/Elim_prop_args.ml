@@ -3,7 +3,7 @@
 
 (** {1 Eliminate function arguments of type "prop"} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module TI = TermInner
 module T = TI.Default

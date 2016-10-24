@@ -75,6 +75,8 @@ section
             $"../core"
             $(OASIS_getvar EXTRA_OCAMLINCLUDES)
         ACCU_OCAMLPACKS[] +=
+            $"containers"
+            $"sequence"
             $"qcheck"
             $(OASIS_getvar EXTRA_OCAMLPACKS)
         ACCU_CFLAGS[] +=

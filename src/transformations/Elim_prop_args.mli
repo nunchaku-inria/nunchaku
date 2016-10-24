@@ -6,7 +6,7 @@
     Emits some "if/then/else" instead, using a pseudo-prop type
     that has exactly two arguments. *)
 
-open Nunchaku_core
+open Nunchaku
 
 type term = TermInner.Default.t
 type ty = term

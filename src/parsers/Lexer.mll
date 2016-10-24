@@ -5,7 +5,7 @@
 
 {
 
-  open Nunchaku_core
+  open Nunchaku
   open Parser
 
 }

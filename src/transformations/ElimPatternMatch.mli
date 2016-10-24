@@ -14,7 +14,7 @@
   which is a decision tree understandable by CVC4
 *)
 
-open Nunchaku_core
+open Nunchaku
 
 type term = TermInner.Default.t
 

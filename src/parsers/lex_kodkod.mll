@@ -1,5 +1,5 @@
 {
-open Nunchaku_core
+open Nunchaku
 open Parse_kodkod
 
 module A = Ast_kodkod

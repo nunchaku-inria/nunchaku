@@ -3,7 +3,7 @@
 
 (** {1 Eliminate pattern-matching in Equations and Terms} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module Stmt = Statement
 module TI = TermMono

@@ -3,7 +3,7 @@
 
 (** {1 FOL to Relational FO Logic} *)
 
-open Nunchaku_core
+open Nunchaku
 
 type problem1 = (FO.T.t, FO.Ty.t) FO.Problem.t
 type model1 = (FO.T.t, FO.Ty.t) Model.t

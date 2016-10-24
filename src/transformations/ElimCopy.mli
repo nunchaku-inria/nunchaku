@@ -3,7 +3,7 @@
 
 (** {1 Eliminate Copy Types} *)
 
-open Nunchaku_core
+open Nunchaku
 
 val name : string
 

@@ -3,7 +3,7 @@
 
 (** {1 Generation of Random Terms} *)
 
-open Nunchaku_core
+open Nunchaku
 
 type rstate = Random.State.t
 type 'a rgen = rstate -> 'a

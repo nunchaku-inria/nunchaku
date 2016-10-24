@@ -3,7 +3,7 @@
 
 (** {1 Eliminate Infinite Types} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module TI = TermInner
 module Subst = Var.Subst

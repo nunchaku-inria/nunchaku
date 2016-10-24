@@ -3,7 +3,7 @@
 
 (** {1 Scoping and Type Inference} *)
 
-open Nunchaku_core
+open Nunchaku
 
 type 'a or_error = ('a, string) CCResult.t
 type id = ID.t

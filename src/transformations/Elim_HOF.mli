@@ -5,7 +5,7 @@
 
     Encode partial applications and higher-order applications *)
 
-open Nunchaku_core
+open Nunchaku
 
 val name : string
 

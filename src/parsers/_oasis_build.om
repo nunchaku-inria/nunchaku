@@ -89,6 +89,8 @@ section
             $(OASIS_getvar EXTRA_OCAMLINCLUDES)
         ACCU_OCAMLPACKS[] +=
             $"tip_parser"
+            $"containers"
+            $"sequence"
             $(OASIS_getvar EXTRA_OCAMLPACKS)
         ACCU_CFLAGS[] +=
             $(cflags)

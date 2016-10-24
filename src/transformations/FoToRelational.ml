@@ -3,7 +3,7 @@
 
 (** {1 FOL to Relational FO Logic} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module TyTbl = CCHashtbl.Make(FO.Ty)
 

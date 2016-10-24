@@ -5,7 +5,7 @@
 
    See http://www.cs.miami.edu/~tptp/TPTP/QuickGuide/FiniteInterpretations.html *)
 
-open Nunchaku_core
+open Nunchaku
 
 module TI = TermInner
 module T = TermInner.Default

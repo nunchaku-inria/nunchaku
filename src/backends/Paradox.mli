@@ -3,7 +3,7 @@
 
 (** {1 Frontend to Paradox} *)
 
-open Nunchaku_core
+open Nunchaku
 
 type term = FO_tptp.term
 type ty = FO_tptp.ty

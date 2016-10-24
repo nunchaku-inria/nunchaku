@@ -3,7 +3,7 @@
 
 (** {1 Interface to CVC4} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module E = CCResult
 module Var = Var

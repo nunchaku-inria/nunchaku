@@ -7,7 +7,7 @@
      a [data a =  c1 x1 | ... | cn xn] becomes a type [a]
      plus axioms defining each constructor, selector and tester. *)
 
-open Nunchaku_core
+open Nunchaku
 
 type term = TermInner.Default.t
 

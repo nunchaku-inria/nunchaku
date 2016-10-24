@@ -6,7 +6,7 @@
     - rename values to something more "canonical"
     - eliminate recursive definitions in decision trees *)
 
-open Nunchaku_core
+open Nunchaku
 
 type term = TermInner.Default.t
 type model = (term, term) Model.t

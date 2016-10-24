@@ -16,37 +16,37 @@ section
     if $(not $(SKIP_BUILD_nunchaku))
         NAME = $"nunchaku"
         BYTE_ENABLED = $"false"
-        MAIN_MODULE = $"nunchaku"
+        MAIN_MODULE = $"nunchaku_main"
         OCAMLPACKS[] =
             $"threads"
             $"unix"
             $"num"
-            $"sequence"
             $"containers.data"
             $"containers.sexp"
+            $"sequence"
             $"containers"
             $"threads"
             $"unix"
             $"num"
-            $"sequence"
             $"containers.data"
             $"containers.sexp"
+            $"sequence"
             $"containers"
             $"threads"
             $"unix"
             $"num"
-            $"sequence"
             $"containers.data"
             $"tip_parser"
             $"containers.sexp"
+            $"sequence"
             $"containers"
             $"threads"
             $"unix"
             $"num"
-            $"sequence"
             $"containers.data"
             $"tip_parser"
             $"containers.sexp"
+            $"sequence"
             $"containers"
             $(OASIS_getvar EXTRA_OCAMLPACKS)
         OCAML_LIBS[] =
@@ -83,9 +83,11 @@ section
             export cflags
         if true
             ocamlcflags[] =
+                $"-thread"
             export ocamlcflags
         if true
             ocamloptflags[] =
+                $"-thread"
             export ocamloptflags
         OCAMLCFLAGS += $(ocamlcflags)
         OCAMLOPTFLAGS += $(ocamloptflags)

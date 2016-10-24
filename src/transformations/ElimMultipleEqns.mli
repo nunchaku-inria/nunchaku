@@ -3,7 +3,7 @@
 
 (** {1 Transform a problem with multiple equations per defined Symbol into one with single equations} *)
 
-open Nunchaku_core
+open Nunchaku
 
 type term = TermInner.Default.t
 

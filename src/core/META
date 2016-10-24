@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: cb096c7ddabd0f25406eca105522634d)
+# DO NOT EDIT (digest: 370ac97caab1267706f427b3afe5400c)
 version = "0.1"
 description = "A model finder for higher-order logic"
 requires =
@@ -12,7 +12,7 @@ exists_if = "nunchaku.cma"
 package "transformations" (
  version = "0.1"
  description = "A model finder for higher-order logic"
- requires = "containers nunchaku"
+ requires = "containers sequence nunchaku"
  archive(byte) = "nunchaku_transformations.cma"
  archive(byte, plugin) = "nunchaku_transformations.cma"
  archive(native) = "nunchaku_transformations.cmxa"
@@ -23,7 +23,7 @@ package "transformations" (
 package "random" (
  version = "0.1"
  description = "A model finder for higher-order logic"
- requires = "nunchaku qcheck"
+ requires = "nunchaku containers sequence qcheck"
  archive(byte) = "nunchaku_random.cma"
  archive(byte, plugin) = "nunchaku_random.cma"
  archive(native) = "nunchaku_random.cmxa"
@@ -34,7 +34,7 @@ package "random" (
 package "parsers" (
  version = "0.1"
  description = "A model finder for higher-order logic"
- requires = "nunchaku tip_parser"
+ requires = "nunchaku tip_parser containers sequence"
  archive(byte) = "nunchaku_parsers.cma"
  archive(byte, plugin) = "nunchaku_parsers.cma"
  archive(native) = "nunchaku_parsers.cmxa"
@@ -45,7 +45,7 @@ package "parsers" (
 package "backends" (
  version = "0.1"
  description = "A model finder for higher-order logic"
- requires = "nunchaku nunchaku.parsers containers.sexp"
+ requires = "nunchaku nunchaku.parsers containers sequence containers.sexp"
  archive(byte) = "nunchaku_backends.cma"
  archive(byte, plugin) = "nunchaku_backends.cma"
  archive(native) = "nunchaku_backends.cmxa"

@@ -3,7 +3,7 @@
 
 (** {1 Rename values in a model} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module TI = TermInner
 module M = Model

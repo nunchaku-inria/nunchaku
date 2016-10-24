@@ -2,7 +2,7 @@
 
 (* {1 TPTP Printer} *)
 
-open Nunchaku_core
+open Nunchaku
 
 type 'a printer = Format.formatter -> 'a -> unit
 

@@ -3,7 +3,7 @@
 
 (** {1 Monomorphization} *)
 
-open Nunchaku_core
+open Nunchaku
 
 (* summary:
     - detect polymorphic functions

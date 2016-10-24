@@ -7,7 +7,7 @@
   https://github.com/nunchaku-inria/nunchaku/issues/4
 *)
 
-open Nunchaku_core
+open Nunchaku
 
 val name : string
 

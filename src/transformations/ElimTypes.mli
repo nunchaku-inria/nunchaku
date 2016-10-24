@@ -3,7 +3,7 @@
 
 (** {1 Encoding of Simple Types} *)
 
-open Nunchaku_core
+open Nunchaku
 
 type term = TermInner.Default.t
 type state

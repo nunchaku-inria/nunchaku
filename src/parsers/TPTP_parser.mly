@@ -9,7 +9,7 @@
 
 %{
 
-  open Nunchaku_core
+  open Nunchaku
 
   module L = Location
   module A = UntypedAST
@@ -92,14 +92,14 @@
 %token <string> RATIONAL
 %token <string> INTEGER
 
-%start <Nunchaku_core.UntypedAST.statement> parse_statement
-%start <Nunchaku_core.UntypedAST.statement list> parse_statement_list
-%start <Nunchaku_core.UntypedAST.term> parse_term
-%start <Nunchaku_core.UntypedAST.term> parse_fo_form
-%start <Nunchaku_core.UntypedAST.term> parse_ho_form
-%start <Nunchaku_core.UntypedAST.ty> parse_ty
+%start <Nunchaku.UntypedAST.statement> parse_statement
+%start <Nunchaku.UntypedAST.statement list> parse_statement_list
+%start <Nunchaku.UntypedAST.term> parse_term
+%start <Nunchaku.UntypedAST.term> parse_fo_form
+%start <Nunchaku.UntypedAST.term> parse_ho_form
+%start <Nunchaku.UntypedAST.ty> parse_ty
 
-%start <Nunchaku_core.UntypedAST.term list list> parse_answer_tuples
+%start <Nunchaku.UntypedAST.term list list> parse_answer_tuples
 
 
 %%

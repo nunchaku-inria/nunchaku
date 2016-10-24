@@ -3,7 +3,7 @@
 
 (** {1 Wrapper for TIP} *)
 
-open Nunchaku_core
+open Nunchaku
 
 type 'a or_error = ('a, string) CCResult.t
 

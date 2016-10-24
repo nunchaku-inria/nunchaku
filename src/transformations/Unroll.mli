@@ -3,7 +3,7 @@
 
 (** {1 Unrolling of (Co)inductive Predicates} *)
 
-open Nunchaku_core
+open Nunchaku
 
 type term = TermInner.Default.t
 type decode_state

@@ -3,7 +3,7 @@
 
 (** {1 Simple Model AST} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module T = FO_tptp
 

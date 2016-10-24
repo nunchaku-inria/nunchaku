@@ -1,7 +1,7 @@
 
 (** {1 Main program} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module E = CCResult
 module A = UntypedAST

@@ -3,7 +3,7 @@
 
 (** {1 Wrapper for TIP} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module A = Tip_ast
 module UA = UntypedAST

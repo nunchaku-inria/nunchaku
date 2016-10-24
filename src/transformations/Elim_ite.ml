@@ -3,7 +3,7 @@
 
 (** {1 Eliminate "if/then/else"} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module T = FO.T
 

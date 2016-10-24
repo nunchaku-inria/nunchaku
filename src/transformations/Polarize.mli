@@ -7,7 +7,7 @@
   or (co)inductive specifications) depending on the call-site polarity.
 *)
 
-open Nunchaku_core
+open Nunchaku
 
 type term = TermInner.Default.t
 type decode_state

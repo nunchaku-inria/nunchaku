@@ -3,7 +3,7 @@
 
 (** {1 Specialization} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module TI = TermInner
 module Stmt = Statement

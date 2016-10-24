@@ -12,7 +12,7 @@
      ]
 *)
 
-open Nunchaku_core
+open Nunchaku
 
 type term = FO.T.t
 type ty = FO.Ty.t

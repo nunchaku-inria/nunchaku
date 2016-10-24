@@ -2,7 +2,7 @@
 
 (** {1 Interface to Kodkod} *)
 
-open Nunchaku_core
+open Nunchaku
 open Nunchaku_parsers
 
 module Res = Problem.Res

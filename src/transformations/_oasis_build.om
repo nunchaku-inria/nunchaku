@@ -96,6 +96,7 @@ section
             $(OASIS_getvar EXTRA_OCAMLINCLUDES)
         ACCU_OCAMLPACKS[] +=
             $"containers"
+            $"sequence"
             $(OASIS_getvar EXTRA_OCAMLPACKS)
         ACCU_CFLAGS[] +=
             $(cflags)

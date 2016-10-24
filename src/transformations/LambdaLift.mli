@@ -7,7 +7,7 @@
     equalities such as [(fun x. t) = (fun y. u)] are replaced by
     [forall x. t = u[x/y]]. *)
 
-open Nunchaku_core
+open Nunchaku
 
 type term = TermInner.Default.t
 

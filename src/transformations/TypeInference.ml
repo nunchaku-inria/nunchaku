@@ -3,7 +3,7 @@
 
 (** {1 Scoping and Type Inference} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module A = UntypedAST
 module E = CCResult

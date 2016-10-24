@@ -7,7 +7,7 @@
     It encodes recursive functions as axioms, with a quantification over
     an uninterpreted abstraction type. *)
 
-open Nunchaku_core
+open Nunchaku
 
 val name : string
 

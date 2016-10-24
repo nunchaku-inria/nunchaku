@@ -3,7 +3,7 @@
 
 (** {1 TPTP Preprocessor} *)
 
-open Nunchaku_core
+open Nunchaku
 
 module A = UntypedAST
 module Loc = Location
@@ -277,7 +277,7 @@ let preprocess seq =
   with e -> Utils.err_of_exn e
 
 (*$inject
-  open Nunchaku_core
+  open Nunchaku
   module A = UntypedAST
   let parses_ok p t = match p t with CCResult.Ok _ -> true | _ -> false
   let ho_parses_ok = parses_ok TPTP_lexer.ho_form_of_string
