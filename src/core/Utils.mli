@@ -132,6 +132,9 @@ val options_warnings_ : (Arg.key * Arg.spec * Arg.doc) list
 
 exception NotImplemented of string
 
+val pp_seq : ?sep:string -> 'a CCFormat.printer -> 'a Sequence.t CCFormat.printer
+val pp_list : ?sep:string -> 'a CCFormat.printer -> 'a list CCFormat.printer
+
 val pp_error_prefix : unit CCFormat.printer
 
 val err_sprintf : ('a, Format.formatter, unit, string) format4 -> 'a

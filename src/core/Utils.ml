@@ -260,6 +260,9 @@ let options_warnings_ =
 
 exception NotImplemented of string
 
+let pp_seq ?(sep=" ") p = CCFormat.seq ~start:"" ~stop:"" ~sep p
+let pp_list ?(sep=" ") p = CCFormat.list ~start:"" ~stop:"" ~sep p
+
 (* print error prefix *)
 let pp_error_prefix out () = Format.fprintf out "@{<Red>Error@}: "
 
