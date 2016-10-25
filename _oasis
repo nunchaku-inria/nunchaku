@@ -102,8 +102,7 @@ Executable nunchaku
   MainIs:           nunchaku_main.ml
   ByteOpt:          -thread
   NativeOpt:        -thread
-  BuildDepends:     nunchaku, nunchaku.transformations, nunchaku.parsers,
-                    nunchaku.backends
+  BuildDepends:     nunchaku.backends, nunchaku, nunchaku.transformations, nunchaku.parsers
 
 PreBuildCommand:    make qtest-gen
 

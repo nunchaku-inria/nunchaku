@@ -19,7 +19,12 @@ DefineInstallRules()
 OCAMLDEPS_MODULES_ENABLED = true
 
 GitVersion.ml:
-        echo "let id = \"(commit `git rev-parse HEAD`\"" > $@
+    if which git:
+        echo "let id = \"commit \\" > $@
+        git rev-parse HEAD >> $@
+        echo "\"" >> $@
+    else:
+        echo "let id = \"\"" > $@
 
 build-here: $(BUILD_TARGETS)
 doc-here: $(BUILD_DOC_TARGETS)
