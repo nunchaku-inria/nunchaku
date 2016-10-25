@@ -13,7 +13,8 @@ AlphaFeatures: compiled_setup_ml, ocamlbuild_more_args
 
 Synopsis:    A model finder for higher-order logic
 
-XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain' -j 0"
+# j1 for cygwin
+XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain' -j 1"
 
 Flag random
   Description:      enable the library for generating random data
