@@ -9,12 +9,12 @@ module TI = TermInner
 module T = TermInner.Default
 module P = T.P
 module U = T.U
-module A = Tip_ast
+module PA = Nunchaku_parsers
+module A = PA.Tip_ast
 module Res = Problem.Res
 module E = CCResult
 module S = Scheduling
 module St = Statement
-module Pa = Nunchaku_parsers
 
 type term = TermInner.Default.t
 type ty = term
@@ -327,7 +327,7 @@ let parse_term (s:Sexp_lib.t): term =
   try
     (* FIXME: inefficient, of course. We should parse directly by
        adding a "model" entry to TIP *)
-    Tip_parser.parse_term Tip_lexer.token
+    PA.Tip_parser.parse_term PA.Tip_lexer.token
       (Sexp_lib.to_string s |> Lexing.from_string)
     |> term_of_tip empty_env
   with e ->
@@ -336,7 +336,7 @@ let parse_term (s:Sexp_lib.t): term =
 
 let parse_ty (s:Sexp_lib.t): ty =
   try
-    Tip_parser.parse_ty Tip_lexer.token
+    PA.Tip_parser.parse_ty PA.Tip_lexer.token
       (Sexp_lib.to_string s |> Lexing.from_string)
     |> ty_of_tip
   with e ->

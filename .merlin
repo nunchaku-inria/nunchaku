@@ -15,6 +15,5 @@ PKG sequence
 PKG unix
 PKG num
 PKG qcheck
-PKG tip_parser
 B +threads
 FLG -w +a-4-44-48-29-58@8 -short-paths
