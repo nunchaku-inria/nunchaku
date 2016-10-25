@@ -4,13 +4,13 @@
 (** {1 Backend for SMBC} *)
 
 open Nunchaku_core
+open Nunchaku_parsers
 
 module TI = TermInner
 module T = TermInner.Default
 module P = T.P
 module U = T.U
-module PA = Nunchaku_parsers
-module A = PA.Tip_ast
+module A = Tip_ast
 module Res = Problem.Res
 module E = CCResult
 module S = Scheduling
@@ -323,26 +323,6 @@ and typed_var_of_tip (env:env) (s,ty) =
   let v = Var.of_id id ~ty in
   StrMap.add s (`Var v) env, v
 
-let parse_term (s:Sexp_lib.t): term =
-  try
-    (* FIXME: inefficient, of course. We should parse directly by
-       adding a "model" entry to TIP *)
-    PA.Tip_parser.parse_term PA.Tip_lexer.token
-      (Sexp_lib.to_string s |> Lexing.from_string)
-    |> term_of_tip empty_env
-  with e ->
-    error_parse_modelf "expected term,@ got `@[%a@]`:@ %s"
-      Sexp_lib.pp s (Printexc.to_string e)
-
-let parse_ty (s:Sexp_lib.t): ty =
-  try
-    PA.Tip_parser.parse_ty PA.Tip_lexer.token
-      (Sexp_lib.to_string s |> Lexing.from_string)
-    |> ty_of_tip
-  with e ->
-    error_parse_modelf "expected type,@ got `@[%a@]`:@ %s"
-      Sexp_lib.pp s (Printexc.to_string e)
-
 (* convert a term into a decision tree *)
 let dt_of_term (t:term): (term,ty) Model.DT.t =
   (* split [t] into a list of equations [var = t'] where [var in vars] *)
@@ -400,51 +380,38 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
     (fun k->k P.print body (Model.DT.print P.print') dt);
   dt
 
-let parse_model (s:Sexp_lib.t): (_,_) Model.t =
-  let parse_binding m = function
-    | `List [`Atom "val"; t; u] ->
-      let t = parse_term t in
-      let dt = parse_term u |> dt_of_term in
-      let k = Model.Symbol_fun in
-      (* FIXME: find actual kind *)
-      Model.add_value m (t,dt,k)
-    | `List [`Atom "type"; ty; `List dom] ->
-      let parse_id s = match s with
-        | `Atom name ->
-          begin match id_of_tip empty_env name with
-            | `Const id -> id
-            | `Undef _ | `Var _ | `Subst _ ->
-              error_parse_modelf
-                "expected domain constant,@ got `@[%a@]`" Sexp_lib.pp s
-          end
-        | _ ->
-          error_parse_modelf "expected domain constant,@ got `@[%a@]`" Sexp_lib.pp s
-      in
-      let dom = List.map parse_id dom in
-      let ty = parse_ty ty in
-      Model.add_finite_type m ty dom
-    | s ->
-      error_parse_modelf "expected model binding,@ got `%a`" Sexp_lib.pp s
-  in
-  begin match s with
-    | `List l ->
-      List.fold_left parse_binding Model.empty l
-    | _ -> error_parse_model "expected list of model bindings,@ got `%a`"
-  end
+module A_res = A.Smbc_res
 
-let parse_res_sexp s : (_,_) Res.t * S.shortcut = match s with
-  | `List [`Atom "result"; `Atom "UNSAT"] ->
-    Res.Unsat, S.Shortcut
-  | `List [`Atom "result"; `Atom "UNKNOWN"] ->
-    Res.Unknown, S.No_shortcut
-  | `List [`Atom "result"; `Atom "TIMEOUT"] ->
-    Res.Timeout, S.No_shortcut
-  | `List [`Atom "result"; `Atom "SAT"; model]
-  | `List [`Atom "result"; `Atom "SAT"; `Atom ":model"; model] ->
-    let m = parse_model model in
+let convert_model (m:A_res.model): (_,_) Model.t =
+  List.fold_left
+    (fun m e -> match e with
+       | A_res.Ty (ty, dom) ->
+         let ty = ty_of_tip ty in
+         let dom =
+           List.map
+             (fun s -> match id_of_tip empty_env s with
+                | `Subst _
+                | `Var _ -> error_parse_modelf "invalid domain element %s" s
+                | `Const id
+                | `Undef id -> id)
+             dom
+         in
+         Model.add_finite_type m ty dom
+       | A_res.Val (a,b) ->
+         let a = term_of_tip empty_env a in
+         let b = term_of_tip empty_env b |> dt_of_term in
+         (* TODO: find actual kind *)
+         let k = Model.Symbol_fun in
+         Model.add_value m (a,b,k))
+    Model.empty m
+
+let convert_res (res:A_res.t): (_,_) Res.t * S.shortcut = match res with
+  | A_res.Timeout -> Res.Timeout, S.No_shortcut
+  | A_res.Unknown _ -> Res.Unknown, S.No_shortcut
+  | A_res.Unsat -> Res.Unsat, S.Shortcut
+  | A_res.Sat m ->
+    let m = convert_model m in
     Res.Sat m, S.Shortcut
-  | _ ->
-    error_parse_modelf "expected `(result ...)`,@ got `@[%a@]`" Sexp_lib.pp s
 
 (* parse [stdout, errcode] into a proper result *)
 let parse_res (out:string) (errcode:int): (term,ty) Res.t * S.shortcut =
@@ -454,12 +421,10 @@ let parse_res (out:string) (errcode:int): (term,ty) Res.t * S.shortcut =
     Res.Error (Error msg), S.Shortcut
   else (
     try
-      let s = match Sexp_lib.parse_string out with
-        | `Ok s -> s
-        | `Error e ->
-          error_parse_modelf "expected a S-expression, got `%s`:@ %s" out e
-      in
-      parse_res_sexp s
+      let lexbuf = Lexing.from_string out in
+      Location.set_file lexbuf "<output of smbc>";
+      let res = Tip_parser.parse_smbc_res Tip_lexer.token lexbuf in
+      convert_res res
     with e ->
       Res.Error e, S.Shortcut
   )
