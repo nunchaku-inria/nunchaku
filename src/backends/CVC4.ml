@@ -21,11 +21,7 @@ let fpf = Format.fprintf
 type model_term = FO.T.t
 type model_ty = FO.Ty.t
 
-module DSexp = CCSexpM.MakeDecode(struct
-  type 'a t = 'a
-  let return x = x
-  let (>>=) x f = f x
-end)
+module DSexp = Sexp_lib.Decoder
 
 exception Error of string
 exception CVC4_error of string
@@ -161,8 +157,6 @@ let close s =
       flush s.oc;
       close_in_noerr s.ic;
       close_out_noerr s.oc;
-      (* release buffer *)
-      s.sexp <- DSexp.make ~bufsize:5 (fun _ _ _ -> assert false);
     with _ -> ()
   )
 
@@ -175,7 +169,7 @@ let create_ ~print_model ~decode (ic,oc) =
     print_model;
     decode;
     closed=false;
-    sexp=DSexp.make ~bufsize:4_000 (input ic);
+    sexp=DSexp.of_lexbuf (Lexing.from_channel ic);
     res=None;
   } in
   Gc.finalise close s; (* close on finalize *)
@@ -576,7 +570,7 @@ let get_kind ~decode id =
     errorf_ "could not find kind of %a" ID.print id
 
 (* state: decode_state *)
-let parse_model_ ~decode : CCSexp.t -> (_,_) Model.t = function
+let parse_model_ ~decode : Sexp_lib.t -> (_,_) Model.t = function
   | `Atom _ -> error_ "expected model, got atom"
   | `List assoc ->
     (* parse model *)
@@ -643,7 +637,7 @@ let get_model_ ~print_model ~decode s : (_,_) Model.t =
   | `End -> error_ "unexpected end of input from CVC4: expected model"
   | `Ok sexp ->
       if print_model
-        then Format.eprintf "@[raw model:@ @[<hv>%a@]@]@." CCSexpM.print sexp;
+        then Format.eprintf "@[raw model:@ @[<hv>%a@]@]@." Sexp_lib.pp sexp;
       let m = parse_model_ ~decode sexp in
       (* check all symbols are defined *)
       let ok =
@@ -676,7 +670,7 @@ let read_res_ ~print_model ~decode s =
       Res.Error (CVC4_error s)
   | `Ok sexp ->
       let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ `%a`@]"
-        CCSexpM.print sexp
+        Sexp_lib.pp sexp
       in
       Res.Error (Error msg)
   | `Error e -> Res.Error (Error e)

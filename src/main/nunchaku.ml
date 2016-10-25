@@ -504,7 +504,7 @@ let main_model ~output statements =
   match res, output with
   | _, O_sexp ->
       let s = Problem.Res.to_sexp P.to_sexp P.to_sexp res in
-      Format.printf "@[<hv2>%a@]@." CCSexpM.print s
+      Format.printf "@[<hv2>%a@]@." Sexp_lib.pp s
   | Res.Sat m, O_nunchaku when m.Model.potentially_spurious ->
       Format.printf "@[<v>@[<v2>SAT: (potentially spurious) {@,@[<v>%a@]@]@,}@]@."
         (Model.print P.print' P.print) m;

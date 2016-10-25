@@ -9,7 +9,7 @@ module Metadata = ProblemMetadata
 type loc = Loc.t
 type id = ID.t
 type 'a printer = Format.formatter -> 'a -> unit
-type 'a to_sexp = 'a -> CCSexp.t
+type 'a to_sexp = 'a -> Sexp_lib.t
 type 'a or_error = ('a, string) CCResult.t
 type metadata = ProblemMetadata.t
 
@@ -181,8 +181,8 @@ module Res = struct
     | Sat m ->
         fpf out "@[<hv>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]" (Model.print pt pty) m
 
-  let str = CCSexp.atom
-  let lst = CCSexp.of_list
+  let str = Sexp_lib.atom
+  let lst = Sexp_lib.list
 
   let to_sexp ft fty : (_,_) t to_sexp = function
     | Unsat -> str "UNSAT"

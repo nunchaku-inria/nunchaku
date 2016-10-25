@@ -291,9 +291,9 @@ module Builtin = struct
   let to_seq b f = iter f b
 
   let to_sexp
-  : ('a -> CCSexp.t) -> 'a t -> CCSexp.t
+  : ('a -> Sexp_lib.t) -> 'a t -> Sexp_lib.t
   = fun cterm t ->
-    let str = CCSexp.atom and lst = CCSexp.of_list in
+    let str = Sexp_lib.atom and lst = Sexp_lib.list in
     match t with
       | `True -> str "true"
       | `False -> str "false"
@@ -387,7 +387,7 @@ module type PRINT = sig
   val print_in_binder : t printer
   val to_string : t -> string
 
-  val to_sexp : t -> CCSexp.t
+  val to_sexp : t -> Sexp_lib.t
 end
 
 module Print(T : REPR)
@@ -485,10 +485,10 @@ module Print(T : REPR)
 
   let to_string = CCFormat.to_string print
 
-  let str = CCSexp.atom
-  let lst = CCSexp.of_list
+  let str = Sexp_lib.atom
+  let lst = Sexp_lib.list
 
-  let rec to_sexp t : CCSexp.t = match T.repr t with
+  let rec to_sexp t : Sexp_lib.t = match T.repr t with
     | TyBuiltin b -> str (TyBuiltin.to_string b)
     | Const id -> str (ID.to_string id)
     | TyMeta _ -> assert false

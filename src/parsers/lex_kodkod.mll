@@ -10,7 +10,7 @@ let atom = 'A' ['0' - '9']+
 
 rule token = parse
 | [' ' '\t' '\r'] { token lexbuf }
-| '\n' { Lexing.new_line lexbuf; token lexbuf }
+| ('\n' | "\r\n") { Lexing.new_line lexbuf; token lexbuf }
 | "---OUTCOME---" { SECTION A.S_outcome }
 | "---INSTANCE---" { SECTION A.S_instance }
 | "---STATS---" { SECTION A.S_stats }

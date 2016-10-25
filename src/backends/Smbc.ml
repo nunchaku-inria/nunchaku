@@ -323,23 +323,25 @@ and typed_var_of_tip (env:env) (s,ty) =
   let v = Var.of_id id ~ty in
   StrMap.add s (`Var v) env, v
 
-let parse_term (s:CCSexp.t): term =
+let parse_term (s:Sexp_lib.t): term =
   try
+    (* FIXME: inefficient, of course. We should parse directly by
+       adding a "model" entry to TIP *)
     Tip_parser.parse_term Tip_lexer.token
-      (CCSexpM.to_string s |> Lexing.from_string)
+      (Sexp_lib.to_string s |> Lexing.from_string)
     |> term_of_tip empty_env
   with e ->
     error_parse_modelf "expected term,@ got `@[%a@]`:@ %s"
-      CCSexpM.print s (Printexc.to_string e)
+      Sexp_lib.pp s (Printexc.to_string e)
 
-let parse_ty (s:CCSexp.t): ty =
+let parse_ty (s:Sexp_lib.t): ty =
   try
     Tip_parser.parse_ty Tip_lexer.token
-      (CCSexpM.to_string s |> Lexing.from_string)
+      (Sexp_lib.to_string s |> Lexing.from_string)
     |> ty_of_tip
   with e ->
     error_parse_modelf "expected type,@ got `@[%a@]`:@ %s"
-      CCSexpM.print s (Printexc.to_string e)
+      Sexp_lib.pp s (Printexc.to_string e)
 
 (* convert a term into a decision tree *)
 let dt_of_term (t:term): (term,ty) Model.DT.t =
@@ -398,7 +400,7 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
     (fun k->k P.print body (Model.DT.print P.print') dt);
   dt
 
-let parse_model (s:CCSexp.t): (_,_) Model.t =
+let parse_model (s:Sexp_lib.t): (_,_) Model.t =
   let parse_binding m = function
     | `List [`Atom "val"; t; u] ->
       let t = parse_term t in
@@ -413,16 +415,16 @@ let parse_model (s:CCSexp.t): (_,_) Model.t =
             | `Const id -> id
             | `Undef _ | `Var _ | `Subst _ ->
               error_parse_modelf
-                "expected domain constant,@ got `@[%a@]`" CCSexpM.print s
+                "expected domain constant,@ got `@[%a@]`" Sexp_lib.pp s
           end
         | _ ->
-          error_parse_modelf "expected domain constant,@ got `@[%a@]`" CCSexpM.print s
+          error_parse_modelf "expected domain constant,@ got `@[%a@]`" Sexp_lib.pp s
       in
       let dom = List.map parse_id dom in
       let ty = parse_ty ty in
       Model.add_finite_type m ty dom
     | s ->
-      error_parse_modelf "expected model binding,@ got `%a`" CCSexpM.print s
+      error_parse_modelf "expected model binding,@ got `%a`" Sexp_lib.pp s
   in
   begin match s with
     | `List l ->
@@ -442,7 +444,7 @@ let parse_res_sexp s : (_,_) Res.t * S.shortcut = match s with
     let m = parse_model model in
     Res.Sat m, S.Shortcut
   | _ ->
-    error_parse_modelf "expected `(result ...)`,@ got `@[%a@]`" CCSexpM.print s
+    error_parse_modelf "expected `(result ...)`,@ got `@[%a@]`" Sexp_lib.pp s
 
 (* parse [stdout, errcode] into a proper result *)
 let parse_res (out:string) (errcode:int): (term,ty) Res.t * S.shortcut =
@@ -452,7 +454,7 @@ let parse_res (out:string) (errcode:int): (term,ty) Res.t * S.shortcut =
     Res.Error (Error msg), S.Shortcut
   else (
     try
-      let s = match CCSexpM.parse_string out with
+      let s = match Sexp_lib.parse_string out with
         | `Ok s -> s
         | `Error e ->
           error_parse_modelf "expected a S-expression, got `%s`:@ %s" out e

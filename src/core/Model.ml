@@ -5,7 +5,7 @@ module Subst = Var.Subst
 
 type 'a printer = Format.formatter -> 'a -> unit
 type 'a prec_printer = TermInner.prec -> 'a printer
-type 'a to_sexp = 'a -> CCSexp.t
+type 'a to_sexp = 'a -> Sexp_lib.t
 
 let fpf = Format.fprintf
 
@@ -250,9 +250,9 @@ module DT = struct
     check_ res;
     res
 
-  let to_sexp ft fty t : CCSexp.t =
-    let lst = CCSexp.of_list in
-    let str = CCSexp.atom in
+  let to_sexp ft fty t : Sexp_lib.t =
+    let lst = Sexp_lib.list in
+    let str = Sexp_lib.atom in
     let eqn_to_sexp {ft_var=v; ft_term=t} =
       lst [str "="; str (Var.to_string_full v); ft t]
     in
@@ -626,10 +626,10 @@ let print pt pty out m =
     (pp_nonempty_list pp_type) m.finite_types
     (pp_nonempty_list pp_value) m.values
 
-let str = CCSexp.atom
-let lst = CCSexp.of_list
+let str = Sexp_lib.atom
+let lst = Sexp_lib.list
 
-let to_sexp ft fty m : CCSexp.t =
+let to_sexp ft fty m : Sexp_lib.t =
   let id_to_sexp id = str (ID.to_string id) in
   let ty_to_sexp (ty,dom) =
     lst [str "type"; fty ty; lst (List.map id_to_sexp dom)] in
