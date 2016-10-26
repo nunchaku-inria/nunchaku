@@ -40,12 +40,12 @@ let compare v1 v2 = Pervasives.compare v1.id v2.id
 let hash_fun v h = CCHash.int v.id h
 let hash v = v.id land max_int (* >= 0 *)
 
-let print out v =
+let print_normal out v =
   if v.needs_at
     then Format.fprintf out "@@%s%s" v.name (Polarity.to_string v.pol)
     else Format.fprintf out "%s%s" v.name (Polarity.to_string v.pol)
 
-let to_string v =
+let to_string_normal v =
   if v.needs_at
     then Printf.sprintf "@@%s%s" v.name (Polarity.to_string v.pol)
     else v.name ^ Polarity.to_string v.pol
@@ -66,6 +66,18 @@ let print_full out v =
 let to_string_full = CCFormat.to_string print_full
 
 let print_name out v = CCFormat.string out v.name
+
+(* debug mode: always print ID unique counters *)
+let always_print_full_ = ref false
+let () =
+  Utils.add_option
+    ("--pp-id", Arg.Set always_print_full_, " always print IDs numbers")
+
+let print out v =
+  if !always_print_full_ then print_full out v else print_normal out v
+
+let to_string v =
+  if !always_print_full_ then to_string_full v else to_string_normal v
 
 module As_key = struct
   type t = _t

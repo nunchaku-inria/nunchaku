@@ -256,6 +256,10 @@ let options_warnings_ =
       , " <bool>: enable/disable warnings on model parsing errors"
   ]
 
+let options_others_ : (Arg.key * Arg.spec * Arg.doc) list ref = ref []
+
+let add_option o = options_others_ := o :: !options_others_
+
 (** {2 Misc} *)
 
 exception NotImplemented of string

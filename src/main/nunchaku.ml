@@ -130,6 +130,7 @@ let options =
   Arg.align @@ List.sort Pervasives.compare @@ (
   options_debug_ @
   Utils.options_warnings_ @
+  !Utils.options_others_ @
   [ "--print-input", Arg.Set print_, " print input"
   ; "--print-all", Arg.Set print_all_, " print every step of the pipeline"
   ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline and exit"

@@ -128,6 +128,11 @@ val warningf : warning -> ('a, Format.formatter, unit, unit) format4 -> 'a
 
 val options_warnings_ : (Arg.key * Arg.spec * Arg.doc) list
 
+val options_others_ : (Arg.key * Arg.spec * Arg.doc) list ref
+
+val add_option : Arg.key * Arg.spec * Arg.doc -> unit
+(** Add an option to {!options_others_} *)
+
 (** {2 Misc} *)
 
 exception NotImplemented of string
