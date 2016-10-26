@@ -124,7 +124,9 @@ module Make(M : sig val mode : mode end) = struct
     (* map constructors/test/selectors to be encoded,
        into corresponding identifiers *)
     env: (T.t, T.t) Env.t;
-    (* environment *)
+    (* environment. *)
+    mutable new_env : (T.t, T.t) Env.t;
+    (* New definitions, also used for computing types *)
     at_cache: AT.cache;
     (* used for computing type cardinalities *)
     mutable unsat_means_unknown: bool;
@@ -138,6 +140,7 @@ module Make(M : sig val mode : mode end) = struct
     tys=ID.Tbl.create 16;
     map=Tbl.create 16;
     env;
+    new_env=Env.create ();
     at_cache=AT.create_cache();
     unsat_means_unknown=false;
   }
@@ -157,11 +160,19 @@ module Make(M : sig val mode : mode end) = struct
     | Some res -> res
     | None -> errorf "could not find encoding of `is-%a`" ID.print id
 
+  (* compute type of [t], using both envs *)
+  let ty_exn ~state (t:T.t) =
+    U.ty_exn t
+      ~sigma:(fun id ->
+        let open CCOpt in
+        Env.find_ty ~env:state.env id
+        <+> Env.find_ty ~env:state.new_env id)
+
   (* is [ty] a type that is being encoded? *)
   let is_encoded_ty state (ty:T.t): bool =
-    match UEnv.info_of_ty_exn ~env:state.env ty, mode with
-      | {Env.def=Env.Data (`Data, _, _); _}, M_data
-      | {Env.def=Env.Data (`Codata, _, _); _}, M_codata -> true
+    match UEnv.info_of_ty ~env:state.env ty, mode with
+      | Result.Ok {Env.def=Env.Data (`Data, _, _); _}, M_data
+      | Result.Ok {Env.def=Env.Data (`Codata, _, _); _}, M_codata -> true
       | _ -> false
 
   (* is [ty] an infinite type that is being encoded? *)
@@ -178,8 +189,8 @@ module Make(M : sig val mode : mode end) = struct
   (* local state used to maximally share subterms, so as to avoid
      combinatorial explosion due to `asserting` constraints *)
   type sharing_state = {
-    ss_env: (term,ty) Env.t;
-    ss_tbl: sharing_cell U.Tbl.t;
+    ss_globals: sharing_global_state;
+    mutable ss_tbl: sharing_cell U.Map.t;
     (* term -> unique variable for it *)
     mutable ss_var_to_cell: (ty, sharing_cell) Var.Subst.t;
     (* var -> the cell it defines *)
@@ -187,6 +198,16 @@ module Make(M : sig val mode : mode end) = struct
     (* var -> list of cells depending on it *)
     mutable ss_visited: U.VarSet.t;
     (* variables already introduced. Each cell is `let`-bound exactly once. *)
+    mutable ss_global_guards: term list;
+    (* the guards attached to constants (which are not let-defined). *)
+  }
+
+  (* globals for the sharing state *)
+  and sharing_global_state = {
+    ss_env: (term,ty) Env.t;
+    (* global environment for typing *)
+    mutable ss_num: int;
+    (* fresh name generator *)
   }
 
   and sharing_cell = {
@@ -201,13 +222,18 @@ module Make(M : sig val mode : mode end) = struct
     (* list of guards paired with this variable *)
   }
 
-  let create_share ~env : sharing_state =
-    { ss_env = env;
-      ss_tbl = U.Tbl.create 64;
+  let share_of_globals (g:sharing_global_state): sharing_state =
+    { ss_globals = g;
+      ss_tbl = U.Map.empty;
       ss_var_to_cell = Var.Subst.empty;
       ss_terms_depending_on = Var.Subst.empty;
       ss_visited = U.VarSet.empty;
+      ss_global_guards = [];
     }
+
+  let share_of_env ~env : sharing_state =
+    let g = { ss_env=env; ss_num=0 } in
+    share_of_globals g
 
   let pp_cell out (c:sharing_cell) = Var.print_full out c.sc_var
 
@@ -215,7 +241,7 @@ module Make(M : sig val mode : mode end) = struct
     Var.Subst.find ~subst:state.ss_var_to_cell v
 
   (* given [t], get a unique variable [x] standing for [t] *)
-  let get_sharing_cell (state:sharing_state) (t:term): sharing_cell =
+  let get_sharing_cell state (share:sharing_state) (t:term): sharing_cell =
     (* find which variables are used in [t], and add [cell] to the
        list of reverse dependencies of those variables *)
     let add_to_deps cell =
@@ -223,25 +249,25 @@ module Make(M : sig val mode : mode end) = struct
       U.VarSet.to_seq fv
         |> Sequence.iter
           (fun v ->
-             let l = Var.Subst.find_or ~subst:state.ss_terms_depending_on v ~default:[] in
+             let l = Var.Subst.find_or ~subst:share.ss_terms_depending_on v ~default:[] in
              Utils.debugf ~section 5 "@[<2>deps(%a) +=@ %a (:= `@[%a@]`)@]"
                (fun k->k Var.print_full v Var.print_full
                    cell.sc_var P.print cell.sc_term);
-             state.ss_terms_depending_on <-
-               Var.Subst.add ~subst:state.ss_terms_depending_on v (cell :: l))
+             share.ss_terms_depending_on <-
+               Var.Subst.add ~subst:share.ss_terms_depending_on v (cell :: l))
     in
-    try U.Tbl.find state.ss_tbl t
+    try U.Map.find t share.ss_tbl
     with Not_found ->
       (* make fresh variable *)
-      let ty = UEnv.ty_exn ~env:state.ss_env t in
+      let ty = ty_exn ~state t in
       let v =
-        Var.makef ~ty "#%s_%d" (TyMo.mangle ~sep:"_" ty)
-          (U.Tbl.length state.ss_tbl)
+        Var.makef ~ty "#%s_%d" (TyMo.mangle ~sep:"_" ty) share.ss_globals.ss_num
       in
+      share.ss_globals.ss_num <- share.ss_globals.ss_num + 1;
       let sc_depends_on =
         U.free_vars t
         |> U.VarSet.to_seq
-        |> Sequence.filter_map (cell_of_var state)
+        |> Sequence.filter_map (cell_of_var share)
         |> Sequence.to_rev_list
       in
       Utils.debugf ~section 5
@@ -253,23 +279,26 @@ module Make(M : sig val mode : mode end) = struct
         sc_depends_on;
         sc_guards=[];
       } in
-      U.Tbl.add state.ss_tbl t cell;
-      state.ss_var_to_cell <- Var.Subst.add ~subst:state.ss_var_to_cell v cell;
+      share.ss_tbl <- U.Map.add t cell share.ss_tbl;
+      share.ss_var_to_cell <- Var.Subst.add ~subst:share.ss_var_to_cell v cell;
       add_to_deps cell;
       cell
 
-  let remove_cell state (cell:sharing_cell): unit =
+  let remove_cell share (cell:sharing_cell): unit =
     let v = cell.sc_var in
-    state.ss_terms_depending_on <-
-      Var.Subst.remove ~subst:state.ss_terms_depending_on v;
-    U.Tbl.remove state.ss_tbl cell.sc_term;
-    state.ss_var_to_cell <- Var.Subst.remove ~subst:state.ss_var_to_cell cell.sc_var;
+    share.ss_terms_depending_on <-
+      Var.Subst.remove ~subst:share.ss_terms_depending_on v;
+    share.ss_tbl <- U.Map.remove cell.sc_term share.ss_tbl;
+    share.ss_var_to_cell <- Var.Subst.remove ~subst:share.ss_var_to_cell cell.sc_var;
     ()
 
   let add_guard (c:sharing_cell) (g:term): unit =
     c.sc_guards <- g :: c.sc_guards
 
   let add_guards c l = List.iter (add_guard c) l
+
+  let add_global_guard (share:sharing_state) (g:term): unit =
+    share.ss_global_guards <- g :: share.ss_global_guards
 
   (* for every let-binding [x := u] in [share] that satisfies [filter],
        or is DFS-reachable from such a cell,
@@ -303,7 +332,7 @@ module Make(M : sig val mode : mode end) = struct
     in
     (* collect all *)
     begin match start with
-      | `All -> U.Tbl.values share.ss_tbl |> Sequence.iter add_cell_to_process
+      | `All -> U.Map.values share.ss_tbl |> Sequence.iter add_cell_to_process
       | `Vars l -> List.iter visit_terms_depending_on l
     end;
     (* now, topological sort of [to_process] so that cells are
@@ -325,7 +354,16 @@ module Make(M : sig val mode : mode end) = struct
     in
     Var.Subst.to_seq !to_process |> Sequence.map snd |> Sequence.iter visit_cell;
     let new_t =
-      let guards = U.remove_dup !all_guards in
+      (* if [`All] was requested, also introduce the guards for
+         constants that were not let-defined *)
+      let global_guards = match start with
+        | `Vars _ -> []
+        | `All ->
+          let l = share.ss_global_guards in
+          share.ss_global_guards <- [];
+          l
+      in
+      let guards = U.remove_dup (List.rev_append global_guards !all_guards) in
       U.let_l (List.rev !all_lets) (U.asserting t guards)
     in
     Utils.debugf ~section 5 "@[<2>`@[%a@]`@ becomes@ `@[%a@]`@]"
@@ -333,31 +371,31 @@ module Make(M : sig val mode : mode end) = struct
     new_t
 
   let tr_term state (pol:Pol.t) (t:T.t) : T.t =
-    let share = create_share ~env:state.env in
-    let rec tr_term_rec (pol:Pol.t) t : T.t = match T.repr t with
+    let rec tr_term_rec share (pol:Pol.t) t : T.t = match T.repr t with
       | TI.Const id ->
         (* constant constructor, or unrelated ID *)
         begin match Tbl.get state.map (Cstor id) with
           | None -> t
-          | Some id' ->
-            (* [c asserting is-c c] *)
-            let cell = get_sharing_cell share (U.const id') in
-            let t' = U.var cell.sc_var in
-            let guard = U.app_const (get_test_exn state id) [t'] in
-            add_guard cell guard;
-            t'
+          | Some _ ->
+            (* [c asserting is-c c].
+               We do NOT introduce a variable here, simply add the guard
+               to global guards *)
+            let guard = U.app_const (get_test_exn state id) [t] in
+            add_global_guard share guard;
+            t
         end
+      | TI.App (_,[]) -> assert false
       | TI.App (f, l) ->
         begin match T.repr f with
           | TI.Const f_id ->
-            let l' = List.map (tr_term_rec Pol.NoPol) l in
+            let l' = List.map (tr_term_rec share Pol.NoPol) l in
             begin match Tbl.get state.map (Cstor f_id) with
               | None ->
                 U.app_const f_id l'
               | Some f_id' ->
                 (* id is a constructor, we introduce a guard stating
                    [is-id (id x1..xn) & And_k proj-id-k (id x1..xn) = x_k] *)
-                let cell = get_sharing_cell share (U.app_const f_id' l') in
+                let cell = get_sharing_cell state share (U.app_const f_id' l') in
                 let t' = U.var cell.sc_var in
                 let guards =
                   U.app_const (get_test_exn state f_id) [t']
@@ -369,7 +407,7 @@ module Make(M : sig val mode : mode end) = struct
                 add_guards cell guards;
                 t'
             end
-          | _ -> tr_term_aux Pol.NoPol t
+          | _ -> tr_term_aux share Pol.NoPol t
         end
       | TI.Builtin (`DataSelect (id,i)) ->
         begin match get_select_ state id i with
@@ -390,10 +428,10 @@ module Make(M : sig val mode : mode end) = struct
       | TI.Let (v, t, u) ->
         (* process [u] and be sure to introduce other "let"s that
            depend on [v] *)
-        let u' = tr_term_rec Pol.NoPol u in
+        let u' = tr_term_rec share Pol.NoPol u in
         let u' = introduce_lets share u' ~start:(`Vars [v]) in
         (* process [t] and re-build let *)
-        let t' = tr_term_rec Pol.NoPol t in
+        let t' = tr_term_rec share Pol.NoPol t in
         U.let_ v t' u'
       | TI.Bind ((`Forall | `Exists) as q, v, _)
         when is_infinite_and_encoded_ty state (Var.ty v) ->
@@ -408,58 +446,63 @@ module Make(M : sig val mode : mode end) = struct
               (fun k->k P.print t P.print res Pol.pp pol P.print (Var.ty v));
             res
           | `Keep ->
-            tr_bind pol q t
+            tr_bind share pol q t
         end
       | TI.Builtin b ->
         begin match b with
-          | `Eq (t1,_) when not (U.ty_is_Prop (UEnv.ty_exn ~env:state.env t1)) ->
-            tr_term_aux pol t
+          | `Eq (t1,_) when not (U.ty_is_Prop (ty_exn ~state t1)) ->
+            tr_term_aux share pol t
             (* equality is ok *)
-          | `Imply _ | `And _ | `Or _ | `Eq _ ->
+          | `Imply _ | `And _ | `Or _ | `Eq _ | `Ite _ ->
             (* boolean connectives: do not let sharing pass through for now, to
                play safe with polarities. *)
-            U.builtin (TI.Builtin.map b ~f:(tr_term_top pol))
-          | _ -> tr_term_aux pol t
+            U.builtin (TI.Builtin.map b ~f:(tr_term_block_lets share pol))
+          | _ -> tr_term_aux share pol t
         end
-      | TI.Bind (`Fun, _, _) -> tr_bind pol `Fun t
+      | TI.Bind ((`Forall | `Exists | `Fun) as b, _, _) -> tr_bind share pol b t
       | TI.Match (t,m) ->
         if is_encoded_ty state (UEnv.ty_exn ~env:state.env t)
         then errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.print t
         else (
-          let t = tr_term_rec pol t in
+          let t = tr_term_rec share pol t in
           let m =
             ID.Map.map
               (fun (vars,rhs) ->
-                 let rhs = tr_term_rec pol rhs in
+                 let rhs = tr_term_rec share pol rhs in
                  let rhs = introduce_lets share rhs ~start:(`Vars vars) in
                  vars, rhs)
               m
           in
           U.match_with t m
         )
-      | _ -> tr_term_aux pol t
+      | _ -> tr_term_aux share pol t
     (* properly encode [t], which starts with [binder]. We have to
        introduce let-definitions that depend on the bound variables inside
        the binder, not outside.
        The other let-definitions can percolate through the binder though *)
-    and tr_bind pol (binder:TI.Binder.t) t =
+    and tr_bind share pol (binder:TI.Binder.t) t =
       let vars, body = U.bind_unfold binder t in
-      let body' = tr_term_rec pol body in
+      let body' = tr_term_rec share pol body in
       let body' = introduce_lets share body' ~start:(`Vars vars) in
       U.mk_bind_l binder vars body'
     (* map *)
-    and tr_term_aux pol t =
+    and tr_term_aux share pol t =
       U.map_pol () pol t
         ~bind:(fun () v -> (), v)
-        ~f:(fun () -> tr_term_rec)
-    (* translate [t], and introduce all remaining "let"s and assertions *)
-    and tr_term_top pol t =
-      let t' = tr_term_rec pol t in
-      introduce_lets share t' ~start:`All
+        ~f:(fun () -> tr_term_rec share)
+    (* translate [t] in a new [sharing_state], to avoid sharing definitions
+       with the surrounding scope, for they would be introduced several times.
+       All bindings and assertions are introduced locally, so the result
+       is self-contained. . *)
+    and tr_term_block_lets share pol t : term =
+      let share' = share_of_globals share.ss_globals in
+      let t' = tr_term_rec share' pol t in
+      introduce_lets share' t' ~start:`All
     in
-    tr_term_top pol t
+    let share = share_of_env ~env:state.env in
+    tr_term_block_lets share pol t
 
-  let tr_ty = tr_term
+  let tr_ty _ _ ty = ty
 
   (* add binding to state *)
   let add_ state k id =
@@ -504,7 +547,7 @@ module Make(M : sig val mode : mode end) = struct
   let app_id_fst (id,_) l = app_id id l
 
   (* declare the new constants *)
-  let common_decls etys =
+  let common_decls etys : (_,_) Stmt.t list =
     let mk_decl (id,ty) =
       Stmt.decl ~info:Stmt.info_default ~attrs:[] id ty
     (* cardinality attribute  for this type *)
@@ -531,7 +574,7 @@ module Make(M : sig val mode : mode end) = struct
     in
     List.rev_append tys others
 
-  let common_axioms etys =
+  let common_axioms etys : (_,_) Stmt.t list =
     let mk_ax f = Stmt.axiom1 ~info:Stmt.info_default f in
     (* axiomatize new constants *)
     CCList.flat_map
@@ -757,17 +800,48 @@ module Make(M : sig val mode : mode end) = struct
     let eq_axiom_l = eq_corec_axioms state etys in
     decl_l @ eq_axiom_l @ ax_l
 
-  let encode_stmt state stmt = match Stmt.view stmt, mode with
+  (* encode inductive predicate (preserving its invariants) *)
+  let encode_pred state ~info wf kind l : (_,_) Stmt.t =
+    let l =
+      l
+      |> List.map
+        (fun ({Stmt.pred_clauses=cs; _} as def) ->
+           let cs =
+             List.map
+               (fun {Stmt.clause_guard=g; clause_concl=t; clause_vars} ->
+                  let g = CCOpt.map (tr_term state Pol.Neg) g in
+                  (* only process under the predicate itself *)
+                  let t =
+                    U.map () t ~bind:(fun _ _ -> assert false)
+                      ~f:(fun () t -> tr_term state Pol.NoPol t)
+                  in
+                  {Stmt.clause_vars; clause_guard=g; clause_concl=t})
+               cs
+           in
+           {def with Stmt.pred_clauses=cs})
+    in
+    Stmt.mk_pred ~info ~wf kind l
+
+  let encode_stmt state stmt : (_,_) Stmt.t list= match Stmt.view stmt, mode with
     | Stmt.TyDef (`Codata, _), M_data
     | Stmt.Pred _, M_data -> assert false (* invariant broken *)
     | Stmt.TyDef (`Codata, l), M_codata ->
       Utils.debugf ~section 2 "@[<2>encode codata@ `@[%a@]`@]"
         (fun k->k PStmt.print_tydefs (`Codata, l));
-      encode_codata state l
+      let new_st = encode_codata state l in
+      state.new_env <- Env.add_statement_l ~env:state.new_env new_st;
+      new_st
     | Stmt.TyDef (`Data, l), M_data ->
       Utils.debugf ~section 2 "@[<2>encode data@ `@[%a@]`@]"
         (fun k->k PStmt.print_tydefs (`Data, l));
-      encode_data state l
+      let new_st = encode_data state l in
+      state.new_env <- Env.add_statement_l ~env:state.new_env new_st;
+      new_st
+    | Stmt.Pred (wf, kind, l), _ ->
+      Utils.debugf ~section 2 "@[<2>encode inductive pred@ `@[%a@]`@]"
+        (fun k->k PStmt.print stmt);
+      let new_stmt = encode_pred ~info:(Stmt.info stmt) state wf kind l in
+      [new_stmt]
     | _ ->
       Utils.debugf ~section 2 "@[<2>encode statement@ `@[%a@]`@]"
         (fun k->k PStmt.print stmt);
