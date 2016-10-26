@@ -236,6 +236,9 @@ let add_statement ~env st =
   | Stmt.Pred (wf, kind, preds) ->
       def_preds ?loc ~env ~wf ~kind preds
 
+let add_statement_l ~env l =
+  List.fold_left (fun env st -> add_statement ~env st) env l
+
 let mem ~env ~id = ID.PerTbl.mem env.infos id
 
 let find_ty_exn ~env id = (find_exn ~env id).ty

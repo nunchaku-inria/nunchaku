@@ -142,11 +142,11 @@ val add_copy :
   ('t, 'ty) Statement.copy ->
   ('t, 'ty) t
 
-val add_statement :
-  env:('t,'ty) t ->
-  ('t,'ty) Statement.t ->
-  ('t,'ty) t
+val add_statement : env:('t,'ty) t -> ('t,'ty) Statement.t -> ('t,'ty) t
 (** Add any statement *)
+
+val add_statement_l : env:('t,'ty) t -> ('t,'ty) Statement.t list -> ('t,'ty) t
+(** Add any statements *)
 
 val find : env:('t, 'ty) t -> id -> ('t, 'ty) info option
 
