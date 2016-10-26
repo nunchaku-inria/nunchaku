@@ -845,6 +845,7 @@ module type UTIL = sig
   val guard : t_ -> t_ Builtin.guard -> t_
 
   val mk_bind : Binder.t -> t_ var -> t_ -> t_
+  val mk_bind_l : Binder.t -> t_ var list -> t_ -> t_
 
   val ty_type : t_ (** Type of types *)
   val ty_kind : t_ (** Type of ty_type *)
@@ -1053,6 +1054,7 @@ module Util(T : S)
     | _::_ -> T.build (App(t,l))
   let app_const id l = app (const id) l
   let mk_bind b v t = T.build (Bind (b, v, t))
+  let mk_bind_l b = List.fold_right (mk_bind b)
   let fun_ v t = T.build (Bind (`Fun, v, t))
   let mu v t = T.build (Bind (`Mu, v, t))
 
