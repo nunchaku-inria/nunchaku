@@ -406,6 +406,17 @@ let make_model_pipeline () =
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+    Tr.ElimPatternMatch.pipe ~mode:Tr.ElimPatternMatch.Elim_codata_match 
+      ~print:(!print_elim_codata_ || !print_all_) ~check @@@
+    Tr.ElimData.Codata.pipe ~print:(!print_elim_codata_ || !print_all_) ~check @@@
+    (if !enable_polarize_
+     then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
+         ~check ~polarize_rec:!polarize_rec_
+     else Transform.nop ()) @@@
+    Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+    Tr.Skolem.pipe
+      ~skolems_in_model:!skolems_in_model_
+      ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
     Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
     Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
     Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
@@ -435,7 +446,8 @@ let make_model_pipeline () =
       (fork
         pipe_smbc
         (pipe_mono_common @@
-         Tr.ElimPatternMatch.pipe ~print:(!print_elim_match_ || !print_all_) ~check @@@
+         Tr.ElimPatternMatch.pipe ~mode:Tr.ElimPatternMatch.Elim_both
+            ~print:(!print_elim_match_ || !print_all_) ~check @@@
          fork
            (pipe_common_paradox_kodkod (fork pipe_paradox pipe_kodkod))
            pipe_cvc4))

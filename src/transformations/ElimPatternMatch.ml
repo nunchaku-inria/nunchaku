@@ -17,68 +17,102 @@ let name = "elim_match"
 
 type term = T.t
 
+type mode =
+  | Elim_data_match
+  | Elim_codata_match
+  | Elim_both
+
+let pp_mode out = function
+  | Elim_data_match -> CCFormat.string out "elim_data_match"
+  | Elim_codata_match -> CCFormat.string out "elim_codata_match"
+  | Elim_both -> CCFormat.string out "elim_both"
+
 let mk_select_ = U.data_select
 let mk_test_ = U.data_test
 
 (* apply substitution [ctx.subst] in [t], and also replace pattern matching
    with [`DataSelect] and [`DataTest] *)
-let rec elim_match_ ~subst t = match TMono.repr t with
-  | TI.Var v ->
+let elim_match ~mode ~env t =
+  (* should we encode a match on this term? Depends on [mode] and its type *)
+  let should_encode t =
+    let module UEnv = Env.Util(T) in
+    let ty = UEnv.ty_exn ~env t in
+    let info = UEnv.info_of_ty_exn ~env ty in
+    match mode, Env.def info with
+      | Elim_both, _ -> true
+      | Elim_data_match, Env.Data (`Data,_,_)
+      | Elim_codata_match, Env.Data (`Codata,_,_) -> true
+      | _, Env.Data (_,_,_) -> false
+      | _ -> assert false
+  in
+  let rec elim_match_ ~subst t = match TMono.repr t with
+    | TI.Var v ->
       CCOpt.get t (Subst.find ~subst v)
-  | TI.Const _ -> t
-  | TI.App (f,l) -> U.app (elim_match_ ~subst f) (elim_match_l_ ~subst l)
-  | TI.Builtin b -> U.builtin (TI.Builtin.map b ~f:(elim_match_ ~subst))
-  | TI.Bind ((`Forall | `Exists | `Fun | `Mu) as b,v,t) ->
+    | TI.Const _ -> t
+    | TI.App (f,l) -> U.app (elim_match_ ~subst f) (elim_match_l_ ~subst l)
+    | TI.Builtin b -> U.builtin (TI.Builtin.map b ~f:(elim_match_ ~subst))
+    | TI.Bind ((`Forall | `Exists | `Fun | `Mu) as b,v,t) ->
       let v' = Var.fresh_copy v in
       let subst = Subst.add ~subst v (U.var v') in
       let t' = elim_match_ ~subst t in
       U.mk_bind b v' t'
-  | TI.Let (v,t,u) ->
+    | TI.Let (v,t,u) ->
       let t' = elim_match_ ~subst t in
       let v' = Var.fresh_copy v in
       let subst = Subst.add ~subst v (U.var v') in
       U.let_ v' t' (elim_match_ ~subst u)
-  | TI.TyBuiltin _ -> t
-  | TI.TyArrow (a,b) ->
+    | TI.TyBuiltin _ -> t
+    | TI.TyArrow (a,b) ->
       U.ty_arrow (elim_match_ ~subst a)(elim_match_ ~subst b)
-  | TI.Match (t,l) ->
+    | TI.Match (t,l) when should_encode t ->
       (* change t into t';
-          then a decision tree is built where
-            each case   [c,vars,rhs] is changed into:
-            "if is-c t' then rhs[vars_i := select-c-i t'] else ..."
+        then a decision tree is built where
+          each case  [c,vars,rhs] is changed into:
+          "if is-c t' then rhs[vars_i := select-c-i t'] else ..."
       *)
       let t' = elim_match_ ~subst t in
       (* remove first binding to make it the default case *)
       let c1, (vars1,rhs1) = ID.Map.choose l in
       let subst1 = CCList.Idx.foldi
-        (fun subst i vi -> Subst.add ~subst vi (mk_select_ c1 i t'))
-        subst vars1
+          (fun subst i vi -> Subst.add ~subst vi (mk_select_ c1 i t'))
+          subst vars1
       in
       let default_case = elim_match_ ~subst:subst1 rhs1 in
       (* series of ite with selectors on the other cases *)
       let l = ID.Map.remove c1 l in
       ID.Map.fold
         (fun c (vars,rhs) acc ->
-          let subst' = CCList.Idx.foldi
-            (fun subst i vi -> Subst.add ~subst vi (mk_select_ c i t'))
-            subst vars
-          in
-          let rhs' = elim_match_ ~subst:subst' rhs in
-          U.ite (mk_test_ c t') rhs' acc)
+           let subst' = CCList.Idx.foldi
+               (fun subst i vi -> Subst.add ~subst vi (mk_select_ c i t'))
+               subst vars
+           in
+           let rhs' = elim_match_ ~subst:subst' rhs in
+           U.ite (mk_test_ c t') rhs' acc)
         l
         default_case
+    | TI.Match (t, l) ->
+      let t = elim_match_ ~subst t in
+      let l =
+        ID.Map.map
+          (fun (vars,rhs) ->
+             let subst, vars = CCList.fold_map U.rename_var subst vars in
+             vars, elim_match_ ~subst rhs)
+          l
+      in
+      U.match_with t l
 
-and elim_match_l_ ~subst l =
-  List.map (elim_match_ ~subst) l
+  and elim_match_l_ ~subst l =
+    List.map (elim_match_ ~subst) l
+  in
+  elim_match_ ~subst:Subst.empty t
 
-let elim_match t = elim_match_ ~subst:Subst.empty t
-
-let tr_problem pb =
+let tr_problem ?(mode=Elim_both) pb =
+  let env = Problem.env pb in
   Problem.map pb
-    ~term:elim_match
-    ~ty:elim_match
+    ~term:(elim_match ~env ~mode)
+    ~ty:(fun ty->ty)
 
-let pipe ~print ~check =
+let pipe ~mode ~print ~check =
   let open Transform in
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
@@ -89,7 +123,7 @@ let pipe ~print ~check =
       let module C = TypeCheck.Make(T) in
       C.check_problem (C.empty ()))
   in
-  let encode pb = tr_problem pb, () in
+  let encode pb = tr_problem ~mode pb, () in
   make ~name
     ~encode
     ~input_spec:Transform.Features.(empty |> update Ty Mono)

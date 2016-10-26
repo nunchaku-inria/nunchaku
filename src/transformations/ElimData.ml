@@ -307,8 +307,6 @@ module Make(M : sig val mode : mode end) = struct
       Stmt.decl ~info:Stmt.info_default ~attrs:[] id ty
     (* cardinality attribute  for this type *)
     and attr_card ety =
-      let module C = Cardinality in
-      let module Z = C.Z in
       Stmt.Attr_card_hint ety.ety_card
     in
     let tys =
