@@ -410,6 +410,17 @@ module Make(M : sig val mode : mode end) = struct
           | `Keep ->
             tr_bind pol q t
         end
+      | TI.Builtin b ->
+        begin match b with
+          | `Eq (t1,_) when not (U.ty_is_Prop (UEnv.ty_exn ~env:state.env t1)) ->
+            tr_term_aux pol t
+            (* equality is ok *)
+          | `Imply _ | `And _ | `Or _ | `Eq _ ->
+            (* boolean connectives: do not let sharing pass through for now, to
+               play safe with polarities. *)
+            U.builtin (TI.Builtin.map b ~f:(tr_term_top pol))
+          | _ -> tr_term_aux pol t
+        end
       | TI.Bind (`Fun, _, _) -> tr_bind pol `Fun t
       | TI.Match (t,m) ->
         if is_encoded_ty state (UEnv.ty_exn ~env:state.env t)
@@ -441,10 +452,12 @@ module Make(M : sig val mode : mode end) = struct
       U.map_pol () pol t
         ~bind:(fun () v -> (), v)
         ~f:(fun () -> tr_term_rec)
+    (* translate [t], and introduce all remaining "let"s and assertions *)
+    and tr_term_top pol t =
+      let t' = tr_term_rec pol t in
+      introduce_lets share t' ~start:`All
     in
-    let t' = tr_term_rec pol t in
-    (* introduce all remaining "let"s *)
-    introduce_lets share t' ~start:`All
+    tr_term_top pol t
 
   let tr_ty = tr_term
 
