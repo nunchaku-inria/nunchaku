@@ -62,15 +62,15 @@ dispatch
           let out = env "%GitVersion.ml" in
           Cmd (S [A "echo"; Quote (Sh v); Sh ">"; Px out]));
 
+      (* Qtest supports building a test module by extracting cases
+         directly from several composing several .ml{,i} files together.  \
+         To use that feature with ocamlbuild, you should create a .qtestpack \
+         file with the same syntax as .mllib or .mlpack files: \
+         a whitespace-separated list of the capitalized module names \
+         of the .ml{,i} files you want to combine together. *)
       rule "ocaml: modular qtest (qtestpack)"
         ~prods:["%.ml"]
         ~deps:["%.qtestpack"]
-        ~doc:"Qtest supports building a test module by extracting cases
-              directly from several composing several .ml{,i} files together.  \
-              To use that feature with ocamlbuild, you should create a .qtestpack \
-              file with the same syntax as .mllib or .mlpack files: \
-              a whitespace-separated list of the capitalized module names \
-              of the .ml{,i} files you want to combine together."
         (qtest_many "%.ml" "%.qtestpack");
 
     | _ -> ()
