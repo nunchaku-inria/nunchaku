@@ -461,7 +461,7 @@ module Print(T : REPR)
         wrap P_app p out "@[<2>%a@ %a@]" print_in_app f
           (pp_list_ ~sep:" " print_in_app) l
     | Let (v,t,u) ->
-        wrap P_top p out "@[<2>let %a :=@ %a in@ %a@]" Var.print_full v print t print u
+        wrap P_top p out "@[let @[<2>%a :=@ %a@] in@ %a@]" Var.print_full v print t print u
     | Match (t,l) ->
         let pp_case out (id,(vars,t)) =
           fpf out "@[<hv2>| @[<hv2>%a %a@] ->@ %a@]"
