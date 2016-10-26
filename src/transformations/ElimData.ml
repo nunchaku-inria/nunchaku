@@ -15,6 +15,7 @@ module PStmt = Stmt.Print(P)(P)
 module AT = AnalyzeType.Make(T)
 module Pol = Polarity
 module UEnv = Env.Util(T)
+module TyMo = (val TypeMono.default)
 
 type term = T.t
 
@@ -174,88 +175,276 @@ module Make(M : sig val mode : mode end) = struct
         | Cardinality.QuasiFiniteGEQ _ -> false
       end)
 
-  let rec tr_term state (pol:Pol.t) t : T.t = match T.repr t with
-    | TI.Const id ->
-      (* constant constructor, or unrelated ID *)
-      begin match Tbl.get state.map (Cstor id) with
-        | None -> t
-        | Some id' ->
-          (* [c asserting is-c c] *)
-          let t' = U.const id' in
-          let guard = U.app_const (get_test_exn state id) [t'] in
-          U.asserting t' [guard]
+  (* local state used to maximally share subterms, so as to avoid
+     combinatorial explosion due to `asserting` constraints *)
+  type sharing_state = {
+    ss_env: (term,ty) Env.t;
+    ss_tbl: sharing_cell U.Tbl.t;
+    (* term -> unique variable for it *)
+    mutable ss_var_to_cell: (ty, sharing_cell) Var.Subst.t;
+    (* var -> the cell it defines *)
+    mutable ss_terms_depending_on: (ty, sharing_cell list) Var.Subst.t;
+    (* var -> list of cells depending on it *)
+    mutable ss_visited: U.VarSet.t;
+    (* variables already introduced. Each cell is `let`-bound exactly once. *)
+  }
+
+  and sharing_cell = {
+    sc_var: ty Var.t;
+    (* variable standing for the term *)
+    sc_term: term;
+    (* the term that is represented by the variable *)
+    sc_depends_on: sharing_cell list;
+    (* list of cells this one directly depends on, and which must be defined
+       before it for proper scoping *)
+    mutable sc_guards: term list;
+    (* list of guards paired with this variable *)
+  }
+
+  let create_share ~env : sharing_state =
+    { ss_env = env;
+      ss_tbl = U.Tbl.create 64;
+      ss_var_to_cell = Var.Subst.empty;
+      ss_terms_depending_on = Var.Subst.empty;
+      ss_visited = U.VarSet.empty;
+    }
+
+  let pp_cell out (c:sharing_cell) = Var.print_full out c.sc_var
+
+  let cell_of_var state (v:_ Var.t): sharing_cell option =
+    Var.Subst.find ~subst:state.ss_var_to_cell v
+
+  (* given [t], get a unique variable [x] standing for [t] *)
+  let get_sharing_cell (state:sharing_state) (t:term): sharing_cell =
+    (* find which variables are used in [t], and add [cell] to the
+       list of reverse dependencies of those variables *)
+    let add_to_deps cell =
+      let fv = U.free_vars cell.sc_term in
+      U.VarSet.to_seq fv
+        |> Sequence.iter
+          (fun v ->
+             let l = Var.Subst.find_or ~subst:state.ss_terms_depending_on v ~default:[] in
+             Utils.debugf ~section 5 "@[<2>deps(%a) +=@ %a (:= `@[%a@]`)@]"
+               (fun k->k Var.print_full v Var.print_full
+                   cell.sc_var P.print cell.sc_term);
+             state.ss_terms_depending_on <-
+               Var.Subst.add ~subst:state.ss_terms_depending_on v (cell :: l))
+    in
+    try U.Tbl.find state.ss_tbl t
+    with Not_found ->
+      (* make fresh variable *)
+      let ty = UEnv.ty_exn ~env:state.ss_env t in
+      let v =
+        Var.makef ~ty "#%s_%d" (TyMo.mangle ~sep:"_" ty)
+          (U.Tbl.length state.ss_tbl)
+      in
+      let sc_depends_on =
+        U.free_vars t
+        |> U.VarSet.to_seq
+        |> Sequence.filter_map (cell_of_var state)
+        |> Sequence.to_rev_list
+      in
+      Utils.debugf ~section 5
+        "@[<2>introduce def %a@ := `@[%a@]`@ depends on: (@[%a@])@]"
+        (fun k->k Var.print v P.print t (Utils.pp_list pp_cell) sc_depends_on);
+      let cell = {
+        sc_var=v;
+        sc_term=t;
+        sc_depends_on;
+        sc_guards=[];
+      } in
+      U.Tbl.add state.ss_tbl t cell;
+      state.ss_var_to_cell <- Var.Subst.add ~subst:state.ss_var_to_cell v cell;
+      add_to_deps cell;
+      cell
+
+  let remove_cell state (cell:sharing_cell): unit =
+    let v = cell.sc_var in
+    state.ss_terms_depending_on <-
+      Var.Subst.remove ~subst:state.ss_terms_depending_on v;
+    U.Tbl.remove state.ss_tbl cell.sc_term;
+    state.ss_var_to_cell <- Var.Subst.remove ~subst:state.ss_var_to_cell cell.sc_var;
+    ()
+
+  let add_guard (c:sharing_cell) (g:term): unit =
+    c.sc_guards <- g :: c.sc_guards
+
+  let add_guards c l = List.iter (add_guard c) l
+
+  (* for every let-binding [x := u] in [share] that satisfies [filter],
+       or is DFS-reachable from such a cell,
+       replace [t] by [let x := u in t] and remove cell from [share].
+       NOTE: careful about the dependencies between subterms and superterms
+       during traversal, let-bindings must be correctly ordered *)
+  let introduce_lets share (t:term) ~(start:[`All | `Vars of ty Var.t list]): term =
+    let all_guards = ref [] in
+    let all_lets = ref [] in
+    (* the set of cells to introduce *)
+    let to_process : (ty, sharing_cell) Var.Subst.t ref = ref Var.Subst.empty in
+    let add_cell_to_process c =
+      to_process := Var.Subst.add ~subst:!to_process c.sc_var c
+    in
+    (* first, collect all cells by DFS *)
+    let rec visit_terms_depending_on v =
+      Utils.debugf ~section 5 "@[<2>visit_terms_depending_on %a@]"
+        (fun k->k Var.print v);
+      begin match Var.Subst.find ~subst:share.ss_terms_depending_on v with
+        | None -> ()
+        | Some cells ->
+          share.ss_terms_depending_on <-
+            Var.Subst.remove ~subst:share.ss_terms_depending_on v;
+          (* deal with [cells] and the cells that depend on them *)
+          List.iter
+            (fun cell ->
+               add_cell_to_process cell;
+               visit_terms_depending_on cell.sc_var)
+            cells
       end
-    | TI.App (f, l) ->
-      begin match T.repr f with
-        | TI.Const f_id ->
-          let l' = List.map (tr_term state Pol.NoPol) l in
-          begin match Tbl.get state.map (Cstor f_id) with
-            | None ->
-              U.app_const f_id l'
-            | Some f_id' ->
-              (* id is a constructor, we introduce a guard stating
-                 [is-id (id x1..xn) & And_k proj-id-k (id x1..xn) = x_k] *)
-              let t' = U.app_const f_id' l' in
-              let guard =
-                U.app_const (get_test_exn state f_id) [t']
-                :: List.mapi
-                    (fun i arg ->
-                       U.eq arg (U.app_const (get_select_exn_ state f_id i) [t']))
-                    l'
-              in
-              U.asserting t' guard
-          end
-        | _ -> tr_term_aux state Pol.NoPol t
-      end
-    | TI.Builtin (`DataSelect (id,i)) ->
-      begin match get_select_ state id i with
-        | Some id' -> U.const id'
-        | None ->
-          if mode = M_data
-          then errorf "could not find encoding of `select-%a-%d`" ID.print id i
-          else t
-      end
-    | TI.Builtin (`DataTest id) ->
-      begin match get_test_ state id with
-        | Some id' -> U.const id'
-        | None ->
-          if mode = M_data
-          then errorf "could not find encoding of `is-%a`" ID.print id
-          else t
-      end
-    | TI.Bind ((`Forall | `Exists) as q, v, f)
-      when is_infinite_and_encoded_ty state (Var.ty v) ->
-      (* quantifier over an infinite (co)data, must approximate
-         depending on the polarity *)
-      begin match U.approx_infinite_quant_pol q pol with
-        | `Keep -> U.mk_bind q v (tr_term state pol f)
-        | `Unsat_means_unknown res ->
-          state.unsat_means_unknown <- true;
-          Utils.debugf ~section 3
-            "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
-                  quantifying over infinite encoded type `@[%a@]`@]"
-            (fun k->k P.print t P.print res Pol.pp pol P.print (Var.ty v));
-          res
-      end
-    | TI.Match (t,m) ->
-      if is_encoded_ty state (UEnv.ty_exn ~env:state.env t)
-      then errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.print t
-      else (
-        let t = tr_term state pol t in
-        let m =
-          ID.Map.map
-            (fun (vars,rhs) ->
-               let rhs = tr_term state pol rhs in
-               vars, rhs)
-            m
-        in
-        U.match_with t m
+    in
+    (* collect all *)
+    begin match start with
+      | `All -> U.Tbl.values share.ss_tbl |> Sequence.iter add_cell_to_process
+      | `Vars l -> List.iter visit_terms_depending_on l
+    end;
+    (* now, topological sort of [to_process] so that cells are
+       let-defined in a good order. Ignore cells that are not to be
+       processed, they will be introduced in an outer scope. *)
+    let rec visit_cell cell =
+      let v = cell.sc_var in
+      let u = cell.sc_term in
+      if Var.Subst.mem v ~subst:!to_process &&
+         not (U.VarSet.mem v share.ss_visited) then (
+        share.ss_visited <- U.VarSet.add v share.ss_visited;
+        remove_cell share cell;
+        (* visit other cells that this one depends on *)
+        List.iter visit_cell cell.sc_depends_on;
+        (* add guards and bind [v] *)
+        all_guards := List.rev_append cell.sc_guards !all_guards;
+        all_lets := (v, u) :: !all_lets;
       )
-    | _ -> tr_term_aux state pol t
-  and tr_term_aux state pol t =
-    U.map_pol () pol t
-      ~bind:(fun () v -> (), v)
-      ~f:(fun () -> tr_term state)
+    in
+    Var.Subst.to_seq !to_process |> Sequence.map snd |> Sequence.iter visit_cell;
+    let new_t =
+      let guards = U.remove_dup !all_guards in
+      U.let_l (List.rev !all_lets) (U.asserting t guards)
+    in
+    Utils.debugf ~section 5 "@[<2>`@[%a@]`@ becomes@ `@[%a@]`@]"
+      (fun k->k P.print t P.print new_t);
+    new_t
+
+  let tr_term state (pol:Pol.t) (t:T.t) : T.t =
+    let share = create_share ~env:state.env in
+    let rec tr_term_rec (pol:Pol.t) t : T.t = match T.repr t with
+      | TI.Const id ->
+        (* constant constructor, or unrelated ID *)
+        begin match Tbl.get state.map (Cstor id) with
+          | None -> t
+          | Some id' ->
+            (* [c asserting is-c c] *)
+            let cell = get_sharing_cell share (U.const id') in
+            let t' = U.var cell.sc_var in
+            let guard = U.app_const (get_test_exn state id) [t'] in
+            add_guard cell guard;
+            t'
+        end
+      | TI.App (f, l) ->
+        begin match T.repr f with
+          | TI.Const f_id ->
+            let l' = List.map (tr_term_rec Pol.NoPol) l in
+            begin match Tbl.get state.map (Cstor f_id) with
+              | None ->
+                U.app_const f_id l'
+              | Some f_id' ->
+                (* id is a constructor, we introduce a guard stating
+                   [is-id (id x1..xn) & And_k proj-id-k (id x1..xn) = x_k] *)
+                let cell = get_sharing_cell share (U.app_const f_id' l') in
+                let t' = U.var cell.sc_var in
+                let guards =
+                  U.app_const (get_test_exn state f_id) [t']
+                  :: List.mapi
+                      (fun i arg ->
+                         U.eq arg (U.app_const (get_select_exn_ state f_id i) [t']))
+                      l'
+                in
+                add_guards cell guards;
+                t'
+            end
+          | _ -> tr_term_aux Pol.NoPol t
+        end
+      | TI.Builtin (`DataSelect (id,i)) ->
+        begin match get_select_ state id i with
+          | Some id' -> U.const id'
+          | None ->
+            if mode = M_data
+            then errorf "could not find encoding of `select-%a-%d`" ID.print id i
+            else t
+        end
+      | TI.Builtin (`DataTest id) ->
+        begin match get_test_ state id with
+          | Some id' -> U.const id'
+          | None ->
+            if mode = M_data
+            then errorf "could not find encoding of `is-%a`" ID.print id
+            else t
+        end
+      | TI.Let (v, t, u) ->
+        (* process [u] and be sure to introduce other "let"s that
+           depend on [v] *)
+        let u' = tr_term_rec Pol.NoPol u in
+        let u' = introduce_lets share u' ~start:(`Vars [v]) in
+        (* process [t] and re-build let *)
+        let t' = tr_term_rec Pol.NoPol t in
+        U.let_ v t' u'
+      | TI.Bind ((`Forall | `Exists) as q, v, _)
+        when is_infinite_and_encoded_ty state (Var.ty v) ->
+        (* quantifier over an infinite (co)data, must approximate
+           depending on the polarity *)
+        begin match U.approx_infinite_quant_pol q pol with
+          | `Unsat_means_unknown res ->
+            state.unsat_means_unknown <- true;
+            Utils.debugf ~section 3
+              "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
+               quantifying over infinite encoded type `@[%a@]`@]"
+              (fun k->k P.print t P.print res Pol.pp pol P.print (Var.ty v));
+            res
+          | `Keep ->
+            tr_bind pol q t
+        end
+      | TI.Bind (`Fun, _, _) -> tr_bind pol `Fun t
+      | TI.Match (t,m) ->
+        if is_encoded_ty state (UEnv.ty_exn ~env:state.env t)
+        then errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.print t
+        else (
+          let t = tr_term_rec pol t in
+          let m =
+            ID.Map.map
+              (fun (vars,rhs) ->
+                 let rhs = tr_term_rec pol rhs in
+                 let rhs = introduce_lets share rhs ~start:(`Vars vars) in
+                 vars, rhs)
+              m
+          in
+          U.match_with t m
+        )
+      | _ -> tr_term_aux pol t
+    (* properly encode [t], which starts with [binder]. We have to
+       introduce let-definitions that depend on the bound variables inside
+       the binder, not outside.
+       The other let-definitions can percolate through the binder though *)
+    and tr_bind pol (binder:TI.Binder.t) t =
+      let vars, body = U.bind_unfold binder t in
+      let body' = tr_term_rec pol body in
+      let body' = introduce_lets share body' ~start:(`Vars vars) in
+      U.mk_bind_l binder vars body'
+    (* map *)
+    and tr_term_aux pol t =
+      U.map_pol () pol t
+        ~bind:(fun () v -> (), v)
+        ~f:(fun () -> tr_term_rec)
+    in
+    let t' = tr_term_rec pol t in
+    (* introduce all remaining "let"s *)
+    introduce_lets share t' ~start:`All
 
   let tr_ty = tr_term
 
@@ -567,6 +756,8 @@ module Make(M : sig val mode : mode end) = struct
         (fun k->k PStmt.print_tydefs (`Data, l));
       encode_data state l
     | _ ->
+      Utils.debugf ~section 2 "@[<2>encode statement@ `@[%a@]`@]"
+        (fun k->k PStmt.print stmt);
       let stmt =
         Stmt.map stmt ~term:(tr_term state Pol.Pos) ~ty:(tr_ty state Pol.NoPol)
       in
