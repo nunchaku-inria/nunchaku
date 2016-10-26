@@ -15,6 +15,7 @@ module Res = Problem.Res
 module E = CCResult
 module S = Scheduling
 module St = Statement
+module PSt = Statement.Print(P)(P)
 
 type term = TermInner.Default.t
 type ty = term
@@ -31,20 +32,24 @@ let is_available () =
   with Sys_error _ -> false
 
 exception Error of string
-exception Out_of_scope
+exception Out_of_scope of string
 exception Conversion_error
 exception Parse_result_error of string
 
 let () = Printexc.register_printer
     (function
       | Error msg -> Some (Utils.err_sprintf "[SMBC backend] %s" msg)
-      | Out_of_scope -> Some "problem is out of scope for SMBC"
+      | Out_of_scope msg -> Some (Printf.sprintf "problem is out of scope for SMBC: %s" msg)
       | Conversion_error -> Some "problem could not be converted to TIP"
       | Parse_result_error msg -> Some ("could not parse result: " ^ msg)
       | _ -> None)
 
 let error_ msg = raise (Error msg)
 let errorf msg = Utils.exn_ksprintf msg ~f:error_
+
+let out_of_scope msg = raise (Out_of_scope msg)
+let out_of_scopef msg = Utils.exn_ksprintf msg ~f:out_of_scope
+
 
 let erase = ID.Erase.create_state ()
 let id_to_string id = ID.Erase.to_name erase id
@@ -71,8 +76,8 @@ let rec term_to_tip(t:term): A.term = match T.repr t with
       | `Ite (a,b,c) -> A.if_ (term_to_tip a)(term_to_tip b)(term_to_tip c)
       | `Eq (a,b) -> A.eq (term_to_tip a)(term_to_tip b)
       | `Not a -> A.not_ (term_to_tip a)
-      | `DataTest _ -> raise Out_of_scope
-      | `DataSelect _
+      | `DataTest _ -> out_of_scopef "cannot convert to TIP data test %a" P.print t
+      | `DataSelect _ -> out_of_scopef "cannot convert to TIP data select %a" P.print t
       | `Undefined_atom _
       | `Undefined_self (_,_) -> raise Conversion_error
       | `Unparsable _
@@ -85,7 +90,7 @@ let rec term_to_tip(t:term): A.term = match T.repr t with
   | TI.Bind (`Exists,v,body) ->
     A.exists [conv_typed_var v] (term_to_tip body)
   | TI.Bind (`TyForall,_,_)
-  | TI.Bind (`Mu,_,_) -> raise Out_of_scope
+  | TI.Bind (`Mu,_,_) -> out_of_scopef "cannot convert to TIP µ %a" P.print t
   | TI.Let (v,t,u) ->
     A.let_ [conv_var v, term_to_tip t] (term_to_tip u)
   | TI.Match (u,map) ->
@@ -108,11 +113,11 @@ and ty_to_tip(t:term): A.ty = match T.repr t with
     let l = List.map ty_to_tip l in
     begin match T.repr f with
       | TI.Const id -> A.ty_app (id_to_string id) l
-      | _ -> raise Out_of_scope
+      | _ -> out_of_scopef "cannot convert to TIP ty %a" P.print t
     end
   | TI.TyArrow (a,b) -> A.ty_arrow (ty_to_tip a)(ty_to_tip b)
   | TI.TyBuiltin `Prop -> A.ty_bool
-  | TI.TyBuiltin `Type -> raise Out_of_scope
+  | TI.TyBuiltin `Type -> out_of_scope "cannot encode to TIP TType"
   | _ -> assert false
 
 and conv_typed_var v = conv_var v, ty_to_tip (Var.ty v)
@@ -134,8 +139,11 @@ let decl_to_tip id ty : A.statement =
   )
 
 let statement_to_tip (st:(term,ty)St.t): A.statement list = match St.view st with
-  | St.Decl (id,ty,[]) -> [decl_to_tip id ty]
-  | St.Decl _ -> raise Out_of_scope
+  | St.Decl (id,ty,_) ->
+    let vars, _, _ = U.ty_unfold ty in
+    if vars=[] 
+    then [decl_to_tip id ty]
+    else out_of_scopef "cannot encode to TIP poly statement %a" PSt.print st
   | St.Axiom (St.Axiom_std l) ->
     List.map (fun ax -> A.assert_ (term_to_tip ax)) l
   | St.Axiom (St.Axiom_spec s) ->
@@ -159,7 +167,7 @@ let statement_to_tip (st:(term,ty)St.t): A.statement list = match St.view st wit
     let l =
       List.map
         (fun def ->
-           assert (def.St.rec_ty_vars=[]);
+           if def.St.rec_ty_vars <> [] then out_of_scopef "polymorphic `@[%a@]`" PSt.print st;
            let {St.defined_head=id; defined_ty=ty} = def.St.rec_defined in
            let name = id_to_string id in
            let _, _, ty_ret = U.ty_unfold ty in
@@ -186,7 +194,7 @@ let statement_to_tip (st:(term,ty)St.t): A.statement list = match St.view st wit
   | St.Goal g ->
     let neg_g = term_to_tip (U.not_ g) in
     [A.assert_not ~ty_vars:[] neg_g]
-  | St.TyDef (`Codata,_) -> raise Out_of_scope
+  | St.TyDef (`Codata,_) -> out_of_scopef "cannot encode Codata %a" PSt.print st
   | St.TyDef (`Data, l) ->
     let l =
       List.map
@@ -458,8 +466,10 @@ let solve ~deadline pb =
           "@[<2>smbc exited with %d, stdout:@ `%s`@]"
           (fun k->k errcode stdout);
         parse_res stdout errcode
-      | S.Fut.Fail Out_of_scope
-      | S.Fut.Done (E.Error Out_of_scope) ->
+      | S.Fut.Fail (Out_of_scope msg)
+      | S.Fut.Done (E.Error (Out_of_scope msg)) ->
+        Utils.debugf ~section 3 "@[out of scope because:@ %s@]"
+          (fun k->k msg);
         Res.Out_of_scope, S.No_shortcut (* out of scope *)
       | S.Fut.Done (E.Error e) ->
         Res.Error e, S.Shortcut
@@ -495,8 +505,8 @@ let call ?(print_model=false) ?prio ~print problem =
 let pipe ?(print_model=false) ~print () =
   let input_spec =
     Transform.Features.(of_list [
-        Ty, Mono; If_then_else, Present; Match, Present;
-        Eqn, Eqn_single; Codata, Present;
+        Ty, Mono; If_then_else, Present;
+        Eqn, Eqn_single; Codata, Absent;
         Copy, Absent; Ind_preds, Absent; Prop_args, Present;
         ])
   in
