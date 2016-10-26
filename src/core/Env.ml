@@ -1,6 +1,6 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-module ID = ID
+module TI = TermInner
 module Stmt = Statement
 module Loc = Location
 
@@ -242,6 +242,29 @@ let mem ~env ~id = ID.PerTbl.mem env.infos id
 let find_ty_exn ~env id = (find_exn ~env id).ty
 
 let find_ty ~env id = CCOpt.map (fun x -> x.ty) (find ~env id)
+
+module Util(T : TermInner.S) = struct
+  type term = T.t
+  type ty = T.t
+
+  module UT = TI.Util(T)
+
+  let ty ~env t = UT.ty ~sigma:(find_ty ~env) t
+
+  let ty_exn ~env t = UT.ty_exn ~sigma:(find_ty ~env) t
+
+  exception No_head of ty
+
+  let info_of_ty_exn ~env ty =
+    try
+      let id = UT.head_sym ty in
+      find_exn ~env id
+    with Not_found -> raise (No_head ty)
+
+  let info_of_ty ~env ty =
+    try Result.Ok (info_of_ty_exn ~env ty)
+    with No_head _ -> Result.Error "type has no head"
+end
 
 module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) = struct
   let fpf = Format.fprintf

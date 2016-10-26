@@ -162,6 +162,26 @@ val find_ty_exn : env:('t, 'ty) t -> id -> 'ty
 val find_ty : env:('t, 'ty) t -> id -> 'ty option
 (** Safe version of {!find_ty_exn} *)
 
+module Util(T : TermInner.S) : sig
+  type term = T.t
+  type ty = T.t
+
+  val ty : env:(term,ty) t -> term -> ty TermInner.or_error
+  (** Compute type of this term *)
+
+  val ty_exn : env:(term,ty) t -> term -> ty
+
+  val info_of_ty : env:(term,ty) t -> ty -> (term, ty) info TermInner.or_error
+  (** [info_of_ty ~env ty] finds the information related to the given
+      type. *)
+
+  exception No_head of ty
+
+  val info_of_ty_exn : env:(term,ty) t -> ty -> (term, ty) info
+  (** Unsafe version of {!info_of_ty}
+      @raise No_head if the type is not an (applied) constant *)
+end
+
 val mem : env:(_,_) t -> id:id -> bool
 (** @return true if the symbol is at least declared *)
 

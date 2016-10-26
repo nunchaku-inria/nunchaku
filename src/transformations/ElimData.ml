@@ -14,6 +14,7 @@ module P = T.P
 module PStmt = Stmt.Print(P)(P)
 module AT = AnalyzeType.Make(T)
 module Pol = Polarity
+module UEnv = Env.Util(T)
 
 type term = T.t
 
@@ -155,23 +156,23 @@ module Make(M : sig val mode : mode end) = struct
     | Some res -> res
     | None -> errorf "could not find encoding of `is-%a`" ID.print id
 
+  (* is [ty] a type that is being encoded? *)
+  let is_encoded_ty state (ty:T.t): bool =
+    match UEnv.info_of_ty_exn ~env:state.env ty, mode with
+      | {Env.def=Env.Data (`Data, _, _); _}, M_data
+      | {Env.def=Env.Data (`Codata, _, _); _}, M_codata -> true
+      | _ -> false
+
   (* is [ty] an infinite type that is being encoded? *)
-  let is_infinite_and_encoded_ state (ty:T.t): bool = match T.repr ty with
-    | TI.Const id ->
-      begin match Env.find ~env:state.env id, mode with
-        | Some {Env.def=Env.Data (`Data, _, _); _}, M_data
-        | Some {Env.def=Env.Data (`Codata, _, _); _}, M_codata ->
-          let card = AT.cardinality_ty_id ~cache:state.at_cache state.env id in
-          begin match card with
-            | Cardinality.Unknown
-            | Cardinality.Infinite -> true
-            | Cardinality.Exact _
-            | Cardinality.QuasiFiniteGEQ _ -> false
-          end
-        | Some _, _ -> false
-        | None, _ -> assert false
-      end
-    | _ -> false
+  let is_infinite_and_encoded_ty state (ty:T.t): bool =
+    is_encoded_ty state ty &&
+    ( let card = AT.cardinality_ty ~cache:state.at_cache state.env ty in
+      begin match card with
+        | Cardinality.Unknown
+        | Cardinality.Infinite -> true
+        | Cardinality.Exact _
+        | Cardinality.QuasiFiniteGEQ _ -> false
+      end)
 
   let rec tr_term state (pol:Pol.t) t : T.t = match T.repr t with
     | TI.Const id ->
@@ -223,7 +224,7 @@ module Make(M : sig val mode : mode end) = struct
           else t
       end
     | TI.Bind ((`Forall | `Exists) as q, v, f)
-      when is_infinite_and_encoded_ state (Var.ty v) ->
+      when is_infinite_and_encoded_ty state (Var.ty v) ->
       (* quantifier over an infinite (co)data, must approximate
          depending on the polarity *)
       begin match U.approx_infinite_quant_pol q pol with
@@ -236,8 +237,20 @@ module Make(M : sig val mode : mode end) = struct
             (fun k->k P.print t P.print res Pol.pp pol P.print (Var.ty v));
           res
       end
-    | TI.Match _ ->
-      errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.print t
+    | TI.Match (t,m) ->
+      if is_encoded_ty state (UEnv.ty_exn ~env:state.env t)
+      then errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.print t
+      else (
+        let t = tr_term state pol t in
+        let m =
+          ID.Map.map
+            (fun (vars,rhs) ->
+               let rhs = tr_term state pol rhs in
+               vars, rhs)
+            m
+        in
+        U.match_with t m
+      )
     | _ -> tr_term_aux state pol t
   and tr_term_aux state pol t =
     U.map_pol () pol t
