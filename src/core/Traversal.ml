@@ -217,7 +217,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
                yield_term c.Stmt.clause_concl)
             p.Stmt.pred_clauses
         | PS_spec s ->
-          yield_vars s.Stmt.spec_vars;
+          yield_vars s.Stmt.spec_ty_vars;
           List.iter yield_defined s.Stmt.spec_defined;
           List.iter yield_term s.Stmt.spec_axioms;
         | PS_decl (id,ty,_) ->

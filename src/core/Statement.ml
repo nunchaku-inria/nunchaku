@@ -33,14 +33,14 @@ type (+'t, +'ty) equations =
 
 type (+'t,+'ty) rec_def = {
   rec_defined: 'ty defined;
-  rec_vars: 'ty var list; (* type variables in definitions *)
+  rec_ty_vars: 'ty var list; (* type variables in definitions *)
   rec_eqns: ('t, 'ty) equations; (* list of equations defining the term *)
 }
 
 type (+'t, +'ty) rec_defs = ('t, 'ty) rec_def list
 
 type (+'t, +'ty) spec_defs = {
-  spec_vars: 'ty var list; (* type variables used by defined terms *)
+  spec_ty_vars: 'ty var list; (* type variables used by defined terms *)
   spec_defined: 'ty defined list;  (* terms being specified together *)
   spec_axioms: 't list;  (* free-form axioms *)
 }
@@ -254,10 +254,10 @@ let map_copy ~term ~ty c =
   map_copy_bind () c ~bind ~term:(fun () -> term) ~ty:(fun () -> ty)
 
 let map_rec_def_bind ~bind ~term ~ty acc t =
-  let acc', vars = Utils.fold_map bind acc t.rec_vars in
+  let acc', vars = Utils.fold_map bind acc t.rec_ty_vars in
   {
     rec_defined=map_defined ~f:(ty acc) t.rec_defined;
-    rec_vars=vars;
+    rec_ty_vars=vars;
     rec_eqns=map_eqns_bind ~bind ~term acc' t.rec_eqns;
   }
 
@@ -271,8 +271,8 @@ let map_rec_defs_bind ~bind ~term ~ty acc t =
   List.map (map_rec_def_bind ~bind ~term ~ty acc) t
 
 let map_spec_defs_bind ~bind ~term ~ty acc t =
-  let acc', vars = Utils.fold_map bind acc t.spec_vars in
-  { spec_vars=vars;
+  let acc', vars = Utils.fold_map bind acc t.spec_ty_vars in
+  { spec_ty_vars=vars;
     spec_defined=List.map (map_defined ~f:(ty acc)) t.spec_defined;
     spec_axioms=List.map (term acc') t.spec_axioms;
   }

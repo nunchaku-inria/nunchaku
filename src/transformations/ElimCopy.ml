@@ -72,7 +72,7 @@ let copy_as_data ~info (c:(_,_) Stmt.copy): (_,_) Stmt.t list =
     let def =
       { Stmt.
         rec_defined = Stmt.mk_defined c.Stmt.copy_concrete c.Stmt.copy_concrete_ty;
-        rec_vars=[];
+        rec_ty_vars=[];
         rec_eqns=Stmt.Eqn_nested [[x], [lhs], rhs, []];
       }
     in

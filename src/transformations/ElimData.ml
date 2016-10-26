@@ -427,7 +427,7 @@ module Make(M : sig val mode : mode end) = struct
     let def_c =
       Stmt.axiom_spec ~info:Stmt.info_default
         { Stmt.spec_defined=[def_c];
-          spec_vars=[];
+          spec_ty_vars=[];
           spec_axioms=[ax_c];
         }
     in

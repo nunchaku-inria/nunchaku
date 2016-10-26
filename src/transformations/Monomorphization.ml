@@ -162,13 +162,13 @@ let should_be_mangled_ ~env id =
 
 (* bind the type variables of [def] to [tup]. *)
 let match_rec ?(subst=Subst.empty) ~def tup =
-  assert (ArgTuple.length tup = List.length def.Stmt.rec_vars);
-  Subst.add_list ~subst def.Stmt.rec_vars (ArgTuple.m_args tup)
+  assert (ArgTuple.length tup = List.length def.Stmt.rec_ty_vars);
+  Subst.add_list ~subst def.Stmt.rec_ty_vars (ArgTuple.m_args tup)
 
 (* bind the type variables of [spec] to [tup]. *)
 let match_spec ?(subst=Subst.empty) ~spec tup =
-  assert (ArgTuple.length tup = List.length spec.Stmt.spec_vars);
-  Subst.add_list ~subst spec.Stmt.spec_vars (ArgTuple.m_args tup)
+  assert (ArgTuple.length tup = List.length spec.Stmt.spec_ty_vars);
+  Subst.add_list ~subst spec.Stmt.spec_ty_vars (ArgTuple.m_args tup)
 
 (* bind the type variables of [def] to [tup]. *)
 let match_pred ?(subst=Subst.empty) ~(def:(_,_) Stmt.pred_def) tup =
@@ -355,13 +355,13 @@ let dispatch = {
     (* we know [subst case.defined = (id args)], now
             specialize the axioms and other fields *)
     let local_state = mk_local_state ~subst (depth+1) in
-    let n = List.length def.Stmt.rec_vars in
+    let n = List.length def.Stmt.rec_ty_vars in
     let eqns = mono_eqns ~self ~local_state n def.Stmt.rec_eqns in
     (* new (specialized) case *)
     let rec_defined = mono_defined ~self ~local_state def.Stmt.rec_defined arg in
     let def' =
       {Stmt.
-        rec_vars=[];
+        rec_ty_vars=[];
         rec_defined;
         rec_eqns=eqns;
       } in
@@ -399,7 +399,7 @@ let dispatch = {
     Some (fun self ~depth ~loc:_ id spec tup ->
       Utils.debugf ~section 5 "monomorphize spec for %a on %a"
         (fun k->k ID.print id ArgTuple.print tup);
-      assert (ArgTuple.length tup = List.length spec.Stmt.spec_vars);
+      assert (ArgTuple.length tup = List.length spec.Stmt.spec_ty_vars);
       let st = Trav.state self in
       (* flag every symbol as specialized. We can use [tup] for every
            specified symbol, as they all share the same set of type variables. *)
@@ -426,7 +426,7 @@ let dispatch = {
           (fun ax -> mono_term ~self ~local_state ax)
           spec.Stmt.spec_axioms
       in
-      let st' = {Stmt.spec_axioms=axioms; spec_defined=defined; spec_vars=[]; } in
+      let st' = {Stmt.spec_axioms=axioms; spec_defined=defined; spec_ty_vars=[]; } in
       st'
     );
 

@@ -754,7 +754,7 @@ let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
             } in
             { Stmt.
               rec_defined=defined;
-              rec_vars=vars;
+              rec_ty_vars=[];
               rec_eqns=eqn;
             }
           ) else (
@@ -804,12 +804,12 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
   | Stmt.Axiom (Stmt.Axiom_rec l) -> elim_hof_rec ~state ~info l
   | Stmt.Axiom (Stmt.Axiom_spec spec) ->
       let subst, vars =
-        Utils.fold_map (bind_hof_var ~state) Subst.empty spec.Stmt.spec_vars
+        Utils.fold_map (bind_hof_var ~state) Subst.empty spec.Stmt.spec_ty_vars
       in
       let spec =
         { Stmt.
           spec_axioms=List.map (tr_term Pol.Pos subst) spec.Stmt.spec_axioms;
-          spec_vars=vars;
+          spec_ty_vars=vars;
           spec_defined=
             List.map
               (fun d ->

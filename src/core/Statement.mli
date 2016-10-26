@@ -30,14 +30,14 @@ type (+'t, +'ty) equations =
 
 type (+'t,+'ty) rec_def = {
   rec_defined: 'ty defined;
-  rec_vars: 'ty var list; (* type variables in definitions *)
+  rec_ty_vars: 'ty var list; (* type variables in definitions *)
   rec_eqns: ('t, 'ty) equations; (* list of equations defining the term *)
 }
 
 type (+'t, +'ty) rec_defs = ('t, 'ty) rec_def list
 
 type (+'t, +'ty) spec_defs = {
-  spec_vars: 'ty var list; (* type variables used by defined terms *)
+  spec_ty_vars: 'ty var list; (* type variables used by defined terms *)
   spec_defined: 'ty defined list;  (* terms being specified together *)
   spec_axioms: 't list;  (* free-form axioms *)
 }

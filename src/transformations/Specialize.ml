@@ -764,7 +764,7 @@ let dispatch = {
     (* new (specialized) case *)
     let rec_defined = specialize_defined ~state:st def.Stmt.rec_defined args in
     let def' = {Stmt.
-      rec_vars=[];
+      rec_ty_vars=[];
       rec_defined;
       rec_eqns=eqns;
     } in

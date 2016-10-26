@@ -142,7 +142,7 @@ let statement_to_tip (st:(term,ty)St.t): A.statement list = match St.view st wit
     (* TODO: if some variables have type {fun,datatype}, then raise Out_of_scope,
        for SMBC will not be able to handle them *)
     (* first declare, then axiomatize *)
-    assert (s.St.spec_vars=[]);
+    assert (s.St.spec_ty_vars=[]);
     let decls =
       St.defined_of_spec s
       |> Sequence.map
@@ -159,7 +159,7 @@ let statement_to_tip (st:(term,ty)St.t): A.statement list = match St.view st wit
     let l =
       List.map
         (fun def ->
-           assert (def.St.rec_vars=[]);
+           assert (def.St.rec_ty_vars=[]);
            let {St.defined_head=id; defined_ty=ty} = def.St.rec_defined in
            let name = id_to_string id in
            let _, _, ty_ret = U.ty_unfold ty in

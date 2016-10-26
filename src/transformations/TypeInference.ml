@@ -798,7 +798,7 @@ module Convert(Term : TermTyped.S) = struct
   (* convert a specification *)
   let convert_spec_defs ?loc ~env (untyped_defined_l, ax_l) =
     (* what are we specifying? a list of [Stmt.defined] terms *)
-    let defined_l, env', spec_vars = match untyped_defined_l with
+    let defined_l, env', spec_ty_vars = match untyped_defined_l with
       | [] -> assert false (* parser error *)
       | (v,ty) :: tail ->
           let id = ID.make v in
@@ -830,10 +830,10 @@ module Convert(Term : TermTyped.S) = struct
           defined :: l, env', vars
     in
     (* convert axioms. Use [env'] so that the specified terms are actually
-        expansed into their version applied to [spec_vars] *)
+        expansed into their version applied to [spec_ty_vars] *)
     let axioms = List.map
       (fun ax ->
-        (* check that all the free type variables in [ax] are among [spec_vars] *)
+        (* check that all the free type variables in [ax] are among [spec_ty_vars] *)
         let before_generalize t =
           begin match check_no_meta t with
           | `Ok -> ()
@@ -842,7 +842,7 @@ module Convert(Term : TermTyped.S) = struct
               "term `@[%a@]`@ contains non-generalized variables @[%a@]"
               P.print t (CCFormat.list MetaVar.print) vars'
           end;
-          match check_vars ~vars:(VarSet.of_list spec_vars) ~rel:`Subset t with
+          match check_vars ~vars:(VarSet.of_list spec_ty_vars) ~rel:`Subset t with
           | `Ok -> ()
           | `Bad bad_vars ->
               ill_formedf ?loc ~kind:"spec"
@@ -854,8 +854,8 @@ module Convert(Term : TermTyped.S) = struct
       ax_l
     in
     (* check that no meta remains *)
-    List.iter check_mono_var_ spec_vars;
-    let spec = {Stmt. spec_axioms=axioms; spec_vars; spec_defined=defined_l; } in
+    List.iter check_mono_var_ spec_ty_vars;
+    let spec = {Stmt. spec_axioms=axioms; spec_ty_vars; spec_defined=defined_l; } in
     let env = List.fold_left
       (fun env def ->
         let id = def.Stmt.defined_head in
@@ -1022,7 +1022,7 @@ module Convert(Term : TermTyped.S) = struct
         in
         (* return case *)
         {Stmt.
-          rec_defined=defined; rec_vars=ty_vars;
+          rec_defined=defined; rec_ty_vars=ty_vars;
           rec_eqns=Stmt.Eqn_nested rec_eqns; })
       l'
     in
