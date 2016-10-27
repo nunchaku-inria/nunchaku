@@ -481,26 +481,31 @@ let dispatch = {
        other types in the process *)
     let subst =
       Subst.add_list ~subst:Subst.empty
-        c.Stmt.copy_vars (ArgTuple.m_args tup) in
+        c.Stmt.copy_vars (ArgTuple.m_args tup)
+    in
     let id', _ = mangle_ ~state:st c.Stmt.copy_id (ArgTuple.m_args tup) in
     let local_state = mk_local_state ~subst depth in
     let of_' = mono_type ~self ~local_state c.Stmt.copy_of in
     let to_' = mono_type ~self ~local_state c.Stmt.copy_to in
+    let wrt = match c.Stmt.copy_wrt with
+      | Stmt.Wrt_nothing -> Stmt.Wrt_nothing
+      | Stmt.Wrt_subset p -> Stmt.Wrt_subset (mono_term ~self ~local_state p)
+      | Stmt.Wrt_quotient r -> Stmt.Wrt_quotient (mono_term ~self ~local_state r)
+    in
     let abstract', _ =
       mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
     let concrete', _ =
       mangle_ ~state:st c.Stmt.copy_concrete (ArgTuple.m_args tup) in
     let ty_abstract' = U.ty_arrow of_' to_' in
     let ty_concrete' = U.ty_arrow to_' of_' in
-    let pred = CCOpt.map (mono_term ~self ~local_state) c.Stmt.copy_pred in
     let ty' = U.ty_type in
     (* create new copy type *)
     let c' =
       Stmt.mk_copy
         ~of_:of_' ~to_:to_' ~ty:ty' ~vars:[]
+        ~wrt
         ~abstract:(abstract', ty_abstract')
         ~concrete:(concrete', ty_concrete')
-        ~pred
         id'
     in
     c'

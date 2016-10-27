@@ -49,7 +49,7 @@ type (+'t, +'ty) def =
     (** ID is the concretization function *)
 
   | NoDef
-      (** Undefined symbol *)
+    (** Undefined symbol *)
 
 (** All information on a given symbol *)
 type (+'t, +'ty) info = {

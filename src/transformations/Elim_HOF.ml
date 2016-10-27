@@ -847,9 +847,14 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
       let subst, copy_vars = bind_hof_vars ~state Subst.empty c.Stmt.copy_vars in
       let copy_of = encode_ty_ ~handle_id c.Stmt.copy_of in
       let copy_to = encode_ty_ ~handle_id c.Stmt.copy_to in
+      let copy_wrt = match c.Stmt.copy_wrt with
+        | Stmt.Wrt_nothing -> Stmt.Wrt_nothing
+        | Stmt.Wrt_subset p -> Stmt.Wrt_subset (tr_term Pol.NoPol subst p)
+        | Stmt.Wrt_quotient r -> Stmt.Wrt_quotient (tr_term Pol.NoPol subst r)
+      in
       let c' = {
         c with Stmt.
-          copy_pred = CCOpt.map (tr_term Pol.NoPol subst) c.Stmt.copy_pred;
+          copy_wrt;
           copy_vars;
           copy_of;
           copy_to;

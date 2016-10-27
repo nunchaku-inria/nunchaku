@@ -103,7 +103,7 @@ let copy_as_finite_ty state ~info ~(pred:term) c : (_,_) Stmt.t list =
   let ty_c = U.ty_const id_c in
   ID.Tbl.add state.copy_as_uninterpreted id_c ();
   Utils.debugf ~section 3 "@[copy type %a:@ should_approx=%B@]"
-    (fun k->k ID.print id_c should_approx);
+    (fun k -> k ID.print id_c should_approx);
   (* be sure to register approximated types *)
   if should_approx
   then TyTbl.add state.approximate_types ty_c ();
@@ -114,6 +114,7 @@ let copy_as_finite_ty state ~info ~(pred:term) c : (_,_) Stmt.t list =
     in
     Stmt.decl ~info ~attrs id_c c.Stmt.copy_ty
   and decl_abs =
+    (* TODO: incomplete attribute *)
     Stmt.decl ~info ~attrs:[] c.Stmt.copy_abstract c.Stmt.copy_abstract_ty
   and decl_conc =
     Stmt.decl ~info ~attrs:[] c.Stmt.copy_concrete c.Stmt.copy_concrete_ty
@@ -189,9 +190,10 @@ let elim pb =
         let info = Stmt.info stmt in
         match Stmt.view stmt with
           | Stmt.Copy c ->
-            begin match c.Stmt.copy_pred with
-              | None -> copy_as_data ~info c
-              | Some p -> copy_as_finite_ty state ~info ~pred:p c
+            begin match c.Stmt.copy_wrt with
+              | Stmt.Wrt_nothing -> copy_as_data ~info c
+              | Stmt.Wrt_subset p -> copy_as_finite_ty state ~info ~pred:p c
+              | Stmt.Wrt_quotient r -> Utils.not_implemented "quotient type"
             end
           | _ ->
             let stmt' =

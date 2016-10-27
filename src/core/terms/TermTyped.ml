@@ -78,7 +78,7 @@ module Util(T : S)
   val ty_const : ?loc:loc -> id -> t
   val ty_app : ?loc:loc -> t -> t list -> t
   val ty_arrow : ?loc:loc -> t -> t -> t
-  val ty_arrow_l : ?loc:loc -> t -> t -> t
+  val ty_arrow_l : ?loc:loc -> t list -> t -> t
 
   val ty_var : ?loc:loc -> t var -> t
   val ty_forall : ?loc:loc -> t var -> t -> t
@@ -169,6 +169,7 @@ end = struct
 
   let ty_arrow ?loc a b =
     build ?loc ~ty:ty_type (TI.TyArrow (a,b))
+  let ty_arrow_l ?loc = List.fold_right (ty_arrow ?loc)
 
   let ty_forall ?loc a b =
     mk_bind ?loc ~ty:ty_type `TyForall a b
