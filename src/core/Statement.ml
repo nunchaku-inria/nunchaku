@@ -12,7 +12,6 @@ type 'ty defined = {
   defined_ty: 'ty; (* type of the head symbol *)
 }
 
-
 type (+'t, +'ty) equations =
   | Eqn_nested of
       ('ty var list (* universally quantified vars *)
@@ -86,7 +85,7 @@ type (+'t, +'ty) pred_def = {
 type 't copy_wrt =
   | Wrt_nothing
   | Wrt_subset of 't (* invariant (copy_of -> prop) *)
-  | Wrt_quotient of 't (* invariant (copy_of -> copy_of -> prop) *)
+  | Wrt_quotient of [`Partial | `Total] * 't (* invariant (copy_of -> copy_of -> prop) *)
 
 type (+'t, +'ty) copy = {
   copy_id: ID.t; (* new name *)
@@ -243,7 +242,7 @@ let map_eqns ~term ~ty c =
 let map_copy_wrt f wrt = match wrt with
   | Wrt_nothing -> Wrt_nothing
   | Wrt_subset p -> Wrt_subset (f p)
-  | Wrt_quotient r -> Wrt_quotient (f r)
+  | Wrt_quotient (tty, r) -> Wrt_quotient (tty, f r)
 
 let map_copy_bind ~bind ~term ~ty acc c =
   let acc', copy_vars = Utils.fold_map bind acc c.copy_vars in
@@ -436,7 +435,7 @@ let fold_bind ~bind ~term:fterm ~ty:fty b_acc acc (st:(_,_) t) =
       begin match c.copy_wrt with
         | Wrt_nothing -> acc
         | Wrt_subset p -> fterm b_acc acc p
-        | Wrt_quotient r -> fterm b_acc acc r
+        | Wrt_quotient (_, r) -> fterm b_acc acc r
       end
   | Goal t -> fterm b_acc acc t
 
@@ -573,7 +572,8 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
     let pp_wrt out = function
       | Wrt_nothing -> ()
       | Wrt_subset p -> fpf out "@,@[<2>subset@ @[%a@]@]" Pt.print p
-      | Wrt_quotient r -> fpf out "@,@[<2>quotient@ @[%a@]@]" Pt.print r
+      | Wrt_quotient (`Total, r) -> fpf out "@,@[<2>quotient@ @[%a@]@]" Pt.print r
+      | Wrt_quotient (`Partial, r) -> fpf out "@,@[<2>partial_quotient@ @[%a@]@]" Pt.print r
     in
     fpf out
       "@[<v2>copy @[<4>%a %a :=@ @[%a@]@]@ %a\

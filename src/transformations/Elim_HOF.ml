@@ -850,7 +850,7 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
       let copy_wrt = match c.Stmt.copy_wrt with
         | Stmt.Wrt_nothing -> Stmt.Wrt_nothing
         | Stmt.Wrt_subset p -> Stmt.Wrt_subset (tr_term Pol.NoPol subst p)
-        | Stmt.Wrt_quotient r -> Stmt.Wrt_quotient (tr_term Pol.NoPol subst r)
+        | Stmt.Wrt_quotient (tty, r) -> Stmt.Wrt_quotient (tty, tr_term Pol.NoPol subst r)
       in
       let c' = {
         c with Stmt.

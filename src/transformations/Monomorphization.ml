@@ -490,7 +490,7 @@ let dispatch = {
     let wrt = match c.Stmt.copy_wrt with
       | Stmt.Wrt_nothing -> Stmt.Wrt_nothing
       | Stmt.Wrt_subset p -> Stmt.Wrt_subset (mono_term ~self ~local_state p)
-      | Stmt.Wrt_quotient r -> Stmt.Wrt_quotient (mono_term ~self ~local_state r)
+      | Stmt.Wrt_quotient (tty, r) -> Stmt.Wrt_quotient (tty, mono_term ~self ~local_state r)
     in
     let abstract', _ =
       mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in

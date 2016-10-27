@@ -193,7 +193,7 @@ let elim pb =
             begin match c.Stmt.copy_wrt with
               | Stmt.Wrt_nothing -> copy_as_data ~info c
               | Stmt.Wrt_subset p -> copy_as_finite_ty state ~info ~pred:p c
-              | Stmt.Wrt_quotient r -> Utils.not_implemented "quotient type"
+              | Stmt.Wrt_quotient (tty, r) -> Utils.not_implemented "quotient type"
             end
           | _ ->
             let stmt' =

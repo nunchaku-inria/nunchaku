@@ -8,7 +8,6 @@ type id = ID.t
 type loc = Loc.t
 type 'a printer = Format.formatter -> 'a -> unit
 
-
 type (+'t, +'ty) def =
   | Fun_def of
       ('t, 'ty) Statement.rec_defs *

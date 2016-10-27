@@ -85,7 +85,7 @@ type (+'t, +'ty) pred_def = {
 type 't copy_wrt =
   | Wrt_nothing
   | Wrt_subset of 't (* invariant (copy_of -> prop) *)
-  | Wrt_quotient of 't (* invariant (copy_of -> copy_of -> prop) *)
+  | Wrt_quotient of [`Partial | `Total] * 't (* invariant (copy_of -> copy_of -> prop) *)
 
 type (+'t, +'ty) copy = {
   copy_id: ID.t; (* new name *)

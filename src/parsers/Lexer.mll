@@ -82,6 +82,7 @@ rule token = parse
   | "copy" { COPY }
   | "subset" { SUBSET }
   | "quotient" { QUOTIENT }
+  | "partial_quotient" { PARTIAL_QUOTIENT }
   | "abstract" { ABSTRACT }
   | "concrete" { CONCRETE }
   | "wf" { WF_ATTRIBUTE }

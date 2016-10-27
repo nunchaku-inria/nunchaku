@@ -67,6 +67,7 @@
 %token COPY
 %token SUBSET
 %token QUOTIENT
+%token PARTIAL_QUOTIENT
 %token ABSTRACT
 %token CONCRETE
 
@@ -333,7 +334,8 @@ decl_attributes:
 copy_wrt:
   | { A.Wrt_nothing }
   | SUBSET t=atomic_term { A.Wrt_subset t }
-  | QUOTIENT t=atomic_term { A.Wrt_quotient t }
+  | QUOTIENT t=atomic_term { A.Wrt_quotient (`Total, t) }
+  | PARTIAL_QUOTIENT t=atomic_term { A.Wrt_quotient (`Partial, t) }
 
 statement:
   | VAL v=raw_var COLON t=term attrs=decl_attributes DOT

@@ -306,7 +306,7 @@ module Make(T : TI.S) = struct
               check_same_ty
                 (U.ty_arrow c.Stmt.copy_of U.ty_prop)
                 ty_p
-            | Stmt.Wrt_quotient r ->
+            | Stmt.Wrt_quotient (_, r) ->
               (* check that [r : copy_of -> copy_of -> prop] *)
               let ty_r = check ~env VarSet.empty r in
               check_same_ty

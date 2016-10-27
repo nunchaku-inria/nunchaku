@@ -229,7 +229,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
           begin match c.Stmt.copy_wrt with
             | Stmt.Wrt_nothing -> ()
             | Stmt.Wrt_subset t
-            | Stmt.Wrt_quotient t -> yield_term t
+            | Stmt.Wrt_quotient (_, t) -> yield_term t
           end
         | PS_goal t -> yield_term t
         | PS_axiom l -> List.iter yield_term l

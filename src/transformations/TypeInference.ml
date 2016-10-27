@@ -1252,11 +1252,11 @@ module Convert(Term : TermTyped.S) = struct
         (* [p : concrete -> prop] *)
         unify_in_ctx_ ~stack:[] (U.ty_exn p) (U.ty_arrow ty_of U.ty_prop);
         Stmt.Wrt_subset p
-      | A.Wrt_quotient r ->
+      | A.Wrt_quotient (tty, r) ->
         let r = convert_term_exn ~env r in
         (* [r : concrete -> concrete -> prop] *)
         unify_in_ctx_ ~stack:[] (U.ty_exn r) (U.ty_arrow_l [ty_of; ty_of] U.ty_prop);
-        Stmt.Wrt_quotient r
+        Stmt.Wrt_quotient (tty, r)
     in
     (* create statement *)
     let c = Stmt.mk_copy

@@ -131,7 +131,7 @@ type mutual_preds = (var * ty * term list) list
 type copy_wrt =
   | Wrt_nothing
   | Wrt_subset of term
-  | Wrt_quotient of term
+  | Wrt_quotient of [`Partial | `Total] * term
 
 type copy = {
   id: var; (* the new name *)
@@ -388,7 +388,8 @@ let print_statement out st = match st.stmt_value with
       let pp_wrt out = function
         | Wrt_nothing -> ()
         | Wrt_subset p -> fpf out "@[subset %a@]@," print_term p
-        | Wrt_quotient r -> fpf out "@[quotient %a@]@," print_term r
+        | Wrt_quotient (`Total, r) -> fpf out "@[quotient %a@]@," print_term r
+        | Wrt_quotient (`Partial, r) -> fpf out "@[partial_quotient %a@]@," print_term r
       in
       fpf out "@[<v2>@[<4>copy @[%s%a@] :=@ @[%a@]@]@,%aabstract = %s@,concrete = %s@]"
         c.id (pp_list_ ~sep:" " CCFormat.string) c.copy_vars
