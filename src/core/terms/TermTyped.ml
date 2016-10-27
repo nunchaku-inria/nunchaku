@@ -5,9 +5,6 @@
 
 module TI = TermInner
 module Loc = Location
-module Var = Var
-module MetaVar = MetaVar
-module ID = ID
 
 (*$inject
   module TI = TermInner
@@ -81,6 +78,7 @@ module Util(T : S)
   val ty_const : ?loc:loc -> id -> t
   val ty_app : ?loc:loc -> t -> t list -> t
   val ty_arrow : ?loc:loc -> t -> t -> t
+  val ty_arrow_l : ?loc:loc -> t -> t -> t
 
   val ty_var : ?loc:loc -> t var -> t
   val ty_forall : ?loc:loc -> t var -> t -> t

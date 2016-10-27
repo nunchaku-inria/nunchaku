@@ -141,7 +141,7 @@ let decl_to_tip id ty : A.statement =
 let statement_to_tip (st:(term,ty)St.t): A.statement list = match St.view st with
   | St.Decl (id,ty,_) ->
     let vars, _, _ = U.ty_unfold ty in
-    if vars=[] 
+    if vars=[]
     then [decl_to_tip id ty]
     else out_of_scopef "cannot encode to TIP poly statement %a" PSt.print st
   | St.Axiom (St.Axiom_std l) ->

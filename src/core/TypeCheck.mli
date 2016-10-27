@@ -29,5 +29,3 @@ module Make(T : TermInner.S) : sig
       @param check_non_empty_tys if true, also check that no statement
        defines an empty type. default false. *)
 end
-
-

@@ -87,7 +87,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) : sig
       @param dispatch how to deal with definitions of symbols.
         Fields that are not specified are dealt with generically *)
 
-  val env : t -> (term,ty) Env.t
+  val env : t -> (term, ty) Env.t
 
   val state : t -> State.t
 
@@ -109,9 +109,9 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) : sig
   exception CannotTraverse
 
   val traverse_stmt :
-    ?after_env:((term,ty) Env.t -> unit) ->
+    ?after_env:((term, ty) Env.t -> unit) ->
     t ->
-    (term,ty) Statement.t ->
+    (term, ty) Statement.t ->
     unit
   (** Traverse the given statement, adding its translation to the result,
       updating the environment, etc.
@@ -119,7 +119,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) : sig
       @param after_env called once the environment is updated, but
       before the statment is actually traversed *)
 
-  val get_statements: t -> (term,ty) Statement.t CCVector.vector
+  val get_statements: t -> (term, ty) Statement.t CCVector.vector
   (** [get_statements t] sorts topologically and merges the pieces of statements
       previously added by {!push_rec}, {!push_pred}, etc. and
       returns a valid list of statements.

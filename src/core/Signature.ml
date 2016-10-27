@@ -1,6 +1,5 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-module ID = ID
 module Stmt = Statement
 
 type id = ID.t

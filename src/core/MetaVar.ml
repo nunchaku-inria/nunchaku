@@ -3,7 +3,6 @@
 
 (** {1 References for Unification} *)
 
-module ID = ID
 
 type id = ID.t
 

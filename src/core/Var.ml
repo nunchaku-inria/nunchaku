@@ -1,7 +1,6 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-module ID = ID
 
 type id = ID.t
 

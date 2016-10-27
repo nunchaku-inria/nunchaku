@@ -65,6 +65,8 @@
 %token VAL
 %token GOAL
 %token COPY
+%token SUBSET
+%token QUOTIENT
 %token ABSTRACT
 %token CONCRETE
 
@@ -276,9 +278,10 @@ defined_symbol:
 
 rec_def:
   | d=defined_symbol EQDEF l=separated_nonempty_list(SEMI_COLON,term)
-    { 
+    {
       let v, ty = d in
-      v, ty, l }
+      v, ty, l
+    }
 
 rec_defs:
   | l=separated_nonempty_list(AND, rec_def) { l }
@@ -327,9 +330,10 @@ decl_attributes:
     { l }
   | { [] }
 
-copy_pred:
-  | { None }
-  | PRED t=atomic_term { Some t }
+copy_wrt:
+  | { A.Wrt_nothing }
+  | SUBSET t=atomic_term { A.Wrt_subset t }
+  | QUOTIENT t=atomic_term { A.Wrt_quotient t }
 
 statement:
   | VAL v=raw_var COLON t=term attrs=decl_attributes DOT
@@ -383,15 +387,15 @@ statement:
       A.include_ ~loc f
     }
   | COPY id=raw_var vars=raw_var* EQDEF u=term
+    wrt=copy_wrt
     ABSTRACT abs=raw_var
     CONCRETE conc=raw_var
-    pred=copy_pred
     DOT
     {
       (* TODO: instead, parse list of "fields" and validate after parsing?
          better once we get more possible (optional) fields, in random order *)
       let loc = L.mk_pos $startpos $endpos in
-      A.copy ~loc ~of_:u ~abstract:abs ~concrete:conc ~pred id vars
+      A.copy ~loc ~of_:u ~abstract:abs ~concrete:conc ~wrt id vars
     }
   | error
     {

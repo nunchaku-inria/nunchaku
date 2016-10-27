@@ -6,8 +6,6 @@
 open Nunchaku_core
 
 module E = CCResult
-module Var = Var
-module ID = ID
 module Res = Problem.Res
 module S = Scheduling
 

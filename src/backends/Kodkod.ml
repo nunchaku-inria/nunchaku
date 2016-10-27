@@ -477,7 +477,7 @@ let rec call_rec ~print ~size ~deadline pb : res * Scheduling.shortcut =
         Res.Unknown, S.No_shortcut
       | Res.Unsat ->
         let now = Unix.gettimeofday () in
-        if deadline -. now  > 0.5
+        if deadline -. now > 0.5
         then
           (* unsat, and we still have some time: retry with a bigger size *)
           call_rec ~print ~size:(size + default_increment_) ~deadline pb

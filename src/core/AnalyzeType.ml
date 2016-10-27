@@ -72,8 +72,8 @@ module Make(T : TI.S) = struct
 
   let enter_id_ cache id state ~f = enter_ty_ cache (U.ty_const id) state ~f
 
-  let sum_ ~f l = ID.Map.fold (fun _ x acc -> Card.(acc+f x)) l Card.zero
-  let product_ ~f l = List.fold_left (fun acc x -> Card.(acc*f x)) Card.one l
+  let sum_ ~f l = ID.Map.fold (fun _ x acc -> Card.(acc + f x)) l Card.zero
+  let product_ ~f l = List.fold_left (fun acc x -> Card.(acc * f x)) Card.one l
 
   type save_op =
     | Save
@@ -89,13 +89,14 @@ module Make(T : TI.S) = struct
       | None ->
         let res = match T.repr ty with
           | TI.Const id -> eval_id_ op env cache id
+          (* TODO: make more precise for e.g. "list nat" (or mangle) *)
           | _ -> Card.quasi_finite_nonzero (* approx *)
         in
         (* maybe cache *)
         begin match op with
           | Save ->
             Utils.debugf ~section 5 "@[<2>card `@[%a@]` =@ %a@]"
-              (fun k->k P.print ty Card.print res);
+              (fun k -> k P.print ty Card.print res);
             save_ cache ty res
           | Do_not_save -> ()
         end;
@@ -153,9 +154,13 @@ module Make(T : TI.S) = struct
                 compute_sum_ op env cache def (Assume Card.infinite)
           end
       | Env.Copy_ty c ->
-          begin match c.Stmt.copy_pred with
-          | Some _ -> Card.quasi_finite_zero (* restriction of size? *)
-          | None -> eval_ty_ op env cache c.Stmt.copy_of (* cardinality of definition *)
+          let underlying = eval_ty_ op env cache c.Stmt.copy_of in (* cardinality of definition *)
+          begin match c.Stmt.copy_wrt with
+            | Stmt.Wrt_nothing -> underlying
+            | Stmt.Wrt_subset _
+            | Stmt.Wrt_quotient _ ->
+              (* approximation *)
+              if Card.is_finite underlying then Card.quasi_finite_nonzero else Card.unknown
           end
       | Env.NoDef ->
           (* uninterpreted datatype: use hints and other specific params *)
@@ -191,10 +196,10 @@ module Make(T : TI.S) = struct
   let cardinality_ty_id ?(cache=create_cache ()) env id =
     eval_ty_ Save env cache (U.ty_const id)
 
-  let cardinality_ty ?(cache=create_cache()) env ty =
+  let cardinality_ty ?(cache=create_cache ()) env ty =
     eval_ty_ Save env cache ty
 
-  let check_non_zero ?(cache=create_cache()) env stmt =
+  let check_non_zero ?(cache=create_cache ()) env stmt =
     match Stmt.view stmt with
     | Stmt.TyDef (`Data, l) ->
         Utils.debugf ~section 5 "@[<2>check well-formed:@ `@[%a@]`@]"

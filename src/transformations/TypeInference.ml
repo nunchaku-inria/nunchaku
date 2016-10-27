@@ -7,9 +7,6 @@ open Nunchaku_core
 
 module A = UntypedAST
 module E = CCResult
-module ID = ID
-module Var = Var
-module MetaVar = MetaVar
 module Loc = Location
 module Stmt = Statement
 
@@ -1248,22 +1245,25 @@ module Convert(Term : TermTyped.S) = struct
       TyEnv.add_decl ~env c.A.abstract ~id:abstract ty_abstract in
     let env =
       TyEnv.add_decl ~env c.A.concrete ~id:concrete ty_concrete in
-    (* handle optional pred *)
-    let pred =
-      CCOpt.map
-        (fun p ->
-           let p = convert_term_exn ~env p in
-           (* [p : concrete -> prop] *)
-           unify_in_ctx_ ~stack:[] (U.ty_exn p) (U.ty_arrow ty_of U.ty_prop);
-           p)
-        c.A.pred
+    let wrt = match c.A.wrt with
+      | A.Wrt_nothing -> Stmt.Wrt_nothing
+      | A.Wrt_subset p ->
+        let p = convert_term_exn ~env p in
+        (* [p : concrete -> prop] *)
+        unify_in_ctx_ ~stack:[] (U.ty_exn p) (U.ty_arrow ty_of U.ty_prop);
+        Stmt.Wrt_subset p
+      | A.Wrt_quotient r ->
+        let r = convert_term_exn ~env r in
+        (* [r : concrete -> concrete -> prop] *)
+        unify_in_ctx_ ~stack:[] (U.ty_exn r) (U.ty_arrow_l [ty_of; ty_of] U.ty_prop);
+        Stmt.Wrt_quotient r
     in
     (* create statement *)
     let c = Stmt.mk_copy
         ~of_:ty_of ~to_:ty_new ~vars ~ty:ty_id
+        ~wrt
         ~abstract:(abstract,ty_abstract)
         ~concrete:(concrete,ty_concrete)
-        ~pred
         id in
     env, c
 

@@ -80,6 +80,8 @@ rule token = parse
   | "copred" { COPRED }
   | "include" { INCLUDE }
   | "copy" { COPY }
+  | "subset" { SUBSET }
+  | "quotient" { QUOTIENT }
   | "abstract" { ABSTRACT }
   | "concrete" { CONCRETE }
   | "wf" { WF_ATTRIBUTE }

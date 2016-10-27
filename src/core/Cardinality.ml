@@ -23,13 +23,10 @@ end
 
 type t =
   | Exact of Z.t
-
   | QuasiFiniteGEQ of Z.t
   (** unknown, but ≥ 0. If all uninterpreted types are finite, then
             this is finite too *)
-
   | Infinite
-
   | Unknown
   (** Any value, we do not know *)
 
@@ -53,6 +50,7 @@ let quasi_finite_nonzero = QuasiFiniteGEQ Z.one
 let infinite = Infinite
 let unknown = Unknown
 let is_zero = function Exact z -> Z.sign z = 0 | _ -> false
+let is_finite = function Exact _ | QuasiFiniteGEQ _ -> true | Infinite | Unknown -> false
 
 let ( * ) a b = match a, b with
   | Unknown, _

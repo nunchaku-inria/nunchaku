@@ -175,15 +175,6 @@ let parse_chan ic =
   | `End -> `Error "unexpected end of file"
   | (`Ok _ | `Error _) as res -> res
 
-let parse_chan_gen ic =
-  let buf = Lexing.from_channel ic in
-  let d = Decoder.of_lexbuf buf in
-  fun () ->
-    match Decoder.next d with
-    | `End -> None
-    | `Error _ as e -> Some e
-    | `Ok _ as res -> Some res
-
 let parse_chan_list ic =
   let buf = Lexing.from_channel ic in
   let d = Decoder.of_lexbuf buf in

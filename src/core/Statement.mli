@@ -82,17 +82,22 @@ type (+'t, +'ty) pred_def = {
   pred_clauses: ('t, 'ty) pred_clause list;
 }
 
+type 't copy_wrt =
+  | Wrt_nothing
+  | Wrt_subset of 't (* invariant (copy_of -> prop) *)
+  | Wrt_quotient of 't (* invariant (copy_of -> copy_of -> prop) *)
+
 type (+'t, +'ty) copy = {
   copy_id: ID.t; (* new name *)
   copy_vars: 'ty Var.t list; (* list of type variables *)
   copy_ty: 'ty;  (* type of [copy_id], of the form [type -> type -> ... -> type] *)
   copy_of: 'ty; (* [id vars] is a copy of [of_]. Set of variables = vars *)
   copy_to: 'ty; (* [id vars] *)
+  copy_wrt: 't copy_wrt;
   copy_abstract: ID.t; (* [of -> id vars] *)
   copy_abstract_ty: 'ty;
   copy_concrete: ID.t; (* [id vars -> of] *)
   copy_concrete_ty: 'ty;
-  copy_pred: 't option; (* invariant (copy_of -> prop) *)
 }
 
 (** Attribute on declarations *)
@@ -189,7 +194,7 @@ val mk_mutual_ty:
 (** Constructor for {!tydef} *)
 
 val mk_copy :
-  pred:'t option ->
+  wrt:'t copy_wrt ->
   of_:'ty ->
   to_:'ty ->
   ty:'ty ->
@@ -299,14 +304,27 @@ val map_pred_bind :
 
 val map_preds :
   term:('a -> 'a1) -> ty:('b -> 'b1) ->
-  ('a,'b) pred_def list ->
-  ('a1,'b1) pred_def list
+  ('a, 'b) pred_def list ->
+  ('a1, 'b1) pred_def list
+
+val map_copy_wrt :
+  ('a -> 'b) ->
+  'a copy_wrt ->
+  'b copy_wrt
+
+val map_copy_bind :
+  bind:('a -> 'b var -> 'a * 'c var) ->
+  term:('a -> 'd -> 'e) ->
+  ty:('a -> 'b -> 'c) ->
+  'a ->
+  ('d, 'b) copy ->
+  ('e, 'c) copy
 
 val map_copy :
   term:('t1 -> 't2) ->
   ty:('ty1 -> 'ty2) ->
-  ('t1,'ty1) copy ->
-  ('t2,'ty2) copy
+  ('t1, 'ty1) copy ->
+  ('t2, 'ty2) copy
 
 val map :
   term:('t -> 't2) ->
@@ -373,4 +391,3 @@ module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
   val print_copy : (Pt.t, Pty.t) copy printer
   val print : (Pt.t, Pty.t) t printer
 end
-

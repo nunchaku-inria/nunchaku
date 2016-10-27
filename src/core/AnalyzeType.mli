@@ -20,6 +20,7 @@ module Make(T : TermInner.S) : sig
 
   val create_cache :
     ?default_card:int ->
+    (* TODO: remove? *)
     ?map_hint:(Cardinality.t -> Cardinality.t option) ->
     unit ->
     cache

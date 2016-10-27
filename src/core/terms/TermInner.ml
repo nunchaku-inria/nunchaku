@@ -3,9 +3,6 @@
 
 (** {1 Main View for terms} *)
 
-module ID = ID
-module Var = Var
-module MetaVar = MetaVar
 
 type id = ID.t
 type 'a var = 'a Var.t
@@ -356,7 +353,7 @@ type 'a view =
  *)
 
 type 't repr = 't -> 't view
-(** A concrete representation of terms by the type [t'] *)
+(** A concrete representation of terms by the type ['t] *)
 
 type 't build = 't view -> 't
 (** A builder for a concrete representation with type ['t]. *)

@@ -5,7 +5,6 @@ open Nunchaku_core
 
 module E = CCResult
 module A = UntypedAST
-module Utils = Utils
 module TI = TermInner
 module Backends = Nunchaku_backends
 module Tr = Nunchaku_transformations
@@ -406,7 +405,7 @@ let make_model_pipeline () =
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-    Tr.ElimPatternMatch.pipe ~mode:Tr.ElimPatternMatch.Elim_codata_match 
+    Tr.ElimPatternMatch.pipe ~mode:Tr.ElimPatternMatch.Elim_codata_match
       ~print:(!print_elim_codata_ || !print_all_) ~check @@@
     Tr.ElimData.Codata.pipe ~print:(!print_elim_codata_ || !print_all_) ~check @@@
     (if !enable_polarize_

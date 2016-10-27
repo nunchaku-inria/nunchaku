@@ -298,14 +298,20 @@ module Make(T : TI.S) = struct
             c.Stmt.copy_concrete_ty
               (U.ty_forall_l c.Stmt.copy_vars
                  (U.ty_arrow c.Stmt.copy_to c.Stmt.copy_of));
-          begin match c.Stmt.copy_pred with
-            | None -> ()
-            | Some p ->
+          begin match c.Stmt.copy_wrt with
+            | Stmt.Wrt_nothing -> ()
+            | Stmt.Wrt_subset p ->
               (* check that [p : copy_of -> prop] *)
               let ty_p = check ~env VarSet.empty p in
               check_same_ty
                 (U.ty_arrow c.Stmt.copy_of U.ty_prop)
                 ty_p
+            | Stmt.Wrt_quotient r ->
+              (* check that [r : copy_of -> copy_of -> prop] *)
+              let ty_r = check ~env VarSet.empty r in
+              check_same_ty
+                (U.ty_arrow_l [c.Stmt.copy_of; c.Stmt.copy_of] U.ty_prop)
+                ty_r
           end;
       | _ -> default_check st
     end;
