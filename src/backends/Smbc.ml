@@ -448,8 +448,9 @@ let solve ~deadline pb =
     Res.Unknown [Res.U_timeout i], S.No_shortcut
   else (
     let timer = Utils.Time.start_timer () in
-    let mk_info() =
-      Res.mk_info ~backend:"smbc" ~time:(Utils.Time.get_timer timer) ()
+    let mk_info ?msg () =
+      Res.mk_info ?message:msg
+        ~backend:"smbc" ~time:(Utils.Time.get_timer timer) ()
     in
     let timeout = (int_of_float (deadline -. now +. 1.5)) in
     (* call solver and communicate over stdin *)
@@ -477,7 +478,7 @@ let solve ~deadline pb =
       | S.Fut.Done (E.Error (Out_of_scope msg)) ->
         Utils.debugf ~section 3 "@[out of scope because:@ %s@]"
           (fun k->k msg);
-        let info = mk_info() in
+        let info = mk_info ~msg () in
         Res.Unknown [Res.U_out_of_scope info], S.No_shortcut (* out of scope *)
       | S.Fut.Done (E.Error e) ->
         let info = mk_info() in

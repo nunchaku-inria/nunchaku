@@ -146,6 +146,7 @@ module Res = struct
   type info = {
     backend: string; (* which solver returned this result? *)
     time: float; (* time it took *)
+    message: string option; (* additional message *)
   }
 
   (* a single reason why "unknown" *)
@@ -167,7 +168,8 @@ module Res = struct
     | Error (e, i) -> Error (e, i)
     | Sat (m, i) -> Sat (f m, i)
 
-  let mk_info ~backend ~time () = {backend;time}
+  let mk_info ?message ~backend ~time () =
+    {backend; time; message}
 
   let map ~term ~ty t =
     map_m t ~f:(Model.map ~term ~ty)
@@ -181,7 +183,12 @@ module Res = struct
     | Sat (_,_) -> fpf out "SAT"
 
   let print_info out i =
-    Format.fprintf out "{backend:%s, time:%.1fs}" i.backend i.time
+    let pp_msg out = function
+      | None -> ()
+      | Some s -> Format.fprintf out ",@ message=%S" s
+    in
+    Format.fprintf out "{@[<2>backend:%s, time:%.1fs%a@]}"
+      i.backend i.time pp_msg i.message
 
   let print_unknown_info out = function
     | U_timeout i -> fpf out "TIMEOUT %a" print_info i

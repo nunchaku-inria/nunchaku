@@ -123,6 +123,7 @@ module Res : sig
   type info = {
     backend: string; (* which solver returned this result? *)
     time: float; (* time it took *)
+    message: string option; (* additional message *)
   }
 
   (* a single reason why "unknown" *)
@@ -138,7 +139,7 @@ module Res : sig
     | Unknown of unknown_info list (* can cumulate several reasons *)
     | Error of exn * info
 
-  val mk_info : backend:string -> time:float -> unit -> info
+  val mk_info : ?message:string -> backend:string -> time:float -> unit -> info
 
   val map : term:('t1 -> 't2) -> ty:('ty1 -> 'ty2) -> ('t1,'ty1) t -> ('t2, 'ty2) t
 
