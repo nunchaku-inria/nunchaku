@@ -883,6 +883,9 @@ module type UTIL = sig
   module Tbl : CCHashtbl.S with type key = t_
   (** Hashtbl with terms as key. The hash function is modulo α-equiv *)
 
+  module Map : CCMap.S with type key = t_
+  (** Map with terms as key. The hash function is modulo α-equiv *)
+
   val remove_dup : t_ list -> t_ list
   (** Use a hashset to remove duplicates from the list. Order is
       not preserved. *)
@@ -1316,11 +1319,15 @@ module Util(T : S)
 
   let equal a b = equal_with ~subst:Subst.empty a b
 
-  module Tbl = CCHashtbl.Make(struct
-      type t = t_
-      let equal = equal
-      let hash = hash_alpha_eq
-    end)
+  module As_key = struct
+    type t = t_
+    let compare = compare
+    let equal = equal
+    let hash = hash_alpha_eq
+  end
+
+  module Tbl = CCHashtbl.Make(As_key)
+  module Map = CCMap.Make(As_key)
 
   (* remove duplicates in [l] *)
   let remove_dup l : t_ list =
