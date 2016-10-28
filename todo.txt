@@ -13,3 +13,5 @@
 (B) 2016-06-01 repair, in ElimCopy, rec/pred statements (adjust num. of variables)
 2016-06-13 refactor Stmt to use `defined` more; also rename "tydef" into "data"
 (B) 2015-10-05 narrowing pipeline to SMBC
+(A) 2016-10-27 cleanup: write + always use Statement.map_bind_pol (never just map)
+(A) 2016-10-28 merge Env and Traversal.Partial_statement; remove notion of Signature

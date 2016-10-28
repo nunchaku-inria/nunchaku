@@ -75,3 +75,4 @@ x 2016-06-27 2016-06-06 improve Elim_prop_args (type-driven recursive traversal)
 x 2016-06-27 2016-06-13 refine ElimRec to avoid boxing small products of finite types (useful for paradox)
 x 2016-06-27 2016-06-13 ElimData: use asserting for defining cons/nil (see mockup)
 x 2016-07-18 2015-11-16 narrowing @feature
+x 2016-10-27 2016-10-25 copy tip-parser in src/parsers/
