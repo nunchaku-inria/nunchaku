@@ -456,6 +456,14 @@ let make_model_pipeline () =
 
 let process_res_ r =
   let module Res = Problem.Res in
+  (* [l] only contains unknown-like results (+timeout+out_of_scope),
+     recover accurate info *)
+  let find_result_if_unknown l =
+    let l =
+      CCList.flat_map (function Res.Unknown l -> l | _ -> assert false) l
+    in
+    Res.Unknown l
+  in
   match r with
   | Scheduling.Res_fail e -> E.fail (Printexc.to_string e)
   | Scheduling.Res_list [] -> E.fail "no task succeeded"
@@ -463,10 +471,10 @@ let process_res_ r =
     assert
       (List.for_all
          (function
-           | Res.Timeout | Res.Unknown | Res.Out_of_scope -> true
-           | Res.Error _ | Res.Sat _ | Res.Unsat -> false)
+           | Res.Unknown _ -> true
+           | Res.Error _ | Res.Sat _ | Res.Unsat _ -> false)
          l);
-    let res = if List.mem Res.Timeout l then Res.Timeout else Res.Unknown in
+    let res = find_result_if_unknown l in
     E.return res
   | Scheduling.Res_one r -> E.return r
 
@@ -480,7 +488,7 @@ let run_tasks ~j ~deadline pipe pb =
     |> Lazy_list.to_list
   in
   match tasks with
-    | [] -> E.return Res.Unknown
+    | [] -> E.return (Res.Unknown [])
     | _::_ ->
       let res = Scheduling.run ~j ~deadline tasks in
       process_res_ res
@@ -517,27 +525,23 @@ let main_model ~output statements =
   | _, O_sexp ->
       let s = Problem.Res.to_sexp P.to_sexp P.to_sexp res in
       Format.printf "@[<hv2>%a@]@." Sexp_lib.pp s
-  | Res.Sat m, O_nunchaku when m.Model.potentially_spurious ->
-      Format.printf "@[<v>@[<v2>SAT: (potentially spurious) {@,@[<v>%a@]@]@,}@]@."
-        (Model.print P.print' P.print) m;
-  | Res.Sat m, O_nunchaku ->
-      Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]@."
-        Model.Default.print_standard m;
-  | Res.Sat m, O_tptp ->
+  | Res.Sat (m,i), O_nunchaku when m.Model.potentially_spurious ->
+      Format.printf "@[<v>@[<v2>SAT: (potentially spurious) {@,@[<v>%a@]@]@,}@,%a@]@."
+        (Model.print P.print' P.print) m Res.print_info i;
+  | Res.Sat (m,i), O_nunchaku ->
+      Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@,%a@]@."
+        Model.Default.print_standard m Res.print_info i;
+  | Res.Sat (m,i), O_tptp ->
       (* XXX: if potentially spurious, what should we print? *)
       let module PM = Nunchaku_parsers.TPTP_print in
-      Format.printf "@[<v2>%a@]@,@." PM.print_model m
-  | Res.Unsat, O_nunchaku ->
-      Format.printf "@[UNSAT@]@."
-  | Res.Unsat, O_tptp ->
-      Format.printf "@[SZS Status: Unsatisfiable@]@."
-  | Res.Out_of_scope, _ ->
-      Format.printf "@[OUT_OF_SCOPE@]@."
-  | Res.Unknown, _ ->
-      Format.printf "@[UNKNOWN@]@."
-  | Res.Timeout, _ ->
-      Format.printf "@[TIMEOUT@]@."
-  | Res.Error e, _ ->
+      Format.printf "@[<v2>%a@]@,%% %a@." PM.print_model m Res.print_info i
+  | Res.Unsat i, O_nunchaku ->
+      Format.printf "@[UNSAT@]@.%a@." Res.print_info i
+  | Res.Unsat i, O_tptp ->
+      Format.printf "@[SZS Status: Unsatisfiable@]@.%% %a@." Res.print_info i
+  | Res.Unknown l, _ ->
+      Format.printf "@[UNKNOWN@]@.(@[<hv>%a@])@." (Utils.pp_list Res.print_unknown_info) l
+  | Res.Error (e,_), _ ->
       raise e
 
 (* main *)

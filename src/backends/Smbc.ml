@@ -413,28 +413,28 @@ let convert_model (m:A_res.model): (_,_) Model.t =
          Model.add_value m (a,b,k))
     Model.empty m
 
-let convert_res (res:A_res.t): (_,_) Res.t * S.shortcut = match res with
-  | A_res.Timeout -> Res.Timeout, S.No_shortcut
-  | A_res.Unknown _ -> Res.Unknown, S.No_shortcut
-  | A_res.Unsat -> Res.Unsat, S.Shortcut
+let convert_res ~info (res:A_res.t): (_,_) Res.t * S.shortcut = match res with
+  | A_res.Timeout -> Res.Unknown [Res.U_timeout info], S.No_shortcut
+  | A_res.Unknown s -> Res.Unknown [Res.U_other (info,s)], S.No_shortcut
+  | A_res.Unsat -> Res.Unsat info, S.Shortcut
   | A_res.Sat m ->
     let m = convert_model m in
-    Res.Sat m, S.Shortcut
+    Res.Sat (m,info), S.Shortcut
 
 (* parse [stdout, errcode] into a proper result *)
-let parse_res (out:string) (errcode:int): (term,ty) Res.t * S.shortcut =
+let parse_res ~info (out:string) (errcode:int): (term,ty) Res.t * S.shortcut =
   if errcode<>0
   then
     let msg = Printf.sprintf "smbc failed with errcode %d, output:\n%s" errcode out in
-    Res.Error (Error msg), S.Shortcut
+    Res.Error (Error msg, info), S.Shortcut
   else (
     try
       let lexbuf = Lexing.from_string out in
       Location.set_file lexbuf "<output of smbc>";
       let res = Tip_parser.parse_smbc_res Tip_lexer.token lexbuf in
-      convert_res res
+      convert_res ~info res
     with e ->
-      Res.Error e, S.Shortcut
+      Res.Error (e,info), S.Shortcut
   )
 
 (** {2 Main Solving} *)
@@ -443,8 +443,14 @@ let solve ~deadline pb =
   Utils.debug ~section 1 "calling smbc";
   let now = Unix.gettimeofday() in
   if now +. 0.5 > deadline
-  then Res.Timeout, S.No_shortcut
+  then
+    let i = Res.mk_info ~backend:"smbc" ~time:0. () in
+    Res.Unknown [Res.U_timeout i], S.No_shortcut
   else (
+    let timer = Utils.Time.start_timer () in
+    let mk_info() =
+      Res.mk_info ~backend:"smbc" ~time:(Utils.Time.get_timer timer) ()
+    in
     let timeout = (int_of_float (deadline -. now +. 1.5)) in
     (* call solver and communicate over stdin *)
     let cmd = Printf.sprintf "smbc -t %d -nc --stdin 2>&1" timeout in
@@ -465,21 +471,26 @@ let solve ~deadline pb =
         Utils.debugf ~lock:true ~section 2
           "@[<2>smbc exited with %d, stdout:@ `%s`@]"
           (fun k->k errcode stdout);
-        parse_res stdout errcode
+        let info = mk_info() in
+        parse_res ~info stdout errcode
       | S.Fut.Fail (Out_of_scope msg)
       | S.Fut.Done (E.Error (Out_of_scope msg)) ->
         Utils.debugf ~section 3 "@[out of scope because:@ %s@]"
           (fun k->k msg);
-        Res.Out_of_scope, S.No_shortcut (* out of scope *)
+        let info = mk_info() in
+        Res.Unknown [Res.U_out_of_scope info], S.No_shortcut (* out of scope *)
       | S.Fut.Done (E.Error e) ->
-        Res.Error e, S.Shortcut
+        let info = mk_info() in
+        Res.Error (e,info), S.Shortcut
       | S.Fut.Stopped ->
-        Res.Timeout, S.No_shortcut
+        let info = mk_info() in
+        Res.Unknown [Res.U_timeout info], S.No_shortcut
       | S.Fut.Fail e ->
         (* return error *)
         Utils.debugf ~lock:true ~section 1 "@[<2>smbc failed with@ `%s`@]"
           (fun k->k (Printexc.to_string e));
-        Res.Error e, S.Shortcut
+        let info = mk_info() in
+        Res.Error (e,info), S.Shortcut
   )
 
 (* solve problem before [deadline] *)
@@ -494,7 +505,7 @@ let call ?(print_model=false) ?prio ~print problem =
        Utils.debugf ~section 2 "@[<2>smbc result:@ %a@]"
          (fun k->k Res.print_head res);
        begin match res with
-         | Res.Sat m when print_model ->
+         | Res.Sat (m,_) when print_model ->
            let pp_ty oc _ = CCFormat.string oc "$i" in
            Format.printf "@[<2>raw smbc model:@ @[%a@]@]@."
              (Model.print P.print' pp_ty) m

@@ -143,21 +143,31 @@ let env ?init:(env=Env.create()) pb =
     ill_formedf_ "invalid env: %a" Env.pp_invalid_def_ e
 
 module Res = struct
+  type info = {
+    backend: string; (* which solver returned this result? *)
+    time: float; (* time it took *)
+  }
+
+  (* a single reason why "unknown" *)
+  type unknown_info =
+    | U_timeout of info
+    | U_out_of_scope of info
+    | U_incomplete of info
+    | U_other of info * string
+
   type (+'t,+'ty) t =
-    | Unsat
-    | Sat of ('t,'ty) Model.t
-    | Unknown
-    | Timeout
-    | Out_of_scope
-    | Error of exn
+    | Unsat of info
+    | Sat of ('t,'ty) Model.t * info
+    | Unknown of unknown_info list
+    | Error of exn * info
 
   let map_m ~f t =  match t with
-    | Unsat -> Unsat
-    | Timeout -> Timeout
-    | Error e -> Error e
-    | Unknown -> Unknown
-    | Out_of_scope -> Out_of_scope
-    | Sat m -> Sat (f m)
+    | Unsat i -> Unsat i
+    | Unknown l -> Unknown l
+    | Error (e, i) -> Error (e, i)
+    | Sat (m, i) -> Sat (f m, i)
+
+  let mk_info ~backend ~time () = {backend;time}
 
   let map ~term ~ty t =
     map_m t ~f:(Model.map ~term ~ty)
@@ -165,30 +175,38 @@ module Res = struct
   let fpf = Format.fprintf
 
   let print_head out = function
-    | Unsat -> fpf out "UNSAT"
-    | Timeout -> fpf out "TIMEOUT"
-    | Error e -> fpf out "ERROR %s" (Printexc.to_string e)
-    | Unknown -> fpf out "UNKNOWN"
-    | Out_of_scope -> fpf out "OUT_OF_SCOPE"
-    | Sat _ -> fpf out "SAT"
+    | Unsat _ -> fpf out "UNSAT"
+    | Error (e,_) -> fpf out "ERROR %s" (Printexc.to_string e)
+    | Unknown _ -> fpf out "UNKNOWN"
+    | Sat (_,_) -> fpf out "SAT"
+
+  let print_info out i =
+    Format.fprintf out "{backend:%s, time:%.1fs}" i.backend i.time
+
+  let print_unknown_info out = function
+    | U_timeout i -> fpf out "TIMEOUT %a" print_info i
+    | U_out_of_scope i -> fpf out "OUT_OF_SCOPE %a" print_info i
+    | U_incomplete i -> fpf out "INCOMPLETE %a" print_info i
+    | U_other (i,s) -> fpf out "INCOMPLETE %a %s" print_info i s
+
+  let print_info_opt out = function
+    | None -> ()
+    | Some i -> print_info out i
 
   let print pt pty out = function
-    | Unsat -> fpf out "UNSAT"
-    | Timeout -> fpf out "TIMEOUT"
-    | Error e -> fpf out "ERROR %s" (Printexc.to_string e)
-    | Unknown -> fpf out "UNKNOWN"
-    | Out_of_scope -> fpf out "OUT_OF_SCOPE"
-    | Sat m ->
-        fpf out "@[<hv>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]" (Model.print pt pty) m
+    | Unsat i -> fpf out "UNSAT %a" print_info i
+    | Error (e,i) -> fpf out "ERROR %s %a" (Printexc.to_string e) print_info i
+    | Unknown l -> fpf out "UNKNOWN (@[%a@])" (Utils.pp_list print_unknown_info) l
+    | Sat (m,i) ->
+      fpf out "@[<hv>@[<v2>SAT: {@,@[<v>%a@]@]@,}@,%a@]"
+        (Model.print pt pty) m print_info i
 
   let str = Sexp_lib.atom
   let lst = Sexp_lib.list
 
   let to_sexp ft fty : (_,_) t to_sexp = function
-    | Unsat -> str "UNSAT"
-    | Timeout -> str "TIMEOUT"
-    | Error e -> lst [str "ERROR"; str (Printexc.to_string e)]
-    | Unknown -> str "UNKNOWN"
-    | Out_of_scope -> str "OUT_OF_SCOPE"
-    | Sat m -> lst [str "SAT"; Model.to_sexp ft fty m]
+    | Unsat _ -> str "UNSAT"
+    | Error (e,_) -> lst [str "ERROR"; str (Printexc.to_string e)]
+    | Unknown _ -> str "UNKNOWN"
+    | Sat (m,_) -> lst [str "SAT"; Model.to_sexp ft fty m]
 end

@@ -120,13 +120,25 @@ val env : ?init:('t,'ty) Env.t -> ('t, 'ty) t -> ('t,'ty) Env.t
 (** {2 Result} *)
 
 module Res : sig
+  type info = {
+    backend: string; (* which solver returned this result? *)
+    time: float; (* time it took *)
+  }
+
+  (* a single reason why "unknown" *)
+  type unknown_info =
+    | U_timeout of info
+    | U_out_of_scope of info
+    | U_incomplete of info
+    | U_other of info * string
+
   type (+'t,+'ty) t =
-    | Unsat
-    | Sat of ('t,'ty) Model.t
-    | Unknown
-    | Timeout
-    | Out_of_scope
-    | Error of exn
+    | Unsat of info
+    | Sat of ('t,'ty) Model.t * info
+    | Unknown of unknown_info list (* can cumulate several reasons *)
+    | Error of exn * info
+
+  val mk_info : backend:string -> time:float -> unit -> info
 
   val map : term:('t1 -> 't2) -> ty:('ty1 -> 'ty2) -> ('t1,'ty1) t -> ('t2, 'ty2) t
 
@@ -136,6 +148,10 @@ module Res : sig
     ('t2, 'ty2) t
 
   val print : (TermInner.prec -> 't printer) -> 'ty printer -> ('t,'ty) t printer
+
+  val print_info : info printer
+
+  val print_unknown_info : unknown_info printer
 
   val print_head : (_,_) t printer
   (** print result, not content (i.e. not the model *)

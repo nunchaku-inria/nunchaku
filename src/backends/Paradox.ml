@@ -69,25 +69,31 @@ let parse_model s : model =
   A.to_model l
 
 (* [s] is the output of paradox, parse a result from it *)
-let parse_res ~meta s =
+let parse_res ~info ~meta s =
   if CCString.mem ~sub:"BEGIN MODEL" s
   then if meta.ProblemMetadata.sat_means_unknown
-    then Res.Unknown, S.No_shortcut
+    then Res.Unknown [Res.U_timeout info], S.No_shortcut
     else
       let m = parse_model s in
-      Res.Sat m, S.Shortcut
+      Res.Sat (m,info), S.Shortcut
   else if CCString.mem ~sub:"RESULT: Unsatisfiable" s
   then if meta.ProblemMetadata.unsat_means_unknown
-    then Res.Unknown, S.No_shortcut
-    else Res.Unsat, S.Shortcut
-  else Res.Unknown, S.No_shortcut
+    then Res.Unknown [Res.U_incomplete info], S.No_shortcut
+    else Res.Unsat info, S.Shortcut
+  else Res.Unknown [Res.U_other (info,"")], S.No_shortcut
 
 let solve ~deadline pb =
   Utils.debug ~section 1 "calling paradox";
   let now = Unix.gettimeofday() in
   if now +. 0.5 > deadline
-  then Res.Timeout, S.No_shortcut
+  then
+    let i = Res.mk_info ~backend:"paradox" ~time:0. () in
+    Res.Unknown [Res.U_timeout i], S.No_shortcut
   else (
+    let timer = Utils.Time.start_timer () in
+    let mk_info() =
+      Res.mk_info ~backend:"paradox" ~time:(Utils.Time.get_timer timer) ()
+    in
     (* use a temporary file for calling paradox *)
     CCIO.File.with_temp ~prefix:"nunchaku_paradox" ~suffix:".p"
       (fun file ->
@@ -113,16 +119,17 @@ let solve ~deadline pb =
            | S.Fut.Done (E.Ok (stdout, errcode)) ->
              Utils.debugf ~lock:true ~section 2
                "@[<2>paradox exited with %d, stdout:@ `%s`@]" (fun k->k errcode stdout);
-             parse_res ~meta:pb.FO_tptp.pb_meta stdout
+             let info = mk_info () in
+             parse_res ~info ~meta:pb.FO_tptp.pb_meta stdout
            | S.Fut.Done (E.Error e) ->
-             Res.Error e, S.Shortcut
+             Res.Error (e, mk_info()), S.Shortcut
            | S.Fut.Stopped ->
-             Res.Timeout, S.No_shortcut
+             Res.Unknown [Res.U_timeout (mk_info())], S.No_shortcut
            | S.Fut.Fail e ->
              (* return error *)
              Utils.debugf ~lock:true ~section 1 "@[<2>paradox failed with@ %s@]"
                (fun k->k (Printexc.to_string e));
-             Res.Error e, S.Shortcut
+             Res.Error (e, mk_info()), S.Shortcut
       )
   )
 
@@ -136,7 +143,7 @@ let call ?(print_model=false) ?prio ~print problem =
        Utils.debugf ~section 2 "@[<2>paradox result:@ %a@]"
          (fun k->k Res.print_head res);
        begin match res with
-         | Res.Sat m when print_model ->
+         | Res.Sat (m,_) when print_model ->
            let pp_ty oc _ = CCFormat.string oc "$i" in
            Format.printf "@[<2>raw paradox model:@ @[%a@]@]@."
              (Model.print (CCFun.const T.print_term_tptp) pp_ty) m

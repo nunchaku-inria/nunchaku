@@ -14,6 +14,19 @@ module Time : sig
 
   val start : unit -> float
   (** time at which the program started *)
+
+  type timer
+  (** A single-use timer, measures elapsed time  between {!start_timer()}
+      and first call to {!stop_timer} *)
+
+  val start_timer: unit -> timer
+
+  val stop_timer : timer -> unit
+    (** Stop timer, or does nothing if stopped already *)
+
+  val get_timer : timer -> float
+  (** Number of seconds elapsed between {!start_timer} and now, or
+      between {!start_timer} and {!stop_timer} *)
 end
 
 (** {2 Debugging} *)

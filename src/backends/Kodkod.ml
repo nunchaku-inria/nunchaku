@@ -48,6 +48,8 @@ type state = {
     (* declarations *)
   mutable trivially_unsat: bool;
     (* hack: was last "unsat" actually "trivially_unsat"? *)
+  timer: Utils.Time.timer;
+    (* timer *)
 }
 
 let errorf msg = Utils.failwithf msg
@@ -143,6 +145,7 @@ let create_state ~default_size (pb:FO_rel.problem) : state =
     univ_map;
     decls= pb.FO_rel.pb_decls;
     trivially_unsat=false;
+    timer=Utils.Time.start_timer();
   }
 
 let fpf = Format.fprintf
@@ -337,6 +340,9 @@ let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
     M.empty
     m
 
+let mk_info (state:state): Res.info =
+  Res.mk_info ~backend:"kodkod" ~time:(Utils.Time.get_timer state.timer) ()
+
 module Parser = struct
   module L = Lex_kodkod
   module P = Parse_kodkod
@@ -375,19 +381,20 @@ module Parser = struct
 
   (* parse the result from the solver's stdout and errcode *)
   let res state (s:string) (errcode:int) : res * S.shortcut =
+    let info = mk_info state in
     if errcode = 137
     then (
       Utils.debugf ~section:_kodkod_section 1
         "kodkod stopped with errcode %d, assume it timeouted; stdout:@ `%s`"
         (fun k->k errcode s);
-      Res.Timeout, S.No_shortcut
+      Res.Unknown [Res.U_timeout info], S.No_shortcut
     )
     else if errcode <> 0 && CCString.mem s ~sub:"Ran out of time"
-    then Res.Timeout, S.No_shortcut
+    then Res.Unknown [Res.U_timeout info], S.No_shortcut
     else if errcode <> 0
     then (
       let msg = CCFormat.sprintf "kodkod failed (errcode %d), stdout:@ `%s`@." errcode s in
-      Res.Error (Failure msg), S.Shortcut
+      Res.Error (Failure msg, info), S.Shortcut
     ) else (
       let delim = "---OUTCOME---" in
       let i =
@@ -400,10 +407,10 @@ module Parser = struct
       outcome lexbuf;
       match L.result lexbuf with
         | A.Unsat ->
-          Res.Unsat, S.Shortcut
+          Res.Unsat info, S.Shortcut
         | A.Trivially_unsat ->
           state.trivially_unsat <- true; (* will stop iterating *)
-          Res.Unsat, S.Shortcut
+          Res.Unsat info, S.Shortcut
         | A.Sat ->
           (* parse model *)
           instance lexbuf;
@@ -413,7 +420,7 @@ module Parser = struct
           colon lexbuf;
           let m = Parse_kodkod.parse_model L.token lexbuf in
           let m = convert_model state m in
-          Res.Sat m, S.Shortcut
+          Res.Sat (m,info), S.Shortcut
     )
 end
 
@@ -421,7 +428,9 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
   Utils.debug ~section 1 "calling kodkod";
   let now = Unix.gettimeofday() in
   if now +. 0.5 > deadline
-  then Res.Timeout, S.No_shortcut
+  then
+    let i = Res.mk_info ~backend:"kodkod" ~time:0. () in
+    Res.Unknown [Res.U_timeout i], S.No_shortcut
   else (
     (* print the problem *)
     let timeout = deadline -. now in
@@ -449,14 +458,14 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
           (fun k->k errcode stdout);
         Parser.res state stdout errcode
       | S.Fut.Done (E.Error e) ->
-        Res.Error e, S.Shortcut
+        Res.Error (e,mk_info state), S.Shortcut
       | S.Fut.Stopped ->
-        Res.Timeout, S.No_shortcut
+        Res.Unknown [Res.U_timeout (mk_info state)], S.No_shortcut
       | S.Fut.Fail e ->
         (* return error *)
         Utils.debugf ~lock:true ~section 1 "@[<2>kodkod failed with@ `%s`@]"
           (fun k->k (Printexc.to_string e));
-        Res.Error e, S.Shortcut
+        Res.Error (e, mk_info state), S.Shortcut
   )
 
 let default_size_ = 2 (* FUDGE *)
@@ -472,10 +481,10 @@ let rec call_rec ~print ~size ~deadline pb : res * Scheduling.shortcut =
     Utils.debugf ~section 2 "@[<2>kodkod result for size %d:@ %a@]"
       (fun k->k size Res.print_head res);
     match res with
-      | Res.Unsat when state.trivially_unsat ->
+      | Res.Unsat i when state.trivially_unsat ->
         (* stop increasing the size *)
-        Res.Unknown, S.No_shortcut
-      | Res.Unsat ->
+        Res.Unknown [Res.U_incomplete i], S.No_shortcut
+      | Res.Unsat i ->
         let now = Unix.gettimeofday () in
         if deadline -. now > 0.5
         then
@@ -484,7 +493,7 @@ let rec call_rec ~print ~size ~deadline pb : res * Scheduling.shortcut =
         else
           (* we fixed a maximal cardinal, so maybe there's an even bigger
              model, but we cannot know for sure *)
-          Res.Unknown, S.No_shortcut
+          Res.Unknown [Res.U_incomplete i], S.No_shortcut
       | _ -> res, short
 
 let call ?(print_model=false) ?(prio=10) ~print pb =
@@ -494,7 +503,7 @@ let call ?(print_model=false) ?(prio=10) ~print pb =
          call_rec ~print ~deadline ~size:default_size_ pb
        in
        begin match res with
-         | Res.Sat m when print_model ->
+         | Res.Sat (m,_) when print_model ->
            let pp_ty oc _ = CCFormat.string oc "$i" in
            Format.printf "@[<2>@{<Yellow>raw kodkod model@}:@ @[%a@]@]@."
              (Model.print (CCFun.const FO_rel.print_expr) pp_ty) m

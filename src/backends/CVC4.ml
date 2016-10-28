@@ -113,6 +113,8 @@ type decode_state = {
     (* variables in scope *)
   db_prefixes: (string,ground_ty) Hashtbl.t;
     (* prefixes expected for De Bruijn indices *)
+  timer: Utils.Time.timer;
+    (* time elapsed *)
   mutable db_stack: Ty.t Var.t option ref list;
     (* stack of variables for mu-binders, with a bool ref.
        If the ref is true, it means the variable is used at least once *)
@@ -127,6 +129,7 @@ let create_decode_state ~kinds () = {
   symbols=ID.Tbl.create 32;
   db_prefixes=Hashtbl.create 8;
   db_stack=[];
+  timer=Utils.Time.start_timer();
   vars=ID.Tbl.create 32;
   witnesses=gty_map_empty;
 }
@@ -648,44 +651,49 @@ let get_model_ ~print_model ~decode s : (_,_) Model.t =
       m
 
 (* read the result *)
-let read_res_ ~print_model ~decode s =
+let read_res_ ~info ~print_model ~decode s =
   match DSexp.next s.sexp with
   | `Ok (`Atom "unsat") ->
       Utils.debug ~section 5 "CVC4 returned `unsat`";
-      Res.Unsat
+      Res.Unsat info
   | `Ok (`Atom "sat") ->
       Utils.debug ~section 5 "CVC4 returned `sat`";
       let m = if ID.Tbl.length decode.symbols = 0
         then Model.empty
         else get_model_ ~print_model ~decode s
       in
-      Res.Sat m
+      Res.Sat (m,info)
   | `Ok (`Atom "unknown") ->
       Utils.debug ~section 5 "CVC4 returned `unknown`";
-      Res.Unknown
+      Res.Unknown [Res.U_other (info, "")]
   | `Ok (`List [`Atom "error"; `Atom s]) ->
       Utils.debugf ~section 5 "@[<2>CVC4 returned `error %s`@]" (fun k->k s);
-      Res.Error (CVC4_error s)
+      Res.Error (CVC4_error s, info)
   | `Ok sexp ->
       let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ `%a`@]"
         Sexp_lib.pp sexp
       in
-      Res.Error (Error msg)
-  | `Error e -> Res.Error (Error e)
+      Res.Error (Error msg, info)
+  | `Error e -> Res.Error (Error e, info)
   | `End ->
       Utils.debug ~section 5 "no answer from CVC4, assume it timeouted";
-      Res.Timeout
+      Res.Unknown [Res.U_timeout info]
+
+let mk_info (decode:decode_state): Res.info =
+  let time = Utils.Time.get_timer decode.timer in
+  Res.mk_info ~backend:"cvc4" ~time ()
 
 let res t = match t.res with
   | Some r -> r
   | None when t.closed ->
-      let r = Res.Timeout in
+      let r = Res.Unknown [Res.U_timeout (mk_info t.decode)] in
       t.res <- Some r;
       r
   | None ->
+      let info  = mk_info t.decode in
       let r =
-        try read_res_ ~print_model:t.print_model ~decode:t.decode t
-        with e -> Res.Error e
+        try read_res_ ~info ~print_model:t.print_model ~decode:t.decode t
+        with e -> Res.Error (e, info)
       in
       t.res <- Some r;
       r
@@ -781,7 +789,9 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
   then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem (decode, problem');
   (* enough time remaining? *)
   if now +. 0.1 > deadline
-  then S.Fut.return (Res.Timeout, S.No_shortcut)
+  then
+    let info = Res.mk_info ~backend:"cvc4" ~time:0. () in
+    S.Fut.return (Res.Unknown [Res.U_timeout info], S.No_shortcut)
   else (
     let timeout = deadline -. now in
     assert (timeout > 0.);
@@ -795,16 +805,14 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
           (fun k->k (Res.print FO.print_term' FO.print_ty) r);
         close s;
         match r with
-          | Res.Sat _ -> r, S.Shortcut
-          | Res.Unsat ->
+          | Res.Sat (_,_) -> r, S.Shortcut
+          | Res.Unsat i ->
             (* beware, this "unsat" might be wrong *)
             if pb.FO.Problem.meta.ProblemMetadata.unsat_means_unknown
-            then Res.Unknown, S.No_shortcut
-            else Res.Unsat, S.Shortcut
-          | Res.Out_of_scope
-          | Res.Timeout
-          | Res.Unknown -> r, S.No_shortcut
-          | Res.Error e ->
+            then Res.Unknown [Res.U_incomplete i], S.No_shortcut
+            else Res.Unsat i, S.Shortcut
+          | Res.Unknown _ -> r, S.No_shortcut
+          | Res.Error (e,_) ->
             Utils.debugf ~lock:true ~section 1
               "@[<2>error while running CVC4@ with `%s`:@ @[%s@]@]"
               (fun k->k cmd (Printexc.to_string e));
@@ -813,7 +821,9 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
     |> S.Fut.map
       (function
         | E.Ok x -> fst x
-        | E.Error e -> Res.Error e, S.Shortcut)
+        | E.Error e ->
+          let info = mk_info decode in
+          Res.Error (e,info), S.Shortcut)
   )
 
 let is_available () =

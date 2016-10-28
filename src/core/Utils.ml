@@ -12,9 +12,30 @@ module Time = struct
       let stop = Unix.gettimeofday () in
       stop -. start),
     (function () -> start)
+
+  type timer = {
+    timer_start: float;
+    mutable timer_stop: float option;
+  }
+
+  let start_timer () =
+    { timer_start=Unix.gettimeofday();
+      timer_stop=None;
+    }
+
+  let stop_timer t = match t.timer_stop with
+    | Some _ -> ()
+    | None -> t.timer_stop <- Some (Unix.gettimeofday())
+
+  let get_timer t =
+    let stop = match t.timer_stop with
+      | None -> Unix.gettimeofday()
+      | Some t -> t
+    in
+    stop -. t.timer_start
 end
 
-(** {2 Debug} *)
+(*  {2 Debug} *)
 
 (** Debug section *)
 module Section = struct
