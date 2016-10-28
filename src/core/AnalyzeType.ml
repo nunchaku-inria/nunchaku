@@ -49,14 +49,12 @@ module Make(T : TI.S) = struct
     state: cache_state TyTbl.t; (** main state *)
     non_zero: unit ID.Tbl.t; (** types we know are non-empty data *)
     default_card: int option;
-    map_hint: (Card.t -> Card.t option);
   }
 
-  let create_cache ?default_card ?(map_hint=CCOpt.return) () = {
+  let create_cache ?default_card () = {
     state=TyTbl.create 16;
     non_zero=ID.Tbl.create 8;
     default_card;
-    map_hint;
   }
 
   let save_ cache ty card =
@@ -175,12 +173,7 @@ module Make(T : TI.S) = struct
               | Stmt.Attr_card_min n ->
                 Some (Card.QuasiFiniteGEQ (Z.of_int n))
               | Stmt.Attr_infinite -> Some Card.infinite
-              | Stmt.Attr_card_hint c ->
-                (* first, check if the hint is valuable *)
-                begin match cache.map_hint c with
-                  | None -> None
-                  | Some _ as res -> res
-                end
+              | Stmt.Attr_card_hint c -> Some c
               | _ -> None)
             attrs
           |> CCOpt.get_or ~default
