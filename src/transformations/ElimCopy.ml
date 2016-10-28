@@ -23,7 +23,8 @@ type ty = T.t
 
 type state = {
   env: (term, ty) Env.t;
-  approximate_types: unit TyTbl.t; (* copy types that are approximate *)
+  incomplete_types: unit TyTbl.t; (* copy types that are incomplete (missing elements) *)
+  abstract_types: unit TyTbl.t; (* copy types that are abstract (confusion among elements) *)
   copy_as_uninterpreted: unit ID.Tbl.t; (* copy types mapped to uninterpreted types *)
   at_cache: AT.cache;
   mutable unsat_means_unknown: bool;
@@ -34,7 +35,8 @@ type decode_state = state
 let create_state ~env = {
   env;
   at_cache=AT.create_cache ();
-  approximate_types=TyTbl.create 16;
+  incomplete_types=TyTbl.create 16;
+  abstract_types=TyTbl.create 16;
   copy_as_uninterpreted=ID.Tbl.create 16;
   unsat_means_unknown=false;
 }
@@ -92,6 +94,13 @@ let should_be_incomplete card_concrete = match card_concrete with
     (* if [n >= threshold] we approximate *)
     Cardinality.Z.(compare (of_int approx_threshold_) n <= 0)
 
+let attrs_of_ty state (ty:ty): Stmt.decl_attr list =
+  (if AT.is_abstract state.env ty
+   then [Stmt.Attr_abstract] else [])
+  @
+  (if AT.is_incomplete state.env ty
+   then [Stmt.Attr_incomplete] else [])
+
 (* [c] is a subset copy type with predicate [pred]; encode it as a new
    uninterpreted type [c], where [abstract] and [concrete] are regular functions
    with some axioms, and [pred] is valid all over [concrete c] *)
@@ -106,12 +115,16 @@ let copy_subset_as_uninterpreted_ty state ~info ~(pred:term) c : (_, _) Stmt.t l
   Utils.debugf ~section 3 "@[copy type %a:@ should_be_incomplete=%B@]"
     (fun k -> k ID.print id_c incomplete);
   (* be sure to register approximated types *)
-  if incomplete
-  then TyTbl.add state.approximate_types ty_c ();
+  if incomplete then (
+    TyTbl.add state.incomplete_types ty_c ();
+  );
   (* declare the new (uninterpreted) type and functions *)
   let decl_c =
-    (* TODO: incomplete attribute (should inherit from concrete type etc.) *)
-    let attrs = if incomplete then [] else [Stmt.Attr_card_hint card_concrete] in
+    let new_attr =
+      if incomplete then Stmt.Attr_incomplete else Stmt.Attr_card_hint card_concrete
+    in
+    let old_attrs = attrs_of_ty state c.Stmt.copy_of in
+    let attrs = new_attr :: old_attrs in
     Stmt.decl ~info ~attrs id_c c.Stmt.copy_ty
   and decl_abs =
     Stmt.decl ~info ~attrs:[] c.Stmt.copy_abstract c.Stmt.copy_abstract_ty
@@ -169,13 +182,17 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
   ID.Tbl.add state.copy_as_uninterpreted id_c ();
   Utils.debugf ~section 3 "@[copy type %a:@ should_be_incomplete=%B@]"
     (fun k -> k ID.print id_c incomplete);
-  (* be sure to register approximated types *)
-  if incomplete
-  then TyTbl.add state.approximate_types ty_c ();
+  if incomplete then (
+    TyTbl.add state.incomplete_types ty_c ();
+  );
+  TyTbl.add state.abstract_types ty_c ();
   (* declare the new (uninterpreted) type and functions *)
   let decl_c =
-    (* TODO: incomplete attribute (should inherit from concrete type etc.) *)
-    let attrs = if incomplete then [] else [Stmt.Attr_card_hint card_concrete] in
+    let incomp_attr =
+      if incomplete then [Stmt.Attr_incomplete] else []
+    in
+    let old_attrs = attrs_of_ty state c.Stmt.copy_of in
+    let attrs = Stmt.Attr_abstract :: incomp_attr @ old_attrs in
     Stmt.decl ~info ~attrs id_c c.Stmt.copy_ty
   and decl_abs =
     Stmt.decl ~info ~attrs:[] c.Stmt.copy_abstract c.Stmt.copy_abstract_ty
@@ -233,13 +250,14 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
   [decl_c; decl_abs; decl_conc; ax_abs_conc; ax_rel_conc; ax_partition]
     @ ax_defined
 
-let is_approx_type_ state ty = TyTbl.mem state.approximate_types ty
+let is_incomplete_type_ state ty = TyTbl.mem state.incomplete_types ty
+let is_abstract_type_ state ty = TyTbl.mem state.abstract_types ty
 
 (* encode terms, perform the required approximations *)
 let encode_term state pol t =
   let rec aux pol t = match T.repr t with
     | TI.Bind ((`Forall | `Exists) as q, v, _)
-      when is_approx_type_ state (Var.ty v) ->
+      when is_incomplete_type_ state (Var.ty v) ->
       (* might approximate this quantifier *)
       begin match U.approx_infinite_quant_pol q pol with
         | `Keep -> aux' pol t
@@ -268,7 +286,8 @@ let elim pb =
           | Stmt.Copy c ->
             begin match c.Stmt.copy_wrt with
               | Stmt.Wrt_nothing -> copy_as_data ~info c
-              | Stmt.Wrt_subset p -> copy_subset_as_uninterpreted_ty state ~info ~pred:p c
+              | Stmt.Wrt_subset p ->
+                copy_subset_as_uninterpreted_ty state ~info ~pred:p c
               | Stmt.Wrt_quotient (tty, r) ->
                 copy_quotient_as_uninterpreted_ty state ~info ~tty ~rel:r c
             end
