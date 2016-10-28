@@ -655,29 +655,29 @@ let read_res_ ~info ~print_model ~decode s =
   match DSexp.next s.sexp with
   | `Ok (`Atom "unsat") ->
       Utils.debug ~section 5 "CVC4 returned `unsat`";
-      Res.Unsat info
+      Res.Unsat (Lazy.force info)
   | `Ok (`Atom "sat") ->
       Utils.debug ~section 5 "CVC4 returned `sat`";
       let m = if ID.Tbl.length decode.symbols = 0
         then Model.empty
         else get_model_ ~print_model ~decode s
       in
-      Res.Sat (m,info)
+      Res.Sat (m, Lazy.force info)
   | `Ok (`Atom "unknown") ->
       Utils.debug ~section 5 "CVC4 returned `unknown`";
-      Res.Unknown [Res.U_other (info, "")]
+      Res.Unknown [Res.U_other (Lazy.force info, "")]
   | `Ok (`List [`Atom "error"; `Atom s]) ->
       Utils.debugf ~section 5 "@[<2>CVC4 returned `error %s`@]" (fun k->k s);
-      Res.Error (CVC4_error s, info)
+      Res.Error (CVC4_error s, Lazy.force info)
   | `Ok sexp ->
       let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ `%a`@]"
         Sexp_lib.pp sexp
       in
-      Res.Error (Error msg, info)
-  | `Error e -> Res.Error (Error e, info)
+      Res.Error (Error msg, Lazy.force info)
+  | `Error e -> Res.Error (Error e, Lazy.force info)
   | `End ->
       Utils.debug ~section 5 "no answer from CVC4, assume it timeouted";
-      Res.Unknown [Res.U_timeout info]
+      Res.Unknown [Res.U_timeout (Lazy.force info)]
 
 let mk_info (decode:decode_state): Res.info =
   let time = Utils.Time.get_timer decode.timer in
@@ -690,10 +690,10 @@ let res t = match t.res with
       t.res <- Some r;
       r
   | None ->
-      let info  = mk_info t.decode in
+      let info = lazy (mk_info t.decode) in
       let r =
         try read_res_ ~info ~print_model:t.print_model ~decode:t.decode t
-        with e -> Res.Error (e, info)
+        with e -> Res.Error (e, Lazy.force info)
       in
       t.res <- Some r;
       r
