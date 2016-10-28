@@ -42,7 +42,7 @@ module Make(T : TI.S) = struct
       errorf_ "identifier %a not defined in scope" ID.print_full id
 
   let err_ty_mismatch t exp act =
-    errorf_ "@[<2>type of `@[%a@]` should be `@[%a@]`,@ but is `@[%a@]`@]"
+    errorf_ "@[<2>type of `@[%a@]`@ should be `@[%a@]`,@ but is `@[%a@]`@]"
       P.print t P.print exp P.print act
 
   (* check that [ty = prop] *)

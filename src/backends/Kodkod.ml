@@ -135,7 +135,7 @@ let translate_names_ pb =
   n2id, id2n
 
 (* initialize the state for this particular problem *)
-let create_state ~default_size (pb:FO_rel.problem) : state =
+let create_state ~timer ~default_size (pb:FO_rel.problem) : state =
   let univ_size, univ_map = compute_univ_ ~default_size pb in
   let id_of_name, name_of_id = translate_names_ pb in
   { default_size;
@@ -143,9 +143,9 @@ let create_state ~default_size (pb:FO_rel.problem) : state =
     id_of_name;
     univ_size;
     univ_map;
+    timer;
     decls= pb.FO_rel.pb_decls;
     trivially_unsat=false;
-    timer=Utils.Time.start_timer();
   }
 
 let fpf = Format.fprintf
@@ -340,8 +340,11 @@ let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
     M.empty
     m
 
-let mk_info (state:state): Res.info =
-  Res.mk_info ~backend:"kodkod" ~time:(Utils.Time.get_timer state.timer) ()
+let mk_info state: Res.info =
+  Res.mk_info
+    ~message:(Printf.sprintf "dimension %d" state.default_size) 
+    ~backend:"kodkod"
+    ~time:(Utils.Time.get_timer state.timer) ()
 
 module Parser = struct
   module L = Lex_kodkod
@@ -473,8 +476,8 @@ let default_increment_ = 2 (* FUDGE *)
 
 (* call {!solve} with increasingly big problems, until we run out of time
    or obtain "sat" *)
-let rec call_rec ~print ~size ~deadline pb : res * Scheduling.shortcut =
-  let state = create_state ~default_size:size pb in
+let rec call_rec ~timer ~print ~size ~deadline pb : res * Scheduling.shortcut =
+  let state = create_state ~timer ~default_size:size pb in
   if print
     then Format.printf "@[<v>kodkod problem:@ ```@ %a@,```@]@." (print_pb state pb) ();
     let res, short = solve ~deadline state pb in
@@ -489,7 +492,7 @@ let rec call_rec ~print ~size ~deadline pb : res * Scheduling.shortcut =
         if deadline -. now > 0.5
         then
           (* unsat, and we still have some time: retry with a bigger size *)
-          call_rec ~print ~size:(size + default_increment_) ~deadline pb
+          call_rec ~timer ~print ~size:(size + default_increment_) ~deadline pb
         else
           (* we fixed a maximal cardinal, so maybe there's an even bigger
              model, but we cannot know for sure *)
@@ -499,8 +502,9 @@ let rec call_rec ~print ~size ~deadline pb : res * Scheduling.shortcut =
 let call ?(print_model=false) ?(prio=10) ~print pb =
   S.Task.make ~prio
     (fun ~deadline () ->
+       let timer = Utils.Time.start_timer () in
        let res, short =
-         call_rec ~print ~deadline ~size:default_size_ pb
+         call_rec ~timer ~print ~deadline ~size:default_size_ pb
        in
        begin match res with
          | Res.Sat (m,_) when print_model ->
