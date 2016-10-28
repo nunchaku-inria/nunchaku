@@ -211,7 +211,12 @@ module Make(T : TI.S) = struct
       U.fold false () ty ~bind:(fun () _ -> ())
         ~f:(fun b () ty -> b || is_incomplete env ty)
 
-  (* TODO *)
-  let is_abstract _ _ =
-    Utils.not_implemented "AnalyzeType.is_abstract"
+  let rec is_abstract env ty = match T.repr ty with
+    | TI.Const id ->
+      let info = Env.find_exn ~env id in
+      Env.is_abstract info
+    | _ ->
+      (* "or" on subtypes *)
+      U.fold false () ty ~bind:(fun () _ -> ())
+        ~f:(fun b () ty -> b || is_abstract env ty)
 end
