@@ -958,7 +958,7 @@ let find_dt_ m id =
 let tr_dt ?(subst=Subst.empty) ~state ~map dt =
   Utils.debugf ~section 5 "@[<hv2>decode@ `@[%a@]`@ with @[%a@]@]"
     (fun k->k
-        (Model.DT.print P.print') dt (Subst.print P.print) subst);
+        (Model.DT.print P.print' P.print) dt (Subst.print P.print) subst);
   (* first, replace vars *)
   let dt' =
     let vars = DT.vars dt in

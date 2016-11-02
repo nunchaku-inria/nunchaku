@@ -484,7 +484,7 @@ let decode_model ~state m =
         | _ ->
           Utils.debugf ~section 5
             "@[<2>decode @[%a@]@ := `@[%a@]@]"
-            (fun k->k P.print t (M.DT.print P.print') dt);
+            (fun k->k P.print t (M.DT.print P.print' P.print) dt);
           let ty = expected_ty state t in
           let ty_ret = U.ty_returns ty in
           let dt = decode_vars ty dt in

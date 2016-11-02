@@ -102,7 +102,7 @@ module DT : sig
   val check_ : (_,_) t -> unit
   (** check some invariants *)
 
-  val print : 't prec_printer -> ('t, _) t printer
+  val print : 't prec_printer -> 'ty printer -> ('t, 'ty) t printer
 
   val print_flat_test : 't prec_printer -> ('t, _) flat_test printer
   val print_flat : 't prec_printer -> ('t, _) flat_dt printer

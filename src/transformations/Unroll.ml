@@ -290,7 +290,7 @@ let filter_dt_ dt : (_,_) DT.t =
     | removed_var :: _ ->
       Utils.debugf ~section 5
         "@[<v>remove var @[%a@]@ from `@[%a@]`@]"
-        (fun k->k Var.print_full removed_var (Model.DT.print P.print') dt);
+        (fun k->k Var.print_full removed_var (Model.DT.print P.print' P.print) dt);
     | [] -> assert false
   end;
   M.DT_util.remove_first_var dt

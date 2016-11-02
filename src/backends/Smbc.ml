@@ -385,7 +385,7 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
   } in
   let dt = Model.DT.of_flat ~equal:U.equal ~hash:U.hash flat in
   Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
-    (fun k->k P.print body (Model.DT.print P.print') dt);
+    (fun k->k P.print body (Model.DT.print P.print' P.print) dt);
   dt
 
 module A_res = A.Smbc_res

@@ -518,7 +518,7 @@ let find_ptrue state map m : ID.t =
               raise (Found_ptrue res)
             | _ ->
               errorf "unexpected model for pseudo-true: `@[%a@]`"
-                (DT.print (fun _ -> FO_rel.print_expr)) set
+                (DT.print (fun _ -> FO_rel.print_expr) FO_rel.print_sub_universe) set
           end
         | _ -> ()
       );
@@ -601,7 +601,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
       let t' = FO.T.const id in
       Utils.debugf ~section 3
         "@[<2>decode predicate `%a`@ as `@[%a@]`@]"
-        (fun k->k ID.print id (M.DT.print FO.print_term') dt);
+        (fun k->k ID.print id (M.DT.print FO.print_term' FO.print_ty) dt);
       M.add_value m (t', dt, M.Symbol_prop)
   end else begin match List.rev doms with
     | [] -> assert false (* impossible, needs at least to return arg *)
@@ -660,7 +660,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
       let t' = FO.T.const id in
       Utils.debugf ~section 3
         "@[<2>decode function `%a`@ as `@[%a@]`@]"
-        (fun k->k ID.print id (M.DT.print FO.print_term') dt);
+        (fun k->k ID.print id (M.DT.print FO.print_term' FO.print_ty) dt);
       M.add_value m (t', dt, M.Symbol_fun)
   end
 

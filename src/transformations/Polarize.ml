@@ -494,7 +494,7 @@ let filter_dt_ ~polarized ~default:d dt : (_,_) DT.t =
   let is_pos = ID.is_pos polarized in
   Utils.debugf ~section 5
     "@[<v>retain branches that yield %B for `%a`@ from `@[%a@]`@]"
-    (fun k->k is_pos ID.print polarized (Model.DT.print P.print') dt);
+    (fun k->k is_pos ID.print polarized (Model.DT.print P.print' P.print) dt);
   let rec aux dt = match dt with
     | DT.Yield t ->
       (* evaluate as fully as possible, hoping for [true] or [false] *)

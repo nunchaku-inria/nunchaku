@@ -71,22 +71,23 @@ module DT = struct
       in
       cases var ~tests ~default
 
-  let rec print pt out t = match t with
+  let rec print pt pty out t = match t with
     | Yield t -> pt TI.P_top out t
     | Cases {tests=[]; default=None; _} -> assert false
     | Cases {tests=[]; var; default=Some d} ->
-      fpf out "@[<hv1>cases %a@ {default: %a@,}@]"
-        Var.print_full var (print pt) d
+      fpf out "@[<hv1>cases (@[%a:%a@])@ {default: %a@,}@]"
+        Var.print_full var pty (Var.ty var) (print pt pty) d
     | Cases cases ->
       let pp_test out (lhs,rhs) =
-        fpf out "@[<2>@[%a@] =>@ %a@]" (pt TI.P_arrow) lhs (print pt) rhs
+        fpf out "@[<2>@[%a@] =>@ %a@]" (pt TI.P_arrow) lhs (print pt pty) rhs
       and pp_default out = function
         | None -> ()
-        | Some d -> fpf out ";@ default: %a" (print pt) d
+        | Some d -> fpf out ";@ default: %a" (print pt pty) d
       in
       let pp_tests = CCFormat.list ~start:"" ~stop:"" ~sep:"; " pp_test in
-      fpf out "@[<hv1>cases %a@ {@[<v>%a%a@]@,}@]"
-        Var.print_full cases.var pp_tests cases.tests pp_default cases.default
+      fpf out "@[<hv1>cases (@[%a:%a@])@ {@[<v>%a%a@]@,}@]"
+        Var.print_full cases.var pty (Var.ty cases.var)
+        pp_tests cases.tests pp_default cases.default
 
   let rec ty_args = function
     | Yield _ -> []
@@ -169,7 +170,8 @@ module DT = struct
     (* how to fail *)
     let pp_ =
       let pterm _ out _ = CCFormat.string out "<term>" in
-      print pterm
+      let pty out _ = CCFormat.string out "<ty>" in
+      print pterm pty
     in
     let fail_var v dt =
       Utils.failwithf "var %a@ does not match %a" Var.print_full v pp_ dt
@@ -519,7 +521,7 @@ module DT_util = struct
     in
     U.fun_l vars (aux dt)
 
-  let print : dt printer = DT.print P.print'
+  let print : dt printer = DT.print P.print' P.print
 end
 
 (** {2 Models} *)
@@ -615,7 +617,7 @@ let print pt pty out m =
   and pp_value out (t,dt,_) =
     fpf out "@[<2>val @[%a@]@ :=@ %a@]."
       (pt TI.P_top) t
-      (DT.print pt) dt
+      (DT.print pt pty) dt
   in
   (* only print non-empty lists *)
   let pp_nonempty_list pp out l =
