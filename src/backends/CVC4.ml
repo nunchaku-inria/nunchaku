@@ -776,6 +776,7 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
     let info = Res.mk_info ~backend:"cvc4" ~time:0. () in
     S.Fut.return (Res.Unknown [Res.U_timeout info], S.No_shortcut)
   else (
+    Utils.debug ~section 1 "calling cvc4";
     let timeout = deadline -. now in
     assert (timeout > 0.);
     let cmd = mk_cvc4_cmd_ timeout options in
