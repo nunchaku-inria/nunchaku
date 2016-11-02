@@ -112,6 +112,8 @@ module Ty : sig
   val equal : t -> t -> bool
   val compare : t -> t -> int
   val hash : t -> int
+
+  val to_seq : t -> t Sequence.t
 end
 
 module T : sig
@@ -151,6 +153,9 @@ module T : sig
   val equiv : t -> t -> t
   val forall : Ty.t var -> t -> t
   val exists : Ty.t var -> t -> t
+
+  val to_seq : t -> t Sequence.t
+  (** subterms *)
 end
 
 (** {2 Problem} *)
@@ -180,6 +185,8 @@ module Problem : sig
     'acc ->
     ('t, 'ty) t ->
     'acc * ('t2, 'ty2) t
+
+  val to_seq : ('t,'ty) t -> ('t,'ty) statement Sequence.t
 end
 
 (** {2 Utils} *)
@@ -193,6 +200,10 @@ module Util : sig
 
   val problem_kinds : (_,Ty.t) Problem.t -> Model.symbol_kind ID.Map.t
 end
+
+val tys_of_toplevel_ty : 'ty toplevel_ty -> 'ty Sequence.t
+val terms_of_statement : ('t, _) statement -> 't Sequence.t
+val tys_of_statement : (_, 'ty) statement -> 'ty Sequence.t
 
 (** {2 IO} *)
 
