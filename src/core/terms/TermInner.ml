@@ -472,7 +472,8 @@ module Print(T : REPR)
         wrap P_bind p out "@[<2>%s @[<hv>%a@].@ %a@]" s
           (pp_list_ ~sep:" " pp_typed_var) vars print_in_binder body
     | TyArrow (a,b) ->
-        wrap P_arrow p out "@[<2>%a ->@ %a@]" (print' P_arrow) a (print' P_arrow) b
+        (* TODO: left should have [P_arrow] but ignoring the right-assoc *)
+        wrap P_arrow p out "@[<2>%a ->@ %a@]" (print' P_app) a (print' P_arrow) b
   and pp_typed_var out v =
     let ty = Var.ty v in
     fpf out "(@[%a:@,@[%a@]@])" Var.print_full v print ty
