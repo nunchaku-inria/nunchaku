@@ -439,6 +439,9 @@ let parse_res ~info (out:string) (errcode:int): (term,ty) Res.t * S.shortcut =
 
 (** {2 Main Solving} *)
 
+(* step between successive depths in iterative deepening *)
+let depth_step_ = 1 (* FUDGE *)
+
 let solve ~deadline pb =
   Utils.debug ~section 1 "calling smbc";
   let now = Unix.gettimeofday() in
@@ -454,7 +457,10 @@ let solve ~deadline pb =
     in
     let timeout = (int_of_float (deadline -. now +. 1.5)) in
     (* call solver and communicate over stdin *)
-    let cmd = Printf.sprintf "smbc -t %d -nc --stdin 2>&1" timeout in
+    let cmd =
+      Printf.sprintf "smbc -t %d -nc --depth-step %d --stdin 2>&1"
+        timeout depth_step_
+    in
     Utils.debugf ~section 5 "smbc call: `%s`" (fun k->k cmd);
     let fut =
       S.popen cmd
