@@ -52,39 +52,11 @@ type ground_ty = Ty.t
 let gty_make = Ty.app
 let gty_const id = gty_make id []
 
-let rec gty_equal a b = match Ty.view a, Ty.view b with
-  | FO.TyBuiltin a, FO.TyBuiltin b -> a=b
-  | FO.TyApp (hd_a, l_a), FO.TyApp (hd_b, l_b) ->
-      ID.equal hd_a hd_b
-      && CCList.equal gty_equal l_a l_b
-  | FO.TyBuiltin _, _ | FO.TyApp _, _ -> false
+module GTy_map = CCMap.Make(FO.Ty)
 
-type 'a gty_map = (ground_ty * 'a) list ID.Map.t
-
-let gty_map_empty : _ gty_map = ID.Map.empty
-
-let gty_head ty =
-  match Ty.view ty with
-    | FO.TyApp (id,_) -> Some id
-    | FO.TyBuiltin _ -> None
-
-let gty_map_add m g x =
-  match gty_head g with
-  | None -> assert false
-  | Some id ->
-      let l = ID.Map.get_or id m ~or_:[] in
-      if CCList.Assoc.mem ~eq:gty_equal l g
-      then m
-      else ID.Map.add id ((g,x) :: l) m
-
-let gty_map_find_exn m g =
-  match gty_head g with
-    | None -> raise Not_found
-    | Some id ->
-        let l = ID.Map.find id m in
-        CCList.Assoc.get_exn ~eq:gty_equal l g
-
-let gty_map_mem m g = try ignore (gty_map_find_exn m g); true with Not_found -> false
+let gty_head ty = match Ty.view ty with
+  | FO.TyApp (id,_) -> Some id
+  | FO.TyBuiltin _ -> None
 
 let rec fobackty_of_ground_ty g = match Ty.view g with
   | FO.TyApp (id,l) ->
@@ -118,7 +90,7 @@ type decode_state = {
   mutable db_stack: Ty.t Var.t option ref list;
     (* stack of variables for mu-binders, with a bool ref.
        If the ref is true, it means the variable is used at least once *)
-  mutable witnesses : ID.t gty_map;
+  mutable witnesses : ID.t GTy_map.t;
     (* type -> witness of this type *)
 }
 
@@ -131,7 +103,7 @@ let create_decode_state ~kinds () = {
   db_stack=[];
   timer=Utils.Time.start_timer();
   vars=ID.Tbl.create 32;
-  witnesses=gty_map_empty;
+  witnesses=GTy_map.empty;
 }
 
 (* the solver is dealt with through stdin/stdout *)
@@ -328,7 +300,7 @@ let print_problem out (decode, pb) =
         fpf out "(@[assert@ %a@])" print_term t
     | FO.CardBound (ty_id, which, n) ->
         let witness =
-          try gty_map_find_exn decode.witnesses (gty_const ty_id)
+          try GTy_map.find (gty_const ty_id) decode.witnesses
           with Not_found ->
             errorf_ "no witness declared for cardinality bound on %a" ID.print ty_id
         in
@@ -723,7 +695,7 @@ let preprocess pb : processed_problem =
   let add_ty_witnesses stmt l =
     List.fold_left
       (fun acc gty ->
-        if not (is_finite_ state gty) || gty_map_mem state.witnesses gty
+        if not (is_finite_ state gty) || GTy_map.mem gty state.witnesses
         then acc (* already declared a witness for [gty], or [gty] is not
                     a finite type *)
         else (
@@ -733,11 +705,22 @@ let preprocess pb : processed_problem =
           (* declare [c] *)
           let ty_c = [], gty in
           decl state c (Q_type gty);
-          state.witnesses <- gty_map_add state.witnesses gty c;
+          state.witnesses <- GTy_map.add gty c state.witnesses;
           FO.Decl (c, ty_c,[]) :: acc
         ))
       [stmt] l
     |> List.rev
+  in
+  (* gather list of (possibly parametrized) types occurring in [stmt],
+     add witnesses for them *)
+  let add_ty_witnesses_gen stmt =
+    let tys =
+      FO.tys_of_statement stmt
+      |> Sequence.flat_map FO.Ty.to_seq
+      |> Sequence.sort_uniq ~cmp:FO.Ty.compare
+      |> Sequence.to_rev_list
+    in
+    add_ty_witnesses stmt tys
   in
   let pb =
     FO.Problem.flat_map ~meta:(FO.Problem.meta pb)
@@ -762,11 +745,11 @@ let preprocess pb : processed_problem =
                Utils.debugf ~section 5 "@[<2>declare `%s` as De Bruijn prefix@]" (fun k->k c);
                add_db_prefix state c ty)
             l.FO.tys_defs;
-          [stmt]
-      | FO.TyDecl _
+          add_ty_witnesses_gen stmt
+      | FO.TyDecl _ (* witnesses will be added on demand *)
       | FO.Axiom _
       | FO.Goal _
-      | FO.MutualTypes (_,_) -> [stmt])
+      | FO.MutualTypes (_,_) -> add_ty_witnesses_gen stmt)
     pb
   in
   state, pb
