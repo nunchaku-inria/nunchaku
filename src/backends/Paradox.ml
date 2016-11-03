@@ -72,16 +72,18 @@ let parse_model s : model =
 
 (* [s] is the output of paradox, parse a result from it *)
 let parse_res ~info ~meta s =
-  if CCString.mem ~sub:"BEGIN MODEL" s
+  if CCString.mem ~sub:"SZS status Timeout" s
+  then Res.Unknown [Res.U_timeout info], S.No_shortcut
+  else if CCString.mem ~sub:"RESULT: Unsatisfiable" s
+  then if meta.ProblemMetadata.unsat_means_unknown
+    then Res.Unknown [Res.U_incomplete info], S.No_shortcut
+    else Res.Unsat info, S.Shortcut
+  else if CCString.mem ~sub:begin_model s
   then if meta.ProblemMetadata.sat_means_unknown
     then Res.Unknown [Res.U_timeout info], S.No_shortcut
     else
       let m = parse_model s in
       Res.Sat (m,info), S.Shortcut
-  else if CCString.mem ~sub:"RESULT: Unsatisfiable" s
-  then if meta.ProblemMetadata.unsat_means_unknown
-    then Res.Unknown [Res.U_incomplete info], S.No_shortcut
-    else Res.Unsat info, S.Shortcut
   else Res.Unknown [Res.U_other (info,"")], S.No_shortcut
 
 let solve ~deadline pb =
