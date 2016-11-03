@@ -51,7 +51,9 @@ let end_model = "SZS output end FiniteModel"
 let parse_model s : model =
   let i1 = CCString.find ~sub:begin_model s in
   let i1 = String.index_from s i1 '\n'+1 in (* skip full line *)
+  if i1<0 then errorf "could not find start-model marker in `%s`" s;
   let i2 = CCString.find ~start:i1 ~sub:end_model s in
+  if i2<0 then errorf "could not find end-model marker in `%s`" s;
   (* [s']: part of [s] between the model markers *)
   let s' = String.sub s i1 (i2-i1) in
   let lexbuf = Lexing.from_string s' in
