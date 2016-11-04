@@ -173,7 +173,7 @@ let print_pb state pb out () : unit =
     let card = CCOpt.get state.default_size su.FO_rel.su_card in
     if offset=0
     then fpf out "u%d" card
-    else fpf out "u%d@%d" card offset
+    else fpf out "u%d@@%d" card offset
   (* print a sub-universe's name *)
   and pp_su_name out su: unit =
     fpf out "%s" (id2name su.FO_rel.su_name)
