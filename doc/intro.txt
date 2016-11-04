@@ -1,15 +1,21 @@
 {1 Nunchaku}
 
-TODO explain there are libraries and the core
-
 {2 The Core Library}
 
+This library contains the core data structures and algorithms for
+manipulating Nunchaku's terms, statements and models, as well as
+many utilities.
+
 {!modules:
-CVC4
+AnalyzeType
+Cardinality
 Env
 FO
+FO_rel
+FO_tptp
 ID
 Intf
+Lazy_list
 Location
 MetaVar
 Model
@@ -20,16 +26,14 @@ Problem
 ProblemMetadata
 Reduce
 Scheduling
+Sexp_lib
 Signature
-Solver_intf
 Statement
 TermInner
 TermMono
-TermPoly
 TermTyped
 Transform
 Traversal
-TyCardinality
 TypeCheck
 TypeMono
 TypePoly
@@ -40,30 +44,56 @@ Var
 }
 
 {2 Transformations}
+
+This library contains transformations from problems to problems, most of
+which are encodings.
+
 {!modules:
 ElimCopy
-Elim_HOF
+ElimData
 ElimIndPreds
 ElimMultipleEqns
 ElimPatternMatch
 ElimRecursion
+ElimTypes
+Elim_HOF
+Elim_infinite
+Elim_ite
+Elim_prop_args
+FoToRelational
 IntroGuards
+LambdaLift
+Model_clean
 Monomorphization
 Polarize
 Skolem
+Specialize
 TypeInference
 Unroll
 }
 
 {2 Parsers}
 
+Parsers and printers for several formats, including Nunchaku's native format.
+
 {!modules:
-NunLexer
-NunParser
-NunParsingUtils
-NunTPTPLexer
-NunTPTPParser
-NunTPTPPreprocess
+Ast_kodkod
+Lex_kodkod
+Lexer
+Parse_kodkod
+Parse_tip
+Parser
+Parsing_utils
+TPTP_lexer
+TPTP_model_ast
+TPTP_model_lexer
+TPTP_model_parser
+TPTP_parser
+TPTP_preprocess
+TPTP_print
+Tip_ast
+Tip_lexer
+Tip_parser
 }
 
 {2 Index}

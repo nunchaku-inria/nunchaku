@@ -28,7 +28,7 @@ Library nunchaku_core
                     Env, Signature, Statement, FO_tptp, FO_rel, Cardinality,
                     Scheduling, Polarity, Traversal, ProblemMetadata,
                     AnalyzeType, Prelude, TypeCheck, Lazy_list,
-                    Sexp_lib, Sexp_lex, 
+                    Sexp_lib, Sexp_lex,
                     terms/TermInner,
                     terms/TermTyped,
                     terms/TermMono,

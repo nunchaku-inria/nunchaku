@@ -555,7 +555,7 @@ module type UTIL_REPR = sig
   (** The free type meta-variables in [t] *)
 
   val bind_unfold : Binder.t -> t_ -> t_ Var.t list * t_
-  (** [bind_unfold binder [bind binder x1...xn. t] returns [x1...xn, t] *)
+  (** [bind_unfold binder (bind binder x1...xn. t)] returns [x1...xn, t] *)
 
   val fun_unfold : t_ -> t_ Var.t list * t_
   (** [fun_unfold (fun x y z. t) = [x;y;z], t].
