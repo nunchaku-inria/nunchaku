@@ -9,7 +9,7 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
+type term = TermInner.Default.t
 
 type mode =
   | M_data
@@ -25,18 +25,18 @@ module type S = sig
   val name : string
 
   val transform_pb :
-    (T.t, T.t) Problem.t ->
-    (T.t, T.t) Problem.t * decode_state
+    (term, term) Problem.t ->
+    (term, term) Problem.t * decode_state
 
   val decode_model :
-    decode_state -> (T.t, T.t) Model.t -> (T.t, T.t) Model.t
+    decode_state -> (term, term) Model.t -> (term, term) Model.t
 
   val pipe :
     print:bool ->
     check:bool ->
-    ((T.t,T.t) Problem.t,
-     (T.t,T.t) Problem.t,
-     (T.t,T.t) Problem.Res.t, (T.t,T.t) Problem.Res.t
+    ((term,term) Problem.t,
+     (term,term) Problem.t,
+     (term,term) Problem.Res.t, (term,term) Problem.Res.t
     ) Transform.t
 
   val pipe_with :
@@ -44,8 +44,8 @@ module type S = sig
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
     check:bool ->
-    ((T.t,T.t) Problem.t,
-     (T.t,T.t) Problem.t, 'c, 'd
+    ((term,term) Problem.t,
+     (term,term) Problem.t, 'c, 'd
     ) Transform.t
 end
 

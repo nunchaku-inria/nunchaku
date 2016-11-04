@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: a001746c05fdcf1da1a6881efa6f849b)
+# DO NOT EDIT (digest: 83b964f0c78f85f453a49a6498176412)
 src/core/ID
 src/core/Var
 src/core/MetaVar
@@ -27,9 +27,10 @@ src/core/AnalyzeType
 src/core/Prelude
 src/core/TypeCheck
 src/core/Lazy_list
+src/core/Sexp_lib
+src/core/Sexp_lex
 src/core/terms/TermInner
 src/core/terms/TermTyped
-src/core/terms/TermPoly
 src/core/terms/TermMono
 src/core/terms/Pattern
 src/core/types/TypePoly
@@ -47,13 +48,17 @@ src/parsers/TPTP_model_parser
 src/parsers/Ast_kodkod
 src/parsers/Lex_kodkod
 src/parsers/Parse_kodkod
+src/parsers/Tip_ast
+src/parsers/Tip_parser
+src/parsers/Tip_lexer
+src/parsers/Parse_tip
 src/transformations/Skolem
 src/transformations/TypeInference
 src/transformations/ElimPatternMatch
 src/transformations/Monomorphization
 src/transformations/Specialize
 src/transformations/LambdaLift
-src/transformations/ElimHOF
+src/transformations/Elim_HOF
 src/transformations/ElimRecursion
 src/transformations/ElimMultipleEqns
 src/transformations/ElimIndPreds

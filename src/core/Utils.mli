@@ -14,6 +14,19 @@ module Time : sig
 
   val start : unit -> float
   (** time at which the program started *)
+
+  type timer
+  (** A single-use timer, measures elapsed time  between {!start_timer()}
+      and first call to {!stop_timer} *)
+
+  val start_timer: unit -> timer
+
+  val stop_timer : timer -> unit
+    (** Stop timer, or does nothing if stopped already *)
+
+  val get_timer : timer -> float
+  (** Number of seconds elapsed between {!start_timer} and now, or
+      between {!start_timer} and {!stop_timer} *)
 end
 
 (** {2 Debugging} *)
@@ -128,9 +141,17 @@ val warningf : warning -> ('a, Format.formatter, unit, unit) format4 -> 'a
 
 val options_warnings_ : (Arg.key * Arg.spec * Arg.doc) list
 
+val options_others_ : (Arg.key * Arg.spec * Arg.doc) list ref
+
+val add_option : Arg.key * Arg.spec * Arg.doc -> unit
+(** Add an option to {!options_others_} *)
+
 (** {2 Misc} *)
 
 exception NotImplemented of string
+
+val pp_seq : ?sep:string -> 'a CCFormat.printer -> 'a Sequence.t CCFormat.printer
+val pp_list : ?sep:string -> 'a CCFormat.printer -> 'a list CCFormat.printer
 
 val pp_error_prefix : unit CCFormat.printer
 

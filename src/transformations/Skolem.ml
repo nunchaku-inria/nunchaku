@@ -13,6 +13,8 @@ module T = TI.Default
 module U = T.U
 module P = T.P
 
+type term = TermInner.Default.t
+
 let name = "skolem"
 let section = Utils.Section.make name
 
@@ -68,8 +70,6 @@ let new_sym ~state =
 (* TODO: maybe transform nested `C[if exists x.p[x] then a else b]` where `a`
    is not of type prop, into `exists x.p[x] => C[a] & ¬ exists x.p[x] => C[b]` *)
 
-(* TODO: ignore let-bound variables in skolem symbols *)
-
 (* shall we skolemize the existential variable [v]? *)
 let should_skolemize_ ~state v =
   let ty = Var.ty v in
@@ -113,11 +113,17 @@ let skolemize_ ~state ?(in_goal=false) pol t =
             let env = env_add_var ~env v in
             U.mk_bind b v (aux env pol t')
         end
+    | TI.Let (v, t, u) ->
+      (* rename [v], but do not parametrize skolems with it *)
+      let t' = aux env pol t in
+      let v' = aux_var env v in
+      let env' = env_bind ~env v (U.var v') in
+      let u' = aux env' pol u in
+      U.let_ v' t' u'
     | TI.App _
     | TI.Builtin _
     | TI.Bind _
     | TI.Match _
-    | TI.Let _
     | TI.TyArrow _ ->
         aux' env pol t
     | TI.TyBuiltin b -> U.ty_builtin b

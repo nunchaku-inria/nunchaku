@@ -3,36 +3,36 @@
 
 (** {1 Top-Level Statements (with locations)} *)
 
-module Metadata = ProblemMetadata
+type metadata = ProblemMetadata.t
 
 type loc = Location.t
 type id = ID.t
 type 'a printer = Format.formatter -> 'a -> unit
-type 'a to_sexp = 'a -> CCSexp.t
+type 'a to_sexp = 'a -> Sexp_lib.t
 type 'a or_error = ('a, string) CCResult.t
 
 (** {2 Problem: a Set of Statements + Signature} *)
 
 type ('t, 'ty) t = private {
   statements : ('t, 'ty) Statement.t CCVector.ro_vector;
-  metadata: Metadata.t;
+  metadata: metadata;
 }
 
 val make :
-  meta:Metadata.t ->
+  meta:metadata ->
   ('t, 'ty) Statement.t CCVector.ro_vector ->
   ('t, 'ty) t
 (** Build a problem from statements *)
 
 val of_list :
-  meta:Metadata.t ->
+  meta:metadata ->
   ('t, 'ty) Statement.t list ->
   ('t, 'ty) t
 
 val statements : ('t, 'ty) t -> ('t, 'ty) Statement.t CCVector.ro_vector
-val metadata : _ t -> Metadata.t
+val metadata : (_,_) t -> metadata
 
-val update_meta : ('t,'ty) t -> (Metadata.t -> Metadata.t) -> ('t,'ty) t
+val update_meta : ('t,'ty) t -> (metadata -> metadata) -> ('t,'ty) t
 
 val add_sat_means_unknown : bool -> ('t,'ty) t -> ('t,'ty) t
 val set_sat_means_unknown : ('t,'ty) t -> ('t,'ty) t
@@ -120,12 +120,26 @@ val env : ?init:('t,'ty) Env.t -> ('t, 'ty) t -> ('t,'ty) Env.t
 (** {2 Result} *)
 
 module Res : sig
+  type info = {
+    backend: string; (* which solver returned this result? *)
+    time: float; (* time it took *)
+    message: string option; (* additional message *)
+  }
+
+  (* a single reason why "unknown" *)
+  type unknown_info =
+    | U_timeout of info
+    | U_out_of_scope of info
+    | U_incomplete of info
+    | U_other of info * string
+
   type (+'t,+'ty) t =
-    | Unsat
-    | Sat of ('t,'ty) Model.t
-    | Unknown
-    | Timeout
-    | Error of exn
+    | Unsat of info
+    | Sat of ('t,'ty) Model.t * info
+    | Unknown of unknown_info list (* can cumulate several reasons *)
+    | Error of exn * info
+
+  val mk_info : ?message:string -> backend:string -> time:float -> unit -> info
 
   val map : term:('t1 -> 't2) -> ty:('ty1 -> 'ty2) -> ('t1,'ty1) t -> ('t2, 'ty2) t
 
@@ -135,6 +149,10 @@ module Res : sig
     ('t2, 'ty2) t
 
   val print : (TermInner.prec -> 't printer) -> 'ty printer -> ('t,'ty) t printer
+
+  val print_info : info printer
+
+  val print_unknown_info : unknown_info printer
 
   val print_head : (_,_) t printer
   (** print result, not content (i.e. not the model *)

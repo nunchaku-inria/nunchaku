@@ -9,8 +9,6 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
-
 val name : string
 
 exception Attr_is_handle_cstor
@@ -28,7 +26,7 @@ exception Attr_proto_val of ID.t * int
     which is an application symbol of type [handle -> a_1 -> ... -> a_n -> ret],
     where the proto has type [handle -> a_k]. *)
 
-type term = T.t
+type term = TermInner.Default.t
 type decode_state
 
 val elim_recursion :

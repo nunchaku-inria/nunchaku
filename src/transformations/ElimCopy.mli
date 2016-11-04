@@ -5,12 +5,10 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
-
 val name : string
 
-type term = T.t
-type ty = T.t
+type term = TermInner.Default.t
+type ty = term
 
 type decode_state
 

@@ -7,13 +7,12 @@
   sent to some SMT solver. Types are monomorphic, formulas are first-order
 *)
 
-module Metadata = ProblemMetadata
-module Res = Problem.Res
-
 type id = ID.t
 type 'a var = 'a Var.t
 type 'a printer = Format.formatter -> 'a -> unit
 type 'a or_error = ('a, string) CCResult.t
+type metadata = ProblemMetadata.t
+type ('a,'b) res = ('a,'b) Problem.Res.t
 
 module TyBuiltin : sig
   type t =
@@ -113,6 +112,8 @@ module Ty : sig
   val equal : t -> t -> bool
   val compare : t -> t -> int
   val hash : t -> int
+
+  val to_seq : t -> t Sequence.t
 end
 
 module T : sig
@@ -152,35 +153,40 @@ module T : sig
   val equiv : t -> t -> t
   val forall : Ty.t var -> t -> t
   val exists : Ty.t var -> t -> t
+
+  val to_seq : t -> t Sequence.t
+  (** subterms *)
 end
 
 (** {2 Problem} *)
 module Problem : sig
   type ('t, 'ty) t = {
     statements: ('t, 'ty) statement CCVector.ro_vector;
-    meta: Metadata.t;
+    meta: metadata;
   }
 
-  val make : meta:Metadata.t -> ('t, 'ty) statement CCVector.ro_vector -> ('t, 'ty) t
-  val of_list : meta:Metadata.t -> ('t, 'ty) statement list -> ('t, 'ty) t
+  val make : meta:metadata -> ('t, 'ty) statement CCVector.ro_vector -> ('t, 'ty) t
+  val of_list : meta:metadata -> ('t, 'ty) statement list -> ('t, 'ty) t
   val statements : ('t, 'ty) t -> ('t, 'ty) statement CCVector.ro_vector
-  val meta : _ t -> Metadata.t
+  val meta : (_,_) t -> metadata
   val map :
-    meta:Metadata.t ->
+    meta:metadata ->
     (('t, 'ty) statement -> ('t2, 'ty2) statement) ->
     ('t, 'ty) t ->
     ('t2, 'ty2) t
   val flat_map :
-    meta:Metadata.t ->
+    meta:metadata ->
     (('t, 'ty) statement -> ('t2, 'ty2) statement list) ->
     ('t, 'ty) t ->
     ('t2, 'ty2) t
   val fold_flat_map :
-    meta:Metadata.t ->
+    meta:metadata ->
     ('acc -> ('t, 'ty) statement -> 'acc * ('t2, 'ty2) statement list) ->
     'acc ->
     ('t, 'ty) t ->
     'acc * ('t2, 'ty2) t
+
+  val to_seq : ('t,'ty) t -> ('t,'ty) statement Sequence.t
 end
 
 (** {2 Utils} *)
@@ -194,6 +200,10 @@ module Util : sig
 
   val problem_kinds : (_,Ty.t) Problem.t -> Model.symbol_kind ID.Map.t
 end
+
+val tys_of_toplevel_ty : 'ty toplevel_ty -> 'ty Sequence.t
+val terms_of_statement : ('t, _) statement -> 't Sequence.t
+val tys_of_statement : (_, 'ty) statement -> 'ty Sequence.t
 
 (** {2 IO} *)
 
@@ -231,5 +241,5 @@ end
 
 val pipe_tptp :
   ((T.t, Ty.t) Problem.t, FO_tptp.problem,
-    (FO_tptp.term, FO_tptp.ty) Res.t,
-    (T.t, Ty.t) Res.t) Transform.t
+    (FO_tptp.term, FO_tptp.ty) res,
+    (T.t, Ty.t) res) Transform.t

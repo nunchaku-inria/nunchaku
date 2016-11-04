@@ -8,10 +8,8 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
-
-type term = T.t
-type ty = T.t
+type term = TermInner.Default.t
+type ty = term
 type problem = (term, ty) Problem.t
 type model = (term,ty) Model.t
 type res = (term,ty) Problem.Res.t

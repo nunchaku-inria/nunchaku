@@ -28,23 +28,21 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
-
 val name : string
 
 exception Error of string
 
-type term = T.t
-type ty = T.t
+type term = TermInner.Default.t
+type ty = term
 
 type decode_state
 (** Used to decode *)
 
 val specialize_problem :
-  (T.t, T.t) Problem.t ->
-  (T.t, T.t) Problem.t * decode_state
+  (term, term) Problem.t ->
+  (term, term) Problem.t * decode_state
 
-val decode_term : decode_state -> T.t -> T.t
+val decode_term : decode_state -> term -> term
 
 val pipe :
   print:bool ->

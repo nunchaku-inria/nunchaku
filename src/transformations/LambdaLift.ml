@@ -79,7 +79,7 @@ let mk_new_rec f ty vars body =
   let eqns = Stmt.Eqn_single (vars, body) in
   let defined = Stmt.mk_defined f ty in
   {Stmt.
-    rec_vars=vars;
+    rec_ty_vars=vars;
     rec_defined=defined;
     rec_eqns=eqns;
   }

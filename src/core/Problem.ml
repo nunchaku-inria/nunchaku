@@ -9,8 +9,9 @@ module Metadata = ProblemMetadata
 type loc = Loc.t
 type id = ID.t
 type 'a printer = Format.formatter -> 'a -> unit
-type 'a to_sexp = 'a -> CCSexp.t
+type 'a to_sexp = 'a -> Sexp_lib.t
 type 'a or_error = ('a, string) CCResult.t
+type metadata = ProblemMetadata.t
 
 let fpf = Format.fprintf
 
@@ -142,19 +143,33 @@ let env ?init:(env=Env.create()) pb =
     ill_formedf_ "invalid env: %a" Env.pp_invalid_def_ e
 
 module Res = struct
+  type info = {
+    backend: string; (* which solver returned this result? *)
+    time: float; (* time it took *)
+    message: string option; (* additional message *)
+  }
+
+  (* a single reason why "unknown" *)
+  type unknown_info =
+    | U_timeout of info
+    | U_out_of_scope of info
+    | U_incomplete of info
+    | U_other of info * string
+
   type (+'t,+'ty) t =
-    | Unsat
-    | Sat of ('t,'ty) Model.t
-    | Unknown
-    | Timeout
-    | Error of exn
+    | Unsat of info
+    | Sat of ('t,'ty) Model.t * info
+    | Unknown of unknown_info list
+    | Error of exn * info
 
   let map_m ~f t =  match t with
-    | Unsat -> Unsat
-    | Timeout -> Timeout
-    | Error e -> Error e
-    | Unknown -> Unknown
-    | Sat m -> Sat (f m)
+    | Unsat i -> Unsat i
+    | Unknown l -> Unknown l
+    | Error (e, i) -> Error (e, i)
+    | Sat (m, i) -> Sat (f m, i)
+
+  let mk_info ?message ~backend ~time () =
+    {backend; time; message}
 
   let map ~term ~ty t =
     map_m t ~f:(Model.map ~term ~ty)
@@ -162,27 +177,43 @@ module Res = struct
   let fpf = Format.fprintf
 
   let print_head out = function
-    | Unsat -> fpf out "UNSAT"
-    | Timeout -> fpf out "TIMEOUT"
-    | Error e -> fpf out "ERROR %s" (Printexc.to_string e)
-    | Unknown -> fpf out "UNKNOWN"
-    | Sat _ -> fpf out "SAT"
+    | Unsat _ -> fpf out "UNSAT"
+    | Error (e,_) -> fpf out "ERROR %s" (Printexc.to_string e)
+    | Unknown _ -> fpf out "UNKNOWN"
+    | Sat (_,_) -> fpf out "SAT"
+
+  let print_info out i =
+    let pp_msg out = function
+      | None -> ()
+      | Some s -> Format.fprintf out ",@ message=%S" s
+    in
+    Format.fprintf out "{@[<2>backend:%s, time:%.1fs%a@]}"
+      i.backend i.time pp_msg i.message
+
+  let print_unknown_info out = function
+    | U_timeout i -> fpf out "TIMEOUT %a" print_info i
+    | U_out_of_scope i -> fpf out "OUT_OF_SCOPE %a" print_info i
+    | U_incomplete i -> fpf out "INCOMPLETE %a" print_info i
+    | U_other (i,s) -> fpf out "INCOMPLETE %a %s" print_info i s
+
+  let print_info_opt out = function
+    | None -> ()
+    | Some i -> print_info out i
 
   let print pt pty out = function
-    | Unsat -> fpf out "UNSAT"
-    | Timeout -> fpf out "TIMEOUT"
-    | Error e -> fpf out "ERROR %s" (Printexc.to_string e)
-    | Unknown -> fpf out "UNKNOWN"
-    | Sat m ->
-        fpf out "@[<hv>@[<v2>SAT: {@,@[<v>%a@]@]@,}@]" (Model.print pt pty) m
+    | Unsat i -> fpf out "UNSAT %a" print_info i
+    | Error (e,i) -> fpf out "ERROR %s %a" (Printexc.to_string e) print_info i
+    | Unknown l -> fpf out "UNKNOWN (@[%a@])" (Utils.pp_list print_unknown_info) l
+    | Sat (m,i) ->
+      fpf out "@[<hv>@[<v2>SAT: {@,@[<v>%a@]@]@,}@,%a@]"
+        (Model.print pt pty) m print_info i
 
-  let str = CCSexp.atom
-  let lst = CCSexp.of_list
+  let str = Sexp_lib.atom
+  let lst = Sexp_lib.list
 
   let to_sexp ft fty : (_,_) t to_sexp = function
-    | Unsat -> str "UNSAT"
-    | Timeout -> str "TIMEOUT"
-    | Error e -> lst [str "ERROR"; str (Printexc.to_string e)]
-    | Unknown -> str "UNKNOWN"
-    | Sat m -> lst [str "SAT"; Model.to_sexp ft fty m]
+    | Unsat _ -> str "UNSAT"
+    | Error (e,_) -> lst [str "ERROR"; str (Printexc.to_string e)]
+    | Unknown _ -> str "UNKNOWN"
+    | Sat (m,_) -> lst [str "SAT"; Model.to_sexp ft fty m]
 end

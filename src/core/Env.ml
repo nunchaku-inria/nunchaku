@@ -1,13 +1,12 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-module ID = ID
+module TI = TermInner
 module Stmt = Statement
 module Loc = Location
 
 type id = ID.t
 type loc = Loc.t
 type 'a printer = Format.formatter -> 'a -> unit
-
 
 type (+'t, +'ty) def =
   | Fun_def of
@@ -49,7 +48,7 @@ type (+'t, +'ty) def =
     (** ID is the concretization function *)
 
   | NoDef
-      (** Undefined symbol *)
+    (** Undefined symbol *)
 
 (** All information on a given symbol *)
 type (+'t, +'ty) info = {
@@ -237,11 +236,37 @@ let add_statement ~env st =
   | Stmt.Pred (wf, kind, preds) ->
       def_preds ?loc ~env ~wf ~kind preds
 
+let add_statement_l ~env l =
+  List.fold_left (fun env st -> add_statement ~env st) env l
+
 let mem ~env ~id = ID.PerTbl.mem env.infos id
 
 let find_ty_exn ~env id = (find_exn ~env id).ty
 
 let find_ty ~env id = CCOpt.map (fun x -> x.ty) (find ~env id)
+
+module Util(T : TermInner.S) = struct
+  type term = T.t
+  type ty = T.t
+
+  module UT = TI.Util(T)
+
+  let ty ~env t = UT.ty ~sigma:(find_ty ~env) t
+
+  let ty_exn ~env t = UT.ty_exn ~sigma:(find_ty ~env) t
+
+  exception No_head of ty
+
+  let info_of_ty_exn ~env ty =
+    try
+      let id = UT.head_sym ty in
+      find_exn ~env id
+    with Not_found -> raise (No_head ty)
+
+  let info_of_ty ~env ty =
+    try Result.Ok (info_of_ty_exn ~env ty)
+    with No_head _ -> Result.Error "type has no head"
+end
 
 module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) = struct
   let fpf = Format.fprintf

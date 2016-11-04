@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 2bfb645684dd63a1e93833dbd993d595)
+# DO NOT EDIT (digest: 445d41f17ff61e3a8b471c62812f0b5e)
 ID
 Var
 MetaVar
@@ -27,9 +27,10 @@ AnalyzeType
 Prelude
 TypeCheck
 Lazy_list
+Sexp_lib
+Sexp_lex
 terms/TermInner
 terms/TermTyped
-terms/TermPoly
 terms/TermMono
 terms/Pattern
 types/TypePoly

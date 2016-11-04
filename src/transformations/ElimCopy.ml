@@ -23,7 +23,8 @@ type ty = T.t
 
 type state = {
   env: (term, ty) Env.t;
-  approximate_types: unit TyTbl.t; (* copy types that are approximate *)
+  incomplete_types: unit TyTbl.t; (* copy types that are incomplete (missing elements) *)
+  abstract_types: unit TyTbl.t; (* copy types that are abstract (confusion among elements) *)
   copy_as_uninterpreted: unit ID.Tbl.t; (* copy types mapped to uninterpreted types *)
   at_cache: AT.cache;
   mutable unsat_means_unknown: bool;
@@ -34,7 +35,8 @@ type decode_state = state
 let create_state ~env = {
   env;
   at_cache=AT.create_cache ();
-  approximate_types=TyTbl.create 16;
+  incomplete_types=TyTbl.create 16;
+  abstract_types=TyTbl.create 16;
   copy_as_uninterpreted=ID.Tbl.create 16;
   unsat_means_unknown=false;
 }
@@ -45,7 +47,7 @@ let errorf msg = Utils.exn_ksprintf ~f:error msg
 (** {2 Encoding} *)
 
 (* encode the copy type as a datatype *)
-let copy_as_data ~info (c:_ Stmt.copy): _ Stmt.t list =
+let copy_as_data ~info (c:(_,_) Stmt.copy): (_,_) Stmt.t list =
   (* the datatype itself, whose cstor is [c.copy_abstract] *)
   let cstor =
     { Stmt.
@@ -72,7 +74,7 @@ let copy_as_data ~info (c:_ Stmt.copy): _ Stmt.t list =
     let def =
       { Stmt.
         rec_defined = Stmt.mk_defined c.Stmt.copy_concrete c.Stmt.copy_concrete_ty;
-        rec_vars=[];
+        rec_ty_vars=[];
         rec_eqns=Stmt.Eqn_nested [[x], [lhs], rhs, []];
       }
     in
@@ -83,35 +85,46 @@ let copy_as_data ~info (c:_ Stmt.copy): _ Stmt.t list =
 
 let approx_threshold_ = 30 (* FUDGE *)
 
-(* [c] is a copy type with predicate [pred]; encode it as a new uninterpreted
-   type [c], where [abstract] and [concrete] are regular functions with
-   some axioms, and [pred] is valid all over [concrete c] *)
-let copy_as_finite_ty state ~info ~(pred:term) c : _ Stmt.t list =
+(* should we do an approximation of [c.Stmt.copy_of]? *)
+let should_be_incomplete card_concrete = match card_concrete with
+  | Cardinality.Infinite
+  | Cardinality.Unknown -> true
+  | Cardinality.Exact n
+  | Cardinality.QuasiFiniteGEQ n ->
+    (* if [n >= threshold] we approximate *)
+    Cardinality.Z.(compare (of_int approx_threshold_) n <= 0)
+
+let attrs_of_ty state (ty:ty): Stmt.decl_attr list =
+  (if AT.is_abstract state.env ty
+   then [Stmt.Attr_abstract] else [])
+  @
+  (if AT.is_incomplete state.env ty
+   then [Stmt.Attr_incomplete] else [])
+
+(* [c] is a subset copy type with predicate [pred]; encode it as a new
+   uninterpreted type [c], where [abstract] and [concrete] are regular functions
+   with some axioms, and [pred] is valid all over [concrete c] *)
+let copy_subset_as_uninterpreted_ty state ~info ~(pred:term) c : (_, _) Stmt.t list =
   let card_concrete =
     AT.cardinality_ty ~cache:state.at_cache state.env c.Stmt.copy_of
   in
-  (* should we do an approximation of [c.Stmt.copy_of]? *)
-  let should_approx = match card_concrete with
-    | Cardinality.Infinite
-    | Cardinality.Unknown -> true
-    | Cardinality.Exact n
-    | Cardinality.QuasiFiniteGEQ n ->
-      (* if [n >= threshold] we approximate *)
-      Cardinality.Z.(compare (of_int approx_threshold_) n <= 0)
-  in
+  let incomplete = should_be_incomplete card_concrete in
   let id_c = c.Stmt.copy_id in
   let ty_c = U.ty_const id_c in
   ID.Tbl.add state.copy_as_uninterpreted id_c ();
-  Utils.debugf ~section 3 "@[copy type %a:@ should_approx=%B@]"
-    (fun k->k ID.print id_c should_approx);
+  Utils.debugf ~section 3 "@[copy type %a:@ should_be_incomplete=%B@]"
+    (fun k -> k ID.print id_c incomplete);
   (* be sure to register approximated types *)
-  if should_approx
-  then TyTbl.add state.approximate_types ty_c ();
+  if incomplete then (
+    TyTbl.add state.incomplete_types ty_c ();
+  );
   (* declare the new (uninterpreted) type and functions *)
   let decl_c =
-    let attrs =
-      if should_approx then [] else [Stmt.Attr_card_hint card_concrete]
+    let new_attr =
+      if incomplete then Stmt.Attr_incomplete else Stmt.Attr_card_hint card_concrete
     in
+    let old_attrs = attrs_of_ty state c.Stmt.copy_of in
+    let attrs = new_attr :: old_attrs in
     Stmt.decl ~info ~attrs id_c c.Stmt.copy_ty
   and decl_abs =
     Stmt.decl ~info ~attrs:[] c.Stmt.copy_abstract c.Stmt.copy_abstract_ty
@@ -134,20 +147,20 @@ let copy_as_finite_ty state ~info ~(pred:term) c : _ Stmt.t list =
       (Red.app_whnf pred
          [U.app_const c.Stmt.copy_concrete [U.var a]])
     |> Stmt.axiom1 ~info
-  (* if no approximation (concrete type is finite and small enough),
-     axiom [forall r:repr. pred r => r = concrete (abstract r)] *)
+  (* if complete (concrete type is finite and small enough),
+     axiom [forall c:conc. pred c => c = concrete (abstract c)] *)
   and ax_defined =
-    if should_approx then []
+    if incomplete then []
     else (
-      let r = Var.make ~ty:c.Stmt.copy_of ~name:"r" in
+      let co = Var.make ~ty:c.Stmt.copy_of ~name:"c" in
       let ax =
-        U.forall r
+        U.forall co
           (U.imply
-             (Red.app_whnf pred [U.var r])
+             (Red.app_whnf pred [U.var co])
              (U.eq
-                (U.var r)
+                (U.var co)
                 (U.app_const c.Stmt.copy_concrete
-                   [U.app_const c.Stmt.copy_abstract [U.var r]])))
+                   [U.app_const c.Stmt.copy_abstract [U.var co]])))
         |> Stmt.axiom1 ~info
       in
       [ax]
@@ -156,13 +169,95 @@ let copy_as_finite_ty state ~info ~(pred:term) c : _ Stmt.t list =
   [decl_c; decl_abs; decl_conc; ax_abs_conc; ax_pred_conc]
     @ ax_defined
 
-let is_approx_type_ state ty = TyTbl.mem state.approximate_types ty
+(* [c] is a quotient copy type with relation [rel]; encode it as a new
+   uninterpreted type [c], where [abstract] and [concrete] are regular functions
+   with some axioms, and [pred] is valid all over [concrete c] *)
+let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) Stmt.t list =
+  let card_concrete =
+    AT.cardinality_ty ~cache:state.at_cache state.env c.Stmt.copy_of
+  in
+  let incomplete = should_be_incomplete card_concrete in
+  let id_c = c.Stmt.copy_id in
+  let ty_c = U.ty_const id_c in
+  ID.Tbl.add state.copy_as_uninterpreted id_c ();
+  Utils.debugf ~section 3 "@[copy type %a:@ should_be_incomplete=%B@]"
+    (fun k -> k ID.print id_c incomplete);
+  if incomplete then (
+    TyTbl.add state.incomplete_types ty_c ();
+  );
+  TyTbl.add state.abstract_types ty_c ();
+  (* declare the new (uninterpreted) type and functions *)
+  let decl_c =
+    let incomp_attr =
+      if incomplete then [Stmt.Attr_incomplete] else []
+    in
+    let old_attrs = attrs_of_ty state c.Stmt.copy_of in
+    let attrs = Stmt.Attr_abstract :: incomp_attr @ old_attrs in
+    Stmt.decl ~info ~attrs id_c c.Stmt.copy_ty
+  and decl_abs =
+    Stmt.decl ~info ~attrs:[] c.Stmt.copy_abstract c.Stmt.copy_abstract_ty
+  and decl_conc =
+    Stmt.decl ~info ~attrs:[] c.Stmt.copy_concrete c.Stmt.copy_concrete_ty
+  in
+  (* axiom [forall a:abs. abstract (concrete a) = a] *)
+  let ax_abs_conc =
+    let a = Var.make ~ty:ty_c ~name:"a" in
+    U.forall a
+      (U.eq
+         (U.var a)
+         (U.app_const c.Stmt.copy_abstract
+            [U.app_const c.Stmt.copy_concrete [U.var a]]))
+    |> Stmt.axiom1 ~info
+  (* axiom [forall a: abs. rel (concrete a) (concrete a)] *)
+  and ax_rel_conc =
+    let a = Var.make ~ty:ty_c ~name:"a" in
+    let conc_a = U.app_const c.Stmt.copy_concrete [U.var a] in
+    U.forall a (Red.app_whnf rel [conc_a; conc_a])
+    |> Stmt.axiom1 ~info
+  (* axiom [forall a b: abs. rel (concrete a) (concrete b) => a = b] *)
+  and ax_partition =
+    let a = Var.make ~ty:ty_c ~name:"a" in
+    let b = Var.make ~ty:ty_c ~name:"b" in
+    let conc_a = U.app_const c.Stmt.copy_concrete [U.var a] in
+    let conc_b = U.app_const c.Stmt.copy_concrete [U.var b] in
+    U.forall_l [a; b]
+      (U.imply
+        (Red.app_whnf rel [conc_a; conc_b])
+        (U.eq (U.var a) (U.var b)))
+    |> Stmt.axiom1 ~info
+  (* if complete (concrete type is finite and small enough),
+     axiom [forall c:conc. (rel c c =>)? rel c (concrete (abstract c))] *)
+  and ax_defined =
+    if incomplete then []
+    else (
+      let co = Var.make ~ty:c.Stmt.copy_of ~name:"c" in
+      let add_guard t = match tty with
+        | `Partial -> U.imply (Red.app_whnf rel [U.var co; U.var co]) t
+        | `Total -> t
+      in
+      let ax =
+        U.forall co
+          (add_guard
+             (Red.app_whnf rel
+                [U.var co;
+                 U.app_const c.Stmt.copy_concrete
+                   [U.app_const c.Stmt.copy_abstract [U.var co]]]))
+        |> Stmt.axiom1 ~info
+      in
+      [ax]
+    )
+  in
+  [decl_c; decl_abs; decl_conc; ax_abs_conc; ax_rel_conc; ax_partition]
+    @ ax_defined
+
+let is_incomplete_type_ state ty = TyTbl.mem state.incomplete_types ty
+let is_abstract_type_ state ty = TyTbl.mem state.abstract_types ty
 
 (* encode terms, perform the required approximations *)
 let encode_term state pol t =
   let rec aux pol t = match T.repr t with
     | TI.Bind ((`Forall | `Exists) as q, v, _)
-      when is_approx_type_ state (Var.ty v) ->
+      when is_incomplete_type_ state (Var.ty v) ->
       (* might approximate this quantifier *)
       begin match U.approx_infinite_quant_pol q pol with
         | `Keep -> aux' pol t
@@ -189,9 +284,12 @@ let elim pb =
         let info = Stmt.info stmt in
         match Stmt.view stmt with
           | Stmt.Copy c ->
-            begin match c.Stmt.copy_pred with
-              | None -> copy_as_data ~info c
-              | Some p -> copy_as_finite_ty state ~info ~pred:p c
+            begin match c.Stmt.copy_wrt with
+              | Stmt.Wrt_nothing -> copy_as_data ~info c
+              | Stmt.Wrt_subset p ->
+                copy_subset_as_uninterpreted_ty state ~info ~pred:p c
+              | Stmt.Wrt_quotient (tty, r) ->
+                copy_quotient_as_uninterpreted_ty state ~info ~tty ~rel:r c
             end
           | _ ->
             let stmt' =
@@ -218,7 +316,7 @@ module DT_util = M.DT_util
 *)
 let decode_concrete_ st m : term ID.Map.t =
   (* map [copy_id -> model of copy_concretize] *)
-  let concrete_funs : (_ Stmt.copy * _ M.DT.t) ID.Map.t  =
+  let concrete_funs : ((_,_) Stmt.copy * (_,_) M.DT.t) ID.Map.t  =
     M.fold ID.Map.empty m
       ~values:(fun map (t,dt,_) -> match T.repr t with
         | TI.Const id ->
@@ -268,7 +366,7 @@ let decode_term (map:term ID.Map.t) (t:term): term =
   in
   aux t
 
-let decode_model (st:decode_state) m : _ Model.t =
+let decode_model (st:decode_state) m : (_,_) Model.t =
   let env = st.env in
   let map = decode_concrete_ st m in
   Utils.debugf ~section 3

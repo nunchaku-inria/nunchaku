@@ -8,9 +8,7 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
-
-type term = T.t
+type term = TermInner.Default.t
 
 val name : string
 

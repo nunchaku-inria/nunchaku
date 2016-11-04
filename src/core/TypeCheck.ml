@@ -42,7 +42,7 @@ module Make(T : TI.S) = struct
       errorf_ "identifier %a not defined in scope" ID.print_full id
 
   let err_ty_mismatch t exp act =
-    errorf_ "@[<2>type of `@[%a@]` should be `@[%a@]`,@ but is `@[%a@]`@]"
+    errorf_ "@[<2>type of `@[%a@]`@ should be `@[%a@]`,@ but is `@[%a@]`@]"
       P.print t P.print exp P.print act
 
   (* check that [ty = prop] *)
@@ -272,7 +272,7 @@ module Make(T : TI.S) = struct
           (* special checks *)
           List.iter
             (fun def ->
-               let tyvars = def.Stmt.rec_vars in
+               let tyvars = def.Stmt.rec_ty_vars in
                let bound = List.fold_left (check_var ~env) VarSet.empty tyvars in
                let {Stmt.defined_head=id; _} = def.Stmt.rec_defined in
                check_eqns ~env ~bound id def.Stmt.rec_eqns)
@@ -282,7 +282,7 @@ module Make(T : TI.S) = struct
           Stmt.defined_of_spec spec
             |> Sequence.map Stmt.ty_of_defined
             |> Sequence.iter (fun ty -> ignore (check_is_ty ~env bound ty));
-          let bound = List.fold_left (check_var ~env) bound spec.Stmt.spec_vars in
+          let bound = List.fold_left (check_var ~env) bound spec.Stmt.spec_ty_vars in
           List.iter (check_is_prop ~env bound) spec.Stmt.spec_axioms
       | Stmt.Copy c ->
           default_check st;
@@ -298,14 +298,20 @@ module Make(T : TI.S) = struct
             c.Stmt.copy_concrete_ty
               (U.ty_forall_l c.Stmt.copy_vars
                  (U.ty_arrow c.Stmt.copy_to c.Stmt.copy_of));
-          begin match c.Stmt.copy_pred with
-            | None -> ()
-            | Some p ->
+          begin match c.Stmt.copy_wrt with
+            | Stmt.Wrt_nothing -> ()
+            | Stmt.Wrt_subset p ->
               (* check that [p : copy_of -> prop] *)
               let ty_p = check ~env VarSet.empty p in
               check_same_ty
                 (U.ty_arrow c.Stmt.copy_of U.ty_prop)
                 ty_p
+            | Stmt.Wrt_quotient (_, r) ->
+              (* check that [r : copy_of -> copy_of -> prop] *)
+              let ty_r = check ~env VarSet.empty r in
+              check_same_ty
+                (U.ty_arrow_l [c.Stmt.copy_of; c.Stmt.copy_of] U.ty_prop)
+                ty_r
           end;
       | _ -> default_check st
     end;

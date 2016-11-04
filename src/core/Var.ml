@@ -1,7 +1,6 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-module ID = ID
 
 type id = ID.t
 
@@ -107,6 +106,7 @@ module Subst = struct
     add ~subst v v', v'
 
   let to_list s = M.fold (fun _ (v,x) acc -> (v,x)::acc) s []
+  let to_seq s yield = M.iter (fun _ (v,x) -> yield (v,x)) s
 
   let print pt out s =
     let pp_pair out (v,t) =

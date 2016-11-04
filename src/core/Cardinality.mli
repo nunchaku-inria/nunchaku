@@ -21,13 +21,10 @@ end
 
 type t =
   | Exact of Z.t
-
   | QuasiFiniteGEQ of Z.t
-      (** unknown, but ≥ 0. If all uninterpreted types are finite, then
+      (** unknown, but ≥ Z.t value. If all uninterpreted types are finite, then
           this is finite too *)
-
   | Infinite
-
   | Unknown
       (** Any value, we do not know *)
 
@@ -39,6 +36,7 @@ val of_int : int -> t
 val of_z : Z.t -> t
 
 val is_zero : t -> bool
+val is_finite : t -> bool
 
 val sum : t list -> t
 val product : t list -> t

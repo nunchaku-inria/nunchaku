@@ -9,11 +9,9 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
-
 val name : string
 
-type term = T.t
+type term = TermInner.Default.t
 type decode_state
 
 val elim_ind_preds :

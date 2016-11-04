@@ -1,9 +1,8 @@
 # OASIS_START
-# DO NOT EDIT (digest: 069526a92cb970f99db8f8ce3cdf4a53)
+# DO NOT EDIT (digest: 9b02635b633f9e5a8347fee176d1fc45)
 version = "0.2"
-description = "A counter-example finder for higher-order logic"
-requires =
-"containers containers.data containers.sexp sequence num unix threads"
+description = "A model finder for higher-order logic"
+requires = "containers containers.data sequence num unix threads"
 archive(byte) = "nunchaku_core.cma"
 archive(byte, plugin) = "nunchaku_core.cma"
 archive(native) = "nunchaku_core.cmxa"
@@ -11,7 +10,7 @@ archive(native, plugin) = "nunchaku_core.cmxs"
 exists_if = "nunchaku_core.cma"
 package "transformations" (
  version = "0.2"
- description = "A counter-example finder for higher-order logic"
+ description = "A model finder for higher-order logic"
  requires = "containers nunchaku"
  archive(byte) = "nunchaku_transformations.cma"
  archive(byte, plugin) = "nunchaku_transformations.cma"
@@ -22,7 +21,7 @@ package "transformations" (
 
 package "random" (
  version = "0.2"
- description = "A counter-example finder for higher-order logic"
+ description = "A model finder for higher-order logic"
  requires = "nunchaku qcheck"
  archive(byte) = "nunchaku_random.cma"
  archive(byte, plugin) = "nunchaku_random.cma"
@@ -33,7 +32,7 @@ package "random" (
 
 package "parsers" (
  version = "0.2"
- description = "A counter-example finder for higher-order logic"
+ description = "A model finder for higher-order logic"
  requires = "nunchaku"
  archive(byte) = "nunchaku_parsers.cma"
  archive(byte, plugin) = "nunchaku_parsers.cma"
@@ -44,8 +43,8 @@ package "parsers" (
 
 package "backends" (
  version = "0.2"
- description = "A counter-example finder for higher-order logic"
- requires = "nunchaku nunchaku.parsers containers.sexp"
+ description = "A model finder for higher-order logic"
+ requires = "nunchaku nunchaku.parsers"
  archive(byte) = "nunchaku_backends.cma"
  archive(byte, plugin) = "nunchaku_backends.cma"
  archive(native) = "nunchaku_backends.cmxa"

@@ -5,13 +5,10 @@
 
 open Nunchaku_core
 
-module T = FO.T
-module Ty = FO.Ty
+type model_term = FO.T.t
+type model_ty = FO.Ty.t
 
-type model_term = T.t
-type model_ty = Ty.t
-
-type problem = (T.t, Ty.t) FO.Problem.t
+type problem = (model_term, model_ty) FO.Problem.t
 type processed_problem
 
 val preprocess : problem -> processed_problem
@@ -24,7 +21,7 @@ val solve :
   ?print:bool ->
   ?print_model:bool ->
   problem ->
-  ((T.t, Ty.t) Problem.Res.t * Scheduling.shortcut) Scheduling.Fut.t
+  ((model_term, model_ty) Problem.Res.t * Scheduling.shortcut) Scheduling.Fut.t
   (** [solve pb] returns a {b task} that, when executed, will return
       a model or UNSAT (see {!Solver_intf.Res.t}). *)
 

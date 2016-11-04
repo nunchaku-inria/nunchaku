@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 578b425a2ca6649fff28f56483770a6b)
+# DO NOT EDIT (digest: 0730fc2b9889920ef0a394d6f5610f12)
 Parsing_utils
 Lexer
 Parser
@@ -13,4 +13,8 @@ TPTP_model_parser
 Ast_kodkod
 Lex_kodkod
 Parse_kodkod
+Tip_ast
+Tip_parser
+Tip_lexer
+Parse_tip
 # OASIS_STOP

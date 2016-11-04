@@ -7,9 +7,6 @@ open Nunchaku_core
 
 module A = UntypedAST
 module E = CCResult
-module ID = ID
-module Var = Var
-module MetaVar = MetaVar
 module Loc = Location
 module Stmt = Statement
 
@@ -798,7 +795,7 @@ module Convert(Term : TermTyped.S) = struct
   (* convert a specification *)
   let convert_spec_defs ?loc ~env (untyped_defined_l, ax_l) =
     (* what are we specifying? a list of [Stmt.defined] terms *)
-    let defined_l, env', spec_vars = match untyped_defined_l with
+    let defined_l, env', spec_ty_vars = match untyped_defined_l with
       | [] -> assert false (* parser error *)
       | (v,ty) :: tail ->
           let id = ID.make v in
@@ -830,10 +827,10 @@ module Convert(Term : TermTyped.S) = struct
           defined :: l, env', vars
     in
     (* convert axioms. Use [env'] so that the specified terms are actually
-        expansed into their version applied to [spec_vars] *)
+        expansed into their version applied to [spec_ty_vars] *)
     let axioms = List.map
       (fun ax ->
-        (* check that all the free type variables in [ax] are among [spec_vars] *)
+        (* check that all the free type variables in [ax] are among [spec_ty_vars] *)
         let before_generalize t =
           begin match check_no_meta t with
           | `Ok -> ()
@@ -842,7 +839,7 @@ module Convert(Term : TermTyped.S) = struct
               "term `@[%a@]`@ contains non-generalized variables @[%a@]"
               P.print t (CCFormat.list MetaVar.print) vars'
           end;
-          match check_vars ~vars:(VarSet.of_list spec_vars) ~rel:`Subset t with
+          match check_vars ~vars:(VarSet.of_list spec_ty_vars) ~rel:`Subset t with
           | `Ok -> ()
           | `Bad bad_vars ->
               ill_formedf ?loc ~kind:"spec"
@@ -854,8 +851,8 @@ module Convert(Term : TermTyped.S) = struct
       ax_l
     in
     (* check that no meta remains *)
-    List.iter check_mono_var_ spec_vars;
-    let spec = {Stmt. spec_axioms=axioms; spec_vars; spec_defined=defined_l; } in
+    List.iter check_mono_var_ spec_ty_vars;
+    let spec = {Stmt. spec_axioms=axioms; spec_ty_vars; spec_defined=defined_l; } in
     let env = List.fold_left
       (fun env def ->
         let id = def.Stmt.defined_head in
@@ -1022,7 +1019,7 @@ module Convert(Term : TermTyped.S) = struct
         in
         (* return case *)
         {Stmt.
-          rec_defined=defined; rec_vars=ty_vars;
+          rec_defined=defined; rec_ty_vars=ty_vars;
           rec_eqns=Stmt.Eqn_nested rec_eqns; })
       l'
     in
@@ -1248,22 +1245,25 @@ module Convert(Term : TermTyped.S) = struct
       TyEnv.add_decl ~env c.A.abstract ~id:abstract ty_abstract in
     let env =
       TyEnv.add_decl ~env c.A.concrete ~id:concrete ty_concrete in
-    (* handle optional pred *)
-    let pred =
-      CCOpt.map
-        (fun p ->
-           let p = convert_term_exn ~env p in
-           (* [p : concrete -> prop] *)
-           unify_in_ctx_ ~stack:[] (U.ty_exn p) (U.ty_arrow ty_of U.ty_prop);
-           p)
-        c.A.pred
+    let wrt = match c.A.wrt with
+      | A.Wrt_nothing -> Stmt.Wrt_nothing
+      | A.Wrt_subset p ->
+        let p = convert_term_exn ~env p in
+        (* [p : concrete -> prop] *)
+        unify_in_ctx_ ~stack:[] (U.ty_exn p) (U.ty_arrow ty_of U.ty_prop);
+        Stmt.Wrt_subset p
+      | A.Wrt_quotient (tty, r) ->
+        let r = convert_term_exn ~env r in
+        (* [r : concrete -> concrete -> prop] *)
+        unify_in_ctx_ ~stack:[] (U.ty_exn r) (U.ty_arrow_l [ty_of; ty_of] U.ty_prop);
+        Stmt.Wrt_quotient (tty, r)
     in
     (* create statement *)
     let c = Stmt.mk_copy
         ~of_:ty_of ~to_:ty_new ~vars ~ty:ty_id
+        ~wrt
         ~abstract:(abstract,ty_abstract)
         ~concrete:(concrete,ty_concrete)
-        ~pred
         id in
     env, c
 
@@ -1433,7 +1433,7 @@ module Convert(Term : TermTyped.S) = struct
     let res = CCVector.freeze res in
     let pb =
       Problem.make res
-        ~meta:Problem.Metadata.default
+        ~meta:ProblemMetadata.default
     in
     pb, env
 
@@ -1445,8 +1445,6 @@ end
 module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
   type term1 = T1.t
   type term2 = T2.t
-
-  module HO2 = TermPoly.Make(T2)
 
   let pipe_with ~decode ~print =
     (* type inference *)

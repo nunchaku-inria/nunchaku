@@ -764,7 +764,7 @@ let dispatch = {
     (* new (specialized) case *)
     let rec_defined = specialize_defined ~state:st def.Stmt.rec_defined args in
     let def' = {Stmt.
-      rec_vars=[];
+      rec_ty_vars=[];
       rec_defined;
       rec_eqns=eqns;
     } in
@@ -1146,7 +1146,7 @@ let gather_spec_funs state m : aggregate_models =
 
 (* function that converts a specialized DT into a non-specialized DT,
    where terms are decoded *)
-let dt_of_spec_dt state ~vars (dt,dsf) : _ DT.t =
+let dt_of_spec_dt state ~vars (dt,dsf) : (_,_) DT.t =
   Utils.debugf ~section 5
     "@[<2>generalize dt@ `@[<2>@[%a@]@]`@ on vars @[%a@]@ with arg %a@]"
     (fun k->k
@@ -1193,7 +1193,7 @@ let dt_of_spec_dt state ~vars (dt,dsf) : _ DT.t =
 
 (* convert a set of specialized models, into a model of the
    non-specialized function *)
-let dt_of_am state (am:aggregate_model) : _ DT.t =
+let dt_of_am state (am:aggregate_model) : (_,_) DT.t =
   let _, ty_args, _ = U.ty_unfold am.am_ty in
   let vars = List.mapi (fun i ty -> Var.makef ~ty "x_%d" i) ty_args in
   (* convert each specialized DT into a partial DT ranging over [vars] *)

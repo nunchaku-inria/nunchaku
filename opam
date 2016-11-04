@@ -24,7 +24,7 @@ remove: [
 ]
 depends: [
     "ocamlfind" {build}
-    "containers" { >= "0.16" }
+    "containers" { >= "0.16" < "1.0" }
     "menhir" {build}
     "sequence"
     "base-unix"
@@ -38,4 +38,3 @@ homepage: "https://github.com/nunchaku-inria/nunchaku/"
 available: [ocaml-version >= "4.00.0"]
 dev-repo: "https://github.com/nunchaku-inria/nunchaku.git"
 bug-reports: "https://github.com/nunchaku-inria/nunchaku/issues"
-

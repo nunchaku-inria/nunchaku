@@ -1,12 +1,8 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Interface to Kodkod} *)
 
 open Nunchaku_core
-
-module T = FO.T
-module Ty = FO.Ty
 
 type problem = FO_rel.problem
 type res = (FO_rel.expr, FO_rel.sub_universe) Problem.Res.t
@@ -28,7 +24,6 @@ val pipe :
   unit ->
   ( problem,
     res Scheduling.Task.t,
-    'c, 'c) Transform.transformation
+    'c, 'c) Transform.t
 (** Transformation corresponding to calling Kodkod on
     the input problem *)
-

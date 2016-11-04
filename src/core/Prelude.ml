@@ -20,7 +20,7 @@ let parse_errorf_ msg = CCFormat.ksprintf ~f:parse_error_ msg
 let loc = Location.mk "<prelude>" 0 0 0 0
 
 (* parser for a very simple S-expr based language *)
-let sexp_to_term : CCSexp.t -> A.term =
+let sexp_to_term : Sexp_lib.t -> A.term =
   let rec p = function
     | `List (`Atom "asserting" :: t :: l) -> A.asserting ~loc (p t) (List.map p l)
     | `List [`Atom "=>"; a; b] -> A.imply ~loc (p a) (p b)
@@ -44,12 +44,12 @@ let sexp_to_term : CCSexp.t -> A.term =
     | `Atom "false" -> A.false_
     | `Atom v -> A.var ~loc v
     | `List (`Atom v :: l) -> A.app ~loc (A.var ~loc v) (List.map p l)
-    | s -> parse_errorf_ "@[<2>expected term, got @[%a@]@]" CCSexpM.print s
+    | s -> parse_errorf_ "@[<2>expected term, got @[%a@]@]" Sexp_lib.pp s
   in
   p
 
 let p_term s =
-  match CCSexpM.parse_string s with
+  match Sexp_lib.parse_string s with
   | `Ok s -> sexp_to_term s
   | `Error msg ->
       parse_errorf_ "could not parse `%s` as an S-expression: %s" s msg

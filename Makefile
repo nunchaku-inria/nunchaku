@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 46f8bd9984975bd4727bed22d0876cd2)
+# DO NOT EDIT (digest: 0ea630b0d23ed49c1bf5c457a3a51866)
 
 SETUP = ./setup.exe
 
@@ -38,38 +38,17 @@ configure: $(SETUP)
 	$(SETUP) -configure $(CONFIGUREFLAGS)
 
 setup.exe: setup.ml
-	ocamlfind ocamlopt -o $@ $< || ocamlfind ocamlc -o $@ $< || true
+	ocamlfind ocamlopt -o $@ setup.ml || ocamlfind ocamlc -o $@ setup.ml || true
 	$(RM) setup.cmi setup.cmo setup.cmx setup.o
 
 .PHONY: build doc test all install uninstall reinstall clean distclean configure
 
 # OASIS_STOP
 
-DONTTEST=myocamlbuild.ml setup.ml
-QTESTABLE=$(filter-out $(DONTTEST), \
-	$(wildcard src/core/*.ml) \
-	$(wildcard src/core/*.mli) \
-	$(wildcard src/parsers/*.ml) \
-	$(wildcard src/parsers/*.mli) \
-	$(wildcard src/transformations/*.ml) \
-	$(wildcard src/transformations/*.mli) \
-	$(wildcard src/random/*.ml) \
-	$(wildcard src/random/*.mli) \
-	)
-
 qtest-clean:
 	@rm -rf qtest/
 
 QTEST_PREAMBLE='open Nunchaku_core;; '
-
-qtest-gen:
-	@mkdir -p qtest
-	@if which qtest > /dev/null ; then \
-		qtest extract --preamble $(QTEST_PREAMBLE) \
-			-o qtest/run_qtest.ml \
-			$(QTESTABLE) 2> /dev/null ; \
-	else touch qtest/run_qtest.ml ; \
-	fi
 
 watch:
 	while find src/ -print0 | xargs -0 inotifywait -e delete_self -e modify ; do \

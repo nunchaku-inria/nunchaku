@@ -1,12 +1,12 @@
 # OASIS_START
-# DO NOT EDIT (digest: 5be4fb73732832b786be51ea59c1e2df)
+# DO NOT EDIT (digest: 0d7c9d6344e51c8033855ad6e1651b0f)
 Skolem
 TypeInference
 ElimPatternMatch
 Monomorphization
 Specialize
 LambdaLift
-ElimHOF
+Elim_HOF
 ElimRecursion
 ElimMultipleEqns
 ElimIndPreds

@@ -3,15 +3,13 @@
 
 (** {1 Analyze Types : Cardinalities, Abstract, Incomplete} *)
 
-module TI = TermInner
-
 exception Error of string
 
 exception Polymorphic
 
 exception EmptyData of ID.t
 
-module Make(T : TI.S) : sig
+module Make(T : TermInner.S) : sig
   type ty = T.t
 
   type 'a env = ('a, ty) Env.t
@@ -22,13 +20,10 @@ module Make(T : TI.S) : sig
 
   val create_cache :
     ?default_card:int ->
-    ?map_hint:(Cardinality.t -> Cardinality.t option) ->
     unit ->
     cache
   (** @param default_card if provided, the uninterpreted types we
-        know nothing about will be considered as having this card
-      @param map_hint if provided, will be applied to filter_map any
-        type hint associated with uninterpreted types *)
+        know nothing about will be considered as having this card *)
 
   val cardinality_ty : ?cache:cache -> _ env -> ty -> Cardinality.t
   (** [cardinality_ty ty] computes the cardinality of the type [ty], which

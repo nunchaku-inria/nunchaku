@@ -5,15 +5,10 @@
 
 module TI = TermInner
 module Loc = Location
-module Var = Var
-module MetaVar = MetaVar
-module ID = ID
 
 (*$inject
-  module Var = Var
-  module TyI = Type_intf
+  module TI = TermInner
   module U = Util(Default)
-
 *)
 
 type 'a view = 'a TI.view
@@ -83,6 +78,7 @@ module Util(T : S)
   val ty_const : ?loc:loc -> id -> t
   val ty_app : ?loc:loc -> t -> t list -> t
   val ty_arrow : ?loc:loc -> t -> t -> t
+  val ty_arrow_l : ?loc:loc -> t list -> t -> t
 
   val ty_var : ?loc:loc -> t var -> t
   val ty_forall : ?loc:loc -> t var -> t -> t
@@ -173,6 +169,7 @@ end = struct
 
   let ty_arrow ?loc a b =
     build ?loc ~ty:ty_type (TI.TyArrow (a,b))
+  let ty_arrow_l ?loc = List.fold_right (ty_arrow ?loc)
 
   let ty_forall ?loc a b =
     mk_bind ?loc ~ty:ty_type `TyForall a b
@@ -183,14 +180,10 @@ end = struct
 end
 
 (*$T
-  TyI.returns_Type ~repr:U.as_ty U.ty_type
-  TyI.returns_Type ~repr:U.as_ty U.(ty_arrow ty_prop ty_type)
-  not (TyI.returns_Type ~repr:U.as_ty U.(ty_arrow ty_type ty_prop))
+  U.ty_returns_Type U.ty_type
+  U.ty_returns_Type U.(ty_arrow ty_prop ty_type)
+  not (U.ty_returns_Type U.(ty_arrow ty_type ty_prop))
 *)
-
-module AsPoly(T : REPR)
-: TermPoly.S with type T.t = T.t
-= TermPoly.Make(T)
 
 module Default = struct
   type t = {

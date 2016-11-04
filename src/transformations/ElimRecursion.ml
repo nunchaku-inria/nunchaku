@@ -665,7 +665,7 @@ let pass2_ projs (doms:finite_domains) =
 *)
 let pass3_ ~state doms m =
   (* decode a function. *)
-  let decode_fun_ (dom:finite_domain) (dt:_ DT.t) : _ DT.t =
+  let decode_fun_ (dom:finite_domain) (dt:(_,_) DT.t) : (_,_) DT.t =
     let arity = List.length dom.dom_fun.fun_concretization in
     if DT.num_vars dt < arity
     then fail_decode_

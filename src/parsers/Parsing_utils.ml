@@ -74,13 +74,6 @@ module type S = sig
   val statement_of_string : string -> statement or_error
 
   val statement_of_string_exn : string -> statement
-
-  module HO : sig
-    module T = TermInner.Default
-
-    val term_of_str : string -> T.t or_error
-    val term_of_str_exn : string -> T.t
-  end
 end
 
 let error_include_ ?loc f =
@@ -164,17 +157,4 @@ module Make(P : PARSER) : S = struct
 
   let statement_of_string = try_parse_ P.parse_statement
   let statement_of_string_exn = parse_str_ P.parse_statement
-
-  module HO = struct
-    module T = TermInner.Default
-    module Conv = TermPoly.OfUntyped(T)
-
-    let term_of_str_exn s =
-      let t = term_of_string_exn s in
-      Conv.convert_term t
-
-    let term_of_str s =
-      try E.return (term_of_str_exn s)
-      with e -> Utils.err_of_exn e
-  end
 end

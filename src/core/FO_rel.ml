@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Relational FO Logic} *)
@@ -374,5 +373,3 @@ let print_problem out pb =
     print_universe pb.pb_univ
     (CCFormat.seq ~start:"" ~stop:"" print_decl) (ID.Map.values pb.pb_decls)
     (pp_list ~sep:" && " print_form) pb.pb_goal
-
-

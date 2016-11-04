@@ -3,24 +3,17 @@
 
 (** {1 Unification of Types} *)
 
-module MetaVar = MetaVar
-module ID = ID
-module Var = Var
 module TI = TermInner
 module TyI = TypePoly
-module Utils = Utils
 module Subst = Var.Subst
 
 let section = Utils.Section.make "unif"
 
 (*$inject
-  module Var = Var
-  module MetaVar = MetaVar
-  module TI = TermInner
+      module TI = TermInner
   module T = TermTyped.Default
   module U = TermTyped.Util(T)
-  module ID = ID
-  module Unif = Make(T)
+    module Unif = Make(T)
 
   let repr = T.repr
 

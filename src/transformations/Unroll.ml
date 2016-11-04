@@ -1,7 +1,7 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(** {1 Unrolling of (co)inductive Predicates} *)
+(** {1 Unrolling of (Co)inductive Predicates} *)
 
 open Nunchaku_core
 
@@ -284,13 +284,13 @@ and rewrite' ~state t =
     ~bind:(fun () v -> (), v)
 
 (* remove the tests for the unrolling variable in [dt] *)
-let filter_dt_ dt : _ DT.t =
+let filter_dt_ dt : (_,_) DT.t =
   (* check that [removed_var] is the first var *)
   begin match DT.vars dt with
     | removed_var :: _ ->
       Utils.debugf ~section 5
         "@[<v>remove var @[%a@]@ from `@[%a@]`@]"
-        (fun k->k Var.print_full removed_var (Model.DT.print P.print') dt);
+        (fun k->k Var.print_full removed_var (Model.DT.print P.print' P.print) dt);
     | [] -> assert false
   end;
   M.DT_util.remove_first_var dt
