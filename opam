@@ -35,6 +35,6 @@ depopts: [
     "qtest" {test}
 ]
 homepage: "https://github.com/nunchaku-inria/nunchaku/"
-available: [ocaml-version >= "4.00.0"]
+available: [ocaml-version >= "4.01.0"]
 dev-repo: "https://github.com/nunchaku-inria/nunchaku.git"
 bug-reports: "https://github.com/nunchaku-inria/nunchaku/issues"
