@@ -23,6 +23,10 @@ used for reporting bugs.
 
 To build Nunchaku, there are several ways.
 
+== Documentation
+
+the API documentation can be found at https://nunchaku-inria.github.io/nunchaku/.
+
 === Released versions
 
 Releases can be found on https://gforge.inria.fr/projects/nunchaku .
