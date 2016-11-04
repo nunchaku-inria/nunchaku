@@ -1446,8 +1446,6 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
   type term1 = T1.t
   type term2 = T2.t
 
-  module HO2 = TermPoly.Make(T2)
-
   let pipe_with ~decode ~print =
     (* type inference *)
     let module Conv = Convert(T1) in

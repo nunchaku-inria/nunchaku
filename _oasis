@@ -31,7 +31,6 @@ Library nunchaku_core
                     Sexp_lib, Sexp_lex, 
                     terms/TermInner,
                     terms/TermTyped,
-                    terms/TermPoly,
                     terms/TermMono,
                     terms/Pattern,
                     types/TypePoly,

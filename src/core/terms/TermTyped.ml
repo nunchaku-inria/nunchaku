@@ -185,10 +185,6 @@ end
   not (U.ty_returns_Type U.(ty_arrow ty_type ty_prop))
 *)
 
-module AsPoly(T : REPR)
-: TermPoly.S with type T.t = T.t
-= TermPoly.Make(T)
-
 module Default = struct
   type t = {
     view : t view;
