@@ -176,7 +176,7 @@ let pred_to_def
   let rhs = U.or_ cases in
   {Stmt.
     rec_defined=d;
-    rec_vars=vars;
+    rec_ty_vars=[];
     rec_eqns=Stmt.Eqn_single (vars,rhs);
   }
 

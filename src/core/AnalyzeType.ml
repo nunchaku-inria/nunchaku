@@ -49,14 +49,12 @@ module Make(T : TI.S) = struct
     state: cache_state TyTbl.t; (** main state *)
     non_zero: unit ID.Tbl.t; (** types we know are non-empty data *)
     default_card: int option;
-    map_hint: (Card.t -> Card.t option);
   }
 
-  let create_cache ?default_card ?(map_hint=CCOpt.return) () = {
+  let create_cache ?default_card () = {
     state=TyTbl.create 16;
     non_zero=ID.Tbl.create 8;
     default_card;
-    map_hint;
   }
 
   let save_ cache ty card =
@@ -72,8 +70,8 @@ module Make(T : TI.S) = struct
 
   let enter_id_ cache id state ~f = enter_ty_ cache (U.ty_const id) state ~f
 
-  let sum_ ~f l = ID.Map.fold (fun _ x acc -> Card.(acc+f x)) l Card.zero
-  let product_ ~f l = List.fold_left (fun acc x -> Card.(acc*f x)) Card.one l
+  let sum_ ~f l = ID.Map.fold (fun _ x acc -> Card.(acc + f x)) l Card.zero
+  let product_ ~f l = List.fold_left (fun acc x -> Card.(acc * f x)) Card.one l
 
   type save_op =
     | Save
@@ -89,13 +87,14 @@ module Make(T : TI.S) = struct
       | None ->
         let res = match T.repr ty with
           | TI.Const id -> eval_id_ op env cache id
+          (* TODO: make more precise for e.g. "list nat" (or mangle) *)
           | _ -> Card.quasi_finite_nonzero (* approx *)
         in
         (* maybe cache *)
         begin match op with
           | Save ->
             Utils.debugf ~section 5 "@[<2>card `@[%a@]` =@ %a@]"
-              (fun k->k P.print ty Card.print res);
+              (fun k -> k P.print ty Card.print res);
             save_ cache ty res
           | Do_not_save -> ()
         end;
@@ -153,9 +152,13 @@ module Make(T : TI.S) = struct
                 compute_sum_ op env cache def (Assume Card.infinite)
           end
       | Env.Copy_ty c ->
-          begin match c.Stmt.copy_pred with
-          | Some _ -> Card.quasi_finite_zero (* restriction of size? *)
-          | None -> eval_ty_ op env cache c.Stmt.copy_of (* cardinality of definition *)
+          let underlying = eval_ty_ op env cache c.Stmt.copy_of in (* cardinality of definition *)
+          begin match c.Stmt.copy_wrt with
+            | Stmt.Wrt_nothing -> underlying
+            | Stmt.Wrt_subset _
+            | Stmt.Wrt_quotient _ ->
+              (* approximation *)
+              if Card.is_finite underlying then Card.quasi_finite_nonzero else Card.unknown
           end
       | Env.NoDef ->
           (* uninterpreted datatype: use hints and other specific params *)
@@ -170,12 +173,7 @@ module Make(T : TI.S) = struct
               | Stmt.Attr_card_min n ->
                 Some (Card.QuasiFiniteGEQ (Z.of_int n))
               | Stmt.Attr_infinite -> Some Card.infinite
-              | Stmt.Attr_card_hint c ->
-                (* first, check if the hint is valuable *)
-                begin match cache.map_hint c with
-                  | None -> None
-                  | Some _ as res -> res
-                end
+              | Stmt.Attr_card_hint c -> Some c
               | _ -> None)
             attrs
           |> CCOpt.get_or ~default
@@ -191,10 +189,10 @@ module Make(T : TI.S) = struct
   let cardinality_ty_id ?(cache=create_cache ()) env id =
     eval_ty_ Save env cache (U.ty_const id)
 
-  let cardinality_ty ?(cache=create_cache()) env ty =
+  let cardinality_ty ?(cache=create_cache ()) env ty =
     eval_ty_ Save env cache ty
 
-  let check_non_zero ?(cache=create_cache()) env stmt =
+  let check_non_zero ?(cache=create_cache ()) env stmt =
     match Stmt.view stmt with
     | Stmt.TyDef (`Data, l) ->
         Utils.debugf ~section 5 "@[<2>check well-formed:@ `@[%a@]`@]"
@@ -213,7 +211,12 @@ module Make(T : TI.S) = struct
       U.fold false () ty ~bind:(fun () _ -> ())
         ~f:(fun b () ty -> b || is_incomplete env ty)
 
-  (* TODO *)
-  let is_abstract _ _ =
-    Utils.not_implemented "AnalyzeType.is_abstract"
+  let rec is_abstract env ty = match T.repr ty with
+    | TI.Const id ->
+      let info = Env.find_exn ~env id in
+      Env.is_abstract info
+    | _ ->
+      (* "or" on subtypes *)
+      U.fold false () ty ~bind:(fun () _ -> ())
+        ~f:(fun b () ty -> b || is_abstract env ty)
 end

@@ -1,5 +1,7 @@
 
 #use "topfind";;
+#require "num";;
+#require "tip_parser";;
 #require "containers";;
 #require "containers.iter";;
 #require "containers.sexp";;

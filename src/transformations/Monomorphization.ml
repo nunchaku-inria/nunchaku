@@ -95,16 +95,20 @@ type unmangle_state = (ID.t * term list) ID.Tbl.t
 
 module St = struct
   type t = {
+    always_mangle: bool;
     mangle : (string, ID.t) Hashtbl.t;
     (* mangled name -> mangled ID *)
     unmangle : unmangle_state;
     (* mangled name -> (id, args) *)
   }
 
-  let create () = {
+  let create ~always_mangle () = {
+    always_mangle;
     mangle=Hashtbl.create 64;
     unmangle=ID.Tbl.create 64;
   }
+
+  let always_mangle st = st.always_mangle
 
   (* remember that (id,tup) -> mangled *)
   let save_mangled ~state id tup ~mangled =
@@ -158,13 +162,13 @@ let should_be_mangled_ ~env id =
 
 (* bind the type variables of [def] to [tup]. *)
 let match_rec ?(subst=Subst.empty) ~def tup =
-  assert (ArgTuple.length tup = List.length def.Stmt.rec_vars);
-  Subst.add_list ~subst def.Stmt.rec_vars (ArgTuple.m_args tup)
+  assert (ArgTuple.length tup = List.length def.Stmt.rec_ty_vars);
+  Subst.add_list ~subst def.Stmt.rec_ty_vars (ArgTuple.m_args tup)
 
 (* bind the type variables of [spec] to [tup]. *)
 let match_spec ?(subst=Subst.empty) ~spec tup =
-  assert (ArgTuple.length tup = List.length spec.Stmt.spec_vars);
-  Subst.add_list ~subst spec.Stmt.spec_vars (ArgTuple.m_args tup)
+  assert (ArgTuple.length tup = List.length spec.Stmt.spec_ty_vars);
+  Subst.add_list ~subst spec.Stmt.spec_ty_vars (ArgTuple.m_args tup)
 
 (* bind the type variables of [def] to [tup]. *)
 let match_pred ?(subst=Subst.empty) ~(def:(_,_) Stmt.pred_def) tup =
@@ -179,9 +183,7 @@ type local_state = {
 
 (* monomorphize term *)
 let rec mono_term ~self ~local_state (t:term) : term =
-  (*
   Utils.debugf ~section 5 "@[<2>mono term@ `@[%a@]`@]" (fun k->k P.print t);
-  *)
   match T.repr t with
     | TI.Builtin b ->
       U.builtin (TI.Builtin.map b ~f:(mono_term ~self ~local_state))
@@ -211,10 +213,12 @@ let rec mono_term ~self ~local_state (t:term) : term =
           (* find type arguments *)
           let info = Env.find_exn ~env:(Trav.env self) id in
           let ty = info.Env.ty in
-          if U.ty_returns_Type ty && Env.is_not_def info
+          if U.ty_returns_Type ty
+          && Env.is_not_def info
+          && not (St.always_mangle (Trav.state self))
           then (
             (* do not change undefined type constructors, such as [pair],
-               keep them parametric; do not mangle! *)
+               keep them parametric; do not mangle (unless [always_mangle=true])! *)
             Trav.call_dep self ~depth:local_state.depth id ArgTuple.empty;
             let l' = List.map (mono_type ~self ~local_state) l in
             U.app_const id l'
@@ -225,7 +229,8 @@ let rec mono_term ~self ~local_state (t:term) : term =
             let mangled_tup = List.map (mono_type ~self ~local_state) unmangled_tup in
             (* mangle? *)
             let new_id, mangled =
-              if should_be_mangled_ ~env:(Trav.env self) id
+              if St.always_mangle (Trav.state self)
+              || should_be_mangled_ ~env:(Trav.env self) id
               then mangle_ ~state:(Trav.state self) id mangled_tup
               else id, None
             in
@@ -350,13 +355,13 @@ let dispatch = {
     (* we know [subst case.defined = (id args)], now
             specialize the axioms and other fields *)
     let local_state = mk_local_state ~subst (depth+1) in
-    let n = List.length def.Stmt.rec_vars in
+    let n = List.length def.Stmt.rec_ty_vars in
     let eqns = mono_eqns ~self ~local_state n def.Stmt.rec_eqns in
     (* new (specialized) case *)
     let rec_defined = mono_defined ~self ~local_state def.Stmt.rec_defined arg in
     let def' =
       {Stmt.
-        rec_vars=[];
+        rec_ty_vars=[];
         rec_defined;
         rec_eqns=eqns;
       } in
@@ -394,7 +399,7 @@ let dispatch = {
     Some (fun self ~depth ~loc:_ id spec tup ->
       Utils.debugf ~section 5 "monomorphize spec for %a on %a"
         (fun k->k ID.print id ArgTuple.print tup);
-      assert (ArgTuple.length tup = List.length spec.Stmt.spec_vars);
+      assert (ArgTuple.length tup = List.length spec.Stmt.spec_ty_vars);
       let st = Trav.state self in
       (* flag every symbol as specialized. We can use [tup] for every
            specified symbol, as they all share the same set of type variables. *)
@@ -421,7 +426,7 @@ let dispatch = {
           (fun ax -> mono_term ~self ~local_state ax)
           spec.Stmt.spec_axioms
       in
-      let st' = {Stmt.spec_axioms=axioms; spec_defined=defined; spec_vars=[]; } in
+      let st' = {Stmt.spec_axioms=axioms; spec_defined=defined; spec_ty_vars=[]; } in
       st'
     );
 
@@ -476,26 +481,31 @@ let dispatch = {
        other types in the process *)
     let subst =
       Subst.add_list ~subst:Subst.empty
-        c.Stmt.copy_vars (ArgTuple.m_args tup) in
+        c.Stmt.copy_vars (ArgTuple.m_args tup)
+    in
     let id', _ = mangle_ ~state:st c.Stmt.copy_id (ArgTuple.m_args tup) in
     let local_state = mk_local_state ~subst depth in
     let of_' = mono_type ~self ~local_state c.Stmt.copy_of in
     let to_' = mono_type ~self ~local_state c.Stmt.copy_to in
+    let wrt = match c.Stmt.copy_wrt with
+      | Stmt.Wrt_nothing -> Stmt.Wrt_nothing
+      | Stmt.Wrt_subset p -> Stmt.Wrt_subset (mono_term ~self ~local_state p)
+      | Stmt.Wrt_quotient (tty, r) -> Stmt.Wrt_quotient (tty, mono_term ~self ~local_state r)
+    in
     let abstract', _ =
       mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
     let concrete', _ =
       mangle_ ~state:st c.Stmt.copy_concrete (ArgTuple.m_args tup) in
     let ty_abstract' = U.ty_arrow of_' to_' in
     let ty_concrete' = U.ty_arrow to_' of_' in
-    let pred = CCOpt.map (mono_term ~self ~local_state) c.Stmt.copy_pred in
     let ty' = U.ty_type in
     (* create new copy type *)
     let c' =
       Stmt.mk_copy
         ~of_:of_' ~to_:to_' ~ty:ty' ~vars:[]
+        ~wrt
         ~abstract:(abstract', ty_abstract')
         ~concrete:(concrete', ty_concrete')
-        ~pred
         id'
     in
     c'
@@ -534,8 +544,8 @@ let mono_statement t st =
   end;
   Trav.traverse_stmt t st
 
-let monomorphize ?(depth_limit=256) pb =
-  let state = St.create () in
+let monomorphize ?(depth_limit=256) ?(always_mangle=false) pb =
+  let state = St.create ~always_mangle () in
   (* create the state used for monomorphization. Toplevel function
     for specializing (id,tup) is [mono_statements_for_id] *)
   let traverse = Trav.create
@@ -550,7 +560,7 @@ let monomorphize ?(depth_limit=256) pb =
   (* output result. If depth limit reached we might be incomplete *)
   let meta =
     Problem.metadata pb
-    |> Problem.Metadata.add_sat_means_unknown
+    |> ProblemMetadata.add_sat_means_unknown
       (Trav.max_depth_reached traverse)
   in
   let res = Trav.get_statements traverse |> CCVector.freeze in
@@ -590,7 +600,7 @@ let unmangle_term ~(state:unmangle_state) (t:term):term =
 let unmangle_model ~state =
   Model.map ~term:(unmangle_term ~state) ~ty:(unmangle_term ~state)
 
-let pipe_with ~decode ~print ~check =
+let pipe_with ~decode ~always_mangle ~print ~check =
   let on_encoded =
     Utils.singleton_if print ()
       ~f:(fun () ->
@@ -608,14 +618,10 @@ let pipe_with ~decode ~print ~check =
     ~input_spec:Transform.Features.(empty |> update Ty Poly)
     ~map_spec:Transform.Features.(update Ty Mono)
     ~name
-    ~encode:(fun p ->
-      let p, state = monomorphize p in
-      p, state
-      (* TODO mangling of types, as an option *)
-    )
+    ~encode:(fun p -> monomorphize ~always_mangle p)
     ~decode
     ()
 
-let pipe ~print ~check =
+let pipe ~always_mangle ~print ~check =
   let decode state = Problem.Res.map_m ~f:(unmangle_model ~state) in
-  pipe_with ~print ~decode ~check
+  pipe_with ~always_mangle ~print ~decode ~check

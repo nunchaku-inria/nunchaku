@@ -5,26 +5,24 @@
 
 open Nunchaku_core
 
-module TI = TermInner
-module T = TermInner.Default
+type term = TermInner.Default.t
+type state
 
 val name : string
 
-type state
-
 val transform_pb :
-  (T.t, T.t) Problem.t ->
-  (T.t, T.t) Problem.t * state
+  (term, term) Problem.t ->
+  (term, term) Problem.t * state
 
 val decode_model :
-  state:state -> (T.t,T.t) Model.t -> (T.t,T.t) Model.t
+  state:state -> (term,term) Model.t -> (term,term) Model.t
 
 val pipe :
   print:bool ->
   check:bool ->
-  ((T.t,T.t) Problem.t,
-   (T.t,T.t) Problem.t,
-    (T.t,T.t) Problem.Res.t, (T.t,T.t) Problem.Res.t
+  ((term,term) Problem.t,
+   (term,term) Problem.t,
+    (term,term) Problem.Res.t, (term,term) Problem.Res.t
   ) Transform.t
 
 val pipe_with :
@@ -32,6 +30,6 @@ val pipe_with :
   decode:(state -> 'c -> 'd) ->
   print:bool ->
   check:bool ->
-  ((T.t,T.t) Problem.t,
-   (T.t,T.t) Problem.t, 'c, 'd
+  ((term,term) Problem.t,
+   (term,term) Problem.t, 'c, 'd
   ) Transform.t

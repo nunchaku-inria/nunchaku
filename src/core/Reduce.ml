@@ -3,8 +3,6 @@
 
 (** {1 Reductions, including Beta Reduction} *)
 
-module ID = ID
-module Var = Var
 module TI = TermInner
 module Subst = Var.Subst
 

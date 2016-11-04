@@ -201,7 +201,10 @@ type process_status = int
 
 (* make sure that we are a session leader; that is, our children die if we die *)
 let ensure_session_leader =
-  let thunk = lazy (ignore (Unix.setsid ())) in
+  let thunk = lazy (
+    if not Sys.win32 && not Sys.cygwin
+    then ignore (Unix.setsid ())
+  ) in
   fun () -> Lazy.force thunk
 
 (* create a new active process by running [cmd] and applying [f] on it *)

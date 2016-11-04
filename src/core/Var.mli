@@ -68,9 +68,9 @@ module Subst : sig
   type (+'ty, +'a) t
   (** A substitution for variables of type ['ty], to terms ['a] *)
 
-  val empty : _ t
-  val is_empty : _ t -> bool
-  val size : _ t -> int
+  val empty : (_,_) t
+  val is_empty : (_,_) t -> bool
+  val size : (_,_) t -> int
 
   val singleton : 'ty var -> 'a -> ('ty, 'a) t
 
@@ -109,6 +109,7 @@ module Subst : sig
   val map : f:('a -> 'b) -> ('ty,'a) t -> ('ty,'b) t
 
   val to_list : ('ty,'a) t -> ('ty var * 'a) list
+  val to_seq : ('ty,'a) t -> ('ty var * 'a) Sequence.t
 
   val print : 'a CCFormat.printer -> (_, 'a) t CCFormat.printer
 end

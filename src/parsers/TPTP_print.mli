@@ -4,15 +4,13 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
-
 type 'a printer = Format.formatter -> 'a -> unit
 
 exception Error of string
 
-type term = T.t
-type form = T.t
-type ty = T.t
+type term = TermInner.Default.t
+type form = term
+type ty = term
 type model = (term, ty) Model.t
 
 val print_term : term printer

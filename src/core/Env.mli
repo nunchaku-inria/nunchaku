@@ -70,21 +70,21 @@ exception InvalidDef of id * string
 
 val pp_invalid_def_ : exn printer
 
-val create: ?size:int -> unit -> _ t
+val create: ?size:int -> unit -> (_,_) t
 (** Create a new environment *)
 
-val loc: _ info -> loc option
+val loc: (_,_) info -> loc option
 val def: ('t,'ty) info -> ('t,'ty) def
 val ty: (_,'ty) info -> 'ty
 
-val is_fun : _ info -> bool (** spec/rec *)
-val is_rec : _ info -> bool (** rec *)
-val is_data : _ info -> bool
-val is_cstor : _ info -> bool
-val is_not_def : _ info -> bool
+val is_fun : (_,_) info -> bool (** spec/rec *)
+val is_rec : (_,_) info -> bool (** rec *)
+val is_data : (_,_) info -> bool
+val is_cstor : (_,_) info -> bool
+val is_not_def : (_,_) info -> bool
 
-val is_incomplete : _ info -> bool
-val is_abstract : _ info -> bool
+val is_incomplete : (_,_) info -> bool
+val is_abstract : (_,_) info -> bool
 
 val declare:
   ?loc:loc ->
@@ -142,11 +142,11 @@ val add_copy :
   ('t, 'ty) Statement.copy ->
   ('t, 'ty) t
 
-val add_statement :
-  env:('t,'ty) t ->
-  ('t,'ty) Statement.t ->
-  ('t,'ty) t
+val add_statement : env:('t,'ty) t -> ('t,'ty) Statement.t -> ('t,'ty) t
 (** Add any statement *)
+
+val add_statement_l : env:('t,'ty) t -> ('t,'ty) Statement.t list -> ('t,'ty) t
+(** Add any statements *)
 
 val find : env:('t, 'ty) t -> id -> ('t, 'ty) info option
 
@@ -162,7 +162,27 @@ val find_ty_exn : env:('t, 'ty) t -> id -> 'ty
 val find_ty : env:('t, 'ty) t -> id -> 'ty option
 (** Safe version of {!find_ty_exn} *)
 
-val mem : env:_ t -> id:id -> bool
+module Util(T : TermInner.S) : sig
+  type term = T.t
+  type ty = T.t
+
+  val ty : env:(term,ty) t -> term -> ty TermInner.or_error
+  (** Compute type of this term *)
+
+  val ty_exn : env:(term,ty) t -> term -> ty
+
+  val info_of_ty : env:(term,ty) t -> ty -> (term, ty) info TermInner.or_error
+  (** [info_of_ty ~env ty] finds the information related to the given
+      type. *)
+
+  exception No_head of ty
+
+  val info_of_ty_exn : env:(term,ty) t -> ty -> (term, ty) info
+  (** Unsafe version of {!info_of_ty}
+      @raise No_head if the type is not an (applied) constant *)
+end
+
+val mem : env:(_,_) t -> id:id -> bool
 (** @return true if the symbol is at least declared *)
 
 module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig

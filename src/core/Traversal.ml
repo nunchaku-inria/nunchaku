@@ -22,7 +22,7 @@ module type SCC_arg = sig
   val deps : t -> t Sequence.t
 end
 
-(* Strongly Connected Components of the graph whose vertices' type is [X.t] *)
+(* Strongly connected components of the graph whose vertices' type is [X.t] *)
 module SCC(X : SCC_arg) : sig
   val explore : X.t Sequence.t -> X.t list Sequence.t
 end = struct
@@ -30,7 +30,7 @@ end = struct
 
   type cell = {
     mutable min_id: int; (* min ID of the vertex' scc *)
-    id: int;  (* ID of the vertex *)
+    id: int; (* ID of the vertex *)
     mutable on_stack: bool;
     vertex: X.t;
   }
@@ -44,7 +44,7 @@ end = struct
 
   (* pop elements of [stack] until we reach node with given [id] *)
   let rec pop_down_to ~id acc stack =
-    assert (not(Stack.is_empty stack));
+    assert (not (Stack.is_empty stack));
     let cell = Stack.pop stack in
     cell.on_stack <- false;
     if cell.id = id then (
@@ -217,7 +217,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
                yield_term c.Stmt.clause_concl)
             p.Stmt.pred_clauses
         | PS_spec s ->
-          yield_vars s.Stmt.spec_vars;
+          yield_vars s.Stmt.spec_ty_vars;
           List.iter yield_defined s.Stmt.spec_defined;
           List.iter yield_term s.Stmt.spec_axioms;
         | PS_decl (id,ty,_) ->
@@ -226,7 +226,11 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
         | PS_copy c ->
           yield_vars c.Stmt.copy_vars;
           Stmt.defined_of_copy c yield_defined;
-          CCOpt.iter yield_term c.Stmt.copy_pred
+          begin match c.Stmt.copy_wrt with
+            | Stmt.Wrt_nothing -> ()
+            | Stmt.Wrt_subset t
+            | Stmt.Wrt_quotient (_, t) -> yield_term t
+          end
         | PS_goal t -> yield_term t
         | PS_axiom l -> List.iter yield_term l
         | PS_data (_,d) ->
@@ -274,7 +278,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
       (* set of new (partial) statements *)
     mutable depth_reached: bool;
       (* max depth reached? *)
-    mutable res: (term,ty) Statement.t CCVector.vector option;
+    mutable res: (term, ty) Statement.t CCVector.vector option;
       (* result, if any *)
   }
 
@@ -339,7 +343,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     |> Sequence.map fst
 
   let check_depth_ t d =
-    if d>t.max_depth && not t.depth_reached then (
+    if d > t.max_depth && not t.depth_reached then (
       Utils.debugf ~section 1 "caution: depth limit reached" (fun k -> k);
       t.depth_reached <- true;
     )
@@ -406,7 +410,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
 
   let traverse_stmt_ ~after_env t (st:(term,ty) Stmt.t) : unit =
     Utils.debugf ~section 2 "@[<2>enter statement@ `%a`@]"
-      (fun k-> k PStmt.print st);
+      (fun k -> k PStmt.print st);
     (* process statement *)
     t.env <- Env.add_statement ~env:t.env st;
     after_env t.env;
@@ -559,7 +563,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
 
   let can_merge_ ps1 ps2 =
     Utils.debugf ~section 4
-      "can merge `@[%a@]`@ and `@[%a@]`" (fun k->k pp_ps ps1 pp_ps ps2)
+      "can merge `@[%a@]`@ and `@[%a@]`" (fun k -> k pp_ps ps1 pp_ps ps2)
 
   let cannot_merge_ ps1 ps2 =
     Arg.fail
@@ -585,7 +589,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
   let merge_into_rec ps1 l ps = match ps.ps_view with
     | PS_rec r ->
       can_merge_ ps1 ps;
-      r  :: l
+      r :: l
     | _ -> cannot_merge_ ps1 ps
 
   (* merge a list of [partial_statement] into one statement, or fail *)
@@ -610,7 +614,8 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
       Stmt.copy ~info c
     | [{ps_view=PS_decl (id,ty,attrs); ps_info=info; _}] ->
       Stmt.decl ~info ~attrs id ty
-    | {ps_view=(PS_decl _ | PS_axiom _ | PS_goal _ | PS_copy _ | PS_spec _); _} as ps1 :: ps2 :: _ ->
+    | {ps_view=(PS_decl _ | PS_axiom _ | PS_goal _ | PS_copy _ | PS_spec _); _}
+      as ps1 :: ps2 :: _ ->
       Arg.fail "statement `@[%a@]`@ cannot be mutually recursive with `@[%a@]`"
         pp_ps ps1 pp_ps ps2
 

@@ -16,23 +16,26 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
+type term = TermInner.Default.t
+
+(** Mode of operations: which matches should be removed? *)
+type mode =
+  | Elim_data_match
+  | Elim_codata_match
+  | Elim_both
 
 val name : string
 
-type term = T.t
-
-val elim_match : T.t -> T.t
-
 val tr_problem:
+  ?mode:mode ->
   (term, term) Problem.t ->
   (term, term) Problem.t
 
 val pipe :
+  mode:mode ->
   print:bool ->
   check:bool ->
-    ((term, term) Problem.t,
-     (term, term) Problem.t,
-    'c, 'c
-  ) Transform.t
+  ((term, term) Problem.t,
+   (term, term) Problem.t,
+    'c, 'c) Transform.t
 (** Pipeline component. Reverse direction is identity. *)

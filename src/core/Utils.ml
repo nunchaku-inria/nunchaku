@@ -12,9 +12,30 @@ module Time = struct
       let stop = Unix.gettimeofday () in
       stop -. start),
     (function () -> start)
+
+  type timer = {
+    timer_start: float;
+    mutable timer_stop: float option;
+  }
+
+  let start_timer () =
+    { timer_start=Unix.gettimeofday();
+      timer_stop=None;
+    }
+
+  let stop_timer t = match t.timer_stop with
+    | Some _ -> ()
+    | None -> t.timer_stop <- Some (Unix.gettimeofday())
+
+  let get_timer t =
+    let stop = match t.timer_stop with
+      | None -> Unix.gettimeofday()
+      | Some t -> t
+    in
+    stop -. t.timer_start
 end
 
-(** {2 Debug} *)
+(*  {2 Debug} *)
 
 (** Debug section *)
 module Section = struct
@@ -107,9 +128,13 @@ let debugf_real lock section msg k =
   then Format.fprintf debug_fmt_ "@[<hov 3>@{<Black>%.3f[]@}@ " now
   else Format.fprintf debug_fmt_ "@[<hov 3>@{<Black>%.3f[%s]@}@ "
     now section.Section.full_name;
-  k (Format.kfprintf
-      (fun fmt -> Format.fprintf fmt "@]@."; if lock then Mutex.unlock debug_lock_)
-      debug_fmt_ msg)
+  try
+    k (Format.kfprintf
+        (fun fmt -> Format.fprintf fmt "@]@."; if lock then Mutex.unlock debug_lock_)
+        debug_fmt_ msg)
+  with e ->
+    if lock then Mutex.unlock debug_lock_;
+    raise e
 
 (* inlinable function *)
 let debugf ?(lock=false) ?(section=Section.root) l msg k =
@@ -252,9 +277,16 @@ let options_warnings_ =
       , " <bool>: enable/disable warnings on model parsing errors"
   ]
 
+let options_others_ : (Arg.key * Arg.spec * Arg.doc) list ref = ref []
+
+let add_option o = options_others_ := o :: !options_others_
+
 (** {2 Misc} *)
 
 exception NotImplemented of string
+
+let pp_seq ?(sep=" ") p = CCFormat.seq ~start:"" ~stop:"" ~sep p
+let pp_list ?(sep=" ") p = CCFormat.list ~start:"" ~stop:"" ~sep p
 
 (* print error prefix *)
 let pp_error_prefix out () = Format.fprintf out "@{<Red>Error@}: "

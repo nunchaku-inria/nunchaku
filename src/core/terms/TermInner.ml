@@ -3,9 +3,6 @@
 
 (** {1 Main View for terms} *)
 
-module ID = ID
-module Var = Var
-module MetaVar = MetaVar
 
 type id = ID.t
 type 'a var = 'a Var.t
@@ -291,9 +288,9 @@ module Builtin = struct
   let to_seq b f = iter f b
 
   let to_sexp
-  : ('a -> CCSexp.t) -> 'a t -> CCSexp.t
+  : ('a -> Sexp_lib.t) -> 'a t -> Sexp_lib.t
   = fun cterm t ->
-    let str = CCSexp.atom and lst = CCSexp.of_list in
+    let str = Sexp_lib.atom and lst = Sexp_lib.list in
     match t with
       | `True -> str "true"
       | `False -> str "false"
@@ -356,7 +353,7 @@ type 'a view =
  *)
 
 type 't repr = 't -> 't view
-(** A concrete representation of terms by the type [t'] *)
+(** A concrete representation of terms by the type ['t] *)
 
 type 't build = 't view -> 't
 (** A builder for a concrete representation with type ['t]. *)
@@ -387,7 +384,7 @@ module type PRINT = sig
   val print_in_binder : t printer
   val to_string : t -> string
 
-  val to_sexp : t -> CCSexp.t
+  val to_sexp : t -> Sexp_lib.t
 end
 
 module Print(T : REPR)
@@ -461,7 +458,7 @@ module Print(T : REPR)
         wrap P_app p out "@[<2>%a@ %a@]" print_in_app f
           (pp_list_ ~sep:" " print_in_app) l
     | Let (v,t,u) ->
-        wrap P_top p out "@[<2>let %a :=@ %a in@ %a@]" Var.print_full v print t print u
+        wrap P_top p out "@[let @[<2>%a :=@ %a@] in@ %a@]" Var.print_full v print t print u
     | Match (t,l) ->
         let pp_case out (id,(vars,t)) =
           fpf out "@[<hv2>| @[<hv2>%a %a@] ->@ %a@]"
@@ -475,7 +472,8 @@ module Print(T : REPR)
         wrap P_bind p out "@[<2>%s @[<hv>%a@].@ %a@]" s
           (pp_list_ ~sep:" " pp_typed_var) vars print_in_binder body
     | TyArrow (a,b) ->
-        wrap P_arrow p out "@[<2>%a ->@ %a@]" (print' P_arrow) a (print' P_arrow) b
+        (* TODO: left should have [P_arrow] but ignoring the right-assoc *)
+        wrap P_arrow p out "@[<2>%a ->@ %a@]" (print' P_app) a (print' P_arrow) b
   and pp_typed_var out v =
     let ty = Var.ty v in
     fpf out "(@[%a:@,@[%a@]@])" Var.print_full v print ty
@@ -485,10 +483,10 @@ module Print(T : REPR)
 
   let to_string = CCFormat.to_string print
 
-  let str = CCSexp.atom
-  let lst = CCSexp.of_list
+  let str = Sexp_lib.atom
+  let lst = Sexp_lib.list
 
-  let rec to_sexp t : CCSexp.t = match T.repr t with
+  let rec to_sexp t : Sexp_lib.t = match T.repr t with
     | TyBuiltin b -> str (TyBuiltin.to_string b)
     | Const id -> str (ID.to_string id)
     | TyMeta _ -> assert false
@@ -556,8 +554,12 @@ module type UTIL_REPR = sig
   val free_meta_vars : ?init:t_ MetaVar.t ID.Map.t -> t_ -> t_ MetaVar.t ID.Map.t
   (** The free type meta-variables in [t] *)
 
+  val bind_unfold : Binder.t -> t_ -> t_ Var.t list * t_
+  (** [bind_unfold binder (bind binder x1...xn. t)] returns [x1...xn, t] *)
+
   val fun_unfold : t_ -> t_ Var.t list * t_
-  (** [fun_unfold (fun x y z. t) = [x;y;z], t] *)
+  (** [fun_unfold (fun x y z. t) = [x;y;z], t].
+      Special case of {!bind_unfold} *)
 
   val get_ty_arg : t_ -> int -> t_ option
   (** [get_ty_arg ty n] gets the [n]-th argument of [ty], if [ty] is a
@@ -711,12 +713,14 @@ module UtilRepr(T : REPR)
           (fun acc v -> ID.Map.add (MetaVar.id v) v acc)
           init
 
-  let fun_unfold t =
+  let bind_unfold b t =
     let rec aux vars t = match T.repr t with
-      | Bind (`Fun, v, t') -> aux (v::vars) t'
+      | Bind (b', v, t') when b=b' -> aux (v::vars) t'
       | _ -> List.rev vars, t
     in
     aux [] t
+
+  let fun_unfold t = bind_unfold `Fun t
 
   let ty_unfold t =
     let rec aux1 t = match T.repr t with
@@ -839,6 +843,7 @@ module type UTIL = sig
   val guard : t_ -> t_ Builtin.guard -> t_
 
   val mk_bind : Binder.t -> t_ var -> t_ -> t_
+  val mk_bind_l : Binder.t -> t_ var list -> t_ -> t_
 
   val ty_type : t_ (** Type of types *)
   val ty_kind : t_ (** Type of ty_type *)
@@ -878,6 +883,9 @@ module type UTIL = sig
 
   module Tbl : CCHashtbl.S with type key = t_
   (** Hashtbl with terms as key. The hash function is modulo α-equiv *)
+
+  module Map : CCMap.S with type key = t_
+  (** Map with terms as key. The hash function is modulo α-equiv *)
 
   val remove_dup : t_ list -> t_ list
   (** Use a hashset to remove duplicates from the list. Order is
@@ -1047,6 +1055,7 @@ module Util(T : S)
     | _::_ -> T.build (App(t,l))
   let app_const id l = app (const id) l
   let mk_bind b v t = T.build (Bind (b, v, t))
+  let mk_bind_l b = List.fold_right (mk_bind b)
   let fun_ v t = T.build (Bind (`Fun, v, t))
   let mu v t = T.build (Bind (`Mu, v, t))
 
@@ -1311,11 +1320,15 @@ module Util(T : S)
 
   let equal a b = equal_with ~subst:Subst.empty a b
 
-  module Tbl = CCHashtbl.Make(struct
-      type t = t_
-      let equal = equal
-      let hash = hash_alpha_eq
-    end)
+  module As_key = struct
+    type t = t_
+    let compare = compare
+    let equal = equal
+    let hash = hash_alpha_eq
+  end
+
+  module Tbl = CCHashtbl.Make(As_key)
+  module Map = CCMap.Make(As_key)
 
   (* remove duplicates in [l] *)
   let remove_dup l : t_ list =

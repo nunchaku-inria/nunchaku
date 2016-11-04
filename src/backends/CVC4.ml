@@ -6,8 +6,6 @@
 open Nunchaku_core
 
 module E = CCResult
-module Var = Var
-module ID = ID
 module Res = Problem.Res
 module S = Scheduling
 
@@ -21,11 +19,7 @@ let fpf = Format.fprintf
 type model_term = FO.T.t
 type model_ty = FO.Ty.t
 
-module DSexp = CCSexpM.MakeDecode(struct
-  type 'a t = 'a
-  let return x = x
-  let (>>=) x f = f x
-end)
+module DSexp = Sexp_lib.Decoder
 
 exception Error of string
 exception CVC4_error of string
@@ -58,39 +52,11 @@ type ground_ty = Ty.t
 let gty_make = Ty.app
 let gty_const id = gty_make id []
 
-let rec gty_equal a b = match Ty.view a, Ty.view b with
-  | FO.TyBuiltin a, FO.TyBuiltin b -> a=b
-  | FO.TyApp (hd_a, l_a), FO.TyApp (hd_b, l_b) ->
-      ID.equal hd_a hd_b
-      && CCList.equal gty_equal l_a l_b
-  | FO.TyBuiltin _, _ | FO.TyApp _, _ -> false
+module GTy_map = CCMap.Make(FO.Ty)
 
-type 'a gty_map = (ground_ty * 'a) list ID.Map.t
-
-let gty_map_empty : _ gty_map = ID.Map.empty
-
-let gty_head ty =
-  match Ty.view ty with
-    | FO.TyApp (id,_) -> Some id
-    | FO.TyBuiltin _ -> None
-
-let gty_map_add m g x =
-  match gty_head g with
-  | None -> assert false
-  | Some id ->
-      let l = ID.Map.get_or id m ~or_:[] in
-      if CCList.Assoc.mem ~eq:gty_equal l g
-      then m
-      else ID.Map.add id ((g,x) :: l) m
-
-let gty_map_find_exn m g =
-  match gty_head g with
-    | None -> raise Not_found
-    | Some id ->
-        let l = ID.Map.find id m in
-        CCList.Assoc.get_exn ~eq:gty_equal l g
-
-let gty_map_mem m g = try ignore (gty_map_find_exn m g); true with Not_found -> false
+let gty_head ty = match Ty.view ty with
+  | FO.TyApp (id,_) -> Some id
+  | FO.TyBuiltin _ -> None
 
 let rec fobackty_of_ground_ty g = match Ty.view g with
   | FO.TyApp (id,l) ->
@@ -119,10 +85,12 @@ type decode_state = {
     (* variables in scope *)
   db_prefixes: (string,ground_ty) Hashtbl.t;
     (* prefixes expected for De Bruijn indices *)
+  timer: Utils.Time.timer;
+    (* time elapsed *)
   mutable db_stack: Ty.t Var.t option ref list;
     (* stack of variables for mu-binders, with a bool ref.
        If the ref is true, it means the variable is used at least once *)
-  mutable witnesses : ID.t gty_map;
+  mutable witnesses : ID.t GTy_map.t;
     (* type -> witness of this type *)
 }
 
@@ -133,8 +101,9 @@ let create_decode_state ~kinds () = {
   symbols=ID.Tbl.create 32;
   db_prefixes=Hashtbl.create 8;
   db_stack=[];
+  timer=Utils.Time.start_timer();
   vars=ID.Tbl.create 32;
-  witnesses=gty_map_empty;
+  witnesses=GTy_map.empty;
 }
 
 (* the solver is dealt with through stdin/stdout *)
@@ -161,8 +130,6 @@ let close s =
       flush s.oc;
       close_in_noerr s.ic;
       close_out_noerr s.oc;
-      (* release buffer *)
-      s.sexp <- DSexp.make ~bufsize:5 (fun _ _ _ -> assert false);
     with _ -> ()
   )
 
@@ -175,7 +142,7 @@ let create_ ~print_model ~decode (ic,oc) =
     print_model;
     decode;
     closed=false;
-    sexp=DSexp.make ~bufsize:4_000 (input ic);
+    sexp=DSexp.of_lexbuf (Lexing.from_channel ic);
     res=None;
   } in
   Gc.finalise close s; (* close on finalize *)
@@ -231,7 +198,7 @@ let rec pp_gty ~decode out g =
 
 (* the prefix used by CVC4 for constants of the given type *)
 let const_of_ty ~decode gty =
-  CCFormat.sprintf "@[<h>@uc_%a@]" (pp_gty ~decode) gty
+  CCFormat.sprintf "@[<h>@@uc_%a@]" (pp_gty ~decode) gty
 
 (* the i-th constant of the given type *)
 let const_of_ty_nth ~decode gty i =
@@ -333,7 +300,7 @@ let print_problem out (decode, pb) =
         fpf out "(@[assert@ %a@])" print_term t
     | FO.CardBound (ty_id, which, n) ->
         let witness =
-          try gty_map_find_exn decode.witnesses (gty_const ty_id)
+          try GTy_map.find (gty_const ty_id) decode.witnesses
           with Not_found ->
             errorf_ "no witness declared for cardinality bound on %a" ID.print ty_id
         in
@@ -557,7 +524,7 @@ let parse_fun_ ~decode ~arity:n term =
   (* change the shape of [body] so it looks more like a decision tree *)
   let dt = FO.Util.dt_of_term ~vars body in
   Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
-    (fun k->k FO.print_term body (Model.DT.print FO.print_term') dt);
+    (fun k->k FO.print_term body (Model.DT.print FO.print_term' FO.print_ty) dt);
   dt
 
 let sym_get_const_ ~decode id = match ID.Tbl.find decode.symbols id with
@@ -576,7 +543,7 @@ let get_kind ~decode id =
     errorf_ "could not find kind of %a" ID.print id
 
 (* state: decode_state *)
-let parse_model_ ~decode : CCSexp.t -> _ Model.t = function
+let parse_model_ ~decode : Sexp_lib.t -> (_,_) Model.t = function
   | `Atom _ -> error_ "expected model, got atom"
   | `List assoc ->
     (* parse model *)
@@ -633,7 +600,7 @@ let send_get_model_ out decode =
     (ID.Tbl.to_seq decode.symbols)
 
 (* read model from CVC4 instance [s] *)
-let get_model_ ~print_model ~decode s : _ Model.t =
+let get_model_ ~print_model ~decode s : (_,_) Model.t =
   Utils.debugf ~section 3 "@[<2>ask for model with@ %a@]"
     (fun k -> k send_get_model_ decode);
   fpf s.fmt "%a@." send_get_model_ decode;
@@ -643,7 +610,7 @@ let get_model_ ~print_model ~decode s : _ Model.t =
   | `End -> error_ "unexpected end of input from CVC4: expected model"
   | `Ok sexp ->
       if print_model
-        then Format.eprintf "@[raw model:@ @[<hv>%a@]@]@." CCSexpM.print sexp;
+        then Format.eprintf "@[raw model:@ @[<hv>%a@]@]@." Sexp_lib.pp sexp;
       let m = parse_model_ ~decode sexp in
       (* check all symbols are defined *)
       let ok =
@@ -656,44 +623,49 @@ let get_model_ ~print_model ~decode s : _ Model.t =
       m
 
 (* read the result *)
-let read_res_ ~print_model ~decode s =
+let read_res_ ~info ~print_model ~decode s =
   match DSexp.next s.sexp with
   | `Ok (`Atom "unsat") ->
       Utils.debug ~section 5 "CVC4 returned `unsat`";
-      Res.Unsat
+      Res.Unsat (Lazy.force info)
   | `Ok (`Atom "sat") ->
       Utils.debug ~section 5 "CVC4 returned `sat`";
       let m = if ID.Tbl.length decode.symbols = 0
         then Model.empty
         else get_model_ ~print_model ~decode s
       in
-      Res.Sat m
+      Res.Sat (m, Lazy.force info)
   | `Ok (`Atom "unknown") ->
       Utils.debug ~section 5 "CVC4 returned `unknown`";
-      Res.Unknown
+      Res.Unknown [Res.U_other (Lazy.force info, "")]
   | `Ok (`List [`Atom "error"; `Atom s]) ->
       Utils.debugf ~section 5 "@[<2>CVC4 returned `error %s`@]" (fun k->k s);
-      Res.Error (CVC4_error s)
+      Res.Error (CVC4_error s, Lazy.force info)
   | `Ok sexp ->
       let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ `%a`@]"
-        CCSexpM.print sexp
+        Sexp_lib.pp sexp
       in
-      Res.Error (Error msg)
-  | `Error e -> Res.Error (Error e)
+      Res.Error (Error msg, Lazy.force info)
+  | `Error e -> Res.Error (Error e, Lazy.force info)
   | `End ->
       Utils.debug ~section 5 "no answer from CVC4, assume it timeouted";
-      Res.Timeout
+      Res.Unknown [Res.U_timeout (Lazy.force info)]
+
+let mk_info (decode:decode_state): Res.info =
+  let time = Utils.Time.get_timer decode.timer in
+  Res.mk_info ~backend:"cvc4" ~time ()
 
 let res t = match t.res with
   | Some r -> r
   | None when t.closed ->
-      let r = Res.Timeout in
+      let r = Res.Unknown [Res.U_timeout (mk_info t.decode)] in
       t.res <- Some r;
       r
   | None ->
+      let info = lazy (mk_info t.decode) in
       let r =
-        try read_res_ ~print_model:t.print_model ~decode:t.decode t
-        with e -> Res.Error e
+        try read_res_ ~info ~print_model:t.print_model ~decode:t.decode t
+        with e -> Res.Error (e, Lazy.force info)
       in
       t.res <- Some r;
       r
@@ -723,7 +695,7 @@ let preprocess pb : processed_problem =
   let add_ty_witnesses stmt l =
     List.fold_left
       (fun acc gty ->
-        if not (is_finite_ state gty) || gty_map_mem state.witnesses gty
+        if not (is_finite_ state gty) || GTy_map.mem gty state.witnesses
         then acc (* already declared a witness for [gty], or [gty] is not
                     a finite type *)
         else (
@@ -733,11 +705,22 @@ let preprocess pb : processed_problem =
           (* declare [c] *)
           let ty_c = [], gty in
           decl state c (Q_type gty);
-          state.witnesses <- gty_map_add state.witnesses gty c;
+          state.witnesses <- GTy_map.add gty c state.witnesses;
           FO.Decl (c, ty_c,[]) :: acc
         ))
       [stmt] l
     |> List.rev
+  in
+  (* gather list of (possibly parametrized) types occurring in [stmt],
+     add witnesses for them *)
+  let add_ty_witnesses_gen stmt =
+    let tys =
+      FO.tys_of_statement stmt
+      |> Sequence.flat_map FO.Ty.to_seq
+      |> Sequence.sort_uniq ~cmp:FO.Ty.compare
+      |> Sequence.to_rev_list
+    in
+    add_ty_witnesses stmt tys
   in
   let pb =
     FO.Problem.flat_map ~meta:(FO.Problem.meta pb)
@@ -762,11 +745,11 @@ let preprocess pb : processed_problem =
                Utils.debugf ~section 5 "@[<2>declare `%s` as De Bruijn prefix@]" (fun k->k c);
                add_db_prefix state c ty)
             l.FO.tys_defs;
-          [stmt]
-      | FO.TyDecl _
+          add_ty_witnesses_gen stmt
+      | FO.TyDecl _ (* witnesses will be added on demand *)
       | FO.Axiom _
       | FO.Goal _
-      | FO.MutualTypes (_,_) -> [stmt])
+      | FO.MutualTypes (_,_) -> add_ty_witnesses_gen stmt)
     pb
   in
   state, pb
@@ -789,8 +772,11 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
   then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem (decode, problem');
   (* enough time remaining? *)
   if now +. 0.1 > deadline
-  then S.Fut.return (Res.Timeout, S.No_shortcut)
+  then
+    let info = Res.mk_info ~backend:"cvc4" ~time:0. () in
+    S.Fut.return (Res.Unknown [Res.U_timeout info], S.No_shortcut)
   else (
+    Utils.debug ~section 1 "calling cvc4";
     let timeout = deadline -. now in
     assert (timeout > 0.);
     let cmd = mk_cvc4_cmd_ timeout options in
@@ -803,15 +789,14 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
           (fun k->k (Res.print FO.print_term' FO.print_ty) r);
         close s;
         match r with
-          | Res.Sat _ -> r, S.Shortcut
-          | Res.Unsat ->
+          | Res.Sat (_,_) -> r, S.Shortcut
+          | Res.Unsat i ->
             (* beware, this "unsat" might be wrong *)
             if pb.FO.Problem.meta.ProblemMetadata.unsat_means_unknown
-            then Res.Unknown, S.No_shortcut
-            else Res.Unsat, S.Shortcut
-          | Res.Timeout
-          | Res.Unknown -> r, S.No_shortcut
-          | Res.Error e ->
+            then Res.Unknown [Res.U_incomplete i], S.No_shortcut
+            else Res.Unsat i, S.Shortcut
+          | Res.Unknown _ -> r, S.No_shortcut
+          | Res.Error (e,_) ->
             Utils.debugf ~lock:true ~section 1
               "@[<2>error while running CVC4@ with `%s`:@ @[%s@]@]"
               (fun k->k cmd (Printexc.to_string e));
@@ -820,12 +805,14 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
     |> S.Fut.map
       (function
         | E.Ok x -> fst x
-        | E.Error e -> Res.Error e, S.Shortcut)
+        | E.Error e ->
+          let info = mk_info decode in
+          Res.Error (e,info), S.Shortcut)
   )
 
 let is_available () =
   try
-    let res = Sys.command "which cvc4 > /dev/null" = 0 in
+    let res = Sys.command "which cvc4 > /dev/null 2> /dev/null" = 0 in
     if res then Utils.debug ~section 3 "CVC4 is available";
     res
   with Sys_error _ -> false

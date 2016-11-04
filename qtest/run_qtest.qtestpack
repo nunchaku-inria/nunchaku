@@ -1,0 +1,6 @@
+src/core/Reduce
+src/core/terms/TermTyped
+src/core/TypeUnify
+src/core/Scheduling
+src/parsers/TPTP_preprocess
+src/random/Term_random

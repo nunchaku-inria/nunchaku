@@ -30,7 +30,7 @@ module type S = sig
   val repr : T.t -> T.t view
   (** [repr t] returns the view of [t] as a type.
       precondition: [is_ty t]
-      @raise some exception otherwise *)
+      raise some exception otherwise *)
 
   val as_ty : T.t -> T.t view option
   (** [as_ty t] returns [Some view] if [is_ty t, repr t = view], and

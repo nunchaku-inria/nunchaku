@@ -1,7 +1,5 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-module Var = Var
-module ID = ID
 module TI = TermInner
 
 type id = ID.t
@@ -13,7 +11,6 @@ type 'ty defined = {
   defined_head: id; (* symbol being defined *)
   defined_ty: 'ty; (* type of the head symbol *)
 }
-
 
 type (+'t, +'ty) equations =
   | Eqn_nested of
@@ -33,14 +30,14 @@ type (+'t, +'ty) equations =
 
 type (+'t,+'ty) rec_def = {
   rec_defined: 'ty defined;
-  rec_vars: 'ty var list; (* type variables in definitions *)
+  rec_ty_vars: 'ty var list; (* type variables in definitions *)
   rec_eqns: ('t, 'ty) equations; (* list of equations defining the term *)
 }
 
 type (+'t, +'ty) rec_defs = ('t, 'ty) rec_def list
 
 type (+'t, +'ty) spec_defs = {
-  spec_vars: 'ty var list; (* type variables used by defined terms *)
+  spec_ty_vars: 'ty var list; (* type variables used by defined terms *)
   spec_defined: 'ty defined list;  (* terms being specified together *)
   spec_axioms: 't list;  (* free-form axioms *)
 }
@@ -85,17 +82,22 @@ type (+'t, +'ty) pred_def = {
   pred_clauses: ('t, 'ty) pred_clause list;
 }
 
+type 't copy_wrt =
+  | Wrt_nothing
+  | Wrt_subset of 't (* invariant (copy_of -> prop) *)
+  | Wrt_quotient of [`Partial | `Total] * 't (* invariant (copy_of -> copy_of -> prop) *)
+
 type (+'t, +'ty) copy = {
   copy_id: ID.t; (* new name *)
   copy_vars: 'ty Var.t list; (* list of type variables *)
   copy_ty: 'ty;  (* type of [copy_id], of the form [type -> type -> ... -> type] *)
   copy_of: 'ty; (* [id vars] is a copy of [of_]. Set of variables = vars *)
   copy_to: 'ty; (* [id vars] *)
+  copy_wrt: 't copy_wrt;
   copy_abstract: ID.t; (* [of -> id vars] *)
   copy_abstract_ty: 'ty;
   copy_concrete: ID.t; (* [id vars -> of] *)
   copy_concrete_ty: 'ty;
-  copy_pred: 't option; (* invariant (prop) *)
 }
 
 (** Attribute on declarations *)
@@ -176,7 +178,7 @@ let mk_mutual_ty id ~ty_vars ~cstors ~ty =
   in
   {ty_id=id; ty_type=ty; ty_vars; ty_cstors; }
 
-let mk_copy ~pred ~of_ ~to_ ~ty ~abstract ~concrete ~vars id =
+let mk_copy ~wrt ~of_ ~to_ ~ty ~abstract ~concrete ~vars id =
   let copy_abstract, copy_abstract_ty = abstract in
   let copy_concrete, copy_concrete_ty = concrete in
   { copy_id=id;
@@ -184,11 +186,11 @@ let mk_copy ~pred ~of_ ~to_ ~ty ~abstract ~concrete ~vars id =
     copy_ty=ty;
     copy_of=of_;
     copy_to=to_;
+    copy_wrt=wrt;
     copy_abstract;
     copy_abstract_ty;
     copy_concrete;
     copy_concrete_ty;
-    copy_pred=pred;
   }
 
 (* find a definition for [id] in [cases], or None *)
@@ -237,6 +239,11 @@ let map_eqns ~term ~ty c =
   let bind () v = (), Var.update_ty ~f:ty v in
   map_eqns_bind () c ~bind ~term:(fun () -> term)
 
+let map_copy_wrt f wrt = match wrt with
+  | Wrt_nothing -> Wrt_nothing
+  | Wrt_subset p -> Wrt_subset (f p)
+  | Wrt_quotient (tty, r) -> Wrt_quotient (tty, f r)
+
 let map_copy_bind ~bind ~term ~ty acc c =
   let acc', copy_vars = Utils.fold_map bind acc c.copy_vars in
   { c with
@@ -244,9 +251,9 @@ let map_copy_bind ~bind ~term ~ty acc c =
     copy_of = ty acc' c.copy_of;
     copy_to = ty acc' c.copy_to;
     copy_ty = ty acc c.copy_ty;
+    copy_wrt = map_copy_wrt (term acc') c.copy_wrt;
     copy_abstract_ty = ty acc' c.copy_abstract_ty;
     copy_concrete_ty = ty acc' c.copy_concrete_ty;
-    copy_pred = CCOpt.map (term acc') c.copy_pred;
   }
 
 let map_copy ~term ~ty c =
@@ -254,10 +261,10 @@ let map_copy ~term ~ty c =
   map_copy_bind () c ~bind ~term:(fun () -> term) ~ty:(fun () -> ty)
 
 let map_rec_def_bind ~bind ~term ~ty acc t =
-  let acc', vars = Utils.fold_map bind acc t.rec_vars in
+  let acc', vars = Utils.fold_map bind acc t.rec_ty_vars in
   {
     rec_defined=map_defined ~f:(ty acc) t.rec_defined;
-    rec_vars=vars;
+    rec_ty_vars=vars;
     rec_eqns=map_eqns_bind ~bind ~term acc' t.rec_eqns;
   }
 
@@ -271,8 +278,8 @@ let map_rec_defs_bind ~bind ~term ~ty acc t =
   List.map (map_rec_def_bind ~bind ~term ~ty acc) t
 
 let map_spec_defs_bind ~bind ~term ~ty acc t =
-  let acc', vars = Utils.fold_map bind acc t.spec_vars in
-  { spec_vars=vars;
+  let acc', vars = Utils.fold_map bind acc t.spec_ty_vars in
+  { spec_ty_vars=vars;
     spec_defined=List.map (map_defined ~f:(ty acc)) t.spec_defined;
     spec_axioms=List.map (term acc') t.spec_axioms;
   }
@@ -425,7 +432,11 @@ let fold_bind ~bind ~term:fterm ~ty:fty b_acc acc (st:(_,_) t) =
       let acc =
         List.fold_left (fty b_acc) acc
           [c.copy_of; c.copy_ty; c.copy_to] in
-      CCOpt.fold (fterm b_acc) acc c.copy_pred
+      begin match c.copy_wrt with
+        | Wrt_nothing -> acc
+        | Wrt_subset p -> fterm b_acc acc p
+        | Wrt_quotient (_, r) -> fterm b_acc acc r
+      end
   | Goal t -> fterm b_acc acc t
 
 let fold ~term:fterm ~ty:fty acc st =
@@ -558,20 +569,22 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
   let print_pred_defs out preds = pplist ~sep:" and " print_pred_def out preds
 
   let print_copy out c =
-    let pp_pred out = function
-      | None -> ()
-      | Some p -> fpf out "@,@[<2>pred@ @[%a@]@]" Pt.print p
+    let pp_wrt out = function
+      | Wrt_nothing -> ()
+      | Wrt_subset p -> fpf out "@,@[<2>subset@ @[%a@]@]" Pt.print p
+      | Wrt_quotient (`Total, r) -> fpf out "@,@[<2>quotient@ @[%a@]@]" Pt.print r
+      | Wrt_quotient (`Partial, r) -> fpf out "@,@[<2>partial_quotient@ @[%a@]@]" Pt.print r
     in
     fpf out
-      "@[<v2>copy @[%a %a :=@ @[%a@]@]@ \
+      "@[<v2>copy @[<4>%a %a :=@ @[%a@]@]@ %a\
         @[abstract %a : @[%a@]@]@ \
-        @[concrete %a : @[%a@]@]%a@]"
+        @[concrete %a : @[%a@]@]@]"
       ID.print c.copy_id
       (CCFormat.list ~start:"" ~stop:"" ~sep:" " Var.print_full) c.copy_vars
       Pty.print c.copy_of
+      pp_wrt c.copy_wrt
       ID.print c.copy_abstract Pty.print c.copy_abstract_ty
       ID.print c.copy_concrete Pty.print c.copy_concrete_ty
-      pp_pred c.copy_pred
 
   let print_tydef out tydef =
     let ppcstors out c =

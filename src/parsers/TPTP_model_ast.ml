@@ -237,7 +237,7 @@ let to_model (l:statement list) : (T.term, T.ty) Model.t =
     )
   in
   (* add one statement to the model *)
-  let add_st m st : _ M.t = match st with
+  let add_st m st : (_,_) M.t = match st with
     | Fi_domain (_, _, l) ->
       (* trivial domain *)
       let l = List.map get_or_create_id l in

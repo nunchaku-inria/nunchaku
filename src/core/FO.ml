@@ -10,6 +10,8 @@ type id = ID.t
 type 'a var = 'a Var.t
 type 'a printer = Format.formatter -> 'a -> unit
 type 'a or_error = ('a, string) CCResult.t
+type ('a,'b) res = ('a,'b) Res.t
+type metadata = Metadata.t
 
 module TyBuiltin = struct
   type t =
@@ -130,6 +132,16 @@ module Ty = struct
 
   let compare = compare_ty
   let equal a b = compare a b = 0
+
+  let to_seq t yield =
+    let rec aux t =
+      yield t;
+      begin match t.view with
+        | TyBuiltin _ -> ()
+        | TyApp (_,l) -> List.iter aux l
+      end
+    in
+    aux t
 end
 
 module T = struct
@@ -223,6 +235,30 @@ module T = struct
   let equiv a b = make_ (Equiv (a,b))
   let forall v t = make_ (Forall (v,t))
   let exists v t = make_ (Exists (v,t))
+
+  let to_seq t yield =
+    let rec aux t =
+      yield t;
+      begin match t.view with
+        | True | False | Var _ | Builtin (`Int _) | Unparsable _
+          -> ()
+        | And l | Or l | Undefined_atom (_,_,l) | App (_,l)
+          -> List.iter aux l
+        | DataTest (_,t)
+        | DataSelect (_,_,t)
+        | Undefined (_,t)
+        | Fun (_,t)
+        | Mu (_,t)
+        | Forall (_,t)
+        | Exists (_,t)
+        | Not t
+          -> aux t
+        | Let (_,t,u) -> aux t; aux u
+        | Ite (a,b,c) -> aux a; aux b; aux c
+        | Eq (a,b) | Imply (a,b) | Equiv (a,b) -> aux a; aux b
+      end
+    in
+    aux t
 end
 
 (** {2 The Problems sent to Solvers} *)
@@ -254,8 +290,27 @@ module Problem = struct
     in
     let pb' = make ~meta (CCVector.freeze res) in
     acc', pb'
+
+  let to_seq t = CCVector.to_seq t.statements
 end
 
+let tys_of_toplevel_ty (l,ret) yield =
+  List.iter yield l; yield ret
+
+let st_to_seq_ t ~term:yield_term ~ty:yield_ty = match t with
+  | TyDecl (_,_,_) -> ()
+  | Decl (_,ty,_) -> tys_of_toplevel_ty ty yield_ty
+  | Axiom t -> yield_term t
+  | CardBound (_,_,_) -> ()
+  | MutualTypes (_,defs) ->
+    Sequence.of_list defs.tys_defs
+    |> Sequence.flat_map (fun tydef -> ID.Map.values tydef.ty_cstors)
+    |> Sequence.flat_map_l (fun cstor -> cstor.cstor_args)
+    |> Sequence.iter yield_ty
+  | Goal t -> yield_term t
+
+let terms_of_statement st yield = st_to_seq_ st ~term:yield ~ty:(fun _ -> ())
+let tys_of_statement st yield = st_to_seq_ st ~term:(fun _ -> ()) ~ty:yield
 
 let fpf = Format.fprintf
 
@@ -465,7 +520,7 @@ module Util = struct
         f acc x >>= fun acc -> fold_m f acc tail
 
     (* convert to a decision tree. *)
-    let to_dt ~vars t : _ DT.t =
+    let to_dt ~vars t : (_,_) DT.t =
       (* tests must have >= 1 condition; otherwise they are default *)
       let tests, others =
         Sequence.to_list t

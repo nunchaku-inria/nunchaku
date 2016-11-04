@@ -46,7 +46,7 @@ let dollar_word = '$' lower_word
 rule token = parse
   | comment_line { token lexbuf }
   | comment_block { token lexbuf }  (* TODO: count new lines in lexeme lexbuf *)
-  | '\n' { Lexing.new_line lexbuf; token lexbuf }
+  | ('\n' | "\r\n") { Lexing.new_line lexbuf; token lexbuf }
   | [' ' '\t' '\r'] { token lexbuf }
   | eof { EOI }
   | "fof" { FOF }

@@ -11,15 +11,16 @@ BuildTools:  ocamlbuild
 FilesAB:     src/main/const.ml.ab
 AlphaFeatures: compiled_setup_ml, ocamlbuild_more_args
 
-Synopsis:    A counter-example finder for higher-order logic
+Synopsis:    A model finder for higher-order logic
 
-XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain' -j 0"
+# j1 for cygwin
+XOCamlbuildExtraArgs: "-menhir 'menhir --dump --explain' -j 1"
 
-Flag "random"
+Flag random
   Description:      enable the library for generating random data
   Default:          true
 
-Library "nunchaku_core"
+Library nunchaku_core
   Path:             src/core/
   Pack:             true
   Modules:          ID, Var, MetaVar, Location, Intf, Utils, Transform,
@@ -27,41 +28,41 @@ Library "nunchaku_core"
                     Env, Signature, Statement, FO_tptp, FO_rel, Cardinality,
                     Scheduling, Polarity, Traversal, ProblemMetadata,
                     AnalyzeType, Prelude, TypeCheck, Lazy_list,
+                    Sexp_lib, Sexp_lex,
                     terms/TermInner,
                     terms/TermTyped,
-                    terms/TermPoly,
                     terms/TermMono,
                     terms/Pattern,
                     types/TypePoly,
                     types/TypeMono
   Install:          true
   FindlibName:      nunchaku
-  BuildDepends:     containers, containers.data, containers.sexp, sequence,
-                    num, unix, threads
+  BuildDepends:     containers, containers.data, sequence, num, unix, threads
 
-Library "nunchaku_parsers"
+Library nunchaku_parsers
   Path:             src/parsers/
   Pack:             true
   Modules:          Parsing_utils, Lexer, Parser, TPTP_print,
                     TPTP_lexer, TPTP_parser, TPTP_preprocess,
                     TPTP_model_ast, TPTP_model_lexer, TPTP_model_parser,
-                    Ast_kodkod, Lex_kodkod, Parse_kodkod
+                    Ast_kodkod, Lex_kodkod, Parse_kodkod,
+                    Tip_ast, Tip_parser, Tip_lexer, Parse_tip
   Install:          true
   FindlibName:      parsers
   FindlibParent:    nunchaku_core
   BuildTools:       menhir
   BuildDepends:     nunchaku
 
-Library "nunchaku_backends"
+Library nunchaku_backends
   Path:             src/backends
   Pack:             true
-  Modules:          CVC4, Kodkod, Paradox
+  Modules:          CVC4, Kodkod, Paradox, Smbc
   Install:          true
   FindlibName:      backends
   FindlibParent:    nunchaku_core
-  BuildDepends:     nunchaku, nunchaku.parsers, containers.sexp
+  BuildDepends:     nunchaku, nunchaku.parsers
 
-Library "nunchaku_transformations"
+Library nunchaku_transformations
   Path:             src/transformations
   Pack:             true
   Modules:          Skolem,
@@ -70,7 +71,7 @@ Library "nunchaku_transformations"
                     Monomorphization,
                     Specialize,
                     LambdaLift,
-                    ElimHOF,
+                    Elim_HOF,
                     ElimRecursion,
                     ElimMultipleEqns,
                     ElimIndPreds,
@@ -90,7 +91,7 @@ Library "nunchaku_transformations"
   FindlibParent:    nunchaku_core
   BuildDepends:     containers, nunchaku
 
-Library "nunchaku_random"
+Library nunchaku_random
   Path:             src/random
   Pack:             true
   Modules:          Term_random
@@ -107,8 +108,6 @@ Executable nunchaku
   MainIs:           nunchaku.ml
   BuildDepends:     nunchaku, nunchaku.transformations, nunchaku.parsers,
                     nunchaku.backends
-
-PreBuildCommand:    make qtest-gen
 
 Executable run_qtest
   Path:             qtest/

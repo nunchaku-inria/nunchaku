@@ -58,13 +58,22 @@ module Features = struct
   let update_l = List.fold_right (fun (k,v) -> update k v)
   let of_list = M.of_list
 
+  type check_res =
+    | Check_ok
+    | Check_fail of key * value * value
+
   (* check that every pair [k,v in spec] is also in [t] *)
-  let check t ~spec =
-    M.for_all
-      (fun k v -> match M.get k t with
-         | None -> false
-         | Some v' -> v=v')
-      spec
+  let check t ~spec : check_res =
+    let bad =
+      M.to_list spec
+      |> CCList.find_map
+        (fun (k,v) -> match M.get k t with
+           | None -> assert false
+           | Some v' -> if v=v' then None else Some (k,v,v'))
+    in
+    match bad with
+      | None -> Check_ok
+      | Some (k,v,v') -> Check_fail (k,v,v')
 
   let str_of_value = function
     | Present -> "present"
@@ -210,12 +219,16 @@ module Pipe = struct
     in
     fpf out "@[%a@]" pp t
 
-  let check_features_ ~name f ~spec =
-    if not (Features.check ~spec f)
-    then Utils.failwithf
+  let check_features_ ~name f ~spec = match Features.check ~spec f with
+    | Features.Check_ok -> ()
+    | Features.Check_fail (k,expected,actual) ->
+      Utils.failwithf
         "@[<hv2>feature mismatch in transformation %s:@ \
-         expected @[%a@] as input,@ got @[%a@]@]"
-        name Features.print spec Features.print f
+         on feature %s, expected %s, got %s@ \
+         features: @[%a@],@ state: @[%a@]@]"
+        name (Features.str_of_key k)
+        (Features.str_of_value expected) (Features.str_of_value actual)
+        Features.print spec Features.print f
 
   let check p =
     let rec aux

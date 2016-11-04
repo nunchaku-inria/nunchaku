@@ -5,7 +5,7 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
+type term = TermInner.Default.t
 
 val name : string
 
@@ -25,8 +25,8 @@ val skolemize :
   state:state ->
   ?in_goal:bool ->
   Polarity.t ->
-  T.t ->
-  T.t * (ID.t * T.t) list
+  term ->
+  term * (ID.t * term) list
 (** [skolemize ~state pol t] returns [t', new_syms] where [t'] is
     the skolemization of [t] under polarity [pol],
     and [new_syms] is a set of new symbols with their type
@@ -37,13 +37,13 @@ val print_state : Format.formatter -> state -> unit
 
 val skolemize_pb :
   state:state ->
-  (T.t, T.t) Problem.t ->
-  (T.t, T.t) Problem.t
+  (term, term) Problem.t ->
+  (term, term) Problem.t
 
 val decode_model :
   skolems_in_model:bool ->
   state:state ->
-  (T.t,T.t) Model.t -> (T.t,T.t) Model.t
+  (term,term) Model.t -> (term,term) Model.t
 (** Decode the given model
     @param skolems_in_model if true, skolem constants will stay in the
       model after decoding; otherwise they are dropped *)
@@ -53,9 +53,9 @@ val pipe :
   mode:mode ->
   print:bool ->
   check:bool ->
-  ((T.t,T.t as 'inv) Problem.t,
-    (T.t,T.t) Problem.t,
-    (T.t,T.t) Problem.Res.t, (T.t,T.t) Problem.Res.t
+  ((term,term as 'inv) Problem.t,
+    (term,term) Problem.t,
+    (term,term) Problem.Res.t, (term,term) Problem.Res.t
   ) Transform.t
 
 (** Similar to {!pipe} but with a generic decode function.
@@ -71,6 +71,6 @@ val pipe_with :
   decode:(state -> 'c -> 'd) ->
   print:bool ->
   check:bool ->
-  ((T.t,T.t) Problem.t,
-    (T.t,T.t) Problem.t, 'c, 'd
+  ((term,term) Problem.t,
+    (term,term) Problem.t, 'c, 'd
   ) Transform.t

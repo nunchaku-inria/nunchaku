@@ -50,9 +50,13 @@ module Features : sig
 
   val of_list : (key * value) list -> t
 
-  val check : t -> spec:t -> bool
-  (** [check t ~spec] returns [true] if all features required by [spec] are
-      valid in [t] *)
+  type check_res =
+    | Check_ok
+    | Check_fail of key * value * value
+
+  val check : t -> spec:t -> check_res
+  (** [check t ~spec] returns [Check_ok] if all features required by [spec] are
+      valid in [t], and [Check_fail (key, expected, actual)] otherwise *)
 
   val print : t printer
 end
@@ -177,12 +181,12 @@ module Pipe : sig
     ('a, 'b, 'd1, 'e) transformation list ->
     ('b, 'b2, 'c, 'd1) t -> ('a, 'b2, 'c, 'e) t
 
-  val check : _ t -> unit
+  val check : (_,_,_,_) t -> unit
   (** [check pipe] checks that the features of each component of
       the pipeline fit with their input.
       It is assumed we start with {!Features.full} *)
 
-  val print : _ t printer
+  val print : (_,_,_,_) t printer
 end
 
 val run : pipe:('a, 'b, 'c, 'd) Pipe.t ->

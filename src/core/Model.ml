@@ -5,7 +5,7 @@ module Subst = Var.Subst
 
 type 'a printer = Format.formatter -> 'a -> unit
 type 'a prec_printer = TermInner.prec -> 'a printer
-type 'a to_sexp = 'a -> CCSexp.t
+type 'a to_sexp = 'a -> Sexp_lib.t
 
 let fpf = Format.fprintf
 
@@ -71,22 +71,23 @@ module DT = struct
       in
       cases var ~tests ~default
 
-  let rec print pt out t = match t with
+  let rec print pt pty out t = match t with
     | Yield t -> pt TI.P_top out t
     | Cases {tests=[]; default=None; _} -> assert false
     | Cases {tests=[]; var; default=Some d} ->
-      fpf out "@[<hv1>cases %a@ {default: %a@,}@]"
-        Var.print_full var (print pt) d
+      fpf out "@[<hv1>cases (@[%a:%a@])@ {default: %a@,}@]"
+        Var.print_full var pty (Var.ty var) (print pt pty) d
     | Cases cases ->
       let pp_test out (lhs,rhs) =
-        fpf out "@[<2>@[%a@] =>@ %a@]" (pt TI.P_arrow) lhs (print pt) rhs
+        fpf out "@[<2>@[%a@] =>@ %a@]" (pt TI.P_arrow) lhs (print pt pty) rhs
       and pp_default out = function
         | None -> ()
-        | Some d -> fpf out ";@ default: %a" (print pt) d
+        | Some d -> fpf out ";@ default: %a" (print pt pty) d
       in
       let pp_tests = CCFormat.list ~start:"" ~stop:"" ~sep:"; " pp_test in
-      fpf out "@[<hv1>cases %a@ {@[<v>%a%a@]@,}@]"
-        Var.print_full cases.var pp_tests cases.tests pp_default cases.default
+      fpf out "@[<hv1>cases (@[%a:%a@])@ {@[<v>%a%a@]@,}@]"
+        Var.print_full cases.var pty (Var.ty cases.var)
+        pp_tests cases.tests pp_default cases.default
 
   let rec ty_args = function
     | Yield _ -> []
@@ -133,8 +134,8 @@ module DT = struct
 
   let mk_flat_test v t = {ft_var=v; ft_term=t}
 
-  let flatten t : _ flat_dt =
-    let rec aux t : (_ flat_test list * 't) Sequence.t = match t with
+  let flatten t : (_,_) flat_dt =
+    let rec aux t : ((_,_) flat_test list * 't) Sequence.t = match t with
       | Yield t -> Sequence.return ([], t)
       | Cases {var; tests; default} ->
         let sub_tests =
@@ -169,7 +170,8 @@ module DT = struct
     (* how to fail *)
     let pp_ =
       let pterm _ out _ = CCFormat.string out "<term>" in
-      print pterm
+      let pty out _ = CCFormat.string out "<ty>" in
+      print pterm pty
     in
     let fail_var v dt =
       Utils.failwithf "var %a@ does not match %a" Var.print_full v pp_ dt
@@ -250,9 +252,9 @@ module DT = struct
     check_ res;
     res
 
-  let to_sexp ft fty t : CCSexp.t =
-    let lst = CCSexp.of_list in
-    let str = CCSexp.atom in
+  let to_sexp ft fty t : Sexp_lib.t =
+    let lst = Sexp_lib.list in
+    let str = Sexp_lib.atom in
     let eqn_to_sexp {ft_var=v; ft_term=t} =
       lst [str "="; str (Var.to_string_full v); ft t]
     in
@@ -309,6 +311,7 @@ module DT_util = struct
   module U = T.U
   module P = T.P
 
+  type term = T.t
   type dt = (T.t, T.t) DT.t
   type subst = (T.t, T.t) Var.Subst.t
 
@@ -398,7 +401,7 @@ module DT_util = struct
     | DT.Yield _ as res :: _ -> res (* arbitrary… *)
     | DT.Cases {DT.var; tests=t; default} :: tail ->
       let module TTbl = U.Tbl in
-      let tbl : _ DT.t list TTbl.t = TTbl.create 32 in
+      let tbl : (_,_) DT.t list TTbl.t = TTbl.create 32 in
       (* add one case to the table *)
       let merge_into_tbl (lhs,rhs) =
         TTbl.add_list tbl lhs rhs
@@ -518,7 +521,7 @@ module DT_util = struct
     in
     U.fun_l vars (aux dt)
 
-  let print : dt printer = DT.print P.print'
+  let print : dt printer = DT.print P.print' P.print
 end
 
 (** {2 Models} *)
@@ -614,7 +617,7 @@ let print pt pty out m =
   and pp_value out (t,dt,_) =
     fpf out "@[<2>val @[%a@]@ :=@ %a@]."
       (pt TI.P_top) t
-      (DT.print pt) dt
+      (DT.print pt pty) dt
   in
   (* only print non-empty lists *)
   let pp_nonempty_list pp out l =
@@ -625,10 +628,10 @@ let print pt pty out m =
     (pp_nonempty_list pp_type) m.finite_types
     (pp_nonempty_list pp_value) m.values
 
-let str = CCSexp.atom
-let lst = CCSexp.of_list
+let str = Sexp_lib.atom
+let lst = Sexp_lib.list
 
-let to_sexp ft fty m : CCSexp.t =
+let to_sexp ft fty m : Sexp_lib.t =
   let id_to_sexp id = str (ID.to_string id) in
   let ty_to_sexp (ty,dom) =
     lst [str "type"; fty ty; lst (List.map id_to_sexp dom)] in
@@ -644,6 +647,7 @@ module Default = struct
   module T = TermInner.Default
   module P = T.P
 
+  type term = T.t
   type t = (T.t, T.t) model
 
   let to_sexp = to_sexp P.to_sexp P.to_sexp

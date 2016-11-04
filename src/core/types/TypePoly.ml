@@ -3,9 +3,6 @@
 
 (** {1 Types with polymorphism and meta-variables} *)
 
-module ID = ID
-module Var = Var
-module MetaVar = MetaVar
 module TI = TermInner
 
 module Builtin = TI.TyBuiltin

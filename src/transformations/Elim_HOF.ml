@@ -754,7 +754,7 @@ let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
             } in
             { Stmt.
               rec_defined=defined;
-              rec_vars=vars;
+              rec_ty_vars=[];
               rec_eqns=eqn;
             }
           ) else (
@@ -804,12 +804,12 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
   | Stmt.Axiom (Stmt.Axiom_rec l) -> elim_hof_rec ~state ~info l
   | Stmt.Axiom (Stmt.Axiom_spec spec) ->
       let subst, vars =
-        Utils.fold_map (bind_hof_var ~state) Subst.empty spec.Stmt.spec_vars
+        Utils.fold_map (bind_hof_var ~state) Subst.empty spec.Stmt.spec_ty_vars
       in
       let spec =
         { Stmt.
           spec_axioms=List.map (tr_term Pol.Pos subst) spec.Stmt.spec_axioms;
-          spec_vars=vars;
+          spec_ty_vars=vars;
           spec_defined=
             List.map
               (fun d ->
@@ -847,9 +847,14 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
       let subst, copy_vars = bind_hof_vars ~state Subst.empty c.Stmt.copy_vars in
       let copy_of = encode_ty_ ~handle_id c.Stmt.copy_of in
       let copy_to = encode_ty_ ~handle_id c.Stmt.copy_to in
+      let copy_wrt = match c.Stmt.copy_wrt with
+        | Stmt.Wrt_nothing -> Stmt.Wrt_nothing
+        | Stmt.Wrt_subset p -> Stmt.Wrt_subset (tr_term Pol.NoPol subst p)
+        | Stmt.Wrt_quotient (tty, r) -> Stmt.Wrt_quotient (tty, tr_term Pol.NoPol subst r)
+      in
       let c' = {
         c with Stmt.
-          copy_pred = CCOpt.map (tr_term Pol.NoPol subst) c.Stmt.copy_pred;
+          copy_wrt;
           copy_vars;
           copy_of;
           copy_to;
@@ -953,7 +958,7 @@ let find_dt_ m id =
 let tr_dt ?(subst=Subst.empty) ~state ~map dt =
   Utils.debugf ~section 5 "@[<hv2>decode@ `@[%a@]`@ with @[%a@]@]"
     (fun k->k
-        (Model.DT.print P.print') dt (Subst.print P.print) subst);
+        (Model.DT.print P.print' P.print) dt (Subst.print P.print) subst);
   (* first, replace vars *)
   let dt' =
     let vars = DT.vars dt in
@@ -1005,61 +1010,80 @@ let new_fun_name_ ~state =
 (* compute a map from constants of type "to a (to b c)" to fresh names
    of type "a -> b -> c", defined on the side.
    @return the map, and a list of definitions *)
-let map_ho_consts_to_funs ~state m : const_map * (unit -> _ M.value_def list) =
+let map_ho_consts_to_funs ~state m : const_map * (unit -> (_,_) M.value_def list) =
   let const_tbl : T.t ID.Tbl.t = ID.Tbl.create 16 in
-  let fun_defs : _ M.value_def list ref = ref [] in
+  let fun_defs : (_,_) M.value_def list ref = ref [] in
   let all_fun_const = all_fun_consts_ ~state m in
-  (* find the function corresponding to
-     the constant [c] of type [to 'a (to 'b 'c)];
-     @param app the application symbol corresponding to [to 'a (to 'b 'c)]
-     @param ty the decoded (arrow) type ['a -> 'b -> 'c] *)
-  let rec tr_functional_cst (app:ID.t) ty (c:ID.t) =
-    match ID.Tbl.get const_tbl c with
-    | Some t -> t
-    | None ->
-      Utils.debugf ~section 5
-        "@[<2>tr fun constant `@[%a@] : @[%a@]`@ with app symbol `%a`@]"
-        (fun k->k ID.print c P.print ty ID.print app);
-      let _, _args, ret = U.ty_unfold ty in
-      (* give a name to the function *)
-      let c' = new_fun_name_ ~state in
-      ID.Tbl.add const_tbl c (U.const c');
-      Utils.debugf ~section 5
-        "@[<2>translate name %a into %a@]" (fun k->k ID.print c ID.print c');
-      (* compute the body of the lambda *)
-      let dt = compute_dt app c in
-      let t' = U.const c' in
-      let k = if U.ty_is_Prop ret then M.Symbol_prop else M.Symbol_fun in
-      CCList.Ref.push fun_defs (t', dt, k);
-      Utils.debugf ~section 5
-        "@[... decode `%a`@ into `@[%a@ := @[%a@]@]`@]"
-        (fun k->k ID.print c ID.print c' M.DT_util.print dt);
-      t'
-  (* compute a decision tree for this constant *)
-  and compute_dt app (c:ID.t) : _ DT.t =
-    let dt, _ = find_dt_ m app in
-    M.DT_util.apply dt (U.const c)
-    |> tr_dt ~subst:Subst.empty ~state ~map:map_id
+  let add_to_tbl id t =
+    ID.Tbl.add const_tbl id t;
+    Utils.debugf ~section 5
+      "@[<2>translate name %a into %a@]" (fun k->k ID.print id P.print t);
+  in
   (* if [id] is a domain constant, then map it to a lambda term,
      otherwise keep it intact *)
-  and map_id
+  let rec map_id
     : const_map
     = fun id -> match ID.Map.get id all_fun_const with
     | None -> U.const id
     | Some (ty,h) ->
-      (* find corresponding "apply" symbol *)
-      let handle_id = get_handle_id_decode ~state in
-      let ty' = decode_term ~state ~map:map_id Subst.empty ty in
-      let ty_app = U.ty_arrow (ty_of_handle_ ~handle_id h) ty' in
-      let app =
-        try
-          Ty.Map.find ty_app state.app_symbols
-        with Not_found ->
-          errorf_
-            "cannot find app symbol for `@[%a@],@ handle `@[%a@]`,@ full type `@[%a@]``"
-            ID.print id pp_handle h P.print ty_app
-      in
-      tr_functional_cst app.af_id ty' id
+      begin match ID.Tbl.get const_tbl id with
+        | Some t -> t
+        | None -> tr_functional_cst id ty h
+      end
+  (* find the function corresponding to
+     the constant [c] of type [to 'a (to 'b 'c)];
+     @param app the application symbol corresponding to [to 'a (to 'b 'c)]
+     @param ty the decoded (arrow) type ['a -> 'b -> 'c] *)
+  and tr_functional_cst (id:ID.t) (ty:ty) (h:handle) =
+    (* find corresponding "apply" symbol *)
+    let handle_id = get_handle_id_decode ~state in
+    let ty' = decode_term ~state ~map:map_id Subst.empty ty in
+    let ty_app = U.ty_arrow (ty_of_handle_ ~handle_id h) ty' in
+    begin match Ty.Map.get ty_app state.app_symbols with
+      | Some app ->
+        tr_partial_fun app.af_id ty' id
+      | None ->
+        Utils.debugf ~section 5
+          "cannot find app symbol for `@[%a@],@ handle `@[%a@]`,@ full type `@[%a@]``"
+          (fun k->k ID.print id pp_handle h P.print ty_app);
+        (* return a new undefined function *)
+        let _, ty_args, ty_ret = U.ty_unfold ty' in
+        let vars =
+          List.mapi (fun i ty -> Var.makef ~ty "_%d" i) ty_args
+        and body =
+          let id' =
+            ID.make_f "_%s_%d" (Ty.mangle ~sep:"_" ty_ret) (ID.Tbl.length const_tbl)
+          in
+          U.undefined_self (U.const id')
+        in
+        let t = U.fun_l vars body in
+        add_to_tbl id t;
+        t
+    end
+  (* translate back this partially applied function
+     @param app the application symbol *)
+  and tr_partial_fun (app:ID.t) ty (c:ID.t) =
+    Utils.debugf ~section 5
+      "@[<2>tr fun constant `@[%a@] : @[%a@]`@ with app symbol `%a`@]"
+      (fun k->k ID.print c P.print ty ID.print app);
+    let _, _args, ret = U.ty_unfold ty in
+    (* give a name to the function *)
+    let c' = new_fun_name_ ~state in
+    let t' = U.const c' in
+    add_to_tbl c t';
+    (* compute the body of the lambda *)
+    let dt = compute_dt app c in
+    let k = if U.ty_is_Prop ret then M.Symbol_prop else M.Symbol_fun in
+    CCList.Ref.push fun_defs (t', dt, k);
+    Utils.debugf ~section 5
+      "@[... decode `%a`@ into `@[%a@ := @[%a@]@]`@]"
+      (fun k->k ID.print c ID.print c' M.DT_util.print dt);
+    t'
+  (* compute a decision tree for this constant *)
+  and compute_dt app (c:ID.t) : (_,_) DT.t =
+    let dt, _ = find_dt_ m app in
+    M.DT_util.apply dt (U.const c)
+    |> tr_dt ~subst:Subst.empty ~state ~map:map_id
   in
   map_id, (fun () -> !fun_defs)
 
@@ -1068,7 +1092,7 @@ let map_ho_consts_to_funs ~state m : const_map * (unit -> _ M.value_def list) =
    the model [m] by flattening/filtering discrimination trees for functions
    of [tower].
    @return new discrimination tree, function kind *)
-let extract_subtree_ m f_id tower : _ DT.t * M.symbol_kind =
+let extract_subtree_ m f_id tower : (_,_) DT.t * M.symbol_kind =
   Utils.debugf ~section 5 "@[<2>extract subtree for @[%a@]@]" (fun k->k pp_fe_tower tower);
   (* @param hd: first parameter, that is, the partial function being applied *)
   let rec aux hd tower = match tower with

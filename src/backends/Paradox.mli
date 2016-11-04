@@ -5,7 +5,9 @@
 
 open Nunchaku_core
 
-module T = FO_tptp
+type term = FO_tptp.term
+type ty = FO_tptp.ty
+type problem = FO_tptp.problem
 
 val is_available : unit -> bool
 (** test whether the solver is available *)
@@ -19,15 +21,15 @@ val call :
   ?print_model:bool ->
   ?prio:int ->
   print:bool ->
-  T.problem ->
-  (T.term, T.ty) Problem.Res.t Scheduling.Task.t
+  problem ->
+  (term, ty) Problem.Res.t Scheduling.Task.t
 
 val pipe :
   ?print_model:bool ->
   print:bool ->
   unit ->
-  ( T.problem,
-    (T.term, T.ty) Problem.Res.t Scheduling.Task.t,
+  ( problem,
+    (term, ty) Problem.Res.t Scheduling.Task.t,
     'c, 'c) Transform.transformation
 (** Transformation corresponding to calling paradox on the problem *)
 

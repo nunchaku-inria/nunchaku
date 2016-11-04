@@ -8,9 +8,8 @@
 
 open Nunchaku_core
 
-module T = TermInner.Default
-
-type model = (T.t, T.t) Model.t
+type term = TermInner.Default.t
+type model = (term, term) Model.t
 
 val name : string
 
@@ -27,4 +26,4 @@ val remove_recursion : model -> model
 
 val pipe :
   print:bool ->
-  ('a, 'a, (T.t, T.t) Problem.Res.t, (T.t, T.t) Problem.Res.t) Transform.t
+  ('a, 'a, (term, term) Problem.Res.t, (term, term) Problem.Res.t) Transform.t
