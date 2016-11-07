@@ -3,7 +3,6 @@
 
 module ID = ID
 module Var = Var
-module Sig = Signature
 module TI = TermInner
 
 module Builtin = TI.Builtin

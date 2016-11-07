@@ -11,7 +11,7 @@ type 'a printer = Format.formatter -> 'a -> unit
 type 'a to_sexp = 'a -> Sexp_lib.t
 type 'a or_error = ('a, string) CCResult.t
 
-(** {2 Problem: a Set of Statements + Signature} *)
+(** {2 Problem: a Set of Statements} *)
 
 type ('t, 'ty) t = private {
   statements : ('t, 'ty) Statement.t CCVector.ro_vector;

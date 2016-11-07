@@ -15,7 +15,7 @@ type ty = T.t
 
 val print_term : T.t CCFormat.printer
 
-(** Signature used to generate random terms *)
+(** signature used to generate random terms *)
 val base_sig : ty ID.Map.t
 
 (** {2 Generators} *)
