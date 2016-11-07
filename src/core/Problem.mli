@@ -107,11 +107,6 @@ val goal : ('t, _) t -> 't
     have a single goal is ill-formed
     @raise IllFormed if the problem doesn't have exactly one goal *)
 
-val signature : ?init:'ty Signature.t -> (_, 'ty) t -> 'ty Signature.t
-(** Gather the signature of every declared symbol
-    @param init initial signature, if any
-    @raise IllFormed if some symbol is declared twice *)
-
 val env : ?init:('t,'ty) Env.t -> ('t, 'ty) t -> ('t,'ty) Env.t
 (** Build an environment defining/declaring every symbol of the problem.
     @param init initial env, if any

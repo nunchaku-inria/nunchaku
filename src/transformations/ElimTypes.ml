@@ -40,17 +40,17 @@ type state = {
     (* predicate -> type it encodes *)
   parametrized_ty: unit ID.Tbl.t;
     (* parametrized ty *)
-  sigma: T.t Signature.t;
+  env: (T.t,T.t) Env.t;
     (* signature, for decoding purpose *)
   side_axioms: (T.t, T.t) Statement.t CCVector.vector;
     (* new declarations *)
 }
 
-let create_state ~sigma () = {
+let create_state ~env () = {
   ty_to_pred=Ty.Map.empty;
   pred_to_ty=ID.Map.empty;
   parametrized_ty=ID.Tbl.create 16;
-  sigma;
+  env;
   side_axioms=CCVector.create();
 }
 
@@ -301,8 +301,8 @@ let encode_stmt state st =
 
 (* TODO: more accurate spec *)
 let transform_pb pb =
-  let sigma = Problem.signature pb in
-  let state = create_state ~sigma () in
+  let env = Problem.env pb in
+  let state = create_state ~env () in
   let pb' =
     Problem.flat_map_statements pb
       ~f:(encode_stmt state)
@@ -371,7 +371,7 @@ let rebuild_types state m : retyping =
       | _ -> rety)
 
 let ty_of_id_ state id =
-  match Signature.find ~sigma:state.sigma id with
+  match Env.find_ty ~env:state.env id with
     | Some t -> t
     | None -> errorf_ "could not find the type of `@[%a@]`" ID.print id
 

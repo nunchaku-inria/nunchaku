@@ -27,7 +27,7 @@ module TermTbl = CCHashtbl.Make(struct
 type state = {
   mutable count: int;
     (* counter for new names *)
-  mutable sigma: ty Signature.t;
+  mutable env: (T.t,ty) Env.t;
     (* signature *)
   funs: T.t TermTbl.t;
     (* function -> lambda-lifted function *)
@@ -35,9 +35,9 @@ type state = {
     (* set of newly introduced functions *)
 }
 
-let create_state ~sigma () =
+let create_state ~env () =
   { count=0;
-    sigma;
+    env;
     funs=TermTbl.create 16;
     new_ids=ID.Tbl.create 16;
   }
@@ -95,10 +95,10 @@ let declare_new_rec f ty vars body =
    compute WHNF in case [var args] (new β redexes) *)
 
 let find_ty_ ~state t =
-  U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) t
+  U.ty_exn ~sigma:(Env.find_ty ~env:state.env) t
 
-let decl_fun_ ~state id ty =
-  state.sigma <- Signature.declare ~sigma:state.sigma id ty
+let decl_fun_ ~state ~attrs id ty =
+  state.env <- Env.declare ~attrs ~env:state.env id ty
 
 let is_lambda_ t = match T.repr t with
   | TI.Bind (`Fun, _, _) -> true
@@ -206,8 +206,8 @@ let rec tr_term ~state local_state subst t = match T.repr t with
       ~f:(fun subst -> tr_term ~state local_state subst)
 
 let tr_problem pb =
-  let sigma = Problem.signature pb in
-  let state = create_state ~sigma () in
+  let env = Problem.env pb in
+  let state = create_state ~env () in
   let local_state = {
     new_decls = CCVector.create ();
     in_scope = In_nothing;

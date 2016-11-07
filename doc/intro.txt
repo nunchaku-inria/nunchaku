@@ -27,7 +27,6 @@ ProblemMetadata
 Reduce
 Scheduling
 Sexp_lib
-Signature
 Statement
 TermInner
 TermMono

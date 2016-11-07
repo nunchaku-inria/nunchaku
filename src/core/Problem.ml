@@ -128,11 +128,6 @@ let goal pb =
   in
   aux None 0
 
-let signature ?(init=Signature.empty) pb =
-  CCVector.fold
-    (fun sigma st -> Signature.add_statement ~sigma st)
-    init pb.statements
-
 let env ?init:(env=Env.create()) pb =
   let module St = Statement in
   try

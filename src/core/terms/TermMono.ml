@@ -125,16 +125,16 @@ module ToFO(T : TI.S) = struct
     and ret = conv_ty ret in
     args, ret
 
-  let rec conv_term ~sigma t = match Mono.repr t with
+  let rec conv_term ~env t = match Mono.repr t with
     | Const id -> FO.T.const id
     | Var v -> FO.T.var (conv_var v)
     | Let (v,t,u) ->
-        FO.T.let_ (conv_var v) (conv_term ~sigma t) (conv_term ~sigma u)
+        FO.T.let_ (conv_var v) (conv_term ~env t) (conv_term ~env u)
     | Builtin (`Ite (a,b,c)) ->
         FO.T.ite
-          (conv_term ~sigma a) (conv_term ~sigma b) (conv_term ~sigma c)
+          (conv_term ~env a) (conv_term ~env b) (conv_term ~env c)
     | Builtin (`Undefined_self (c,t)) ->
-        FO.T.undefined c (conv_term ~sigma t)
+        FO.T.undefined c (conv_term ~env t)
     | Builtin (`Undefined_atom (c,ty)) ->
         FO.T.undefined_atom c (conv_top_ty ty) []
     | Builtin (`Unparsable ty) -> FO.T.unparsable (conv_ty ty)
@@ -142,40 +142,40 @@ module ToFO(T : TI.S) = struct
     | Builtin `False -> FO.T.false_
     | Builtin (`Eq (a,b)) ->
         (* forbid equality between functions *)
-        let ty = U.ty_exn ~sigma:(Sig.find ~sigma) a in
+        let ty = U.ty_exn ~sigma:(Env.find_ty ~env) a in
         begin match T.repr ty with
           | TI.TyArrow _
           | TI.Bind (`TyForall, _, _) -> fail_ t "equality between functions";
           | TI.TyBuiltin `Prop ->
-            FO.T.equiv (conv_term ~sigma a) (conv_term ~sigma b)
+            FO.T.equiv (conv_term ~env a) (conv_term ~env b)
           | _ ->
-            FO.T.eq (conv_term ~sigma a) (conv_term ~sigma b)
+            FO.T.eq (conv_term ~env a) (conv_term ~env b)
         end
-    | Builtin (`Not t) -> FO.T.not_ (conv_term ~sigma t)
-    | Builtin (`And l) -> FO.T.and_ (List.map (conv_term ~sigma) l)
-    | Builtin (`Or l) -> FO.T.or_ (List.map (conv_term ~sigma) l)
+    | Builtin (`Not t) -> FO.T.not_ (conv_term ~env t)
+    | Builtin (`And l) -> FO.T.and_ (List.map (conv_term ~env) l)
+    | Builtin (`Or l) -> FO.T.or_ (List.map (conv_term ~env) l)
     | Builtin (`Imply (a,b)) ->
-        FO.T.imply (conv_term ~sigma a) (conv_term ~sigma b)
+        FO.T.imply (conv_term ~env a) (conv_term ~env b)
     | App (f, l) ->
         begin match Mono.repr f, l with
-        | Const id, _ -> FO.T.app id (List.map (conv_term ~sigma) l)
+        | Const id, _ -> FO.T.app id (List.map (conv_term ~env) l)
         | Builtin (`Undefined_atom (c,ty)), _ ->
-            let l = List.map (conv_term ~sigma) l in
+            let l = List.map (conv_term ~env) l in
             FO.T.undefined_atom c (conv_top_ty ty) l
         | Builtin (`DataTest c), [t] ->
-            FO.T.data_test c (conv_term ~sigma t)
+            FO.T.data_test c (conv_term ~env t)
         | Builtin (`DataSelect (c,n)), [t] ->
-            FO.T.data_select c n (conv_term ~sigma t)
+            FO.T.data_select c n (conv_term ~env t)
         | _ -> fail_ t "application of non-constant term"
         end
     | Bind (`Fun,v,t) ->
-        FO.T.fun_ (conv_var v) (conv_term ~sigma t)
+        FO.T.fun_ (conv_var v) (conv_term ~env t)
     | Bind (`Mu,v,t) ->
-        FO.T.mu (conv_var v) (conv_term ~sigma t)
+        FO.T.mu (conv_var v) (conv_term ~env t)
     | Bind (`Forall, v,f) ->
-        FO.T.forall (conv_var v) (conv_term ~sigma f)
+        FO.T.forall (conv_var v) (conv_term ~env f)
     | Bind (`Exists, v,f) ->
-        FO.T.exists (conv_var v) (conv_term ~sigma f)
+        FO.T.exists (conv_var v) (conv_term ~env f)
     | Match _ -> fail_ t "no case in FO terms"
     | Builtin (`Guard _) -> fail_ t "no guards (assert/assume) in FO"
     | Builtin (`DataSelect _ | `DataTest _) ->
@@ -183,25 +183,25 @@ module ToFO(T : TI.S) = struct
     | TyBuiltin _
     | TyArrow (_,_) -> fail_ t "no types in FO terms"
 
-  let conv_form ~sigma f =
+  let conv_form ~env f =
     Utils.debugf 3 ~section
       "@[<2>convert to FO the formula@ `@[%a@]`@]" (fun k -> k P.print f);
-    conv_term ~sigma f
+    conv_term ~env f
 
   let convert_eqns
-  : head:id -> sigma:T.t Sig.t -> (T.t,T.t) Statement.equations -> FO.T.t list
-  = fun ~head ~sigma eqns ->
+  : head:id -> env:(T.t,T.t) Env.t -> (T.t,T.t) Statement.equations -> FO.T.t list
+  = fun ~head ~env eqns ->
     let module St = Statement in
     let conv_eqn (vars, args, rhs, side) =
       let vars = List.map conv_var vars in
       let lhs = FO.T.app head args in
       let f =
-        if U.ty_returns_Prop (Sig.find_exn ~sigma head)
-        then FO.T.equiv lhs (conv_term ~sigma rhs)
-        else FO.T.eq lhs (conv_term ~sigma rhs)
+        if U.ty_returns_Prop (Env.find_ty_exn ~env head)
+        then FO.T.equiv lhs (conv_term ~env rhs)
+        else FO.T.eq lhs (conv_term ~env rhs)
       in
       (* add side conditions *)
-      let side = List.map (conv_form ~sigma) side in
+      let side = List.map (conv_form ~env) side in
       let f = if side=[] then f else FO.T.imply (FO.T.and_ side) f in
       List.fold_right FO.T.forall vars f
     in
@@ -211,17 +211,17 @@ module ToFO(T : TI.S) = struct
         let vars = List.map conv_var vars in
         [ FO.T.eq
             (FO.T.const head)
-            (List.fold_right FO.T.fun_ vars (conv_term ~sigma rhs)) ]
+            (List.fold_right FO.T.fun_ vars (conv_term ~env rhs)) ]
     | St.Eqn_app (_,vars,lhs,rhs) ->
         (* [id = fun vars. rhs] *)
         let vars = List.map conv_var vars in
-        let lhs = conv_term ~sigma lhs in
-        let rhs = conv_term ~sigma rhs in
+        let lhs = conv_term ~env lhs in
+        let rhs = conv_term ~env rhs in
         [ List.fold_right FO.T.forall vars (FO.T.eq lhs rhs) ]
     | St.Eqn_nested l ->
         List.map
           (fun (vars,args,rhs,side) ->
-            conv_eqn (vars, List.map (conv_term ~sigma) args, rhs, side))
+            conv_eqn (vars, List.map (conv_term ~env) args, rhs, side))
           l
 
 let conv_attrs =
@@ -231,10 +231,10 @@ let conv_attrs =
       | Statement.Attr_pseudo_true -> Some FO.Attr_pseudo_true
       | _ -> None)
 
-  let convert_statement ~sigma st =
+  let convert_statement ~env st =
     let module St = Statement in
     match St.view st with
-    | St.Decl (id, ty, attrs) ->
+    | St.Decl {St.defined_ty=ty; defined_attrs=attrs;defined_head=id} ->
         let _, _, ret = U.ty_unfold ty in
         let attrs' = conv_attrs attrs in
         let st' =
@@ -262,7 +262,7 @@ let conv_attrs =
         let mk_ax x = FO.Axiom x in
         begin match a with
         | St.Axiom_std l ->
-            List.map (fun ax -> conv_form  ~sigma ax |> mk_ax) l
+            List.map (fun ax -> conv_form  ~env ax |> mk_ax) l
         | St.Axiom_spec s ->
             (* first declare all types; then push axioms *)
             let decls = List.rev_map
@@ -272,7 +272,7 @@ let conv_attrs =
                 FO.Decl (head, ty, []))
               s.St.spec_defined
             and ax = List.map
-              (fun ax -> ax |> conv_form ~sigma |> mk_ax)
+              (fun ax -> ax |> conv_form ~env |> mk_ax)
               s.St.spec_axioms
             in
             List.rev_append decls ax
@@ -292,14 +292,14 @@ let conv_attrs =
                 (fun def ->
                   (* transform equations *)
                   let head = def.St.rec_defined.St.defined_head in
-                  let l = convert_eqns ~head ~sigma def.St.rec_eqns in
+                  let l = convert_eqns ~head ~env def.St.rec_eqns in
                   List.map mk_ax l)
                 s
             in
             List.rev_append decls axioms
         end
     | St.Goal f ->
-        [ FO.Goal (conv_form ~sigma f) ]
+        [ FO.Goal (conv_form ~env f) ]
     | St.Copy _ -> assert false
     | St.Pred _ -> assert false
     | St.TyDef (k, l) ->
@@ -325,10 +325,10 @@ let conv_attrs =
 
   let convert_problem p =
     let meta = Problem.metadata p in
-    let sigma = Problem.signature p in
+    let env = Problem.env p in
     let res =
       CCVector.flat_map_list
-        (convert_statement ~sigma)
+        (convert_statement ~env)
         (Problem.statements p)
     in
     FO.Problem.make ~meta res
