@@ -219,7 +219,9 @@ let encode_min_card_ ~(pred:ID.t) n =
 let encode_stmt_ state st : (_,_) Stmt.t list =
   let info = Stmt.info st in
   match Stmt.view st with
-  | Stmt.Decl (id, ty, attrs) when U.ty_returns_Type ty ->
+  | Stmt.Decl ({Stmt.defined_ty=ty; _} as d) when U.ty_returns_Type ty ->
+    let id = Stmt.id_of_defined d in
+    let attrs = Stmt.attrs_of_defined d in
     (* type declaration *)
     let _, args, _ = U.ty_unfold ty in
     assert (List.for_all U.ty_is_Type args);
@@ -242,7 +244,9 @@ let encode_stmt_ state st : (_,_) Stmt.t list =
         ID.Tbl.add state.parametrized_ty id ();
         []
     end
-  | Stmt.Decl (id, ty, attrs) when U.ty_returns_Prop ty ->
+  | Stmt.Decl ({Stmt.defined_ty=ty; _} as d) when U.ty_returns_Prop ty ->
+    let id = Stmt.id_of_defined d in
+    let attrs = Stmt.attrs_of_defined d in
     (* symbol declaration *)
     ensure_maps_to_predicate state ty;
     let _, args, _ = U.ty_unfold ty in
@@ -253,7 +257,10 @@ let encode_stmt_ state st : (_,_) Stmt.t list =
         U.ty_prop
     in
     [ Stmt.decl ~info ~attrs id ty' ]
-  | Stmt.Decl (id, ty, attrs) ->
+  | Stmt.Decl d ->
+    let id = Stmt.id_of_defined d in
+    let attrs = Stmt.attrs_of_defined d in
+    let ty = Stmt.ty_of_defined d in
     let _, args, ret = U.ty_unfold ty in
     assert (not (U.ty_is_Prop ret));
     (* declare every argument type, + the return type *)

@@ -139,7 +139,7 @@ let decl_to_tip id ty : A.statement =
   )
 
 let statement_to_tip (st:(term,ty)St.t): A.statement list = match St.view st with
-  | St.Decl (id,ty,_) ->
+  | St.Decl {St.defined_head=id; defined_ty=ty; _} ->
     let vars, _, _ = U.ty_unfold ty in
     if vars=[]
     then [decl_to_tip id ty]
@@ -154,7 +154,7 @@ let statement_to_tip (st:(term,ty)St.t): A.statement list = match St.view st wit
     let decls =
       St.defined_of_spec s
       |> Sequence.map
-        (fun {St.defined_head=id; defined_ty=ty} ->
+        (fun {St.defined_head=id; defined_ty=ty; _} ->
            decl_to_tip id ty)
       |> Sequence.to_list
     and axioms =
@@ -168,7 +168,7 @@ let statement_to_tip (st:(term,ty)St.t): A.statement list = match St.view st wit
       List.map
         (fun def ->
            if def.St.rec_ty_vars <> [] then out_of_scopef "polymorphic `@[%a@]`" PSt.print st;
-           let {St.defined_head=id; defined_ty=ty} = def.St.rec_defined in
+           let {St.defined_head=id; defined_ty=ty; _} = def.St.rec_defined in
            let name = id_to_string id in
            let _, _, ty_ret = U.ty_unfold ty in
            let vars, body = match def.St.rec_eqns with

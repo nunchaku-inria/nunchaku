@@ -198,7 +198,7 @@ let elim_ind_preds
                by polarize *)
             Utils.not_implemented
               "cannot eliminate non-well-founded predicates without polarization"
-        | Stmt.Decl (id,d,attrs) -> [Stmt.decl ~info ~attrs id d]
+        | Stmt.Decl d -> [Stmt.decl_of_defined ~info d]
         | Stmt.Copy c -> [Stmt.copy ~info c]
         | Stmt.Axiom (Stmt.Axiom_std l) -> [Stmt.axiom ~info l]
         | Stmt.Axiom (Stmt.Axiom_spec l) -> [Stmt.axiom_spec ~info l]

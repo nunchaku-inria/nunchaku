@@ -141,7 +141,9 @@ let gather_hof_ pb =
     Problem.statements pb
     |> CCVector.fold
       (fun ((h_ty, app_m) as acc) stmt -> match Stmt.view stmt with
-        | Stmt.Decl (id, _, attrs) ->
+        | Stmt.Decl d ->
+            let id = Stmt.id_of_defined d in
+            let attrs = Stmt.attrs_of_defined d in
             begin match is_handle_ty attrs, is_app_ attrs, h_ty with
             | true, _, None -> Some id, app_m (* found `to` *)
             | true, _, Some i2 ->
@@ -526,11 +528,14 @@ let tr_rec_defs ~info ~state l =
 let tr_statement ~state st =
   let info = Stmt.info st in
   let stmts' = match Stmt.view st with
-  | Stmt.Decl (id,l,attrs) ->
+  | Stmt.Decl d ->
+      let id = Stmt.id_of_defined d in
+      let attrs = Stmt.attrs_of_defined d in
+      let ty = Stmt.ty_of_defined d in
       (* app symbol: needs encoding *)
       if id_is_app_fun_ ~state id then ensure_exists_encoding_ ~state id;
       (* in any case, no type declaration changes *)
-      Stmt.decl ~info ~attrs id l :: pop_new_stmts_ ~state
+      Stmt.decl ~info ~attrs id ty :: pop_new_stmts_ ~state
   | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l] (* no (co) data changes *)
   | Stmt.Pred _ -> assert false (* typing: should be absent *)
   | Stmt.Axiom l ->

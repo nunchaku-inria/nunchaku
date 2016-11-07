@@ -96,6 +96,13 @@ val declare:
   ('t, 'ty) t
 (** Declare a symbol's type (as undefined, for now) *)
 
+val declare_defined :
+  ?loc:loc ->
+  env:('t, 'ty) t ->
+  'ty Statement.defined ->
+  ('t, 'ty) t
+(** Declare a symbol's type (as undefined, for now) *)
+
 val rec_funs:
   ?loc:loc ->
   env:('t, 'ty) t ->

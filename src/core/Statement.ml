@@ -7,9 +7,37 @@ type 'a var = 'a Var.t
 type loc = Location.t
 type 'a printer = Format.formatter -> 'a -> unit
 
+(** Attribute on declarations *)
+type decl_attr =
+  | Attr_card_max of int (** maximal cardinality of type *)
+  | Attr_card_min of int (** minimal cardinality of type *)
+  | Attr_card_hint of Cardinality.t (** hint on the card of a type *)
+  | Attr_incomplete (** encoding of some type with some values removed *)
+  | Attr_abstract (** encoding of some type where some values are conflated *)
+  | Attr_infinite (** infinite uninterpreted type *)
+  | Attr_finite_approx of ID.t (** finite approximation of an infinite type *)
+  | Attr_infinite_upcast (** cast finite approx to infinite type *)
+  | Attr_pseudo_prop (** encoding of [prop] *)
+  | Attr_pseudo_true (** encoding of [true_ : pseudo_prop] *)
+  | Attr_is_handle_cstor
+  (** [Attr_is_handle_cstor] means that the ID is the binary type symbol
+        that represents arrows for partially applied functions *)
+  | Attr_app_val
+  (** [Attr_app_val] means that the ID being defined is an "application function"
+      that is used to encode HO partial application into regular FO total
+      application. There is only one application symbol per type. *)
+  | Attr_proto_val of ID.t * int
+  (** [Attr_proto_val (f,k)] means the ID currently being declared is
+      the [k]-th "proto" function used for default values. This "proto" is
+      paired to the symbol [f], which is an application symbol of type
+      [handle -> a_1 -> ... -> a_n -> ret], where the proto
+      has type [handle -> a_k]. *)
+  | Attr_never_box (** This function should never be boxed in ElimRec *)
+
 type 'ty defined = {
   defined_head: id; (* symbol being defined *)
   defined_ty: 'ty; (* type of the head symbol *)
+  defined_attrs: decl_attr list;
 }
 
 type (+'t, +'ty) equations =
@@ -100,35 +128,8 @@ type (+'t, +'ty) copy = {
   copy_concrete_ty: 'ty;
 }
 
-(** Attribute on declarations *)
-type decl_attr =
-  | Attr_card_max of int (** maximal cardinality of type *)
-  | Attr_card_min of int (** minimal cardinality of type *)
-  | Attr_card_hint of Cardinality.t (** hint on the card of a type *)
-  | Attr_incomplete (** encoding of some type with some values removed *)
-  | Attr_abstract (** encoding of some type where some values are conflated *)
-  | Attr_infinite (** infinite uninterpreted type *)
-  | Attr_finite_approx of ID.t (** finite approximation of an infinite type *)
-  | Attr_infinite_upcast (** cast finite approx to infinite type *)
-  | Attr_pseudo_prop (** encoding of [prop] *)
-  | Attr_pseudo_true (** encoding of [true_ : pseudo_prop] *)
-  | Attr_is_handle_cstor
-  (** [Attr_is_handle_cstor] means that the ID is the binary type symbol
-        that represents arrows for partially applied functions *)
-  | Attr_app_val
-  (** [Attr_app_val] means that the ID being defined is an "application function"
-      that is used to encode HO partial application into regular FO total
-      application. There is only one application symbol per type. *)
-  | Attr_proto_val of ID.t * int
-  (** [Attr_proto_val (f,k)] means the ID currently being declared is
-      the [k]-th "proto" function used for default values. This "proto" is
-      paired to the symbol [f], which is an application symbol of type
-      [handle -> a_1 -> ... -> a_n -> ret], where the proto
-      has type [handle -> a_k]. *)
-  | Attr_never_box (** This function should never be boxed in ElimRec *)
-
 type (+'term, +'ty) view =
-  | Decl of id * 'ty * decl_attr list
+  | Decl of 'ty defined
   | Axiom of ('term, 'ty) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
   | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty) pred_def list
@@ -151,7 +152,8 @@ type (+'t, +'ty) statement = ('t, 'ty) t
 let info_default = { loc=None; name=None; }
 let info_of_loc loc = { loc; name=None; }
 
-let mk_defined id ty = { defined_head=id; defined_ty=ty; }
+let mk_defined ~attrs id ty =
+  { defined_head=id; defined_ty=ty; defined_attrs=attrs; }
 
 let tydef_vars t = t.ty_vars
 let tydef_id t = t.ty_id
@@ -168,7 +170,8 @@ let make_ ~info view = {info;view}
 let mk_axiom ~info t = make_ ~info (Axiom t)
 let mk_ty_def ~info k l = make_ ~info (TyDef (k, l))
 
-let decl ~info ~attrs id t = make_ ~info (Decl (id,t,attrs))
+let decl_of_defined ~info d= make_ ~info (Decl d)
+let decl ~info ~attrs id t = make_ ~info (Decl (mk_defined ~attrs id t))
 let axiom ~info l = mk_axiom ~info (Axiom_std l)
 let axiom1 ~info t = axiom ~info [t]
 let axiom_spec ~info t = mk_axiom ~info (Axiom_spec t)
@@ -225,6 +228,7 @@ let find_pred ~defs id =
     defs
 
 let map_defined ~f d = {
+  d with
   defined_head=d.defined_head;
   defined_ty=f d.defined_ty;
 }
@@ -354,8 +358,9 @@ let map_ty_defs ~ty l = List.map (map_ty_def ~ty) l
 let map_bind ~bind ~term:ft ~ty:fty acc st =
   let info = st.info in
   match st.view with
-  | Decl (id,t,attrs) ->
-      decl ~info ~attrs id (fty acc t)
+  | Decl d ->
+      let d = map_defined d ~f:(fty acc) in
+      decl_of_defined ~info d
   | Axiom a ->
       begin match a with
       | Axiom_std l -> axiom ~info (List.map (ft acc) l)
@@ -418,7 +423,7 @@ let fold_preds_bind ~bind ~term ~ty b_acc acc l =
 
 let fold_bind ~bind ~term:fterm ~ty:fty b_acc acc (st:(_,_) t) =
   match st.view with
-  | Decl (_, t, _) -> fty b_acc acc t
+  | Decl {defined_ty=t; _} -> fty b_acc acc t
   | Axiom a ->
       begin match a with
       | Axiom_std l -> List.fold_left (fterm b_acc) acc l
@@ -461,21 +466,22 @@ let iter ~term ~ty st =
 
 let id_of_defined d = d.defined_head
 let ty_of_defined d = d.defined_ty
+let attrs_of_defined d = d.defined_attrs
 let defined_of_rec r = r.rec_defined
 let defined_of_recs l = Sequence.of_list l |> Sequence.map defined_of_rec
 let defined_of_spec spec = Sequence.of_list spec.spec_defined
 let defined_of_pred p = p.pred_defined
 let defined_of_preds l = Sequence.of_list l |> Sequence.map defined_of_pred
-let defined_of_cstor c = mk_defined c.cstor_name c.cstor_type
+let defined_of_cstor c : _ defined = mk_defined ~attrs:[] c.cstor_name c.cstor_type
 let defined_of_data d yield =
-  yield (mk_defined d.ty_id d.ty_type);
+  yield (mk_defined ~attrs:[] d.ty_id d.ty_type);
   ID.Map.iter (fun _ c -> yield (defined_of_cstor c)) d.ty_cstors
 let defined_of_datas l =
   Sequence.of_list l |> Sequence.flat_map defined_of_data
-let defined_of_copy c yield =
-  yield (mk_defined c.copy_id c.copy_ty);
-  yield (mk_defined c.copy_abstract c.copy_abstract_ty);
-  yield (mk_defined c.copy_concrete c.copy_concrete_ty);
+let defined_of_copy c yield : unit =
+  yield (mk_defined ~attrs:[] c.copy_id c.copy_ty);
+  yield (mk_defined ~attrs:[] c.copy_abstract c.copy_abstract_ty);
+  yield (mk_defined ~attrs:[] c.copy_concrete c.copy_concrete_ty);
   ()
 
 let ids_of_copy c =
@@ -514,7 +520,8 @@ let print_attrs out = function
 
 module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
   let pp_defined out d =
-    fpf out "@[%a : %a@]" ID.print d.defined_head Pty.print d.defined_ty
+    fpf out "@[%a : %a%a@]"
+      ID.print d.defined_head Pty.print d.defined_ty print_attrs d.defined_attrs
   and pp_typed_var out v =
     fpf out "@[<2>%a:%a@]" Var.print_full v Pty.print_in_app (Var.ty v)
 
@@ -577,9 +584,8 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
     fpf out "@[<v>%a@]" (pplist ~sep:"; " print_clause) l
 
   let print_pred_def out pred =
-    fpf out "@[<hv2>@[%a@ : %a@] :=@ %a@]"
-      ID.print pred.pred_defined.defined_head
-      Pty.print pred.pred_defined.defined_ty
+    fpf out "@[<hv2>@[%a@] :=@ %a@]"
+      pp_defined pred.pred_defined
       print_clauses pred.pred_clauses
 
   let print_pred_defs out preds = pplist ~sep:" and " print_pred_def out preds
@@ -623,8 +629,8 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
     fpf out ".@]"
 
   let print out t = match t.view with
-  | Decl (id,t,attrs) ->
-      fpf out "@[<2>val %a@ : %a%a.@]" ID.print id Pty.print t print_attrs attrs
+  | Decl d ->
+      fpf out "@[<2>val %a.@]" pp_defined d
   | Axiom a ->
       begin match a with
       | Axiom_std l ->

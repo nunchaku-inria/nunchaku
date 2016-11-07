@@ -193,9 +193,9 @@ let transform_statement state st : (_,_) Stmt.t =
     (fun k->k PStmt.print st);
   let info = Stmt.info st in
   match Stmt.view st with
-    | Stmt.Decl (id,ty,attrs) ->
-      let ty = transform_ty state ~top:true ty in
-      Stmt.decl ~info ~attrs id ty
+    | Stmt.Decl d ->
+      let d = Stmt.map_defined d ~f:(transform_ty state ~top:true) in
+      Stmt.decl_of_defined ~info d
     | _ ->
       (* NOTE: maybe not robust if there are [copy] types *)
       Stmt.map_bind Var.Subst.empty st

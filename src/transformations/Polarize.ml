@@ -300,10 +300,11 @@ let define_pred
   let open Stmt in
   let defined = def.pred_defined in
   let defined =
-    { Stmt.
-      defined_head=(if is_pos then p.pos else p.neg);
-      defined_ty=defined.Stmt.defined_ty;
-    } in
+    {defined
+     with Stmt.
+       defined_head=(if is_pos then p.pos else p.neg);
+    }
+  in
   let tr_clause
     : (term, term) pred_clause ->
       (term, term) pred_clause
@@ -318,8 +319,8 @@ let define_pred
   in
   let pred_clauses = List.map tr_clause def.pred_clauses in
   { def with
-    pred_defined=defined;
-    pred_clauses; }
+      pred_defined=defined;
+      pred_clauses; }
 
 let polarize_term ~self subst t = polarize_term_rec ~self Pol.NoPol subst t
 

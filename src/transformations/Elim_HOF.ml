@@ -720,7 +720,8 @@ let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
   let elim_eqn
     : (term,ty) Stmt.rec_def -> (term,ty) Stmt.rec_def
     = fun def ->
-      let id = def.Stmt.rec_defined.Stmt.defined_head in
+      let defined = def.Stmt.rec_defined in
+      let id = defined.Stmt.defined_head in
       match def.Stmt.rec_eqns with
       | Stmt.Eqn_single (vars, rhs) ->
           if FunMap.mem (F_id id) state.arities then (
@@ -748,10 +749,10 @@ let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
               List.map
                 (function TC_first_param _ -> id | TC_app a -> a.af_id) stack in
             let eqn = Stmt.Eqn_app (app_l, vars, lhs, rhs) in
-            let defined = { Stmt.
-              defined_head=id;
-              defined_ty=ty_of_fun_encoding_ ~state fe;
-            } in
+            let defined =
+              Stmt.mk_defined id ~attrs:defined.Stmt.defined_attrs
+                (ty_of_fun_encoding_ ~state fe)
+            in
             { Stmt.
               rec_defined=defined;
               rec_ty_vars=[];
@@ -793,14 +794,15 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
     ty'
   in
   let stmt' = match Stmt.view stmt with
-  | Stmt.Decl (id,ty,attrs) ->
+  | Stmt.Decl d ->
+      let id = Stmt.id_of_defined d in
       let ty' =
         if FunMap.mem (F_id id) state.arities
         then encode_fun id
-        else encode_toplevel_ty ~state ty
+        else encode_toplevel_ty ~state (Stmt.ty_of_defined d)
             (* keep as is, not a partially applied fun; still have to modify type *)
       in
-      [Stmt.decl ~info id ty' ~attrs]
+      [Stmt.decl ~info id ty' ~attrs:(Stmt.attrs_of_defined d)]
   | Stmt.Axiom (Stmt.Axiom_rec l) -> elim_hof_rec ~state ~info l
   | Stmt.Axiom (Stmt.Axiom_spec spec) ->
       let subst, vars =
@@ -815,12 +817,13 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
               (fun d ->
                  let id = Stmt.id_of_defined d in
                  let ty = Stmt.ty_of_defined d in
+                 let attrs = Stmt.attrs_of_defined d in
                  let ty' =
                    if FunMap.mem (F_id id) state.arities
                    then encode_fun id
                    else encode_toplevel_ty ~state ty
                  in
-                 Stmt.mk_defined id ty')
+                 Stmt.mk_defined ~attrs id ty')
               spec.Stmt.spec_defined;
         } in
       [Stmt.axiom_spec ~info spec]

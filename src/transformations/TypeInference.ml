@@ -805,7 +805,7 @@ module Convert(Term : TermTyped.S) = struct
           let vars = CCList.init n
             (fun i -> Var.make ~ty:U.ty_type ~name:(CCFormat.sprintf "a_%d" i)) in
           let t_vars = List.map (U.ty_var ?loc:None) vars in
-          let defined = {Stmt.defined_head=id; defined_ty=ty;} in
+          let defined = Stmt.mk_defined ~attrs:[] id ty in
           (* locally, ensure that [v] refers to the defined term *)
           let t = U.app ~ty:(ty_apply ty t_vars) (U.const ~ty id) t_vars in
           let env' = TyEnv.add_def ~env v ~as_:t in
@@ -821,7 +821,7 @@ module Convert(Term : TermTyped.S) = struct
                    type arguments" v v' n n';
               let t' = U.app ~ty:(ty_apply ty' t_vars) (U.const id' ~ty:ty') t_vars in
               let env' = TyEnv.add_def ~env:env' v' ~as_:t' in
-              env', {Stmt.defined_head=id'; defined_ty=ty';})
+              env', Stmt.mk_defined ~attrs:[] id' ty')
             env' tail
           in
           defined :: l, env', vars
@@ -982,7 +982,7 @@ module Convert(Term : TermTyped.S) = struct
     (* convert the equations *)
     let l' = List.map
       (fun (id,ty,ty_vars,l) ->
-        let defined = Stmt.mk_defined id ty in
+        let defined = Stmt.mk_defined ~attrs:[] id ty in
         (* in the definitions of [id], actually ensure that [id.name]
            is bound to [id ty_vars]. This way we can be sure that all definitions
            will share the same set of type variables. *)
@@ -1094,7 +1094,7 @@ module Convert(Term : TermTyped.S) = struct
     (* convert the equations *)
     let l' = List.map
       (fun (id,ty,ty_vars,l) ->
-        let defined = {Stmt.defined_head=id; defined_ty=ty; } in
+        let defined = Stmt.mk_defined ~attrs:[] id ty in
         (* in the definitions of [id], actually ensure that [id.name]
            is bound to [id ty_vars]. This way we can be sure that all definitions
            will share the same set of type variables. *)

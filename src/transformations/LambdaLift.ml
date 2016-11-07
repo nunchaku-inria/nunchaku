@@ -77,7 +77,7 @@ let contains_some_id ~of_:set t =
 (* declare new function [f : ty := fun vars. body] *)
 let mk_new_rec f ty vars body =
   let eqns = Stmt.Eqn_single (vars, body) in
-  let defined = Stmt.mk_defined f ty in
+  let defined = Stmt.mk_defined ~attrs:[] f ty in
   {Stmt.
     rec_ty_vars=vars;
     rec_defined=defined;
@@ -165,7 +165,7 @@ let rec tr_term ~state local_state subst t = match T.repr t with
       let new_fun = fresh_fun_ ~state in
       let new_vars = captured_vars @ v :: body_vars in
       (* declare new function *)
-      decl_fun_ ~state new_fun ty;
+      decl_fun_ ~state ~attrs:[] new_fun ty;
       Utils.debugf ~section 5 "@[<2>declare `@[%a : %a@]`@ for `@[%a@]`@]"
         (fun k->k ID.print new_fun P.print ty P.print t);
       (* how we define [new_fun] depends on whether it is mutually recursive
@@ -247,7 +247,7 @@ let tr_problem pb =
                 ~ty:CCFun.id ~term:(tr_term ~state local_state Var.Subst.empty)
             in
             let new_defined, new_axioms =
-              List.map (fun (id,ty,ax) -> Stmt.mk_defined id ty, ax) !l
+              List.map (fun (id,ty,ax) -> Stmt.mk_defined ~attrs:[] id ty, ax) !l
               |> List.split
             in
             (* combine [defs'] with additional definitions in [l] *)
