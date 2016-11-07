@@ -254,14 +254,7 @@ let conv_attrs =
               | St.Attr_card_min n -> Some (FO.CardBound (id, `Min, n))
               | St.Attr_infinite ->
                 failf "@[<2>infinite type `%a`@ should have been eliminated@]" ID.print id
-              | St.Attr_card_hint _
-              | St.Attr_finite_approx _
-              | St.Attr_infinite_upcast
-              | St.Attr_abstract
-              | St.Attr_incomplete
-              | St.Attr_pseudo_prop
-              | St.Attr_pseudo_true
-              | St.Attr_exn _ -> None)
+              | _ -> None)
             attrs
         in
         st' :: others

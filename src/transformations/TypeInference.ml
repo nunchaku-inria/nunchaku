@@ -1306,13 +1306,6 @@ module Convert(Term : TermTyped.S) = struct
       (function
         | Stmt.Attr_card_max n -> max_card := n
         | Stmt.Attr_card_min n -> min_card := n
-        | Stmt.Attr_pseudo_prop
-        | Stmt.Attr_pseudo_true
-        | Stmt.Attr_card_hint _ -> assert false (* not in input *)
-        | Stmt.Attr_incomplete
-        | Stmt.Attr_abstract
-        | Stmt.Attr_infinite
-        | Stmt.Attr_exn _ -> ()
         | Stmt.Attr_finite_approx id' ->
           if not (is_infinite_ ~env id')
           then ill_formedf ?loc ~kind:"attributes"
@@ -1333,6 +1326,7 @@ module Convert(Term : TermTyped.S) = struct
           then ill_formedf ?loc ~kind:"attributes"
               "expect type of `%a` to be `<finite approx> → <infinite type>`,@ \
                but got `@[%a@]`" ID.print id P.print ty;
+        | _ -> ()
       )
       l;
     if !min_card > !max_card
