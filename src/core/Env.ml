@@ -86,6 +86,7 @@ let errorf_ id msg =
 let loc t = t.loc
 let def t = t.def
 let ty t = t.ty
+let attrs t = t.decl_attrs
 
 let is_fun i = match i.def with Fun_spec _ | Fun_def _ -> true | _ -> false
 let is_rec i = match i.def with Fun_def _ -> true | _ -> false

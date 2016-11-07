@@ -76,6 +76,7 @@ val create: ?size:int -> unit -> (_,_) t
 val loc: (_,_) info -> loc option
 val def: ('t,'ty) info -> ('t,'ty) def
 val ty: (_,'ty) info -> 'ty
+val attrs : (_, _) info -> Statement.decl_attr list
 
 val is_fun : (_,_) info -> bool (** spec/rec *)
 val is_rec : (_,_) info -> bool (** rec *)
