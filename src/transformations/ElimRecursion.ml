@@ -450,20 +450,30 @@ let card_tys_ ~state l : Card.t = match l with
 
 let box_threshold_ = 257 (* FUDGE *)
 
+let never_box_ attrs =
+  List.exists (function Stmt.Attr_never_box -> true | _ -> false) attrs
+
 (* given [id : ty] a recursive function, should we encode its domain?
    This is a heuristic if [ty = a1 -> a2 -> ... -> ak -> ret] where
     each [a_i] is finite; otherwise we MUST box. *)
 let should_box_ ~state id ty : bool =
+  let info = Env.find_exn ~env:state.env id in
+  let can_box = not (never_box_ (Env.attrs info)) in
   let module Z = Card.Z in
   let _, args, _ = U.ty_unfold ty in
   let card = card_tys_ ~state args in
-  let res = match card with
-    | Card.Unknown
-    | Card.Infinite -> true
-    | Card.Exact c
-    | Card.QuasiFiniteGEQ c ->
-      (* should box if [z >= box_threshold] *)
-      Z.compare c (Z.of_int box_threshold_) >= 0
+  let res =
+    can_box
+    &&
+  (* box if cardinal is too high *)
+    begin match card with
+      | Card.Unknown
+      | Card.Infinite -> true
+      | Card.Exact c
+      | Card.QuasiFiniteGEQ c ->
+        (* should box if [z >= box_threshold] *)
+        Z.compare c (Z.of_int box_threshold_) >= 0
+    end
   in
   Utils.debugf ~section 2
     "@[<2>@{<Cyan>decision to box@} `@[%a : %a@]`:@ %B (card of domain = %a)@]"
