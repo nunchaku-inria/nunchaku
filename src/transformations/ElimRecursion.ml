@@ -20,21 +20,6 @@ let name = "elim_rec"
 
 let section = Utils.Section.make name
 
-exception Attr_is_handle_cstor
-
-exception Attr_app_val
-
-exception Attr_proto_val of ID.t * int
-
-let fpf = Format.fprintf
-let spf = CCFormat.sprintf
-
-let () = Printexc.register_printer
-  (function
-    | Attr_app_val -> Some "app_symbol"
-    | Attr_is_handle_cstor -> Some "handle_type"
-    | Attr_proto_val (id, n) -> Some (spf "proto_%d_of_%a" n ID.print id)
-    | _ -> None)
 
 type term = T.t
 type ty = T.t
@@ -119,6 +104,9 @@ let fail_decode_ ?term:t msg =
 let error_ msg = raise (Error msg)
 let errorf_ msg = CCFormat.ksprintf msg ~f:error_
 
+let fpf = Format.fprintf
+let spf = CCFormat.sprintf
+
 let () = Printexc.register_printer
   (function
     | TranslationFailed (t,msg) ->
@@ -139,13 +127,13 @@ let gather_hof_ pb =
   let is_handle_ty attrs =
     List.exists
       (function
-        | Stmt.Attr_exn Attr_is_handle_cstor -> true
+        | Stmt.Attr_is_handle_cstor -> true
         | _ -> false)
       attrs
   and is_app_ attrs =
     List.exists
       (function
-        | Stmt.Attr_exn Attr_app_val -> true
+        | Stmt.Attr_app_val -> true
         | _ -> false)
       attrs
   in

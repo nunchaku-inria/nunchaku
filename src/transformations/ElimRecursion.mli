@@ -11,21 +11,6 @@ open Nunchaku_core
 
 val name : string
 
-exception Attr_is_handle_cstor
-(** [Attr_is_handle_cstor] means that the ID is the binary type symbol
-    that represents arrows for partially applied functions *)
-
-exception Attr_app_val
-(** [Attr_app_val] means that the ID being defined is an "application function"
-    that is used to encode HO partial application into regular FO total
-    application. There is only one application symbol per type. *)
-
-exception Attr_proto_val of ID.t * int
-(** [Attr_proto_val (f,k)] means the ID currently being declared is the [k]-th "proto"
-    function used for default values. This "proto" is paired to the symbol [f],
-    which is an application symbol of type [handle -> a_1 -> ... -> a_n -> ret],
-    where the proto has type [handle -> a_k]. *)
-
 type term = TermInner.Default.t
 type decode_state
 
