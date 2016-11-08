@@ -33,19 +33,17 @@ let is_available () =
 
 exception Error of string
 exception Out_of_scope of string
-exception Conversion_error
+exception Conversion_error of T.t
 exception Parse_result_error of string
 
 let () = Printexc.register_printer
     (function
       | Error msg -> Some (Utils.err_sprintf "[SMBC backend] %s" msg)
       | Out_of_scope msg -> Some (Printf.sprintf "problem is out of scope for SMBC: %s" msg)
-      | Conversion_error -> Some "problem could not be converted to TIP"
+      | Conversion_error t ->
+        Some (CCFormat.sprintf "problem could not be converted to TIP: %a" P.print t)
       | Parse_result_error msg -> Some ("could not parse result: " ^ msg)
       | _ -> None)
-
-let error_ msg = raise (Error msg)
-let errorf msg = Utils.exn_ksprintf msg ~f:error_
 
 let out_of_scope msg = raise (Out_of_scope msg)
 let out_of_scopef msg = Utils.exn_ksprintf msg ~f:out_of_scope
@@ -79,7 +77,7 @@ let rec term_to_tip(t:term): A.term = match T.repr t with
       | `DataTest _ -> out_of_scopef "cannot convert to TIP data test %a" P.print t
       | `DataSelect _ -> out_of_scopef "cannot convert to TIP data select %a" P.print t
       | `Undefined_atom _
-      | `Undefined_self (_,_) -> raise Conversion_error
+      | `Undefined_self (_,_) -> raise (Conversion_error t)
       | `Unparsable _
       | `Guard _ -> assert false (* TODO: better error: should not happen *)
     end
@@ -104,7 +102,7 @@ let rec term_to_tip(t:term): A.term = match T.repr t with
     A.match_ u cases
   | TI.TyBuiltin _
   | TI.TyArrow _
-  | TI.TyMeta _ -> raise Conversion_error
+  | TI.TyMeta _ -> raise (Conversion_error t)
 
 and ty_to_tip(t:term): A.ty = match T.repr t with
   | TI.Const id -> A.ty_const (id_to_string id)
@@ -458,7 +456,7 @@ let solve ~deadline pb =
     let timeout = (int_of_float (deadline -. now +. 1.5)) in
     (* call solver and communicate over stdin *)
     let cmd =
-      Printf.sprintf "smbc -t %d -nc --depth-step %d --stdin 2>&1"
+      Printf.sprintf "smbc -t %d -nc --depth-step %d --check --stdin 2>&1"
         timeout depth_step_
     in
     Utils.debugf ~section 5 "smbc call: `%s`" (fun k->k cmd);
