@@ -68,7 +68,7 @@ let rec term_to_tip(t:term): A.term = match T.repr t with
     begin match b with
       | `True -> A.true_
       | `False -> A.false_
-      | `Or l
+      | `Or l -> A.or_ (List.map term_to_tip l)
       | `And l -> A.and_ (List.map term_to_tip l)
       | `Imply (a,b) -> A.imply (term_to_tip a)(term_to_tip b)
       | `Ite (a,b,c) -> A.if_ (term_to_tip a)(term_to_tip b)(term_to_tip c)
