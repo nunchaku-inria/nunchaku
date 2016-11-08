@@ -342,7 +342,7 @@ let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
 
 let mk_info state: Res.info =
   Res.mk_info
-    ~message:(Printf.sprintf "dimension %d" state.default_size) 
+    ~message:(Printf.sprintf "dimension %d" state.default_size)
     ~backend:"kodkod"
     ~time:(Utils.Time.get_timer state.timer) ()
 
@@ -499,7 +499,7 @@ let rec call_rec ~timer ~print ~size ~deadline pb : res * Scheduling.shortcut =
           Res.Unknown [Res.U_incomplete i], S.No_shortcut
       | _ -> res, short
 
-let call ?(print_model=false) ?(prio=10) ~print pb =
+let call_real ~print_model ~prio ~print pb =
   S.Task.make ~prio
     (fun ~deadline () ->
        let timer = Utils.Time.start_timer () in
@@ -515,12 +515,29 @@ let call ?(print_model=false) ?(prio=10) ~print pb =
        end;
        res, short)
 
+let call ?(print_model=false) ?(prio=10) ~print ~dump pb = match dump with
+  | None ->
+    call_real ~print_model ~prio ~print pb
+  | Some file ->
+    (* TODO: emit sequence of problems for different sizes? *)
+    let file = file ^ ".kodkod.kki" in
+    Utils.debugf ~section 1 "output kodkod problem into `%s`" (fun k->k file);
+    CCIO.with_out file
+      (fun oc ->
+         let out = Format.formatter_of_out_channel oc in
+         let state = create_state ~timer:(Utils.Time.start_timer()) ~default_size:2 pb in
+         Format.fprintf out
+           "@[<v>%a@]@."
+           (print_pb state pb) ());
+    let i = Res.mk_info ~backend:"kodkod" ~time:0. () in
+    S.Task.return (Res.Unknown [Res.U_other (i, "--dump")]) S.No_shortcut
+
 let is_available () =
   try Sys.command "which kodkodi > /dev/null 2> /dev/null" = 0
   with Sys_error _ -> false
 
-let pipe ?(print_model=false) ~print () =
-  let encode pb = call ~print_model ~print pb, () in
+let pipe ?(print_model=false) ~print ~dump () =
+  let encode pb = call ~print_model ~print ~dump pb, () in
   Transform.make
     ~name
     ~encode
