@@ -431,9 +431,11 @@ let make_model_pipeline () =
     (if !enable_specialize_
      then Tr.Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check
      else Transform.nop ()) @@@
+    (*
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+       *)
     Tr.ElimPatternMatch.pipe ~mode:Tr.ElimPatternMatch.Elim_codata_match
       ~print:(!print_elim_codata_ || !print_all_) ~check @@@
     Tr.ElimData.Codata.pipe ~print:(!print_elim_codata_ || !print_all_) ~check @@@
@@ -442,9 +444,11 @@ let make_model_pipeline () =
          ~check ~polarize_rec:!polarize_rec_
      else Transform.nop ()) @@@
     Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+    (*
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+       *)
     Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
     Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
     Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
