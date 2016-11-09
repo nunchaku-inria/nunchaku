@@ -76,3 +76,4 @@ x 2016-06-27 2016-06-13 refine ElimRec to avoid boxing small products of finite 
 x 2016-06-27 2016-06-13 ElimData: use asserting for defining cons/nil (see mockup)
 x 2016-07-18 2015-11-16 narrowing @feature
 x 2016-10-27 2016-10-25 copy tip-parser in src/parsers/
+x 2016-11-09 2016-11-08 --dump option for dumping sub-problems to files
