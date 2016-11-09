@@ -226,6 +226,7 @@ let print_pb out (pb:problem): unit =
     (fun st ->
        let l = statement_to_tip st in
        List.iter (Format.fprintf out "%a@." A.pp_stmt) l);
+  Format.fprintf out "(check-sat)@.";
   ()
 
 (** {2 Parsing Model} *)
