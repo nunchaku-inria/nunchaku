@@ -50,11 +50,14 @@ let as_approx_attr_ =
 
 (* find the universal types, build a map "infinite type -> approx" *)
 let find_types_st (map,set) st = match Stmt.view st with
-  | Stmt.Decl (id, ty, attrs) when U.ty_is_Type ty && has_infinite_attr_ attrs ->
+  | Stmt.Decl {Stmt.defined_attrs=attrs;defined_ty=ty; defined_head=id}
+    when U.ty_is_Type ty && has_infinite_attr_ attrs ->
     ID.Map.add id None map, set
-  | Stmt.Decl (id, _, attrs) when has_upcast_attr_ attrs ->
+  | Stmt.Decl {Stmt.defined_head=id; defined_attrs=attrs; _}
+    when has_upcast_attr_ attrs ->
     map, ID.Set.add id set
-  | Stmt.Decl (id, ty, attrs) when U.ty_is_Type ty ->
+  | Stmt.Decl {Stmt.defined_attrs=attrs;defined_ty=ty; defined_head=id}
+    when U.ty_is_Type ty ->
     begin match as_approx_attr_ attrs with
       | None -> map, set
       | Some id' ->
@@ -126,10 +129,11 @@ and bind_var st subst v =
   subst, v'
 
 let encode_statement map st = match Stmt.view st with
-  | Stmt.Decl (_, ty, attrs) when has_infinite_attr_ attrs ->
+  | Stmt.Decl {Stmt.defined_ty=ty; defined_attrs=attrs; _}
+    when has_infinite_attr_ attrs ->
     assert (U.ty_is_Type ty);
     [] (* remove infinite type *)
-  | Stmt.Decl (_, _, attrs) when has_upcast_attr_ attrs ->
+  | Stmt.Decl {Stmt.defined_attrs=attrs; _} when has_upcast_attr_ attrs ->
     [] (* remove upcast functions *)
   | _ ->
     let tr_term subst t = encode_term map subst Pol.Pos t in

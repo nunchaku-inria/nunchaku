@@ -81,6 +81,7 @@ let enable_specialize_ = ref true
 let skolems_in_model_ = ref true
 let timeout_ = ref 30
 let version_ = ref false
+let dump_ : [`No | `Yes | `Into of string] ref = ref `No
 let file = ref ""
 let solvers = ref [S_CVC4; S_kodkod; S_paradox; S_smbc]
 let j = ref 3
@@ -113,6 +114,9 @@ let parse_solvers_ s =
 let set_solvers_ s =
   let l = parse_solvers_ s |> CCList.Set.uniq ~eq:(=) in
   solvers := l
+
+let set_dump () = dump_ := `Yes
+let set_dump_into s = dump_ := `Into s
 
 (* set debug levels *)
 let options_debug_ = Utils.Section.iter
@@ -190,6 +194,10 @@ let options =
   ; "--no-color", call_with false CCFormat.set_color_default, " disable color"
   ; "-nc", call_with false CCFormat.set_color_default, " disable color (alias to --no-color)"
   ; "-j", Arg.Set_int j, " set parallelism level"
+  ; "--dump", Arg.Unit set_dump, " instead of running solvers, dump their problem into files"
+  ; "--dump-into",
+    Arg.String set_dump_into,
+    " instead of running solvers, dump their problem into files in <directory>"
   ; "--polarize-rec", Arg.Set polarize_rec_, " enable polarization of rec predicates"
   ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
   ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"
@@ -282,6 +290,22 @@ let close_task p =
     ~f:(fun task ret ->
        Scheduling.Task.map ~f:ret task, CCFun.id)
 
+(* get a file name prefix for "--dump", or [None] if "--dump" was not specified *)
+let get_dump_file () = match !dump_ with
+  | `No -> None
+  | `Into dir ->
+    let filename = match !file with
+      | "" -> "nunchaku_problem"
+      | f -> Filename.chop_extension (Filename.basename f) ^ ".nunchaku"
+    in
+    Some (Filename.concat dir filename)
+  | `Yes ->
+    begin match !file with
+      | "" -> Some "nunchaku_problem"
+      | f ->
+        Some (Filename.chop_extension (Filename.basename f) ^ ".nunchaku")
+    end
+
 let make_cvc4 ~j () =
   let open Transform.Pipe in
   if List.mem S_CVC4 !solvers && Backends.CVC4.is_available ()
@@ -289,6 +313,7 @@ let make_cvc4 ~j () =
     Backends.CVC4.pipes
       ~options:Backends.CVC4.options_l
       ~slice:(1. *. float j)
+      ~dump:(get_dump_file ())
       ~print:!print_all_
       ~print_smt:(!print_all_ || !print_smt_)
       ~print_model:(!print_all_ || !print_raw_model_)
@@ -302,6 +327,7 @@ let make_paradox () =
   then
     Backends.Paradox.pipe
       ~print_model:(!print_all_ || !print_raw_model_)
+      ~dump:(get_dump_file ())
       ~print:!print_all_ ()
     @@@ id
   else fail
@@ -312,6 +338,7 @@ let make_kodkod () =
   then
     Backends.Kodkod.pipe
       ~print:!print_all_
+      ~dump:(get_dump_file ())
       ~print_model:(!print_all_ || !print_raw_model_)
       ()
     @@@ id
@@ -323,6 +350,7 @@ let make_smbc () =
   then
     Backends.Smbc.pipe
       ~print:!print_all_
+      ~dump:(get_dump_file ())
       ~print_model:(!print_all_ || !print_raw_model_)
       ()
     @@@ id
@@ -403,9 +431,11 @@ let make_model_pipeline () =
     (if !enable_specialize_
      then Tr.Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check
      else Transform.nop ()) @@@
+    (*
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+       *)
     Tr.ElimPatternMatch.pipe ~mode:Tr.ElimPatternMatch.Elim_codata_match
       ~print:(!print_elim_codata_ || !print_all_) ~check @@@
     Tr.ElimData.Codata.pipe ~print:(!print_elim_codata_ || !print_all_) ~check @@@
@@ -414,9 +444,11 @@ let make_model_pipeline () =
          ~check ~polarize_rec:!polarize_rec_
      else Transform.nop ()) @@@
     Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+    (*
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+       *)
     Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
     Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
     Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@

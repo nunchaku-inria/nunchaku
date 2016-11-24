@@ -43,6 +43,7 @@ val options_l : string list
   @param options: flags to pass the solver (default "").
   @param slice total amount of time allotted to CVC4
   @param prio priority of the task
+  @param dump if [Some f], do not call the solver, but write the problem into file [f]
   @raise CVC4_error if the solver failed with an error
 *)
 val call :
@@ -50,6 +51,7 @@ val call :
   ?prio:int ->
   ?slice:float ->
   print:bool ->
+  dump:string option ->
   print_smt:bool ->
   print_model:bool ->
   problem ->
@@ -59,6 +61,7 @@ val pipes :
   ?options:string list ->
   ?slice:float ->
   print:bool ->
+  dump:string option ->
   print_smt:bool ->
   print_model:bool ->
   unit ->

@@ -83,6 +83,9 @@ module Task : sig
   type 'res t
   (** Task returning a value of type ['res] when executed *)
 
+  val return : ?prio:int -> 'a -> shortcut -> 'a t
+  (** A task that will return immediately *)
+
   val make :
     ?prio:int ->
     ?slice:float ->

@@ -250,7 +250,7 @@ module Make(T : TI.S) = struct
           check_is_prop ~env bound' (U.eq lhs rhs)
 
   let check_statement t st =
-    Utils.debugf ~section 2 "@[<2>type check@ `@[%a@]`@]"
+    Utils.debugf ~section 4 "@[<2>type check@ `@[%a@]`@]"
       (fun k-> let module PStmt = Statement.Print(P)(P) in k PStmt.print st);
     (* update env *)
     let env = Env.add_statement ~env:t.env st in

@@ -331,9 +331,9 @@ let uniq_eqn_st env st =
       env, Stmt.axiom_spec ~info l
   | Stmt.Axiom (Stmt.Axiom_std l) ->
       env, Stmt.axiom ~info l
-  | Stmt.Decl (id,ty,attrs) ->
-      let env = Env.declare ?loc ~attrs ~env id ty in
-      env, Stmt.decl ~info ~attrs id ty
+  | Stmt.Decl d ->
+      let env = Env.declare_defined ?loc ~env d in
+      env, Stmt.decl_of_defined ~info d
   | Stmt.TyDef (k,ty) ->
       (* declare (co)data, so it can be used in encoding *)
       let env = Env.def_data ?loc ~env ~kind:k ty in

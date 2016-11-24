@@ -350,16 +350,35 @@ module Convert(Term : TermTyped.S) = struct
     | A.Builtin (`Eq | `Equiv) -> true
     | _ -> false
 
-  (* check that the map is exhaustive *)
-  let check_cases_exhaustive_ ?loc ~env ~ty m =
+  (* check that the map is exhaustive, and return its completed form
+     if [default] is provided *)
+  let check_cases_exhaustive_ ?loc ~env ~ty m def =
     (* find the type definition *)
     let cstors = TyEnv.find_datatype ?loc ~env (U.head_sym ty) in
     let missing = ID.Map.fold
-      (fun id _ acc ->
-        if ID.Map.mem id m then acc else id::acc)
+      (fun id cstor acc ->
+        if ID.Map.mem id m then acc else (id,cstor)::acc)
       cstors []
     in
-    if missing=[] then `Ok else `Missing missing
+    begin match missing, def with
+      | [], _ -> `Ok
+      | _::_, Some default_rhs ->
+        (* complete matches with default case (and some variables that will
+           not be used) *)
+        let m' =
+          List.fold_left
+            (fun m (id,cstor) ->
+               let vars =
+                 List.mapi (fun i ty -> Var.makef ~ty "_%d" i) cstor.Stmt.cstor_args
+               in
+               ID.Map.add id (vars,default_rhs) m)
+            m missing
+        in
+        `Completed m'
+      | _::_, None ->
+        (* no default case, and some missing constructors *)
+        `Missing (List.map fst missing)
+    end
 
   let check_prop_ ~stack t =
     unify_in_ctx_ ~stack (U.ty_exn t) U.ty_prop;
@@ -484,7 +503,7 @@ module Convert(Term : TermTyped.S) = struct
         let env = TyEnv.add_var ~env v ~var in
         let u = convert_term_ ~stack ~env u in
         U.let_ ?loc var t u
-    | A.Match (t,l) ->
+    | A.Match (t,l,def) ->
         let t = convert_term_ ~stack ~env t in
         let ty_t = U.ty_exn t in
         (* build map (cstor -> case) for pattern match *)
@@ -524,17 +543,28 @@ module Convert(Term : TermTyped.S) = struct
         with Not_found ->
           ill_formedf ?loc ~kind:"match" "pattern-match needs at least one case"
         in
+        (* check default case, if present *)
+        let def =
+          CCOpt.map
+            (fun t ->
+               let t = convert_term_ ~stack ~env t in
+               unify_in_ctx_ ~stack:[] ty (U.ty_exn t);
+               t)
+            def
+        in
         (* check the match is exhaustive and correct *)
-        if not (TI.cases_well_formed m)
-          then ill_formed ?loc ~kind:"match"
-            "ill-formed pattern match (non linear pattern)";
-        begin match check_cases_exhaustive_ ~env ~ty:ty_t m with
-          | `Ok -> ()
+        if not (TI.cases_well_formed m) then (
+          ill_formed ?loc ~kind:"match"
+            "ill-formed pattern match (non linear pattern)"
+        );
+        let m = match check_cases_exhaustive_ ~env ~ty:ty_t m def with
+          | `Ok -> m
+          | `Completed m' -> m'
           | `Missing l ->
               ill_formedf ?loc ~kind:"match"
                 "pattern match is not exhaustive (missing %a)"
                 (CCFormat.list ID.print) l
-        end;
+        in
         (* ok, we're done here *)
         U.match_with ~ty t m
     | A.Ite (a,b,c) ->
@@ -805,7 +835,7 @@ module Convert(Term : TermTyped.S) = struct
           let vars = CCList.init n
             (fun i -> Var.make ~ty:U.ty_type ~name:(CCFormat.sprintf "a_%d" i)) in
           let t_vars = List.map (U.ty_var ?loc:None) vars in
-          let defined = {Stmt.defined_head=id; defined_ty=ty;} in
+          let defined = Stmt.mk_defined ~attrs:[] id ty in
           (* locally, ensure that [v] refers to the defined term *)
           let t = U.app ~ty:(ty_apply ty t_vars) (U.const ~ty id) t_vars in
           let env' = TyEnv.add_def ~env v ~as_:t in
@@ -821,7 +851,7 @@ module Convert(Term : TermTyped.S) = struct
                    type arguments" v v' n n';
               let t' = U.app ~ty:(ty_apply ty' t_vars) (U.const id' ~ty:ty') t_vars in
               let env' = TyEnv.add_def ~env:env' v' ~as_:t' in
-              env', {Stmt.defined_head=id'; defined_ty=ty';})
+              env', Stmt.mk_defined ~attrs:[] id' ty')
             env' tail
           in
           defined :: l, env', vars
@@ -982,7 +1012,7 @@ module Convert(Term : TermTyped.S) = struct
     (* convert the equations *)
     let l' = List.map
       (fun (id,ty,ty_vars,l) ->
-        let defined = Stmt.mk_defined id ty in
+        let defined = Stmt.mk_defined ~attrs:[] id ty in
         (* in the definitions of [id], actually ensure that [id.name]
            is bound to [id ty_vars]. This way we can be sure that all definitions
            will share the same set of type variables. *)
@@ -1094,7 +1124,7 @@ module Convert(Term : TermTyped.S) = struct
     (* convert the equations *)
     let l' = List.map
       (fun (id,ty,ty_vars,l) ->
-        let defined = {Stmt.defined_head=id; defined_ty=ty; } in
+        let defined = Stmt.mk_defined ~attrs:[] id ty in
         (* in the definitions of [id], actually ensure that [id.name]
            is bound to [id ty_vars]. This way we can be sure that all definitions
            will share the same set of type variables. *)
@@ -1306,13 +1336,6 @@ module Convert(Term : TermTyped.S) = struct
       (function
         | Stmt.Attr_card_max n -> max_card := n
         | Stmt.Attr_card_min n -> min_card := n
-        | Stmt.Attr_pseudo_prop
-        | Stmt.Attr_pseudo_true
-        | Stmt.Attr_card_hint _ -> assert false (* not in input *)
-        | Stmt.Attr_incomplete
-        | Stmt.Attr_abstract
-        | Stmt.Attr_infinite
-        | Stmt.Attr_exn _ -> ()
         | Stmt.Attr_finite_approx id' ->
           if not (is_infinite_ ~env id')
           then ill_formedf ?loc ~kind:"attributes"
@@ -1333,6 +1356,7 @@ module Convert(Term : TermTyped.S) = struct
           then ill_formedf ?loc ~kind:"attributes"
               "expect type of `%a` to be `<finite approx> → <infinite type>`,@ \
                but got `@[%a@]`" ID.print id P.print ty;
+        | _ -> ()
       )
       l;
     if !min_card > !max_card

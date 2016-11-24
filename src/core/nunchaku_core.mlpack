@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 445d41f17ff61e3a8b471c62812f0b5e)
+# DO NOT EDIT (digest: f9c5d50d2802bd31883bd05bfe9a70e2)
 ID
 Var
 MetaVar
@@ -14,7 +14,6 @@ Problem
 FO
 Reduce
 Env
-Signature
 Statement
 FO_tptp
 FO_rel

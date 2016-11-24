@@ -11,7 +11,7 @@ type 'a printer = Format.formatter -> 'a -> unit
 type 'a to_sexp = 'a -> Sexp_lib.t
 type 'a or_error = ('a, string) CCResult.t
 
-(** {2 Problem: a Set of Statements + Signature} *)
+(** {2 Problem: a Set of Statements} *)
 
 type ('t, 'ty) t = private {
   statements : ('t, 'ty) Statement.t CCVector.ro_vector;
@@ -106,11 +106,6 @@ val goal : ('t, _) t -> 't
 (** [goal pb] returns the unique goal of [pb], or fails. A problem that doesn't
     have a single goal is ill-formed
     @raise IllFormed if the problem doesn't have exactly one goal *)
-
-val signature : ?init:'ty Signature.t -> (_, 'ty) t -> 'ty Signature.t
-(** Gather the signature of every declared symbol
-    @param init initial signature, if any
-    @raise IllFormed if some symbol is declared twice *)
 
 val env : ?init:('t,'ty) Env.t -> ('t, 'ty) t -> ('t,'ty) Env.t
 (** Build an environment defining/declaring every symbol of the problem.

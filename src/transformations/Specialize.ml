@@ -629,7 +629,7 @@ let specialize_defined ~state d args =
   then d
   else
     let nf = find_new_fun_exn ~state d.Stmt.defined_head args in
-    {Stmt.defined_head=nf.nf_id; defined_ty=nf.nf_ty; }
+    Stmt.mk_defined ~attrs:[] nf.nf_id nf.nf_ty
 
 (* specialize equations w.r.t. the given set of arguments (with their position)
     to specialize a definition for a tuple of arguments, bind those arguments

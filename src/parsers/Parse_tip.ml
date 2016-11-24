@@ -46,8 +46,6 @@ let rec conv_ty (ty:A.ty): UA.ty = match ty with
 let conv_var (v,ty) = v, Some (conv_ty ty)
 let conv_vars = List.map conv_var
 
-(* TODO: support "default" in matches (update main AST…) *)
-
 let rec conv_term (t:A.term): UA.term = match t with
   | A.True -> UA.true_
   | A.False -> UA.false_
@@ -61,16 +59,22 @@ let rec conv_term (t:A.term): UA.term = match t with
   | A.If (a,b,c) ->
     UA.ite (conv_term a)(conv_term b)(conv_term c)
   | A.Match (u,branches) ->
+    let def = ref None in
     let branches =
-      List.map
+      CCList.filter_map
         (function
-          | A.Match_default _ ->
-            Utils.not_implemented "does not support `default` in matches"
+          | A.Match_default rhs ->
+            begin match !def with
+              | Some _ ->
+                failwith "TIP parser: cannot have two `default` cases in the same match"
+              | None -> def := Some (conv_term rhs)
+            end;
+            None
           | A.Match_case (c, vars, rhs) ->
-            c, List.map (fun v->`Var v) vars, conv_term rhs)
+            Some (c, List.map (fun v->`Var v) vars, conv_term rhs))
         branches
     in
-    UA.match_with (conv_term u) branches
+    UA.match_with (conv_term u) branches ?default:!def
   | A.Let (bindings,body) ->
     List.fold_right
       (fun (v,t) body -> UA.let_ v (conv_term t) body)
@@ -144,7 +148,6 @@ let convert_st (st:A.statement): UA.statement list =
     | A.Stmt_check_sat -> [] (* trivial *)
     | A.Stmt_fun_def fr
     | A.Stmt_fun_rec fr ->
-      (* definition becomes a decl + universal axioms *)
       let f, vars, ty_f = conv_def fr.A.fr_decl in
       let vars_as_t =
         List.map (fun (s,_) -> UA.var s) vars
@@ -153,9 +156,29 @@ let convert_st (st:A.statement): UA.statement list =
       let ax = UA.forall_list ?loc vars (UA.eq (UA.app (UA.var f) vars_as_t) body) in
       let def = UA.rec_ ?loc [f, ty_f, [ax]] in
       [def]
-    | A.Stmt_funs_rec _
-      ->
-      assert false (* TODO *)
+    | A.Stmt_funs_rec {A.fsr_decls; fsr_bodies} ->
+      if List.length fsr_decls <> List.length fsr_bodies then (
+        Utils.failwithf
+          "TIP parser: in `@[%a@`],@ number of declarations and bodies must coincide"
+          A.pp_stmt st
+      );
+      let defs =
+        List.map2
+          (fun decl body ->
+             (* definition becomes a decl + universal axioms *)
+             let f, vars, ty_f = conv_def decl in
+             let vars_as_t =
+               List.map (fun (s,_) -> UA.var s) vars
+             in
+             let body = conv_term body in
+             let ax =
+               UA.forall_list ?loc vars (UA.eq (UA.app (UA.var f) vars_as_t) body)
+             in
+             f, ty_f, [ax])
+          fsr_decls fsr_bodies
+      in
+      let def = UA.rec_ ?loc defs in
+      [def]
 
 let convert_st_l ?(into=CCVector.create()) l =
   List.iter (fun st -> CCVector.append_list into (convert_st st)) l;

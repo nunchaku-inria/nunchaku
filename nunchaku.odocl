@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 83b964f0c78f85f453a49a6498176412)
+# DO NOT EDIT (digest: f90600f3a098e836f5ece36e8d5f85d5)
 src/core/ID
 src/core/Var
 src/core/MetaVar
@@ -14,7 +14,6 @@ src/core/Problem
 src/core/FO
 src/core/Reduce
 src/core/Env
-src/core/Signature
 src/core/Statement
 src/core/FO_tptp
 src/core/FO_rel

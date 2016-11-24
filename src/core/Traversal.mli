@@ -66,11 +66,9 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) : sig
     do_ty_def:
       (t ->
        ?loc:Location.t ->
-       attrs:Statement.decl_attr list ->
-       ID.t ->
-       ty:ty->
+       ty Statement.defined ->
        Arg.t ->
-       (ID.t * ty * Statement.decl_attr list))
+       ty Statement.defined)
       option;
   }
 

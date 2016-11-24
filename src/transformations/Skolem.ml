@@ -34,7 +34,7 @@ type mode =
   ]
 
 type state = {
-  mutable sigma: T.t Signature.t;
+  mutable env: (T.t,T.t) Env.t;
   tbl: new_sym ID.Tbl.t; (* skolem -> quantified form *)
   prefix:string; (* prefix for Skolem symbols *)
   mode: mode;
@@ -43,7 +43,7 @@ type state = {
 }
 
 let create ?(prefix="nun_sk_") ~mode () = {
-  sigma=Signature.empty;
+  env=Env.create ();
   tbl=ID.Tbl.create 32;
   prefix;
   mode;
@@ -177,7 +177,7 @@ let skolemize_pb ~state pb =
   Problem.flat_map_statements
     ~f:(fun stmt ->
       let stmt' = skolemize_stmt ~state stmt in
-      state.sigma <- Signature.add_statement ~sigma:state.sigma stmt';
+      state.env <- Env.add_statement ~env:state.env stmt';
       let l = state.new_sym in
       state.new_sym <- [];
       let prelude =

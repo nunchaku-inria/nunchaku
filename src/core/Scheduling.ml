@@ -288,6 +288,10 @@ module Task = struct
   let of_fut ?(prio=50) ?(slice=1.) f =
     Task { prio; f; slice; post=CCFun.id; }
 
+  let return ?(prio=100) x short =
+    let f ~deadline:_ () = Fut.return (x, short) in
+    of_fut ~prio ~slice:0.001 f
+
   let make ?prio ?slice f =
     of_fut ?prio ?slice
       (fun ~deadline () -> Fut.make (fun () -> f ~deadline ()))

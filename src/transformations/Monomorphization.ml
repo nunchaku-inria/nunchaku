@@ -306,12 +306,12 @@ let term_has_ty_vars t =
 
 let mono_defined ~self ~local_state d tup =
   let ty, _ = ArgTuple.app_poly_ty d.Stmt.defined_ty tup in
-  let defined_ty = mono_type ~self ~local_state ty in
+  let new_ty = mono_type ~self ~local_state ty in
   let state = Trav.state self in
-  let defined_head, _ =
+  let new_id, _ =
     mangle_ ~state d.Stmt.defined_head (ArgTuple.m_args tup)
   in
-  {Stmt.defined_head; defined_ty; }
+  Stmt.mk_defined ~attrs:[] new_id new_ty
 
 (* monomorphize equations properly
    n: number of type arguments *)
@@ -512,7 +512,8 @@ let dispatch = {
   );
 
   (* declare a symbol that is axiomatized *)
-  do_ty_def = Some (fun self ?loc:_ ~attrs id ~ty tup ->
+  do_ty_def = Some (fun self ?loc:_ d tup ->
+    let id = Stmt.id_of_defined d in
     Utils.debugf ~section 5 "declare type for %a on %a"
       (fun k->k ID.print id ArgTuple.print tup);
     (* declare specialized type *)
@@ -520,10 +521,10 @@ let dispatch = {
       | None -> id
       | Some x -> x
     in
-    let ty, subst = ArgTuple.app_poly_ty ty tup in
+    let ty, subst = ArgTuple.app_poly_ty (Stmt.ty_of_defined d) tup in
     let local_state = mk_local_state ~subst 0 in
     let new_ty = mono_type ~self ~local_state ty in
-    new_id, new_ty, attrs
+    Stmt.mk_defined ~attrs:(Stmt.attrs_of_defined d) new_id new_ty
   );
 }
 

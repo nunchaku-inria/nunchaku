@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: a6a4cf1c163937710a2666320f41a739)
+# DO NOT EDIT (digest: 0b0218c6de70ee6a72e00f7814fcc531)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -30,7 +30,6 @@ true: annot, bin_annot
 "src/core/FO.cmx": for-pack(Nunchaku_core)
 "src/core/Reduce.cmx": for-pack(Nunchaku_core)
 "src/core/Env.cmx": for-pack(Nunchaku_core)
-"src/core/Signature.cmx": for-pack(Nunchaku_core)
 "src/core/Statement.cmx": for-pack(Nunchaku_core)
 "src/core/FO_tptp.cmx": for-pack(Nunchaku_core)
 "src/core/FO_rel.cmx": for-pack(Nunchaku_core)
