@@ -20,21 +20,6 @@ let name = "elim_rec"
 
 let section = Utils.Section.make name
 
-exception Attr_is_handle_cstor
-
-exception Attr_app_val
-
-exception Attr_proto_val of ID.t * int
-
-let fpf = Format.fprintf
-let spf = CCFormat.sprintf
-
-let () = Printexc.register_printer
-  (function
-    | Attr_app_val -> Some "app_symbol"
-    | Attr_is_handle_cstor -> Some "handle_type"
-    | Attr_proto_val (id, n) -> Some (spf "proto_%d_of_%a" n ID.print id)
-    | _ -> None)
 
 type term = T.t
 type ty = T.t
@@ -119,6 +104,9 @@ let fail_decode_ ?term:t msg =
 let error_ msg = raise (Error msg)
 let errorf_ msg = CCFormat.ksprintf msg ~f:error_
 
+let fpf = Format.fprintf
+let spf = CCFormat.sprintf
+
 let () = Printexc.register_printer
   (function
     | TranslationFailed (t,msg) ->
@@ -139,13 +127,13 @@ let gather_hof_ pb =
   let is_handle_ty attrs =
     List.exists
       (function
-        | Stmt.Attr_exn Attr_is_handle_cstor -> true
+        | Stmt.Attr_is_handle_cstor -> true
         | _ -> false)
       attrs
   and is_app_ attrs =
     List.exists
       (function
-        | Stmt.Attr_exn Attr_app_val -> true
+        | Stmt.Attr_app_val -> true
         | _ -> false)
       attrs
   in
@@ -153,7 +141,9 @@ let gather_hof_ pb =
     Problem.statements pb
     |> CCVector.fold
       (fun ((h_ty, app_m) as acc) stmt -> match Stmt.view stmt with
-        | Stmt.Decl (id, _, attrs) ->
+        | Stmt.Decl d ->
+            let id = Stmt.id_of_defined d in
+            let attrs = Stmt.attrs_of_defined d in
             begin match is_handle_ty attrs, is_app_ attrs, h_ty with
             | true, _, None -> Some id, app_m (* found `to` *)
             | true, _, Some i2 ->
@@ -462,20 +452,30 @@ let card_tys_ ~state l : Card.t = match l with
 
 let box_threshold_ = 257 (* FUDGE *)
 
+let never_box_ attrs =
+  List.exists (function Stmt.Attr_never_box -> true | _ -> false) attrs
+
 (* given [id : ty] a recursive function, should we encode its domain?
    This is a heuristic if [ty = a1 -> a2 -> ... -> ak -> ret] where
     each [a_i] is finite; otherwise we MUST box. *)
 let should_box_ ~state id ty : bool =
+  let info = Env.find_exn ~env:state.env id in
+  let can_box = not (never_box_ (Env.attrs info)) in
   let module Z = Card.Z in
   let _, args, _ = U.ty_unfold ty in
   let card = card_tys_ ~state args in
-  let res = match card with
-    | Card.Unknown
-    | Card.Infinite -> true
-    | Card.Exact c
-    | Card.QuasiFiniteGEQ c ->
-      (* should box if [z >= box_threshold] *)
-      Z.compare c (Z.of_int box_threshold_) >= 0
+  let res =
+    can_box
+    &&
+  (* box if cardinal is too high *)
+    begin match card with
+      | Card.Unknown
+      | Card.Infinite -> true
+      | Card.Exact c
+      | Card.QuasiFiniteGEQ c ->
+        (* should box if [z >= box_threshold] *)
+        Z.compare c (Z.of_int box_threshold_) >= 0
+    end
   in
   Utils.debugf ~section 2
     "@[<2>@{<Cyan>decision to box@} `@[%a : %a@]`:@ %B (card of domain = %a)@]"
@@ -528,11 +528,14 @@ let tr_rec_defs ~info ~state l =
 let tr_statement ~state st =
   let info = Stmt.info st in
   let stmts' = match Stmt.view st with
-  | Stmt.Decl (id,l,attrs) ->
+  | Stmt.Decl d ->
+      let id = Stmt.id_of_defined d in
+      let attrs = Stmt.attrs_of_defined d in
+      let ty = Stmt.ty_of_defined d in
       (* app symbol: needs encoding *)
       if id_is_app_fun_ ~state id then ensure_exists_encoding_ ~state id;
       (* in any case, no type declaration changes *)
-      Stmt.decl ~info ~attrs id l :: pop_new_stmts_ ~state
+      Stmt.decl ~info ~attrs id ty :: pop_new_stmts_ ~state
   | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l] (* no (co) data changes *)
   | Stmt.Pred _ -> assert false (* typing: should be absent *)
   | Stmt.Axiom l ->

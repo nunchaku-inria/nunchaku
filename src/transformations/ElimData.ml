@@ -645,7 +645,7 @@ module Make(M : sig val mode : mode end) = struct
     (* [id_c : id -> id -> prop], with negative polarity *)
     let id_c = ID.make_f "occurs_in_%a" ID.print_name id in
     let ty_c = U.ty_arrow_l [U.const id; U.const id] U.ty_prop in
-    let def_c = Stmt.mk_defined id_c ty_c in
+    let def_c = Stmt.mk_defined ~attrs:[Stmt.Attr_never_box] id_c ty_c in
     ID.Tbl.add state.decode id_c Axiom_rec;
     (* definition:
        [occurs_in x y :=
@@ -736,7 +736,7 @@ module Make(M : sig val mode : mode end) = struct
       |> List.map
         (fun (id_ty, id_c, ety) ->
            let ty_c = U.ty_arrow_l [U.const id_ty; U.const id_ty] U.ty_prop in
-           let def_c = Stmt.mk_defined id_c ty_c in
+           let def_c = Stmt.mk_defined ~attrs:[Stmt.Attr_never_box] id_c ty_c in
            let x = Var.make ~ty:(U.const id_ty) ~name:"x" in
            let y = Var.make ~ty:(U.const id_ty) ~name:"y" in
            let vars = [x;y] in

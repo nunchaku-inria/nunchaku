@@ -11,6 +11,7 @@ val call :
   ?print_model:bool ->
   ?prio:int ->
   print:bool ->
+  dump:string option ->
   problem ->
   res Scheduling.Task.t
 
@@ -21,6 +22,7 @@ val is_available : unit -> bool
 val pipe :
   ?print_model:bool ->
   print:bool ->
+  dump:string option ->
   unit ->
   ( problem,
     res Scheduling.Task.t,

@@ -28,18 +28,18 @@ type state = {
   true_ : ID.t;
   false_ : ID.t;
   pseudo_prop: ID.t;
-  sigma: ty Signature.t;
+  env: (term,ty) Env.t;
   mutable declared: bool; (* did we declare prop_? *)
   mutable needed: bool; (* do we need prop_? *)
 }
 
-let create_state ~sigma () =
+let create_state ~env () =
   { true_ = ID.make "true_";
     false_ = ID.make "false_";
     pseudo_prop = ID.make "prop_";
     declared = false;
     needed = false;
-    sigma;
+    env;
   }
 
 (** {2 Encoding} *)
@@ -75,7 +75,7 @@ let declare_ state : (_,_) Stmt.t list =
   [ decl_ty; decl_true; decl_false; distinct_ax; exhaustive_ax ]
 
 let find_ty state (t:term) : ty =
-  U.ty_exn ~sigma:(Signature.find ~sigma:state.sigma) t
+  U.ty_exn ~sigma:(Env.find_ty ~env:state.env) t
 
 (* translate a type
    @param top true if toplevel; only toplevel props are
@@ -110,7 +110,7 @@ let rename_var state subst v =
   Var.Subst.add ~subst v v', v'
 
 (* TODO: rewrite this as a type-driven pass:
-   - carry around old_sigma, new_sigma
+   - carry around old_env, new_env
    - recurse in subterms, translate them, infer their new type
    - if new type is prop and we expect prop_, use `ite`
      if new type is prop_ and we expect prop, use `= true_`
@@ -193,9 +193,9 @@ let transform_statement state st : (_,_) Stmt.t =
     (fun k->k PStmt.print st);
   let info = Stmt.info st in
   match Stmt.view st with
-    | Stmt.Decl (id,ty,attrs) ->
-      let ty = transform_ty state ~top:true ty in
-      Stmt.decl ~info ~attrs id ty
+    | Stmt.Decl d ->
+      let d = Stmt.map_defined d ~f:(transform_ty state ~top:true) in
+      Stmt.decl_of_defined ~info d
     | _ ->
       (* NOTE: maybe not robust if there are [copy] types *)
       Stmt.map_bind Var.Subst.empty st
@@ -204,8 +204,8 @@ let transform_statement state st : (_,_) Stmt.t =
         ~ty:(fun _ -> transform_ty state ~top:true)
 
 let transform_problem pb =
-  let sigma = Problem.signature pb in
-  let state = create_state ~sigma () in
+  let env = Problem.env pb in
+  let state = create_state ~env () in
   let pb' =
     Problem.flat_map_statements pb
       ~f:(fun st ->

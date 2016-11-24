@@ -95,7 +95,7 @@ and term_node =
   | App of term * term list
   | Fun of typed_var * term
   | Let of var * term * term
-  | Match of term * (var * var_or_wildcard list * term) list
+  | Match of term * (var * var_or_wildcard list * term) list * term option (* default *)
   | Ite of term * term * term
   | Forall of typed_var * term
   | Exists of typed_var * term
@@ -175,7 +175,7 @@ let rec app ?loc t l = match Loc.get t with
   | _ -> Loc.with_loc ?loc (App (t,l))
 let fun_ ?loc v t = Loc.with_loc ?loc (Fun(v,t))
 let let_ ?loc v t u = Loc.with_loc ?loc (Let (v,t,u))
-let match_with ?loc t l = Loc.with_loc ?loc (Match (t,l))
+let match_with ?loc ?default t l = Loc.with_loc ?loc (Match (t,l,default))
 let ite ?loc a b c = Loc.with_loc ?loc (Ite (a,b,c))
 let ty_prop = builtin `Prop
 let ty_type = builtin `Type
@@ -277,13 +277,16 @@ let rec print_term out term = match Loc.get term with
       fpf out "@[<2>mu %a.@ %a@]" print_typed_var v print_term t
   | Let (v,t,u) ->
       fpf out "@[<2>let %s :=@ %a in@ %a@]" v print_term t print_term u
-  | Match (t,l) ->
+  | Match (t,l,def) ->
       let pp_case out (id,vars,t) =
         fpf out "@[<hv2>| %s %a ->@ %a@]"
           id (pp_list_ ~sep:" " pp_var_or_wildcard) vars print_term t
+      and pp_default out = function
+        | None -> ()
+        | Some rhs -> fpf out "@ | default -> %a" print_term rhs
       in
-      fpf out "@[<hv2>match @[%a@] with@ %a end@]"
-        print_term t (pp_list_ ~sep:"" pp_case) l
+      fpf out "@[<hv2>match @[%a@] with@ %a%a end@]"
+        print_term t (pp_list_ ~sep:"" pp_case) l pp_default def
   | Ite (a,b,c) ->
       (* special case to avoid deep nesting of ifs *)
       let pp_middle out (a,b) =

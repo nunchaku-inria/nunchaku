@@ -130,7 +130,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     | PS_rec of (term, ty) Stmt.rec_def
     | PS_pred of [`Wf | `Not_wf] * [`Pred | `Copred] * (term, ty) Stmt.pred_def
     | PS_spec of (term, ty) Stmt.spec_defs
-    | PS_decl of ID.t * ty * Stmt.decl_attr list
+    | PS_decl of ty Stmt.defined
     | PS_data of [`Data | `Codata] * ty Stmt.tydef
     | PS_copy of (term, ty) Stmt.copy
     | PS_goal of term
@@ -171,7 +171,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     | PS_rec d -> Stmt.defined_of_rec d |> yield_defined
     | PS_pred (_,_,d) -> Stmt.defined_of_pred d |> yield_defined
     | PS_spec l -> Stmt.defined_of_spec l |> Sequence.map Stmt.id_of_defined
-    | PS_decl (id,_,_) -> Sequence.return id
+    | PS_decl {Stmt.defined_head=id; _} -> Sequence.return id
     | PS_copy c -> Stmt.ids_of_copy c
     | PS_data (_,l) -> Stmt.defined_of_data l |> Sequence.map Stmt.id_of_defined
     | PS_goal _
@@ -220,7 +220,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
           yield_vars s.Stmt.spec_ty_vars;
           List.iter yield_defined s.Stmt.spec_defined;
           List.iter yield_term s.Stmt.spec_axioms;
-        | PS_decl (id,ty,_) ->
+        | PS_decl {Stmt.defined_head=id; defined_ty=ty; _} ->
           yield id;
           yield_term ty
         | PS_copy c ->
@@ -250,8 +250,8 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
           PStmt.print_pred_def p
       | PS_spec s ->
         Format.fprintf out "@[%a@]" PStmt.print_spec_defs s
-      | PS_decl (id,ty,_) ->
-        Format.fprintf out "@[val %a : %a@]" ID.print id P.print ty
+      | PS_decl d ->
+        Format.fprintf out "@[val %a@]" PStmt.pp_defined d
       | PS_data (k,d) ->
         Format.fprintf out "%s %a"
           (match k with `Data -> "data" | `Codata -> "codata")
@@ -327,11 +327,9 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     do_ty_def:
       (t ->
        ?loc:Location.t ->
-       attrs:Statement.decl_attr list ->
-       ID.t ->
-       ty:ty->
+       ty Statement.defined ->
        Arg.t ->
-       (ID.t * ty * Statement.decl_attr list))
+       ty Statement.defined)
       option;
   }
 
@@ -420,12 +418,12 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     let tr_type = tr_term in
     let bind_var () v = (), do_var_ t ~depth:0 v in
     begin match Stmt.view st with
-      | Stmt.Decl (id,ty,attrs) ->
+      | Stmt.Decl d ->
         begin match t.dispatch.do_ty_def with
           | None ->
             (* generic treatment *)
-            let ty = tr_type () ty in
-            let ps = mk_ps_ ~info (PS_decl (id,ty,attrs)) in
+            let d = Stmt.map_defined d ~f:(tr_type ()) in
+            let ps = mk_ps_ ~info (PS_decl d) in
             add_graph_ t ps
           | Some _ -> ()
         end
@@ -533,8 +531,8 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
             let ty = env_info.Env.ty in
             let attrs = env_info.Env.decl_attrs in
             let loc = env_info.Env.loc in
-            let id', ty', attrs' = f t ?loc ~attrs id ~ty arg in
-            let ps = mk_ps_ ~info:(Stmt.info_of_loc loc) (PS_decl (id', ty', attrs')) in
+            let d' = f t ?loc (Stmt.mk_defined ~attrs id ty) arg in
+            let ps = mk_ps_ ~info:(Stmt.info_of_loc loc) (PS_decl d') in
             add_graph_ t ps;
         end
 
@@ -612,8 +610,8 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
       Stmt.goal ~info t
     | [{ps_view=PS_copy c; ps_info=info; _}] ->
       Stmt.copy ~info c
-    | [{ps_view=PS_decl (id,ty,attrs); ps_info=info; _}] ->
-      Stmt.decl ~info ~attrs id ty
+    | [{ps_view=PS_decl d; ps_info=info; _}] ->
+      Stmt.decl_of_defined ~info d
     | {ps_view=(PS_decl _ | PS_axiom _ | PS_goal _ | PS_copy _ | PS_spec _); _}
       as ps1 :: ps2 :: _ ->
       Arg.fail "statement `@[%a@]`@ cannot be mutually recursive with `@[%a@]`"

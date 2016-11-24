@@ -7,9 +7,37 @@ type loc = Location.t
 type 'a var = 'a Var.t
 type 'a printer = Format.formatter -> 'a -> unit
 
+(** Attribute on declarations *)
+type decl_attr =
+  | Attr_card_max of int (** maximal cardinality of type *)
+  | Attr_card_min of int (** minimal cardinality of type *)
+  | Attr_card_hint of Cardinality.t (** hint on the card of a type *)
+  | Attr_incomplete (** encoding of some type with some values removed *)
+  | Attr_abstract (** encoding of some type where some values are conflated *)
+  | Attr_infinite (** infinite uninterpreted type *)
+  | Attr_finite_approx of ID.t (** finite approximation of an infinite type *)
+  | Attr_infinite_upcast (** cast finite approx to infinite type *)
+  | Attr_pseudo_prop (** encoding of [prop] *)
+  | Attr_pseudo_true (** encoding of [true_ : pseudo_prop] *)
+  | Attr_is_handle_cstor
+  (** [Attr_is_handle_cstor] means that the ID is the binary type symbol
+        that represents arrows for partially applied functions *)
+  | Attr_app_val
+  (** [Attr_app_val] means that the ID being defined is an "application function"
+      that is used to encode HO partial application into regular FO total
+      application. There is only one application symbol per type. *)
+  | Attr_proto_val of ID.t * int
+  (** [Attr_proto_val (f,k)] means the ID currently being declared is
+      the [k]-th "proto" function used for default values. This "proto" is
+      paired to the symbol [f], which is an application symbol of type
+      [handle -> a_1 -> ... -> a_n -> ret], where the proto
+      has type [handle -> a_k]. *)
+  | Attr_never_box (** This function should never be boxed in ElimRec *)
+
 type 'ty defined = {
   defined_head: id; (* symbol being defined *)
   defined_ty: 'ty; (* type of the head symbol *)
+  defined_attrs: decl_attr list;
 }
 
 type (+'t, +'ty) equations =
@@ -100,22 +128,8 @@ type (+'t, +'ty) copy = {
   copy_concrete_ty: 'ty;
 }
 
-(** Attribute on declarations *)
-type decl_attr =
-  | Attr_card_max of int (** maximal cardinality of type *)
-  | Attr_card_min of int (** minimal cardinality of type *)
-  | Attr_card_hint of Cardinality.t (** hint on the card of a type *)
-  | Attr_incomplete (** encoding of some type with some values removed *)
-  | Attr_abstract (** encoding of some type where some values are conflated *)
-  | Attr_infinite (** infinite uninterpreted type *)
-  | Attr_finite_approx of ID.t (** finite approximation of an infinite type *)
-  | Attr_infinite_upcast (** cast finite approx to infinite type *)
-  | Attr_pseudo_prop (** encoding of [prop] *)
-  | Attr_pseudo_true (** encoding of [true_ : pseudo_prop] *)
-  | Attr_exn of exn (** open case *)
-
 type (+'term, +'ty) view =
-  | Decl of id * 'ty * decl_attr list
+  | Decl of 'ty defined
   | Axiom of ('term, 'ty) axiom
   | TyDef of [`Data | `Codata] * 'ty mutual_types
   | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty) pred_def list
@@ -135,7 +149,7 @@ type (+'term, +'ty) t = private {
 
 type (+'t, +'ty) statement = ('t, 'ty) t
 
-val mk_defined : ID.t -> 'ty -> 'ty defined
+val mk_defined : attrs:decl_attr list -> ID.t -> 'ty -> 'ty defined
 
 val tydef_vars : 'ty tydef -> 'ty Var.t list
 val tydef_id : _ tydef -> id
@@ -155,6 +169,8 @@ val mk_ty_def : info:info -> [`Data | `Codata] -> 'ty mutual_types -> (_, 'ty) t
 
 val decl : info:info -> attrs:decl_attr list -> id -> 'a -> (_, 'a) t
 (** declare a type/function/predicate *)
+
+val decl_of_defined: info:info -> 'ty defined -> (_, 'ty) t
 
 val axiom : info:info -> 'a list -> ('a,_) t
 (** Axioms without additional assumptions *)
@@ -360,6 +376,7 @@ val iter :
 
 val id_of_defined : _ defined -> ID.t
 val ty_of_defined : 'ty defined -> 'ty
+val attrs_of_defined : _ defined -> decl_attr list
 val defined_of_rec : (_, 'ty) rec_def -> 'ty defined
 val defined_of_recs : (_, 'ty) rec_defs -> 'ty defined Sequence.t
 val defined_of_spec : (_, 'ty) spec_defs -> 'ty defined Sequence.t
@@ -378,6 +395,7 @@ val print_attr : decl_attr printer
 val print_attrs : decl_attr list printer
 
 module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
+  val pp_defined : Pty.t defined printer
   val print_spec_defs : (Pt.t, Pty.t) spec_defs printer
   val print_clause : (Pt.t, Pty.t) pred_clause printer
   val print_clauses : (Pt.t, Pty.t) pred_clause list printer

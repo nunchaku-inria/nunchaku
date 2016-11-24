@@ -86,6 +86,7 @@ let errorf_ id msg =
 let loc t = t.loc
 let def t = t.def
 let ty t = t.ty
+let attrs t = t.decl_attrs
 
 let is_fun i = match i.def with Fun_spec _ | Fun_def _ -> true | _ -> false
 let is_rec i = match i.def with Fun_def _ -> true | _ -> false
@@ -108,16 +109,25 @@ let declare ?loc ~attrs ~env:t id ty =
   let info = {loc; decl_attrs=attrs; ty; def=NoDef} in
   {infos=ID.PerTbl.replace t.infos id info}
 
+let declare_defined ?loc ~env:t d =
+  let id = Stmt.id_of_defined d in
+  let ty = Stmt.ty_of_defined d in
+  let attrs = Stmt.attrs_of_defined d in
+  check_not_defined_ t ~id ~fail_msg:"already declared";
+  let info = {loc; decl_attrs=attrs; ty; def=NoDef} in
+  {infos=ID.PerTbl.replace t.infos id info}
+
 let rec_funs ?loc ~env:t defs =
   List.fold_left
     (fun t def ->
-      let id = def.Stmt.rec_defined.Stmt.defined_head in
+      let defined = def.Stmt.rec_defined in
+      let id = defined.Stmt.defined_head in
       if ID.PerTbl.mem t.infos id
         then errorf_ id "already declared or defined";
       let info = {
         loc;
         ty=def.Stmt.rec_defined.Stmt.defined_ty;
-        decl_attrs=[];
+        decl_attrs=defined.Stmt.defined_attrs;
         def=Fun_def (defs, def, loc);
       } in
       {infos=ID.PerTbl.replace t.infos id info}
@@ -128,7 +138,8 @@ let declare_rec_funs ?loc ~env defs =
     (fun env def ->
       let d = def.Stmt.rec_defined in
       let id = d.Stmt.defined_head in
-      declare ~attrs:[] ?loc ~env id d.Stmt.defined_ty)
+      let attrs = d.Stmt.defined_attrs in
+      declare ~attrs ?loc ~env id d.Stmt.defined_ty)
     env defs
 
 let find_exn ~env:t id =
@@ -148,7 +159,7 @@ let spec_funs ?loc ~env:t spec =
       let info = {
         loc;
         ty=defined.Stmt.defined_ty;
-        decl_attrs=[];
+        decl_attrs=defined.Stmt.defined_attrs;
         def=Fun_spec(spec, loc);
       } in
       {infos=ID.PerTbl.replace t.infos id info; }
@@ -184,13 +195,14 @@ let def_data ?loc ~env:t ~kind tys =
     ) t tys
 
 let def_pred ?loc ~env ~wf ~kind def l =
-  let id = def.Stmt.pred_defined.Stmt.defined_head in
+  let defined = def.Stmt.pred_defined in
+  let id = defined.Stmt.defined_head in
   check_not_defined_ env ~id
     ~fail_msg:"is (co)inductive pred, but already defined";
   let info = {
     loc;
-    ty=def.Stmt.pred_defined.Stmt.defined_ty;
-    decl_attrs=[];
+    ty=defined.Stmt.defined_ty;
+    decl_attrs=defined.Stmt.defined_attrs;
     def=Pred(wf,kind,def,l,loc);
   } in
   {infos=ID.PerTbl.replace env.infos id info}
@@ -221,8 +233,8 @@ let add_copy ?loc ~env c =
 let add_statement ~env st =
   let loc = Stmt.loc st in
   match Stmt.view st with
-  | Stmt.Decl (id,ty,attrs) ->
-      declare ?loc ~attrs ~env id ty
+  | Stmt.Decl {Stmt.defined_attrs=attrs; defined_ty=ty; defined_head=id} ->
+      declare ?loc ~env ~attrs id ty
   | Stmt.TyDef (kind,l) ->
       def_data ?loc ~env ~kind l
   | Stmt.Goal _ -> env

@@ -59,7 +59,7 @@ let base_sig =
   let alpha = Var.make ~ty:U.ty_type ~name:"alpha" in
   let beta = Var.make ~ty:U.ty_type ~name:"beta" in
   let open S in
-  Signature.of_list
+  ID.Map.of_list
     [ a, U.ty_type
     ; b, U.ty_type
     ; list, U.(ty_arrow ty_type ty_type)
@@ -332,7 +332,7 @@ let print_rules() =
 
 (*$QR & ~count:300
   arbitrary_prop
-    (fun t -> match U.ty t ~sigma:(Signature.find ~sigma:base_sig) with
+    (fun t -> match U.ty t ~sigma:(fun id -> ID.Map.get id base_sig) with
       | CCResult.Ok ty -> U.ty_is_Prop ty
       | CCResult.Error _ -> false)
 *)
@@ -341,7 +341,7 @@ let print_rules() =
   arbitrary
     (fun t ->
         (* just  see if it typechecks *)
-      match U.ty t ~sigma:(Signature.find ~sigma:base_sig) with
+      match U.ty t ~sigma:(fun id -> ID.Map.get id base_sig) with
       | CCResult.Ok _ ->  true
       | CCResult.Error _ -> false)
 *)

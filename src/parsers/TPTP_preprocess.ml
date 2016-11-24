@@ -99,7 +99,7 @@ let close_forall t =
     | A.MetaVar _ -> ()
     | A.App (f,l) -> compute_fvars f; List.iter compute_fvars l
     | A.Let (v,t,u) -> compute_fvars t; enter_bvar v (fun () -> compute_fvars u)
-    | A.Match (t,l) ->
+    | A.Match (t,l,_) ->
         compute_fvars t;
         List.iter
           (fun (_,vars,rhs) ->
@@ -187,15 +187,17 @@ let rec declare_missing ~ctx ~state t =
       let t = declare_missing ~ctx ~state t in
       enter_var_ ~state v
         (fun () -> A.let_ ?loc v t (declare_missing ~ctx ~state u))
-  | A.Match (t,l) ->
+  | A.Match (t,l,def) ->
       let t = declare_missing ~ctx ~state t in
       let l = List.map
         (fun (c,vars,rhs) ->
           enter_vars_ ~state vars
-            (fun () -> c, vars, declare_missing ~ctx ~state rhs)
-        ) l
+            (fun () -> c, vars, declare_missing ~ctx ~state rhs))
+        l
+      and def =
+        CCOpt.map (declare_missing ~ctx ~state) def
       in
-      A.match_with ?loc t l
+      A.match_with ?loc ?default:def t l
   | A.Ite (a,b,c) ->
       A.ite ?loc
         (declare_missing ~state ~ctx:Ctx_prop a)

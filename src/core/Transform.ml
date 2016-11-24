@@ -55,8 +55,8 @@ module Features = struct
     ] |> M.of_list
 
   let update = M.add
-  let update_l = List.fold_right (fun (k,v) -> update k v)
-  let of_list = M.of_list
+  let update_l l = List.fold_right (fun (k,v) -> update k v) l
+  let of_list l = M.of_list l
 
   type check_res =
     | Check_ok
