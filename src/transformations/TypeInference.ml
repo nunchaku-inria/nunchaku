@@ -350,16 +350,35 @@ module Convert(Term : TermTyped.S) = struct
     | A.Builtin (`Eq | `Equiv) -> true
     | _ -> false
 
-  (* check that the map is exhaustive *)
-  let check_cases_exhaustive_ ?loc ~env ~ty m =
+  (* check that the map is exhaustive, and return its completed form
+     if [default] is provided *)
+  let check_cases_exhaustive_ ?loc ~env ~ty m def =
     (* find the type definition *)
     let cstors = TyEnv.find_datatype ?loc ~env (U.head_sym ty) in
     let missing = ID.Map.fold
-      (fun id _ acc ->
-        if ID.Map.mem id m then acc else id::acc)
+      (fun id cstor acc ->
+        if ID.Map.mem id m then acc else (id,cstor)::acc)
       cstors []
     in
-    if missing=[] then `Ok else `Missing missing
+    begin match missing, def with
+      | [], _ -> `Ok
+      | _::_, Some default_rhs ->
+        (* complete matches with default case (and some variables that will
+           not be used) *)
+        let m' =
+          List.fold_left
+            (fun m (id,cstor) ->
+               let vars =
+                 List.mapi (fun i ty -> Var.makef ~ty "_%d" i) cstor.Stmt.cstor_args
+               in
+               ID.Map.add id (vars,default_rhs) m)
+            m missing
+        in
+        `Completed m'
+      | _::_, None ->
+        (* no default case, and some missing constructors *)
+        `Missing (List.map fst missing)
+    end
 
   let check_prop_ ~stack t =
     unify_in_ctx_ ~stack (U.ty_exn t) U.ty_prop;
@@ -484,7 +503,7 @@ module Convert(Term : TermTyped.S) = struct
         let env = TyEnv.add_var ~env v ~var in
         let u = convert_term_ ~stack ~env u in
         U.let_ ?loc var t u
-    | A.Match (t,l) ->
+    | A.Match (t,l,def) ->
         let t = convert_term_ ~stack ~env t in
         let ty_t = U.ty_exn t in
         (* build map (cstor -> case) for pattern match *)
@@ -524,17 +543,28 @@ module Convert(Term : TermTyped.S) = struct
         with Not_found ->
           ill_formedf ?loc ~kind:"match" "pattern-match needs at least one case"
         in
+        (* check default case, if present *)
+        let def =
+          CCOpt.map
+            (fun t ->
+               let t = convert_term_ ~stack ~env t in
+               unify_in_ctx_ ~stack:[] ty (U.ty_exn t);
+               t)
+            def
+        in
         (* check the match is exhaustive and correct *)
-        if not (TI.cases_well_formed m)
-          then ill_formed ?loc ~kind:"match"
-            "ill-formed pattern match (non linear pattern)";
-        begin match check_cases_exhaustive_ ~env ~ty:ty_t m with
-          | `Ok -> ()
+        if not (TI.cases_well_formed m) then (
+          ill_formed ?loc ~kind:"match"
+            "ill-formed pattern match (non linear pattern)"
+        );
+        let m = match check_cases_exhaustive_ ~env ~ty:ty_t m def with
+          | `Ok -> m
+          | `Completed m' -> m'
           | `Missing l ->
               ill_formedf ?loc ~kind:"match"
                 "pattern match is not exhaustive (missing %a)"
                 (CCFormat.list ID.print) l
-        end;
+        in
         (* ok, we're done here *)
         U.match_with ~ty t m
     | A.Ite (a,b,c) ->
