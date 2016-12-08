@@ -157,7 +157,7 @@ module Make(T : TI.S) = struct
         let bound' = check_var ~env bound v in
         check_same_ (U.var v) t' (Var.ty v) ty_t';
         check ~env bound' u
-    | TI.Match (_,m) ->
+    | TI.Match (_,m,def) ->
         (* TODO: check that each constructor is present, and only once *)
         let id, (vars, rhs) = ID.Map.choose m in
         let bound' = List.fold_left (check_var ~env) bound vars in
@@ -173,6 +173,11 @@ module Make(T : TI.S) = struct
                check_same_ rhs rhs' ty ty'
              ))
           m;
+        TI.iter_default_case
+          (fun rhs' -> 
+             let ty' = check ~env bound rhs' in
+             check_same_ rhs rhs' ty ty')
+          def;
         ty
     | TI.TyMeta _ -> assert false
     | TI.TyBuiltin b ->

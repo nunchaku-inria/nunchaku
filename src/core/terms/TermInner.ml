@@ -318,6 +318,11 @@ type 'a case = 'a var list * 'a
 (** A list of cases (indexed by constructor) *)
 type 'a cases = 'a case ID.Map.t
 
+type 'a default_case =
+  | Default_none
+  | Default_some of 'a * int ID.Map.t
+  (* default term, + set of cstors covered this way along with their arity *)
+
 let cases_to_list = ID.Map.to_list
 
 (* check that: each case is linear (all vars are different) *)
@@ -338,7 +343,7 @@ type 'a view =
   | Builtin of 'a Builtin.t (** built-in operation *)
   | Bind of Binder.t * 'a var * 'a
   | Let of 'a var * 'a * 'a
-  | Match of 'a * 'a cases (** shallow pattern-match *)
+  | Match of 'a * 'a cases * 'a default_case (** shallow pattern-match, with default *)
   | TyBuiltin of TyBuiltin.t (** Builtin type *)
   | TyArrow of 'a * 'a  (** Arrow type *)
   | TyMeta of 'a MetaVar.t
@@ -459,13 +464,17 @@ module Print(T : REPR)
           (pp_list_ ~sep:" " print_in_app) l
     | Let (v,t,u) ->
         wrap P_top p out "@[let @[<2>%a :=@ %a@] in@ %a@]" Var.print_full v print t print u
-    | Match (t,l) ->
+    | Match (t,l, def) ->
         let pp_case out (id,(vars,t)) =
           fpf out "@[<hv2>| @[<hv2>%a %a@] ->@ %a@]"
             ID.print id (pp_list_ ~sep:" " Var.print_full) vars print t
+        and pp_def out = function
+          | Default_none -> ()
+          | Default_some (d,_) -> fpf out "@ @[<hv2> | default ->@ %a@]" print d
         in
-        fpf out "@[<hv>@[<hv2>match @[%a@] with@ %a@]@ end@]"
+        fpf out "@[<hv>@[<hv2>match @[%a@] with@ %a%a@]@ end@]"
           print t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
+          pp_def def
     | Bind (b, _, _) ->
         let s = Binder.to_string b in
         let vars, body = unroll_binder b t in
@@ -495,7 +504,11 @@ module Print(T : REPR)
     | App (f,l) -> lst (to_sexp f :: List.map to_sexp l)
     | Let (v,t,u) ->
       lst [str "let"; lst [lst [var_to_sexp v; to_sexp t]]; to_sexp u]
-    | Match (t,l) ->
+    | Match (t,l,d) ->
+      let last = match d with
+        | Default_none -> []
+        | Default_some (d,_) -> [lst [str "default"; to_sexp d]]
+      in
       lst
         (str "match" ::
            to_sexp t ::
@@ -503,7 +516,7 @@ module Print(T : REPR)
              (fun c (vars,t) acc ->
                 lst [str (ID.to_string c); lst (List.map var_to_sexp vars); to_sexp t]
                 :: acc)
-             l [])
+             l last)
     | Bind (b, _, _) ->
       let s = Binder.to_string b in
       let vars, body = unroll_binder b t in
@@ -596,6 +609,20 @@ module type UTIL_REPR = sig
   (** Number of type variables that must be bound in the type. *)
 end
 
+let iter_default_case f = function
+  | Default_none ->  ()
+  | Default_some (t, _) -> f t
+
+let map_default_case f = function
+  | Default_none -> Default_none
+  | Default_some (t, ids) -> Default_some (f t, ids)
+
+let map_default_case' f = function
+  | Default_none -> Default_none
+  | Default_some (t, ids) ->
+    let t, ids = f t ids in
+    Default_some (t, ids)
+
 (** Utils that only require a {!REPR} *)
 module UtilRepr(T : REPR)
 : UTIL_REPR with type t_ = T.t
@@ -615,9 +642,10 @@ module UtilRepr(T : REPR)
       | TyBuiltin _
       | Const _ -> ()
       | Var v -> aux_var v
-      | Match (t,l) ->
+      | Match (t,l,d) ->
           aux t;
-          ID.Map.iter (fun _ (vars,rhs) -> List.iter aux_var vars; aux rhs) l
+          ID.Map.iter (fun _ (vars,rhs) -> List.iter aux_var vars; aux rhs) l;
+          iter_default_case aux d;
       | Builtin b -> Builtin.iter aux b
       | App (f,l) -> aux f; List.iter aux l
       | Bind (_,v,t) -> aux_var v; aux t
@@ -637,14 +665,15 @@ module UtilRepr(T : REPR)
           aux ~bound (Var.ty v)
       | App (f,l) ->
           aux ~bound f; List.iter (aux ~bound) l
-      | Match (t,l) ->
+      | Match (t,l,d) ->
           aux ~bound t;
           ID.Map.iter
             (fun _ (vars,rhs) ->
               List.iter (fun v -> aux ~bound (Var.ty v)) vars;
               let bound = List.fold_right VarSet.add vars bound in
-              aux ~bound rhs
-            ) l
+              aux ~bound rhs)
+            l;
+          iter_default_case (aux ~bound) d;
       | Builtin b -> Builtin.iter (aux ~bound) b
       | Bind (_,v,t) ->
           aux ~bound (Var.ty v); aux ~bound:(VarSet.add v bound) t
@@ -680,7 +709,7 @@ module UtilRepr(T : REPR)
           | Var v
           | Bind (_,v,_)
           | Let (v,_,_) -> Sequence.return v
-          | Match (_,l) ->
+          | Match (_,l,_) ->
               let open Sequence.Infix in
               ID.Map.to_seq l >>= fun (_,(vars,_)) -> Sequence.of_list vars
           | Builtin _
@@ -816,7 +845,7 @@ module type UTIL = sig
   val fun_ : t_ var -> t_ -> t_
   val mu : t_ var -> t_ -> t_
   val let_ : t_ var -> t_ -> t_ -> t_
-  val match_with : t_ -> t_ cases -> t_
+  val match_with : t_ -> t_ cases -> def:t_ default_case -> t_
   val ite : t_ -> t_ -> t_ -> t_
   val forall : t_ var -> t_ -> t_
   val exists : t_ var -> t_ -> t_
@@ -1064,9 +1093,13 @@ module Util(T : S)
     | Builtin `False -> u
     | _ -> T.build (Let (v, t, u))
 
-  let match_with t l =
-    if ID.Map.is_empty l then invalid_arg "Term.case: empty list of cases";
-    T.build (Match (t,l))
+  let match_with t m ~def =
+    begin match def with
+      | Default_none when ID.Map.is_empty m -> invalid_arg "Term.case: empty list of cases";
+      | Default_some (d,_) when ID.Map.is_empty m -> d
+      | _ ->
+        T.build (Match (t,m,def))
+    end
 
   let forall v t = match T.repr t with
     | Builtin `True
@@ -1228,12 +1261,15 @@ module Util(T : S)
         | Builtin b -> CCHash.seq hash_ (Builtin.to_seq b) h
         | Let (v,t,u) -> decr d; hash_var v h |> hash_ t |> hash_ u
         | Bind (_,v,t) -> decr d; hash_var v h |> hash_ t
-        | Match (t,l) ->
+        | Match (t,l,def) ->
             decr d;
             hash_ t h
               |> CCHash.seq
                 (fun (vars,rhs) h -> CCHash.list hash_var vars h |> hash_ rhs)
                 (ID.Map.to_seq l |> Sequence.map snd)
+              |> (fun h->match def with
+                | Default_none -> h
+                | Default_some (t,_) -> hash_ t h)
         | TyArrow (a,b) -> decr d; hash_ a h |> hash_ b
         | TyBuiltin _
         | TyMeta _ -> h
@@ -1287,7 +1323,7 @@ module Util(T : S)
         let subst = Subst.add ~subst v1 t1 in
         let subst = Subst.add ~subst v2 t2 in
         equal_with ~subst u1 u2
-    | Match (t1,l1), Match (t2,l2) ->
+    | Match (t1,l1,d1), Match (t2,l2,d2) ->
         ID.Map.cardinal l1 = ID.Map.cardinal l2 &&
         equal_with ~subst t1 t2 &&
         List.for_all2
@@ -1307,6 +1343,12 @@ module Util(T : S)
           )
           (cases_to_list l1) (* list, sorted by ID *)
           (cases_to_list l2)
+        &&
+        begin match d1, d2 with
+          | Default_none, Default_none -> true
+          | Default_some (t1,_), Default_some (t2,_) -> equal_with ~subst t1 t2
+          | Default_none, _ | Default_some _, _ -> false
+        end
     | Var _, _
     | Match _, _
     | TyBuiltin _,_
@@ -1369,8 +1411,12 @@ module Util(T : S)
         let acc = f acc b_acc t in
         let b_acc = bind b_acc v in
         f acc b_acc u
-    | Match (t,cases) ->
+    | Match (t,cases,def) ->
         let acc = f acc b_acc t in
+        let acc = match def with
+          | Default_none -> acc
+          | Default_some (t, _) -> f acc b_acc t
+        in
         ID.Map.fold
           (fun _ (vars,rhs) acc ->
             let b_acc = List.fold_left bind b_acc vars in
@@ -1404,15 +1450,16 @@ module Util(T : S)
         let b_acc, v' = bind b_acc v in
         let t = f b_acc t in
         Bind (b, v', t)
-    | Match (lhs,cases) ->
+    | Match (lhs,cases,def) ->
         let lhs = f b_acc lhs in
+        let def = map_default_case (f b_acc) def in
         let cases = ID.Map.map
           (fun (vars,rhs) ->
             let b_acc, vars' = Utils.fold_map bind b_acc vars in
             vars', f b_acc rhs)
           cases
         in
-        Match (lhs, cases)
+        Match (lhs, cases, def)
     | TyArrow (a,b) ->
         let a = f b_acc a in
         let b = f b_acc b in
@@ -1490,15 +1537,16 @@ module Util(T : S)
         let b_acc, v' = bind b_acc v in
         let t = f b_acc P.NoPol t in
         mk_bind b v' t
-    | Match (lhs,cases) ->
+    | Match (lhs,cases,def) ->
         let lhs = f b_acc P.NoPol lhs in
+        let def = map_default_case (f b_acc pol) def in
         let cases = ID.Map.map
           (fun (vars,rhs) ->
             let b_acc, vars' = Utils.fold_map bind b_acc vars in
             vars', f b_acc pol rhs)
           cases
         in
-        match_with lhs cases
+        match_with lhs cases ~def
     | TyArrow (a,b) ->
         let a = f b_acc pol a in
         let b = f b_acc pol b in
@@ -1749,7 +1797,7 @@ module Util(T : S)
         | `TyForall -> ty_type
         end
     | Let (_,_,u) -> ty_exn ~sigma u
-    | Match (_,m) ->
+    | Match (_,m,_) ->
         let _, (_, rhs) = ID.Map.choose m in
         ty_exn ~sigma rhs
     | TyMeta _ -> assert false
@@ -1878,10 +1926,11 @@ end = struct
       | App (f,l) -> App (convert f, List.map convert l)
       | Bind (b,v,t) -> Bind (b, aux_var v, convert t)
       | Let (v,t,u) -> Let (aux_var v, convert t, convert u)
-      | Match (t,l) ->
+      | Match (t,l,d) ->
           Match (
             convert t,
-            ID.Map.map (fun (vars,rhs) -> List.map aux_var vars, convert rhs) l
+            ID.Map.map (fun (vars,rhs) -> List.map aux_var vars, convert rhs) l,
+            map_default_case convert d
           )
       | TyArrow (a,b) -> TyArrow (convert a, convert b)
       | TyMeta v -> TyMeta (aux_meta v)

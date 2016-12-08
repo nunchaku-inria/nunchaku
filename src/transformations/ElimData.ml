@@ -460,7 +460,7 @@ module Make(M : sig val mode : mode end) = struct
           | _ -> tr_term_aux share pol t
         end
       | TI.Bind ((`Forall | `Exists | `Fun) as b, _, _) -> tr_bind share pol b t
-      | TI.Match (t,m) ->
+      | TI.Match (t,m,def) ->
         if is_encoded_ty state (UEnv.ty_exn ~env:state.env t)
         then errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.print t
         else (
@@ -472,8 +472,11 @@ module Make(M : sig val mode : mode end) = struct
                  let rhs = introduce_lets share rhs ~start:(`Vars vars) in
                  vars, rhs)
               m
+          and def = TI.map_default_case
+              (fun rhs -> tr_term_rec share pol rhs)
+              def
           in
-          U.match_with t m
+          U.match_with t m ~def
         )
       | _ -> tr_term_aux share pol t
     (* properly encode [t], which starts with [binder]. We have to

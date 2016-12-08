@@ -56,7 +56,7 @@ module Util(T : S)
   val fun_ : ?loc:loc -> ty:t -> t var -> t -> t
   val mu : ?loc:loc -> t var -> t -> t
   val let_ : ?loc:loc -> t var -> t -> t -> t
-  val match_with : ?loc:loc -> ty:t -> t -> t TI.cases -> t
+  val match_with : ?loc:loc -> ty:t -> t -> t TI.cases -> def:t TI.default_case -> t
   val ite : ?loc:loc -> t -> t -> t -> t
   val forall : ?loc:loc -> t var -> t -> t
   val exists : ?loc:loc -> t var -> t -> t
@@ -133,9 +133,9 @@ end = struct
   let let_ ?loc v t u =
     build ?loc ~ty:(ty_exn u) (TI.Let (v, t, u))
 
-  let match_with ?loc ~ty t l =
+  let match_with ?loc ~ty t l ~def =
     if ID.Map.is_empty l then invalid_arg "Term_typed.case: no cases";
-    build ?loc ~ty (TI.Match (t, l))
+    build ?loc ~ty (TI.Match (t, l, def))
 
   let ite ?loc a b c =
     builtin ?loc ~ty:(ty_exn b) (`Ite (a,b,c))

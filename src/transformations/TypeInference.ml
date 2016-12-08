@@ -365,16 +365,14 @@ module Convert(Term : TermTyped.S) = struct
       | _::_, Some default_rhs ->
         (* complete matches with default case (and some variables that will
            not be used) *)
-        let m' =
+        let map =
           List.fold_left
-            (fun m (id,cstor) ->
-               let vars =
-                 List.mapi (fun i ty -> Var.makef ~ty "_%d" i) cstor.Stmt.cstor_args
-               in
-               ID.Map.add id (vars,default_rhs) m)
-            m missing
+            (fun map (id,cstor) ->
+               let arity = List.length cstor.Stmt.cstor_args in
+               ID.Map.add id arity map)
+            ID.Map.empty missing
         in
-        `Completed m'
+        `Completed (default_rhs, map)
       | _::_, None ->
         (* no default case, and some missing constructors *)
         `Missing (List.map fst missing)
@@ -557,16 +555,16 @@ module Convert(Term : TermTyped.S) = struct
           ill_formed ?loc ~kind:"match"
             "ill-formed pattern match (non linear pattern)"
         );
-        let m = match check_cases_exhaustive_ ~env ~ty:ty_t m def with
-          | `Ok -> m
-          | `Completed m' -> m'
+        let def = match check_cases_exhaustive_ ~env ~ty:ty_t m def with
+          | `Ok -> TI.Default_none
+          | `Completed (def,map) -> TI.Default_some (def,map)
           | `Missing l ->
               ill_formedf ?loc ~kind:"match"
-                "pattern match is not exhaustive (missing %a)"
+                "pattern match is not exhaustive (missing [@[%a@]])"
                 (CCFormat.list ID.print) l
         in
         (* ok, we're done here *)
-        U.match_with ~ty t m
+        U.match_with ~ty t m ~def
     | A.Ite (a,b,c) ->
         let a = convert_term_ ~stack ~env a in
         let b = convert_term_ ~stack ~env b in
@@ -691,8 +689,12 @@ module Convert(Term : TermTyped.S) = struct
     | TI.Builtin b -> TI.Builtin.to_seq b |> Sequence.for_all is_mono_
     | TI.Let (v,t,u) ->
         is_mono_var_ v && is_mono_ t && is_mono_ u
-    | TI.Match (t,l) ->
+    | TI.Match (t,l,d) ->
         is_mono_ t &&
+        begin match d with
+          | TI.Default_none -> true
+          | TI.Default_some (rhs,_) -> is_mono_ rhs
+        end &&
         ID.Map.for_all
           (fun _ (vars,rhs) -> List.for_all is_mono_var_ vars && is_mono_ rhs)
           l

@@ -91,15 +91,18 @@ let rec term_to_tip(t:term): A.term = match T.repr t with
   | TI.Bind (`Mu,_,_) -> out_of_scopef "cannot convert to TIP µ %a" P.print t
   | TI.Let (v,t,u) ->
     A.let_ [conv_var v, term_to_tip t] (term_to_tip u)
-  | TI.Match (u,map) ->
+  | TI.Match (u,map,def) ->
     let u = term_to_tip u in
     let cases =
        ID.Map.to_list map
        |> List.map
          (fun (c, (vars,rhs)) ->
             A.Match_case (id_to_string c, List.map conv_var vars, term_to_tip rhs))
+    and def = match def with
+      | TI.Default_none -> []
+      | TI.Default_some (rhs,_) -> [A.Match_default (term_to_tip rhs)]
     in
-    A.match_ u cases
+    A.match_ u (cases @ def)
   | TI.TyBuiltin _
   | TI.TyArrow _
   | TI.TyMeta _ -> raise (Conversion_error t)

@@ -200,7 +200,7 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
       if is_prop ~state u
       then combine pol (U.let_ v t u) g
       else U.let_ v t u, g
-  | TI.Match (lhs, cases) ->
+  | TI.Match (lhs, cases, def) ->
       let lhs, g_lhs = tr_term ~state ~pol lhs in
       if is_prop ~state t && pol <> Pol.NoPol
       then (
@@ -215,12 +215,20 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
             let rhs, g_rhs = tr_term ~state ~pol rhs in
             vars, combine_polarized ~is_pos rhs g_rhs)
           cases
+        and def =
+          TI.map_default_case
+            (fun rhs ->
+               let rhs, g_rhs = tr_term ~state ~pol rhs in
+               combine_polarized ~is_pos rhs g_rhs)
+            def
         in
-        combine pol (U.match_with lhs cases) g_lhs
+        combine pol (U.match_with lhs cases ~def) g_lhs
       ) else (
         (* wrap guards in a pattern matching *)
         let asserting = ref ID.Map.empty in
+        let asserting_def = ref ([],ID.Map.empty) in
         let assuming = ref ID.Map.empty in
+        let assuming_def = ref ([],ID.Map.empty) in
         let cases = ID.Map.mapi
           (fun c (vars,rhs) ->
             let rhs, g_rhs = tr_term ~state ~pol rhs in
@@ -228,21 +236,34 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
             assuming := ID.Map.add c (vars, g_rhs.assuming) !assuming;
             vars,rhs)
           cases
+        and def = TI.map_default_case'
+            (fun rhs ids ->
+               let rhs, g_rhs = tr_term ~state ~pol rhs in
+               asserting_def := g_rhs.asserting, ids;
+               assuming_def := g_rhs.assuming, ids;
+               rhs, ids)
+            def
         in
         (* convert the map from constructors to guards, into one single
            guard that uses pattern matching *)
-        let map_to_guard m =
-          if ID.Map.exists (fun _ (_,l) -> l<>[]) m
+        let map_to_guard m def =
+          if ID.Map.exists (fun _ (_,l) -> l<>[]) m || fst def <> []
           then
             let m = ID.Map.map (fun (vars,l) -> vars, U.and_ l) m in
-            [U.match_with lhs m]
+            let def = match def with
+              | [], _ -> TI.Default_none
+              | l, ids ->
+                assert (not (ID.Map.is_empty ids));
+                TI.Default_some (U.and_ l, ids)
+            in
+            [U.match_with lhs m ~def]
           else []
         in
         let g_cases = {
-          asserting = map_to_guard !asserting;
-          assuming = map_to_guard !assuming;
+          asserting = map_to_guard !asserting !asserting_def;
+          assuming = map_to_guard !assuming !assuming_def;
         } in
-        U.match_with lhs cases, combine_guard g_cases g_lhs
+        U.match_with lhs cases ~def, combine_guard g_cases g_lhs
       )
   | TI.TyBuiltin _
   | TI.TyArrow (_,_) -> t, empty_guard

@@ -176,9 +176,10 @@ module Make(T : TI.S) = struct
           State.make ~subst (U.builtin b) args
 
     (* see whether [st] matches a case in [m] *)
-    let lookup_case_ st m = match T.repr st.head with
+    let lookup_case_ st m def = match T.repr st.head with
       | TI.Const id ->
-          begin try
+        begin
+          try
             let vars, rhs = ID.Map.find id m in
             let n = List.length vars in
             (* it matches! arity should match too, otherwise the
@@ -188,8 +189,16 @@ module Make(T : TI.S) = struct
             let subst = Subst.add_list ~subst:st.subst vars matched_args in
             Some (rhs, other_args, subst)
           with Not_found ->
-            None
-          end
+            begin match def with
+              | TI.Default_some (rhs, m) when ID.Map.mem id m ->
+                let arity = ID.Map.find id m in
+                if arity>List.length st.args then failwith "partial application of match";
+                (* drop [arity] arguments *)
+                let _, other_args = CCList.take_drop arity st.args in
+                Some (rhs, other_args, st.subst)
+              | _ -> None
+            end
+        end
       | _ -> None
 
     (* reduce until the head is not a function *)
@@ -215,13 +224,13 @@ module Make(T : TI.S) = struct
               let subst = Subst.add ~subst:st.subst v a in
               whnf_ (State.make ~subst body args')
           end
-      | TI.Match (t, l) ->
+      | TI.Match (t, l, def) ->
           let st_t = whnf_ (State.const ~subst:st.subst t) in
           (* see whether [st] matches some case *)
-          begin match lookup_case_ st_t l with
+          begin match lookup_case_ st_t l def with
             | None ->
                 (* just replace the head *)
-                State.set_head st (U.match_with (State.to_term st_t) l)
+                State.set_head st (U.match_with (State.to_term st_t) l ~def)
             | Some (rhs, args, subst) ->
                 whnf_ (State.make ~subst rhs args)
           end
@@ -263,10 +272,10 @@ module Make(T : TI.S) = struct
       | TI.Let (v,t,u) ->
           let t = snf_term ~subst:st.subst t in
           enter_snf_ st v u (fun v u -> U.let_ v t u)
-      | TI.Match (t,l) ->
+      | TI.Match (t,l,def) ->
           let st_t = snf_ (State.const ~subst:st.subst t) in
           (* see whether [st] matches some case *)
-          begin match lookup_case_ st_t l with
+          begin match lookup_case_ st_t l def with
             | None ->
                 (* just replace the head and evaluate each branch *)
                 let l = ID.Map.map
@@ -276,7 +285,7 @@ module Make(T : TI.S) = struct
                     vars',rhs')
                   l
                 in
-                State.set_head st (U.match_with (State.to_term st_t) l)
+                State.set_head st (U.match_with (State.to_term st_t) l ~def)
             | Some (rhs, args, subst) ->
                 whnf_ (State.make ~subst rhs args)
           end
