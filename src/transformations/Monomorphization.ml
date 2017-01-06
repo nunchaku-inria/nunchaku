@@ -267,15 +267,16 @@ let rec mono_term ~self ~local_state (t:term) : term =
       U.let_ (mono_var ~self ~local_state v)
         (mono_term ~self ~local_state t)
         (mono_term ~self ~local_state u)
-    | TI.Match (t,l) ->
+    | TI.Match (t,l,def) ->
       let t = mono_term ~self ~local_state t in
+      let def = TI.map_default_case (mono_term ~self ~local_state) def in
       let l = ID.Map.map
           (fun (vars,rhs) ->
              let vars = List.map (mono_var ~self ~local_state) vars in
              vars, mono_term ~self ~local_state rhs)
           l
       in
-      U.match_with t l
+      U.match_with t l ~def
     | TI.TyBuiltin b -> U.ty_builtin b
     | TI.TyArrow (a,b) ->
       U.ty_arrow
@@ -587,10 +588,11 @@ let unmangle_term ~(state:unmangle_state) (t:term):term =
     | TI.Bind ((`Forall | `Exists | `Fun | `Mu) as b,v,t) ->
         U.mk_bind b (aux_var v) (aux t)
     | TI.Let (v,t,u) -> U.let_ (aux_var v) (aux t) (aux u)
-    | TI.Match (t,l) ->
+    | TI.Match (t,l,def) ->
         let t = aux t in
+        let def = TI.map_default_case aux def in
         let l = ID.Map.map (fun (vars,rhs) -> List.map aux_var vars, aux rhs) l in
-        U.match_with t l
+        U.match_with t l ~def
     | TI.TyBuiltin b -> U.ty_builtin b
     | TI.TyArrow (a,b) -> U.ty_arrow (aux a) (aux b)
     | TI.Bind (`TyForall, _,_) | TI.TyMeta _ -> assert false

@@ -53,5 +53,5 @@ QTEST_PREAMBLE='open Nunchaku_core;; '
 watch:
 	while find src/ -print0 | xargs -0 inotifywait -e delete_self -e modify ; do \
 		echo "============ at `date` ==========" ; \
-		make ; \
+		make all ; \
 	done

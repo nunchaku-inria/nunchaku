@@ -29,7 +29,7 @@ type 'a view =
   | Builtin of 'a Builtin.t (** built-in operation *)
   | Bind of Binder.t * 'a var * 'a
   | Let of 'a var * 'a * 'a
-  | Match of 'a * 'a TI.cases (** shallow pattern-match *)
+  | Match of 'a * 'a TI.cases * 'a TI.default_case (** shallow pattern-match *)
   | TyBuiltin of TyBuiltin.t (** Builtin type *)
   | TyArrow of 'a * 'a
 
@@ -59,7 +59,7 @@ module Make(T : TI.REPR)
     | TI.TyMeta _ -> assert false
     | TI.Bind ((`Forall | `Exists | `Fun | `Mu) as b,v,t) -> Bind(b,v,t)
     | TI.Let (v,t,u) -> Let(v,t,u)
-    | TI.Match (t,l) -> Match (t,l)
+    | TI.Match (t,l,def) -> Match (t,l,def)
     | TI.TyBuiltin b -> TyBuiltin b
     | TI.TyArrow (a,b) -> TyArrow(a,b)
 end

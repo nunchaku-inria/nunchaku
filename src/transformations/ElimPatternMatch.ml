@@ -64,22 +64,29 @@ let elim_match ~mode ~env t =
     | TI.TyBuiltin _ -> t
     | TI.TyArrow (a,b) ->
       U.ty_arrow (elim_match_ ~subst a)(elim_match_ ~subst b)
-    | TI.Match (t,l) when should_encode t ->
+    | TI.Match (t,l,def) when should_encode t ->
       (* change t into t';
         then a decision tree is built where
           each case  [c,vars,rhs] is changed into:
           "if is-c t' then rhs[vars_i := select-c-i t'] else ..."
       *)
       let t' = elim_match_ ~subst t in
-      (* remove first binding to make it the default case *)
-      let c1, (vars1,rhs1) = ID.Map.choose l in
-      let subst1 = CCList.Idx.foldi
-          (fun subst i vi -> Subst.add ~subst vi (mk_select_ c1 i t'))
-          subst vars1
+      (* get a default case (last leaf of the decision tree) *)
+      let l, default_case = match def with
+        | TermInner.Default_some (rhs,_) ->
+          l, elim_match_ ~subst rhs
+        | TermInner.Default_none ->
+          (* remove first binding to make it the default case *)
+          let c1, (vars1,rhs1) = ID.Map.choose l in
+          let subst0 = CCList.Idx.foldi
+              (fun subst i vi -> Subst.add ~subst vi (mk_select_ c1 i t'))
+              subst vars1
+          in
+          let default_case = elim_match_ ~subst:subst0 rhs1 in
+          let l = ID.Map.remove c1 l in
+          l, default_case
       in
-      let default_case = elim_match_ ~subst:subst1 rhs1 in
       (* series of ite with selectors on the other cases *)
-      let l = ID.Map.remove c1 l in
       ID.Map.fold
         (fun c (vars,rhs) acc ->
            let subst' = CCList.Idx.foldi
@@ -90,8 +97,9 @@ let elim_match ~mode ~env t =
            U.ite (mk_test_ c t') rhs' acc)
         l
         default_case
-    | TI.Match (t, l) ->
+    | TI.Match (t, l, def) ->
       let t = elim_match_ ~subst t in
+      let def = TermInner.map_default_case (elim_match_ ~subst) def in
       let l =
         ID.Map.map
           (fun (vars,rhs) ->
@@ -99,7 +107,7 @@ let elim_match ~mode ~env t =
              vars, elim_match_ ~subst rhs)
           l
       in
-      U.match_with t l
+      U.match_with t l ~def
 
   and elim_match_l_ ~subst l =
     List.map (elim_match_ ~subst) l

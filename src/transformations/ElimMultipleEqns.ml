@@ -72,6 +72,8 @@ let dnode_add_bool d b x = match d, b with
   | DN_match _, _ ->
       errorf_ "@[<2>expected boolean decision node@]"
 
+let dnode_all_cstors d = d.dn_tydef.Stmt.ty_cstors
+
 let dnode_add_cstor d c x = match d with
   | DN_match d ->
       let allowed_cstors = d.dn_tydef.Stmt.ty_cstors in
@@ -229,12 +231,28 @@ and compile_dnode ~local_state v next_vars dn : term = match dn with
     compile_equations ~local_state next_vars dn.dn_wildcard
 | DN_match dn ->
     (* one level of matching *)
-    let l = ID.Map.map
-      (fun cstor ->
-        let id = cstor.Stmt.cstor_name in
+    let def = match dn.dn_wildcard with
+      | [] -> TI.Default_none
+      | l ->
+        let cases =
+          List.map (fun (pats,rhs,side,subst) -> pats, rhs, side, subst) l
+        and map =
+          dnode_all_cstors dn
+          |> ID.Map.filter (fun id _ -> not (ID.Map.mem id dn.dn_by_cstor))
+          |> ID.Map.map (fun c -> List.length c.Stmt.cstor_args)
+        in
+        if ID.Map.is_empty map
+        then TI.Default_none (* exhaustive *)
+        else (
+          let rhs = compile_equations ~local_state next_vars cases in
+          TI.Default_some (rhs, map)
+        )
+    and l = ID.Map.mapi
+      (fun id cases ->
         Utils.debugf ~section 5 "compile_dnode for %a on cstor %a"
           (fun k -> k Var.print v ID.print id);
         (* fresh vars for the constructor's arguments *)
+        let cstor = ID.Map.find id dn.dn_tydef.Stmt.ty_cstors in
         let vars = List.mapi
           (fun i ty -> Var.make ~ty ~name:(spf "v_%d" i))
           cstor.Stmt.cstor_args
@@ -244,30 +262,24 @@ and compile_dnode ~local_state v next_vars dn : term = match dn with
           (fun (pats,rhs,side,subst) ->
             List.map (fun _ -> P_any) vars @ pats, rhs, side, subst)
           dn.dn_wildcard
-        in
-        (* does this constructor also have some explicit branches? *)
-        let cases =
-          try
-            let l = ID.Map.find id dn.dn_by_cstor in
-            assert (l <> []);
-            List.map
-              (fun (new_pats,pats,rhs,side,subst) ->
-                assert (List.length new_pats=List.length vars);
-                new_pats @ pats, rhs, side, subst)
-              l
-          with Not_found -> []
+        (* explicit sub-cases *)
+        and cases =
+          List.map
+            (fun (new_pats,pats,rhs,side,subst) ->
+               assert (List.length new_pats=List.length vars);
+               new_pats @ pats, rhs, side, subst)
+            cases
         in
         let rhs' =
-          compile_equations ~local_state
-            (vars @ next_vars) (cases @ wildcard_cases)
+          compile_equations ~local_state (vars @ next_vars) (cases @ wildcard_cases)
         in
         (* see whether the variables were renamed *)
         let vars = List.map (Subst.deref_rec ~subst:local_state.renaming) vars in
         vars, rhs')
-      dn.dn_tydef.Stmt.ty_cstors
+      dn.dn_by_cstor
     in
     let v = Subst.deref_rec ~subst:local_state.renaming v in
-    U.match_with (U.var v) l
+    U.match_with (U.var v) l ~def
 
 (* @param env the environment for types and constructors
    @param id the symbol being defined
