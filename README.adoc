@@ -19,13 +19,13 @@ There is a dedicated mailing list at nunchaku-users@lists.gforge.inria.fr
 The https://github.com/nunchaku-inria/nunchaku/issues[issue tracker] can be
 used for reporting bugs.
 
+== Documentation
+
+the API documentation can be found at https://nunchaku-inria.github.io/nunchaku/.
 == Build
 
 To build Nunchaku, there are several ways.
 
-== Documentation
-
-the API documentation can be found at https://nunchaku-inria.github.io/nunchaku/.
 
 === Released versions
 
