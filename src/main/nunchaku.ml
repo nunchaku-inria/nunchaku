@@ -396,7 +396,8 @@ let make_model_pipeline () =
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_)
+      ~check ~mode:`Use_selectors @@@
     Tr.ElimData.Data.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
     Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
@@ -449,7 +450,8 @@ let make_model_pipeline () =
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
        *)
-    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Tr.ElimIndPreds.pipe ~mode:`Use_match
+      ~print:(!print_elim_preds_ || !print_all_) ~check @@@
     Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
     Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
     close_task smbc
@@ -462,7 +464,9 @@ let make_model_pipeline () =
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Tr.ElimIndPreds.pipe
+      ~mode:`Use_selectors
+      ~print:(!print_elim_preds_ || !print_all_) ~check @@@
     Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
     Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@

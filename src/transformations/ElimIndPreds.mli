@@ -14,7 +14,17 @@ val name : string
 type term = TermInner.Default.t
 type decode_state
 
+(** How to eliminate inductive predicates *)
+type mode =
+  [ `Use_selectors
+    (** guard sub-cases with data_select and data_test *)
+
+  | `Use_match
+    (** use pattern-matching for picking sub-cases *)
+  ]
+
 val elim_ind_preds :
+  mode:mode ->
   (term, term) Problem.t ->
   (term, term) Problem.t * decode_state
 
@@ -24,6 +34,7 @@ val decode_model : state:decode_state -> (term,term) Model.t -> (term,term) Mode
 val pipe :
   print:bool ->
   check:bool ->
+  mode:mode ->
   ((term, term) Problem.t,
     (term, term) Problem.t,
     (term,term) Problem.Res.t, (term,term) Problem.Res.t) Transform.t
@@ -35,6 +46,7 @@ val pipe_with :
   decode:(decode_state -> 'c -> 'd) ->
   print:bool ->
   check:bool ->
+  mode:mode ->
   ((term, term) Problem.t,
     (term, term) Problem.t,
     'c, 'd

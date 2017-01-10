@@ -14,12 +14,13 @@ module A = Tip_ast
 module Res = Problem.Res
 module E = CCResult
 module S = Scheduling
-module St = Statement
-module PSt = Statement.Print(P)(P)
+module Stmt = Statement
+module PStmt = Statement.Print(P)(P)
 
 type term = TermInner.Default.t
 type ty = term
 type problem = (term,ty) Problem.t
+type env = (term,ty) Env.t
 
 let name = "smbc"
 let section = Utils.Section.make name
@@ -53,54 +54,98 @@ let erase = ID.Erase.create_state ()
 let id_to_string id = ID.Erase.to_name erase id
 let id_of_string s = try Some (ID.Erase.of_name erase s) with Not_found -> None
 
+(** {2 Local Transformation}
+
+    We perform a few local transformations.
+    In particular, we replace data testers by named functions, and
+    give an explicit name to selectors *)
+
+module ID_int_tbl = CCHashtbl.Make(struct
+    type t = ID.t * int
+    let equal (a,i)(b,j) = ID.equal a b && i=j
+    let hash (a,i) = Hashtbl.hash (ID.hash a,i)
+  end)
+
+type state = {
+  local_statements: A.statement CCVector.vector;
+  data_select_tbl: ID.t ID_int_tbl.t;
+  data_test_tbl: ID.t ID.Tbl.t;
+  env: env;
+}
+
+let mk_state (env:env): state = {
+  env;
+  local_statements=CCVector.create();
+  data_select_tbl = ID_int_tbl.create 16;
+  data_test_tbl = ID.Tbl.create 16;
+}
+
+(* remove and return the new statements *)
+let local_statements (st:state): A.statement list =
+  let l = CCVector.to_list st.local_statements in
+  CCVector.clear st.local_statements;
+  l
+
 (** {2 Printing to SMBC} *)
 
-let rec term_to_tip(t:term): A.term = match T.repr t with
+let data_select_fun st c i : ID.t =
+  match ID_int_tbl.get st.data_select_tbl (c,i) with
+    | Some id -> id
+    | None ->
+      Utils.failwithf
+        "cannot find TIP id for data select `select-%a-%d`" ID.print_full c i
+
+let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
   | TI.Const id -> A.const (id_to_string id)
   | TI.Var v -> A.const (conv_var v)
   | TI.App (f, l) ->
-    let l = List.map term_to_tip l in
+    let l = List.map (term_to_tip st) l in
     begin match T.repr f with
       | TI.Const id -> A.app (id_to_string id) l
-      | _ -> List.fold_left A.ho_app (term_to_tip f) l
+      | TI.Builtin (`DataTest c) ->
+        A.app (data_test_fun st c |> id_to_string) l
+      | TI.Builtin (`DataSelect (c,i)) ->
+        A.app (data_select_fun st c i |> id_to_string) l
+      | _ -> List.fold_left A.ho_app (term_to_tip st f) l
     end
   | TI.Builtin b ->
     begin match b with
       | `True -> A.true_
       | `False -> A.false_
-      | `Or l -> A.or_ (List.map term_to_tip l)
-      | `And l -> A.and_ (List.map term_to_tip l)
-      | `Imply (a,b) -> A.imply (term_to_tip a)(term_to_tip b)
-      | `Ite (a,b,c) -> A.if_ (term_to_tip a)(term_to_tip b)(term_to_tip c)
-      | `Eq (a,b) -> A.eq (term_to_tip a)(term_to_tip b)
-      | `Not a -> A.not_ (term_to_tip a)
-      | `DataTest _ -> out_of_scopef "cannot convert to TIP data test %a" P.print t
-      | `DataSelect _ -> out_of_scopef "cannot convert to TIP data select %a" P.print t
+      | `Or l -> A.or_ (List.map (term_to_tip st) l)
+      | `And l -> A.and_ (List.map (term_to_tip st) l)
+      | `Imply (a,b) -> A.imply (term_to_tip st a)(term_to_tip st b)
+      | `Ite (a,b,c) -> A.if_ (term_to_tip st a)(term_to_tip st b)(term_to_tip st c)
+      | `Eq (a,b) -> A.eq (term_to_tip st a)(term_to_tip st b)
+      | `Not a -> A.not_ (term_to_tip st a)
+      | `DataTest c -> A.const (data_test_fun st c |> id_to_string)
+      | `DataSelect (c,i) -> A.const (data_select_fun st c i |> id_to_string)
       | `Undefined_atom _
       | `Undefined_self (_,_) -> raise (Conversion_error t)
       | `Unparsable _
       | `Guard _ -> assert false (* TODO: better error: should not happen *)
     end
   | TI.Bind (`Fun,v,body) ->
-    A.fun_ (conv_typed_var v) (term_to_tip body)
+    A.fun_ (conv_typed_var v) (term_to_tip  st body)
   | TI.Bind (`Forall,v,body) ->
-    A.forall [conv_typed_var v] (term_to_tip body)
+    A.forall [conv_typed_var v] (term_to_tip st body)
   | TI.Bind (`Exists,v,body) ->
-    A.exists [conv_typed_var v] (term_to_tip body)
+    A.exists [conv_typed_var v] (term_to_tip st body)
   | TI.Bind (`TyForall,_,_)
   | TI.Bind (`Mu,_,_) -> out_of_scopef "cannot convert to TIP µ %a" P.print t
   | TI.Let (v,t,u) ->
-    A.let_ [conv_var v, term_to_tip t] (term_to_tip u)
+    A.let_ [conv_var v, term_to_tip st t] (term_to_tip st u)
   | TI.Match (u,map,def) ->
-    let u = term_to_tip u in
+    let u = term_to_tip st u in
     let cases =
        ID.Map.to_list map
        |> List.map
          (fun (c, (vars,rhs)) ->
-            A.Match_case (id_to_string c, List.map conv_var vars, term_to_tip rhs))
+            A.Match_case
+              (id_to_string c, List.map conv_var vars, term_to_tip st rhs))
     and def = match def with
       | TI.Default_none -> []
-      | TI.Default_some (rhs,_) -> [A.Match_default (term_to_tip rhs)]
+      | TI.Default_some (rhs,_) -> [A.Match_default (term_to_tip st rhs)]
     in
     A.match_ u (cases @ def)
   | TI.TyBuiltin _
@@ -125,6 +170,38 @@ and conv_typed_var v = conv_var v, ty_to_tip (Var.ty v)
 and conv_tyvar v = assert (U.ty_is_Type (Var.ty v)); conv_var v
 and conv_var v = id_to_string (Var.id v)
 
+(* a local function for "is-c" data tester *)
+and data_test_fun (st:state) (c:ID.t): ID.t =
+  let ty_c = Env.find_ty_exn ~env:st.env c in
+  let ty_args, c_args, data_ty = U.ty_unfold ty_c in
+  assert (ty_args = []); (* mono *)
+  try ID.Tbl.find st.data_test_tbl c
+  with Not_found ->
+    let id = ID.make_f "is-%s" (ID.to_string_slug c) in
+    (* define id *)
+    let x = "x" in
+    let decl = {
+      A.fun_ty_vars = [];
+      fun_name = id_to_string id;
+      fun_args = [x, ty_to_tip data_ty];
+      fun_ret = A.ty_bool;
+    } in
+    (* [match x with c _ -> true | default -> false] *)
+    let body =
+      let c_vars = List.mapi (fun i _ -> "x_" ^ string_of_int i) c_args in
+      A.match_ (A.const x)
+        [ A.Match_case (id_to_string c, c_vars, A.true_);
+          A.Match_default A.false_;
+        ]
+    in
+    let def = A.fun_def {A.fr_decl=decl; fr_body=body} in
+    (* save and declare *)
+    Utils.debugf ~section 3 "@[<2>define `is-%a` as@ `@[%a@]`@]"
+      (fun k->k ID.print_full c A.pp_stmt def);
+    CCVector.push st.local_statements def;
+    ID.Tbl.add st.data_test_tbl c id;
+    id
+
 let decl_to_tip id ty : A.statement =
   let s = id_to_string id in
   let ty_vars, ty_args, ty_ret = U.ty_unfold ty in
@@ -139,95 +216,109 @@ let decl_to_tip id ty : A.statement =
        (ty_to_tip ty_ret)
   )
 
-let statement_to_tip (st:(term,ty)St.t): A.statement list = match St.view st with
-  | St.Decl {St.defined_head=id; defined_ty=ty; _} ->
-    let vars, _, _ = U.ty_unfold ty in
-    if vars=[]
-    then [decl_to_tip id ty]
-    else out_of_scopef "cannot encode to TIP poly statement %a" PSt.print st
-  | St.Axiom (St.Axiom_std l) ->
-    List.map (fun ax -> A.assert_ (term_to_tip ax)) l
-  | St.Axiom (St.Axiom_spec s) ->
-    (* TODO: if some variables have type {fun,datatype}, then raise Out_of_scope,
-       for SMBC will not be able to handle them *)
-    (* first declare, then axiomatize *)
-    assert (s.St.spec_ty_vars=[]);
-    let decls =
-      St.defined_of_spec s
-      |> Sequence.map
-        (fun {St.defined_head=id; defined_ty=ty; _} ->
-           decl_to_tip id ty)
-      |> Sequence.to_list
-    and axioms =
-      s.St.spec_axioms
-      |> List.map
-        (fun t -> A.assert_ (term_to_tip t))
-    in
-    decls @ axioms
-  | St.Axiom (St.Axiom_rec l) ->
-    let l =
-      List.map
-        (fun def ->
-           if def.St.rec_ty_vars <> [] then out_of_scopef "polymorphic `@[%a@]`" PSt.print st;
-           let {St.defined_head=id; defined_ty=ty; _} = def.St.rec_defined in
-           let name = id_to_string id in
-           let _, _, ty_ret = U.ty_unfold ty in
-           let vars, body = match def.St.rec_eqns with
-             | St.Eqn_single (vars, rhs) ->
-               List.map conv_typed_var vars, term_to_tip rhs
-             | St.Eqn_nested _ | St.Eqn_app _ -> assert false
-           in
-           {A.
-             fun_ty_vars=[];
-             fun_name=name;
-             fun_ret=ty_to_tip ty_ret;
-             fun_args=vars;
-           }, body)
-        l
-    in
-    begin match l with
-      | [decl,body] ->
-        [A.fun_rec {A.fr_decl=decl; fr_body=body}]
-      | l ->
-        let decls, bodies = List.split l in
-        [A.funs_rec decls bodies]
-    end
-  | St.Goal g ->
-    let neg_g = term_to_tip (U.not_ g) in
-    [A.assert_not ~ty_vars:[] neg_g]
-  | St.TyDef (`Codata,_) -> out_of_scopef "cannot encode Codata %a" PSt.print st
-  | St.TyDef (`Data, l) ->
-    let l =
-      List.map
-        (fun d ->
-           assert (d.St.ty_vars=[]);
-           let name = id_to_string d.St.ty_id in
-           let cstors =
-             ID.Map.values d.St.ty_cstors
-             |> Sequence.map
-               (fun  c ->
-                  let cstor_name = id_to_string c.St.cstor_name in
-                  let cstor_args =
-                    c.St.cstor_args
-                    |> List.mapi
-                      (fun i ty -> Printf.sprintf "%s_%d" cstor_name i, ty_to_tip ty)
-                  in
-                  {A.cstor_name; cstor_args})
-             |> Sequence.to_list
-           in
-           name, cstors)
-        l
-    in
-    [A.data [] l]
-  | St.Pred (_,_,_)
-  | St.Copy _ -> assert false
+let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
+  let new_st = match Stmt.view st with
+    | Stmt.Decl {Stmt.defined_head=id; defined_ty=ty; _} ->
+      let vars, _, _ = U.ty_unfold ty in
+      if vars=[]
+      then [decl_to_tip id ty]
+      else out_of_scopef "cannot encode to TIP poly statement %a" PStmt.print st
+    | Stmt.Axiom (Stmt.Axiom_std l) ->
+      List.map (fun ax -> A.assert_ (term_to_tip state ax)) l
+    | Stmt.Axiom (Stmt.Axiom_spec s) ->
+      (* TODO: if some variables have type {fun,datatype}, then raise Out_of_scope,
+         for SMBC will not be able to handle them *)
+      (* first declare, then axiomatize *)
+      assert (s.Stmt.spec_ty_vars=[]);
+      let decls =
+        Stmt.defined_of_spec s
+        |> Sequence.map
+          (fun {Stmt.defined_head=id; defined_ty=ty; _} ->
+             decl_to_tip id ty)
+        |> Sequence.to_list
+      and axioms =
+        s.Stmt.spec_axioms
+        |> List.map
+          (fun t -> A.assert_ (term_to_tip state t))
+      in
+      decls @ axioms
+    | Stmt.Axiom (Stmt.Axiom_rec l) ->
+      let l =
+        List.map
+          (fun def ->
+             if def.Stmt.rec_ty_vars <> [] then (
+               out_of_scopef "polymorphic `@[%a@]`" PStmt.print st;
+             );
+             let {Stmt.defined_head=id; defined_ty=ty; _} = def.Stmt.rec_defined in
+             let name = id_to_string id in
+             let _, _, ty_ret = U.ty_unfold ty in
+             let vars, body = match def.Stmt.rec_eqns with
+               | Stmt.Eqn_single (vars, rhs) ->
+                 List.map conv_typed_var vars, term_to_tip state rhs
+               | Stmt.Eqn_nested _ | Stmt.Eqn_app _ -> assert false
+             in
+             {A.
+               fun_ty_vars=[];
+               fun_name=name;
+               fun_ret=ty_to_tip ty_ret;
+               fun_args=vars;
+             }, body)
+          l
+      in
+      begin match l with
+        | [decl,body] ->
+          [A.fun_rec {A.fr_decl=decl; fr_body=body}]
+        | l ->
+          let decls, bodies = List.split l in
+          [A.funs_rec decls bodies]
+      end
+    | Stmt.Goal g ->
+      let neg_g = term_to_tip state (U.not_ g) in
+      [A.assert_not ~ty_vars:[] neg_g]
+    | Stmt.TyDef (`Codata,_) -> out_of_scopef "cannot encode Codata %a" PStmt.print st
+    | Stmt.TyDef (`Data, l) ->
+      (* declare datatypes, along with their selectors *)
+      let l =
+        List.map
+          (fun d ->
+             assert (d.Stmt.ty_vars=[]);
+             let name = id_to_string d.Stmt.ty_id in
+             let cstors =
+               ID.Map.values d.Stmt.ty_cstors
+               |> Sequence.map
+                 (fun c ->
+                    let cstor_name = id_to_string c.Stmt.cstor_name in
+                    let cstor_args =
+                      c.Stmt.cstor_args
+                      |> List.mapi
+                        (fun i ty ->
+                           let id_select =
+                             ID.make_f "select-%s-%d" cstor_name i
+                           in
+                           ID_int_tbl.add state.data_select_tbl
+                             (c.Stmt.cstor_name,i) id_select;
+                           id_to_string id_select, ty_to_tip ty)
+                    in
+                    {A.cstor_name; cstor_args})
+               |> Sequence.to_list
+             in
+             name, cstors)
+          l
+      in
+      [A.data [] l]
+    | Stmt.Pred (_,_,_)
+    | Stmt.Copy _ -> assert false
+  in
+  local_statements state @ new_st
 
 (* print a problem as TIP *)
 let print_pb out (pb:problem): unit =
+  let env = Problem.env pb in
+  let state = mk_state env in
   Problem.statements pb
   |> CCVector.iter
     (fun st ->
-       let l = statement_to_tip st in
+       let l = statement_to_tip state st in
        List.iter (Format.fprintf out "%a@." A.pp_stmt) l);
   Format.fprintf out "(check-sat)@.";
   ()
@@ -237,14 +328,14 @@ let print_pb out (pb:problem): unit =
 let error_parse_model msg = raise (Parse_result_error msg)
 let error_parse_modelf msg = Utils.exn_ksprintf ~f:error_parse_model msg
 
-module StrMap = CCMap.Make(String)
+module StmtrMap = CCMap.Make(String)
 
 (* local mapping/typing env for variables *)
-type env = [`Var of ty Var.t | `Subst of term] StrMap.t
+type parse_env = [`Var of ty Var.t | `Subst of term] StmtrMap.t
 
-let empty_env : env = StrMap.empty
+let empty_env : parse_env = StmtrMap.empty
 
-let id_of_tip (env:env) (s:string):
+let id_of_tip (env:parse_env) (s:string):
   [`Var of _ Var.t | `Const of ID.t | `Undef of ID.t | `Subst of term] =
   begin match id_of_string s with
     | None when s.[0] = '$' ->
@@ -259,7 +350,7 @@ let id_of_tip (env:env) (s:string):
       `Undef id
     | Some id -> `Const id
     | None ->
-      begin match StrMap.get s env with
+      begin match StmtrMap.get s env with
         | Some (`Var v) -> `Var v
         | Some (`Subst t) -> `Subst t
         | None ->
@@ -267,7 +358,7 @@ let id_of_tip (env:env) (s:string):
       end
   end
 
-let rec term_of_tip (env:env) (t:A.term): term = match t with
+let rec term_of_tip (env:parse_env) (t:A.term): term = match t with
   | A.True -> U.true_
   | A.False -> U.false_
   | A.Const c -> term_of_id env c
@@ -285,7 +376,7 @@ let rec term_of_tip (env:env) (t:A.term): term = match t with
     let env = List.fold_left
       (fun env (s,t) ->
          let t = term_of_tip env t in
-         StrMap.add s (`Subst t) env)
+         StmtrMap.add s (`Subst t) env)
       env l
     in
     term_of_tip env u
@@ -312,7 +403,7 @@ let rec term_of_tip (env:env) (t:A.term): term = match t with
     U.exists_l v body
   | A.Cast (_,_) -> assert false
 
-and term_of_id (env:env) (s:string): term = match id_of_tip env s with
+and term_of_id (env:parse_env) (s:string): term = match id_of_tip env s with
   | `Const id -> U.const id
   | `Undef id ->
     (* FIXME: need some other primitive, e.g. "hole", to represent this? *)
@@ -327,11 +418,11 @@ and ty_of_tip (ty:A.ty): ty = match ty with
   | A.Ty_app (f, l) ->
     U.ty_app (term_of_id empty_env f) (List.map ty_of_tip l)
 
-and typed_var_of_tip (env:env) (s,ty) =
+and typed_var_of_tip (env:parse_env) (s,ty) =
   let id = ID.make s in
   let ty = ty_of_tip ty in
   let v = Var.of_id id ~ty in
-  StrMap.add s (`Var v) env, v
+  StmtrMap.add s (`Var v) env, v
 
 (* convert a term into a decision tree *)
 let dt_of_term (t:term): (term,ty) Model.DT.t =

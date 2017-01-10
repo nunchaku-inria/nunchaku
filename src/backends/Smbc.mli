@@ -8,6 +8,7 @@ open Nunchaku_core
 type term = TermInner.Default.t
 type ty = term
 type problem = (term,ty) Problem.t
+type env = (term,ty) Env.t
 
 val is_available : unit -> bool
 (** test whether the solver is available *)
