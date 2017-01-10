@@ -54,6 +54,9 @@ let as_cstors ~env ~subst ~root t =
                that [select = select'] to eliminate [v] *)
             conds := U.eq select select' :: !conds
         end
+    | TI.Const id when Env.is_cstor (Env.find_exn ~env id) ->
+        (* nullary constructor, easy *)
+        conds := U.eq select t :: !conds;
     | TI.App (f, l) ->
         begin match T.repr f with
         | TI.Const id ->
