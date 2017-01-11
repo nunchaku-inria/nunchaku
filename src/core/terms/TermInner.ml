@@ -609,11 +609,20 @@ module type UTIL_REPR = sig
   val ty_is_unitype : t_ -> bool
 
   val ty_arity : t_ -> int
-  (** If type is a function [a1 -> ... -> an -> ret], returns [n].
-      Returns [0] otherwise. *)
+  (** If type is a function [forall v1...vk. a1 -> ... -> an -> ret],
+      returns [k+n]. Returns [0] otherwise.
+      In other words, this returns the maximal number of arguments
+      anything with this type can be applied to. *)
 
   val ty_num_param : t_ -> int
-  (** Number of type variables that must be bound in the type. *)
+  (** Number of type arguments that any value of this type accepts.
+
+      NOTE: this is not simply [ty_unfold], because some nameless parameters
+      might still be of type "ty".
+
+      For instance, returns 2 on the type
+      [pi a:type. type -> foo -> bar],
+      because any value with this type should be applied to 2 type parameters. *)
 end
 
 let iter_default_case f = function
@@ -815,14 +824,19 @@ module UtilRepr(T : REPR)
     | Bind (`TyForall, _,_) -> None
     | _ -> assert false
 
-  (* number of parameters of this (polymorphic?) T.t type *)
-  let ty_num_param ty =
-    let vars, _, _ = ty_unfold ty in
-    List.length vars
+  (* number of parameters of this (polymorphic?) T.t type. *)
+  let rec ty_num_param ty = match T.repr ty with
+    | TyMeta _ | Var _ | Const _ | App _ | TyBuiltin _ -> 0
+    | TyArrow (a,t') ->
+        if ty_is_Type a
+        then 1 + ty_num_param t' (* [a] is a type parameter *)
+        else 0 (* asks for term parameters *)
+    | Bind (`TyForall, _,t) -> 1 + ty_num_param t
+    | _ -> assert false
 
   let ty_arity ty =
-    let _, args, _ = ty_unfold ty in
-    List.length args
+    let vars, args, _ = ty_unfold ty in
+    List.length vars + List.length args
 end
 
 exception Undefined of id
