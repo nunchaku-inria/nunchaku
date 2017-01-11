@@ -608,6 +608,10 @@ module type UTIL_REPR = sig
 
   val ty_is_unitype : t_ -> bool
 
+  val ty_arity : t_ -> int
+  (** If type is a function [a1 -> ... -> an -> ret], returns [n].
+      Returns [0] otherwise. *)
+
   val ty_num_param : t_ -> int
   (** Number of type variables that must be bound in the type. *)
 end
@@ -812,18 +816,13 @@ module UtilRepr(T : REPR)
     | _ -> assert false
 
   (* number of parameters of this (polymorphic?) T.t type *)
-  let rec ty_num_param ty = match T.repr ty with
-    | TyMeta _ -> 0
-    | Var _ -> 0
-    | Const _
-    | App _
-    | TyBuiltin _ -> 0
-    | TyArrow (a,t') ->
-        if ty_is_Type a
-        then 1 + ty_num_param t' (* [a] is a type parameter *)
-        else 0 (* asks for term parameters *)
-    | Bind (`TyForall, _,t) -> 1 + ty_num_param t
-    | _ -> assert false
+  let ty_num_param ty =
+    let vars, _, _ = ty_unfold ty in
+    List.length vars
+
+  let ty_arity ty =
+    let _, args, _ = ty_unfold ty in
+    List.length args
 end
 
 exception Undefined of id

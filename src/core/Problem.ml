@@ -180,7 +180,7 @@ module Res = struct
   let print_info out i =
     let pp_msg out = function
       | None -> ()
-      | Some s -> Format.fprintf out ",@ message=%S" s
+      | Some s -> Format.fprintf out ",@ message=\"%s\"" s
     in
     Format.fprintf out "{@[<2>backend:%s, time:%.1fs%a@]}"
       i.backend i.time pp_msg i.message
