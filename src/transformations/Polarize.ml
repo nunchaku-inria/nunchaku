@@ -281,9 +281,11 @@ let define_rec
   let defined = { defined with defined_head=(if is_pos then p.pos else p.neg); } in
   Utils.debugf ~section 5 "@[<2>polarize def `@[%a@]`@ on %B@]"
     (fun k->k PStmt.print_rec_def def is_pos);
-  let rec_eqns = map_eqns_bind Var.Subst.empty def.rec_eqns
-    ~bind:Subst.rename_var
-    ~term:(polarize_term_rec ~self (if is_pos then Pol.Pos else Pol.Neg))
+  let pol = if is_pos then Pol.Pos else Pol.Neg in
+  let rec_eqns =
+    map_eqns_bind Var.Subst.empty pol def.rec_eqns
+      ~bind:Subst.rename_var
+      ~term:(fun subst pol -> polarize_term_rec ~self pol subst)
   in
   { def with
     rec_defined=defined;
@@ -310,25 +312,27 @@ let define_pred
       (term, term) pred_clause
     = fun clause ->
       let pol = if is_pos then Pol.Pos else Pol.Neg in
-      (* we keep the same polarity in the guard, because it is not
-         a proper implication. Instead we see this as
+      (* we keep the same polarity in the conclusion and guard, because it is not
+         a proper implication.
+         Instead we see this as
          [concl <-> exists... guard] which, in positive polarity, will become
          [concl+ => exists... guard], making guard positive too *)
       map_clause_bind Var.Subst.empty clause
-        ~bind:Subst.rename_var ~term:(polarize_term_rec ~self pol)
+        ~bind:Subst.rename_var
+        ~term:(fun subst _ -> polarize_term_rec ~self pol subst)
   in
   let pred_clauses = List.map tr_clause def.pred_clauses in
   { def with
       pred_defined=defined;
       pred_clauses; }
 
-let polarize_term ~self subst t = polarize_term_rec ~self Pol.NoPol subst t
+let polarize_term ~self subst pol t = polarize_term_rec ~self pol subst t
 
 let dispatch = {
   Trav.
 
   do_term = (fun self ~depth:_ t ->
-    polarize_term ~self Var.Subst.empty t
+    polarize_term ~self Var.Subst.empty Pol.NoPol t
   );
 
   do_def = (fun self ~depth:_ def act ->
@@ -373,7 +377,7 @@ let dispatch = {
         let def =
           Stmt.map_pred_bind Var.Subst.empty def
             ~bind:Subst.rename_var ~ty:(fun _ ty -> ty)
-            ~term:(polarize_term_rec ~self Pol.Pos) in
+            ~term:(fun subst pol -> polarize_term_rec ~self pol subst) in
         def
     | `Polarize is_pos ->
         let p =

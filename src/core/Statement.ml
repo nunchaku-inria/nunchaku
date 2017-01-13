@@ -233,7 +233,7 @@ let map_defined ~f d = {
   defined_ty=f d.defined_ty;
 }
 
-let map_eqns_bind ~bind ~term acc eqn =
+let map_eqns_bind ~bind ~term acc pol eqn =
   match eqn with
     | Eqn_nested l ->
       Eqn_nested
@@ -241,20 +241,20 @@ let map_eqns_bind ~bind ~term acc eqn =
            (fun (vars,args,rhs,side) ->
               let acc, vars = Utils.fold_map bind acc vars in
               vars,
-              List.map (term acc) args,
-              term acc rhs,
-              List.map (term acc) side)
+              List.map (term acc pol) args,
+              term acc pol rhs,
+              List.map (term acc pol) side)
            l)
     | Eqn_app (app_l, vars, lhs, rhs) ->
       let acc, vars = Utils.fold_map bind acc vars in
-      Eqn_app (app_l, vars, term acc lhs, term acc rhs)
+      Eqn_app (app_l, vars, term acc pol lhs, term acc pol rhs)
     | Eqn_single (vars,rhs) ->
       let acc, vars = Utils.fold_map bind acc vars in
-      Eqn_single (vars, term acc rhs)
+      Eqn_single (vars, term acc pol rhs)
 
 let map_eqns ~term ~ty c =
   let bind () v = (), Var.update_ty ~f:ty v in
-  map_eqns_bind () c ~bind ~term:(fun () -> term)
+  map_eqns_bind () Polarity.NoPol c ~bind ~term:(fun () _pol -> term)
 
 let map_copy_wrt f wrt = match wrt with
   | Wrt_nothing -> Wrt_nothing
@@ -268,26 +268,27 @@ let map_copy_bind ~bind ~term ~ty acc c =
     copy_of = ty acc' c.copy_of;
     copy_to = ty acc' c.copy_to;
     copy_ty = ty acc c.copy_ty;
-    copy_wrt = map_copy_wrt (term acc') c.copy_wrt;
+    copy_wrt = map_copy_wrt (term acc' Polarity.NoPol) c.copy_wrt;
     copy_abstract_ty = ty acc' c.copy_abstract_ty;
     copy_concrete_ty = ty acc' c.copy_concrete_ty;
   }
 
 let map_copy ~term ~ty c =
   let bind () v = (), Var.update_ty ~f:ty v in
-  map_copy_bind () c ~bind ~term:(fun () -> term) ~ty:(fun () -> ty)
+  map_copy_bind () c ~bind ~term:(fun () _pol -> term) ~ty:(fun () -> ty)
 
 let map_rec_def_bind ~bind ~term ~ty acc t =
   let acc', vars = Utils.fold_map bind acc t.rec_ty_vars in
+  let pol = ID.polarity t.rec_defined.defined_head in
   {
     rec_defined=map_defined ~f:(ty acc) t.rec_defined;
     rec_ty_vars=vars;
-    rec_eqns=map_eqns_bind ~bind ~term acc' t.rec_eqns;
+    rec_eqns=map_eqns_bind ~bind ~term acc' pol t.rec_eqns;
   }
 
 let map_rec_def ~term ~ty t =
   let bind () v = (), Var.update_ty v ~f:ty in
-  map_rec_def_bind ~bind ~term:(fun () -> term) ~ty:(fun () -> ty) () t
+  map_rec_def_bind ~bind ~term:(fun () _pol -> term) ~ty:(fun () -> ty) () t
 
 let map_rec_defs ~term ~ty t = List.map (map_rec_def ~term ~ty) t
 
@@ -298,24 +299,24 @@ let map_spec_defs_bind ~bind ~term ~ty acc t =
   let acc', vars = Utils.fold_map bind acc t.spec_ty_vars in
   { spec_ty_vars=vars;
     spec_defined=List.map (map_defined ~f:(ty acc)) t.spec_defined;
-    spec_axioms=List.map (term acc') t.spec_axioms;
+    spec_axioms=List.map (term acc' Polarity.Pos) t.spec_axioms;
   }
 
 let map_spec_defs ~term ~ty t =
   let bind () v = (), Var.update_ty ~f:ty v in
-  map_spec_defs_bind () t ~bind ~term:(fun _ -> term) ~ty:(fun _ -> ty)
+  map_spec_defs_bind () t ~bind ~term:(fun _ _pol -> term) ~ty:(fun _ -> ty)
 
 let map_clause_bind ~bind ~term acc c =
   let acc, vars = Utils.fold_map bind acc c.clause_vars in
   {
     clause_vars=vars;
-    clause_guard=CCOpt.map (term acc) c.clause_guard;
-    clause_concl=term acc c.clause_concl;
+    clause_guard=CCOpt.map (term acc Polarity.Neg) c.clause_guard;
+    clause_concl=term acc Polarity.Pos c.clause_concl;
   }
 
 let map_clause ~term ~ty c =
   let bind () v = (), Var.update_ty v ~f:ty in
-  map_clause_bind () c ~bind ~term:(fun () t -> term t)
+  map_clause_bind () c ~bind ~term:(fun () _pol t -> term t)
 
 let map_pred_bind
 = fun ~bind ~term ~ty acc def ->
@@ -329,9 +330,10 @@ let map_pred_bind
 
 let map_pred ~term ~ty def =
   let bind () v = (), Var.update_ty ~f:ty v in
-  map_pred_bind () def ~bind ~term:(fun () -> term) ~ty:(fun () -> ty)
+  map_pred_bind () def ~bind ~term:(fun () _pol -> term) ~ty:(fun () -> ty)
 
-let map_preds_bind ~bind ~term ~ty acc l = List.map (map_pred_bind acc ~bind ~term ~ty) l
+let map_preds_bind ~bind ~term ~ty acc l =
+  List.map (map_pred_bind acc ~bind ~term ~ty) l
 
 let map_preds ~term ~ty l = List.map (map_pred ~term ~ty) l
 
@@ -363,9 +365,9 @@ let map_bind ~bind ~term:ft ~ty:fty acc st =
       decl_of_defined ~info d
   | Axiom a ->
       begin match a with
-      | Axiom_std l -> axiom ~info (List.map (ft acc) l)
+      | Axiom_std l -> axiom ~info (List.map (ft acc Polarity.Pos) l)
       | Axiom_spec t ->
-          axiom_spec ~info (map_spec_defs ~term:(ft acc) ~ty:(fty acc) t)
+          axiom_spec ~info (map_spec_defs_bind ~bind ~term:ft ~ty:fty acc t)
       | Axiom_rec t ->
           axiom_rec ~info (map_rec_defs_bind ~bind ~term:ft ~ty:fty acc t)
       end
@@ -376,68 +378,73 @@ let map_bind ~bind ~term:ft ~ty:fty acc st =
       let preds = map_preds_bind ~bind ~term:ft ~ty:fty acc preds in
       mk_pred ~info ~wf k preds
   | Copy c -> copy ~info (map_copy_bind ~bind ~term:ft ~ty:fty acc c)
-  | Goal t -> goal ~info (ft acc t)
+  | Goal t -> goal ~info (ft acc Polarity.Pos t)
 
 let map ~term ~ty st =
   let bind () v = (), Var.update_ty ~f:ty v in
-  map_bind () st ~bind ~term:(fun () -> term) ~ty:(fun () -> ty)
+  map_bind () st ~bind ~term:(fun () _pol -> term) ~ty:(fun () -> ty)
 
 let fold_defined ~ty acc d = ty acc d.defined_ty
 
-let fold_eqns_bind ~bind ~term ~ty b_acc acc (e:(_,_) equations) =
-  let fold_vars b_acc acc l = List.fold_left (fun acc v -> ty b_acc acc (Var.ty v)) acc l in
+let fold_eqns_bind ~bind ~term:fterm ~ty:fty b_acc pol acc (e:(_,_) equations) =
+  let fold_vars b_acc acc l =
+    List.fold_left (fun acc v -> fty b_acc acc (Var.ty v)) acc l
+  in
   match e with
   | Eqn_nested l ->
       List.fold_left
         (fun acc (vars,args,rhs,side) ->
           let acc = fold_vars b_acc acc vars in
           let b_acc = List.fold_left bind b_acc vars in
-          let acc = List.fold_left (term b_acc) acc args in
-          let acc = term b_acc acc rhs in
-          List.fold_left (term b_acc) acc side)
+          let acc = List.fold_left (fterm b_acc pol) acc args in
+          let acc = fterm b_acc pol acc rhs in
+          List.fold_left (fterm b_acc pol) acc side)
         acc l
   | Eqn_app (_,vars,lhs,rhs) ->
       let acc = fold_vars b_acc acc vars in
       let b_acc = List.fold_left bind b_acc vars in
-      let acc = term b_acc acc lhs in
-      term b_acc acc rhs
+      let acc = fterm b_acc pol acc lhs in
+      fterm b_acc pol acc rhs
   | Eqn_single (vars,t) ->
-      let acc = List.fold_left (fun acc v -> ty b_acc acc (Var.ty v)) acc vars in
+      let acc = List.fold_left (fun acc v -> fty b_acc acc (Var.ty v)) acc vars in
       let b_acc = List.fold_left bind b_acc vars in
-      term b_acc acc t
+      fterm b_acc pol acc t
 
-let fold_clause_bind ~bind ~term ~ty b_acc acc (c:(_,_) pred_clause) =
+let fold_clause_bind ~bind ~term ~ty k b_acc acc (c:(_,_) pred_clause) =
   let acc =
     List.fold_left (fun acc v -> ty b_acc acc (Var.ty v)) acc c.clause_vars in
+  let pol = match k with `Pred -> Polarity.Pos | `Copred -> Polarity.Neg in
   let b_acc = List.fold_left bind b_acc c.clause_vars in
-  let acc = term b_acc acc c.clause_concl in
-  CCOpt.fold (term b_acc) acc c.clause_guard
+  let acc = term b_acc pol acc c.clause_concl in
+  CCOpt.fold (term b_acc (Polarity.inv pol)) acc c.clause_guard
 
-let fold_pred_bind ~bind ~term ~ty b_acc acc (def:(_,_) pred_def) =
+let fold_pred_bind ~bind ~term ~ty k b_acc acc (def:(_,_) pred_def) =
   let acc = ty b_acc acc def.pred_defined.defined_ty in
   let b_acc = List.fold_left bind b_acc def.pred_tyvars in
-  List.fold_left (fold_clause_bind ~term ~ty ~bind b_acc) acc def.pred_clauses
+  List.fold_left (fold_clause_bind ~term ~ty ~bind k b_acc) acc def.pred_clauses
 
-let fold_preds_bind ~bind ~term ~ty b_acc acc l =
-  List.fold_left (fold_pred_bind ~bind ~term ~ty b_acc) acc l
+let fold_preds_bind ~bind ~term ~ty k b_acc acc l =
+  List.fold_left (fold_pred_bind ~bind ~term ~ty k b_acc) acc l
 
 let fold_bind ~bind ~term:fterm ~ty:fty b_acc acc (st:(_,_) t) =
   match st.view with
   | Decl {defined_ty=t; _} -> fty b_acc acc t
   | Axiom a ->
       begin match a with
-      | Axiom_std l -> List.fold_left (fterm b_acc) acc l
+      | Axiom_std l -> List.fold_left (fterm b_acc Polarity.Pos) acc l
       | Axiom_spec t ->
           let acc = List.fold_left (fold_defined ~ty:(fty b_acc)) acc t.spec_defined in
-          List.fold_left (fterm b_acc) acc t.spec_axioms
+          List.fold_left (fterm b_acc Polarity.Pos) acc t.spec_axioms
       | Axiom_rec t ->
           List.fold_left
             (fun acc def ->
               let acc = fold_defined ~ty:(fty b_acc) acc def.rec_defined in
-              fold_eqns_bind ~bind ~term:fterm ~ty:fty b_acc acc def.rec_eqns)
+              let pol = ID.polarity def.rec_defined.defined_head in
+              fold_eqns_bind ~bind ~term:fterm ~ty:fty b_acc pol acc def.rec_eqns)
             acc t
       end
-  | Pred (_, _, preds) -> fold_preds_bind ~bind ~term:fterm ~ty:fty b_acc acc preds
+  | Pred (_, k, preds) ->
+    fold_preds_bind ~bind ~term:fterm ~ty:fty k b_acc acc preds
   | TyDef (_, l) ->
       List.fold_left
         (fun acc tydef ->
@@ -452,14 +459,14 @@ let fold_bind ~bind ~term:fterm ~ty:fty b_acc acc (st:(_,_) t) =
           [c.copy_of; c.copy_ty; c.copy_to] in
       begin match c.copy_wrt with
         | Wrt_nothing -> acc
-        | Wrt_subset p -> fterm b_acc acc p
-        | Wrt_quotient (_, r) -> fterm b_acc acc r
+        | Wrt_subset p -> fterm b_acc Polarity.NoPol acc p
+        | Wrt_quotient (_, r) -> fterm b_acc Polarity.NoPol acc r
       end
-  | Goal t -> fterm b_acc acc t
+  | Goal t -> fterm b_acc Polarity.Pos acc t
 
 let fold ~term:fterm ~ty:fty acc st =
   fold_bind () acc st
-    ~bind:(fun () _ -> ()) ~term:(fun () -> fterm) ~ty:(fun () -> fty)
+    ~bind:(fun () _ -> ()) ~term:(fun () _pol -> fterm) ~ty:(fun () -> fty)
 
 let iter ~term ~ty st =
   fold () st ~term:(fun () t -> term t) ~ty:(fun () t -> ty t)

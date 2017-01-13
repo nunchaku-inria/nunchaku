@@ -290,7 +290,7 @@ let encode_stmt_ state st : (_,_) Stmt.t list =
     [ Stmt.decl ~info ~attrs id ty'; Stmt.axiom1 ~info ty_clause ]
   | _ ->
     [Stmt.map_bind Var.Subst.empty st
-      ~term:(encode_term state)
+      ~term:(fun subst _ -> encode_term state subst)
       ~ty:(encode_ty state ~top:true)
       ~bind:Var.Subst.rename_var]
 

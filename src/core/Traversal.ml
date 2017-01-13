@@ -414,8 +414,8 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     after_env t.env;
     let info = Stmt.info st in
     (* most basic processing: just traverse the terms to update dependencies *)
-    let tr_term () = t.dispatch.do_term t ~depth:0 in
-    let tr_type = tr_term in
+    let tr_term () _pol term = t.dispatch.do_term t term ~depth:0 in
+    let tr_type () = tr_term () Polarity.NoPol in
     let bind_var () v = (), do_var_ t ~depth:0 v in
     begin match Stmt.view st with
       | Stmt.Decl d ->
@@ -453,7 +453,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
       | Stmt.Copy c ->
         begin match t.dispatch.do_copy with
           | None ->
-            let c = Stmt.map_copy c ~term:(tr_term ()) ~ty:(tr_type ()) in
+            let c = Stmt.map_copy_bind () c ~bind:bind_var ~term:tr_term ~ty:tr_type in
             let ps = mk_ps_ ~info (PS_copy c) in
             add_graph_ t ps
           | Some _ -> ()

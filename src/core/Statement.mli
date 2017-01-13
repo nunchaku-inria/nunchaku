@@ -243,8 +243,9 @@ val map_eqns:
 
 val map_eqns_bind :
   bind:('acc -> 'ty Var.t -> 'acc * 'ty1 Var.t) ->
-  term:('acc -> 'term -> 'term1) ->
+  term:('acc -> Polarity.t -> 'term -> 'term1) ->
   'acc ->
+  Polarity.t ->
   ('term,'ty) equations ->
   ('term1,'ty1) equations
 
@@ -256,7 +257,7 @@ val map_clause:
 
 val map_clause_bind :
   bind:('acc -> 'ty Var.t -> 'acc * 'ty1 Var.t) ->
-  term:('acc -> 'term -> 'term1) ->
+  term:('acc -> Polarity.t -> 'term -> 'term1) ->
   'acc ->
   ('term,'ty) pred_clause ->
   ('term1,'ty1) pred_clause
@@ -269,7 +270,7 @@ val map_rec_def :
 
 val map_rec_def_bind :
   bind:('a -> 'b Var.t -> 'a * 'c Var.t) ->
-  term:('a -> 'd -> 'e) ->
+  term:('a -> Polarity.t -> 'd -> 'e) ->
   ty:('a -> 'b -> 'c) ->
   'a ->
   ('d, 'b) rec_def ->
@@ -278,6 +279,14 @@ val map_rec_def_bind :
 val map_rec_defs :
   term:('t -> 't2) ->
   ty:('ty -> 'ty2) ->
+  ('t, 'ty) rec_defs ->
+  ('t2, 'ty2) rec_defs
+
+val map_rec_defs_bind :
+  bind:('b_acc -> 'ty Var.t -> 'b_acc * 'ty2 Var.t) ->
+  term:('b_acc -> Polarity.t -> 't -> 't2) ->
+  ty:('b_acc -> 'ty -> 'ty2) ->
+  'b_acc ->
   ('t, 'ty) rec_defs ->
   ('t2, 'ty2) rec_defs
 
@@ -299,7 +308,7 @@ val map_spec_defs :
 
 val map_spec_defs_bind :
   bind:('b_acc -> 'ty Var.t -> 'b_acc * 'ty2 Var.t) ->
-  term:('b_acc -> 't -> 't2) ->
+  term:('b_acc -> Polarity.t -> 't -> 't2) ->
   ty:('b_acc -> 'ty -> 'ty2) ->
   'b_acc ->
   ('t, 'ty) spec_defs ->
@@ -312,7 +321,7 @@ val map_pred :
 
 val map_pred_bind :
   bind:('acc -> 'ty Var.t -> 'acc * 'ty2 Var.t) ->
-  term:('acc -> 'term -> 'term2) ->
+  term:('acc -> Polarity.t -> 'term -> 'term2) ->
   ty:('acc -> 'ty -> 'ty2) ->
   'acc ->
   ('term, 'ty) pred_def ->
@@ -323,6 +332,14 @@ val map_preds :
   ('a, 'b) pred_def list ->
   ('a1, 'b1) pred_def list
 
+val map_preds_bind :
+  bind:('acc -> 'ty Var.t -> 'acc * 'ty2 Var.t) ->
+  term:('acc -> Polarity.t -> 'term -> 'term2) ->
+  ty:('acc -> 'ty -> 'ty2) ->
+  'acc ->
+  ('term, 'ty) pred_def list ->
+  ('term2, 'ty2) pred_def list
+
 val map_copy_wrt :
   ('a -> 'b) ->
   'a copy_wrt ->
@@ -330,7 +347,7 @@ val map_copy_wrt :
 
 val map_copy_bind :
   bind:('a -> 'b var -> 'a * 'c var) ->
-  term:('a -> 'd -> 'e) ->
+  term:('a -> Polarity.t -> 'd -> 'e) ->
   ty:('a -> 'b -> 'c) ->
   'a ->
   ('d, 'b) copy ->
@@ -350,7 +367,7 @@ val map :
 
 val map_bind :
   bind:('b_acc -> 'ty Var.t -> 'b_acc * 'ty2 Var.t) ->
-  term:('b_acc -> 't -> 't2) ->
+  term:('b_acc -> Polarity.t -> 't -> 't2) ->
   ty:('b_acc -> 'ty -> 'ty2) ->
   'b_acc ->
   ('t, 'ty) t ->
@@ -360,7 +377,7 @@ val map_bind :
 
 val fold_bind :
   bind:('b_acc -> 'ty Var.t -> 'b_acc) ->
-  term:('b_acc -> 'a -> 't -> 'a) ->
+  term:('b_acc -> Polarity.t -> 'a -> 't -> 'a) ->
   ty:('b_acc -> 'a -> 'ty -> 'a) ->
   'b_acc -> 'a -> ('t, 'ty) t -> 'a
 

@@ -136,7 +136,7 @@ let encode_statement map st = match Stmt.view st with
   | Stmt.Decl {Stmt.defined_attrs=attrs; _} when has_upcast_attr_ attrs ->
     [] (* remove upcast functions *)
   | _ ->
-    let tr_term subst t = encode_term map subst Pol.Pos t in
+    let tr_term subst pol t = encode_term map subst pol t in
     let tr_ty subst ty = encode_term map subst Pol.NoPol ty in
     let st' =
       Stmt.map_bind

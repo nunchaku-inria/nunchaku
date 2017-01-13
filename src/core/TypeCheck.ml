@@ -260,7 +260,8 @@ module Make(T : TI.S) = struct
     (* update env *)
     let env = Env.add_statement ~env:t.env st in
     let t' = {t with env; } in
-    let check_top env bound () t = ignore (check ~env bound t) in
+    let check_top env bound _pol () t = ignore (check ~env bound t) in
+    let check_ty env bound () t = ignore (check ~env bound t) in
     (* check cardinalities *)
     CCOpt.iter
       (fun cache -> TyCard.check_non_zero ~cache env st)
@@ -269,7 +270,7 @@ module Make(T : TI.S) = struct
     let default_check st =
       Stmt.fold_bind VarSet.empty () st
         ~bind:(check_var ~env)
-        ~term:(check_top env) ~ty:(check_top env)
+        ~term:(check_top env) ~ty:(check_ty env)
     in
     (* check types *)
     begin match Stmt.view st with

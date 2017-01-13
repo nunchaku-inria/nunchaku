@@ -200,7 +200,7 @@ let transform_statement state st : (_,_) Stmt.t =
       (* NOTE: maybe not robust if there are [copy] types *)
       Stmt.map_bind Var.Subst.empty st
         ~bind:(rename_var state)
-        ~term:(transform_term state)
+        ~term:(fun subst _pol -> transform_term state subst)
         ~ty:(fun _ -> transform_ty state ~top:true)
 
 let transform_problem pb =

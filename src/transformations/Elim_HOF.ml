@@ -761,7 +761,7 @@ let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
           ) else (
             Utils.debugf ~section 5
               "@[<2>keep structure of FO def of `%a`@]" (fun k->k ID.print id);
-            let tr_term subst = elim_hof_term ~state subst (ID.polarity id) in
+            let tr_term = elim_hof_term ~state in
             let tr_type _subst ty = encode_toplevel_ty ~state ty in
             Stmt.map_rec_def_bind Subst.empty def
               ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
@@ -776,7 +776,7 @@ let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
    statements because of the declarations of new application symbols. *)
 let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
   let info = Stmt.info stmt in
-  let tr_term pol subst = elim_hof_term ~state subst pol in
+  let tr_term = elim_hof_term ~state in
   let tr_type _subst ty = encode_toplevel_ty ~state ty in
   let handle_id = get_or_create_handle_id ~state in
   Utils.debugf ~section 3 "@[<2>@{<cyan>> elim HOF in stmt@}@ `@[%a@]`@]" (fun k->k PStmt.print stmt);
@@ -810,7 +810,7 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
       in
       let spec =
         { Stmt.
-          spec_axioms=List.map (tr_term Pol.Pos subst) spec.Stmt.spec_axioms;
+          spec_axioms=List.map (tr_term subst Pol.Pos) spec.Stmt.spec_axioms;
           spec_ty_vars=vars;
           spec_defined=
             List.map
@@ -852,8 +852,8 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
       let copy_to = encode_ty_ ~handle_id c.Stmt.copy_to in
       let copy_wrt = match c.Stmt.copy_wrt with
         | Stmt.Wrt_nothing -> Stmt.Wrt_nothing
-        | Stmt.Wrt_subset p -> Stmt.Wrt_subset (tr_term Pol.NoPol subst p)
-        | Stmt.Wrt_quotient (tty, r) -> Stmt.Wrt_quotient (tty, tr_term Pol.NoPol subst r)
+        | Stmt.Wrt_subset p -> Stmt.Wrt_subset (tr_term subst Pol.NoPol p)
+        | Stmt.Wrt_quotient (tty, r) -> Stmt.Wrt_quotient (tty, tr_term subst Pol.NoPol r)
       in
       let c' = {
         c with Stmt.
@@ -870,7 +870,7 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
   | Stmt.Goal _ ->
       let stmt' =
         Stmt.map_bind Subst.empty stmt
-          ~bind:(bind_hof_var ~state) ~term:(tr_term Pol.Pos) ~ty:tr_type
+          ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
       in
       [stmt']
   in
