@@ -13,6 +13,7 @@ module T = TI.Default
 module U = T.U
 module P = T.P
 
+type ty = TermInner.Default.t
 type term = TermInner.Default.t
 
 let name = "skolem"
@@ -27,6 +28,86 @@ type new_sym = {
   sym_ty : T.t; (* type of the symbol *)
 }
 
+module type SKOLEM = sig
+  type state
+  type assoc
+
+  val create: ?prefix:string -> unit -> state
+
+  val skolemize :
+    state ->
+    vars:ty Var.t list ->
+    ty_ret:ty ->
+    (ty -> assoc) ->
+    ID.t * ty * assoc
+  (** [skolemize state ~vars ~ty_ret assoc] makes a fresh ID that
+      has the type [ty = List.map Var.ty vars -> ty_ret].
+      It registers it in [state] so that it will be returned on
+      the next call to {!pop_new_decls}, and it will map
+      it to [assoc ty]
+      @return the new ID and its type *)
+
+  val pop_new_decls : state -> (ID.t * assoc) list
+  (** Remove new declarations from [state] and return them *)
+
+  val find_skolem : state -> ID.t -> assoc option
+  (** If the given ID a skolem symbol, return associated data *)
+
+  val all_skolems : state -> (ID.t * assoc) Sequence.t
+end
+
+module Make(Assoc : sig type t end)
+  : SKOLEM with type assoc = Assoc.t
+= struct
+  type assoc = Assoc.t
+
+  type state = {
+    tbl: assoc ID.Tbl.t; (* skolem -> data *)
+    prefix:string; (* prefix for Skolem symbols *)
+    mutable name : int;
+    mutable new_sym: (ID.t * assoc) list; (* list of newly defined symbols *)
+  }
+
+  let create ?(prefix="nun_sk_") () : state = {
+    tbl=ID.Tbl.create 32;
+    prefix;
+    name=0;
+    new_sym=[];
+  }
+
+  let fresh_id_ state : ID.t =
+    let n = state.name in
+    state.name <- n+1;
+    let id = ID.make (state.prefix ^ string_of_int n) in
+    id
+
+  let skolemize state ~vars ~ty_ret mk_assoc =
+    (* type of Skolem function *)
+    let ty_args = List.map Var.ty vars in
+    let ty = List.fold_right U.ty_arrow ty_args ty_ret in
+    (* create new skolem function *)
+    let skolem_id = fresh_id_ state in
+    let assoc = mk_assoc ty in
+    ID.Tbl.add state.tbl skolem_id assoc;
+    state.new_sym <- (skolem_id, assoc):: state.new_sym;
+    Utils.debugf ~section 2
+      "@[<2>new Skolem symbol `%a :@ @[%a@]`@]"
+      (fun k-> k ID.print skolem_id P.print ty);
+    skolem_id, ty, assoc
+
+  let pop_new_decls state =
+    let l = state.new_sym in
+    state.new_sym <- [];
+    l
+
+  let find_skolem state id = ID.Tbl.get state.tbl id
+
+  let all_skolems state = ID.Tbl.to_seq state.tbl
+end
+
+(* for usage in this module *)
+module Sk = Make(struct type t = new_sym end)
+
 type mode =
   [ `Sk_types (** Skolemize type variables only *)
   | `Sk_ho (** Skolemize type variables and term variables of fun type *)
@@ -35,20 +116,14 @@ type mode =
 
 type state = {
   mutable env: (T.t,T.t) Env.t;
-  tbl: new_sym ID.Tbl.t; (* skolem -> quantified form *)
-  prefix:string; (* prefix for Skolem symbols *)
+  sk: Sk.state;
   mode: mode;
-  mutable name : int;
-  mutable new_sym: (ID.t * new_sym) list; (* list of newly defined symbols *)
 }
 
 let create ?(prefix="nun_sk_") ~mode () = {
   env=Env.create ();
-  tbl=ID.Tbl.create 32;
-  prefix;
+  sk=Sk.create ~prefix ();
   mode;
-  name=0;
-  new_sym=[];
 }
 
 type env = {
@@ -61,11 +136,6 @@ let env_bind ~env v t =
 
 let env_add_var ~env v =
   { env with vars=v :: env.vars }
-
-let new_sym ~state =
-  let n = state.name in
-  state.name <- n+1;
-  ID.make (state.prefix ^ string_of_int n)
 
 (* TODO: maybe transform nested `C[if exists x.p[x] then a else b]` where `a`
    is not of type prop, into `exists x.p[x] => C[a] & ¬ exists x.p[x] => C[b]` *)
@@ -95,17 +165,11 @@ let skolemize_ ~state ?(in_goal=false) pol t =
         | `Forall, Pol.Neg when should_skolemize_ ~state v ->
             (* type of Skolem function *)
             let ty_ret = aux env Pol.NoPol (Var.ty v) in
-            let ty_args = List.map Var.ty env.vars in
-            let ty = List.fold_right U.ty_arrow ty_args ty_ret in
-            (* create new skolem function *)
-            let skolem_id = new_sym ~state in
+            let skolem_id, _ty, _ =
+              Sk.skolemize state.sk ~ty_ret ~vars:env.vars
+                (fun ty -> { sym_defines=t; sym_decode=in_goal; sym_ty=ty })
+            in
             let skolem = U.app (U.const skolem_id) (List.map U.var env.vars) in
-            let new_sym = { sym_defines=t; sym_decode=in_goal; sym_ty=ty } in
-            ID.Tbl.add state.tbl skolem_id new_sym;
-            state.new_sym <- (skolem_id, new_sym):: state.new_sym;
-            Utils.debugf ~section 2
-              "@[<2>new Skolem symbol `%a :@ @[%a@]` standing for@ @[`%a`@]@]"
-              (fun k-> k ID.print skolem_id P.print ty P.print t);
             (* convert [t] and replace [v] with [skolem] in it *)
             let env = env_bind ~env v skolem in
             aux env pol t'
@@ -148,8 +212,7 @@ let skolemize_ ~state ?(in_goal=false) pol t =
 let skolemize ~state ?in_goal pol t =
   let t' = skolemize_ ~state ?in_goal pol t in
   (* clear list of new symbols *)
-  let l = state.new_sym in
-  state.new_sym <- [];
+  let l = Sk.pop_new_decls state.sk in
   t', List.map (fun (id,s) -> id,s.sym_ty) l
 
 let skolemize_stmt ~state st =
@@ -168,7 +231,7 @@ let skolemize_stmt ~state st =
       in
       Stmt.axiom_rec ~info l
   | Stmt.Pred (wf, kind, l) ->
-      let l = Stmt.map_preds_bind () l 
+      let l = Stmt.map_preds_bind () l
           ~bind:(fun () v->(),v) ~ty:(fun () ty ->ty)
           ~term:(sk_term ~in_goal:false)
       in
@@ -184,8 +247,7 @@ let skolemize_pb ~state pb =
     ~f:(fun stmt ->
       let stmt' = skolemize_stmt ~state stmt in
       state.env <- Env.add_statement ~env:state.env stmt';
-      let l = state.new_sym in
-      state.new_sym <- [];
+      let l = Sk.pop_new_decls state.sk in
       let prelude =
         List.map
           (fun (id,s) -> Stmt.decl ~info:Stmt.info_default ~attrs:[] id s.sym_ty)
@@ -202,17 +264,9 @@ let print_state out st =
       ID.print id P.print s.sym_ty P.print s.sym_defines
   in
   fpf out "@[<2>skolem table {@,%a@]@,}"
-    (CCFormat.seq pp_sym) (ID.Tbl.to_seq st.tbl)
+    (CCFormat.seq pp_sym) (Sk.all_skolems st.sk)
 
 let epsilon = ID.make "_witness_of"
-
-let find_id_def ~state id =
-  (* if [id] is a Skolem symbol, use an epsilon to display the
-    existential formula it is the witness of *)
-  try
-    let sym = ID.Tbl.find state.tbl id in
-    Some sym
-  with Not_found -> None
 
 let decode_model ~skolems_in_model ~state m =
   Model.filter_map m
@@ -220,7 +274,7 @@ let decode_model ~skolems_in_model ~state m =
     ~values:(fun ((t,dt,k) as tup) ->
       match T.repr t with
         | TI.Const id ->
-            begin match find_id_def ~state id with
+            begin match Sk.find_skolem state.sk id with
               | None -> Some tup
               | Some sym ->
                 if sym.sym_decode && skolems_in_model
