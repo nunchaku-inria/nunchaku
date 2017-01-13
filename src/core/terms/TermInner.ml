@@ -959,7 +959,7 @@ module type UTIL = sig
       @param bind updates the binding accumulator with the bound variable
       @param f called on immediate subterms and on the regular accumulator *)
 
-  val map' :
+  val map_generic :
     f:('b_acc -> t_ -> 'a) ->
     bind:('b_acc -> t_ Var.t -> 'b_acc * 'a Var.t) ->
     'b_acc ->
@@ -974,7 +974,7 @@ module type UTIL = sig
     f:('b_acc -> t_ -> t_) ->
     bind:('b_acc -> t_ Var.t -> 'b_acc * t_ Var.t) ->
     'b_acc -> t_ -> t_
-  (** Special version of {!map'} for terms *)
+  (** Special version of {!map_generic} for terms *)
 
   val map_pol :
     f:('b_acc -> Polarity.t -> t_ -> t_) ->
@@ -1445,7 +1445,7 @@ module Util(T : S)
   let iter ~f ~bind b_acc t =
     fold () b_acc t ~bind ~f:(fun () b_acc t -> f b_acc t)
 
-  let map' ~f ~bind b_acc t = match T.repr t with
+  let map_generic ~f ~bind b_acc t = match T.repr t with
     | TyBuiltin b -> TyBuiltin b
     | Const id -> Const id
     | TyMeta v -> TyMeta (MetaVar.update ~f:(f b_acc) v)
@@ -1481,7 +1481,7 @@ module Util(T : S)
         let b = f b_acc b in
         TyArrow (a,b)
 
-  let map ~f ~bind b_acc t = T.build (map' ~f ~bind b_acc t)
+  let map ~f ~bind b_acc t = T.build (map_generic ~f ~bind b_acc t)
 
   module P = Polarity
 
