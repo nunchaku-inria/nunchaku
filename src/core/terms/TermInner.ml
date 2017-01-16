@@ -80,6 +80,17 @@ module Builtin = struct
       asserting = List.rev_append g1.asserting g2.asserting;
     }
 
+  let pp_guard pterm out g: unit =
+    let pp_case name out l = match l with
+      | [] -> ()
+      | _::_ ->
+        fpf out "@ @[<2>%s@ @[<hv>%a@]@]" name
+          (CCFormat.list ~start:"" ~stop:"" ~sep:" && " pterm) l
+    in
+    Format.fprintf out "%a%a"
+      (pp_case "assuming") g.assuming
+      (pp_case "asserting") g.asserting
+
   type 'a t =
     [ `True
     | `False
@@ -146,16 +157,8 @@ module Builtin = struct
         else CCFormat.string out "?__"
     | `Unparsable ty -> fpf out "@[<2>?__unparsable@ @[%a@]@]" pterm ty
     | `Guard (t, o) ->
-        let pp_case name out l = match l with
-          | [] -> ()
-          | _::_ ->
-              fpf out "@ @[<2>%s@ @[<hv>%a@]@]" name
-                (CCFormat.list ~start:"" ~stop:"" ~sep:" && " pterm) l
-        in
         assert (not (o.asserting=[] && o.assuming=[]));
-        fpf out "@[<hv>%a%a%a@]" pterm t
-          (pp_case "assuming") o.assuming
-          (pp_case "asserting") o.asserting
+        fpf out "@[<hv>%a%a@]" pterm t (pp_guard pterm) o
 
   let equal
   : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
