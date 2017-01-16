@@ -99,7 +99,7 @@ let output_opt = Utils.arg_choice outputs_ ((:=) output_)
 
 (* solver string specification *)
 let parse_solvers_ s =
-  let s = String.trim s |> String.lowercase in
+  let s = String.trim s |> String.lowercase_ascii in
   let l = CCString.Split.list_cpy ~by:"," s in
   List.map
     (function
