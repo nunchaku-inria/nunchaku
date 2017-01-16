@@ -55,3 +55,13 @@ watch:
 		echo "============ at `date` ==========" ; \
 		make all ; \
 	done
+
+ocp-indent:
+	@which ocp-indent > /dev/null || { \
+	  	echo 'ocp-indent not found; please run `opam install ocp-indent`'; \
+		exit 1 ; \
+	  }
+
+reindent: ocp-indent
+
+.PHONY: reindent ocp-indent watch
