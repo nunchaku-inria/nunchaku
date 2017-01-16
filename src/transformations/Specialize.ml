@@ -14,6 +14,7 @@ module U = T.U
 module PStmt = Stmt.Print(P)(P)
 module Red = Reduce.Make(T)
 module VarSet = U.VarSet
+module AT = AnalyzeType.Make(T)
 
 type term = T.t
 type ty = T.t
@@ -210,6 +211,8 @@ type state = {
   (* used for decoding new symbols *)
   new_decls: (term, ty) Stmt.t CCVector.vector;
   (* vector of new declarations *)
+  at_cache: AT.cache;
+  (* for computing cardinalities *)
 }
 
 let create_state () : state = {
@@ -218,6 +221,7 @@ let create_state () : state = {
   count=0;
   decode=ID.Tbl.create 32;
   new_decls=CCVector.create();
+  at_cache=AT.create_cache ();
 }
 
 (* recursive traversal of the statement graph *)
@@ -473,9 +477,43 @@ let heuristic_should_specialize_arg a ty =
   in
   is_fun_ty ty || is_bool_const_ a
 
+type specialization_params = {
+  spec_args: Arg.t;
+  (* the definition is specialized w.r.t those terms *)
+  other_args: term list;
+  (* remaining arguments that will also be parameters to the specialized
+     version of the function *)
+  new_ty: ty;
+  (* type of the new function *)
+}
+
+type specialization_decision =
+  | Do_not_specialize
+  | Do_specialize of specialization_params
+
+(* maximum size of the cardinal of a closure variable's type. *)
+let max_closure_var_type_card = 10 (* FUDGE *)
+
+(* do NOT specialize if at least one closure argument
+   has a type which is too large (see {!max_closure_var_type_card})
+   or infinite.
+   The reason is that closure variables are universally quantified
+   upon, and infinite quantifiers are bad for us *)
+let closure_variable_has_small_ty ~self (v:ty Var.t): bool =
+  let state = Trav.state self in
+  let card_ty =
+    AT.cardinality_ty ~cache:state.at_cache (Trav.env self) (Var.ty v)
+  in
+  let module C = Cardinality in
+  begin match card_ty with
+    | C.Exact n | C.QuasiFiniteGEQ n ->
+      C.Z.compare n (C.Z.of_int max_closure_var_type_card) <= 0
+    | C.Infinite | C.Unknown -> false
+  end
+
 (* shall we specialize the application of [f : ty] to [l], and on which
     subset of [l]? *)
-let decide_if_specialize ~self f ty l =
+let decide_if_specialize ~self f ty l : specialization_decision =
   (* apply to type arguments *)
   let info = Env.find_exn ~env:(Trav.env self) f in
   match Env.def info with
@@ -499,8 +537,13 @@ let decide_if_specialize ~self f ty l =
           (function `Specialize x -> `Left x | `Keep y -> `Right y)
         |> (fun (a,b) -> Arg.make a, b)
       in
-      if Arg.is_empty spec_args
-      then `No
+      let some_variable_has_big_ty =
+        List.exists
+          (fun v -> not (closure_variable_has_small_ty ~self v))
+          (Arg.vars spec_args)
+      in
+      if Arg.is_empty spec_args || some_variable_has_big_ty
+      then Do_not_specialize
       else (
         (* type of specialized function. We cannot use [other_args]
            because [f] might be partially applied. *)
@@ -509,9 +552,13 @@ let decide_if_specialize ~self f ty l =
         (* new arguments: types of free variables of [spec_args] *)
         and ty_new_args = Arg.vars spec_args |> List.map Var.ty in
         let new_ty = U.ty_arrow_l (ty_new_args @ ty_remaining_args) ty_ret in
-        `Yes (spec_args, other_args, new_ty)
+        Do_specialize {
+          spec_args;
+          other_args;
+          new_ty;
+        }
       )
-    | _ -> `No
+    | _ -> Do_not_specialize
 
 let find_new_fun ~state f args =
   (* see whether the function is already specialized on those parameters *)
@@ -558,11 +605,11 @@ let rec specialize_term ~self ~depth subst t =
           let ty = info.Env.ty in
           if Env.is_rec info
           then match decide_if_specialize ~self f_id ty l' with
-            | `No ->
+            | Do_not_specialize ->
               (* still require [f]'s definition *)
               require_without_specializing ~self ~depth f_id;
               U.app f l'
-            | `Yes (spec_args, other_args, new_ty) ->
+            | Do_specialize {spec_args; other_args; new_ty} ->
               (* [spec_args] is a subset of [l'] on which we are going to
                    specialize [f].
                  [other_args] are the remaining arguments,
