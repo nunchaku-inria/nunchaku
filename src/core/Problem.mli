@@ -143,7 +143,7 @@ module Res : sig
     ('t1, 'ty1) t ->
     ('t2, 'ty2) t
 
-  val print : (TermInner.prec -> 't printer) -> 'ty printer -> ('t,'ty) t printer
+  val print : (Precedence.t -> 't printer) -> 'ty printer -> ('t,'ty) t printer
 
   val print_info : info printer
 

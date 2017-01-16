@@ -245,20 +245,20 @@ let rec tr_term_rec_ ~guards ~state subst t =
     | TI.Builtin (`True | `False | `DataSelect _ | `DataTest _) ->
       t (* partially applied, or constant *)
     | TI.Builtin ((`Undefined_self _ | `Undefined_atom _ | `Unparsable _) as b) ->
-      U.builtin (TI.Builtin.map b ~f:(tr_term_rec_ ~guards ~state subst))
+      U.builtin (Builtin.map b ~f:(tr_term_rec_ ~guards ~state subst))
     | TI.Builtin (`Guard (t, g)) ->
       let t = tr_term_rec_ ~guards ~state subst t in
-      let g' = TI.Builtin.map_guard (tr_term_rec_ ~guards ~state subst) g in
+      let g' = Builtin.map_guard (tr_term_rec_ ~guards ~state subst) g in
       U.guard t g'
-    | TI.Bind (`Fun,_,_) -> fail_tr_ t "translation of λ impossible"
+    | TI.Bind (Binder.Fun,_,_) -> fail_tr_ t "translation of λ impossible"
     | TI.Builtin (`Eq _ | `Ite _ | `And _ | `Or _ | `Not _ | `Imply _)
-    | TI.Bind ((`Forall | `Exists | `Mu), _, _)
+    | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Mu), _, _)
     | TI.Match _
     | TI.Let _ ->
       tr_term_rec_' ~guards ~state subst t
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> t
-    | TI.Bind (`TyForall, _, _)
+    | TI.Bind (Binder.TyForall, _, _)
     | TI.TyMeta _ -> assert false
 
 and tr_term_rec_' ~guards ~state subst t =

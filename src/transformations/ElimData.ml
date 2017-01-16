@@ -14,7 +14,6 @@ module P = T.P
 module PStmt = Stmt.Print(P)(P)
 module AT = AnalyzeType.Make(T)
 module Pol = Polarity
-module UEnv = Env.Util(T)
 module TyMo = (val TypeMono.default)
 
 type term = T.t
@@ -162,7 +161,7 @@ module Make(M : sig val mode : mode end) = struct
 
   (* compute type of [t], using both envs *)
   let ty_exn ~state (t:T.t) =
-    U.ty_exn t
+    U.ty_of_signature_exn t
       ~sigma:(fun id ->
         let open CCOpt in
         Env.find_ty ~env:state.env id
@@ -170,7 +169,7 @@ module Make(M : sig val mode : mode end) = struct
 
   (* is [ty] a type that is being encoded? *)
   let is_encoded_ty state (ty:T.t): bool =
-    match UEnv.info_of_ty ~env:state.env ty, mode with
+    match U.info_of_ty ~env:state.env ty, mode with
       | Result.Ok {Env.def=Env.Data (`Data, _, _); _}, M_data
       | Result.Ok {Env.def=Env.Data (`Codata, _, _); _}, M_codata -> true
       | _ -> false
@@ -433,11 +432,11 @@ module Make(M : sig val mode : mode end) = struct
         (* process [t] and re-build let *)
         let t' = tr_term_rec share Pol.NoPol t in
         U.let_ v t' u'
-      | TI.Bind ((`Forall | `Exists) as q, v, _)
+      | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, _)
         when is_infinite_and_encoded_ty state (Var.ty v) ->
         (* quantifier over an infinite (co)data, must approximate
            depending on the polarity *)
-        begin match U.approx_infinite_quant_pol q pol with
+        begin match U.approx_infinite_quant_pol_binder q pol with
           | `Unsat_means_unknown res ->
             state.unsat_means_unknown <- true;
             Utils.debugf ~section 3
@@ -456,12 +455,12 @@ module Make(M : sig val mode : mode end) = struct
           | `Imply _ | `And _ | `Or _ | `Eq _ | `Ite _ ->
             (* boolean connectives: do not let sharing pass through for now, to
                play safe with polarities. *)
-            U.builtin (TI.Builtin.map b ~f:(tr_term_block_lets share pol))
+            U.builtin (Builtin.map b ~f:(tr_term_block_lets share pol))
           | _ -> tr_term_aux share pol t
         end
-      | TI.Bind ((`Forall | `Exists | `Fun) as b, _, _) -> tr_bind share pol b t
+      | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun) as b, _, _) -> tr_bind share pol b t
       | TI.Match (t,m,def) ->
-        if is_encoded_ty state (UEnv.ty_exn ~env:state.env t)
+        if is_encoded_ty state (U.ty_exn ~env:state.env t)
         then errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.print t
         else (
           let t = tr_term_rec share pol t in
@@ -483,7 +482,7 @@ module Make(M : sig val mode : mode end) = struct
        introduce let-definitions that depend on the bound variables inside
        the binder, not outside.
        The other let-definitions can percolate through the binder though *)
-    and tr_bind share pol (binder:TI.Binder.t) t =
+    and tr_bind share pol (binder:Binder.t) t =
       let vars, body = U.bind_unfold binder t in
       let body' = tr_term_rec share pol body in
       let body' = introduce_lets share body' ~start:(`Vars vars) in

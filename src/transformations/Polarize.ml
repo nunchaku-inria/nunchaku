@@ -149,7 +149,7 @@ let polarize_def_of ~self id pol = match pol with
 type subst = (T.t, T.t Var.t) Var.Subst.t
 
 let is_prop ~self t =
-  let ty = U.ty_exn ~sigma:(Env.find_ty ~env:(Trav.env self)) t in
+  let ty = U.ty_exn ~env:(Trav.env self) t in
   U.ty_is_Prop ty
 
 (* traverse [t], replacing some symbols by their polarized version,
@@ -159,10 +159,9 @@ let rec polarize_term_rec
   = fun ~self pol subst t ->
     match T.repr t with
       | TI.Builtin (`Guard (t, g)) ->
-        let open TI.Builtin in
+        let open Builtin in
         let g = {
           asserting = List.map (polarize_term_rec ~self Pol.Pos subst) g.asserting;
-          assuming = List.map (polarize_term_rec ~self Pol.Neg subst) g.assuming;
         } in
         let t = polarize_term_rec ~self pol subst t in
         U.guard t g
@@ -244,14 +243,14 @@ let rec polarize_term_rec
           | _ ->
             polarize_term_rec' ~self pol subst t
         end
-      | TI.Bind (`TyForall, _, _) ->
+      | TI.Bind (Binder.TyForall, _, _) ->
         U.eval_renaming ~subst t (* we do not polarize in types *)
       | TI.Builtin (`Eq (a,b)) when pol <> Pol.NoPol && is_prop ~self a ->
         (* we can gain precision here, because if we expand the <=> we
            obtain two polarized formulas, whereas if we keep it we
            only obtain a non-polarized one. *)
         polarize_term_rec ~self pol subst (U.and_ [U.imply a b; U.imply b a])
-      | TI.Bind ((`Forall | `Exists | `Fun | `Mu), _, _)
+      | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun | Binder.Mu), _, _)
       | TI.Builtin (`Ite _ | `Eq _ | `And _ | `Or _ | `Not _  | `Imply _)
       | TI.Let _
       | TI.Match _ ->

@@ -411,7 +411,13 @@ val ids_of_copy : (_,_) copy -> ID.t Sequence.t
 val print_attr : decl_attr printer
 val print_attrs : decl_attr list printer
 
-module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
+module type PRINT_TERM = sig
+  type t
+  val print : t CCFormat.printer
+  val print' : Precedence.t -> t CCFormat.printer
+end
+
+module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) : sig
   val pp_defined : Pty.t defined printer
   val print_spec_defs : (Pt.t, Pty.t) spec_defs printer
   val print_clause : (Pt.t, Pty.t) pred_clause printer

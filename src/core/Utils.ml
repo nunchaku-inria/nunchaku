@@ -113,6 +113,16 @@ module Section = struct
     if s.level = null_level
     then cur_level_rec s
     else s.level
+
+  (* CLI options to set the debug levels *)
+  let cli_options () =
+    iter
+    |> Sequence.map
+      (fun (name,sec) ->
+         "--debug" ^ (if name="" then "" else "."^name),
+         Arg.Int (set_debug sec),
+         " verbosity level for " ^ (if name="" then "all messages" else name))
+    |> Sequence.to_rev_list
 end
 
 let set_debug = Section.set_debug Section.root
@@ -227,6 +237,15 @@ let arg_choice l f =
   in
   Arg.Symbol (List.map fst l, pick)
 
+module Options = struct
+  let all_ : (Arg.key * Arg.spec * Arg.doc) list ref = ref []
+
+  let get_all () = List.rev_append (Section.cli_options ()) !all_
+
+  let add o = all_ := o :: !all_
+  let add_list = List.iter add
+end
+
 (** {2 Warnings} *)
 
 type warning =
@@ -265,21 +284,20 @@ let warningf w msg =
 let warning b msg = warningf b "%s" msg
 
 let enable_warn_ w () = toggle_warning w true
-let options_warnings_ =
-  [ "--warn-overlapping-match"
-  , Arg.Unit (enable_warn_ Warn_overlapping_match)
-  , " enable warning on overlapping cases of pattern-matching"
-  ; "-W1"
-  , Arg.Bool (toggle_warning Warn_overlapping_match)
-  , " <bool>: enable/disable --warn-overlapping-match"
-  ; "-W2"
-  , Arg.Bool (toggle_warning Warn_model_parsing_error)
-  , " <bool>: enable/disable warnings on model parsing errors"
-  ]
 
-let options_others_ : (Arg.key * Arg.spec * Arg.doc) list ref = ref []
-
-let add_option o = options_others_ := o :: !options_others_
+let () =
+  Options.add_list
+    [ 
+      ("--warn-overlapping-match"
+      , Arg.Unit (enable_warn_ Warn_overlapping_match)
+      , " enable warning on overlapping cases of pattern-matching");
+      ("-W1"
+      , Arg.Bool (toggle_warning Warn_overlapping_match)
+      , " <bool>: enable/disable --warn-overlapping-match");
+      ("-W2"
+      , Arg.Bool (toggle_warning Warn_model_parsing_error)
+      , " <bool>: enable/disable warnings on model parsing errors");
+    ]
 
 (** {2 Misc} *)
 

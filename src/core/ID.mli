@@ -49,6 +49,10 @@ val to_string_full : t -> string
 val print_name : Format.formatter -> t -> unit
 (** Print only the name, nothing else *)
 
+val print_undefined_id : bool ref
+(** global option affecting printing: if true, undefined values will
+    be displayed as "undefined_42" rather than "?__" *)
+
 module Map : CCMap.S with type key = t
 module Set : CCSet.S with type elt = t
 module Tbl : CCHashtbl.S with type key = t

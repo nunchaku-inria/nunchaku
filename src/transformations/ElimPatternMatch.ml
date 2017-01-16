@@ -6,12 +6,11 @@
 open Nunchaku_core
 
 module Stmt = Statement
-module TI = TermMono
+module TI = TermInner
 module Subst = Var.Subst
 module T = TermInner.Default
 module U = T.U
 module P = T.P
-module TMono = TermMono.Make(T)
 
 let name = "elim_match"
 
@@ -33,11 +32,11 @@ let mk_test_ = U.data_test
 (* apply substitution [ctx.subst] in [t], and also replace pattern matching
    with [`DataSelect] and [`DataTest] *)
 let elim_match ~mode ~env t =
+  let open Binder in
   (* should we encode a match on this term? Depends on [mode] and its type *)
   let should_encode t =
-    let module UEnv = Env.Util(T) in
-    let ty = UEnv.ty_exn ~env t in
-    let info = UEnv.info_of_ty_exn ~env ty in
+    let ty = U.ty_exn ~env t in
+    let info = U.info_of_ty_exn ~env ty in
     match mode, Env.def info with
       | Elim_both, _ -> true
       | Elim_data_match, Env.Data (`Data,_,_)
@@ -45,17 +44,18 @@ let elim_match ~mode ~env t =
       | _, Env.Data (_,_,_) -> false
       | _ -> assert false
   in
-  let rec elim_match_ ~subst t = match TMono.repr t with
+  let rec elim_match_ ~subst t = match T.repr t with
     | TI.Var v ->
       CCOpt.get t (Subst.find ~subst v)
     | TI.Const _ -> t
     | TI.App (f,l) -> U.app (elim_match_ ~subst f) (elim_match_l_ ~subst l)
-    | TI.Builtin b -> U.builtin (TI.Builtin.map b ~f:(elim_match_ ~subst))
-    | TI.Bind ((`Forall | `Exists | `Fun | `Mu) as b,v,t) ->
+    | TI.Builtin b -> U.builtin (Builtin.map b ~f:(elim_match_ ~subst))
+    | TI.Bind ((Forall | Exists | Fun | Mu) as b,v,t) ->
       let v' = Var.fresh_copy v in
       let subst = Subst.add ~subst v (U.var v') in
       let t' = elim_match_ ~subst t in
       U.mk_bind b v' t'
+    | TI.Bind (TyForall, _, _) | TI.TyMeta _ -> assert false (* by precond *)
     | TI.Let (v,t,u) ->
       let t' = elim_match_ ~subst t in
       let v' = Var.fresh_copy v in

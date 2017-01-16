@@ -50,7 +50,7 @@ module Util(T : S)
     (** @raise Not_found if the term has no type *)
 
     val const : ?loc:loc -> ty:t -> id -> t
-    val builtin : ?loc:loc -> ty:t -> t TI.Builtin.t -> t
+    val builtin : ?loc:loc -> ty:t -> t Builtin.t -> t
     val var : ?loc:loc -> t var -> t
     val app : ?loc:loc -> ty:t -> t -> t list -> t
     val fun_ : ?loc:loc -> ty:t -> t var -> t -> t
@@ -70,7 +70,7 @@ module Util(T : S)
     val mk_bind :
       ?loc:loc ->
       ty:t ->
-      TI.Binder.t -> t var -> t -> t
+      Binder.t -> t var -> t -> t
 
     val ty_type : t (** Type of types *)
     val ty_prop : t (** Propositions *)
@@ -117,7 +117,7 @@ module Util(T : S)
     build ?loc ~ty (TI.Const id)
 
   let true_ = builtin ~ty:ty_prop `True
-  let false_ = builtin ~ty:ty_prop `True
+  let false_ = builtin ~ty:ty_prop `False
 
   let var ?loc v = build ?loc ~ty:(Var.ty v) (TI.Var v)
 
@@ -126,12 +126,12 @@ module Util(T : S)
 
   let mk_bind ?loc ~ty b v t = build ?loc ~ty (TI.Bind (b,v,t))
 
-  let fun_ ?loc ~ty v t = build ?loc ~ty (TI.Bind(`Fun,v, t))
+  let fun_ ?loc ~ty v t = build ?loc ~ty (TI.Bind(Binder.Fun,v, t))
 
   let mu ?loc v t =
     (* typeof v = typeof t = typeof µv.t *)
     let ty = Var.ty v in
-    build ?loc ~ty (TI.Bind (`Mu, v, t))
+    build ?loc ~ty (TI.Bind (Binder.Mu, v, t))
 
   let let_ ?loc v t u =
     build ?loc ~ty:(ty_exn u) (TI.Let (v, t, u))
@@ -144,10 +144,10 @@ module Util(T : S)
     builtin ?loc ~ty:(ty_exn b) (`Ite (a,b,c))
 
   let forall ?loc v t =
-    mk_bind ?loc ~ty:ty_prop `Forall v t
+    mk_bind ?loc ~ty:ty_prop Binder.Forall v t
 
   let exists ?loc v t =
-    mk_bind ?loc ~ty:ty_prop `Exists v t
+    mk_bind ?loc ~ty:ty_prop Binder.Exists v t
 
   let eq ?loc a b =
     builtin ?loc ~ty:ty_prop (`Eq (a,b))
@@ -155,7 +155,7 @@ module Util(T : S)
   let asserting ?loc t l = match l with
     | [] -> t
     | _::_ ->
-      let g = {TI.Builtin.asserting=l; assuming=[];} in
+      let g = { Builtin.asserting=l; } in
       builtin ?loc ~ty:(ty_exn t) (`Guard (t, g))
 
   let undefined_self ?loc t =
@@ -179,7 +179,7 @@ module Util(T : S)
   let ty_arrow_l ?loc = List.fold_right (ty_arrow ?loc)
 
   let ty_forall ?loc a b =
-    mk_bind ?loc ~ty:ty_type `TyForall a b
+    mk_bind ?loc ~ty:ty_type Binder.TyForall a b
 
   include TI.UtilRepr(LiftRepr(T))
 

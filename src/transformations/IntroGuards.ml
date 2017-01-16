@@ -26,27 +26,20 @@ type state = {
   env: (T.t, T.t) Env.t;
 }
 
-type +'a guard = 'a TI.Builtin.guard = {
-  assuming: 'a list;
+type +'a guard = 'a Builtin.guard = {
   asserting: 'a list;
 }
 
-let empty_guard = {asserting=[]; assuming=[]}
+let empty_guard = Builtin.empty_guard
 
-let combine_guard g1 g2 =
-  { assuming=List.rev_append g1.assuming g2.assuming;
-    asserting=List.rev_append g1.asserting g2.asserting;
-  }
+let combine_guard = Builtin.merge_guard
 
 let wrap_guard f g =
   let asserting = match g.asserting with
     | [] -> []
     | l -> [f (U.and_nodup l)]
-  and assuming = match g.assuming with
-    | [] -> []
-    | l -> [f (U.and_nodup l)]
   in
-  {assuming; asserting; }
+  { asserting; }
 
 exception TranslationFailed of term * string
 (* not supposed to escape *)
@@ -64,15 +57,14 @@ let () = Printexc.register_printer
 
 let combine_polarized ~is_pos t g =
   if is_pos
-  then U.imply (U.and_nodup g.assuming) (U.and_nodup (t :: g.asserting))
-  else U.imply (U.and_nodup g.asserting) (U.and_nodup (t :: g.assuming))
+  then U.and_nodup (t :: g.asserting)
+  else U.imply (U.and_nodup g.asserting) t
 
-let add_asserting g p = { g with asserting = p::g.asserting }
-let add_assuming g p = { g with assuming = p::g.assuming }
+let add_asserting g p = { asserting = p::g.asserting }
 
 (* combine side-conditions with [t], depending on polarity *)
 let combine pol t g =
-  if g.assuming=[] && g.asserting=[] then t, empty_guard
+  if g.asserting=[] then t, empty_guard
   else match pol with
     | Pol.Pos ->
       combine_polarized ~is_pos:true t g, empty_guard
@@ -82,7 +74,7 @@ let combine pol t g =
 
 (* is [t] of type prop? *)
 let is_prop ~state t =
-  let ty = U.ty_exn ~sigma:(Env.find_ty ~env:state.env) t in
+  let ty = U.ty_exn ~env:state.env t in
   U.ty_is_Prop ty
 
 (* Translate term/formula recursively by removing asserting/assuming
@@ -124,7 +116,7 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
       t, empty_guard
     | TI.Builtin ((`Unparsable _ | `Undefined_self _ | `Undefined_atom _) as b) ->
       let t' =
-        U.builtin (TI.Builtin.map b ~f:(fun t-> fst(tr_term ~state ~pol t)))
+        U.builtin (Builtin.map b ~f:(fun t-> fst(tr_term ~state ~pol t)))
       in
       t', empty_guard
     | TI.Builtin (`Guard (t, g)) ->
@@ -136,14 +128,6 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
              (* apply guards to [pred] itself, then add [pred] to asserting *)
              add_asserting acc (combine_polarized ~is_pos:true pred g))
           cond_t g.asserting
-      in
-      let conds =
-        List.fold_left
-          (fun acc pred ->
-             (* apply guards to [pred] itself, then add [pred] to assuming *)
-             let pred, g = tr_term ~state ~pol:Pol.Neg pred in
-             add_assuming acc (combine_polarized ~is_pos:true pred g))
-          conds g.assuming
       in
       if is_prop ~state t
       then combine pol t conds
@@ -171,13 +155,10 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
         let asserting =
           U.ite a (U.and_nodup g_b.asserting) (U.and_nodup g_c.asserting)
           :: g_a.asserting
-        and assuming =
-          U.ite a (U.and_nodup g_b.assuming) (U.and_nodup g_c.assuming)
-          :: g_a.assuming
         in
-        U.ite a b c, {assuming; asserting;}
+        U.ite a b c, {asserting}
       )
-    | TI.Bind ((`Forall | `Exists) as b, v, t) ->
+    | TI.Bind ((Binder.Forall | Binder.Exists) as b, v, t) ->
       let t, g = tr_term ~state ~pol t in
       begin match pol with
         | Pol.Pos ->
@@ -191,16 +172,16 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
           let g' = wrap_guard (U.forall v) g in
           U.mk_bind b v t, g'
       end
-    | TI.Bind (`Fun, v, body) ->
+    | TI.Bind (Binder.Fun, v, body) ->
       let body, g = tr_term ~state ~pol:Pol.NoPol body in
-      begin match g.asserting, g.assuming with
-        | [], [] -> U.fun_ v body, empty_guard
+      begin match g.asserting with
+        | [] -> U.fun_ v body, empty_guard
         | _ ->
           fail_tr_ t
             "@[translation of `%a` impossible:@ cannot put guards `%a` under λ@]"
-            P.print t (TI.Builtin.pp_guard P.print) g
+            P.print t (Builtin.pp_guard P.print) g
       end
-    | TI.Bind (`Mu, _, _) -> fail_tr_ t "translation of µ impossible"
+    | TI.Bind (Binder.Mu, _, _) -> fail_tr_ t "translation of µ impossible"
     | TI.Let (v,t,u) ->
       let t, g_t = tr_term t ~state ~pol:Pol.NoPol in
       let u, g_u = tr_term u ~state ~pol in
@@ -235,20 +216,16 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
         (* wrap guards in a pattern matching *)
         let asserting = ref ID.Map.empty in
         let asserting_def = ref ([],ID.Map.empty) in
-        let assuming = ref ID.Map.empty in
-        let assuming_def = ref ([],ID.Map.empty) in
         let cases = ID.Map.mapi
             (fun c (vars,rhs) ->
                let rhs, g_rhs = tr_term ~state ~pol rhs in
                asserting := ID.Map.add c (vars, g_rhs.asserting) !asserting;
-               assuming := ID.Map.add c (vars, g_rhs.assuming) !assuming;
                vars,rhs)
             cases
         and def = TI.map_default_case'
             (fun rhs ids ->
                let rhs, g_rhs = tr_term ~state ~pol rhs in
                asserting_def := g_rhs.asserting, ids;
-               assuming_def := g_rhs.assuming, ids;
                rhs, ids)
             def
         in
@@ -269,13 +246,12 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
         in
         let g_cases = {
           asserting = map_to_guard !asserting !asserting_def;
-          assuming = map_to_guard !assuming !assuming_def;
         } in
         U.match_with lhs cases ~def, combine_guard g_cases g_lhs
       )
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> t, empty_guard
-    | TI.Bind (`TyForall, _, _)
+    | TI.Bind (Binder.TyForall, _, _)
     | TI.TyMeta _ -> assert false
 
 (* translate each element of [l], combining the guards into [acc] *)

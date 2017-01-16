@@ -1,7 +1,5 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-module TI = TermInner
-
 type id = ID.t
 type 'a var = 'a Var.t
 type loc = Location.t
@@ -525,12 +523,18 @@ let print_attrs out = function
   | [] -> ()
   | l -> fpf out "@ [@[%a@]]" (pplist ~sep:"," print_attr) l
 
-module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
+module type PRINT_TERM = sig
+  type t
+  val print : t CCFormat.printer
+  val print' : Precedence.t -> t CCFormat.printer
+end
+
+module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
   let pp_defined out d =
     fpf out "@[%a : %a%a@]"
       ID.print d.defined_head Pty.print d.defined_ty print_attrs d.defined_attrs
   and pp_typed_var out v =
-    fpf out "@[<2>%a:%a@]" Var.print_full v Pty.print_in_app (Var.ty v)
+    fpf out "@[<2>%a:%a@]" Var.print_full v (Pty.print' Precedence.App) (Var.ty v)
 
   let pp_defined_list out =
     fpf out "@[<v>%a@]" (pplist_prefix ~first:"" ~pre:" and " pp_defined)
@@ -538,7 +542,8 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
   let print_eqns id out (e:(_,_) equations) =
     let pp_sides out l =
       if l=[] then ()
-      else fpf out "@[<hv2>%a => @]@," (pplist ~sep:" && " Pt.print_in_app) l
+      else fpf out "@[<hv2>%a => @]@,"
+          (pplist ~sep:" && " (Pt.print' Precedence.App)) l
     in
     match e with
       | Eqn_app (_, vars, lhs, rhs) ->
@@ -552,10 +557,10 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
              if vars=[]
              then fpf out "@[<hv>%a@[<2>%a@ %a@] =@ %a@]"
                  pp_sides side ID.print id
-                 (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
+                 (pplist ~sep:" " (Pt.print' Precedence.App)) args Pt.print rhs
              else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
                  (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print id
-                 (pplist ~sep:" " Pt.print_in_app) args Pt.print rhs
+                 (pplist ~sep:" " (Pt.print' Precedence.App)) args Pt.print rhs
           ) out l
       | Eqn_single (vars,rhs) ->
         fpf out "@[<2>%a %a =@ %a@]" ID.print id
@@ -618,7 +623,7 @@ module Print(Pt : TI.PRINT)(Pty : TI.PRINT) = struct
   let print_tydef out tydef =
     let ppcstors out c =
       fpf out "@[<hv2>%a %a@]"
-        ID.print c.cstor_name (pplist ~sep:" " Pty.print_in_app) c.cstor_args in
+        ID.print c.cstor_name (pplist ~sep:" " (Pty.print' Precedence.App)) c.cstor_args in
     fpf out "@[<hv2>@[%a %a@] :=@ @[<hv>%a@]@]"
       ID.print tydef.ty_id
       (pplist ~sep:" " Var.print_full) tydef.ty_vars

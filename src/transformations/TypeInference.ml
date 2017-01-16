@@ -354,7 +354,7 @@ module Convert(Term : TermTyped.S) = struct
      if [default] is provided *)
   let check_cases_exhaustive_ ?loc ~env ~ty m def =
     (* find the type definition *)
-    let cstors = TyEnv.find_datatype ?loc ~env (U.head_sym ty) in
+    let cstors = TyEnv.find_datatype ?loc ~env (U.head_sym_exn ty) in
     let missing = ID.Map.fold
         (fun id cstor acc ->
            if ID.Map.mem id m then acc else (id,cstor)::acc)
@@ -688,7 +688,7 @@ module Convert(Term : TermTyped.S) = struct
       | TI.Const _ ->  true
       | TI.Var v -> is_mono_var_ v
       | TI.App (f,l) -> is_mono_ f && List.for_all is_mono_ l
-      | TI.Builtin b -> TI.Builtin.to_seq b |> Sequence.for_all is_mono_
+      | TI.Builtin b -> Builtin.to_seq b |> Sequence.for_all is_mono_
       | TI.Let (v,t,u) ->
         is_mono_var_ v && is_mono_ t && is_mono_ u
       | TI.Match (t,l,d) ->
@@ -700,7 +700,7 @@ module Convert(Term : TermTyped.S) = struct
         ID.Map.for_all
           (fun _ (vars,rhs) -> List.for_all is_mono_var_ vars && is_mono_ rhs)
           l
-      | TI.Bind (`TyForall, _, _) -> false
+      | TI.Bind (Binder.TyForall, _, _) -> false
       | TI.Bind (_,v,t) -> is_mono_var_ v && is_mono_ t
       | TI.TyArrow (a,b) -> is_mono_ a && is_mono_ b
   and is_mono_var_ v = is_mono_ (Var.ty v)
@@ -713,11 +713,11 @@ module Convert(Term : TermTyped.S) = struct
       | TI.Const _ -> true
       | TI.Var v -> is_mono_var_ v
       | TI.App (f,l) -> is_prenex_ f && List.for_all is_mono_ l
-      | TI.Builtin b -> TI.Builtin.to_seq b |> Sequence.for_all is_mono_
-      | TI.Bind (`TyForall, v, t) ->
+      | TI.Builtin b -> Builtin.to_seq b |> Sequence.for_all is_mono_
+      | TI.Bind (Binder.TyForall, v, t) ->
         (* pi v:_. t is prenex if t is *)
         is_mono_var_ v && is_prenex_ t
-      | TI.Bind (`Forall, v, t) when U.ty_returns_Type (Var.ty v) ->
+      | TI.Bind (Binder.Forall, v, t) when U.ty_returns_Type (Var.ty v) ->
         (* forall v:type. t is prenex if t is *)
         is_prenex_ t
       | TI.Bind (_,v,t) -> is_mono_var_ v && is_mono_ t
@@ -898,14 +898,14 @@ module Convert(Term : TermTyped.S) = struct
 
   (* change [fun x1...xn.t] into [[x1;...;xn], t] *)
   let rec extract_fun_ t = match Term.repr t with
-    | TI.Bind (`Fun, v, t') ->
+    | TI.Bind (Binder.Fun, v, t') ->
       let vars, rhs = extract_fun_ t' in
       v :: vars, rhs
     | _ -> [], t
 
   (* extract [forall vars. f args = rhs] from a prop *)
   let rec extract_eqn ~f t = match Term.repr t with
-    | TI.Bind (`Forall, v, t') ->
+    | TI.Bind (Binder.Forall, v, t') ->
       CCOpt.map
         (fun (vars,args,rhs) -> v::vars,args,rhs)
         (extract_eqn ~f t')
@@ -935,19 +935,19 @@ module Convert(Term : TermTyped.S) = struct
   (* extract [forall vars. guard => f args] from a prop *)
   let rec extract_clause ~f t =
     match Term.repr t with
-      | TI.Bind (`Forall, v, t') ->
+      | TI.Bind (Binder.Forall, v, t') ->
         CCOpt.map
           (fun (vars, g, t) -> v::vars,g,t)
           (extract_clause ~f t')
       | TI.Builtin (`Imply (a,b)) ->
-        begin try
-            if ID.equal (U.head_sym b) f then Some ([], Some a, b) else None
-          with Not_found -> None
+        begin match U.head_sym b with
+          | Some f' -> if ID.equal f f' then Some ([], Some a, b) else None
+          | None -> None
         end
       | _ ->
-        begin try
-            if ID.equal (U.head_sym t) f then Some ([], None, t) else None
-          with Not_found -> None
+        begin match U.head_sym t with
+          | Some f' -> if ID.equal f f' then Some ([], None, t) else None
+          | None -> None
         end
 
   (* [f args = rhs], where [f : ty]. Maybe [f] is actually
@@ -955,7 +955,7 @@ module Convert(Term : TermTyped.S) = struct
      and return them (along with the new atomic type) *)
   let complete_args_ args ty =
     let rec aux subst args ty = match args, Term.repr ty with
-      | [], TI.Bind (`TyForall, v, ty') ->
+      | [], TI.Bind (Binder.TyForall, v, ty') ->
         assert (IU.ty_returns_Type (Var.ty v));
         let v' = Var.make ~name:"v" ~ty:(Var.ty v) in
         let l, ty = aux (Subst.add ~subst v (U.var v')) [] ty' in
@@ -964,7 +964,7 @@ module Convert(Term : TermTyped.S) = struct
         let v = Var.make ~name:"v" ~ty:ty_arg in
         let l, ty = aux subst [] ty' in
         v :: l, ty
-      | a::args', TI.Bind (`TyForall, v', ty') ->
+      | a::args', TI.Bind (Binder.TyForall, v', ty') ->
         aux (Subst.add ~subst v' a) args' ty'
       | _::args', TI.TyArrow (_, ty') -> aux subst args' ty'
       | _ -> [], Subst.eval ~subst ty

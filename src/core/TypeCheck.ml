@@ -122,8 +122,7 @@ module Make(T : TI.S) = struct
             ignore (check_is_ty ~env bound ty); ty
           | `Undefined_self (_,t) -> check ~env bound t
           | `Guard (t, g) ->
-            List.iter (check_is_prop ~env bound) g.TI.Builtin.asserting;
-            List.iter (check_is_prop ~env bound) g.TI.Builtin.assuming;
+            List.iter (check_is_prop ~env bound) g.Builtin.asserting;
             check ~env bound t
         end
       | TI.Var v ->
@@ -135,18 +134,18 @@ module Make(T : TI.S) = struct
           ~terms:l ~tys:(List.map (check ~env bound) l)
       | TI.Bind (b,v,body) ->
         begin match b with
-          | `Forall
-          | `Exists
-          | `Mu ->
+          | Binder.Forall
+          | Binder.Exists
+          | Binder.Mu ->
             let bound' = check_var ~env bound v in
             check ~env bound' body
-          | `Fun ->
+          | Binder.Fun ->
             let bound' = check_var ~env bound v in
             let ty_body = check ~env bound' body in
             if U.ty_returns_Type (Var.ty v)
             then U.ty_forall v ty_body
             else U.ty_arrow (Var.ty v) ty_body
-          | `TyForall ->
+          | Binder.TyForall ->
             (* type of [pi a:type. body] is [type],
                and [body : type] is mandatory *)
             check_ty_forall_var ~env bound t v;

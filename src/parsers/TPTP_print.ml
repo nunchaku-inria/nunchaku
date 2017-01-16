@@ -45,7 +45,7 @@ type form = T.t
 type ty = T.t
 type model = (term, ty) Model.t
 
-let print_builtin print_inner out : term TI.Builtin.t -> unit = function
+let print_builtin print_inner out : term Builtin.t -> unit = function
   | `True -> CCFormat.string out "$true"
   | `False -> CCFormat.string out "$false"
   | `Eq (a,b) ->
@@ -74,22 +74,22 @@ let print_var out v = CCFormat.string out (Var.id v |> id_to_name)
 
 let rec print_term out t = match T.repr t with
   | TI.Var v -> print_var out v
-  | TI.Bind (`Fun,v,t) ->
+  | TI.Bind (Binder.Fun,v,t) ->
     fpf out "@[<2>^[%a]:@ %a@]" print_typed_var v print_inner t
-  | TI.Bind (`Mu,_,_) -> Utils.not_implemented "print mu in TPTP"
+  | TI.Bind (Binder.Mu,_,_) -> Utils.not_implemented "print mu in TPTP"
   | TI.Let _ -> Utils.not_implemented "print let in TPTP"
   | TI.Match _ -> Utils.not_implemented "print match in TPTP"
   | TI.Builtin (`Unparsable _) -> error_ "cannot print `unparsable` in TPTP"
   | TI.Builtin (`Ite (a,b,c)) ->
     fpf out "$ite_t(@[<hv>%a,@ %a,@ %a@])"
       print_term a print_term b print_term c
-  | TI.Bind (`Forall, v,t) ->
+  | TI.Bind (Binder.Forall, v,t) ->
     fpf out "@[<2>![%a]:@ %a@]" print_typed_var v print_inner t
-  | TI.Bind (`Exists, v,t) ->
+  | TI.Bind (Binder.Exists, v,t) ->
     fpf out "@[<2>?[%a]:@ %a@]" print_typed_var v print_inner t
   | TI.TyArrow (a,b) ->
     fpf out "@[<2>%a >@ %a@]" print_inner a print_ty b
-  | TI.Bind (`TyForall, v,t) ->
+  | TI.Bind (Binder.TyForall, v,t) ->
     fpf out "@[<2>!>[%a]:@ %a@]" print_var v print_inner t
   | TI.Const c -> CCFormat.string out (id_to_name c)
   | TI.App (_, []) -> assert false
@@ -175,7 +175,7 @@ let rec preprocess_term ~state t = match T.repr t with
     let f = preprocess_term ~state f in
     let l = List.map (preprocess_term ~state) l in
     U.app f l
-  | TI.Bind (`Fun, v,t) ->
+  | TI.Bind (Binder.Fun, v,t) ->
     preprocess_typed_var ~state v
       (fun v -> U.fun_ v (preprocess_term ~state t))
   | TI.Let (v,t,u) ->
@@ -183,7 +183,7 @@ let rec preprocess_term ~state t = match T.repr t with
     let u = preprocess_term ~state u in
     let v' = find_var_ ~state v in
     U.let_ v' t u
-  | TI.Bind (`Mu, _,_) ->
+  | TI.Bind (Binder.Mu, _,_) ->
     errorf_ "cannot represent `@[%a@]`@ in TPTP" P.print t
   | TI.Match _ -> Utils.not_implemented "replace in match"
   | TI.Builtin (`Ite (a,b,c)) ->
@@ -191,15 +191,15 @@ let rec preprocess_term ~state t = match T.repr t with
     let b = preprocess_term ~state b in
     let c = preprocess_term ~state c in
     U.ite a b c
-  | TI.Bind (`Forall,v,t) ->
+  | TI.Bind (Binder.Forall,v,t) ->
     preprocess_typed_var ~state v
       (fun v -> U.forall v (preprocess_term ~state t))
-  | TI.Bind (`Exists,v,t) ->
+  | TI.Bind (Binder.Exists,v,t) ->
     preprocess_typed_var ~state v
       (fun v -> U.exists v (preprocess_term ~state t))
   | TI.TyArrow (a,b) ->
     U.ty_arrow (preprocess_ty ~state a) (preprocess_ty ~state b)
-  | TI.Bind (`TyForall,v,t) ->
+  | TI.Bind (Binder.TyForall,v,t) ->
     let v' = mk_var ~state v in
     U.ty_forall v' (preprocess_ty ~state t)
   | TI.Builtin _ -> t
@@ -219,7 +219,7 @@ and mk_var ~state v =
   let name = ID.name (Var.id v) in
   let name = match name.[0] with
     | 'A' .. 'Z' -> name
-    | 'a' .. 'b' -> String.capitalize name
+    | 'a' .. 'b' -> String.capitalize_ascii name
     | _ -> "V" ^ name
   in
   Var.make ~name ~ty:(preprocess_ty ~state (Var.ty v))

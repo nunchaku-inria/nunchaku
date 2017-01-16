@@ -159,10 +159,10 @@ let skolemize_ ~state ?(in_goal=false) pol t =
         | None -> U.var (aux_var env v)
         | Some t -> t
       end
-    | TI.Bind ((`Exists | `Forall) as b, v, t') ->
+    | TI.Bind ((Binder.Exists | Binder.Forall) as b, v, t') ->
       begin match b, pol with
-        | `Exists, Pol.Pos
-        | `Forall, Pol.Neg when should_skolemize_ ~state v ->
+        | Binder.Exists, Pol.Pos
+        | Binder.Forall, Pol.Neg when should_skolemize_ ~state v ->
           (* type of Skolem function *)
           let ty_ret = aux env Pol.NoPol (Var.ty v) in
           let skolem_id, _ty, _ =

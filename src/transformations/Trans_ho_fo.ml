@@ -1,74 +1,16 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-module ID = ID
-module Var = Var
+(** {1 Conversion HO/FO} *)
+
+open Nunchaku_core
+
 module TI = TermInner
 
-module Builtin = TI.Builtin
-module TyBuiltin = TI.TyBuiltin
-
-module Binder = struct
-  type t = [`Forall | `Exists | `Fun | `Mu]
-  let lift
-    : t -> TI.Binder.t
-    = function
-      | `Forall -> `Forall
-      | `Exists -> `Exists
-      | `Mu -> `Mu
-      | `Fun -> `Fun
-end
-
-type id = ID.t
-type 'a var = 'a Var.t
-
-type 'a view =
-  | Const of id (** top-level symbol *)
-  | Var of 'a var (** bound variable *)
-  | App of 'a * 'a list
-  | Builtin of 'a Builtin.t (** built-in operation *)
-  | Bind of Binder.t * 'a var * 'a
-  | Let of 'a var * 'a * 'a
-  | Match of 'a * 'a TI.cases * 'a TI.default_case (** shallow pattern-match *)
-  | TyBuiltin of TyBuiltin.t (** Builtin type *)
-  | TyArrow of 'a * 'a
-
-(** The main signature already  contains every util, printer, constructors,
-    equality, etc. because after that it would be impossible to use
-    the equality [t = INNER.t]. *)
-module type S = sig
-  module T : TI.REPR
-  type t = T.t
-
-  val repr : T.t -> T.t view
-end
-
-(** Build a representation and all the associated utilities *)
-module Make(T : TI.REPR)
-  : S with module T = T
-= struct
-  module T = T
-  type t = T.t
-
-  let repr t = match T.repr t with
-    | TI.Const id -> Const id
-    | TI.Var v -> Var v
-    | TI.App (f,l) -> App (f,l)
-    | TI.Builtin b -> Builtin b
-    | TI.Bind (`TyForall,_,_)
-    | TI.TyMeta _ -> assert false
-    | TI.Bind ((`Forall | `Exists | `Fun | `Mu) as b,v,t) -> Bind(b,v,t)
-    | TI.Let (v,t,u) -> Let(v,t,u)
-    | TI.Match (t,l,def) -> Match (t,l,def)
-    | TI.TyBuiltin b -> TyBuiltin b
-    | TI.TyArrow (a,b) -> TyArrow(a,b)
-end
-
-module ToFO(T : TI.S) = struct
+module Of_ho(T : TI.S) = struct
   module Subst = Var.Subst
   module P = TI.Print(T)
   module U = TI.Util(T)
-  module Mono = Make(T)
 
   exception NotInFO of string
 
@@ -77,8 +19,7 @@ module ToFO(T : TI.S) = struct
   let () = Printexc.register_printer
       (function
         | NotInFO msg -> Some(Utils.err_sprintf "term_mono:@ %s" msg)
-        | _ -> None
-      )
+        | _ -> None)
 
   let fail_ msg = raise (NotInFO msg)
   let failf msg = Utils.exn_ksprintf ~f:fail_ msg
@@ -88,32 +29,33 @@ module ToFO(T : TI.S) = struct
       "@[<2>term `@[%a@]` is not in the first-order fragment:@ %s@]"
       P.print t msg
 
-  let rec conv_ty t = match Mono.repr t with
-    | Var _ -> fail_ t "variable in type"
-    | TyBuiltin b ->
+  let rec conv_ty t = match T.repr t with
+    | TI.Var _ -> fail_ t "variable in type"
+    | TI.TyBuiltin b ->
       begin match b with
         | `Prop -> FO.Ty.builtin `Prop
         | `Unitype -> FO.Ty.builtin `Unitype
         | `Kind -> fail_ t "kind belongs to HO fragment"
         | `Type -> fail_ t "type belongs to HO fragment"
       end
-    | Const id -> FO.Ty.const id
-    | App (f,l) ->
-      begin match Mono.repr f with
-        | Const id -> FO.Ty.app id (List.map conv_ty l)
+    | TI.Const id -> FO.Ty.const id
+    | TI.App (f,l) ->
+      begin match T.repr f with
+        | TI.Const id -> FO.Ty.app id (List.map conv_ty l)
         | _ -> fail_ t "non-constant application"
       end
-    | TyArrow _ -> fail_ t "arrow in atomic type"
-    | Let _
-    | Match _
-    | Builtin _
-    | Bind _ -> fail_ t "not a type"
+    | TI.TyArrow _ -> fail_ t "arrow in atomic type"
+    | TI.Let _
+    | TI.Match _
+    | TI.Builtin _
+    | TI.Bind _ -> fail_ t "not a type"
+    | TI.TyMeta _ -> assert false
 
   let conv_var v = Var.update_ty ~f:conv_ty v
 
   (* find arguments *)
-  let rec flat_arrow_ t = match Mono.repr t with
-    | TyArrow (a, b) ->
+  let rec flat_arrow_ t = match T.repr t with
+    | TI.TyArrow (a, b) ->
       let args, ret = flat_arrow_ b in
       a :: args, ret
     | _ -> [], t
@@ -124,63 +66,65 @@ module ToFO(T : TI.S) = struct
     and ret = conv_ty ret in
     args, ret
 
-  let rec conv_term ~env t = match Mono.repr t with
-    | Const id -> FO.T.const id
-    | Var v -> FO.T.var (conv_var v)
-    | Let (v,t,u) ->
+  let rec conv_term ~env t = match T.repr t with
+    | TI.Const id -> FO.T.const id
+    | TI.Var v -> FO.T.var (conv_var v)
+    | TI.Let (v,t,u) ->
       FO.T.let_ (conv_var v) (conv_term ~env t) (conv_term ~env u)
-    | Builtin (`Ite (a,b,c)) ->
+    | TI.Builtin (`Ite (a,b,c)) ->
       FO.T.ite
         (conv_term ~env a) (conv_term ~env b) (conv_term ~env c)
-    | Builtin (`Undefined_self (c,t)) ->
+    | TI.Builtin (`Undefined_self (c,t)) ->
       FO.T.undefined c (conv_term ~env t)
-    | Builtin (`Undefined_atom (c,ty)) ->
+    | TI.Builtin (`Undefined_atom (c,ty)) ->
       FO.T.undefined_atom c (conv_top_ty ty) []
-    | Builtin (`Unparsable ty) -> FO.T.unparsable (conv_ty ty)
-    | Builtin `True -> FO.T.true_
-    | Builtin `False -> FO.T.false_
-    | Builtin (`Eq (a,b)) ->
+    | TI.Builtin (`Unparsable ty) -> FO.T.unparsable (conv_ty ty)
+    | TI.Builtin `True -> FO.T.true_
+    | TI.Builtin `False -> FO.T.false_
+    | TI.Builtin (`Eq (a,b)) ->
       (* forbid equality between functions *)
-      let ty = U.ty_exn ~sigma:(Env.find_ty ~env) a in
+      let ty = U.ty_exn ~env a in
       begin match T.repr ty with
         | TI.TyArrow _
-        | TI.Bind (`TyForall, _, _) -> fail_ t "equality between functions";
+        | TI.Bind (Binder.TyForall, _, _) -> fail_ t "equality between functions";
         | TI.TyBuiltin `Prop ->
           FO.T.equiv (conv_term ~env a) (conv_term ~env b)
         | _ ->
           FO.T.eq (conv_term ~env a) (conv_term ~env b)
       end
-    | Builtin (`Not t) -> FO.T.not_ (conv_term ~env t)
-    | Builtin (`And l) -> FO.T.and_ (List.map (conv_term ~env) l)
-    | Builtin (`Or l) -> FO.T.or_ (List.map (conv_term ~env) l)
-    | Builtin (`Imply (a,b)) ->
+    | TI.Builtin (`Not t) -> FO.T.not_ (conv_term ~env t)
+    | TI.Builtin (`And l) -> FO.T.and_ (List.map (conv_term ~env) l)
+    | TI.Builtin (`Or l) -> FO.T.or_ (List.map (conv_term ~env) l)
+    | TI.Builtin (`Imply (a,b)) ->
       FO.T.imply (conv_term ~env a) (conv_term ~env b)
-    | App (f, l) ->
-      begin match Mono.repr f, l with
-        | Const id, _ -> FO.T.app id (List.map (conv_term ~env) l)
-        | Builtin (`Undefined_atom (c,ty)), _ ->
+    | TI.App (f, l) ->
+      begin match T.repr f, l with
+        | TI.Const id, _ -> FO.T.app id (List.map (conv_term ~env) l)
+        | TI.Builtin (`Undefined_atom (c,ty)), _ ->
           let l = List.map (conv_term ~env) l in
           FO.T.undefined_atom c (conv_top_ty ty) l
-        | Builtin (`DataTest c), [t] ->
+        | TI.Builtin (`DataTest c), [t] ->
           FO.T.data_test c (conv_term ~env t)
-        | Builtin (`DataSelect (c,n)), [t] ->
+        | TI.Builtin (`DataSelect (c,n)), [t] ->
           FO.T.data_select c n (conv_term ~env t)
         | _ -> fail_ t "application of non-constant term"
       end
-    | Bind (`Fun,v,t) ->
+    | TI.Bind (Binder.Fun,v,t) ->
       FO.T.fun_ (conv_var v) (conv_term ~env t)
-    | Bind (`Mu,v,t) ->
+    | TI.Bind (Binder.Mu,v,t) ->
       FO.T.mu (conv_var v) (conv_term ~env t)
-    | Bind (`Forall, v,f) ->
+    | TI.Bind (Binder.Forall, v,f) ->
       FO.T.forall (conv_var v) (conv_term ~env f)
-    | Bind (`Exists, v,f) ->
+    | TI.Bind (Binder.Exists, v,f) ->
       FO.T.exists (conv_var v) (conv_term ~env f)
-    | Match _ -> fail_ t "no case in FO terms"
-    | Builtin (`Guard _) -> fail_ t "no guards (assert/assume) in FO"
-    | Builtin (`DataSelect _ | `DataTest _) ->
+    | TI.Match _ -> fail_ t "no case in FO terms"
+    | TI.Builtin (`Guard _) -> fail_ t "no guards (assert/assume) in FO"
+    | TI.Builtin (`DataSelect _ | `DataTest _) ->
       fail_ t "no unapplied data-select/test in FO"
-    | TyBuiltin _
-    | TyArrow (_,_) -> fail_ t "no types in FO terms"
+    | TI.TyBuiltin _
+    | TI.TyArrow (_,_) -> fail_ t "no types in FO terms"
+    | TI.Bind (Binder.TyForall,_,_) -> fail_ t "no polymorphic types in FO types"
+    | TI.TyMeta _ -> assert false
 
   let conv_form ~env f =
     Utils.debugf 3 ~section
@@ -188,7 +132,7 @@ module ToFO(T : TI.S) = struct
     conv_term ~env f
 
   let convert_eqns
-    : head:id -> env:(T.t,T.t) Env.t -> (T.t,T.t) Statement.equations -> FO.T.t list
+    : head:ID.t -> env:(T.t,T.t) Env.t -> (T.t,T.t) Statement.equations -> FO.T.t list
     = fun ~head ~env eqns ->
       let module St = Statement in
       let conv_eqn (vars, args, rhs, side) =
@@ -333,7 +277,7 @@ module ToFO(T : TI.S) = struct
     FO.Problem.make ~meta res
 end
 
-module OfFO(T:TI.S) = struct
+module To_ho(T : TI.S) = struct
   module U = TI.Util(T)
   type t = T.t
 
@@ -406,9 +350,9 @@ module OfFO(T:TI.S) = struct
   let convert_model m = Model.map m ~term:convert_term ~ty:convert_ty
 end
 
-module TransFO(T1 : TI.S) = struct
-  module Conv = ToFO(T1)
-  module ConvBack = OfFO(T1)
+module Make(T1 : TermInner.S) = struct
+  module Conv = Of_ho(T1)
+  module ConvBack = To_ho(T1)
 
   let pipe_with ~print ~decode =
     let on_encoded =

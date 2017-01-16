@@ -186,7 +186,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
   Utils.debugf ~section 5 "@[<2>mono term@ `@[%a@]`@]" (fun k->k P.print t);
   match T.repr t with
     | TI.Builtin b ->
-      U.builtin (TI.Builtin.map b ~f:(mono_term ~self ~local_state))
+      U.builtin (Builtin.map b ~f:(mono_term ~self ~local_state))
     | TI.Const c ->
       (* no args, but we require [c, ()] in the output *)
       let depth = local_state.depth+1 in
@@ -203,7 +203,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
       let f, l, subst, guard = Red.Full.whnf ~subst:local_state.subst f l in
       let local_state = {local_state with subst; } in
       let t' = match T.repr f with
-        | TI.Bind (`Fun, _, _) -> assert false (* beta-reduction failed? *)
+        | TI.Bind (Binder.Fun, _, _) -> assert false (* beta-reduction failed? *)
         | TI.Builtin _ ->
           (* builtins are defined, but examine their args *)
           let f = mono_term ~self ~local_state f in
@@ -259,7 +259,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
           failf_ "@[<2>cannot monomorphize application term@ `@[%a@]`@]" print_term t
       in
       U.guard t' guard
-    | TI.Bind ((`Fun | `Forall | `Exists | `Mu) as b, v, t) ->
+    | TI.Bind ((Binder.Fun | Binder.Forall | Binder.Exists | Binder.Mu) as b, v, t) ->
       U.mk_bind b
         (mono_var ~self ~local_state v)
         (mono_term ~self ~local_state t)
@@ -283,7 +283,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
         (mono_term ~self ~local_state a)
         (mono_term ~self ~local_state b)
     | TI.TyMeta _ -> assert false
-    | TI.Bind (`TyForall,_,_) ->
+    | TI.Bind (Binder.TyForall,_,_) ->
       failf_ "@[<2>cannot monomorphize quantified type@ @[%a@]@]" print_ty t
 
 and mono_var ~self ~local_state v : term Var.t =
@@ -584,8 +584,8 @@ let unmangle_term ~(state:unmangle_state) (t:term):term =
         with Not_found -> U.const id
       end
     | TI.App (f,l) -> U.app (aux f) (List.map aux l)
-    | TI.Builtin b -> U.builtin (TI.Builtin.map b ~f:aux)
-    | TI.Bind ((`Forall | `Exists | `Fun | `Mu) as b,v,t) ->
+    | TI.Builtin b -> U.builtin (Builtin.map b ~f:aux)
+    | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun | Binder.Mu) as b,v,t) ->
       U.mk_bind b (aux_var v) (aux t)
     | TI.Let (v,t,u) -> U.let_ (aux_var v) (aux t) (aux u)
     | TI.Match (t,l,def) ->
@@ -595,7 +595,7 @@ let unmangle_term ~(state:unmangle_state) (t:term):term =
       U.match_with t l ~def
     | TI.TyBuiltin b -> U.ty_builtin b
     | TI.TyArrow (a,b) -> U.ty_arrow (aux a) (aux b)
-    | TI.Bind (`TyForall, _,_) | TI.TyMeta _ -> assert false
+    | TI.Bind (Binder.TyForall, _,_) | TI.TyMeta _ -> assert false
   and aux_var = Var.update_ty ~f:aux in
   aux t
 

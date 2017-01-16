@@ -74,8 +74,7 @@ let declare_ state : (_,_) Stmt.t list =
   in
   [ decl_ty; decl_true; decl_false; distinct_ax; exhaustive_ax ]
 
-let find_ty state (t:term) : ty =
-  U.ty_exn ~sigma:(Env.find_ty ~env:state.env) t
+let find_ty state (t:term) : ty = U.ty_exn ~env:state.env t
 
 (* translate a type
    @param top true if toplevel; only toplevel props are
@@ -176,7 +175,7 @@ let transform_term state subst t =
       wrap_prop t'
     | TI.Builtin (`Guard (t,g)) ->
       let t' = aux_expect_prop' subst t in
-      let g' = TI.Builtin.map_guard (aux subst) g in
+      let g' = Builtin.map_guard (aux subst) g in
       U.guard t' g'
     | TI.Builtin (`Ite _ | `DataTest _ | `DataSelect _
                  | `Undefined_atom _ | `Undefined_self _ | `Unparsable _) ->

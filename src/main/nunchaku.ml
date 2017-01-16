@@ -118,23 +118,12 @@ let set_solvers_ s =
 let set_dump () = dump_ := `Yes
 let set_dump_into s = dump_ := `Into s
 
-(* set debug levels *)
-let options_debug_ = Utils.Section.iter
-                     |> Sequence.map
-                       (fun (name,sec) ->
-                          "--debug" ^ (if name="" then "" else "."^name),
-                          Arg.Int (Utils.Section.set_debug sec),
-                          " verbosity level for " ^ (if name="" then "all messages" else name))
-                     |> Sequence.to_rev_list
-
 let call_with x f = Arg.Unit (fun () -> f x)
 
 let options =
   let open CCFun in
   Arg.align @@ List.sort Pervasives.compare @@ (
-    options_debug_ @
-      Utils.options_warnings_ @
-      !Utils.options_others_ @
+    Utils.Options.get_all () @
       [ "--print-input", Arg.Set print_, " print input"
       ; "--print-all", Arg.Set print_all_, " print every step of the pipeline"
       ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline and exit"
@@ -187,7 +176,6 @@ let options =
       ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
       ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
       ; "--print-model", Arg.Set print_model_, " print model after cleanup"
-      ; "--print-undefined", Arg.Set TermInner.print_undefined_id, " print unique IDs of `undefined` terms"
       ; "--checks", Arg.Set check_all_, " check invariants after each pass"
       ; "--no-checks", Arg.Clear check_all_, " disable checking invariants after each pass"
       ; "--color", call_with true CCFormat.set_color_default, " enable color"
@@ -282,7 +270,7 @@ module Pipes = struct
   module Step_tyinfer = Tr.TypeInference.Make(Typed)(HO)
   module Step_conv_ty = Problem.Convert(Typed)(HO)
   (* conversion to FO *)
-  module Step_tofo = TermMono.TransFO(HO)
+  module Step_tofo = Tr.Trans_ho_fo.Make(HO)
 end
 
 let close_task p =
@@ -411,7 +399,7 @@ let make_model_pipeline () =
     close_task (
       Step_tofo.pipe ~print:!print_all_ () @@@
       Tr.Elim_ite.pipe ~print:(!print_elim_ite_ || !print_all_) @@@
-      FO.pipe_tptp @@@
+      Tr.Trans_fo_tptp.pipe @@@
       paradox
     )
   and pipe_kodkod =

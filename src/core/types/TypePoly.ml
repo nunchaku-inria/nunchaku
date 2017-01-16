@@ -43,7 +43,7 @@ module Make(T : TI.REPR)
     | TI.App (f,l) -> is_ty f && List.for_all is_ty l
     | TI.TyArrow (a,b) -> is_ty a && is_ty b
     | TI.Var v -> is_ty_var v
-    | TI.Bind (`TyForall, v, t) -> is_ty_var v && is_ty t
+    | TI.Bind (Binder.TyForall, v, t) -> is_ty_var v && is_ty t
     | TI.TyMeta _ -> true
     | TI.Builtin _
     | TI.Match _
@@ -59,7 +59,7 @@ module Make(T : TI.REPR)
     | TI.App (f,l) -> App (f, l)
     | TI.TyArrow (a, b) -> Arrow (a, b)
     | TI.Var v -> Var v
-    | TI.Bind (`TyForall, v, t) -> Forall (v, t)
+    | TI.Bind (Binder.TyForall, v, t) -> Forall (v, t)
     | TI.TyMeta v -> Meta v
     | TI.Builtin _
     | TI.Match _

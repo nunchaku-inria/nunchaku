@@ -69,9 +69,16 @@ let print_name out v = CCFormat.string out v.name
 
 (* debug mode: always print ID unique counters *)
 let always_print_full_ = ref false
+
+let print_undefined_id : bool ref = ref false
+
 let () =
-  Utils.add_option
-    ("--pp-id", Arg.Set always_print_full_, " always print IDs numbers")
+  Utils.Options.add_list
+    [ ("--pp-id", Arg.Set always_print_full_, " always print IDs numbers");
+      ("--print-undefined",
+       Arg.Set print_undefined_id,
+       " print unique IDs of `undefined` terms");
+    ]
 
 let print out v =
   if !always_print_full_ then print_full out v else print_normal out v

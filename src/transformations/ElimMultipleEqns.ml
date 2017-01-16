@@ -130,10 +130,10 @@ let rec compile_equations ~local_state vars l : term =
         let ty = Var.ty v in
         if U.ty_is_Prop ty
         then DN_if ([], []) (* [v] is a prop, we use a if/then/else *)
-        else try
-            let ty_id = U.head_sym ty in
+        else begin match U.head_sym ty with
+          | Some ty_id ->
             (* what does the type of [v] look like? *)
-            match Env.def (Env.find_exn ~env:local_state.env ty_id) with
+            begin match Env.def (Env.find_exn ~env:local_state.env ty_id) with
               | Env.Data (_, _, tydef) ->
                 (* [v] is a variable of type (co)data, so we use the list
                    of constructors to build a shallow pattern match *)
@@ -154,8 +154,10 @@ let rec compile_equations ~local_state vars l : term =
                 (* [v] is of a non-matchable type, but we can still bind
                    it to an (opaque) value *)
                 DN_bind []
-          with Not_found ->
+              end
+          | None ->
             DN_bind [] (* not an atomic type *)
+        end
       in
       let dnode = List.fold_left
           (fun dnode (pats, rhs, side, subst) ->

@@ -94,14 +94,13 @@ let declare_new_rec f ty vars body =
 (* TODO: expand `let` if its parameter is HO, and
    compute WHNF in case [var args] (new β redexes) *)
 
-let find_ty_ ~state t =
-  U.ty_exn ~sigma:(Env.find_ty ~env:state.env) t
+let find_ty_ ~state t = U.ty_exn ~env:state.env t
 
 let decl_fun_ ~state ~attrs id ty =
   state.env <- Env.declare ~attrs ~env:state.env id ty
 
 let is_lambda_ t = match T.repr t with
-  | TI.Bind (`Fun, _, _) -> true
+  | TI.Bind (Binder.Fun, _, _) -> true
   | _ -> false
 
 (* given two lists of variables, return:
@@ -134,7 +133,7 @@ let complete_vars ~subst l1 l2 =
 (* traverse [t] recursively, replacing lambda terms by new named functions *)
 let rec tr_term ~state local_state subst t = match T.repr t with
   | TI.Var v -> U.var (Var.Subst.find_or ~default:v ~subst v)
-  | TI.Bind (`Fun, _, _) when TermTbl.mem state.funs t ->
+  | TI.Bind (Binder.Fun, _, _) when TermTbl.mem state.funs t ->
     (* will only work if [t] is alpha-equivalent to [t']; in particular
        that implies that [t] and [t'] capture exactly the same terms,
        which makes this safe *)
@@ -142,7 +141,7 @@ let rec tr_term ~state local_state subst t = match T.repr t with
     Utils.debugf ~section 5 "@[<2>re-use `@[%a@]`@ for `@[%a@]`@]"
       (fun k->k P.print t' P.print t);
     t'
-  | TI.Bind (`Fun, v, body) ->
+  | TI.Bind (Binder.Fun, v, body) ->
     (* first, λ-lift in the body *)
     let body = tr_term ~state local_state subst body in
     (* captured variables *)

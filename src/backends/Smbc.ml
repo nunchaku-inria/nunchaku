@@ -125,14 +125,14 @@ let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
       | `Unparsable _
       | `Guard _ -> assert false (* TODO: better error: should not happen *)
     end
-  | TI.Bind (`Fun,v,body) ->
+  | TI.Bind (Binder.Fun,v,body) ->
     A.fun_ (conv_typed_var v) (term_to_tip  st body)
-  | TI.Bind (`Forall,v,body) ->
+  | TI.Bind (Binder.Forall,v,body) ->
     A.forall [conv_typed_var v] (term_to_tip st body)
-  | TI.Bind (`Exists,v,body) ->
+  | TI.Bind (Binder.Exists,v,body) ->
     A.exists [conv_typed_var v] (term_to_tip st body)
-  | TI.Bind (`TyForall,_,_)
-  | TI.Bind (`Mu,_,_) -> out_of_scopef "cannot convert to TIP µ %a" P.print t
+  | TI.Bind (Binder.TyForall,_,_)
+  | TI.Bind (Binder.Mu,_,_) -> out_of_scopef "cannot convert to TIP µ %a" P.print t
   | TI.Let (v,t,u) ->
     A.let_ [conv_var v, term_to_tip st t] (term_to_tip st u)
   | TI.Match (u,map,def) ->

@@ -1,10 +1,9 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-module TI = TermInner
 module Subst = Var.Subst
 
 type 'a printer = Format.formatter -> 'a -> unit
-type 'a prec_printer = TermInner.prec -> 'a printer
+type 'a prec_printer = Precedence.t -> 'a printer
 type 'a to_sexp = 'a -> Sexp_lib.t
 
 let fpf = Format.fprintf
@@ -72,14 +71,14 @@ module DT = struct
       cases var ~tests ~default
 
   let rec print pt pty out t = match t with
-    | Yield t -> pt TI.P_top out t
+    | Yield t -> pt Precedence.Top out t
     | Cases {tests=[]; default=None; _} -> assert false
     | Cases {tests=[]; var; default=Some d} ->
       fpf out "@[<hv1>cases (@[%a:%a@])@ {default: %a@,}@]"
         Var.print_full var pty (Var.ty var) (print pt pty) d
     | Cases cases ->
       let pp_test out (lhs,rhs) =
-        fpf out "@[<2>@[%a@] =>@ %a@]" (pt TI.P_arrow) lhs (print pt pty) rhs
+        fpf out "@[<2>@[%a@] =>@ %a@]" (pt Precedence.Arrow) lhs (print pt pty) rhs
       and pp_default out = function
         | None -> ()
         | Some d -> fpf out ";@ default: %a" (print pt pty) d
@@ -288,16 +287,16 @@ module DT = struct
       | None, [] -> assert false
 
   let print_flat_test pt out {ft_var=v; ft_term=t} =
-    fpf out "@[%a = %a@]" Var.print_full v (pt TI.P_eq) t
+    fpf out "@[%a = %a@]" Var.print_full v (pt Precedence.Eq) t
 
   let print_flat pt out fdt =
     let pplist ~sep pp = CCFormat.list ~start:"" ~stop:"" ~sep pp in
     let pp_case out (tests,rhs) =
       fpf out "@[<2>(@[%a@]) =>@ %a@]"
-        (pplist ~sep:" && " (print_flat_test pt)) tests (pt TI.P_arrow) rhs
+        (pplist ~sep:" && " (print_flat_test pt)) tests (pt Precedence.Arrow) rhs
     and pp_default out = function
       | None -> ()
-      | Some d -> fpf out ",@ default=%a" (pt TI.P_app) d
+      | Some d -> fpf out ",@ default=%a" (pt Precedence.App) d
     in
     let pp_cases = pplist ~sep:"" pp_case in
     fpf out "{@[<hv1>vars=(@[%a@]),@ tests=[@[<v>%a@]]%a@,@]}"
@@ -616,7 +615,7 @@ let print pt pty out m =
       pty ty (pplist ~sep:", " ID.print) dom
   and pp_value out (t,dt,_) =
     fpf out "@[<2>val @[%a@]@ :=@ %a@]."
-      (pt TI.P_top) t
+      (pt Precedence.Top) t
       (DT.print pt pty) dt
   in
   (* only print non-empty lists *)
@@ -673,7 +672,7 @@ module Default = struct
         P.print ty (pplist ~sep:", " ID.print) dom
     | SA_val (t,u) ->
       fpf out "@[<2>val @[%a@]@ :=@ %a@]."
-        P.print t (P.print' TI.P_arrow) u
+        P.print t (P.print' Precedence.Arrow) u
 
   let pp_simple out = fpf out "@[<v>%a@]" (pplist ~sep:"" pp_simple_atom)
 

@@ -13,8 +13,6 @@ module T = TermInner.Default
 module U = T.U
 module P = T.P
 module PStmt = Stmt.Print(P)(P)
-module TM = TermMono.Make(T)
-module TMI = TermMono
 module TyI = TypeMono
 module Ty = TypeMono.Make(T)
 module Red = Reduce.Make(T)
@@ -137,13 +135,13 @@ let add_arity_select_ m id n ty =
   assert (args <> []); (* at least one arg: the datatype *)
   add_arity_ m (F_select (id,n)) 1 args ret
 
-let ty_term_ ~env t = U.ty_exn ~sigma:(Env.find_ty ~env) t
+let ty_term_ ~env t = U.ty_exn ~env t
 
 (* compute set of arities for higher-order functions *)
 let compute_arities_term ~env m t =
   let m = ref m in
-  let rec aux t = match TM.repr t with
-    | TMI.Const id ->
+  let rec aux t = match T.repr t with
+    | TI.Const id ->
       begin match as_fun_ ~env id with
         | Some ([], _)
         | None -> ()  (* constant, just ignore *)
@@ -151,17 +149,17 @@ let compute_arities_term ~env m t =
           (* function that is applied to 0 arguments (e.g. as a parameter) *)
           m := add_arity_ !m (F_id id) 0 ty_args ty_ret
       end
-    | TMI.Var v when var_is_ho_ v ->
+    | TI.Var v when var_is_ho_ v ->
       (* higher order variable *)
       m := add_arity_var_ !m v
-    | TMI.Builtin (`DataSelect (id,n)) ->
+    | TI.Builtin (`DataSelect (id,n)) ->
       let ty = ty_term_ ~env t in
       m := add_arity_select_ !m id n ty
-    | TMI.App (f, l) ->
+    | TI.App (f, l) ->
       assert (l<>[]);
-      begin match TM.repr f with
-        | TMI.App _ -> assert false
-        | TMI.Const id ->
+      begin match T.repr f with
+        | TI.App _ -> assert false
+        | TI.Const id ->
           begin match as_fun_ ~env id with
             | Some ([],_) -> assert false
             | None -> ()   (* not a function *)
@@ -171,14 +169,14 @@ let compute_arities_term ~env m t =
           end;
           (* explore subterms *)
           List.iter aux l
-        | TMI.Var v ->
+        | TI.Var v ->
           assert (var_is_ho_ v);
           (* higher order variable applied to [l] *)
           let tyvars, args, ret = U.ty_unfold (Var.ty v) in
           assert (tyvars=[]); (* mono, see {!inv} *)
           assert (List.length args >= List.length l);
           m := add_arity_ !m (F_var v) (List.length l) args ret
-        | TMI.Builtin (`DataSelect (id,n)) ->
+        | TI.Builtin (`DataSelect (id,n)) ->
           let ty = ty_term_ ~env f in
           let tyvars, args, ret = U.ty_unfold ty in
           assert (tyvars=[]); (* mono, see {!inv} *)
@@ -614,9 +612,6 @@ let ty_of_fun_encoding_ ~state fe =
   let handle_id = get_or_create_handle_id ~state in
   U.ty_arrow_l fe.fe_args (ty_of_handle_ ~handle_id fe.fe_ret_handle)
 
-let ty_term_ ~state t =
-  U.ty_exn ~sigma:(Env.find_ty ~env:state.env) t
-
 type renaming_subst = (T.t, T.t Var.t) Subst.t
 
 (* encode [v]'s type, and add it to [subst] *)
@@ -661,8 +656,8 @@ let elim_hof_term ~state subst pol t =
         | None ->
           aux' subst pol t
       end
-    | TI.Bind ((`Forall | `Exists) as q, v, _) when var_is_ho_ v ->
-      begin match U.approx_infinite_quant_pol q pol with
+    | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, _) when var_is_ho_ v ->
+      begin match U.approx_infinite_quant_pol_binder q pol with
         | `Keep -> aux' subst pol t  (* ok *)
         | `Unsat_means_unknown res ->
           state.unsat_means_unknown <- true;
@@ -671,7 +666,7 @@ let elim_hof_term ~state subst pol t =
             (fun k->k P.print t P.print res P.print (Var.ty v));
           res
       end
-    | TI.Builtin (`Eq (a,_)) when ty_is_ho_ (ty_term_ ~state a) ->
+    | TI.Builtin (`Eq (a,_)) when ty_is_ho_ (ty_term_ ~env:state.env a) ->
       (* higher-order comparison --> requires approximation *)
       (* TODO:
          [a = b asserting has_proto a] for noPol,

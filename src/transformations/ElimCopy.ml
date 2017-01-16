@@ -257,10 +257,10 @@ let is_abstract_type_ state ty = TyTbl.mem state.abstract_types ty
 (* encode terms, perform the required approximations *)
 let encode_term state pol t =
   let rec aux pol t = match T.repr t with
-    | TI.Bind ((`Forall | `Exists) as q, v, _)
+    | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, _)
       when is_incomplete_type_ state (Var.ty v) ->
       (* might approximate this quantifier *)
-      begin match U.approx_infinite_quant_pol q pol with
+      begin match U.approx_infinite_quant_pol_binder q pol with
         | `Keep -> aux' pol t
         | `Unsat_means_unknown res ->
           (* drop quantifier *)

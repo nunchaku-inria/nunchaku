@@ -332,7 +332,7 @@ let print_rules() =
 
 (*$QR & ~count:300
   arbitrary_prop
-    (fun t -> match U.ty t ~sigma:(fun id -> ID.Map.get id base_sig) with
+    (fun t -> match U.ty_of_signature t ~sigma:(fun id -> ID.Map.get id base_sig) with
       | CCResult.Ok ty -> U.ty_is_Prop ty
       | CCResult.Error _ -> false)
 *)
@@ -341,7 +341,7 @@ let print_rules() =
   arbitrary
     (fun t ->
         (* just  see if it typechecks *)
-      match U.ty t ~sigma:(fun id -> ID.Map.get id base_sig) with
+      match U.ty_of_signature t ~sigma:(fun id -> ID.Map.get id base_sig) with
       | CCResult.Ok _ ->  true
       | CCResult.Error _ -> false)
 *)

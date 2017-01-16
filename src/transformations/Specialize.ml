@@ -352,8 +352,7 @@ and record_calls_clause cga id (c:(_,_) Stmt.pred_clause) =
                  | _ ->
                    (* recursion impossible, not a variable *)
                    CallGraph.add_nonidentical cga.cga_graph id i;
-                   let ty = U.ty_exn t
-                       ~sigma:(Env.find_ty ~env:cga.cga_env) in
+                   let ty = U.ty_exn ~env:cga.cga_env t in
                    fresh_var_cg ty)
           in
           (* if present, also check the clause guard *)

@@ -18,7 +18,7 @@ module Make(T : TI.S) = struct
       head: T.t; (* invariant: not an App *)
       args: T.t list;
       subst: subst;
-      guard: T.t TI.Builtin.guard;
+      guard: T.t Builtin.guard;
     }
     val make : subst:subst -> T.t -> T.t list -> t
     val const : subst:subst -> T.t -> t
@@ -30,7 +30,7 @@ module Make(T : TI.S) = struct
       head: T.t;
       args: T.t list;
       subst: subst;
-      guard: T.t TI.Builtin.guard;
+      guard: T.t Builtin.guard;
     }
 
     let app_ a b = if b=[] then a else a @ b
@@ -39,18 +39,18 @@ module Make(T : TI.S) = struct
     let rec norm_st st = match T.repr st.head with
       | TI.App (f, l) -> norm_st {st with head=f; args=app_ l st.args}
       | TI.Builtin (`Guard (t,g)) ->
-        norm_st {st with head=t; guard=TI.Builtin.merge_guard g st.guard}
+        norm_st {st with head=t; guard=Builtin.merge_guard g st.guard}
       | _ -> st
 
     (* build a state and enforce invariant *)
     let make ~subst f l =
-      norm_st {head=f; args=l; subst; guard=TI.Builtin.empty_guard; }
+      norm_st {head=f; args=l; subst; guard=Builtin.empty_guard; }
 
     let const ~subst t = make ~subst t []
 
     let set_head st t = norm_st {st with head=t}
 
-    let map_guard f st = {st with guard=TI.Builtin.map_guard f st.guard}
+    let map_guard f st = {st with guard=Builtin.map_guard f st.guard}
 
     (* convert a state back to a term *)
     let to_term ?rec_ st =
@@ -89,7 +89,7 @@ module Make(T : TI.S) = struct
 
     (* Evaluate boolean operators [app_builtin b].
        Subterms are evaluated with [eval] *)
-    let eval_bool_builtin ~eval ~subst (b : _ TI.Builtin.t) =
+    let eval_bool_builtin ~eval ~subst (b : _ Builtin.t) =
       match b with
         | `True -> U.true_
         | `False -> U.false_
@@ -133,7 +133,7 @@ module Make(T : TI.S) = struct
           end
 
     (* evaluate [b] using [eval]. *)
-    let eval_app_builtin ~eval ~subst (b:T.t TI.Builtin.t) args =
+    let eval_app_builtin ~eval ~subst (b:T.t Builtin.t) args =
       (* auxiliary function to evaluate subterms *)
       let eval_term ~subst t =
         State.make ~subst t []
@@ -216,7 +216,7 @@ module Make(T : TI.S) = struct
             | Some t -> whnf_ (State.set_head st t)
           end
         | TI.App _ -> assert false (* broken invariant *)
-        | TI.Bind (`Fun, v, body) ->
+        | TI.Bind (Binder.Fun, v, body) ->
           begin match st.args with
             | [] -> st
             | a :: args' ->
@@ -234,8 +234,8 @@ module Make(T : TI.S) = struct
             | Some (rhs, args, subst) ->
               whnf_ (State.make ~subst rhs args)
           end
-        | TI.Bind (`TyForall, _, _) -> assert false
-        | TI.Bind ((`Forall | `Exists | `Mu), _, _) -> st
+        | TI.Bind (Binder.TyForall, _, _) -> assert false
+        | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Mu), _, _) -> st
         | TI.Let _
         | TI.TyBuiltin _
         | TI.TyArrow _ -> st
@@ -257,14 +257,14 @@ module Make(T : TI.S) = struct
         | TI.Builtin (`Guard _) -> assert false
         | TI.Builtin b ->
           eval_app_builtin ~eval:snf_ ~subst:st.subst b st.args
-        | TI.Bind (`TyForall,_,_) -> st
+        | TI.Bind (Binder.TyForall,_,_) -> st
         | TI.TyArrow (_,_) ->
           st (* NOTE: depend types might require beta-reduction in types *)
         | TI.Var v ->
           assert (not (Subst.mem ~subst:st.subst v));
           st
         | TI.App (_,_) -> assert false  (* not WHNF *)
-        | TI.Bind (`Fun, v, body) ->
+        | TI.Bind (Binder.Fun, v, body) ->
           assert (st.args = []);
           enter_snf_ st v body (fun v body -> U.fun_ v body)
         | TI.Bind (b, v,t) ->
@@ -342,7 +342,7 @@ module Make(T : TI.S) = struct
     | _ -> None
 
   let rec eta_reduce t = match T.repr t with
-    | TI.Bind (`Fun, v, body) ->
+    | TI.Bind (Binder.Fun, v, body) ->
       begin match as_app_to_ ~var:v body with
         | None -> t
         | Some t' -> eta_reduce t'

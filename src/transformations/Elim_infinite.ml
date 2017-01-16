@@ -101,9 +101,9 @@ let rec encode_term st subst pol t = match T.repr t with
       | None -> t
       | Some id' -> U.const id'
     end
-  | TI.Bind ((`Forall | `Exists) as q, v, body)
+  | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, body)
     when ty_is_infinite_ st (Var.ty v) ->
-    begin match U.approx_infinite_quant_pol q pol with
+    begin match U.approx_infinite_quant_pol_binder q pol with
       | `Keep ->
         let subst, v = bind_var st subst v in
         U.mk_bind q v (encode_term st subst pol body)

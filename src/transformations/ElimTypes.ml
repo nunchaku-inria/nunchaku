@@ -69,26 +69,27 @@ let encode_var subst v =
 
 let rec encode_term state subst t = match T.repr t with
   | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
-  | TI.Bind ((`Forall | `Exists) as b, v, body) ->
+  | TI.Bind ((Binder.Forall | Binder.Exists) as b, v, body) ->
     let p = find_pred state (Var.ty v) in
     let subst, v' = encode_var subst v in
     (* add guard, just under the quantifier. *)
     begin match b with
-      | `Forall ->
+      | Binder.Forall ->
         (* [forall v:t. F] -> [forall v. is_t v => F] *)
         U.forall v'
           (U.imply
              (U.app_const p [U.var v'])
              (encode_term state subst body))
-      | `Exists ->
+      | Binder.Exists ->
         (* [exists v:t. F] -> [exists v. is_t v & F] *)
         U.exists v'
           (U.and_
-             [ U.app_const p [U.var v']
-             ; encode_term state subst body ])
+             [ U.app_const p [U.var v'];
+               encode_term state subst body ])
+      | _ -> assert false
     end
-  | TI.Bind (`Fun, _, _) -> Utils.not_implemented "elim_types for λ"
-  | TI.Bind (`TyForall, _, _) -> assert false
+  | TI.Bind (Binder.Fun, _, _) -> Utils.not_implemented "elim_types for λ"
+  | TI.Bind (Binder.TyForall, _, _) -> assert false
   | _ ->
     U.map subst t ~f:(encode_term state) ~bind:encode_var
 

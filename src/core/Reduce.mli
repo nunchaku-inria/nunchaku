@@ -26,7 +26,7 @@ module Make(T : TermInner.S) : sig
       ?subst:subst ->
       T.t ->
       T.t list ->
-      (T.t * T.t list * subst * T.t TermInner.Builtin.guard)
+      (T.t * T.t list * subst * T.t Builtin.guard)
       (** [whnf f l] applies [f] to [l] and returns its WHNF, as a tuple
           [f', l', subst, guard] where
           [f l ---> subst ((f guard) l)] *)
