@@ -391,16 +391,18 @@ module Convert(Term : TermTyped.S) = struct
         ill_formed ~kind:"term" ?loc "equality must be fully applied"
       | A.Builtin s ->
         (* only some symbols correspond to terms *)
-        let b, ty = match s with
+        begin match s with
           | `Imply | `Or | `And | `Not -> ill_formed ?loc "partially applied connective"
           | `Prop -> ill_formed ?loc "`prop` is not a term, but a type"
           | `Type -> ill_formed ?loc "`type` is not a term"
           | `Unitype -> ill_formedf ?loc "`unitype` is not a term"
-          | `True -> `True, prop
-          | `False -> `False, prop
-          | `Undefined _ | `Eq | `Equiv -> assert false (* dealt with earlier *)
-        in
-        U.builtin ?loc ~ty b
+          | `True -> U.true_
+          | `False -> U.false_
+          | `Eq | `Equiv -> assert false (* dealt with earlier *)
+          | `Undefined_atom u ->
+            let u = convert_term_ ~stack ~env u in
+            U.undefined_self ?loc u
+        end
       | A.AtVar v ->
         begin match TyEnv.find_var ?loc ~env v with
           | Decl (id, ty) ->

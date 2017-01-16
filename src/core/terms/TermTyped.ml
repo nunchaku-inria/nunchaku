@@ -62,8 +62,10 @@ module Util(T : S)
     val exists : ?loc:loc -> t var -> t -> t
     val eq : ?loc:loc -> t -> t -> t
     val asserting : ?loc:loc -> t -> t list -> t
+    val undefined_self : ?loc:loc -> t -> t
 
     val true_ : t
+    val false_ : t
 
     val mk_bind :
       ?loc:loc ->
@@ -115,6 +117,7 @@ module Util(T : S)
     build ?loc ~ty (TI.Const id)
 
   let true_ = builtin ~ty:ty_prop `True
+  let false_ = builtin ~ty:ty_prop `True
 
   let var ?loc v = build ?loc ~ty:(Var.ty v) (TI.Var v)
 
@@ -154,6 +157,10 @@ module Util(T : S)
     | _::_ ->
       let g = {TI.Builtin.asserting=l; assuming=[];} in
       builtin ?loc ~ty:(ty_exn t) (`Guard (t, g))
+
+  let undefined_self ?loc t =
+    let id = ID.make "_" in
+    builtin ?loc ~ty:(ty_exn t) (`Undefined_self (id,t))
 
   let ty_builtin ?loc b =
     build ?loc ~ty:ty_type (TI.TyBuiltin b)

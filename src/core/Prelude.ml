@@ -38,6 +38,7 @@ let sexp_to_term : Sexp_lib.t -> A.term =
     | `List [`Atom "pi"; `Atom v; t] -> A.ty_forall ~loc v (p t)
     | `List [`Atom "fun"; `Atom v; t] -> A.fun_ ~loc (v,None) (p t)
     | `List [`Atom "fun"; `Atom v; ty; t] -> A.fun_ ~loc (v,Some (p ty)) (p t)
+    | `List [`Atom "?__"; t] -> A.undefined ~loc (p t)
     | `Atom "prop" -> A.ty_prop
     | `Atom "type" -> A.ty_type
     | `Atom "true" -> A.true_
@@ -71,7 +72,7 @@ let decl_choice =
        (=
         (choice p)
         (asserting
-          (choice p)
+          (?__ (choice p))
           (or (= p (fun x false))
               (p (choice p)))))))"
   in
@@ -83,7 +84,7 @@ let decl_unique =
        (=
         (unique p)
         (asserting
-         (unique p)
+         (?__ (unique p))
          (or
            (= p (fun x (= x (unique p))))
            (= p (fun x false))
@@ -97,7 +98,7 @@ let decl_unique_unsafe =
        (=
         (unique_unsafe p)
         (asserting
-         (unique_unsafe p)
+         (?__ (unique_unsafe p))
          (p (unique_unsafe p)))))"
   in
   A.Rec [ ID.name unique_unsafe, ty_choice_, [ax] ] |> mk_stmt

@@ -173,7 +173,7 @@ let rec declare_missing ~ctx ~state t =
             | `True
             | `False
             | `Unitype
-            | `Undefined _ -> t
+            | `Undefined_atom _ -> t
           end
         | _ ->
           let ctx = prop2term ctx in

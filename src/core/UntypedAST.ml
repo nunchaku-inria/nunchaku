@@ -19,76 +19,9 @@ let () = Printexc.register_printer
 type var = string
 type var_or_wildcard = [`Var of string | `Wildcard]
 
-module Builtin : sig
-  type t =
-    [ `Prop
-    | `Type
-    | `Not
-    | `And
-    | `Or
-    | `True
-    | `False
-    | `Eq
-    | `Equiv
-    | `Imply
-    | `Undefined of string
-    | `Unitype
-    ]
-
-  include Intf.PRINT with type t := t
-  val fixity : t -> [`Prefix | `Infix]
-  val to_string : t -> string
-end = struct
-  type t =
-    [ `Prop
-    | `Type
-    | `Not
-    | `And
-    | `Or
-    | `True
-    | `False
-    | `Eq
-    | `Equiv
-    | `Imply
-    | `Undefined of string
-    | `Unitype
-    ]
-
-  let fixity : t -> [`Infix | `Prefix] = function
-    | `Type
-    | `True
-    | `False
-    | `Prop
-    | `Not -> `Prefix
-    | `And
-    | `Or
-    | `Imply
-    | `Equiv
-    | `Eq
-    | `Unitype
-    | `Undefined _ -> `Infix
-
-  let to_string : t -> string = function
-    | `Type -> "type"
-    | `Prop -> "prop"
-    | `Not -> "~"
-    | `And -> "&&"
-    | `Or -> "||"
-    | `True -> "true"
-    | `False -> "false"
-    | `Eq -> "="
-    | `Equiv -> "="
-    | `Imply -> "=>"
-    | `Undefined s -> "?_" ^ s
-    | `Unitype -> "<unitype>"
-
-  let print out s = Format.pp_print_string out (to_string s)
-end
-
-
 type term = term_node Loc.with_loc
 and term_node =
-  | Builtin of Builtin.t
+  | Builtin of builtin
   | Var of var_or_wildcard
   | AtVar of var  (* variable without implicit arguments *)
   | MetaVar of var (* unification variable *)
@@ -104,6 +37,21 @@ and term_node =
   | TyForall of var * ty
   | Asserting of term * term list
 
+and builtin =
+  [ `Prop
+  | `Type
+  | `Not
+  | `And
+  | `Or
+  | `True
+  | `False
+  | `Eq
+  | `Equiv
+  | `Imply
+  | `Undefined_atom of term
+  | `Unitype
+  ]
+
 (* we mix terms and types because it is hard to know, in
    [@cons a b c], which ones of [a, b, c] are types, and which ones
    are terms *)
@@ -111,6 +59,47 @@ and ty = term
 
 (** A variable with, possibly, its type *)
 and typed_var = var * ty option
+
+
+module Builtin : sig
+  type t = builtin
+  include Intf.PRINT with type t := t
+  val fixity : t -> [`Prefix | `Infix]
+  val to_string : t -> string
+end = struct
+  type t = builtin
+
+  let fixity : t -> [`Infix | `Prefix] = function
+    | `Type
+    | `True
+    | `False
+    | `Prop
+    | `Not -> `Prefix
+    | `And
+    | `Or
+    | `Imply
+    | `Equiv
+    | `Eq
+    | `Unitype
+    | `Undefined_atom _ -> `Infix
+
+  let to_string : t -> string = function
+    | `Type -> "type"
+    | `Prop -> "prop"
+    | `Not -> "~"
+    | `And -> "&&"
+    | `Or -> "||"
+    | `True -> "true"
+    | `False -> "false"
+    | `Eq -> "="
+    | `Equiv -> "="
+    | `Imply -> "=>"
+    | `Undefined_atom _ -> "?__"
+    | `Unitype -> "<unitype>"
+
+  let print out s = Format.pp_print_string out (to_string s)
+end
+
 
 let view = Loc.get
 
@@ -201,6 +190,7 @@ let mu ?loc v t = Loc.with_loc ?loc (Mu (v,t))
 let asserting ?loc t l = match l with
   | [] -> t
   | _::_ -> Loc.with_loc ?loc (Asserting (t,l))
+let undefined ?loc t = Loc.with_loc ?loc (Builtin (`Undefined_atom t))
 let ty_arrow ?loc a b = Loc.with_loc ?loc (TyArrow (a,b))
 let ty_forall ?loc v t = Loc.with_loc ?loc (TyForall (v,t))
 

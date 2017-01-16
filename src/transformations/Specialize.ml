@@ -494,6 +494,8 @@ type specialization_decision =
 (* maximum size of the cardinal of a closure variable's type. *)
 let max_closure_var_type_card = 10 (* FUDGE *)
 
+(* TODO: only do this if functions are non-deterministic *)
+
 (* do NOT specialize if at least one closure argument
    has a type which is too large (see {!max_closure_var_type_card})
    or infinite.
@@ -1018,7 +1020,7 @@ let add_congruence_axioms push_stmt g =
        push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax));
   ()
 
-(* XXX: if we have a "total" annotation on functions (including [unique_unsafe])
+(* TODO: if we have a "total" annotation on functions (including [unique_unsafe])
    or Coq functions, we can avoid generating congruence axioms for those
    functions *)
 
