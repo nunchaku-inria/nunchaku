@@ -10,9 +10,9 @@
 
     {[ let rec map f l = match l with
         | [] -> []
-        | x::l2 -> f x :: map f l2
+        | x::l2 -> f x :: map f l2 ;;
 
-              map (fun x -> x+ g(x)) l
+      map (fun x -> x+ g(x)) l
     ]}
 
     is converted into
@@ -20,9 +20,9 @@
     {[
       let rec map_357 l = match l with
         | [] -> []
-        | x::l2 -> (x + g(x)) :: map_357 l2
+        | x::l2 -> (x + g(x)) :: map_357 l2 ;;
 
-              map_357 l
+      map_357 l
     ]}
 *)
 
