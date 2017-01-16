@@ -43,54 +43,54 @@ module LiftRepr(T : REPR) : TI.REPR with type t = T.t = struct
 end
 
 module Util(T : S)
-: sig
-  type t = T.t
+  : sig
+    type t = T.t
 
-  val ty_exn : t -> t
-  (** @raise Not_found if the term has no type *)
+    val ty_exn : t -> t
+    (** @raise Not_found if the term has no type *)
 
-  val const : ?loc:loc -> ty:t -> id -> t
-  val builtin : ?loc:loc -> ty:t -> t TI.Builtin.t -> t
-  val var : ?loc:loc -> t var -> t
-  val app : ?loc:loc -> ty:t -> t -> t list -> t
-  val fun_ : ?loc:loc -> ty:t -> t var -> t -> t
-  val mu : ?loc:loc -> t var -> t -> t
-  val let_ : ?loc:loc -> t var -> t -> t -> t
-  val match_with : ?loc:loc -> ty:t -> t -> t TI.cases -> def:t TI.default_case -> t
-  val ite : ?loc:loc -> t -> t -> t -> t
-  val forall : ?loc:loc -> t var -> t -> t
-  val exists : ?loc:loc -> t var -> t -> t
-  val eq : ?loc:loc -> t -> t -> t
-  val asserting : ?loc:loc -> t -> t list -> t
+    val const : ?loc:loc -> ty:t -> id -> t
+    val builtin : ?loc:loc -> ty:t -> t TI.Builtin.t -> t
+    val var : ?loc:loc -> t var -> t
+    val app : ?loc:loc -> ty:t -> t -> t list -> t
+    val fun_ : ?loc:loc -> ty:t -> t var -> t -> t
+    val mu : ?loc:loc -> t var -> t -> t
+    val let_ : ?loc:loc -> t var -> t -> t -> t
+    val match_with : ?loc:loc -> ty:t -> t -> t TI.cases -> def:t TI.default_case -> t
+    val ite : ?loc:loc -> t -> t -> t -> t
+    val forall : ?loc:loc -> t var -> t -> t
+    val exists : ?loc:loc -> t var -> t -> t
+    val eq : ?loc:loc -> t -> t -> t
+    val asserting : ?loc:loc -> t -> t list -> t
 
-  val true_ : t
+    val true_ : t
 
-  val mk_bind :
-    ?loc:loc ->
-    ty:t ->
-    TI.Binder.t -> t var -> t -> t
+    val mk_bind :
+      ?loc:loc ->
+      ty:t ->
+      TI.Binder.t -> t var -> t -> t
 
-  val ty_type : t (** Type of types *)
-  val ty_prop : t (** Propositions *)
-  val ty_unitype : t  (** $i in TPTP *)
+    val ty_type : t (** Type of types *)
+    val ty_prop : t (** Propositions *)
+    val ty_unitype : t  (** $i in TPTP *)
 
-  val ty_builtin : ?loc:loc -> TI.TyBuiltin.t -> t
-  val ty_const : ?loc:loc -> id -> t
-  val ty_app : ?loc:loc -> t -> t list -> t
-  val ty_arrow : ?loc:loc -> t -> t -> t
-  val ty_arrow_l : ?loc:loc -> t list -> t -> t
+    val ty_builtin : ?loc:loc -> TI.TyBuiltin.t -> t
+    val ty_const : ?loc:loc -> id -> t
+    val ty_app : ?loc:loc -> t -> t list -> t
+    val ty_arrow : ?loc:loc -> t -> t -> t
+    val ty_arrow_l : ?loc:loc -> t list -> t -> t
 
-  val ty_var : ?loc:loc -> t var -> t
-  val ty_forall : ?loc:loc -> t var -> t -> t
+    val ty_var : ?loc:loc -> t var -> t
+    val ty_forall : ?loc:loc -> t var -> t -> t
 
-  val ty_meta_var : ?loc:loc -> t MetaVar.t -> t
-  (** Meta-variable, ready for unif *)
+    val ty_meta_var : ?loc:loc -> t MetaVar.t -> t
+    (** Meta-variable, ready for unif *)
 
-  include TI.UTIL_REPR with type t_ := t
+    include TI.UTIL_REPR with type t_ := t
 
-  val is_ty: t -> bool
-  (** [is_ty t] same as [is_Type (type of t)] *)
-end = struct
+    val is_ty: t -> bool
+    (** [is_ty t] same as [is_Type (type of t)] *)
+  end = struct
   type t = T.t
 
   let build = T.build
@@ -152,8 +152,8 @@ end = struct
   let asserting ?loc t l = match l with
     | [] -> t
     | _::_ ->
-        let g = {TI.Builtin.asserting=l; assuming=[];} in
-        builtin ?loc ~ty:(ty_exn t) (`Guard (t, g))
+      let g = {TI.Builtin.asserting=l; assuming=[];} in
+      builtin ?loc ~ty:(ty_exn t) (`Guard (t, g))
 
   let ty_builtin ?loc b =
     build ?loc ~ty:ty_type (TI.TyBuiltin b)
@@ -193,17 +193,17 @@ module Default = struct
   }
 
   (* dereference the term, if it is a variable, until it is not bound;
-   also does some simplifications *)
+     also does some simplifications *)
   let rec deref_rec_ t = match t.view with
     | TI.TyMeta var ->
-        begin match MetaVar.deref var with
+      begin match MetaVar.deref var with
         | None -> t
         | Some t' ->
-            let root = deref_rec_ t' in
-            (* path compression *)
-            if t' != root then MetaVar.rebind ~var root;
-            root
-        end
+          let root = deref_rec_ t' in
+          (* path compression *)
+          if t' != root then MetaVar.rebind ~var root;
+          root
+      end
     | _ -> t
 
   let repr t = (deref_rec_ t).view
@@ -215,14 +215,14 @@ module Default = struct
   let build ?loc ~ty view = match view with
     | TI.App (f, []) -> f
     | TI.App ({view=TI.App (f, l1); d_loc=loc; _}, l2) ->
-        make_raw_ ~loc ~ty (TI.App (f, l1 @ l2))
+      make_raw_ ~loc ~ty (TI.App (f, l1 @ l2))
     | _ -> make_raw_ ~loc ~ty view
 
   let kind = {view=TI.TyBuiltin `Kind; d_loc=None; d_ty=None; }
 
   module Print = TI.Print(struct
-    type t_ = t
-    type t = t_
-    let repr = repr
-  end)
+      type t_ = t
+      type t = t_
+      let repr = repr
+    end)
 end

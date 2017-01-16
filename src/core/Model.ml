@@ -486,7 +486,7 @@ module DT_util = struct
     (* check that [vars] subset of current set of vars *)
     let cur_vars = DT.vars dt in
     if not (List.for_all (fun x->CCList.Set.mem ~eq:Var.equal x cur_vars) vars)
-      then invalid_arg "DT_util.remove_vars";
+    then invalid_arg "DT_util.remove_vars";
     aux Subst.empty vars dt
 
   let remove_first_var dt = match DT.vars dt with
@@ -571,17 +571,17 @@ let finite_types m = m.finite_types |> Sequence.of_list
 
 let map ~term:fterm ~ty:fty m = {
   m with
-  values=CCList.map
-    (fun (t,dt,k) ->
-      fterm t, DT.map ~term:fterm ~ty:fty dt, k)
-    m.values;
-  finite_types=List.map (fun (ty,l) -> fty ty, l) m.finite_types;
+    values=CCList.map
+        (fun (t,dt,k) ->
+           fterm t, DT.map ~term:fterm ~ty:fty dt, k)
+        m.values;
+    finite_types=List.map (fun (ty,l) -> fty ty, l) m.finite_types;
 }
 
 let filter_map ~values ~finite_types m = {
   m with
-  values = CCList.filter_map values m.values;
-  finite_types = CCList.filter_map finite_types m.finite_types;
+    values = CCList.filter_map values m.values;
+    finite_types = CCList.filter_map finite_types m.finite_types;
 }
 
 let const_true_ _ = true
@@ -641,7 +641,7 @@ let to_sexp ft fty m : Sexp_lib.t =
   in
   lst
     ( List.map ty_to_sexp m.finite_types
-    @ List.map value_to_sexp m.values)
+      @ List.map value_to_sexp m.values)
 
 module Default = struct
   module T = TermInner.Default

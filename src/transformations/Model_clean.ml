@@ -24,9 +24,9 @@ let section = Utils.Section.(make ~parent:root) name
 (* a kind of flat-form printing of [t] *)
 let rec flatten_ty out t = match T.repr t with
   | TI.App (f,l) ->
-      fpf out "%a_%a"
-        flatten_ty f
-        CCFormat.(list ~start:"" ~stop:"" ~sep:"_" flatten_ty) l
+    fpf out "%a_%a"
+      flatten_ty f
+      CCFormat.(list ~start:"" ~stop:"" ~sep:"_" flatten_ty) l
   | TI.Const id -> ID.print_name out id
   | TI.TyBuiltin b -> CCFormat.string out (TI.TyBuiltin.to_string b)
   | _ -> ()
@@ -38,13 +38,13 @@ let pick_prefix_ ty = CCFormat.sprintf "@[<h>%a@]" flatten_ty ty
 let renaming_rules_of_model_ m =
   List.fold_left
     (fun acc (t, dom) ->
-      let prefix = pick_prefix_ t in
-      CCList.Idx.foldi
-        (fun acc i id ->
-          let name = CCFormat.sprintf "$%s_%d" prefix i in
-          let rhs = ID.make name in
-          ID.Map.add id rhs acc)
-        acc dom)
+       let prefix = pick_prefix_ t in
+       CCList.Idx.foldi
+         (fun acc i id ->
+            let name = CCFormat.sprintf "$%s_%d" prefix i in
+            let rhs = ID.make name in
+            ID.Map.add id rhs acc)
+         acc dom)
     ID.Map.empty
     m.Model.finite_types
 
@@ -96,20 +96,20 @@ let rename m : (_,_) Model.t =
   (* rewrite every term *)
   let rw_nil = rewrite_term_ rules Var.Subst.empty in
   { m with Model.
-    finite_types;
-    values=List.map
-      (fun (t,dt,k) ->
-        let t = rw_nil t in
-        let dt = DT.map ~term:rw_nil ~ty:rw_nil dt in
-        let subst =
-          let vars = DT.vars dt in
-          let vars' = List.mapi rename_ vars in
-          Var.Subst.of_list vars vars'
-        in
-        let dt = M.DT_util.map_vars ~subst dt in
-        t, dt, k
-      )
-      m.Model.values;
+        finite_types;
+        values=List.map
+            (fun (t,dt,k) ->
+               let t = rw_nil t in
+               let dt = DT.map ~term:rw_nil ~ty:rw_nil dt in
+               let subst =
+                 let vars = DT.vars dt in
+                 let vars' = List.mapi rename_ vars in
+                 Var.Subst.of_list vars vars'
+               in
+               let dt = M.DT_util.map_vars ~subst dt in
+               t, dt, k
+            )
+            m.Model.values;
   }
 
 (* remove recursion in models *)
@@ -177,10 +177,10 @@ let remove_trivial_tests m : (_,_) Model.t =
 let pipe ~print:must_print =
   Transform.backward ~name
     (fun res ->
-      let f m = m |> remove_recursion |> remove_trivial_tests |> rename in
-      let res' = Problem.Res.map_m ~f res in
-      if must_print then (
-        let module P = TI.Print(T) in
-        Format.printf "@[<v2>@{<Yellow>after model %s@}:@ %a@]@."
-          name (Problem.Res.print P.print' P.print) res');
-      res')
+       let f m = m |> remove_recursion |> remove_trivial_tests |> rename in
+       let res' = Problem.Res.map_m ~f res in
+       if must_print then (
+         let module P = TI.Print(T) in
+         Format.printf "@[<v2>@{<Yellow>after model %s@}:@ %a@]@."
+           name (Problem.Res.print P.print' P.print) res');
+       res')

@@ -21,10 +21,10 @@ val call :
   problem ->
   (term, ty) Problem.Res.t Scheduling.Task.t
 (** Task for running smbc on a problem
-  @return a tasks
-  @param deadline absolute timestamp at which the process must have finished
-  @param prio priority of the task
-  @param dump if [Some f], do not call the solver, but write the problem into file [f]
+    @return a tasks
+    @param deadline absolute timestamp at which the process must have finished
+    @param prio priority of the task
+    @param dump if [Some f], do not call the solver, but write the problem into file [f]
 *)
 
 val pipe :

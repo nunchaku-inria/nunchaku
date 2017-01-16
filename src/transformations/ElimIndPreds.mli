@@ -3,8 +3,8 @@
 
 (** {1 Eliminate Inductive Predicates}
 
-  Encode them as recursive functions, see
-  https://github.com/nunchaku-inria/nunchaku/issues/4
+    Encode them as recursive functions, see
+    https://github.com/nunchaku-inria/nunchaku/issues/4
 *)
 
 open Nunchaku_core
@@ -17,7 +17,7 @@ type decode_state
 (** How to eliminate inductive predicates *)
 type mode =
   [ `Use_selectors
-    (** guard sub-cases with data_select and data_test *)
+  (** guard sub-cases with data_select and data_test *)
 
   | `Use_match
     (** use pattern-matching for picking sub-cases *)
@@ -36,8 +36,8 @@ val pipe :
   check:bool ->
   mode:mode ->
   ((term, term) Problem.t,
-    (term, term) Problem.t,
-    (term,term) Problem.Res.t, (term,term) Problem.Res.t) Transform.t
+   (term, term) Problem.t,
+   (term,term) Problem.Res.t, (term,term) Problem.Res.t) Transform.t
 
 (** Generic Pipe Component
     @param decode the decode function that takes an applied [(module S)]
@@ -48,7 +48,7 @@ val pipe_with :
   check:bool ->
   mode:mode ->
   ((term, term) Problem.t,
-    (term, term) Problem.t,
-    'c, 'd
+   (term, term) Problem.t,
+   'c, 'd
   ) Transform.t
 

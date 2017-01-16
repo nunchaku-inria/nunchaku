@@ -13,10 +13,10 @@ val is_available : unit -> bool
 (** test whether the solver is available *)
 
 (** Task for running Paradox on a problem
-  @return a tasks
-  @param deadline absolute timestamp at which the process must have finished
-  @param prio priority of the task
-  @param dump if [Some f], do not call the solver, but write the problem into file [f]
+    @return a tasks
+    @param deadline absolute timestamp at which the process must have finished
+    @param prio priority of the task
+    @param dump if [Some f], do not call the solver, but write the problem into file [f]
 *)
 val call :
   ?print_model:bool ->

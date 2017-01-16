@@ -58,7 +58,7 @@ val get_loc : _ with_loc -> t option
 
 (** {2 Lexbuf}
 
-  Utils to set/get the file in a lexbuf *)
+    Utils to set/get the file in a lexbuf *)
 
 val set_file : Lexing.lexbuf -> string -> unit
 (** Change the file name used for positions in this lexbuf *)

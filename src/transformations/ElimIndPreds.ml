@@ -19,9 +19,9 @@ let section = Utils.Section.make name
 exception Error of string
 
 let () = Printexc.register_printer
-(function
-  | Error msg -> Some (CCFormat.sprintf "@[<2>error in elim_ind_pred:@ %s@]" msg)
-  | _ -> None)
+    (function
+      | Error msg -> Some (CCFormat.sprintf "@[<2>error in elim_ind_pred:@ %s@]" msg)
+      | _ -> None)
 
 type term = T.t
 type subst = (term,term) Var.Subst.t
@@ -33,7 +33,7 @@ let errorf_ msg = CCFormat.ksprintf msg ~f:error_
 (** How to eliminate inductive predicates *)
 type mode =
   [ `Use_selectors
-    (** guard sub-cases with data_select and data_test *)
+  (** guard sub-cases with data_select and data_test *)
 
   | `Use_match
     (** use pattern-matching for picking sub-cases *)
@@ -49,43 +49,43 @@ exception ExitAsCstors
        some property on the shape of some subterms of [root].
      - [subst'] is an extension of [subst] that binds leaf variables
        to selector-expressions on [root]
-  @param env environment
-  @param root the term that must have the shaped described by [t]
+   @param env environment
+   @param root the term that must have the shaped described by [t]
 *)
 let as_cstor_guards ~env ~subst ~root t : (subst * term list) option =
   let subst = ref subst in
   let conds = ref [] in
   let rec aux select t = match T.repr t with
     | TI.Var v ->
-        begin match Var.Subst.find ~subst:!subst v with
+      begin match Var.Subst.find ~subst:!subst v with
         | None ->
-            (* bind [v] *)
-            subst := Var.Subst.add ~subst:!subst v select
+          (* bind [v] *)
+          subst := Var.Subst.add ~subst:!subst v select
         | Some select' ->
-            (* [v = select] and [v = select'], so we better make sure
-               that [select = select'] to eliminate [v] *)
-            conds := U.eq select select' :: !conds
-        end
+          (* [v = select] and [v = select'], so we better make sure
+             that [select = select'] to eliminate [v] *)
+          conds := U.eq select select' :: !conds
+      end
     | TI.Const id when Env.is_cstor (Env.find_exn ~env id) ->
-        (* nullary constructor, easy *)
-        conds := U.eq select t :: !conds;
+      (* nullary constructor, easy *)
+      conds := U.eq select t :: !conds;
     | TI.App (f, l) ->
-        begin match T.repr f with
+      begin match T.repr f with
         | TI.Const id ->
-            let info = Env.find_exn ~env id in
-            begin match Env.def info with
+          let info = Env.find_exn ~env id in
+          begin match Env.def info with
             | Env.Cstor _ ->
-                (* yay, a constructor!
-                  - ensure that [select] has this constructor as head
-                  - transform each subterm in [l] *)
-                conds := U.data_test id select :: !conds;
-                List.iteri
-                  (fun i t' -> aux (U.data_select id i select) t')
-                  l
+              (* yay, a constructor!
+                 - ensure that [select] has this constructor as head
+                 - transform each subterm in [l] *)
+              conds := U.data_test id select :: !conds;
+              List.iteri
+                (fun i t' -> aux (U.data_select id i select) t')
+                l
             | _ -> raise ExitAsCstors
-            end
+          end
         | _ -> raise ExitAsCstors
-        end
+      end
     | _ -> raise ExitAsCstors
   in
   try
@@ -223,7 +223,7 @@ let mk_match_tree ~env ~subst vars args ~k : term =
                   in
                   U.match_with (U.var v)
                     (ID.Map.singleton c_id (new_vars,ok_case))
-                     ~def:default
+                    ~def:default
                 | _ -> fail()
               end
             | _ -> fail()
@@ -296,40 +296,40 @@ let encode_clause ~mode ~env (id:ID.t) vars (c:(_,_) Stmt.pred_clause): term =
        || ....`
 *)
 let pred_to_def
-: mode:mode ->
+  : mode:mode ->
   env:(term, term) Env.t ->
   (term, term) Stmt.pred_def ->
   (term, term) Stmt.rec_def
-= fun ~mode ~env pred ->
-  Utils.debugf ~section 3 "@[<2>pred_to_def@ `@[%a@]`@]"
-    (fun k->k PStmt.print_pred_def pred);
-  assert (pred.Stmt.pred_tyvars = []); (* mono *)
-  let d = pred.Stmt.pred_defined in
-  let id = d.Stmt.defined_head in
-  let ty_vars, ty_args, ty_ret = U.ty_unfold d.Stmt.defined_ty in
-  assert (U.ty_is_Prop ty_ret);
-  assert (ty_vars = []); (* mono *)
-  (* create new variables *)
-  let vars =
-    List.mapi
-      (fun i ty ->
-        let name = Format.sprintf "v_%d" i in
-        Var.make ~name ~ty)
-      ty_args
-  in
-  (* translate clauses into one existentially quantified case,
-   then take the disjunction *)
-  let cases =
-    List.map
-      (fun c -> encode_clause ~mode ~env id vars c)
-      pred.Stmt.pred_clauses
-  in
-  let rhs = U.or_ cases in
-  {Stmt.
-    rec_defined=d;
-    rec_ty_vars=[];
-    rec_eqns=Stmt.Eqn_single (vars,rhs);
-  }
+  = fun ~mode ~env pred ->
+    Utils.debugf ~section 3 "@[<2>pred_to_def@ `@[%a@]`@]"
+      (fun k->k PStmt.print_pred_def pred);
+    assert (pred.Stmt.pred_tyvars = []); (* mono *)
+    let d = pred.Stmt.pred_defined in
+    let id = d.Stmt.defined_head in
+    let ty_vars, ty_args, ty_ret = U.ty_unfold d.Stmt.defined_ty in
+    assert (U.ty_is_Prop ty_ret);
+    assert (ty_vars = []); (* mono *)
+    (* create new variables *)
+    let vars =
+      List.mapi
+        (fun i ty ->
+           let name = Format.sprintf "v_%d" i in
+           Var.make ~name ~ty)
+        ty_args
+    in
+    (* translate clauses into one existentially quantified case,
+       then take the disjunction *)
+    let cases =
+      List.map
+        (fun c -> encode_clause ~mode ~env id vars c)
+        pred.Stmt.pred_clauses
+    in
+    let rhs = U.or_ cases in
+    {Stmt.
+      rec_defined=d;
+      rec_ty_vars=[];
+      rec_eqns=Stmt.Eqn_single (vars,rhs);
+    }
 
 let elim_ind_preds
     ~(mode:mode)
@@ -337,25 +337,25 @@ let elim_ind_preds
   : (term, term) Problem.t * decode_state =
   let env = Problem.env pb in
   let pb' = Problem.flat_map_statements pb
-    ~f:(fun st ->
+      ~f:(fun st ->
         let info = Stmt.info st in
         match Stmt.view st with
-        | Stmt.Pred (`Wf, _, l) ->
+          | Stmt.Pred (`Wf, _, l) ->
             (* well-founded: translate directly to recursive functions *)
             let l = List.map (pred_to_def ~mode ~env) l in
             [Stmt.axiom_rec ~info l]
-        | Stmt.Pred (`Not_wf, _, _) ->
+          | Stmt.Pred (`Not_wf, _, _) ->
             (* should have been  transformed into a [`Wf] (co)predicate
                by polarize *)
             Utils.not_implemented
               "cannot eliminate non-well-founded predicates without polarization"
-        | Stmt.Decl d -> [Stmt.decl_of_defined ~info d]
-        | Stmt.Copy c -> [Stmt.copy ~info c]
-        | Stmt.Axiom (Stmt.Axiom_std l) -> [Stmt.axiom ~info l]
-        | Stmt.Axiom (Stmt.Axiom_spec l) -> [Stmt.axiom_spec ~info l]
-        | Stmt.Axiom (Stmt.Axiom_rec l) -> [Stmt.axiom_rec ~info l]
-        | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l]
-        | Stmt.Goal g -> [Stmt.goal ~info g]
+          | Stmt.Decl d -> [Stmt.decl_of_defined ~info d]
+          | Stmt.Copy c -> [Stmt.copy ~info c]
+          | Stmt.Axiom (Stmt.Axiom_std l) -> [Stmt.axiom ~info l]
+          | Stmt.Axiom (Stmt.Axiom_spec l) -> [Stmt.axiom_spec ~info l]
+          | Stmt.Axiom (Stmt.Axiom_rec l) -> [Stmt.axiom_rec ~info l]
+          | Stmt.TyDef (k,l) -> [Stmt.mk_ty_def ~info k l]
+          | Stmt.Goal g -> [Stmt.goal ~info g]
       )
   in
   pb', ()
@@ -368,9 +368,9 @@ let pipe_with ~decode ~print ~check ~mode =
       let module Ppb = Problem.Print(P)(P) in
       Format.printf "@[<v2>@{<Yellow>after elimination of inductive predicates@}:@ %a@]@." Ppb.print)
     @
-    Utils.singleton_if check () ~f:(fun () ->
-      let module C = TypeCheck.Make(T) in
-      C.empty () |> C.check_problem)
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.empty () |> C.check_problem)
   and new_features = match mode with
     | `Use_selectors -> []
     | `Use_match -> Transform.Features.([Match, Present])

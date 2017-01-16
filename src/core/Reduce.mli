@@ -18,8 +18,8 @@ module Make(T : TermInner.S) : sig
   (** [app_whnf f l] applies [f] to [l], then computes the weak head normal form *)
 
   val eta_reduce : T.t -> T.t
-(** Eta-reduction at the root of the term.
-    This replaces [λx. f x] with [f], if [f] does not contain [x] *)
+  (** Eta-reduction at the root of the term.
+      This replaces [λx. f x] with [f], if [f] does not contain [x] *)
 
   module Full : sig
     val whnf :
@@ -27,8 +27,8 @@ module Make(T : TermInner.S) : sig
       T.t ->
       T.t list ->
       (T.t * T.t list * subst * T.t TermInner.Builtin.guard)
-    (** [whnf f l] applies [f] to [l] and returns its WHNF, as a tuple
-        [f', l', subst, guard] where
-        [f l ---> subst ((f guard) l)] *)
+      (** [whnf f l] applies [f] to [l] and returns its WHNF, as a tuple
+          [f', l', subst, guard] where
+          [f l ---> subst ((f guard) l)] *)
   end
 end

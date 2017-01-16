@@ -46,15 +46,15 @@ type fun_encoding = {
 
 type state = {
   mutable domains: domain TyTbl.t;
-    (* atomic type -> domain *)
+  (* atomic type -> domain *)
   funs: fun_encoding ID.Tbl.t;
-    (* function -> relation *)
+  (* function -> relation *)
   dom_of_id: domain ID.Tbl.t;
-    (* domain.dom_id -> domain *)
+  (* domain.dom_id -> domain *)
   pprop_dom: domain;
-    (* specific domain for pseudo-prop *)
+  (* specific domain for pseudo-prop *)
   ptrue: ID.t;
-    (* pseudo-true : pseudo-prop *)
+  (* pseudo-true : pseudo-prop *)
 }
 
 (* declaration of this function/relation *)
@@ -476,9 +476,9 @@ let atoms_of_ts ts: FO_rel.atom Sequence.t =
 let atoms_of_model m: FO_rel.atom Sequence.t =
   fun yield ->
     Model.iter m
-    ~values:(fun (_,dt,_) -> match dt with
-      | DT.Yield (FO_rel.Tuple_set set) -> atoms_of_ts set yield
-      | _ -> assert false)
+      ~values:(fun (_,dt,_) -> match dt with
+        | DT.Yield (FO_rel.Tuple_set set) -> atoms_of_ts set yield
+        | _ -> assert false)
 
 module AM = CCMap.Make(struct
     type t = FO_rel.atom
@@ -691,15 +691,15 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
     |> Sequence.filter_map
       (fun (t,dt,_) -> match t, dt with
          | FO_rel.Const id, DT.Yield (FO_rel.Tuple_set set) ->
-            begin match ID.Tbl.get state.dom_of_id id with
-              | Some dom ->
-                let ids = decode_ty_dom_ map id dom set in
-                Some (dom.dom_id, ids)
-              | None when ID.equal id state.pprop_dom.dom_id ->
-                let ids = decode_ty_dom_ map id state.pprop_dom set in
-                Some (id, ids)
-              | None -> None
-            end
+           begin match ID.Tbl.get state.dom_of_id id with
+             | Some dom ->
+               let ids = decode_ty_dom_ map id dom set in
+               Some (dom.dom_id, ids)
+             | None when ID.equal id state.pprop_dom.dom_id ->
+               let ids = decode_ty_dom_ map id state.pprop_dom set in
+               Some (id, ids)
+             | None -> None
+           end
          | _ -> None)
     |> ID.Map.of_seq
   in

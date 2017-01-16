@@ -50,8 +50,8 @@ let flat_map_statements ~f pb =
   let res = CCVector.create () in
   CCVector.iter
     (fun st ->
-      let new_stmts = f st in
-      List.iter (CCVector.push res) new_stmts
+       let new_stmts = f st in
+       List.iter (CCVector.push res) new_stmts
     ) pb.statements;
   let res = CCVector.freeze res in
   { metadata=pb.metadata; statements=res; }
@@ -62,10 +62,10 @@ let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
     let res = CCVector.create () in
     CCVector.iter
       (fun st ->
-        let st' = Statement.map ~term ~ty st in
-        CCVector.append_seq res (Sequence.of_list (before ()));
-        CCVector.push res st';
-        CCVector.append_seq res (Sequence.of_list (after ()));
+         let st' = Statement.map ~term ~ty st in
+         CCVector.append_seq res (Sequence.of_list (before ()));
+         CCVector.push res st';
+         CCVector.append_seq res (Sequence.of_list (after ()));
       ) p.statements;
     CCVector.freeze res
   );
@@ -79,7 +79,7 @@ module Print(P1 : TermInner.PRINT)(P2 : TermInner.PRINT) = struct
   let print out pb =
     let str_of_meta m =
       (if m.Metadata.sat_means_unknown then "(sat->?)" else "") ^
-      (if m.Metadata.unsat_means_unknown then "(unsat->?)" else "")
+        (if m.Metadata.unsat_means_unknown then "(unsat->?)" else "")
     in
     fpf out "{%s@,%a@,}"
       (str_of_meta pb.metadata)
@@ -106,10 +106,10 @@ exception IllFormed of string
 (** Ill-formed problem *)
 
 let () = Printexc.register_printer
-  (function
-    | IllFormed msg -> Some (Printf.sprintf "problem is ill-formed: %s" msg)
-    | _ -> None
-  )
+    (function
+      | IllFormed msg -> Some (Printf.sprintf "problem is ill-formed: %s" msg)
+      | _ -> None
+    )
 
 let ill_formed_ msg = raise (IllFormed msg)
 let ill_formedf_ msg = Utils.exn_ksprintf msg ~f:ill_formed_
@@ -123,8 +123,8 @@ let goal pb =
       | None -> ill_formed_ "no goal"
     else
       match CCVector.get pb.statements i with
-      | {Statement.view=Statement.Goal g;_} -> aux (Some g) (i+1)
-      | _ -> aux acc (i+1)
+        | {Statement.view=Statement.Goal g;_} -> aux (Some g) (i+1)
+        | _ -> aux acc (i+1)
   in
   aux None 0
 

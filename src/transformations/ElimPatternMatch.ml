@@ -66,7 +66,7 @@ let elim_match ~mode ~env t =
       U.ty_arrow (elim_match_ ~subst a)(elim_match_ ~subst b)
     | TI.Match (t,l,def) when should_encode t ->
       (* change t into t';
-        then a decision tree is built where
+         then a decision tree is built where
           each case  [c,vars,rhs] is changed into:
           "if is-c t' then rhs[vars_i := select-c-i t'] else ..."
       *)
@@ -127,9 +127,9 @@ let pipe ~mode ~print ~check =
       let module PPb = Problem.Print(P)(P) in
       Format.printf "@[<v2>@{<Yellow>after elimination of pattern-match@}: %a@]@." PPb.print)
     @
-    Utils.singleton_if check () ~f:(fun () ->
-      let module C = TypeCheck.Make(T) in
-      C.check_problem (C.empty ()))
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.check_problem (C.empty ()))
   in
   let encode pb = tr_problem ~mode pb, () in
   make ~name

@@ -21,9 +21,9 @@ let section = Utils.Section.make name
 exception Error of string
 
 let () = Printexc.register_printer
-  (function
-    | Error msg -> Some (Utils.err_sprintf "%s:@ %s" name msg)
-    | _ -> None)
+    (function
+      | Error msg -> Some (Utils.err_sprintf "%s:@ %s" name msg)
+      | _ -> None)
 
 let fail_ msg = raise (Error msg)
 let failf msg = Utils.exn_ksprintf ~f:fail_ msg
@@ -189,10 +189,10 @@ let pipe_with ~decode ~print ~check =
         let module PPb = Problem.Print(P)(P) in
         Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name PPb.print)
     @
-    Utils.singleton_if check ()
-      ~f:(fun () ->
-        let module C = TypeCheck.Make(T) in
-        C.empty () |> C.check_problem)
+      Utils.singleton_if check ()
+        ~f:(fun () ->
+          let module C = TypeCheck.Make(T) in
+          C.empty () |> C.check_problem)
   in
   Transform.make
     ~on_encoded

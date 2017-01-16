@@ -138,11 +138,11 @@ let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
   | TI.Match (u,map,def) ->
     let u = term_to_tip st u in
     let cases =
-       ID.Map.to_list map
-       |> List.map
-         (fun (c, (vars,rhs)) ->
-            A.Match_case
-              (id_to_string c, List.map conv_var vars, term_to_tip st rhs))
+      ID.Map.to_list map
+      |> List.map
+        (fun (c, (vars,rhs)) ->
+           A.Match_case
+             (id_to_string c, List.map conv_var vars, term_to_tip st rhs))
     and def = match def with
       | TI.Default_none -> []
       | TI.Default_some (rhs,_) -> [A.Match_default (term_to_tip st rhs)]
@@ -211,9 +211,9 @@ let decl_to_tip id ty : A.statement =
     A.decl_sort s ~arity:(List.length ty_args)
   ) else (
     A.decl_fun s
-       ~tyvars:(List.map conv_tyvar ty_vars)
-       (List.map ty_to_tip ty_args)
-       (ty_to_tip ty_ret)
+      ~tyvars:(List.map conv_tyvar ty_vars)
+      (List.map ty_to_tip ty_args)
+      (ty_to_tip ty_ret)
   )
 
 let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
@@ -374,10 +374,10 @@ let rec term_of_tip (env:parse_env) (t:A.term): term = match t with
     U.ite (term_of_tip env a)(term_of_tip env b)(term_of_tip env c)
   | A.Let (l,u) ->
     let env = List.fold_left
-      (fun env (s,t) ->
-         let t = term_of_tip env t in
-         StmtrMap.add s (`Subst t) env)
-      env l
+        (fun env (s,t) ->
+           let t = term_of_tip env t in
+           StmtrMap.add s (`Subst t) env)
+        env l
     in
     term_of_tip env u
   | A.Fun (v,body) ->
@@ -633,7 +633,7 @@ let pipe ?(print_model=false) ~print ~dump () =
         Ty, Mono; If_then_else, Present;
         Eqn, Eqn_single; Codata, Absent;
         Copy, Absent; Ind_preds, Absent; Prop_args, Present;
-        ])
+      ])
   in
   let encode pb =
     let prio = 25 in

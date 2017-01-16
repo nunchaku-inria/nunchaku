@@ -61,7 +61,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) : sig
        term Statement.tydef ->
        Arg.t ->
        term Statement.tydef)
-      option;
+        option;
 
     do_ty_def:
       (t ->
@@ -69,7 +69,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) : sig
        ty Statement.defined ->
        Arg.t ->
        ty Statement.defined)
-      option;
+        option;
   }
 
   val create :

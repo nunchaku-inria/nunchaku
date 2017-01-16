@@ -139,23 +139,23 @@ let pp_statement out st =
     | vars -> Format.fprintf out "![@[%a@]]:@ " (pp_list_ CCFormat.string) vars
   in
   match st with
-  | Fi_domain (_, v, l) ->
-    Format.fprintf out "(@[<1>domain %s in@ [@[%a@]]@])."
-      v (pp_list_ CCFormat.string) l
-  | Fi_functors (_, id, vars, l) ->
-    let pp_eqn out (vars',args,rhs) =
-      Format.fprintf out "(@[%a%s(%a)@ = %a@])"
-        pp_vars vars' id (pp_list_ pp_term) args pp_term rhs
-    in
-    Format.fprintf out "(@[<1>functors for %s@ @[%a[@[%a@]]@]@])."
-      id pp_vars vars (pp_list_ pp_eqn) l
-  | Fi_predicates (_, id, vars, l) ->
-    let pp_pred out args = Format.fprintf out "%s(%a)" id (pp_list_ pp_term) args in
-    let pp_pred out (vars',args,rhs) =
-      Format.fprintf out "(%a@[%a <=> %a@])" pp_vars vars' pp_pred args pp_term rhs
-    in
-    Format.fprintf out "(@[<1>predicates for %s@ @[%a[@[%a@]]@]@])."
-      id pp_vars vars (pp_list_ pp_pred) l
+    | Fi_domain (_, v, l) ->
+      Format.fprintf out "(@[<1>domain %s in@ [@[%a@]]@])."
+        v (pp_list_ CCFormat.string) l
+    | Fi_functors (_, id, vars, l) ->
+      let pp_eqn out (vars',args,rhs) =
+        Format.fprintf out "(@[%a%s(%a)@ = %a@])"
+          pp_vars vars' id (pp_list_ pp_term) args pp_term rhs
+      in
+      Format.fprintf out "(@[<1>functors for %s@ @[%a[@[%a@]]@]@])."
+        id pp_vars vars (pp_list_ pp_eqn) l
+    | Fi_predicates (_, id, vars, l) ->
+      let pp_pred out args = Format.fprintf out "%s(%a)" id (pp_list_ pp_term) args in
+      let pp_pred out (vars',args,rhs) =
+        Format.fprintf out "(%a@[%a <=> %a@])" pp_vars vars' pp_pred args pp_term rhs
+      in
+      Format.fprintf out "(@[<1>predicates for %s@ @[%a[@[%a@]]@]@])."
+        id pp_vars vars (pp_list_ pp_pred) l
 
 let pp_statements out =
   Format.fprintf out "[@[<hv>%a@]]"

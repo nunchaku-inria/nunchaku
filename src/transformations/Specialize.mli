@@ -3,27 +3,27 @@
 
 (** {1 Specialization}
 
-  Specialization replaces some function, argument to another (higher-order) function,
-  by its definition. It only works when the argument is known.
+    Specialization replaces some function, argument to another (higher-order) function,
+    by its definition. It only works when the argument is known.
 
-  Example:
+    Example:
 
-  {[ let rec map f l = match l with
-     | [] -> []
-     | x::l2 -> f x :: map f l2
+    {[ let rec map f l = match l with
+        | [] -> []
+        | x::l2 -> f x :: map f l2
 
-    map (fun x -> x+ g(x)) l
-  ]}
+              map (fun x -> x+ g(x)) l
+    ]}
 
-  is converted into
+    is converted into
 
-  {[
-  let rec map_357 l = match l with
-    | [] -> []
-    | x::l2 -> (x + g(x)) :: map_357 l2
+    {[
+      let rec map_357 l = match l with
+        | [] -> []
+        | x::l2 -> (x + g(x)) :: map_357 l2
 
-    map_357 l
-  ]}
+              map_357 l
+    ]}
 *)
 
 open Nunchaku_core

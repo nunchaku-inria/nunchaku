@@ -144,39 +144,39 @@ let env_add_var ~env v =
 let should_skolemize_ ~state v =
   let ty = Var.ty v in
   match state.mode, T.repr ty with
-  | `Sk_all, _ -> true
-  | (`Sk_types | `Sk_ho), TI.TyBuiltin `Type -> true
-  | `Sk_types, _ -> false
-  | `Sk_ho, TI.TyArrow _ -> true
-  | `Sk_ho, _ -> false
+    | `Sk_all, _ -> true
+    | (`Sk_types | `Sk_ho), TI.TyBuiltin `Type -> true
+    | `Sk_types, _ -> false
+    | `Sk_ho, TI.TyArrow _ -> true
+    | `Sk_ho, _ -> false
 
 let skolemize_ ~state ?(in_goal=false) pol t =
   (* recursive traversal *)
   let rec aux env pol t = match T.repr t with
     | TI.Const id -> U.const id
     | TI.Var v ->
-        begin match Subst.find ~subst:env.subst v with
-          | None -> U.var (aux_var env v)
-          | Some t -> t
-        end
+      begin match Subst.find ~subst:env.subst v with
+        | None -> U.var (aux_var env v)
+        | Some t -> t
+      end
     | TI.Bind ((`Exists | `Forall) as b, v, t') ->
-        begin match b, pol with
+      begin match b, pol with
         | `Exists, Pol.Pos
         | `Forall, Pol.Neg when should_skolemize_ ~state v ->
-            (* type of Skolem function *)
-            let ty_ret = aux env Pol.NoPol (Var.ty v) in
-            let skolem_id, _ty, _ =
-              Sk.skolemize state.sk ~ty_ret ~vars:env.vars
-                (fun ty -> { sym_defines=t; sym_decode=in_goal; sym_ty=ty })
-            in
-            let skolem = U.app (U.const skolem_id) (List.map U.var env.vars) in
-            (* convert [t] and replace [v] with [skolem] in it *)
-            let env = env_bind ~env v skolem in
-            aux env pol t'
+          (* type of Skolem function *)
+          let ty_ret = aux env Pol.NoPol (Var.ty v) in
+          let skolem_id, _ty, _ =
+            Sk.skolemize state.sk ~ty_ret ~vars:env.vars
+              (fun ty -> { sym_defines=t; sym_decode=in_goal; sym_ty=ty })
+          in
+          let skolem = U.app (U.const skolem_id) (List.map U.var env.vars) in
+          (* convert [t] and replace [v] with [skolem] in it *)
+          let env = env_bind ~env v skolem in
+          aux env pol t'
         | _ ->
-            let env = env_add_var ~env v in
-            U.mk_bind b v (aux env pol t')
-        end
+          let env = env_add_var ~env v in
+          U.mk_bind b v (aux env pol t')
+      end
     | TI.Let (v, t, u) ->
       (* rename [v], but do not parametrize skolems with it *)
       let t' = aux env pol t in
@@ -189,7 +189,7 @@ let skolemize_ ~state ?(in_goal=false) pol t =
     | TI.Bind _
     | TI.Match _
     | TI.TyArrow _ ->
-        aux' env pol t
+      aux' env pol t
     | TI.TyBuiltin b -> U.ty_builtin b
     | TI.TyMeta _ -> assert false
 
@@ -219,28 +219,28 @@ let skolemize_stmt ~state st =
   let info = Stmt.info st in
   let sk_term ?in_goal () pol t = skolemize_ ~state ?in_goal pol t in
   match Stmt.view st with
-  | Stmt.Axiom (Stmt.Axiom_std l) ->
+    | Stmt.Axiom (Stmt.Axiom_std l) ->
       Stmt.axiom ~info (List.map (sk_term () Pol.Pos) l)
-  | Stmt.Axiom (Stmt.Axiom_spec l) ->
+    | Stmt.Axiom (Stmt.Axiom_spec l) ->
       let l = Stmt.map_spec_defs ~term:(sk_term () Pol.Pos) ~ty:CCFun.id l in
       Stmt.axiom_spec ~info l
-  | Stmt.Axiom (Stmt.Axiom_rec l) ->
+    | Stmt.Axiom (Stmt.Axiom_rec l) ->
       let l = Stmt.map_rec_defs_bind () l
           ~bind:(fun () v->(),v) ~ty:(fun () ty->ty)
           ~term:(sk_term ~in_goal:false)
       in
       Stmt.axiom_rec ~info l
-  | Stmt.Pred (wf, kind, l) ->
+    | Stmt.Pred (wf, kind, l) ->
       let l = Stmt.map_preds_bind () l
           ~bind:(fun () v->(),v) ~ty:(fun () ty ->ty)
           ~term:(sk_term ~in_goal:false)
       in
       Stmt.mk_pred ~info ~wf kind l
-  | Stmt.Goal g ->
+    | Stmt.Goal g ->
       Stmt.goal ~info (sk_term ~in_goal:true () Pol.Pos g)
-  | Stmt.Copy _
-  | Stmt.TyDef _
-  | Stmt.Decl _ -> st
+    | Stmt.Copy _
+    | Stmt.TyDef _
+    | Stmt.Decl _ -> st
 
 let skolemize_pb ~state pb =
   Problem.flat_map_statements
@@ -274,15 +274,15 @@ let decode_model ~skolems_in_model ~state m =
     ~values:(fun ((t,dt,k) as tup) ->
       match T.repr t with
         | TI.Const id ->
-            begin match Sk.find_skolem state.sk id with
-              | None -> Some tup
-              | Some sym ->
-                if sym.sym_decode && skolems_in_model
-                then
-                  let t' = U.app_const epsilon [sym.sym_defines] in
-                  Some (t',dt,k)
-                else None (* ignore  this symbol *)
-            end
+          begin match Sk.find_skolem state.sk id with
+            | None -> Some tup
+            | Some sym ->
+              if sym.sym_decode && skolems_in_model
+              then
+                let t' = U.app_const epsilon [sym.sym_defines] in
+                Some (t',dt,k)
+              else None (* ignore  this symbol *)
+          end
         | _ -> Some tup)
 
 let pipe_with ~mode ~decode ~print ~check =
@@ -292,10 +292,10 @@ let pipe_with ~mode ~decode ~print ~check =
         let module Ppb = Problem.Print(P)(P) in
         Format.printf "@[<v2>@{<Yellow>after Skolemization@}: %a@]@." Ppb.print)
     @
-    Utils.singleton_if check ()
-      ~f:(fun () ->
-         let module C = TypeCheck.Make(T) in
-         C.empty () |> C.check_problem)
+      Utils.singleton_if check ()
+        ~f:(fun () ->
+          let module C = TypeCheck.Make(T) in
+          C.empty () |> C.check_problem)
   in
   Transform.make
     ~name

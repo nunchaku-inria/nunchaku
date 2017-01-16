@@ -43,9 +43,9 @@ type 'ty defined = {
 type (+'t, +'ty) equations =
   | Eqn_nested of
       ('ty var list (* universally quantified vars *)
-      * 't list (* arguments (patterns) to the defined term *)
-      * 't  (* right-hand side of equation *)
-      * 't list (* additional conditions *)
+       * 't list (* arguments (patterns) to the defined term *)
+       * 't  (* right-hand side of equation *)
+       * 't list (* additional conditions *)
       ) list
   | Eqn_single of
       'ty var list (* function arguments *)
@@ -92,11 +92,11 @@ type +'ty mutual_types = 'ty tydef list
 (** Flavour of axiom *)
 type (+'t,+'ty) axiom =
   | Axiom_std of 't list
-    (** Axiom list that can influence consistency (no assumptions) *)
+  (** Axiom list that can influence consistency (no assumptions) *)
   | Axiom_spec of ('t,'ty) spec_defs
-    (** Axioms can be safely ignored, they are consistent *)
+  (** Axioms can be safely ignored, they are consistent *)
   | Axiom_rec of ('t,'ty) rec_defs
-    (** Axioms are part of an admissible (partial) definition *)
+  (** Axioms are part of an admissible (partial) definition *)
 
 type (+'t, +'ty) pred_clause = {
   clause_vars: 'ty var list; (* universally quantified vars *)

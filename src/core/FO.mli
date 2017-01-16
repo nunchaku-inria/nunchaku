@@ -3,8 +3,8 @@
 
 (** {1 First-Order Monomorphic Terms and Formulas}
 
-  This is the end of the chain, where formulas and terms are ready to be
-  sent to some SMT solver. Types are monomorphic, formulas are first-order
+    This is the end of the chain, where formulas and terms are ready to be
+    sent to some SMT solver. Types are monomorphic, formulas are first-order
 *)
 
 type id = ID.t
@@ -241,5 +241,5 @@ end
 
 val pipe_tptp :
   ((T.t, Ty.t) Problem.t, FO_tptp.problem,
-    (FO_tptp.term, FO_tptp.ty) res,
-    (T.t, Ty.t) res) Transform.t
+   (FO_tptp.term, FO_tptp.ty) res,
+   (T.t, Ty.t) res) Transform.t

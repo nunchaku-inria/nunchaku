@@ -19,20 +19,20 @@ type ty = T.t
 
 (* term -> 'a, modulo alpha equivalence *)
 module TermTbl = CCHashtbl.Make(struct
-  type t = T.t
-  let equal = U.equal
-  let hash = U.hash_alpha_eq
+    type t = T.t
+    let equal = U.equal
+    let hash = U.hash_alpha_eq
   end)
 
 type state = {
   mutable count: int;
-    (* counter for new names *)
+  (* counter for new names *)
   mutable env: (T.t,ty) Env.t;
-    (* signature *)
+  (* signature *)
   funs: T.t TermTbl.t;
-    (* function -> lambda-lifted function *)
+  (* function -> lambda-lifted function *)
   new_ids: unit ID.Tbl.t;
-    (* set of newly introduced functions *)
+  (* set of newly introduced functions *)
 }
 
 let create_state ~env () =
@@ -53,17 +53,17 @@ type in_scope_of =
   | In_nothing
   | In_rec of
       ID.Set.t * (* ids locally declared *)
-      (T.t, T.t) Stmt.rec_def list ref (* new definitions *)
+        (T.t, T.t) Stmt.rec_def list ref (* new definitions *)
   | In_spec of
       ID.Set.t *
-      (ID.t * ty * term) list ref (* new axioms *)
+        (ID.t * ty * term) list ref (* new axioms *)
 
 (* state for declaring the lambda lifted functions *)
 type local_state = {
   new_decls: (term, ty) Stmt.t CCVector.vector;
-    (* toplevel statements to be added to the problem *)
+  (* toplevel statements to be added to the problem *)
   mutable in_scope : in_scope_of;
-    (* if [local_ids] is not empty, we are in scope of "rec" or "spec" declarations *)
+  (* if [local_ids] is not empty, we are in scope of "rec" or "spec" declarations *)
 }
 
 (* does [t] contain any ID of [set]? *)
@@ -109,7 +109,7 @@ let is_lambda_ t = match T.repr t with
    - a substitution that renames l1 and l2 to those new variables
    - the suffixes to add to [l1] (resp. l2) so that they have
      the same length as the list of fresh variables
-  precond: variables in the common prefix of l1 and l2 have compatible types *)
+   precond: variables in the common prefix of l1 and l2 have compatible types *)
 let complete_vars ~subst l1 l2 =
   let rec aux vars args1 args2 subst l1 l2 = match l1, l2 with
     | [], [] -> List.rev vars, List.rev args1, List.rev args2, subst
@@ -135,71 +135,71 @@ let complete_vars ~subst l1 l2 =
 let rec tr_term ~state local_state subst t = match T.repr t with
   | TI.Var v -> U.var (Var.Subst.find_or ~default:v ~subst v)
   | TI.Bind (`Fun, _, _) when TermTbl.mem state.funs t ->
-      (* will only work if [t] is alpha-equivalent to [t']; in particular
-         that implies that [t] and [t'] capture exactly the same terms,
-         which makes this safe *)
-      let t' = TermTbl.find state.funs t in
-      Utils.debugf ~section 5 "@[<2>re-use `@[%a@]`@ for `@[%a@]`@]"
-        (fun k->k P.print t' P.print t);
-      t'
+    (* will only work if [t] is alpha-equivalent to [t']; in particular
+       that implies that [t] and [t'] capture exactly the same terms,
+       which makes this safe *)
+    let t' = TermTbl.find state.funs t in
+    Utils.debugf ~section 5 "@[<2>re-use `@[%a@]`@ for `@[%a@]`@]"
+      (fun k->k P.print t' P.print t);
+    t'
   | TI.Bind (`Fun, v, body) ->
-      (* first, λ-lift in the body *)
-      let body = tr_term ~state local_state subst body in
-      (* captured variables *)
-      let captured_vars =
-        U.free_vars ~bound:(U.VarSet.singleton v) body
-        |> U.VarSet.to_list
-      in
-      (* compute type of new function *)
-      let _, body_ty_args, ty_ret = find_ty_ ~state body |> U.ty_unfold in
-      let ty =
-        U.ty_arrow_l
-          (List.map Var.ty captured_vars @ Var.ty v :: body_ty_args)
-          ty_ret in
-      (* fully apply body *)
-      let body_vars =
-        List.mapi (fun i ty -> Var.makef ~ty "eta_%d" i) body_ty_args
-      in
-      let body = U.app body (List.map U.var body_vars) in
-      (* declare new toplevel function *)
-      let new_fun = fresh_fun_ ~state in
-      let new_vars = captured_vars @ v :: body_vars in
-      (* declare new function *)
-      decl_fun_ ~state ~attrs:[] new_fun ty;
-      Utils.debugf ~section 5 "@[<2>declare `@[%a : %a@]`@ for `@[%a@]`@]"
-        (fun k->k ID.print new_fun P.print ty P.print t);
-      (* how we define [new_fun] depends on whether it is mutually recursive
-         with the surrounding rec/spec *)
-      begin match local_state.in_scope with
-        | In_rec (ids, l) when contains_some_id ~of_:ids body ->
-            (* body needs to be mutually recursive with [ids], and is a rec *)
-            let def = mk_new_rec new_fun ty new_vars body in
-            l := def :: !l
-        | In_spec (ids, l) when contains_some_id ~of_:ids body ->
-            (* body needs to be mutually recursive with [ids], and is a spec *)
-            let ax = mk_axiom new_fun new_vars body in
-            l := (new_fun, ty, ax) :: !l
-        | In_rec _
-        | In_spec _
-        | In_nothing ->
-            (* no mutual dependencies, can emit toplevel "rec" *)
-            let decl = declare_new_rec new_fun ty new_vars body in
-            CCVector.push local_state.new_decls decl;
-      end;
-      (* replace [fun v. body] by [new_fun vars] *)
-      let t' = U.app_const new_fun (List.map U.var captured_vars) in
-      TermTbl.add state.funs t t'; (* save it *)
-      ID.Tbl.add state.new_ids new_fun ();
-      t'
+    (* first, λ-lift in the body *)
+    let body = tr_term ~state local_state subst body in
+    (* captured variables *)
+    let captured_vars =
+      U.free_vars ~bound:(U.VarSet.singleton v) body
+      |> U.VarSet.to_list
+    in
+    (* compute type of new function *)
+    let _, body_ty_args, ty_ret = find_ty_ ~state body |> U.ty_unfold in
+    let ty =
+      U.ty_arrow_l
+        (List.map Var.ty captured_vars @ Var.ty v :: body_ty_args)
+        ty_ret in
+    (* fully apply body *)
+    let body_vars =
+      List.mapi (fun i ty -> Var.makef ~ty "eta_%d" i) body_ty_args
+    in
+    let body = U.app body (List.map U.var body_vars) in
+    (* declare new toplevel function *)
+    let new_fun = fresh_fun_ ~state in
+    let new_vars = captured_vars @ v :: body_vars in
+    (* declare new function *)
+    decl_fun_ ~state ~attrs:[] new_fun ty;
+    Utils.debugf ~section 5 "@[<2>declare `@[%a : %a@]`@ for `@[%a@]`@]"
+      (fun k->k ID.print new_fun P.print ty P.print t);
+    (* how we define [new_fun] depends on whether it is mutually recursive
+       with the surrounding rec/spec *)
+    begin match local_state.in_scope with
+      | In_rec (ids, l) when contains_some_id ~of_:ids body ->
+        (* body needs to be mutually recursive with [ids], and is a rec *)
+        let def = mk_new_rec new_fun ty new_vars body in
+        l := def :: !l
+      | In_spec (ids, l) when contains_some_id ~of_:ids body ->
+        (* body needs to be mutually recursive with [ids], and is a spec *)
+        let ax = mk_axiom new_fun new_vars body in
+        l := (new_fun, ty, ax) :: !l
+      | In_rec _
+      | In_spec _
+      | In_nothing ->
+        (* no mutual dependencies, can emit toplevel "rec" *)
+        let decl = declare_new_rec new_fun ty new_vars body in
+        CCVector.push local_state.new_decls decl;
+    end;
+    (* replace [fun v. body] by [new_fun vars] *)
+    let t' = U.app_const new_fun (List.map U.var captured_vars) in
+    TermTbl.add state.funs t t'; (* save it *)
+    ID.Tbl.add state.new_ids new_fun ();
+    t'
   | TI.Builtin (`Eq (a,b)) when is_lambda_ a || is_lambda_ b ->
-      (* extensionality: [(λx. t) = f] becomes [∀x. t = t' x] *)
-      let vars1, body1 = U.fun_unfold a in
-      let vars2, body2 = U.fun_unfold b in
-      let new_vars, args1, args2, subst = complete_vars ~subst vars1 vars2 in
-      let body1 = tr_term ~state local_state subst (U.app body1 args1) in
-      let body2 = tr_term ~state local_state subst (U.app body2 args2) in
-      (* quantify on common variables *)
-      U.forall_l new_vars (U.eq body1 body2)
+    (* extensionality: [(λx. t) = f] becomes [∀x. t = t' x] *)
+    let vars1, body1 = U.fun_unfold a in
+    let vars2, body2 = U.fun_unfold b in
+    let new_vars, args1, args2, subst = complete_vars ~subst vars1 vars2 in
+    let body1 = tr_term ~state local_state subst (U.app body1 args1) in
+    let body2 = tr_term ~state local_state subst (U.app body2 args2) in
+    (* quantify on common variables *)
+    U.forall_l new_vars (U.eq body1 body2)
   | _ ->
     U.map subst t
       ~bind:Var.Subst.rename_var
@@ -214,10 +214,10 @@ let tr_problem pb =
   } in
   let pb' =
     Problem.flat_map_statements pb
-    ~f:(fun stmt ->
-      let info = Stmt.info stmt in
-      let stmt' = match Stmt.view stmt with
-        | Stmt.Axiom (Stmt.Axiom_rec defs) ->
+      ~f:(fun stmt ->
+        let info = Stmt.info stmt in
+        let stmt' = match Stmt.view stmt with
+          | Stmt.Axiom (Stmt.Axiom_rec defs) ->
             (* caution, some lambda lifted function might depend on
                the recursive block *)
             let ids =
@@ -233,7 +233,7 @@ let tr_problem pb =
             (* combine [defs'] with additional definitions in [l] *)
             let new_defs = List.rev_append !l defs' in
             Stmt.axiom_rec ~info new_defs
-        | Stmt.Axiom (Stmt.Axiom_spec spec) ->
+          | Stmt.Axiom (Stmt.Axiom_spec spec) ->
             (* caution, some lambda lifted function might depend on
                the recursive block *)
             let ids =
@@ -253,23 +253,23 @@ let tr_problem pb =
             (* combine [defs'] with additional definitions in [l] *)
             let new_defs =
               { spec' with Stmt.
-                spec_defined = new_defined @ spec'.Stmt.spec_defined;
-                spec_axioms = new_axioms @ spec'.Stmt.spec_axioms;
+                        spec_defined = new_defined @ spec'.Stmt.spec_defined;
+                        spec_axioms = new_axioms @ spec'.Stmt.spec_axioms;
               }
             in
             Stmt.axiom_spec ~info new_defs
-        | _ ->
+          | _ ->
             local_state.in_scope <- In_nothing;
             Stmt.map stmt ~ty:CCFun.id
               ~term:(tr_term ~state local_state Var.Subst.empty)
-      in
-      (* append auxiliary definitions *)
-      let res =
-        CCVector.to_list local_state.new_decls
-        @ [stmt']
-      in
-      CCVector.clear local_state.new_decls;
-      res)
+        in
+        (* append auxiliary definitions *)
+        let res =
+          CCVector.to_list local_state.new_decls
+          @ [stmt']
+        in
+        CCVector.clear local_state.new_decls;
+        res)
   in
   pb', state
 
@@ -287,10 +287,10 @@ let pipe_with ~decode ~print ~check =
         let module Ppb = Problem.Print(P)(P) in
         Format.printf "@[<v2>@{<Yellow>after λ-lifting@}: %a@]@." Ppb.print)
     @
-    Utils.singleton_if check ()
-      ~f:(fun () ->
-         let module C = TypeCheck.Make(T) in
-         C.empty() |> C.check_problem)
+      Utils.singleton_if check ()
+        ~f:(fun () ->
+          let module C = TypeCheck.Make(T) in
+          C.empty() |> C.check_problem)
   in
   Transform.make
     ~name

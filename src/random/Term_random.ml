@@ -192,20 +192,20 @@ let ty =
   let fun2 a b c = U.ty_arrow_l [a;b] c in
   let open G in
   fix
-     (fun self n ->
-        if n=0
-        then base
-        else (
-          (* for generating functions, take small type arguments *)
-          let small = min 3 (n-1) in
-          frequency
-            [ 3, base
-            ; 1, return list' <*> self (n-1)
-            ; 1, return pair' <*> self (n-1) <*> self (n-1)
-            ; 1, return fun1 <*> self small <*> self small
-            ; 1, return fun2 <*> self small <*> self small <*> self (n-1)
-            ]
-        ))
+    (fun self n ->
+       if n=0
+       then base
+       else (
+         (* for generating functions, take small type arguments *)
+         let small = min 3 (n-1) in
+         frequency
+           [ 3, base
+           ; 1, return list' <*> self (n-1)
+           ; 1, return pair' <*> self (n-1) <*> self (n-1)
+           ; 1, return fun1 <*> self small <*> self small
+           ; 1, return fun2 <*> self small <*> self small <*> self (n-1)
+           ]
+       ))
   |> sized'
 
 let mk_fresh_var_ = Var.make_gen ~names:"v_%d"
@@ -328,7 +328,7 @@ let print_rules() =
 
 (*$inject
   module U = TermInner.Util(T)
-  *)
+*)
 
 (*$QR & ~count:300
   arbitrary_prop

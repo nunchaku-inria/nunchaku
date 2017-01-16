@@ -85,8 +85,8 @@ val pipe :
   print:bool ->
   check:bool ->
   ((term,term as 'inv) Problem.t,
-    (term,term) Problem.t,
-    (term,term) Problem.Res.t, (term,term) Problem.Res.t
+   (term,term) Problem.t,
+   (term,term) Problem.Res.t, (term,term) Problem.Res.t
   ) Transform.t
 
 (** Similar to {!pipe} but with a generic decode function.
@@ -103,5 +103,5 @@ val pipe_with :
   print:bool ->
   check:bool ->
   ((term,term) Problem.t,
-    (term,term) Problem.t, 'c, 'd
+   (term,term) Problem.t, 'c, 'd
   ) Transform.t

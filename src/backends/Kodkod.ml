@@ -33,23 +33,23 @@ type offset = int
 
 type state = {
   default_size: int;
-    (* cardinal for sub-universes in which it's unspecified *)
+  (* cardinal for sub-universes in which it's unspecified *)
   name_of_id: kodkod_name ID.Map.t;
-    (* map names to kodkod names *)
+  (* map names to kodkod names *)
   id_of_name: ID.t StrMap.t;
-    (* map kodkod names to IDs *)
+  (* map kodkod names to IDs *)
   univ_map: (offset * FO_rel.atom IntMap.t) SUMap.t;
   (* sub-universe ->
        its offset in the global universe
        a map from offsets to atoms of the sub-universe *)
   univ_size: int;
-    (* total size of the universe *)
+  (* total size of the universe *)
   decls: FO_rel.decl ID.Map.t;
-    (* declarations *)
+  (* declarations *)
   mutable trivially_unsat: bool;
-    (* hack: was last "unsat" actually "trivially_unsat"? *)
+  (* hack: was last "unsat" actually "trivially_unsat"? *)
   timer: Utils.Time.timer;
-    (* timer *)
+  (* timer *)
 }
 
 let errorf msg = Utils.failwithf msg
@@ -479,25 +479,25 @@ let default_increment_ = 2 (* FUDGE *)
 let rec call_rec ~timer ~print ~size ~deadline pb : res * Scheduling.shortcut =
   let state = create_state ~timer ~default_size:size pb in
   if print
-    then Format.printf "@[<v>kodkod problem:@ ```@ %a@,```@]@." (print_pb state pb) ();
-    let res, short = solve ~deadline state pb in
-    Utils.debugf ~section 2 "@[<2>kodkod result for size %d:@ %a@]"
-      (fun k->k size Res.print_head res);
-    match res with
-      | Res.Unsat i when state.trivially_unsat ->
-        (* stop increasing the size *)
+  then Format.printf "@[<v>kodkod problem:@ ```@ %a@,```@]@." (print_pb state pb) ();
+  let res, short = solve ~deadline state pb in
+  Utils.debugf ~section 2 "@[<2>kodkod result for size %d:@ %a@]"
+    (fun k->k size Res.print_head res);
+  match res with
+    | Res.Unsat i when state.trivially_unsat ->
+      (* stop increasing the size *)
+      Res.Unknown [Res.U_incomplete i], S.No_shortcut
+    | Res.Unsat i ->
+      let now = Unix.gettimeofday () in
+      if deadline -. now > 0.5
+      then
+        (* unsat, and we still have some time: retry with a bigger size *)
+        call_rec ~timer ~print ~size:(size + default_increment_) ~deadline pb
+      else
+        (* we fixed a maximal cardinal, so maybe there's an even bigger
+           model, but we cannot know for sure *)
         Res.Unknown [Res.U_incomplete i], S.No_shortcut
-      | Res.Unsat i ->
-        let now = Unix.gettimeofday () in
-        if deadline -. now > 0.5
-        then
-          (* unsat, and we still have some time: retry with a bigger size *)
-          call_rec ~timer ~print ~size:(size + default_increment_) ~deadline pb
-        else
-          (* we fixed a maximal cardinal, so maybe there's an even bigger
-             model, but we cannot know for sure *)
-          Res.Unknown [Res.U_incomplete i], S.No_shortcut
-      | _ -> res, short
+    | _ -> res, short
 
 let call_real ~print_model ~prio ~print pb =
   S.Task.make ~prio

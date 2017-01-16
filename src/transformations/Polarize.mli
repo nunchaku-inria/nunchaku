@@ -3,8 +3,8 @@
 
 (** {1 Polarize}
 
-  This duplicates some predicate definitions (either recursive equations,
-  or (co)inductive specifications) depending on the call-site polarity.
+    This duplicates some predicate definitions (either recursive equations,
+    or (co)inductive specifications) depending on the call-site polarity.
 *)
 
 open Nunchaku_core
@@ -31,7 +31,7 @@ val pipe :
   print:bool ->
   check:bool ->
   ((term, term) Problem.t,
-    (term, term) Problem.t,
+   (term, term) Problem.t,
    (term, term) Problem.Res.t,
    (term, term) Problem.Res.t) Transform.t
 
@@ -45,7 +45,7 @@ val pipe_with :
   print:bool ->
   check:bool ->
   ((term, term) Problem.t,
-    (term, term) Problem.t,
-    'c, 'd
+   (term, term) Problem.t,
+   'c, 'd
   ) Transform.t
 

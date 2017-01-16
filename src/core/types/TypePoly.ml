@@ -33,7 +33,7 @@ module type S = sig
 end
 
 module Make(T : TI.REPR)
-: S with module T = T
+  : S with module T = T
 = struct
   module T = T
 

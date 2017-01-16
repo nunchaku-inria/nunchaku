@@ -247,14 +247,14 @@ module Make(M : sig val mode : mode end) = struct
     let add_to_deps cell =
       let fv = U.free_vars cell.sc_term in
       U.VarSet.to_seq fv
-        |> Sequence.iter
-          (fun v ->
-             let l = Var.Subst.find_or ~subst:share.ss_terms_depending_on v ~default:[] in
-             Utils.debugf ~section 5 "@[<2>deps(%a) +=@ %a (:= `@[%a@]`)@]"
-               (fun k->k Var.print_full v Var.print_full
-                   cell.sc_var P.print cell.sc_term);
-             share.ss_terms_depending_on <-
-               Var.Subst.add ~subst:share.ss_terms_depending_on v (cell :: l))
+      |> Sequence.iter
+        (fun v ->
+           let l = Var.Subst.find_or ~subst:share.ss_terms_depending_on v ~default:[] in
+           Utils.debugf ~section 5 "@[<2>deps(%a) +=@ %a (:= `@[%a@]`)@]"
+             (fun k->k Var.print_full v Var.print_full
+                 cell.sc_var P.print cell.sc_term);
+           share.ss_terms_depending_on <-
+             Var.Subst.add ~subst:share.ss_terms_depending_on v (cell :: l))
     in
     try U.Map.find t share.ss_tbl
     with Not_found ->
@@ -452,7 +452,7 @@ module Make(M : sig val mode : mode end) = struct
         begin match b with
           | `Eq (t1,_) when not (U.ty_is_Prop (ty_exn ~state t1)) ->
             tr_term_aux share pol t
-            (* equality is ok *)
+          (* equality is ok *)
           | `Imply _ | `And _ | `Or _ | `Eq _ | `Ite _ ->
             (* boolean connectives: do not let sharing pass through for now, to
                play safe with polarities. *)
@@ -1077,10 +1077,10 @@ module Make(M : sig val mode : mode end) = struct
           let module C = TypeCheck.Make(T) in
           C.empty () |> C.check_problem)
       @
-      Utils.singleton_if print ()
-        ~f:(fun () ->
-          let module Ppb = Problem.Print(P)(P) in
-          Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name Ppb.print)
+        Utils.singleton_if print ()
+          ~f:(fun () ->
+            let module Ppb = Problem.Print(P)(P) in
+            Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name Ppb.print)
     in
     Transform.make
       ~name

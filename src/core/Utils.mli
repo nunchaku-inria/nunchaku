@@ -22,7 +22,7 @@ module Time : sig
   val start_timer: unit -> timer
 
   val stop_timer : timer -> unit
-    (** Stop timer, or does nothing if stopped already *)
+  (** Stop timer, or does nothing if stopped already *)
 
   val get_timer : timer -> float
   (** Number of seconds elapsed between {!start_timer} and now, or
@@ -68,7 +68,7 @@ val set_debug : int -> unit     (** Set debug level of [Section.root] *)
 val get_debug : unit -> int     (** Current debug level for [Section.root] *)
 
 val debugf : ?lock:bool -> ?section:Section.t -> int ->
-            ('a, Format.formatter, unit, unit) format4 -> ('a -> unit) -> unit
+  ('a, Format.formatter, unit, unit) format4 -> ('a -> unit) -> unit
 (** Print a debug message, with the given section and verbosity level.
     The message might be dropped if its level is too high. *)
 

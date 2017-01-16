@@ -3,9 +3,9 @@
 
 (** {1 Environment}
 
-  Maps (co)inductive types to their definition, functions
-  to their specifications/axioms/recursive specifications,
-  constructors to their types, and any symbol to its type *)
+    Maps (co)inductive types to their definition, functions
+    to their specifications/axioms/recursive specifications,
+    constructors to their types, and any symbol to its type *)
 
 type id = ID.t
 type loc = Location.t
@@ -14,44 +14,44 @@ type 'a printer = Format.formatter -> 'a -> unit
 type (+'t, +'ty) def =
   | Fun_def of
       ('t, 'ty) Statement.rec_defs *
-      ('t, 'ty) Statement.rec_def *
-      loc option
-      (** ID is a defined fun/predicate. *)
+        ('t, 'ty) Statement.rec_def *
+        loc option
+  (** ID is a defined fun/predicate. *)
 
   | Fun_spec of
       ('t, 'ty) Statement.spec_defs * loc option
 
   | Data of
       [`Codata | `Data] *
-      'ty Statement.mutual_types *
-      'ty Statement.tydef
-      (** ID is a (co)data *)
+        'ty Statement.mutual_types *
+        'ty Statement.tydef
+  (** ID is a (co)data *)
 
   | Cstor of
       [`Codata | `Data] *
-      'ty Statement.mutual_types *
-      'ty Statement.tydef *
-      'ty Statement.ty_constructor
-      (** ID is a constructor (of the given type) *)
+        'ty Statement.mutual_types *
+        'ty Statement.tydef *
+        'ty Statement.ty_constructor
+  (** ID is a constructor (of the given type) *)
 
   | Pred of
       [`Wf | `Not_wf] *
-      [`Pred | `Copred] *
-      ('t, 'ty) Statement.pred_def *
-      ('t, 'ty) Statement.pred_def list *
-      loc option
+        [`Pred | `Copred] *
+        ('t, 'ty) Statement.pred_def *
+        ('t, 'ty) Statement.pred_def list *
+        loc option
 
   | Copy_ty of ('t, 'ty) Statement.copy
-    (** ID is the copy type *)
+  (** ID is the copy type *)
 
   | Copy_abstract of ('t, 'ty) Statement.copy
-    (** ID is the abstraction function *)
+  (** ID is the abstraction function *)
 
   | Copy_concrete of ('t, 'ty) Statement.copy
-    (** ID is the concretization function *)
+  (** ID is the concretization function *)
 
   | NoDef
-      (** Undefined symbol *)
+  (** Undefined symbol *)
 
 (** All information on a given symbol *)
 type (+'t, +'ty) info = {

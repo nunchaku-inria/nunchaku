@@ -50,8 +50,8 @@ let sexp_to_term : Sexp_lib.t -> A.term =
 
 let p_term s =
   match Sexp_lib.parse_string s with
-  | `Ok s -> sexp_to_term s
-  | `Error msg ->
+    | `Ok s -> sexp_to_term s
+    | `Error msg ->
       parse_errorf_ "could not parse `%s` as an S-expression: %s" s msg
 
 
@@ -67,7 +67,7 @@ let mk_stmt d =
 
 let decl_choice =
   let ax = p_term
-    "(forall p
+      "(forall p
        (=
         (choice p)
         (asserting
@@ -79,7 +79,7 @@ let decl_choice =
 
 let decl_unique =
   let ax = p_term
-    "(forall p
+      "(forall p
        (=
         (unique p)
         (asserting
@@ -93,7 +93,7 @@ let decl_unique =
 
 let decl_unique_unsafe =
   let ax = p_term
-    "(forall p
+      "(forall p
        (=
         (unique_unsafe p)
         (asserting

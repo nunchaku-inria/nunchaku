@@ -115,7 +115,7 @@ let rename_var state subst v =
    - if new type is prop and we expect prop_, use `ite`
      if new type is prop_ and we expect prop, use `= true_`
      (careful with builtins, in particular boolean ones)
-  *)
+*)
 
 (* does [t : prop]? *)
 let has_ty_prop_ state t : bool =
@@ -161,7 +161,7 @@ let transform_term state subst t =
     | _ ->
       U.map subst t
         ~bind:(rename_var state) ~f:aux
-(* we expect [t] to have type [prop_] after translation *)
+  (* we expect [t] to have type [prop_] after translation *)
   and aux_expect_prop' subst t = match T.repr t with
     | TI.Var v ->
       assert state.needed;
@@ -296,10 +296,10 @@ let pipe_with ~decode ~print ~check =
       let module PPb = Problem.Print(P)(P) in
       Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name PPb.print)
     @
-    Utils.singleton_if check ()
-      ~f:(fun () ->
-         let module C = TypeCheck.Make(T) in
-         C.empty () |> C.check_problem)
+      Utils.singleton_if check ()
+        ~f:(fun () ->
+          let module C = TypeCheck.Make(T) in
+          C.empty () |> C.check_problem)
   in
   Transform.make
     ~name

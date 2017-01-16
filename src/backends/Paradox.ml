@@ -45,7 +45,7 @@ let begin_model = "SZS output start FiniteModel"
 let end_model = "SZS output end FiniteModel"
 
 (* TODO : also include constants? e.g. on skolem_unique, skolem
-  constants are not included in the model *)
+   constants are not included in the model *)
 
 (* parse a model from paradox' output [s] *)
 let parse_model s : model =
@@ -110,7 +110,7 @@ let solve ~deadline pb =
          let hard_timeout = (int_of_float (timeout +. 1.5)) in
          let cmd =
            Printf.sprintf "ulimit -t %d; paradox --time %d --model --tstp '%s'"
-              hard_timeout paradox_timeout file
+             hard_timeout paradox_timeout file
          in
          (* call paradox, get its stdout and errcode *)
          let fut =
