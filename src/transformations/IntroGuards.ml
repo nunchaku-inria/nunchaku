@@ -191,7 +191,15 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
           let g' = wrap_guard (U.forall v) g in
           U.mk_bind b v t, g'
       end
-  | TI.Bind (`Fun, _, _) -> fail_tr_ t "translation of λ impossible"
+  | TI.Bind (`Fun, v, body) ->
+      let body, g = tr_term ~state ~pol:Pol.NoPol body in
+      begin match g.asserting, g.assuming with
+        | [], [] -> U.fun_ v body, empty_guard
+        | _ ->
+          fail_tr_ t
+            "@[translation of `%a` impossible:@ cannot put guards `%a` under λ@]"
+            P.print t (TI.Builtin.pp_guard P.print) g
+      end
   | TI.Bind (`Mu, _, _) -> fail_tr_ t "translation of µ impossible"
   | TI.Let (v,t,u) ->
       let t, g_t = tr_term t ~state ~pol:Pol.NoPol in
