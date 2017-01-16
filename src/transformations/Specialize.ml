@@ -188,6 +188,13 @@ type new_fun = {
   nf_specialized_from: ID.t; (* source *)
 }
 
+type new_funs = {
+  nfs_needs_congruence: bool;
+  (* if [true], the function needs some congruence axioms *)
+  nfs_instances: [ `New of Arg.t * new_fun | `Same] list;
+  (* list of instances *)
+}
+
 (* decoding state for one function *)
 type decode_state_fun = {
   dsf_spec_of: ID.t; (* what was the original function, before spec? *)
@@ -200,7 +207,7 @@ type decode_state = decode_state_fun ID.Tbl.t
 type state = {
   specializable_args : bool array ID.Tbl.t;
   (* function -> list of argument positions that can be specialized *)
-  new_funs: [ `New of Arg.t * new_fun | `Same] list ID.Tbl.t;
+  new_funs: new_funs ID.Tbl.t;
   (* maps [f] to a list of [`New (args_i, f')], where each [f'] is
       a specialization of [f] on [args_i],
       or to [`Same], meaning [f] is also used as-is.
@@ -493,7 +500,16 @@ type specialization_decision =
 (* maximum size of the cardinal of a closure variable's type. *)
 let max_closure_var_type_card = 10 (* FUDGE *)
 
-(* TODO: only do this if functions are non-deterministic *)
+(* TODO: if we have a "total" annotation on functions (including [unique_unsafe])
+   or Coq functions, we can avoid generating congruence axioms for those
+   functions.
+*)
+
+(* is the function deterministic?
+   this should be a safe approximation, that is, only return [true] if we
+   are {b sure} that the function is. When in doubt, return [false] *)
+let fun_is_deterministic ~self:_ (_f:ID.t): bool =
+  false (* TODO *)
 
 (* do NOT specialize if at least one closure argument
    has a type which is too large (see {!max_closure_var_type_card})
@@ -512,11 +528,17 @@ let closure_variable_has_small_ty ~self (v:ty Var.t): bool =
     | C.Infinite | C.Unknown -> false
   end
 
+(* check whether all free variables of [t]
+   satisfy {!closure_variable_has_small_ty} *)
+let arg_has_small_ty_closure_vars ~self t: bool =
+  VarSet.for_all (closure_variable_has_small_ty ~self) (U.free_vars t)
+
 (* shall we specialize the application of [f : ty] to [l], and on which
     subset of [l]? *)
 let decide_if_specialize ~self f ty l : specialization_decision =
   (* apply to type arguments *)
   let info = Env.find_exn ~env:(Trav.env self) f in
+  let is_deterministic = fun_is_deterministic ~self f in
   match Env.def info with
     | Env.Fun_def _ ->
       (* only inline defined functions, not constructors or axiomatized symbols *)
@@ -533,17 +555,15 @@ let decide_if_specialize ~self f ty l : specialization_decision =
              if can_specialize_ ~state:(Trav.state self) f i
              && not (U.is_var arg)
              && heuristic_should_specialize_arg arg ty
-             then `Specialize (i, arg) else `Keep arg)
+             (* will we have to pay specialization with evil congruence axioms? *)
+             && (is_deterministic || arg_has_small_ty_closure_vars ~self arg)
+             then `Specialize (i, arg)
+             else `Keep arg)
         |> CCList.partition_map
           (function `Specialize x -> `Left x | `Keep y -> `Right y)
         |> (fun (a,b) -> Arg.make a, b)
       in
-      let some_variable_has_big_ty =
-        List.exists
-          (fun v -> not (closure_variable_has_small_ty ~self v))
-          (Arg.vars spec_args)
-      in
-      if Arg.is_empty spec_args || some_variable_has_big_ty
+      if Arg.is_empty spec_args
       then Do_not_specialize
       else (
         (* type of specialized function. We cannot use [other_args]
@@ -563,12 +583,14 @@ let decide_if_specialize ~self f ty l : specialization_decision =
 
 let find_new_fun ~state f args =
   (* see whether the function is already specialized on those parameters *)
-  let l = try ID.Tbl.find state.new_funs f with Not_found -> [] in
-  CCList.find_map
-    (function
-      | `Same -> None
-      | `New (args',fun_) -> if Arg.equal args args' then Some fun_ else None)
-    l
+  match ID.Tbl.get state.new_funs f with
+    | None -> None
+    | Some nfs ->
+      CCList.find_map
+        (function
+          | `Same -> None
+          | `New (args',fun_) -> if Arg.equal args args' then Some fun_ else None)
+        nfs.nfs_instances
 
 let find_new_fun_exn ~state f args =
   match find_new_fun ~state f args with
@@ -577,15 +599,29 @@ let find_new_fun_exn ~state f args =
       errorf "@[<2>could not find new definition for %a on @[%a@]@]"
         ID.print f Arg.print args
 
+let add_instance ~self f i: unit =
+  let state = Trav.state self in
+  match ID.Tbl.get state.new_funs f with
+    | Some nfs ->
+      let nfs_instances = i :: nfs.nfs_instances in
+      ID.Tbl.replace state.new_funs f {nfs with nfs_instances}
+    | None ->
+      let nfs = {
+        nfs_instances=[i];
+        nfs_needs_congruence=not (fun_is_deterministic ~self f);
+      } in
+      ID.Tbl.add state.new_funs f nfs
+
 (* require [f] to be defined in the output, but without specializing
    it on any of its arguments *)
 let require_without_specializing ~self ~depth f =
   Trav.call_dep self ~depth f Arg.empty;
   let state = Trav.state self in
   (* remember that [f] is used without specialization *)
-  let l = try ID.Tbl.find state.new_funs f with Not_found -> [] in
-  if not (List.mem `Same l)
-  then ID.Tbl.add_list state.new_funs f `Same;
+  let l = try (ID.Tbl.find state.new_funs f).nfs_instances with Not_found -> [] in
+  if not (List.mem `Same l) then (
+    add_instance ~self f `Same;
+  );
   ()
 
 (* traverse [t] and try and specialize functions at every relevant
@@ -662,7 +698,7 @@ and get_new_fun ~self ~depth f ~old_ty ~new_ty args =
         nf_ty=new_ty;
       } in
       (* add [nf] to the list of specialized versions of [f] *)
-      ID.Tbl.add_list state.new_funs f (`New(args,nf));
+      add_instance ~self f (`New (args,nf));
       let dsf = {
         dsf_spec_of=f;
         dsf_ty_of=old_ty;
@@ -949,6 +985,10 @@ module InstanceGraph = struct
     in
     { id; ty_args; vertices; }
 
+  let all_vertices g =
+    Sequence.of_list g.vertices
+    |> Sequence.map fst
+
   (* nodes without parents *)
   let roots g =
     Sequence.of_list g.vertices
@@ -990,21 +1030,58 @@ let mk_congruence_axiom v1 v2 =
   let ax = U.imply_l eqns concl in
   U.close_forall ax
 
+(* add self-congruence axioms, if needed.
+   Those axioms are relevant when a non-deterministic function is
+   specialized with arguments that have closure variables.
+
+   For instance, specializing [choice (fun x. f x y)]
+   should create [choice42 y], with the axiom
+   [forall y1 y2. (fun x. f x y1)=(fun x. f x y2) => choice42 y1=choice42 y2]
+   (e.g. if [f] ignores its second argument)
+*)
+let mk_self_congruence (v:InstanceGraph.vertex): term option =
+  let module IG = InstanceGraph in
+  let arg = v.IG.v_spec_on in
+  let vars = Arg.vars arg in
+  if vars=[] then None
+  else (
+    let vars1 = List.mapi (fun i v -> Var.makef ~ty:(Var.ty v) "x_%d" i) vars in
+    let vars2 = List.mapi (fun i v -> Var.makef ~ty:(Var.ty v) "y_%d" i) vars in
+    let subst1 = Var.Subst.of_list vars1 vars in
+    let subst2 = Var.Subst.of_list vars2 vars in
+    let conds =
+      List.map
+         (fun a ->
+            U.eq
+              (U.eval_renaming ~subst:subst1 a)
+              (U.eval_renaming ~subst:subst2 a))
+         v.IG.v_args
+    and conclusion =
+      U.eq
+        (U.eval_renaming ~subst:subst1 v.IG.v_term)
+        (U.eval_renaming ~subst:subst2 v.IG.v_term)
+    in
+    U.forall_l (vars1@vars2) (U.imply_l conds conclusion)
+    |> CCOpt.return
+  )
+
 (* add the congruence axioms corresponding to instance graph [g], into [push_stmt] *)
 let add_congruence_axioms push_stmt g =
   let module IG = InstanceGraph in
   (* axioms between "roots" (i.e. instances of [g.IG.id]
      that are the most general) *)
   let roots = InstanceGraph.roots g in
-  Sequence.product roots roots
-  |> Sequence.iter
-    (fun (v1,v2) ->
-       (* only emit an axiom once for every pair of distinct vertices *)
-       if ID.compare v1.IG.v_id v2.IG.v_id < 0
-       then (
-         let ax = mk_congruence_axiom v1 v2 in
-         push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax)
-       ));
+  begin
+    Sequence.product roots roots
+    |> Sequence.iter
+      (fun (v1,v2) ->
+         (* only emit an axiom once for every pair of distinct vertices *)
+         if ID.compare v1.IG.v_id v2.IG.v_id < 0
+         then (
+           let ax = mk_congruence_axiom v1 v2 in
+           push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax)
+         ))
+  end;
   (* axioms between a specialized function and its parent (which is more
      general than itself) *)
   InstanceGraph.non_roots g
@@ -1017,11 +1094,14 @@ let add_congruence_axioms push_stmt g =
          |> U.close_forall
        in
        push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax));
+  (* self-congruence axioms *)
+  begin
+    InstanceGraph.all_vertices g
+    |> Sequence.filter_map mk_self_congruence
+    |> Sequence.iter
+      (fun ax -> push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax))
+  end;
   ()
-
-(* TODO: if we have a "total" annotation on functions (including [unique_unsafe])
-   or Coq functions, we can avoid generating congruence axioms for those
-   functions *)
 
 (** {6 Main Encoding} *)
 
@@ -1041,15 +1121,16 @@ let specialize_problem pb =
         ~after_env:(fun _ -> analyze_cg_st ~self:trav st)
         trav st);
   let res = Trav.get_statements trav in
-  (* add congruence axioms for specialized functions *)
+  (* add congruence axioms for specialized functions that require it *)
   ID.Tbl.iter
-    (fun id l ->
-       let ty = Env.find_ty_exn ~env:(Trav.env trav) id in
-       let _, ty_args, _ = U.ty_unfold ty in
-       let g = InstanceGraph.make id ty_args l in
-       Utils.debugf ~section 2 "%a" (fun k->k InstanceGraph.print g);
-       add_congruence_axioms (CCVector.push res) g;
-       ())
+    (fun id nfs ->
+       if nfs.nfs_needs_congruence then (
+         let ty = Env.find_ty_exn ~env:(Trav.env trav) id in
+         let _, ty_args, _ = U.ty_unfold ty in
+         let g = InstanceGraph.make id ty_args nfs.nfs_instances in
+         Utils.debugf ~section 2 "%a" (fun k->k InstanceGraph.print g);
+         add_congruence_axioms (CCVector.push res) g;
+       ))
     state.new_funs;
   (* output new problem *)
   let pb' =
