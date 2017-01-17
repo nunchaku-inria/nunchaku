@@ -21,9 +21,9 @@ let section = Utils.Section.make name
 exception Error of string
 
 let () = Printexc.register_printer
-  (function
-    | Error msg -> Some (Utils.err_sprintf "%s:@ %s" name msg)
-    | _ -> None)
+    (function
+      | Error msg -> Some (Utils.err_sprintf "%s:@ %s" name msg)
+      | _ -> None)
 
 let fail_ msg = raise (Error msg)
 let failf msg = Utils.exn_ksprintf ~f:fail_ msg
@@ -101,9 +101,9 @@ let rec encode_term st subst pol t = match T.repr t with
       | None -> t
       | Some id' -> U.const id'
     end
-  | TI.Bind ((`Forall | `Exists) as q, v, body)
+  | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, body)
     when ty_is_infinite_ st (Var.ty v) ->
-    begin match U.approx_infinite_quant_pol q pol with
+    begin match U.approx_infinite_quant_pol_binder q pol with
       | `Keep ->
         let subst, v = bind_var st subst v in
         U.mk_bind q v (encode_term st subst pol body)
@@ -136,7 +136,7 @@ let encode_statement map st = match Stmt.view st with
   | Stmt.Decl {Stmt.defined_attrs=attrs; _} when has_upcast_attr_ attrs ->
     [] (* remove upcast functions *)
   | _ ->
-    let tr_term subst t = encode_term map subst Pol.Pos t in
+    let tr_term subst pol t = encode_term map subst pol t in
     let tr_ty subst ty = encode_term map subst Pol.NoPol ty in
     let st' =
       Stmt.map_bind
@@ -189,10 +189,10 @@ let pipe_with ~decode ~print ~check =
         let module PPb = Problem.Print(P)(P) in
         Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name PPb.print)
     @
-    Utils.singleton_if check ()
-      ~f:(fun () ->
-        let module C = TypeCheck.Make(T) in
-        C.empty () |> C.check_problem)
+      Utils.singleton_if check ()
+        ~f:(fun () ->
+          let module C = TypeCheck.Make(T) in
+          C.empty () |> C.check_problem)
   in
   Transform.make
     ~on_encoded

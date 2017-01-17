@@ -186,7 +186,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
   Utils.debugf ~section 5 "@[<2>mono term@ `@[%a@]`@]" (fun k->k P.print t);
   match T.repr t with
     | TI.Builtin b ->
-      U.builtin (TI.Builtin.map b ~f:(mono_term ~self ~local_state))
+      U.builtin (Builtin.map b ~f:(mono_term ~self ~local_state))
     | TI.Const c ->
       (* no args, but we require [c, ()] in the output *)
       let depth = local_state.depth+1 in
@@ -203,7 +203,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
       let f, l, subst, guard = Red.Full.whnf ~subst:local_state.subst f l in
       let local_state = {local_state with subst; } in
       let t' = match T.repr f with
-        | TI.Bind (`Fun, _, _) -> assert false (* beta-reduction failed? *)
+        | TI.Bind (Binder.Fun, _, _) -> assert false (* beta-reduction failed? *)
         | TI.Builtin _ ->
           (* builtins are defined, but examine their args *)
           let f = mono_term ~self ~local_state f in
@@ -259,7 +259,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
           failf_ "@[<2>cannot monomorphize application term@ `@[%a@]`@]" print_term t
       in
       U.guard t' guard
-    | TI.Bind ((`Fun | `Forall | `Exists | `Mu) as b, v, t) ->
+    | TI.Bind ((Binder.Fun | Binder.Forall | Binder.Exists | Binder.Mu) as b, v, t) ->
       U.mk_bind b
         (mono_var ~self ~local_state v)
         (mono_term ~self ~local_state t)
@@ -283,7 +283,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
         (mono_term ~self ~local_state a)
         (mono_term ~self ~local_state b)
     | TI.TyMeta _ -> assert false
-    | TI.Bind (`TyForall,_,_) ->
+    | TI.Bind (Binder.TyForall,_,_) ->
       failf_ "@[<2>cannot monomorphize quantified type@ @[%a@]@]" print_ty t
 
 and mono_var ~self ~local_state v : term Var.t =
@@ -469,72 +469,72 @@ let dispatch = {
 
   (* monomorphize the given copy type *)
   do_copy = Some (fun self ~depth ~loc:_ c tup ->
-    assert (ArgTuple.length tup = List.length c.Stmt.copy_vars);
-    let st = Trav.state self in
-    Utils.debugf ~section 3
-      "@[<2>monomorphize copy type@ `@[%a@]`@ on (%a)@ at depth %d@]"
-      (fun k->k PStmt.print_copy c ArgTuple.print tup depth);
-    (* ensure we do not encode this several times, from type/abstract/concrete *)
-    Trav.mark_processed self c.Stmt.copy_id tup;
-    Trav.mark_processed self c.Stmt.copy_abstract tup;
-    Trav.mark_processed self c.Stmt.copy_concrete tup;
-    (* mangle ID, functions and definition, possibly monomorphizing
-       other types in the process *)
-    let subst =
-      Subst.add_list ~subst:Subst.empty
-        c.Stmt.copy_vars (ArgTuple.m_args tup)
-    in
-    let id', _ = mangle_ ~state:st c.Stmt.copy_id (ArgTuple.m_args tup) in
-    let local_state = mk_local_state ~subst depth in
-    let of_' = mono_type ~self ~local_state c.Stmt.copy_of in
-    let to_' = mono_type ~self ~local_state c.Stmt.copy_to in
-    let wrt = match c.Stmt.copy_wrt with
-      | Stmt.Wrt_nothing -> Stmt.Wrt_nothing
-      | Stmt.Wrt_subset p -> Stmt.Wrt_subset (mono_term ~self ~local_state p)
-      | Stmt.Wrt_quotient (tty, r) -> Stmt.Wrt_quotient (tty, mono_term ~self ~local_state r)
-    in
-    let abstract', _ =
-      mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
-    let concrete', _ =
-      mangle_ ~state:st c.Stmt.copy_concrete (ArgTuple.m_args tup) in
-    let ty_abstract' = U.ty_arrow of_' to_' in
-    let ty_concrete' = U.ty_arrow to_' of_' in
-    let ty' = U.ty_type in
-    (* create new copy type *)
-    let c' =
-      Stmt.mk_copy
-        ~of_:of_' ~to_:to_' ~ty:ty' ~vars:[]
-        ~wrt
-        ~abstract:(abstract', ty_abstract')
-        ~concrete:(concrete', ty_concrete')
-        id'
-    in
-    c'
-  );
+      assert (ArgTuple.length tup = List.length c.Stmt.copy_vars);
+      let st = Trav.state self in
+      Utils.debugf ~section 3
+        "@[<2>monomorphize copy type@ `@[%a@]`@ on (%a)@ at depth %d@]"
+        (fun k->k PStmt.print_copy c ArgTuple.print tup depth);
+      (* ensure we do not encode this several times, from type/abstract/concrete *)
+      Trav.mark_processed self c.Stmt.copy_id tup;
+      Trav.mark_processed self c.Stmt.copy_abstract tup;
+      Trav.mark_processed self c.Stmt.copy_concrete tup;
+      (* mangle ID, functions and definition, possibly monomorphizing
+         other types in the process *)
+      let subst =
+        Subst.add_list ~subst:Subst.empty
+          c.Stmt.copy_vars (ArgTuple.m_args tup)
+      in
+      let id', _ = mangle_ ~state:st c.Stmt.copy_id (ArgTuple.m_args tup) in
+      let local_state = mk_local_state ~subst depth in
+      let of_' = mono_type ~self ~local_state c.Stmt.copy_of in
+      let to_' = mono_type ~self ~local_state c.Stmt.copy_to in
+      let wrt = match c.Stmt.copy_wrt with
+        | Stmt.Wrt_nothing -> Stmt.Wrt_nothing
+        | Stmt.Wrt_subset p -> Stmt.Wrt_subset (mono_term ~self ~local_state p)
+        | Stmt.Wrt_quotient (tty, r) -> Stmt.Wrt_quotient (tty, mono_term ~self ~local_state r)
+      in
+      let abstract', _ =
+        mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
+      let concrete', _ =
+        mangle_ ~state:st c.Stmt.copy_concrete (ArgTuple.m_args tup) in
+      let ty_abstract' = U.ty_arrow of_' to_' in
+      let ty_concrete' = U.ty_arrow to_' of_' in
+      let ty' = U.ty_type in
+      (* create new copy type *)
+      let c' =
+        Stmt.mk_copy
+          ~of_:of_' ~to_:to_' ~ty:ty' ~vars:[]
+          ~wrt
+          ~abstract:(abstract', ty_abstract')
+          ~concrete:(concrete', ty_concrete')
+          id'
+      in
+      c'
+    );
 
   (* declare a symbol that is axiomatized *)
   do_ty_def = Some (fun self ?loc:_ d tup ->
-    let id = Stmt.id_of_defined d in
-    Utils.debugf ~section 5 "declare type for %a on %a"
-      (fun k->k ID.print id ArgTuple.print tup);
-    (* declare specialized type *)
-    let new_id = match ArgTuple.mangled tup with
-      | None -> id
-      | Some x -> x
-    in
-    let ty, subst = ArgTuple.app_poly_ty (Stmt.ty_of_defined d) tup in
-    let local_state = mk_local_state ~subst 0 in
-    let new_ty = mono_type ~self ~local_state ty in
-    Stmt.mk_defined ~attrs:(Stmt.attrs_of_defined d) new_id new_ty
-  );
+      let id = Stmt.id_of_defined d in
+      Utils.debugf ~section 5 "declare type for %a on %a"
+        (fun k->k ID.print id ArgTuple.print tup);
+      (* declare specialized type *)
+      let new_id = match ArgTuple.mangled tup with
+        | None -> id
+        | Some x -> x
+      in
+      let ty, subst = ArgTuple.app_poly_ty (Stmt.ty_of_defined d) tup in
+      let local_state = mk_local_state ~subst 0 in
+      let new_ty = mono_type ~self ~local_state ty in
+      Stmt.mk_defined ~attrs:(Stmt.attrs_of_defined d) new_id new_ty
+    );
 }
 
 (* TODO: gather by ID first *)
 let print_processed_ out trav =
   Trav.processed trav
   |> Format.fprintf out "@[<v>%a@]"
-      (CCFormat.seq ~start:"" ~stop:"" ~sep:""
-        (fun out (id,tup) ->
+    (CCFormat.seq ~start:"" ~stop:"" ~sep:""
+       (fun out (id,tup) ->
           Format.fprintf out "@[<h>%a (%a)@]" ID.print id ArgTuple.print tup))
 
 let mono_statement t st =
@@ -549,7 +549,7 @@ let mono_statement t st =
 let monomorphize ?(depth_limit=256) ?(always_mangle=false) pb =
   let state = St.create ~always_mangle () in
   (* create the state used for monomorphization. Toplevel function
-    for specializing (id,tup) is [mono_statements_for_id] *)
+     for specializing (id,tup) is [mono_statements_for_id] *)
   let traverse = Trav.create
       ~max_depth:depth_limit
       ~env:(Env.create ())
@@ -578,24 +578,24 @@ let unmangle_term ~(state:unmangle_state) (t:term):term =
   let rec aux t = match T.repr t with
     | TI.Var v -> U.var (aux_var v)
     | TI.Const id ->
-        begin try
+      begin try
           let id', args = ID.Tbl.find state id in
           U.app (U.const id') (List.map aux args)
         with Not_found -> U.const id
-        end
+      end
     | TI.App (f,l) -> U.app (aux f) (List.map aux l)
-    | TI.Builtin b -> U.builtin (TI.Builtin.map b ~f:aux)
-    | TI.Bind ((`Forall | `Exists | `Fun | `Mu) as b,v,t) ->
-        U.mk_bind b (aux_var v) (aux t)
+    | TI.Builtin b -> U.builtin (Builtin.map b ~f:aux)
+    | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun | Binder.Mu) as b,v,t) ->
+      U.mk_bind b (aux_var v) (aux t)
     | TI.Let (v,t,u) -> U.let_ (aux_var v) (aux t) (aux u)
     | TI.Match (t,l,def) ->
-        let t = aux t in
-        let def = TI.map_default_case aux def in
-        let l = ID.Map.map (fun (vars,rhs) -> List.map aux_var vars, aux rhs) l in
-        U.match_with t l ~def
+      let t = aux t in
+      let def = TI.map_default_case aux def in
+      let l = ID.Map.map (fun (vars,rhs) -> List.map aux_var vars, aux rhs) l in
+      U.match_with t l ~def
     | TI.TyBuiltin b -> U.ty_builtin b
     | TI.TyArrow (a,b) -> U.ty_arrow (aux a) (aux b)
-    | TI.Bind (`TyForall, _,_) | TI.TyMeta _ -> assert false
+    | TI.Bind (Binder.TyForall, _,_) | TI.TyMeta _ -> assert false
   and aux_var = Var.update_ty ~f:aux in
   aux t
 
@@ -610,11 +610,11 @@ let pipe_with ~decode ~always_mangle ~print ~check =
         let module PPb = Problem.Print(P)(P) in
         Format.printf "@[<v2>@{<Yellow>after mono@}: %a@]@." PPb.print)
     @
-    Utils.singleton_if check ()
-      ~f:(fun () ->
-        let module C = TypeCheck.Make(T) in
-        let t = C.empty ~check_non_empty_tys:true () in
-        C.check_problem t)
+      Utils.singleton_if check ()
+        ~f:(fun () ->
+          let module C = TypeCheck.Make(T) in
+          let t = C.empty ~check_non_empty_tys:true () in
+          C.check_problem t)
   in
   Transform.make
     ~on_encoded

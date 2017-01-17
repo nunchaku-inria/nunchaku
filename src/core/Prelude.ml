@@ -38,6 +38,7 @@ let sexp_to_term : Sexp_lib.t -> A.term =
     | `List [`Atom "pi"; `Atom v; t] -> A.ty_forall ~loc v (p t)
     | `List [`Atom "fun"; `Atom v; t] -> A.fun_ ~loc (v,None) (p t)
     | `List [`Atom "fun"; `Atom v; ty; t] -> A.fun_ ~loc (v,Some (p ty)) (p t)
+    | `List [`Atom "?__"; t] -> A.undefined ~loc (p t)
     | `Atom "prop" -> A.ty_prop
     | `Atom "type" -> A.ty_type
     | `Atom "true" -> A.true_
@@ -50,8 +51,8 @@ let sexp_to_term : Sexp_lib.t -> A.term =
 
 let p_term s =
   match Sexp_lib.parse_string s with
-  | `Ok s -> sexp_to_term s
-  | `Error msg ->
+    | `Ok s -> sexp_to_term s
+    | `Error msg ->
       parse_errorf_ "could not parse `%s` as an S-expression: %s" s msg
 
 
@@ -67,11 +68,11 @@ let mk_stmt d =
 
 let decl_choice =
   let ax = p_term
-    "(forall p
+      "(forall p
        (=
         (choice p)
         (asserting
-          (choice p)
+          (?__ (choice p))
           (or (= p (fun x false))
               (p (choice p)))))))"
   in
@@ -79,11 +80,11 @@ let decl_choice =
 
 let decl_unique =
   let ax = p_term
-    "(forall p
+      "(forall p
        (=
         (unique p)
         (asserting
-         (unique p)
+         (?__ (unique p))
          (or
            (= p (fun x (= x (unique p))))
            (= p (fun x false))
@@ -93,11 +94,11 @@ let decl_unique =
 
 let decl_unique_unsafe =
   let ax = p_term
-    "(forall p
+      "(forall p
        (=
         (unique_unsafe p)
         (asserting
-         (unique_unsafe p)
+         (?__ (unique_unsafe p))
          (p (unique_unsafe p)))))"
   in
   A.Rec [ ID.name unique_unsafe, ty_choice_, [ax] ] |> mk_stmt

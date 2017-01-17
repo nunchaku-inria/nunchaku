@@ -74,8 +74,7 @@ let declare_ state : (_,_) Stmt.t list =
   in
   [ decl_ty; decl_true; decl_false; distinct_ax; exhaustive_ax ]
 
-let find_ty state (t:term) : ty =
-  U.ty_exn ~sigma:(Env.find_ty ~env:state.env) t
+let find_ty state (t:term) : ty = U.ty_exn ~env:state.env t
 
 (* translate a type
    @param top true if toplevel; only toplevel props are
@@ -115,7 +114,7 @@ let rename_var state subst v =
    - if new type is prop and we expect prop_, use `ite`
      if new type is prop_ and we expect prop, use `= true_`
      (careful with builtins, in particular boolean ones)
-  *)
+*)
 
 (* does [t : prop]? *)
 let has_ty_prop_ state t : bool =
@@ -161,7 +160,7 @@ let transform_term state subst t =
     | _ ->
       U.map subst t
         ~bind:(rename_var state) ~f:aux
-(* we expect [t] to have type [prop_] after translation *)
+  (* we expect [t] to have type [prop_] after translation *)
   and aux_expect_prop' subst t = match T.repr t with
     | TI.Var v ->
       assert state.needed;
@@ -176,7 +175,7 @@ let transform_term state subst t =
       wrap_prop t'
     | TI.Builtin (`Guard (t,g)) ->
       let t' = aux_expect_prop' subst t in
-      let g' = TI.Builtin.map_guard (aux subst) g in
+      let g' = Builtin.map_guard (aux subst) g in
       U.guard t' g'
     | TI.Builtin (`Ite _ | `DataTest _ | `DataSelect _
                  | `Undefined_atom _ | `Undefined_self _ | `Unparsable _) ->
@@ -200,7 +199,7 @@ let transform_statement state st : (_,_) Stmt.t =
       (* NOTE: maybe not robust if there are [copy] types *)
       Stmt.map_bind Var.Subst.empty st
         ~bind:(rename_var state)
-        ~term:(transform_term state)
+        ~term:(fun subst _pol -> transform_term state subst)
         ~ty:(fun _ -> transform_ty state ~top:true)
 
 let transform_problem pb =
@@ -296,10 +295,10 @@ let pipe_with ~decode ~print ~check =
       let module PPb = Problem.Print(P)(P) in
       Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name PPb.print)
     @
-    Utils.singleton_if check ()
-      ~f:(fun () ->
-         let module C = TypeCheck.Make(T) in
-         C.empty () |> C.check_problem)
+      Utils.singleton_if check ()
+        ~f:(fun () ->
+          let module C = TypeCheck.Make(T) in
+          C.empty () |> C.check_problem)
   in
   Transform.make
     ~name

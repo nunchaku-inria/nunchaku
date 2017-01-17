@@ -3,7 +3,7 @@
 (** {1 Model} *)
 
 type 'a printer = Format.formatter -> 'a -> unit
-type 'a prec_printer = TermInner.prec -> 'a printer
+type 'a prec_printer = Precedence.t -> 'a printer
 type 'a to_sexp = 'a -> Sexp_lib.t
 
 (** {2 Decision Trees}

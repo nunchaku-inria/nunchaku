@@ -57,57 +57,57 @@ end = struct
     | Exit_ of X.t * cell
 
   let explore
-  : X.t Sequence.t -> X.t list Sequence.t
-  = fun seq yield ->
-    (* stack of nodes being explored, for the DFS *)
-    let to_explore : action Stack.t = Stack.create() in
-    let tbl = Tbl.create 128 in
-    (* stack for Tarjan's algorithm itself *)
-    let stack = Stack.create () in
-    (* unique ID *)
-    let count = ref 0 in
-    (* exploration *)
-    Sequence.iter
-      (fun v ->
-         Stack.push (Enter v) to_explore;
-         while not (Stack.is_empty to_explore) do
-           match Stack.pop to_explore with
-             | Enter v ->
-               if not (Tbl.mem tbl v) then (
-                 (* remember unique ID for [v] *)
-                 let n = !count in
-                 incr count;
-                 let cell = mk_cell v n in
-                 cell.on_stack <- true;
-                 Tbl.add tbl v cell;
-                 Stack.push cell stack;
-                 Stack.push (Exit_ (v, cell)) to_explore;
-                 (* explore children *)
-                 Sequence.iter
-                   (fun e -> Stack.push (Enter e) to_explore)
-                   (X.deps v)
-               )
-             | Exit_ (v, cell) ->
-               (* update [min_id] *)
-               assert cell.on_stack;
-               Sequence.iter
-                 (fun e ->
-                    (* must not fail, [dest] already explored *)
-                    let dest_cell = Tbl.find tbl e in
-                    (* same SCC? yes if [dest] points to [cell.v] *)
-                    if dest_cell.on_stack
-                    then cell.min_id <- min cell.min_id dest_cell.min_id
+    : X.t Sequence.t -> X.t list Sequence.t
+    = fun seq yield ->
+      (* stack of nodes being explored, for the DFS *)
+      let to_explore : action Stack.t = Stack.create() in
+      let tbl = Tbl.create 128 in
+      (* stack for Tarjan's algorithm itself *)
+      let stack = Stack.create () in
+      (* unique ID *)
+      let count = ref 0 in
+      (* exploration *)
+      Sequence.iter
+        (fun v ->
+           Stack.push (Enter v) to_explore;
+           while not (Stack.is_empty to_explore) do
+             match Stack.pop to_explore with
+               | Enter v ->
+                 if not (Tbl.mem tbl v) then (
+                   (* remember unique ID for [v] *)
+                   let n = !count in
+                   incr count;
+                   let cell = mk_cell v n in
+                   cell.on_stack <- true;
+                   Tbl.add tbl v cell;
+                   Stack.push cell stack;
+                   Stack.push (Exit_ (v, cell)) to_explore;
+                   (* explore children *)
+                   Sequence.iter
+                     (fun e -> Stack.push (Enter e) to_explore)
+                     (X.deps v)
                  )
-                 (X.deps v);
-               (* pop from stack if SCC found *)
-               if cell.id = cell.min_id then (
-                 let scc = pop_down_to ~id:cell.id [] stack in
-                 yield scc
-               )
-         done
-      ) seq;
-    assert (Stack.is_empty stack);
-    ()
+               | Exit_ (v, cell) ->
+                 (* update [min_id] *)
+                 assert cell.on_stack;
+                 Sequence.iter
+                   (fun e ->
+                      (* must not fail, [dest] already explored *)
+                      let dest_cell = Tbl.find tbl e in
+                      (* same SCC? yes if [dest] points to [cell.v] *)
+                      if dest_cell.on_stack
+                      then cell.min_id <- min cell.min_id dest_cell.min_id
+                   )
+                   (X.deps v);
+                 (* pop from stack if SCC found *)
+                 if cell.id = cell.min_id then (
+                   let scc = pop_down_to ~id:cell.id [] stack in
+                   yield scc
+                 )
+           done
+        ) seq;
+      assert (Stack.is_empty stack);
+      ()
 end
 
 module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
@@ -121,10 +121,10 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
   let section = Arg.section
 
   module IDArgTbl = CCHashtbl.Make(struct
-    type t = ID.t * Arg.t
-    let equal (i1,a1)(i2,a2) = ID.equal i1 i2 && Arg.equal a1 a2
-    let hash (i,a) = Hashtbl.hash (ID.hash i, Arg.hash a)
-  end)
+      type t = ID.t * Arg.t
+      let equal (i1,a1)(i2,a2) = ID.equal i1 i2 && Arg.equal a1 a2
+      let hash (i,a) = Hashtbl.hash (ID.hash i, Arg.hash a)
+    end)
 
   type partial_statement_view =
     | PS_rec of (term, ty) Stmt.rec_def
@@ -138,12 +138,12 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
 
   type partial_statement = {
     ps_view: partial_statement_view;
-      (* content *)
+    (* content *)
     ps_id: int;
-      (* unique identifier for this partial statement *)
+    (* unique identifier for this partial statement *)
     ps_info: Stmt.info;
-      (* partial statements that are mutually dependent with this one,
-         for dependency graph *)
+    (* partial statements that are mutually dependent with this one,
+       for dependency graph *)
   }
 
   let ps_equal t1 t2 = t1.ps_id = t2.ps_id
@@ -168,14 +168,14 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
   let id_defined_by_ps ps : ID.t Sequence.t =
     let yield_defined d = Stmt.id_of_defined d |> Sequence.return in
     match ps.ps_view with
-    | PS_rec d -> Stmt.defined_of_rec d |> yield_defined
-    | PS_pred (_,_,d) -> Stmt.defined_of_pred d |> yield_defined
-    | PS_spec l -> Stmt.defined_of_spec l |> Sequence.map Stmt.id_of_defined
-    | PS_decl {Stmt.defined_head=id; _} -> Sequence.return id
-    | PS_copy c -> Stmt.ids_of_copy c
-    | PS_data (_,l) -> Stmt.defined_of_data l |> Sequence.map Stmt.id_of_defined
-    | PS_goal _
-    | PS_axiom _ -> Sequence.empty
+      | PS_rec d -> Stmt.defined_of_rec d |> yield_defined
+      | PS_pred (_,_,d) -> Stmt.defined_of_pred d |> yield_defined
+      | PS_spec l -> Stmt.defined_of_spec l |> Sequence.map Stmt.id_of_defined
+      | PS_decl {Stmt.defined_head=id; _} -> Sequence.return id
+      | PS_copy c -> Stmt.ids_of_copy c
+      | PS_data (_,l) -> Stmt.defined_of_data l |> Sequence.map Stmt.id_of_defined
+      | PS_goal _
+      | PS_axiom _ -> Sequence.empty
 
   (* IDs used by the definition of this partial statement *)
   let deps_of_ps (ps:partial_statement) : ID.t Sequence.t =
@@ -263,23 +263,23 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
 
   type t = {
     max_depth: int;
-      (* max recursion depth *)
+    (* max recursion depth *)
     mutable env: (term, term) Env.t;
-      (* input definitions *)
+    (* input definitions *)
     state: State.t;
-      (* user-defined state *)
+    (* user-defined state *)
     dispatch: dispatch;
-      (* functions to process definitions and terms *)
+    (* functions to process definitions and terms *)
     graph: unit IDArgTbl.t;
-      (* set of (id*arg) already processed *)
+    (* set of (id*arg) already processed *)
     by_id: partial_statement ID.Tbl.t;
-      (* new ID -> its cell in the graph *)
+    (* new ID -> its cell in the graph *)
     new_stmts: unit PSTbl.t;
-      (* set of new (partial) statements *)
+    (* set of new (partial) statements *)
     mutable depth_reached: bool;
-      (* max depth reached? *)
+    (* max depth reached? *)
     mutable res: (term, ty) Statement.t CCVector.vector option;
-      (* result, if any *)
+    (* result, if any *)
   }
 
   and dispatch = {
@@ -322,7 +322,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
        term Statement.tydef ->
        Arg.t ->
        term Statement.tydef)
-      option;
+        option;
 
     do_ty_def:
       (t ->
@@ -330,7 +330,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
        ty Statement.defined ->
        Arg.t ->
        ty Statement.defined)
-      option;
+        option;
   }
 
   let env t = t.env
@@ -365,8 +365,8 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
   let add_graph_ t (ps:partial_statement) : unit =
     PSTbl.replace t.new_stmts ps ();
     id_defined_by_ps ps
-      |> Sequence.iter
-        (fun id -> ID.Tbl.replace t.by_id id ps);
+    |> Sequence.iter
+      (fun id -> ID.Tbl.replace t.by_id id ps);
     ()
 
   let do_var_ t ~depth v : ty Var.t =
@@ -414,8 +414,8 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     after_env t.env;
     let info = Stmt.info st in
     (* most basic processing: just traverse the terms to update dependencies *)
-    let tr_term () = t.dispatch.do_term t ~depth:0 in
-    let tr_type = tr_term in
+    let tr_term () _pol term = t.dispatch.do_term t term ~depth:0 in
+    let tr_type () = tr_term () Polarity.NoPol in
     let bind_var () v = (), do_var_ t ~depth:0 v in
     begin match Stmt.view st with
       | Stmt.Decl d ->
@@ -453,7 +453,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
       | Stmt.Copy c ->
         begin match t.dispatch.do_copy with
           | None ->
-            let c = Stmt.map_copy c ~term:(tr_term ()) ~ty:(tr_type ()) in
+            let c = Stmt.map_copy_bind () c ~bind:bind_var ~term:tr_term ~ty:tr_type in
             let ps = mk_ps_ ~info (PS_copy c) in
             add_graph_ t ps
           | Some _ -> ()

@@ -1,10 +1,9 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-module TI = TermInner
 module Subst = Var.Subst
 
 type 'a printer = Format.formatter -> 'a -> unit
-type 'a prec_printer = TermInner.prec -> 'a printer
+type 'a prec_printer = Precedence.t -> 'a printer
 type 'a to_sexp = 'a -> Sexp_lib.t
 
 let fpf = Format.fprintf
@@ -72,14 +71,14 @@ module DT = struct
       cases var ~tests ~default
 
   let rec print pt pty out t = match t with
-    | Yield t -> pt TI.P_top out t
+    | Yield t -> pt Precedence.Top out t
     | Cases {tests=[]; default=None; _} -> assert false
     | Cases {tests=[]; var; default=Some d} ->
       fpf out "@[<hv1>cases (@[%a:%a@])@ {default: %a@,}@]"
         Var.print_full var pty (Var.ty var) (print pt pty) d
     | Cases cases ->
       let pp_test out (lhs,rhs) =
-        fpf out "@[<2>@[%a@] =>@ %a@]" (pt TI.P_arrow) lhs (print pt pty) rhs
+        fpf out "@[<2>@[%a@] =>@ %a@]" (pt Precedence.Arrow) lhs (print pt pty) rhs
       and pp_default out = function
         | None -> ()
         | Some d -> fpf out ";@ default: %a" (print pt pty) d
@@ -288,16 +287,16 @@ module DT = struct
       | None, [] -> assert false
 
   let print_flat_test pt out {ft_var=v; ft_term=t} =
-    fpf out "@[%a = %a@]" Var.print_full v (pt TI.P_eq) t
+    fpf out "@[%a = %a@]" Var.print_full v (pt Precedence.Eq) t
 
   let print_flat pt out fdt =
     let pplist ~sep pp = CCFormat.list ~start:"" ~stop:"" ~sep pp in
     let pp_case out (tests,rhs) =
       fpf out "@[<2>(@[%a@]) =>@ %a@]"
-        (pplist ~sep:" && " (print_flat_test pt)) tests (pt TI.P_arrow) rhs
+        (pplist ~sep:" && " (print_flat_test pt)) tests (pt Precedence.Arrow) rhs
     and pp_default out = function
       | None -> ()
-      | Some d -> fpf out ",@ default=%a" (pt TI.P_app) d
+      | Some d -> fpf out ",@ default=%a" (pt Precedence.App) d
     in
     let pp_cases = pplist ~sep:"" pp_case in
     fpf out "{@[<hv1>vars=(@[%a@]),@ tests=[@[<v>%a@]]%a@,@]}"
@@ -486,7 +485,7 @@ module DT_util = struct
     (* check that [vars] subset of current set of vars *)
     let cur_vars = DT.vars dt in
     if not (List.for_all (fun x->CCList.Set.mem ~eq:Var.equal x cur_vars) vars)
-      then invalid_arg "DT_util.remove_vars";
+    then invalid_arg "DT_util.remove_vars";
     aux Subst.empty vars dt
 
   let remove_first_var dt = match DT.vars dt with
@@ -571,17 +570,17 @@ let finite_types m = m.finite_types |> Sequence.of_list
 
 let map ~term:fterm ~ty:fty m = {
   m with
-  values=CCList.map
-    (fun (t,dt,k) ->
-      fterm t, DT.map ~term:fterm ~ty:fty dt, k)
-    m.values;
-  finite_types=List.map (fun (ty,l) -> fty ty, l) m.finite_types;
+    values=CCList.map
+        (fun (t,dt,k) ->
+           fterm t, DT.map ~term:fterm ~ty:fty dt, k)
+        m.values;
+    finite_types=List.map (fun (ty,l) -> fty ty, l) m.finite_types;
 }
 
 let filter_map ~values ~finite_types m = {
   m with
-  values = CCList.filter_map values m.values;
-  finite_types = CCList.filter_map finite_types m.finite_types;
+    values = CCList.filter_map values m.values;
+    finite_types = CCList.filter_map finite_types m.finite_types;
 }
 
 let const_true_ _ = true
@@ -616,7 +615,7 @@ let print pt pty out m =
       pty ty (pplist ~sep:", " ID.print) dom
   and pp_value out (t,dt,_) =
     fpf out "@[<2>val @[%a@]@ :=@ %a@]."
-      (pt TI.P_top) t
+      (pt Precedence.Top) t
       (DT.print pt pty) dt
   in
   (* only print non-empty lists *)
@@ -641,7 +640,7 @@ let to_sexp ft fty m : Sexp_lib.t =
   in
   lst
     ( List.map ty_to_sexp m.finite_types
-    @ List.map value_to_sexp m.values)
+      @ List.map value_to_sexp m.values)
 
 module Default = struct
   module T = TermInner.Default
@@ -673,7 +672,7 @@ module Default = struct
         P.print ty (pplist ~sep:", " ID.print) dom
     | SA_val (t,u) ->
       fpf out "@[<2>val @[%a@]@ :=@ %a@]."
-        P.print t (P.print' TI.P_arrow) u
+        P.print t (P.print' Precedence.Arrow) u
 
   let pp_simple out = fpf out "@[<v>%a@]" (pplist ~sep:"" pp_simple_atom)
 

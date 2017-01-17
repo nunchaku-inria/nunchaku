@@ -25,7 +25,7 @@ module Make(T : TermInner.S) : sig
     t ->
     (T.t, T.t) Problem.t ->
     unit
-  (** Check invariants on all the problem's statements
-      @param check_non_empty_tys if true, also check that no statement
-       defines an empty type. default false. *)
+    (** Check invariants on all the problem's statements
+        @param check_non_empty_tys if true, also check that no statement
+         defines an empty type. default false. *)
 end

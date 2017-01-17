@@ -28,10 +28,9 @@ Library nunchaku_core
                     Env, Statement, FO_tptp, FO_rel, Cardinality,
                     Scheduling, Polarity, Traversal, ProblemMetadata,
                     AnalyzeType, Prelude, TypeCheck, Lazy_list,
-                    Sexp_lib, Sexp_lex,
+                    Sexp_lib, Sexp_lex, Precedence, Binder, Builtin,
                     terms/TermInner,
                     terms/TermTyped,
-                    terms/TermMono,
                     terms/Pattern,
                     types/TypePoly,
                     types/TypeMono
@@ -85,6 +84,8 @@ Library nunchaku_transformations
                     Elim_prop_args,
                     Elim_ite,
                     Elim_infinite,
+                    Trans_ho_fo,
+                    Trans_fo_tptp,
                     FoToRelational
   Install:          true
   FindlibName:      transformations

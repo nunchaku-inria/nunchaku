@@ -1,6 +1,5 @@
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-module TI = TermInner
 module Stmt = Statement
 module Loc = Location
 
@@ -11,44 +10,44 @@ type 'a printer = Format.formatter -> 'a -> unit
 type (+'t, +'ty) def =
   | Fun_def of
       ('t, 'ty) Statement.rec_defs *
-      ('t, 'ty) Statement.rec_def *
-      loc option
-      (** ID is a defined fun/predicate. *)
+        ('t, 'ty) Statement.rec_def *
+        loc option
+  (** ID is a defined fun/predicate. *)
 
   | Fun_spec of
       ('t, 'ty) Statement.spec_defs * loc option
 
   | Data of
       [`Codata | `Data] *
-      'ty Statement.mutual_types *
-      'ty Statement.tydef
-      (** ID is a (co)data *)
+        'ty Statement.mutual_types *
+        'ty Statement.tydef
+  (** ID is a (co)data *)
 
   | Cstor of
       [`Codata | `Data] *
-      'ty Statement.mutual_types *
-      'ty Statement.tydef *
-      'ty Statement.ty_constructor
-      (** ID is a constructor (of the given type) *)
+        'ty Statement.mutual_types *
+        'ty Statement.tydef *
+        'ty Statement.ty_constructor
+  (** ID is a constructor (of the given type) *)
 
   | Pred of
       [`Wf | `Not_wf] *
-      [`Pred | `Copred] *
-      ('t, 'ty) Statement.pred_def *
-      ('t, 'ty) Statement.pred_def list *
-      loc option
+        [`Pred | `Copred] *
+        ('t, 'ty) Statement.pred_def *
+        ('t, 'ty) Statement.pred_def list *
+        loc option
 
   | Copy_ty of ('t, 'ty) Statement.copy
-    (** ID is the copy type *)
+  (** ID is the copy type *)
 
   | Copy_abstract of ('t, 'ty) Statement.copy
-    (** ID is the abstraction function *)
+  (** ID is the abstraction function *)
 
   | Copy_concrete of ('t, 'ty) Statement.copy
-    (** ID is the concretization function *)
+  (** ID is the concretization function *)
 
   | NoDef
-    (** Undefined symbol *)
+  (** Undefined symbol *)
 
 (** All information on a given symbol *)
 type (+'t, +'ty) info = {
@@ -68,17 +67,17 @@ exception UndefinedID of ID.t
 
 let pp_invalid_def_ out = function
   | InvalidDef (id, msg) ->
-      Format.fprintf out "@[<2>invalid definition for `%a`:@ %s@]" ID.print id msg
+    Format.fprintf out "@[<2>invalid definition for `%a`:@ %s@]" ID.print id msg
   | _ -> assert false
 
 let () = Printexc.register_printer
-  (function
-    | InvalidDef _ as e ->
+    (function
+      | InvalidDef _ as e ->
         Some (Utils.err_sprintf "env: %a" pp_invalid_def_ e)
-    | UndefinedID id ->
+      | UndefinedID id ->
         Some (Utils.err_sprintf "env: undefined ID `%a`" ID.print id)
-    | _ -> None
-  )
+      | _ -> None
+    )
 
 let errorf_ id msg =
   Utils.exn_ksprintf msg ~f:(fun msg -> raise (InvalidDef(id,msg)))
@@ -120,26 +119,26 @@ let declare_defined ?loc ~env:t d =
 let rec_funs ?loc ~env:t defs =
   List.fold_left
     (fun t def ->
-      let defined = def.Stmt.rec_defined in
-      let id = defined.Stmt.defined_head in
-      if ID.PerTbl.mem t.infos id
-        then errorf_ id "already declared or defined";
-      let info = {
-        loc;
-        ty=def.Stmt.rec_defined.Stmt.defined_ty;
-        decl_attrs=defined.Stmt.defined_attrs;
-        def=Fun_def (defs, def, loc);
-      } in
-      {infos=ID.PerTbl.replace t.infos id info}
+       let defined = def.Stmt.rec_defined in
+       let id = defined.Stmt.defined_head in
+       if ID.PerTbl.mem t.infos id
+       then errorf_ id "already declared or defined";
+       let info = {
+         loc;
+         ty=def.Stmt.rec_defined.Stmt.defined_ty;
+         decl_attrs=defined.Stmt.defined_attrs;
+         def=Fun_def (defs, def, loc);
+       } in
+       {infos=ID.PerTbl.replace t.infos id info}
     ) t defs
 
 let declare_rec_funs ?loc ~env defs =
   List.fold_left
     (fun env def ->
-      let d = def.Stmt.rec_defined in
-      let id = d.Stmt.defined_head in
-      let attrs = d.Stmt.defined_attrs in
-      declare ~attrs ?loc ~env id d.Stmt.defined_ty)
+       let d = def.Stmt.rec_defined in
+       let id = d.Stmt.defined_head in
+       let attrs = d.Stmt.defined_attrs in
+       declare ~attrs ?loc ~env id d.Stmt.defined_ty)
     env defs
 
 let find_exn ~env:t id =
@@ -153,45 +152,45 @@ let find ~env:t id =
 let spec_funs ?loc ~env:t spec =
   List.fold_left
     (fun t defined ->
-      let id = defined.Stmt.defined_head in
-      if ID.PerTbl.mem t.infos id
-        then errorf_ id "already declared or defined";
-      let info = {
-        loc;
-        ty=defined.Stmt.defined_ty;
-        decl_attrs=defined.Stmt.defined_attrs;
-        def=Fun_spec(spec, loc);
-      } in
-      {infos=ID.PerTbl.replace t.infos id info; }
+       let id = defined.Stmt.defined_head in
+       if ID.PerTbl.mem t.infos id
+       then errorf_ id "already declared or defined";
+       let info = {
+         loc;
+         ty=defined.Stmt.defined_ty;
+         decl_attrs=defined.Stmt.defined_attrs;
+         def=Fun_spec(spec, loc);
+       } in
+       {infos=ID.PerTbl.replace t.infos id info; }
     )
     t spec.Stmt.spec_defined
 
 let def_data ?loc ~env:t ~kind tys =
   List.fold_left
     (fun t tydef ->
-      (* define type *)
-      let id = tydef.Stmt.ty_id in
-      check_not_defined_ t ~id ~fail_msg:"is (co)data, but already defined";
-      let info = {
-        loc;
-        ty=tydef.Stmt.ty_type;
-        decl_attrs=[];
-        def=Data (kind, tys, tydef);
-      } in
-      let t = {infos=ID.PerTbl.replace t.infos id info} in
-      (* define constructors *)
-      ID.Map.fold
-        (fun _ cstor t ->
-          let id = cstor.Stmt.cstor_name in
-          check_not_defined_ t ~id ~fail_msg:"is constructor, but already defined";
-          let info = {
-            loc;
-            ty=cstor.Stmt.cstor_type;
-            decl_attrs=[];
-            def=Cstor (kind,tys,tydef, cstor);
-          } in
-          {infos=ID.PerTbl.replace t.infos id info}
-        ) tydef.Stmt.ty_cstors t
+       (* define type *)
+       let id = tydef.Stmt.ty_id in
+       check_not_defined_ t ~id ~fail_msg:"is (co)data, but already defined";
+       let info = {
+         loc;
+         ty=tydef.Stmt.ty_type;
+         decl_attrs=[];
+         def=Data (kind, tys, tydef);
+       } in
+       let t = {infos=ID.PerTbl.replace t.infos id info} in
+       (* define constructors *)
+       ID.Map.fold
+         (fun _ cstor t ->
+            let id = cstor.Stmt.cstor_name in
+            check_not_defined_ t ~id ~fail_msg:"is constructor, but already defined";
+            let info = {
+              loc;
+              ty=cstor.Stmt.cstor_type;
+              decl_attrs=[];
+              def=Cstor (kind,tys,tydef, cstor);
+            } in
+            {infos=ID.PerTbl.replace t.infos id info}
+         ) tydef.Stmt.ty_cstors t
     ) t tys
 
 let def_pred ?loc ~env ~wf ~kind def l =
@@ -211,7 +210,7 @@ let def_pred ?loc ~env ~wf ~kind def l =
 let def_preds ?loc ~env ~wf ~kind l =
   List.fold_left
     (fun env def ->
-      def_pred ?loc ~env ~wf ~kind def l)
+       def_pred ?loc ~env ~wf ~kind def l)
     env l
 
 let add_copy ?loc ~env c =
@@ -233,19 +232,19 @@ let add_copy ?loc ~env c =
 let add_statement ~env st =
   let loc = Stmt.loc st in
   match Stmt.view st with
-  | Stmt.Decl {Stmt.defined_attrs=attrs; defined_ty=ty; defined_head=id} ->
+    | Stmt.Decl {Stmt.defined_attrs=attrs; defined_ty=ty; defined_head=id} ->
       declare ?loc ~env ~attrs id ty
-  | Stmt.TyDef (kind,l) ->
+    | Stmt.TyDef (kind,l) ->
       def_data ?loc ~env ~kind l
-  | Stmt.Goal _ -> env
-  | Stmt.Axiom (Stmt.Axiom_std _) -> env
-  | Stmt.Axiom (Stmt.Axiom_spec l) ->
+    | Stmt.Goal _ -> env
+    | Stmt.Axiom (Stmt.Axiom_std _) -> env
+    | Stmt.Axiom (Stmt.Axiom_spec l) ->
       spec_funs ?loc ~env l
-  | Stmt.Axiom (Stmt.Axiom_rec l) ->
+    | Stmt.Axiom (Stmt.Axiom_rec l) ->
       rec_funs ?loc ~env l
-  | Stmt.Copy c ->
+    | Stmt.Copy c ->
       add_copy ?loc ~env c
-  | Stmt.Pred (wf, kind, preds) ->
+    | Stmt.Pred (wf, kind, preds) ->
       def_preds ?loc ~env ~wf ~kind preds
 
 let add_statement_l ~env l =
@@ -257,30 +256,12 @@ let find_ty_exn ~env id = (find_exn ~env id).ty
 
 let find_ty ~env id = CCOpt.map (fun x -> x.ty) (find ~env id)
 
-module Util(T : TermInner.S) = struct
-  type term = T.t
-  type ty = T.t
-
-  module UT = TI.Util(T)
-
-  let ty ~env t = UT.ty ~sigma:(find_ty ~env) t
-
-  let ty_exn ~env t = UT.ty_exn ~sigma:(find_ty ~env) t
-
-  exception No_head of ty
-
-  let info_of_ty_exn ~env ty =
-    try
-      let id = UT.head_sym ty in
-      find_exn ~env id
-    with Not_found -> raise (No_head ty)
-
-  let info_of_ty ~env ty =
-    try Result.Ok (info_of_ty_exn ~env ty)
-    with No_head _ -> Result.Error "type has no head"
+module type PRINT_TERM = sig
+  type t
+  val print : t CCFormat.printer
 end
 
-module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) = struct
+module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
   let fpf = Format.fprintf
 
   let print_def out = function
@@ -288,13 +269,13 @@ module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) = struct
     | Fun_spec _ -> CCFormat.string out "<spec>"
     | Data _ -> CCFormat.string out "<data>"
     | Cstor (_,_,_,{ Stmt.cstor_type; _ }) ->
-        fpf out "<cstor : `%a`>" Pty.print cstor_type
+      fpf out "<cstor : `%a`>" Pty.print cstor_type
     | Pred _ -> CCFormat.string out "<pred>"
     | Copy_ty { Stmt.copy_of; _ } -> fpf out "<copy of `%a`>" Pty.print copy_of
     | Copy_abstract { Stmt.copy_id; _ } ->
-        fpf out "<copy abstract of `%a`>" ID.print copy_id
+      fpf out "<copy abstract of `%a`>" ID.print copy_id
     | Copy_concrete { Stmt.copy_id; _ } ->
-        fpf out "<copy concrete of `%a`>" ID.print copy_id
+      fpf out "<copy concrete of `%a`>" ID.print copy_id
     | NoDef -> CCFormat.string out "<no def>"
 
   let print_info out i =

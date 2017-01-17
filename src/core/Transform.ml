@@ -161,19 +161,19 @@ module Pipe = struct
     | Fail : ('a, 'b, 'c, 'd) t (** yields empty list *)
     | Flatten :
         ('a, 'b list, 'c, 'd) t ->
-        ('a, 'b, 'c, 'd) t
+      ('a, 'b, 'c, 'd) t
     | Close :
         ('b1 -> ('c1 -> 'd) -> 'b2 * ('c2 -> 'd)) *
-        ('a, 'b1, 'c1, 'd) t ->
-        ('a, 'b2, 'c2, 'd) t
+          ('a, 'b1, 'c1, 'd) t ->
+      ('a, 'b2, 'c2, 'd) t
     | Comp :
         ('a, 'b, 'e, 'f) transformation *
-        ('b, 'c, 'd, 'e) t ->
-        ('a, 'c, 'd, 'f) t
+          ('b, 'c, 'd, 'e) t ->
+      ('a, 'c, 'd, 'f) t
     | Fork :
         ('a, 'b, 'c, 'd) t *
-        ('a, 'b, 'c, 'd) t ->
-        ('a, 'b, 'c, 'd) t
+          ('a, 'b, 'c, 'd) t ->
+      ('a, 'b, 'c, 'd) t
 
   let id = Id
   let fail = Fail
@@ -207,15 +207,15 @@ module Pipe = struct
   let fpf = Format.fprintf
   let print out t =
     let rec pp : type a b c d. (a,b,c,d) t printer
-    = fun out t -> match t with
-    | Id -> fpf out "id"
-    | Fail -> fpf out "fail"
-    | Flatten t -> fpf out "flatten {@[%a@]}" pp t
-    | Close (_, pipe) -> fpf out "close {@[%a@]}" pp pipe
-    | Comp (Ex tr, t') ->
-        fpf out "@[%s ≡≡@ %a@]" tr.name pp t'
-    | Fork (a,b) ->
-        fpf out "fork @[<v>{ @[%a@]@,| @[%a@]@,}@]" pp a pp b
+      = fun out t -> match t with
+        | Id -> fpf out "id"
+        | Fail -> fpf out "fail"
+        | Flatten t -> fpf out "flatten {@[%a@]}" pp t
+        | Close (_, pipe) -> fpf out "close {@[%a@]}" pp pipe
+        | Comp (Ex tr, t') ->
+          fpf out "@[%s ≡≡@ %a@]" tr.name pp t'
+        | Fork (a,b) ->
+          fpf out "fork @[<v>{ @[%a@]@,| @[%a@]@,}@]" pp a pp b
     in
     fpf out "@[%a@]" pp t
 

@@ -22,11 +22,11 @@ end
 type t =
   | Exact of Z.t
   | QuasiFiniteGEQ of Z.t
-      (** unknown, but ≥ Z.t value. If all uninterpreted types are finite, then
-          this is finite too *)
+  (** unknown, but ≥ Z.t value. If all uninterpreted types are finite, then
+      this is finite too *)
   | Infinite
   | Unknown
-      (** Any value, we do not know *)
+  (** Any value, we do not know *)
 
 val (+) : t -> t -> t
 val ( * ) : t -> t -> t

@@ -49,7 +49,7 @@ module type S = sig
 end
 
 module Make(T : TI.REPR)
-: S with module T = T
+  : S with module T = T
 = struct
   module T = T
 
@@ -85,10 +85,10 @@ module Make(T : TI.REPR)
     | TI.App (f,l) -> App (f, l)
     | TI.TyArrow (a, b) -> Arrow (a, b)
     | TI.Var v ->
-        begin match Subst.find ~subst v with
+      begin match Subst.find ~subst v with
         | None -> assert false
         | Some t' -> repr_with ~subst t'
-        end
+      end
     | TI.TyMeta _
     | TI.Builtin _
     | TI.Match _

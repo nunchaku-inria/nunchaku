@@ -5,6 +5,7 @@
 
 open Nunchaku_core
 
+type ty = TermInner.Default.t
 type term = TermInner.Default.t
 
 val name : string
@@ -16,6 +17,36 @@ type mode =
   ]
 
 type state
+
+module type SKOLEM = sig
+  type state
+  type assoc
+
+  val create: ?prefix:string -> unit -> state
+
+  val skolemize :
+    state ->
+    vars:ty Var.t list ->
+    ty_ret:ty ->
+    (ty -> assoc) ->
+    ID.t * ty * assoc
+  (** [skolemize state ~vars ~ty_ret assoc] makes a fresh ID that
+      has the type [ty = List.map Var.ty vars -> ty_ret].
+      It registers it in [state] so that it will be returned on
+      the next call to {!pop_new_decls}, and it will map
+      it to [assoc ty]
+      @return the new ID and its type *)
+
+  val pop_new_decls : state -> (ID.t * assoc) list
+  (** Remove new declarations from [state] and return them *)
+
+  val find_skolem : state -> ID.t -> assoc option
+  (** If the given ID a skolem symbol, return associated data *)
+
+  val all_skolems : state -> (ID.t * assoc) Sequence.t
+end
+
+module Make(Assoc : sig type t end) : SKOLEM with type assoc = Assoc.t
 
 val create : ?prefix:string -> mode:mode -> unit -> state
 (** @param prefix the prefix used to generate Skolem symbols
@@ -54,8 +85,8 @@ val pipe :
   print:bool ->
   check:bool ->
   ((term,term as 'inv) Problem.t,
-    (term,term) Problem.t,
-    (term,term) Problem.Res.t, (term,term) Problem.Res.t
+   (term,term) Problem.t,
+   (term,term) Problem.Res.t, (term,term) Problem.Res.t
   ) Transform.t
 
 (** Similar to {!pipe} but with a generic decode function.
@@ -72,5 +103,5 @@ val pipe_with :
   print:bool ->
   check:bool ->
   ((term,term) Problem.t,
-    (term,term) Problem.t, 'c, 'd
+   (term,term) Problem.t, 'c, 'd
   ) Transform.t

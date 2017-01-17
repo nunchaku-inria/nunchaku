@@ -125,12 +125,12 @@ let transform_statement st =
   Utils.debugf ~section 3 "@[<2>transform @{<cyan>statement@}@ `@[%a@]`@]"
     (fun k->k FO.print_statement st);
   match st with
-  | FO.TyDecl _
-  | FO.Decl _
-  | FO.CardBound _
-  | FO.MutualTypes _ -> st
-  | FO.Axiom f -> FO.Axiom (transform_term f)
-  | FO.Goal f -> FO.Goal (transform_term f)
+    | FO.TyDecl _
+    | FO.Decl _
+    | FO.CardBound _
+    | FO.MutualTypes _ -> st
+    | FO.Axiom f -> FO.Axiom (transform_term f)
+    | FO.Goal f -> FO.Goal (transform_term f)
 
 let transform_problem pb =
   let meta = FO.Problem.meta pb in

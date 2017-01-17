@@ -22,7 +22,7 @@ module Time : sig
   val start_timer: unit -> timer
 
   val stop_timer : timer -> unit
-    (** Stop timer, or does nothing if stopped already *)
+  (** Stop timer, or does nothing if stopped already *)
 
   val get_timer : timer -> float
   (** Number of seconds elapsed between {!start_timer} and now, or
@@ -68,7 +68,7 @@ val set_debug : int -> unit     (** Set debug level of [Section.root] *)
 val get_debug : unit -> int     (** Current debug level for [Section.root] *)
 
 val debugf : ?lock:bool -> ?section:Section.t -> int ->
-            ('a, Format.formatter, unit, unit) format4 -> ('a -> unit) -> unit
+  ('a, Format.formatter, unit, unit) format4 -> ('a -> unit) -> unit
 (** Print a debug message, with the given section and verbosity level.
     The message might be dropped if its level is too high. *)
 
@@ -122,6 +122,21 @@ val arg_choice : (string * 'a) list -> ('a -> unit) -> Arg.spec
 (** [arg_choice ~kind l f] picks a CLI option among the string in [l],
     and apply [f] to the result. *)
 
+(** {2 Options} *)
+
+(** Some global options that can also be changed on the CLI *)
+
+module Options : sig
+  val get_all : unit -> (Arg.key * Arg.spec * Arg.doc) list
+  (** List of all options added so far *)
+
+  val add : Arg.key * Arg.spec * Arg.doc -> unit
+  (** Add an option to {!options_others_} *)
+
+  val add_list : (Arg.key * Arg.spec * Arg.doc) list -> unit
+  (** Add an option to {!options_others_} *)
+end
+
 (** {2 Warnings} *)
 
 type warning =
@@ -138,13 +153,6 @@ val warning : warning -> string -> unit
 (** Emit the given warning with the associated message *)
 
 val warningf : warning -> ('a, Format.formatter, unit, unit) format4 -> 'a
-
-val options_warnings_ : (Arg.key * Arg.spec * Arg.doc) list
-
-val options_others_ : (Arg.key * Arg.spec * Arg.doc) list ref
-
-val add_option : Arg.key * Arg.spec * Arg.doc -> unit
-(** Add an option to {!options_others_} *)
 
 (** {2 Misc} *)
 
@@ -165,6 +173,9 @@ val not_implementedf: ('a, Format.formatter, unit, 'b) format4 -> 'a
 
 val failwithf : ('a, Format.formatter, unit, 'b) format4 -> 'a
 (** Format version of {!failwith} *)
+
+val invalid_argf : ('a, Format.formatter, unit, 'b) format4 -> 'a
+(** Format version of {!invalid_arg} *)
 
 val err_of_exn: exn -> _ or_error
 (** Make an error out of an exception, with the stack trace *)

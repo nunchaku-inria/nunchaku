@@ -66,7 +66,7 @@ val pipe :
   check:bool ->
   ((term, term) Problem.t,
    (term, term) Problem.t,
-    (term,term) Problem.Res.t, (term,term) Problem.Res.t
+   (term,term) Problem.Res.t, (term,term) Problem.Res.t
   ) Transform.t
 (** Pipeline component *)
 

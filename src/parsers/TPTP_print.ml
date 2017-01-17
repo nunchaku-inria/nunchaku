@@ -21,9 +21,9 @@ let section = Utils.Section.make "print_tptp"
 exception Error of string
 
 let () = Printexc.register_printer
-  (function
-    | Error msg -> Some (Utils.err_sprintf "in PrintTPTP:@ @[%s@]" msg)
-    | _ -> None)
+    (function
+      | Error msg -> Some (Utils.err_sprintf "in PrintTPTP:@ @[%s@]" msg)
+      | _ -> None)
 
 let error_ m = raise (Error m)
 let errorf_ msg = CCFormat.ksprintf ~f:error_ msg
@@ -45,20 +45,20 @@ type form = T.t
 type ty = T.t
 type model = (term, ty) Model.t
 
-let print_builtin print_inner out : term TI.Builtin.t -> unit = function
+let print_builtin print_inner out : term Builtin.t -> unit = function
   | `True -> CCFormat.string out "$true"
   | `False -> CCFormat.string out "$false"
   | `Eq (a,b) ->
-      fpf out "@[<hv>%a =@ %a@]" print_inner a print_inner b
+    fpf out "@[<hv>%a =@ %a@]" print_inner a print_inner b
   | `Undefined_atom _ -> error_ "cannot print undefined atom"
   | `Undefined_self (_id,t) -> print_inner out t
   | `Not f -> fpf out "~ %a" print_inner f
   | `And l ->
-      fpf out "@[<hv>%a@]" (pp_list ~sep:" & " print_inner) l
+    fpf out "@[<hv>%a@]" (pp_list ~sep:" & " print_inner) l
   | `Or l ->
-      fpf out "@[<hv>%a@]" (pp_list ~sep:" | " print_inner) l
+    fpf out "@[<hv>%a@]" (pp_list ~sep:" | " print_inner) l
   | `Imply (a,b) ->
-      fpf out "@[<hv>%a =>@ %a@]" print_inner a print_inner b
+    fpf out "@[<hv>%a =>@ %a@]" print_inner a print_inner b
   | `DataTest _
   | `DataSelect _
   | `Guard _
@@ -74,37 +74,37 @@ let print_var out v = CCFormat.string out (Var.id v |> id_to_name)
 
 let rec print_term out t = match T.repr t with
   | TI.Var v -> print_var out v
-  | TI.Bind (`Fun,v,t) ->
-      fpf out "@[<2>^[%a]:@ %a@]" print_typed_var v print_inner t
-  | TI.Bind (`Mu,_,_) -> Utils.not_implemented "print mu in TPTP"
+  | TI.Bind (Binder.Fun,v,t) ->
+    fpf out "@[<2>^[%a]:@ %a@]" print_typed_var v print_inner t
+  | TI.Bind (Binder.Mu,_,_) -> Utils.not_implemented "print mu in TPTP"
   | TI.Let _ -> Utils.not_implemented "print let in TPTP"
   | TI.Match _ -> Utils.not_implemented "print match in TPTP"
   | TI.Builtin (`Unparsable _) -> error_ "cannot print `unparsable` in TPTP"
   | TI.Builtin (`Ite (a,b,c)) ->
-      fpf out "$ite_t(@[<hv>%a,@ %a,@ %a@])"
-        print_term a print_term b print_term c
-  | TI.Bind (`Forall, v,t) ->
-      fpf out "@[<2>![%a]:@ %a@]" print_typed_var v print_inner t
-  | TI.Bind (`Exists, v,t) ->
-      fpf out "@[<2>?[%a]:@ %a@]" print_typed_var v print_inner t
+    fpf out "$ite_t(@[<hv>%a,@ %a,@ %a@])"
+      print_term a print_term b print_term c
+  | TI.Bind (Binder.Forall, v,t) ->
+    fpf out "@[<2>![%a]:@ %a@]" print_typed_var v print_inner t
+  | TI.Bind (Binder.Exists, v,t) ->
+    fpf out "@[<2>?[%a]:@ %a@]" print_typed_var v print_inner t
   | TI.TyArrow (a,b) ->
-      fpf out "@[<2>%a >@ %a@]" print_inner a print_ty b
-  | TI.Bind (`TyForall, v,t) ->
-      fpf out "@[<2>!>[%a]:@ %a@]" print_var v print_inner t
+    fpf out "@[<2>%a >@ %a@]" print_inner a print_ty b
+  | TI.Bind (Binder.TyForall, v,t) ->
+    fpf out "@[<2>!>[%a]:@ %a@]" print_var v print_inner t
   | TI.Const c -> CCFormat.string out (id_to_name c)
   | TI.App (_, []) -> assert false
   | TI.App (f, l) ->
-      begin match T.repr f with
+    begin match T.repr f with
       | TI.Const _
       | TI.Var _ ->
-          fpf out "@[<2>%a(%a)@]"
-            print_inner f (pp_list ~sep:", " print_term) l
+        fpf out "@[<2>%a(%a)@]"
+          print_inner f (pp_list ~sep:", " print_term) l
       | TI.Builtin _ -> assert false
       | _ ->
-          Utils.not_implementedf
-            "@[<2>print_model:@ could not apply `@[%a@]`@ to arguments [@[%a@]]@]"
-            print_term f (pp_list ~sep:","P.print) l
-      end
+        Utils.not_implementedf
+          "@[<2>print_model:@ could not apply `@[%a@]`@ to arguments [@[%a@]]@]"
+          print_term f (pp_list ~sep:","P.print) l
+    end
   | TI.TyMeta _ -> assert false
   | TI.Builtin b -> print_builtin print_inner out b
   | TI.TyBuiltin `Type -> CCFormat.string out "$tType"
@@ -163,45 +163,45 @@ let find_var_ ~state v =
    - replace lower case (bound) variables by capitalized variables *)
 let rec preprocess_term ~state t = match T.repr t with
   | TI.Const id ->
-      let id' =
-        try ID.Tbl.find state.pre_constants id
-        with Not_found -> id (* not a domain constant *)
-      in
-      U.const id'
+    let id' =
+      try ID.Tbl.find state.pre_constants id
+      with Not_found -> id (* not a domain constant *)
+    in
+    U.const id'
   | TI.Var v ->
-      let v' = find_var_ ~state v in
-      U.var v'
+    let v' = find_var_ ~state v in
+    U.var v'
   | TI.App (f,l) ->
-      let f = preprocess_term ~state f in
-      let l = List.map (preprocess_term ~state) l in
-      U.app f l
-  | TI.Bind (`Fun, v,t) ->
-      preprocess_typed_var ~state v
-        (fun v -> U.fun_ v (preprocess_term ~state t))
+    let f = preprocess_term ~state f in
+    let l = List.map (preprocess_term ~state) l in
+    U.app f l
+  | TI.Bind (Binder.Fun, v,t) ->
+    preprocess_typed_var ~state v
+      (fun v -> U.fun_ v (preprocess_term ~state t))
   | TI.Let (v,t,u) ->
-      let t = preprocess_term ~state t in
-      let u = preprocess_term ~state u in
-      let v' = find_var_ ~state v in
-      U.let_ v' t u
-  | TI.Bind (`Mu, _,_) ->
-      errorf_ "cannot represent `@[%a@]`@ in TPTP" P.print t
+    let t = preprocess_term ~state t in
+    let u = preprocess_term ~state u in
+    let v' = find_var_ ~state v in
+    U.let_ v' t u
+  | TI.Bind (Binder.Mu, _,_) ->
+    errorf_ "cannot represent `@[%a@]`@ in TPTP" P.print t
   | TI.Match _ -> Utils.not_implemented "replace in match"
   | TI.Builtin (`Ite (a,b,c)) ->
-      let a = preprocess_term ~state a in
-      let b = preprocess_term ~state b in
-      let c = preprocess_term ~state c in
-      U.ite a b c
-  | TI.Bind (`Forall,v,t) ->
-      preprocess_typed_var ~state v
-        (fun v -> U.forall v (preprocess_term ~state t))
-  | TI.Bind (`Exists,v,t) ->
-      preprocess_typed_var ~state v
-        (fun v -> U.exists v (preprocess_term ~state t))
+    let a = preprocess_term ~state a in
+    let b = preprocess_term ~state b in
+    let c = preprocess_term ~state c in
+    U.ite a b c
+  | TI.Bind (Binder.Forall,v,t) ->
+    preprocess_typed_var ~state v
+      (fun v -> U.forall v (preprocess_term ~state t))
+  | TI.Bind (Binder.Exists,v,t) ->
+    preprocess_typed_var ~state v
+      (fun v -> U.exists v (preprocess_term ~state t))
   | TI.TyArrow (a,b) ->
-      U.ty_arrow (preprocess_ty ~state a) (preprocess_ty ~state b)
-  | TI.Bind (`TyForall,v,t) ->
-      let v' = mk_var ~state v in
-      U.ty_forall v' (preprocess_ty ~state t)
+    U.ty_arrow (preprocess_ty ~state a) (preprocess_ty ~state b)
+  | TI.Bind (Binder.TyForall,v,t) ->
+    let v' = mk_var ~state v in
+    U.ty_forall v' (preprocess_ty ~state t)
   | TI.Builtin _ -> t
   | TI.TyBuiltin _
   | TI.TyMeta _ -> t
@@ -219,7 +219,7 @@ and mk_var ~state v =
   let name = ID.name (Var.id v) in
   let name = match name.[0] with
     | 'A' .. 'Z' -> name
-    | 'a' .. 'b' -> String.capitalize name
+    | 'a' .. 'b' -> String.capitalize_ascii name
     | _ -> "V" ^ name
   in
   Var.make ~name ~ty:(preprocess_ty ~state (Var.ty v))
@@ -228,8 +228,8 @@ let preprocess_typed_vars ~state vars f =
   let rec aux acc vars f = match vars with
     | [] -> f (List.rev acc)
     | v :: vars' ->
-        preprocess_typed_var ~state v
-          (fun v' ->  aux (v'::acc) vars' f)
+      preprocess_typed_var ~state v
+        (fun v' ->  aux (v'::acc) vars' f)
   in
   aux [] vars f
 
@@ -246,24 +246,24 @@ let translate_dt kind ~vars t dt =
   let forms =
     List.map
       (fun (tests, rhs) ->
-        let subst = mk_subst tests in
-        let args =
-          List.map (fun v -> Var.Subst.find_or ~subst ~default:(U.var v) v) vars
-        in
-        let rhs = U.eval ~subst rhs in
-        let body = match kind with
-          | Model.Symbol_utype
-          | Model.Symbol_data
-          | Model.Symbol_codata -> assert false
-          | Model.Symbol_fun -> U.eq (U.app t args) rhs
-          | Model.Symbol_prop ->
-              (* propositions should become [p(x)] or [not p(x)] *)
-              match T.repr rhs with
-              | TI.Builtin `True -> U.app t args
-              | TI.Builtin `False -> U.not_ (U.app t args)
-              | _ -> U.eq (U.app t args) rhs
-        in
-        U.forall_l vars body
+         let subst = mk_subst tests in
+         let args =
+           List.map (fun v -> Var.Subst.find_or ~subst ~default:(U.var v) v) vars
+         in
+         let rhs = U.eval ~subst rhs in
+         let body = match kind with
+           | Model.Symbol_utype
+           | Model.Symbol_data
+           | Model.Symbol_codata -> assert false
+           | Model.Symbol_fun -> U.eq (U.app t args) rhs
+           | Model.Symbol_prop ->
+             (* propositions should become [p(x)] or [not p(x)] *)
+             match T.repr rhs with
+               | TI.Builtin `True -> U.app t args
+               | TI.Builtin `False -> U.not_ (U.app t args)
+               | _ -> U.eq (U.app t args) rhs
+         in
+         U.forall_l vars body
       )
       fdt.M.DT.fdt_cases
   in
@@ -290,25 +290,25 @@ let preprocess_model (m:model) : tptp_model =
   let res = CCVector.create () in
   (* finite types *)
   Model.finite_types m
-    |> Sequence.map
-      (fun (ty,l) ->
-        (* register domain constants *)
-        List.iter (fun id -> ID.Tbl.add state.pre_constants id (mk_cst id)) l;
-        let ty = preprocess_ty ~state ty in
-        mk_domain ty l)
-    |> CCVector.append_seq res;
+  |> Sequence.map
+    (fun (ty,l) ->
+       (* register domain constants *)
+       List.iter (fun id -> ID.Tbl.add state.pre_constants id (mk_cst id)) l;
+       let ty = preprocess_ty ~state ty in
+       mk_domain ty l)
+  |> CCVector.append_seq res;
   (* constants *)
   Model.values m
-    |> Sequence.map
-      (fun (t,dt,k) ->
-        let t = preprocess_term ~state t in
-        let vars = M.DT.vars dt in
-        let form =
-          preprocess_typed_vars ~state vars
-            (fun vars -> translate_dt k t ~vars dt)
-        in
-        { role = role_of_kind k; form; })
-    |> CCVector.append_seq res;
+  |> Sequence.map
+    (fun (t,dt,k) ->
+       let t = preprocess_term ~state t in
+       let vars = M.DT.vars dt in
+       let form =
+         preprocess_typed_vars ~state vars
+           (fun vars -> translate_dt k t ~vars dt)
+       in
+       { role = role_of_kind k; form; })
+  |> CCVector.append_seq res;
   CCVector.freeze res
 
 (* print a model *)

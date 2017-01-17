@@ -99,7 +99,7 @@ let output_opt = Utils.arg_choice outputs_ ((:=) output_)
 
 (* solver string specification *)
 let parse_solvers_ s =
-  let s = String.trim s |> String.lowercase in
+  let s = String.trim s |> String.lowercase_ascii in
   let l = CCString.Split.list_cpy ~by:"," s in
   List.map
     (function
@@ -118,105 +118,93 @@ let set_solvers_ s =
 let set_dump () = dump_ := `Yes
 let set_dump_into s = dump_ := `Into s
 
-(* set debug levels *)
-let options_debug_ = Utils.Section.iter
-  |> Sequence.map
-    (fun (name,sec) ->
-      "--debug" ^ (if name="" then "" else "."^name),
-      Arg.Int (Utils.Section.set_debug sec),
-      " verbosity level for " ^ (if name="" then "all messages" else name))
-  |> Sequence.to_rev_list
-
 let call_with x f = Arg.Unit (fun () -> f x)
 
 let options =
   let open CCFun in
   Arg.align @@ List.sort Pervasives.compare @@ (
-  options_debug_ @
-  Utils.options_warnings_ @
-  !Utils.options_others_ @
-  [ "--print-input", Arg.Set print_, " print input"
-  ; "--print-all", Arg.Set print_all_, " print every step of the pipeline"
-  ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline and exit"
-  ; "--print-typed", Arg.Set print_typed_, " print input after typing"
-  ; "--print-" ^ Tr.Skolem.name, Arg.Set print_skolem_, " print input after Skolemization"
-  ; "--print-" ^ Tr.Monomorphization.name, Arg.Set print_mono_, " print input after monomorphization"
-  ; "--print-" ^ Tr.ElimPatternMatch.name
+    Utils.Options.get_all () @
+      [ "--print-input", Arg.Set print_, " print input"
+      ; "--print-all", Arg.Set print_all_, " print every step of the pipeline"
+      ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline and exit"
+      ; "--print-typed", Arg.Set print_typed_, " print input after typing"
+      ; "--print-" ^ Tr.Skolem.name, Arg.Set print_skolem_, " print input after Skolemization"
+      ; "--print-" ^ Tr.Monomorphization.name, Arg.Set print_mono_, " print input after monomorphization"
+      ; "--print-" ^ Tr.ElimPatternMatch.name
       , Arg.Set print_elim_match_
       , " print input after elimination of pattern matching"
-  ; "--print-" ^ Tr.ElimIndPreds.name
+      ; "--print-" ^ Tr.ElimIndPreds.name
       , Arg.Set print_elim_preds_
       , " print input after elimination of (co)inductive predicates"
-  ; "--print-" ^ Tr.ElimRecursion.name
+      ; "--print-" ^ Tr.ElimRecursion.name
       , Arg.Set print_elim_recursion_
       , " print input after elimination of recursive functions"
-  ; "--print-" ^ Tr.Specialize.name
+      ; "--print-" ^ Tr.Specialize.name
       , Arg.Set print_specialize_
       , " print input after specialization"
-  ; "--print-" ^ Tr.LambdaLift.name, Arg.Set print_lambda_lift_, " print after λ-lifting"
-  ; "--print-" ^ Tr.Elim_HOF.name
+      ; "--print-" ^ Tr.LambdaLift.name, Arg.Set print_lambda_lift_, " print after λ-lifting"
+      ; "--print-" ^ Tr.Elim_HOF.name
       , Arg.Set print_elim_hof_
       , " print input after elimination of higher-order/partial functions"
-  ; "--print-" ^ Tr.ElimMultipleEqns.name
+      ; "--print-" ^ Tr.ElimMultipleEqns.name
       , Arg.Set print_elim_multi_eqns
       , " print input after elimination of multiple equations"
-  ; "--print-" ^ Tr.Elim_infinite.name
+      ; "--print-" ^ Tr.Elim_infinite.name
       , Arg.Set print_elim_infinite
       , " print input after elimination of infinite types"
 
-  ; "--print-" ^ Tr.Polarize.name , Arg.Set print_polarize_, " print input after polarization"
-  ; "--print-" ^ Tr.Unroll.name, Arg.Set print_unroll_, " print input after unrolling"
-  ; "--print-" ^ Tr.ElimCopy.name, Arg.Set print_copy_, " print input after elimination of copy types"
-  ; "--print-" ^ Tr.ElimData.Data.name
+      ; "--print-" ^ Tr.Polarize.name , Arg.Set print_polarize_, " print input after polarization"
+      ; "--print-" ^ Tr.Unroll.name, Arg.Set print_unroll_, " print input after unrolling"
+      ; "--print-" ^ Tr.ElimCopy.name, Arg.Set print_copy_, " print input after elimination of copy types"
+      ; "--print-" ^ Tr.ElimData.Data.name
       , Arg.Set print_elim_data_
       , " print input after elimination of (co)datatypes"
-  ; "--print-" ^ Tr.ElimData.Codata.name
+      ; "--print-" ^ Tr.ElimData.Codata.name
       , Arg.Set print_elim_codata_
       , " print input after elimination of (co)datatypes"
-  ; "--print-" ^ Tr.IntroGuards.name, Arg.Set print_intro_guards_,
-      " print input after introduction of guards"
-  ; "--print-" ^ Tr.Elim_ite.name, Arg.Set print_elim_ite_,
-      " print input after elimination of if/then/else"
-  ; "--print-" ^ Tr.Elim_prop_args.name, Arg.Set print_elim_prop_args_,
-      " print input after elimination of propositional function subterms"
-  ; "--print-" ^ Tr.ElimTypes.name, Arg.Set print_elim_types_,
-      " print input after elimination of types"
-  ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
-  ; "--print-" ^ Tr.FoToRelational.name, Arg.Set print_fo_to_rel_,
-      " print first-order relational problem"
-  ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
-  ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
-  ; "--print-model", Arg.Set print_model_, " print model after cleanup"
-  ; "--print-undefined", Arg.Set TermInner.print_undefined_id, " print unique IDs of `undefined` terms"
-  ; "--checks", Arg.Set check_all_, " check invariants after each pass"
-  ; "--no-checks", Arg.Clear check_all_, " disable checking invariants after each pass"
-  ; "--color", call_with true CCFormat.set_color_default, " enable color"
-  ; "--no-color", call_with false CCFormat.set_color_default, " disable color"
-  ; "-nc", call_with false CCFormat.set_color_default, " disable color (alias to --no-color)"
-  ; "-j", Arg.Set_int j, " set parallelism level"
-  ; "--dump", Arg.Unit set_dump, " instead of running solvers, dump their problem into files"
-  ; "--dump-into",
-    Arg.String set_dump_into,
-    " instead of running solvers, dump their problem into files in <directory>"
-  ; "--polarize-rec", Arg.Set polarize_rec_, " enable polarization of rec predicates"
-  ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
-  ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"
-  ; "--no-specialize", Arg.Clear enable_specialize_, " disable specialization"
-  ; "--skolems-in-model", Arg.Set skolems_in_model_, " enable skolem constants in models"
-  ; "--no-skolems-in-model", Arg.Clear skolems_in_model_, " disable skolem constants in models"
-  ; "--solvers", Arg.String set_solvers_, " solvers to use " ^ list_solvers_ ()
-  ; "-s", Arg.String set_solvers_, " synonym for --solvers"
-  ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
-  ; "-t", Arg.Set_int timeout_, " alias to --timeout"
-  ; "--input", input_opt , " set input format"
-  ; "-i", input_opt, " synonym for --input"
-  ; "--output", output_opt, " set output format"
-  ; "-o", output_opt, " synonym for --output"
-  ; "--prelude", Arg.String add_prelude, " parse given prelude file"
-  ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
-  ; "--version", Arg.Set version_, " print version and exit"
-  ]
-)
+      ; "--print-" ^ Tr.IntroGuards.name, Arg.Set print_intro_guards_,
+        " print input after introduction of guards"
+      ; "--print-" ^ Tr.Elim_ite.name, Arg.Set print_elim_ite_,
+        " print input after elimination of if/then/else"
+      ; "--print-" ^ Tr.Elim_prop_args.name, Arg.Set print_elim_prop_args_,
+        " print input after elimination of propositional function subterms"
+      ; "--print-" ^ Tr.ElimTypes.name, Arg.Set print_elim_types_,
+        " print input after elimination of types"
+      ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
+      ; "--print-" ^ Tr.FoToRelational.name, Arg.Set print_fo_to_rel_,
+        " print first-order relational problem"
+      ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
+      ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
+      ; "--print-model", Arg.Set print_model_, " print model after cleanup"
+      ; "--checks", Arg.Set check_all_, " check invariants after each pass"
+      ; "--no-checks", Arg.Clear check_all_, " disable checking invariants after each pass"
+      ; "--color", call_with true CCFormat.set_color_default, " enable color"
+      ; "--no-color", call_with false CCFormat.set_color_default, " disable color"
+      ; "-nc", call_with false CCFormat.set_color_default, " disable color (alias to --no-color)"
+      ; "-j", Arg.Set_int j, " set parallelism level"
+      ; "--dump", Arg.Unit set_dump, " instead of running solvers, dump their problem into files"
+      ; "--dump-into",
+        Arg.String set_dump_into,
+        " instead of running solvers, dump their problem into files in <directory>"
+      ; "--polarize-rec", Arg.Set polarize_rec_, " enable polarization of rec predicates"
+      ; "--no-polarize-rec", Arg.Clear polarize_rec_, " disable polarization of rec predicates"
+      ; "--no-polarize", Arg.Clear enable_polarize_, " disable polarization"
+      ; "--no-specialize", Arg.Clear enable_specialize_, " disable specialization"
+      ; "--skolems-in-model", Arg.Set skolems_in_model_, " enable skolem constants in models"
+      ; "--no-skolems-in-model", Arg.Clear skolems_in_model_, " disable skolem constants in models"
+      ; "--solvers", Arg.String set_solvers_, " solvers to use " ^ list_solvers_ ()
+      ; "-s", Arg.String set_solvers_, " synonym for --solvers"
+      ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
+      ; "-t", Arg.Set_int timeout_, " alias to --timeout"
+      ; "--input", input_opt , " set input format"
+      ; "-i", input_opt, " synonym for --input"
+      ; "--output", output_opt, " set output format"
+      ; "-o", output_opt, " synonym for --output"
+      ; "--prelude", Arg.String add_prelude, " parse given prelude file"
+      ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
+      ; "--version", Arg.Set version_, " print version and exit"
+      ]
+  )
 
 let print_version_if_needed () =
   if !version_ then (
@@ -282,13 +270,13 @@ module Pipes = struct
   module Step_tyinfer = Tr.TypeInference.Make(Typed)(HO)
   module Step_conv_ty = Problem.Convert(Typed)(HO)
   (* conversion to FO *)
-  module Step_tofo = TermMono.TransFO(HO)
+  module Step_tofo = Tr.Trans_ho_fo.Make(HO)
 end
 
 let close_task p =
   Transform.Pipe.close p
     ~f:(fun task ret ->
-       Scheduling.Task.map ~f:ret task, CCFun.id)
+      Scheduling.Task.map ~f:ret task, CCFun.id)
 
 (* get a file name prefix for "--dump", or [None] if "--dump" was not specified *)
 let get_dump_file () = match !dump_ with
@@ -396,7 +384,8 @@ let make_model_pipeline () =
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_)
+      ~check ~mode:`Use_selectors @@@
     Tr.ElimData.Data.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
     Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
@@ -410,7 +399,7 @@ let make_model_pipeline () =
     close_task (
       Step_tofo.pipe ~print:!print_all_ () @@@
       Tr.Elim_ite.pipe ~print:(!print_elim_ite_ || !print_all_) @@@
-      FO.pipe_tptp @@@
+      Tr.Trans_fo_tptp.pipe @@@
       paradox
     )
   and pipe_kodkod =
@@ -449,7 +438,8 @@ let make_model_pipeline () =
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
        *)
-    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Tr.ElimIndPreds.pipe ~mode:`Use_match
+      ~print:(!print_elim_preds_ || !print_all_) ~check @@@
     Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
     Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
     close_task smbc
@@ -462,7 +452,9 @@ let make_model_pipeline () =
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+    Tr.ElimIndPreds.pipe
+      ~mode:`Use_selectors
+      ~print:(!print_elim_preds_ || !print_all_) ~check @@@
     Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
     Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
@@ -476,13 +468,13 @@ let make_model_pipeline () =
   let pipe =
     pipe_common
       (fork
-        pipe_smbc
-        (pipe_mono_common @@
-         Tr.ElimPatternMatch.pipe ~mode:Tr.ElimPatternMatch.Elim_both
+         pipe_smbc
+         (pipe_mono_common @@
+          Tr.ElimPatternMatch.pipe ~mode:Tr.ElimPatternMatch.Elim_both
             ~print:(!print_elim_match_ || !print_all_) ~check @@@
-         fork
-           (pipe_common_paradox_kodkod (fork pipe_paradox pipe_kodkod))
-           pipe_cvc4))
+          fork
+            (pipe_common_paradox_kodkod (fork pipe_paradox pipe_kodkod))
+            pipe_cvc4))
   in
   pipe
 
@@ -497,18 +489,18 @@ let process_res_ r =
     Res.Unknown l
   in
   match r with
-  | Scheduling.Res_fail e -> E.fail (Printexc.to_string e)
-  | Scheduling.Res_list [] -> E.fail "no task succeeded"
-  | Scheduling.Res_list l ->
-    assert
-      (List.for_all
-         (function
-           | Res.Unknown _ -> true
-           | Res.Error _ | Res.Sat _ | Res.Unsat _ -> false)
-         l);
-    let res = find_result_if_unknown l in
-    E.return res
-  | Scheduling.Res_one r -> E.return r
+    | Scheduling.Res_fail e -> E.fail (Printexc.to_string e)
+    | Scheduling.Res_list [] -> E.fail "no task succeeded"
+    | Scheduling.Res_list l ->
+      assert
+        (List.for_all
+           (function
+             | Res.Unknown _ -> true
+             | Res.Error _ | Res.Sat _ | Res.Unsat _ -> false)
+           l);
+      let res = find_result_if_unknown l in
+      E.return res
+    | Scheduling.Res_one r -> E.return r
 
 (* run the pipeline on this problem, then run tasks, and return the
    result *)
@@ -530,15 +522,15 @@ let negate_goal stmts =
   let module A = UntypedAST in
   CCVector.map
     (fun st -> match st.A.stmt_value with
-      | A.Goal f -> {st with A.stmt_value=A.Goal (A.not_ f); }
-      | _ -> st)
+       | A.Goal f -> {st with A.stmt_value=A.Goal (A.not_ f); }
+       | _ -> st)
     stmts
 
 (* additional printers *)
 let () = Printexc.register_printer
-  (function
-    | Failure msg -> Some ("failure: " ^ msg)
-    | _ -> None)
+    (function
+      | Failure msg -> Some ("failure: " ^ msg)
+      | _ -> None)
 
 (* model mode *)
 let main_model ~output statements =
@@ -554,26 +546,26 @@ let main_model ~output statements =
   run_tasks ~j:!j ~deadline pipe statements
   >|= fun res ->
   match res, output with
-  | _, O_sexp ->
+    | _, O_sexp ->
       let s = Problem.Res.to_sexp P.to_sexp P.to_sexp res in
       Format.printf "@[<hv2>%a@]@." Sexp_lib.pp s
-  | Res.Sat (m,i), O_nunchaku when m.Model.potentially_spurious ->
+    | Res.Sat (m,i), O_nunchaku when m.Model.potentially_spurious ->
       Format.printf "@[<v>@[<v2>SAT: (potentially spurious) {@,@[<v>%a@]@]@,}@,%a@]@."
         (Model.print P.print' P.print) m Res.print_info i;
-  | Res.Sat (m,i), O_nunchaku ->
+    | Res.Sat (m,i), O_nunchaku ->
       Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@,%a@]@."
         Model.Default.print_standard m Res.print_info i;
-  | Res.Sat (m,i), O_tptp ->
+    | Res.Sat (m,i), O_tptp ->
       (* XXX: if potentially spurious, what should we print? *)
       let module PM = Nunchaku_parsers.TPTP_print in
       Format.printf "@[<v2>%a@]@,%% %a@." PM.print_model m Res.print_info i
-  | Res.Unsat i, O_nunchaku ->
+    | Res.Unsat i, O_nunchaku ->
       Format.printf "@[UNSAT@]@.%a@." Res.print_info i
-  | Res.Unsat i, O_tptp ->
+    | Res.Unsat i, O_tptp ->
       Format.printf "@[SZS Status: Unsatisfiable@]@.%% %a@." Res.print_info i
-  | Res.Unknown l, _ ->
+    | Res.Unknown l, _ ->
       Format.printf "@[UNKNOWN@]@.(@[<hv>%a@])@." (Utils.pp_list Res.print_unknown_info) l
-  | Res.Error (e,_), _ ->
+    | Res.Error (e,_), _ ->
       raise e
 
 (* main *)
@@ -598,8 +590,8 @@ let main () =
 
 let () =
   E.catch (try main () with e -> Utils.err_of_exn e)
-  ~ok:(fun () -> exit 0)
-  ~err:(fun msg ->
-    Format.eprintf "%s@." msg;
-    exit 1
-  )
+    ~ok:(fun () -> exit 0)
+    ~err:(fun msg ->
+      Format.eprintf "%s@." msg;
+      exit 1
+    )

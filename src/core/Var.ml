@@ -117,7 +117,7 @@ module Subst = struct
 end
 
 module Set(Ty : sig type t end) = CCSet.Make(struct
-  type 'a _t = 'a t
-  type t = Ty.t _t
-  let compare = compare
-end)
+    type 'a _t = 'a t
+    type t = Ty.t _t
+    let compare = compare
+  end)

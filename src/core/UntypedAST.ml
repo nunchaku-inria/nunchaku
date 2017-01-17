@@ -9,86 +9,19 @@ exception ParseError of Loc.t
 exception SyntaxError of string * Loc.t option
 
 let () = Printexc.register_printer
-  (function
-    | ParseError loc -> Some ("parse error at " ^ Loc.to_string loc)
-    | SyntaxError (msg, loc) ->
+    (function
+      | ParseError loc -> Some ("parse error at " ^ Loc.to_string loc)
+      | SyntaxError (msg, loc) ->
         Some (Printf.sprintf "syntax error: %s at %s" msg (Loc.to_string_opt loc))
-    | _ -> None
-  )
+      | _ -> None
+    )
 
 type var = string
 type var_or_wildcard = [`Var of string | `Wildcard]
 
-module Builtin : sig
-  type t =
-    [ `Prop
-    | `Type
-    | `Not
-    | `And
-    | `Or
-    | `True
-    | `False
-    | `Eq
-    | `Equiv
-    | `Imply
-    | `Undefined of string
-    | `Unitype
-    ]
-
-  include Intf.PRINT with type t := t
-  val fixity : t -> [`Prefix | `Infix]
-  val to_string : t -> string
-end = struct
-  type t =
-    [ `Prop
-    | `Type
-    | `Not
-    | `And
-    | `Or
-    | `True
-    | `False
-    | `Eq
-    | `Equiv
-    | `Imply
-    | `Undefined of string
-    | `Unitype
-    ]
-
-  let fixity : t -> [`Infix | `Prefix] = function
-    | `Type
-    | `True
-    | `False
-    | `Prop
-    | `Not -> `Prefix
-    | `And
-    | `Or
-    | `Imply
-    | `Equiv
-    | `Eq
-    | `Unitype
-    | `Undefined _ -> `Infix
-
-  let to_string : t -> string = function
-    | `Type -> "type"
-    | `Prop -> "prop"
-    | `Not -> "~"
-    | `And -> "&&"
-    | `Or -> "||"
-    | `True -> "true"
-    | `False -> "false"
-    | `Eq -> "="
-    | `Equiv -> "="
-    | `Imply -> "=>"
-    | `Undefined s -> "?_" ^ s
-    | `Unitype -> "<unitype>"
-
-  let print out s = Format.pp_print_string out (to_string s)
-end
-
-
 type term = term_node Loc.with_loc
 and term_node =
-  | Builtin of Builtin.t
+  | Builtin of builtin
   | Var of var_or_wildcard
   | AtVar of var  (* variable without implicit arguments *)
   | MetaVar of var (* unification variable *)
@@ -104,13 +37,69 @@ and term_node =
   | TyForall of var * ty
   | Asserting of term * term list
 
+and builtin =
+  [ `Prop
+  | `Type
+  | `Not
+  | `And
+  | `Or
+  | `True
+  | `False
+  | `Eq
+  | `Equiv
+  | `Imply
+  | `Undefined_atom of term
+  | `Unitype
+  ]
+
 (* we mix terms and types because it is hard to know, in
-  [@cons a b c], which ones of [a, b, c] are types, and which ones
-  are terms *)
+   [@cons a b c], which ones of [a, b, c] are types, and which ones
+   are terms *)
 and ty = term
 
 (** A variable with, possibly, its type *)
 and typed_var = var * ty option
+
+
+module Builtin : sig
+  type t = builtin
+  include Intf.PRINT with type t := t
+  val fixity : t -> [`Prefix | `Infix]
+  val to_string : t -> string
+end = struct
+  type t = builtin
+
+  let fixity : t -> [`Infix | `Prefix] = function
+    | `Type
+    | `True
+    | `False
+    | `Prop
+    | `Not -> `Prefix
+    | `And
+    | `Or
+    | `Imply
+    | `Equiv
+    | `Eq
+    | `Unitype
+    | `Undefined_atom _ -> `Infix
+
+  let to_string : t -> string = function
+    | `Type -> "type"
+    | `Prop -> "prop"
+    | `Not -> "~"
+    | `And -> "&&"
+    | `Or -> "||"
+    | `True -> "true"
+    | `False -> "false"
+    | `Eq -> "="
+    | `Equiv -> "="
+    | `Imply -> "=>"
+    | `Undefined_atom _ -> "?__"
+    | `Unitype -> "<unitype>"
+
+  let print out s = Format.pp_print_string out (to_string s)
+end
+
 
 let view = Loc.get
 
@@ -201,6 +190,7 @@ let mu ?loc v t = Loc.with_loc ?loc (Mu (v,t))
 let asserting ?loc t l = match l with
   | [] -> t
   | _::_ -> Loc.with_loc ?loc (Asserting (t,l))
+let undefined ?loc t = Loc.with_loc ?loc (Builtin (`Undefined_atom t))
 let ty_arrow ?loc a b = Loc.with_loc ?loc (TyArrow (a,b))
 let ty_forall ?loc v t = Loc.with_loc ?loc (TyForall (v,t))
 
@@ -238,7 +228,7 @@ let rec head t = match Loc.get t with
   | Var `Wildcard | Builtin _ | TyArrow (_,_)
   | Fun (_,_) | Let _ | Match _ | Ite (_,_,_)
   | Forall (_,_) | Mu _ | Exists (_,_) | TyForall (_,_) ->
-      invalid_arg "untypedAST.head"
+    invalid_arg "untypedAST.head"
 
 let fpf = Format.fprintf
 
@@ -248,8 +238,8 @@ let pp_var_or_wildcard out = function
 
 let rec unroll_if_ t = match Loc.get t with
   | Ite (a,b,c) ->
-      let l, last = unroll_if_ c in
-      (a,b) :: l, last
+    let l, last = unroll_if_ c in
+    (a,b) :: l, last
   | _ -> [], t
 
 let pp_list_ ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
@@ -260,60 +250,60 @@ let rec print_term out term = match Loc.get term with
   | AtVar v -> fpf out "@@%s" v
   | MetaVar v -> fpf out "?%s" v
   | App (f, [a;b]) ->
-      begin match Loc.get f with
+    begin match Loc.get f with
       | Builtin s when Builtin.fixity s = `Infix ->
-          fpf out "@[<hv>%a@ @[<hv>%a@ %a@]@]"
-            print_term_inner a Builtin.print s print_term_inner b
+        fpf out "@[<hv>%a@ @[<hv>%a@ %a@]@]"
+          print_term_inner a Builtin.print s print_term_inner b
       | _ ->
-          fpf out "@[<2>%a@ %a@ %a@]" print_term_inner f
-            print_term_inner a print_term_inner b
-      end
+        fpf out "@[<2>%a@ %a@ %a@]" print_term_inner f
+          print_term_inner a print_term_inner b
+    end
   | App (a, l) ->
-      fpf out "@[<2>%a@ %a@]"
-        print_term_inner a (pp_list_ ~sep:" " print_term_inner) l
+    fpf out "@[<2>%a@ %a@]"
+      print_term_inner a (pp_list_ ~sep:" " print_term_inner) l
   | Fun (v, t) ->
-      fpf out "@[<2>fun %a.@ %a@]" print_typed_var v print_term t
+    fpf out "@[<2>fun %a.@ %a@]" print_typed_var v print_term t
   | Mu (v, t) ->
-      fpf out "@[<2>mu %a.@ %a@]" print_typed_var v print_term t
+    fpf out "@[<2>mu %a.@ %a@]" print_typed_var v print_term t
   | Let (v,t,u) ->
-      fpf out "@[<2>let %s :=@ %a in@ %a@]" v print_term t print_term u
+    fpf out "@[<2>let %s :=@ %a in@ %a@]" v print_term t print_term u
   | Match (t,l,def) ->
-      let pp_case out (id,vars,t) =
-        fpf out "@[<hv2>| %s %a ->@ %a@]"
-          id (pp_list_ ~sep:" " pp_var_or_wildcard) vars print_term t
-      and pp_default out = function
-        | None -> ()
-        | Some rhs -> fpf out "@ | default -> %a" print_term rhs
-      in
-      fpf out "@[<hv2>match @[%a@] with@ %a%a end@]"
-        print_term t (pp_list_ ~sep:"" pp_case) l pp_default def
+    let pp_case out (id,vars,t) =
+      fpf out "@[<hv2>| %s %a ->@ %a@]"
+        id (pp_list_ ~sep:" " pp_var_or_wildcard) vars print_term t
+    and pp_default out = function
+      | None -> ()
+      | Some rhs -> fpf out "@ | default -> %a" print_term rhs
+    in
+    fpf out "@[<hv2>match @[%a@] with@ %a%a end@]"
+      print_term t (pp_list_ ~sep:"" pp_case) l pp_default def
   | Ite (a,b,c) ->
-      (* special case to avoid deep nesting of ifs *)
-      let pp_middle out (a,b) =
-        fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]" print_term a print_term b
-      in
-      let middle, last = unroll_if_ c in
-      fpf out "@[<hv>@[<2>if@ @[%a@]@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
-        print_term a print_term b
-        (pp_list_ ~sep:"" pp_middle) middle
-        print_term last
+    (* special case to avoid deep nesting of ifs *)
+    let pp_middle out (a,b) =
+      fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]" print_term a print_term b
+    in
+    let middle, last = unroll_if_ c in
+    fpf out "@[<hv>@[<2>if@ @[%a@]@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
+      print_term a print_term b
+      (pp_list_ ~sep:"" pp_middle) middle
+      print_term last
   | Forall (v, t) ->
-      fpf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
+    fpf out "@[<2>forall %a.@ %a@]" print_typed_var v print_term t
   | Exists (v, t) ->
-      fpf out "@[<2>exists %a.@ %a@]" print_typed_var v print_term t
+    fpf out "@[<2>exists %a.@ %a@]" print_typed_var v print_term t
   | Asserting (_, []) -> assert false
   | Asserting (t, l) ->
-      fpf out "@[<2>%a@ @[<2>asserting @[%a@]@]@]"
-        print_term_inner t (pp_list_ ~sep:" && " print_term_inner) l
+    fpf out "@[<2>%a@ @[<2>asserting @[%a@]@]@]"
+      print_term_inner t (pp_list_ ~sep:" && " print_term_inner) l
   | TyArrow (a, b) ->
-      fpf out "@[<2>%a ->@ %a@]"
-        print_term_in_arrow a print_term b
+    fpf out "@[<2>%a ->@ %a@]"
+      print_term_in_arrow a print_term b
   | TyForall (v, t) ->
-      fpf out "@[<2>pi %s:type.@ %a@]" v print_term t
+    fpf out "@[<2>pi %s:type.@ %a@]" v print_term t
 and print_term_inner out term = match Loc.get term with
   | App _ | Fun _ | Let _ | Ite _ | Match _ | Asserting _
   | Forall _ | Exists _ | TyForall _ | Mu _ | TyArrow _ ->
-      fpf out "(%a)" print_term term
+    fpf out "(%a)" print_term term
   | Builtin _ | AtVar _ | Var _ | MetaVar _ -> print_term out term
 and print_term_in_arrow out t = match Loc.get t with
   | Builtin _
@@ -376,27 +366,27 @@ let pp_attrs out = function
 let print_statement out st = match st.stmt_value with
   | Include (f, None) -> fpf out "@[include %s.@]" f
   | Include (f, Some l) -> fpf out "@[include (%a) from %s.@]"
-      (pp_list_ ~sep:"," CCFormat.string) l f
+                             (pp_list_ ~sep:"," CCFormat.string) l f
   | Decl (v, t, attrs) -> fpf out "@[val %s : %a%a.@]" v print_term t pp_attrs attrs
   | Axiom l -> fpf out "@[axiom @[%a@].@]" (pp_list_ ~sep:";" print_term) l
   | Spec l -> fpf out "@[spec %a.@]" pp_spec_defs l
   | Rec l -> fpf out "@[rec %a.@]" pp_rec_defs l
   | Def (a,b) ->
-      fpf out "@[<2>axiom[def]@ %s@ = @[%a@].@]" a print_term b
+    fpf out "@[<2>axiom[def]@ %s@ = @[%a@].@]" a print_term b
   | Data l -> fpf out "@[data %a.@]" pp_ty_defs l
   | Codata l -> fpf out "@[codata %a.@]" pp_ty_defs l
   | Goal t -> fpf out "@[goal %a.@]" print_term t
   | Pred (k, preds) -> fpf out "@[pred%a %a.@]" pp_wf k pp_mutual_preds preds
   | Copy c ->
-      let pp_wrt out = function
-        | Wrt_nothing -> ()
-        | Wrt_subset p -> fpf out "@[subset %a@]@," print_term p
-        | Wrt_quotient (`Total, r) -> fpf out "@[quotient %a@]@," print_term r
-        | Wrt_quotient (`Partial, r) -> fpf out "@[partial_quotient %a@]@," print_term r
-      in
-      fpf out "@[<v2>@[<4>copy @[%s%a@] :=@ @[%a@]@]@,%aabstract = %s@,concrete = %s@]"
-        c.id (pp_list_ ~sep:" " CCFormat.string) c.copy_vars
-        print_term c.of_ pp_wrt c.wrt c.abstract c.concrete
+    let pp_wrt out = function
+      | Wrt_nothing -> ()
+      | Wrt_subset p -> fpf out "@[subset %a@]@," print_term p
+      | Wrt_quotient (`Total, r) -> fpf out "@[quotient %a@]@," print_term r
+      | Wrt_quotient (`Partial, r) -> fpf out "@[partial_quotient %a@]@," print_term r
+    in
+    fpf out "@[<v2>@[<4>copy @[%s%a@] :=@ @[%a@]@]@,%aabstract = %s@,concrete = %s@]"
+      c.id (pp_list_ ~sep:" " CCFormat.string) c.copy_vars
+      print_term c.of_ pp_wrt c.wrt c.abstract c.concrete
   | Copred (k, preds) -> fpf out "@[copred%a %a.@]" pp_wf k pp_mutual_preds preds
 
 let print_statement_list out l =

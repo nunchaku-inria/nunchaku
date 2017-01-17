@@ -99,8 +99,8 @@ let attrs_of_ty state (ty:ty): Stmt.decl_attr list =
   (if AT.is_abstract state.env ty
    then [Stmt.Attr_abstract] else [])
   @
-  (if AT.is_incomplete state.env ty
-   then [Stmt.Attr_incomplete] else [])
+    (if AT.is_incomplete state.env ty
+     then [Stmt.Attr_incomplete] else [])
 
 (* [c] is a subset copy type with predicate [pred]; encode it as a new
    uninterpreted type [c], where [abstract] and [concrete] are regular functions
@@ -168,7 +168,7 @@ let copy_subset_as_uninterpreted_ty state ~info ~(pred:term) c : (_, _) Stmt.t l
     )
   in
   [decl_c; decl_abs; decl_conc; ax_abs_conc; ax_pred_conc]
-    @ ax_defined
+  @ ax_defined
 
 (* [c] is a quotient copy type with relation [rel]; encode it as a new
    uninterpreted type [c], where [abstract] and [concrete] are regular functions
@@ -223,8 +223,8 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
     let conc_b = U.app_const c.Stmt.copy_concrete [U.var b] in
     U.forall_l [a; b]
       (U.imply
-        (Red.app_whnf rel [conc_a; conc_b])
-        (U.eq (U.var a) (U.var b)))
+         (Red.app_whnf rel [conc_a; conc_b])
+         (U.eq (U.var a) (U.var b)))
     |> Stmt.axiom1 ~info
   (* if complete (concrete type is finite and small enough),
      axiom [forall c:conc. (rel c c =>)? rel c (concrete (abstract c))] *)
@@ -249,7 +249,7 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
     )
   in
   [decl_c; decl_abs; decl_conc; ax_abs_conc; ax_rel_conc; ax_partition]
-    @ ax_defined
+  @ ax_defined
 
 let is_incomplete_type_ state ty = TyTbl.mem state.incomplete_types ty
 let is_abstract_type_ state ty = TyTbl.mem state.abstract_types ty
@@ -257,10 +257,10 @@ let is_abstract_type_ state ty = TyTbl.mem state.abstract_types ty
 (* encode terms, perform the required approximations *)
 let encode_term state pol t =
   let rec aux pol t = match T.repr t with
-    | TI.Bind ((`Forall | `Exists) as q, v, _)
+    | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, _)
       when is_incomplete_type_ state (Var.ty v) ->
       (* might approximate this quantifier *)
-      begin match U.approx_infinite_quant_pol q pol with
+      begin match U.approx_infinite_quant_pol_binder q pol with
         | `Keep -> aux' pol t
         | `Unsat_means_unknown res ->
           (* drop quantifier *)
@@ -355,7 +355,7 @@ let decode_term (map:term ID.Map.t) (t:term): term =
     | TI.Const id ->
       begin match ID.Map.get id map with
         | None -> t
-          | Some t' -> t'
+        | Some t' -> t'
       end
     | TI.App (f, l) ->
       let f = aux f in
@@ -403,9 +403,9 @@ let pipe ~print ~check =
       let module Ppb = Problem.Print(P)(P) in
       Format.printf "@[<v2>@{<Yellow>after %s@}:@ %a@]@." name Ppb.print)
     @
-    Utils.singleton_if check () ~f:(fun () ->
-      let module C = TypeCheck.Make(T) in
-      C.empty () |> C.check_problem)
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.empty () |> C.check_problem)
   in
   let decode st = Problem.Res.map_m ~f:(decode_model st) in
   Transform.make

@@ -130,8 +130,8 @@ module Fut = struct
         | Done x ->
           apply_in0_ q
             (fun () ->
-              try set_done y (f x)
-              with e -> set_fail y e)
+               try set_done y (f x)
+               with e -> set_fail y e)
         | Fail e -> apply_in2_ q set_fail y e);
     on_res y
       ~f:(fun q res -> match res with
@@ -157,8 +157,8 @@ module Fut = struct
         with e -> P_fail e
       in
       match res with
-      | P_done x -> set_done fut x
-      | P_fail e -> set_fail fut e
+        | P_done x -> set_done fut x
+        | P_fail e -> set_fail fut e
     in
     (* spawn thread to run the job *)
     let _ = Thread.create compute_and_set () in
@@ -306,9 +306,9 @@ end
 type 'res running_task =
   | R_task :
       int * (* unique ID *)
-      ('a, 'res) Task.inner *
-      ('a * shortcut) Fut.t ->
-      'res running_task
+        ('a, 'res) Task.inner *
+        ('a * shortcut) Fut.t ->
+    'res running_task
 
 type 'a run_result =
   | Res_one of 'a
@@ -398,40 +398,40 @@ let rec run_pool pool =
   Mutex.lock pool.lock;
   match pool.todo, pool.active, pool.pool_state with
     | _, _, (Res_one _ | Res_fail _) ->
-        (* return now *)
-        Utils.debug ~lock:true ~section 2 "stop active tasks...";
-        Mutex.unlock pool.lock;
-        List.iter kill_rtask_ pool.active;
-        pool.pool_state
+      (* return now *)
+      Utils.debug ~lock:true ~section 2 "stop active tasks...";
+      Mutex.unlock pool.lock;
+      List.iter kill_rtask_ pool.active;
+      pool.pool_state
     | [], [], _ ->
-        Utils.debug ~lock:true ~section 2 "all tasks done";
-        Mutex.unlock pool.lock;
-        pool.pool_state
+      Utils.debug ~lock:true ~section 2 "all tasks done";
+      Mutex.unlock pool.lock;
+      pool.pool_state
     | task :: todo_tl, _, Res_list _ ->
-        if List.length pool.active < pool.j
-        then (
-          Utils.debugf ~lock:true ~section 2
-            "start new task (active: %d / j=%d / todo: %d)"
-            (fun k->k (List.length pool.active) pool.j (List.length todo_tl));
-          (* run new task *)
-          pool.todo <- todo_tl;
-          start_task pool task; (* releases lock *)
-        ) else (
-          (* wait for something to happen *)
-          Utils.debugf ~lock:true ~section 2
-            "waiting (max number of active tasks / todo: %d)..."
-            (fun k->k (1+List.length todo_tl));
-          Condition.wait pool.cond pool.lock;
-          Mutex.unlock pool.lock;
-        );
-        run_pool pool
-    | [], _::_, Res_list _ ->
+      if List.length pool.active < pool.j
+      then (
+        Utils.debugf ~lock:true ~section 2
+          "start new task (active: %d / j=%d / todo: %d)"
+          (fun k->k (List.length pool.active) pool.j (List.length todo_tl));
+        (* run new task *)
+        pool.todo <- todo_tl;
+        start_task pool task; (* releases lock *)
+      ) else (
         (* wait for something to happen *)
-        Utils.debug ~lock:true ~section 2 "waiting for tasks to finish...";
+        Utils.debugf ~lock:true ~section 2
+          "waiting (max number of active tasks / todo: %d)..."
+          (fun k->k (1+List.length todo_tl));
         Condition.wait pool.cond pool.lock;
         Mutex.unlock pool.lock;
-        (* check again *)
-        run_pool pool
+      );
+      run_pool pool
+    | [], _::_, Res_list _ ->
+      (* wait for something to happen *)
+      Utils.debug ~lock:true ~section 2 "waiting for tasks to finish...";
+      Condition.wait pool.cond pool.lock;
+      Mutex.unlock pool.lock;
+      (* check again *)
+      run_pool pool
 
 let run ~j ~deadline tasks =
   if j < 1 then invalid_arg "Scheduling.run";

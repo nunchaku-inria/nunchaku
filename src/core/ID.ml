@@ -42,13 +42,13 @@ let hash v = v.id land max_int (* >= 0 *)
 
 let print_normal out v =
   if v.needs_at
-    then Format.fprintf out "@@%s%s" v.name (Polarity.to_string v.pol)
-    else Format.fprintf out "%s%s" v.name (Polarity.to_string v.pol)
+  then Format.fprintf out "@@%s%s" v.name (Polarity.to_string v.pol)
+  else Format.fprintf out "%s%s" v.name (Polarity.to_string v.pol)
 
 let to_string_normal v =
   if v.needs_at
-    then Printf.sprintf "@@%s%s" v.name (Polarity.to_string v.pol)
-    else v.name ^ Polarity.to_string v.pol
+  then Printf.sprintf "@@%s%s" v.name (Polarity.to_string v.pol)
+  else v.name ^ Polarity.to_string v.pol
 
 let to_string_slug v =
   let suffix = match v.pol with
@@ -60,8 +60,8 @@ let to_string_slug v =
 
 let print_full out v =
   if v.needs_at
-    then Format.fprintf out "@@%s%s/%d" v.name (Polarity.to_string v.pol) v.id
-    else Format.fprintf out "%s%s/%d" v.name (Polarity.to_string v.pol) v.id
+  then Format.fprintf out "@@%s%s/%d" v.name (Polarity.to_string v.pol) v.id
+  else Format.fprintf out "%s%s/%d" v.name (Polarity.to_string v.pol) v.id
 
 let to_string_full = CCFormat.to_string print_full
 
@@ -69,9 +69,16 @@ let print_name out v = CCFormat.string out v.name
 
 (* debug mode: always print ID unique counters *)
 let always_print_full_ = ref false
+
+let print_undefined_id : bool ref = ref false
+
 let () =
-  Utils.add_option
-    ("--pp-id", Arg.Set always_print_full_, " always print IDs numbers")
+  Utils.Options.add_list
+    [ ("--pp-id", Arg.Set always_print_full_, " always print IDs numbers");
+      ("--print-undefined",
+       Arg.Set print_undefined_id,
+       " print unique IDs of `undefined` terms");
+    ]
 
 let print out v =
   if !always_print_full_ then print_full out v else print_normal out v

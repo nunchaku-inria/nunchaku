@@ -27,10 +27,10 @@ exception Error of string
 let spf = CCFormat.sprintf
 
 let () = Printexc.register_printer
-  (function
-    | Error msg ->
+    (function
+      | Error msg ->
         Some (spf "@[<2>elimination of multiple equations:@ %s@]" msg)
-    | _ -> None)
+      | _ -> None)
 
 let error_ msg = raise (Error msg)
 let errorf_ msg = Utils.exn_ksprintf msg ~f:error_
@@ -70,23 +70,23 @@ let dnode_add_bool d b x = match d, b with
   | DN_if (l,r), `False -> DN_if (l,x::r)
   | DN_bind _, _
   | DN_match _, _ ->
-      errorf_ "@[<2>expected boolean decision node@]"
+    errorf_ "@[<2>expected boolean decision node@]"
 
 let dnode_all_cstors d = d.dn_tydef.Stmt.ty_cstors
 
 let dnode_add_cstor d c x = match d with
   | DN_match d ->
-      let allowed_cstors = d.dn_tydef.Stmt.ty_cstors in
-      if not (ID.Map.mem c allowed_cstors)
-      then errorf_ "@[<2>%a is not a constructor of %a@ (these are @[%a@])@]"
+    let allowed_cstors = d.dn_tydef.Stmt.ty_cstors in
+    if not (ID.Map.mem c allowed_cstors)
+    then errorf_ "@[<2>%a is not a constructor of %a@ (these are @[%a@])@]"
         ID.print c ID.print d.dn_tydef.Stmt.ty_id
         (CCFormat.seq ID.print) (ID.Map.to_seq allowed_cstors |> Sequence.map fst);
-      (* add [x] to the list [l] of subtrees already present for case [c] *)
-      let l = try ID.Map.find c d.dn_by_cstor with Not_found -> [] in
-      DN_match { d with dn_by_cstor = ID.Map.add c (x::l) d.dn_by_cstor }
+    (* add [x] to the list [l] of subtrees already present for case [c] *)
+    let l = try ID.Map.find c d.dn_by_cstor with Not_found -> [] in
+    DN_match { d with dn_by_cstor = ID.Map.add c (x::l) d.dn_by_cstor }
   | DN_if _ -> errorf_ "cannot match against %a, boolean case" ID.print c
   | DN_bind _ ->
-      errorf_ "cannot match against %a, variable binding only" ID.print c
+    errorf_ "cannot match against %a, variable binding only" ID.print c
 
 let add_renaming ~local_state v v' =
   local_state.renaming <- Subst.add ~subst:local_state.renaming v v';
@@ -105,89 +105,91 @@ let pp_quad out (pats,rhs,side,subst) =
 (* transform flat equations into a match tree. *)
 let rec compile_equations ~local_state vars l : term =
   match vars, l with
-  | _, [] -> U.undefined_self local_state.root (* undefined case *)
-  | [], [([], rhs, [], subst)] ->
+    | _, [] -> U.undefined_self local_state.root (* undefined case *)
+    | [], [([], rhs, [], subst)] ->
       (* simple case: no side conditions, one RHS *)
       U.eval_renaming ~subst rhs
-  | [], l ->
+    | [], l ->
       (* reverse list, because the first clauses in pattern-match are the
          ones at the end of the list *)
       let l = List.rev_map
-        (fun (args,rhs,side,subst) ->
-          assert (args=[]);
-          rhs,side,subst)
-        l
+          (fun (args,rhs,side,subst) ->
+             assert (args=[]);
+             rhs,side,subst)
+          l
       in
       yield_list ~local_state l
-  | v::vars', _ ->
+    | v::vars', _ ->
       (* build one node of the decision tree *)
       let dnode =
         Utils.debugf ~section 5
           "@[<2>build decision node for %a:%a @[%a@]@ with @[<1>%a@]@]"
           (fun k->k Var.print_full v P.print (Var.ty v)
-            (CCFormat.list Var.print_full) vars'
-            (CCFormat.list pp_quad) l);
+              (CCFormat.list Var.print_full) vars'
+              (CCFormat.list pp_quad) l);
         let ty = Var.ty v in
         if U.ty_is_Prop ty
         then DN_if ([], []) (* [v] is a prop, we use a if/then/else *)
-        else try
-          let ty_id = U.head_sym ty in
-          (* what does the type of [v] look like? *)
-          match Env.def (Env.find_exn ~env:local_state.env ty_id) with
-          | Env.Data (_, _, tydef) ->
-              (* [v] is a variable of type (co)data, so we use the list
-                 of constructors to build a shallow pattern match *)
-              DN_match {
-                dn_tydef=tydef;
-                dn_by_cstor=ID.Map.empty;
-                dn_wildcard=[];
-              }
-          | Env.Fun_def (_,_,_)
-          | Env.Fun_spec _
-          | Env.Pred _
-          | Env.Copy_abstract _
-          | Env.Copy_concrete _
-          | Env.Cstor (_,_,_,_) ->
-              errorf_ "@[`@[%a@]`@ is not a type.@]" ID.print ty_id
-          | Env.Copy_ty _
-          | Env.NoDef ->
-              (* [v] is of a non-matchable type, but we can still bind
-                 it to an (opaque) value *)
-              DN_bind []
-        with Not_found ->
-          DN_bind [] (* not an atomic type *)
+        else begin match U.head_sym ty with
+          | Some ty_id ->
+            (* what does the type of [v] look like? *)
+            begin match Env.def (Env.find_exn ~env:local_state.env ty_id) with
+              | Env.Data (_, _, tydef) ->
+                (* [v] is a variable of type (co)data, so we use the list
+                   of constructors to build a shallow pattern match *)
+                DN_match {
+                  dn_tydef=tydef;
+                  dn_by_cstor=ID.Map.empty;
+                  dn_wildcard=[];
+                }
+              | Env.Fun_def (_,_,_)
+              | Env.Fun_spec _
+              | Env.Pred _
+              | Env.Copy_abstract _
+              | Env.Copy_concrete _
+              | Env.Cstor (_,_,_,_) ->
+                errorf_ "@[`@[%a@]`@ is not a type.@]" ID.print ty_id
+              | Env.Copy_ty _
+              | Env.NoDef ->
+                (* [v] is of a non-matchable type, but we can still bind
+                   it to an (opaque) value *)
+                DN_bind []
+              end
+          | None ->
+            DN_bind [] (* not an atomic type *)
+        end
       in
       let dnode = List.fold_left
-        (fun dnode (pats, rhs, side, subst) ->
-          let pat, pats = match pats with [] -> assert false | x::y -> x,y in
-          match pat with
-          | P_any -> dnode_add_wildcard dnode (pats,rhs,side,subst)
-          | P_term t ->
-              match Pat.repr t with
-              | Pattern.Builtin ((`True | `False) as b) ->
-                  (* follow the [true] branch *)
-                  dnode_add_bool dnode b (pats,rhs,side,subst)
-              | Pattern.App (id,sub_pats) ->
-                  (* follow the [id] branch *)
-                  let sub_pats = List.map (fun x->P_term x) sub_pats in
-                  dnode_add_cstor dnode id (sub_pats,pats,rhs,side,subst)
-              | Pattern.Var v' ->
-                  (* renaming. We try to use [v'] rather than [v] because
-                     the name of [v'] is probably more relevant, except
-                     if [v] is already renamed to something else . *)
-                  let subst = match Subst.find_deref_rec ~subst:local_state.renaming v with
-                    | None when Var.equal v v' -> subst
-                    | None ->
-                        (* v -> v', use [v'] instead of [v] now, in every branch. *)
-                        add_renaming ~local_state v v';
-                        subst
-                    | Some v'' when Var.equal v' v'' -> subst
-                    | Some v'' ->
-                        Subst.add ~subst v' v'' (* v -> v'' <- v' *)
-                  in
-                  dnode_add_wildcard dnode (pats,rhs,side,subst)
-        )
-        dnode l
+          (fun dnode (pats, rhs, side, subst) ->
+             let pat, pats = match pats with [] -> assert false | x::y -> x,y in
+             match pat with
+               | P_any -> dnode_add_wildcard dnode (pats,rhs,side,subst)
+               | P_term t ->
+                 match Pat.repr t with
+                   | Pattern.Builtin ((`True | `False) as b) ->
+                     (* follow the [true] branch *)
+                     dnode_add_bool dnode b (pats,rhs,side,subst)
+                   | Pattern.App (id,sub_pats) ->
+                     (* follow the [id] branch *)
+                     let sub_pats = List.map (fun x->P_term x) sub_pats in
+                     dnode_add_cstor dnode id (sub_pats,pats,rhs,side,subst)
+                   | Pattern.Var v' ->
+                     (* renaming. We try to use [v'] rather than [v] because
+                        the name of [v'] is probably more relevant, except
+                        if [v] is already renamed to something else . *)
+                     let subst = match Subst.find_deref_rec ~subst:local_state.renaming v with
+                       | None when Var.equal v v' -> subst
+                       | None ->
+                         (* v -> v', use [v'] instead of [v] now, in every branch. *)
+                         add_renaming ~local_state v v';
+                         subst
+                       | Some v'' when Var.equal v' v'' -> subst
+                       | Some v'' ->
+                         Subst.add ~subst v' v'' (* v -> v'' <- v' *)
+                     in
+                     dnode_add_wildcard dnode (pats,rhs,side,subst)
+          )
+          dnode l
       in
       let v = Subst.deref_rec ~subst:local_state.renaming v in
       compile_dnode ~local_state v vars' dnode
@@ -197,39 +199,39 @@ let rec compile_equations ~local_state vars l : term =
 and yield_list ~local_state l = match l with
   | [] -> assert false
   | [t,[],subst] ->
-      (* final case *)
-      U.eval_renaming ~subst t
+    (* final case *)
+    U.eval_renaming ~subst t
   | [t, ((_::_) as sides), subst] ->
-      (* final case, but might fail *)
-      let else_ = U.undefined_self local_state.root in
-      let sides = List.map (U.eval_renaming ~subst) sides in
-      U.ite (U.and_ sides) (U.eval_renaming ~subst t) else_
+    (* final case, but might fail *)
+    let else_ = U.undefined_self local_state.root in
+    let sides = List.map (U.eval_renaming ~subst) sides in
+    U.ite (U.and_ sides) (U.eval_renaming ~subst t) else_
   | (t,[],subst)::_::_ ->
-      Utils.warningf Utils.Warn_overlapping_match
-        "@[ignore terms following `@[%a@]`, for it has no side condition@]" P.print t;
-      U.eval_renaming ~subst t
+    Utils.warningf Utils.Warn_overlapping_match
+      "@[ignore terms following `@[%a@]`, for it has no side condition@]" P.print t;
+    U.eval_renaming ~subst t
   | (t, ((_::_) as sides), subst) :: l' ->
-      (* try [sides], yielding [t], otherwise fall back on [l'] *)
-      let sides = List.map (U.eval_renaming ~subst) sides in
-      U.ite (U.and_ sides)
-        (U.eval_renaming ~subst t)
-        (yield_list ~local_state l')
+    (* try [sides], yielding [t], otherwise fall back on [l'] *)
+    let sides = List.map (U.eval_renaming ~subst) sides in
+    U.ite (U.and_ sides)
+      (U.eval_renaming ~subst t)
+      (yield_list ~local_state l')
 
 (* add missing constructors (not explicitely matched upon) to the set
    of cases, complemented with a list of fresh vars, leading to
    the default cases;
    then compile the subtrees *)
 and compile_dnode ~local_state v next_vars dn : term = match dn with
-| DN_if (l,r) ->
+  | DN_if (l,r) ->
     let l = compile_equations ~local_state next_vars l in
     let r = compile_equations ~local_state next_vars r in
     let v = Subst.deref_rec ~subst:local_state.renaming v in
     U.ite (U.var v) l r
-| DN_bind l -> compile_equations ~local_state next_vars l
-| DN_match dn when ID.Map.is_empty dn.dn_by_cstor ->
+  | DN_bind l -> compile_equations ~local_state next_vars l
+  | DN_match dn when ID.Map.is_empty dn.dn_by_cstor ->
     (* no need to match, use next variables *)
     compile_equations ~local_state next_vars dn.dn_wildcard
-| DN_match dn ->
+  | DN_match dn ->
     (* one level of matching *)
     let def = match dn.dn_wildcard with
       | [] -> TI.Default_none
@@ -248,35 +250,35 @@ and compile_dnode ~local_state v next_vars dn : term = match dn with
           TI.Default_some (rhs, map)
         )
     and l = ID.Map.mapi
-      (fun id cases ->
-        Utils.debugf ~section 5 "compile_dnode for %a on cstor %a"
-          (fun k -> k Var.print v ID.print id);
-        (* fresh vars for the constructor's arguments *)
-        let cstor = ID.Map.find id dn.dn_tydef.Stmt.ty_cstors in
-        let vars = List.mapi
-          (fun i ty -> Var.make ~ty ~name:(spf "v_%d" i))
-          cstor.Stmt.cstor_args
-        in
-        (* the cases that always match *)
-        let wildcard_cases = List.map
-          (fun (pats,rhs,side,subst) ->
-            List.map (fun _ -> P_any) vars @ pats, rhs, side, subst)
-          dn.dn_wildcard
-        (* explicit sub-cases *)
-        and cases =
-          List.map
-            (fun (new_pats,pats,rhs,side,subst) ->
-               assert (List.length new_pats=List.length vars);
-               new_pats @ pats, rhs, side, subst)
-            cases
-        in
-        let rhs' =
-          compile_equations ~local_state (vars @ next_vars) (cases @ wildcard_cases)
-        in
-        (* see whether the variables were renamed *)
-        let vars = List.map (Subst.deref_rec ~subst:local_state.renaming) vars in
-        vars, rhs')
-      dn.dn_by_cstor
+        (fun id cases ->
+           Utils.debugf ~section 5 "compile_dnode for %a on cstor %a"
+             (fun k -> k Var.print v ID.print id);
+           (* fresh vars for the constructor's arguments *)
+           let cstor = ID.Map.find id dn.dn_tydef.Stmt.ty_cstors in
+           let vars = List.mapi
+               (fun i ty -> Var.make ~ty ~name:(spf "v_%d" i))
+               cstor.Stmt.cstor_args
+           in
+           (* the cases that always match *)
+           let wildcard_cases = List.map
+               (fun (pats,rhs,side,subst) ->
+                  List.map (fun _ -> P_any) vars @ pats, rhs, side, subst)
+               dn.dn_wildcard
+           (* explicit sub-cases *)
+           and cases =
+             List.map
+               (fun (new_pats,pats,rhs,side,subst) ->
+                  assert (List.length new_pats=List.length vars);
+                  new_pats @ pats, rhs, side, subst)
+               cases
+           in
+           let rhs' =
+             compile_equations ~local_state (vars @ next_vars) (cases @ wildcard_cases)
+           in
+           (* see whether the variables were renamed *)
+           let vars = List.map (Subst.deref_rec ~subst:local_state.renaming) vars in
+           vars, rhs')
+        dn.dn_by_cstor
     in
     let v = Subst.deref_rec ~subst:local_state.renaming v in
     U.match_with (U.var v) l ~def
@@ -285,78 +287,78 @@ and compile_dnode ~local_state v next_vars dn : term = match dn with
    @param id the symbol being defined
 *)
 let uniq_eqns
-: env:env ->
+  : env:env ->
   id:ID.t ->
   ty:T.t ->
   (term, term) Statement.equations ->
   (term, term) Statement.equations
   = fun ~env ~id ~ty e -> match e with
-  | Stmt.Eqn_single _
-  | Stmt.Eqn_app _ -> assert false
-  | Stmt.Eqn_nested l ->
-    (* create fresh vars *)
-    let _, ty_args, _ = U.ty_unfold ty in
-    let vars =
-      List.mapi
-        (fun i ty -> Var.makef ~ty "v_%d" i)
-        ty_args
-    in
-    let cases =
-      List.map
-        (fun (_,args,rhs,side) ->
-          (* might need to add some variables in [args] and [rhs] *)
-          let eta_expand_args = CCList.drop (List.length args) vars |> List.map U.var in
-          let pats = List.map (fun t -> P_term t) (args @ eta_expand_args) in
-          pats, Red.app_whnf rhs eta_expand_args, side, Subst.empty)
-        l
-    and local_state = {
-      root=U.app_const id (List.map U.var vars); (* defined term *)
-      renaming=Subst.empty;
-      env;
-    } in
-    (* compile equations into flat pattern matches *)
-    let new_rhs = compile_equations ~local_state vars cases in
-    (* apply global renaming *)
-    let new_rhs = U.eval_renaming ~subst:local_state.renaming new_rhs in
-    let vars = List.map (Subst.deref_rec ~subst:local_state.renaming) vars in
-    Stmt.Eqn_single (vars,new_rhs)
+    | Stmt.Eqn_single _
+    | Stmt.Eqn_app _ -> assert false
+    | Stmt.Eqn_nested l ->
+      (* create fresh vars *)
+      let _, ty_args, _ = U.ty_unfold ty in
+      let vars =
+        List.mapi
+          (fun i ty -> Var.makef ~ty "v_%d" i)
+          ty_args
+      in
+      let cases =
+        List.map
+          (fun (_,args,rhs,side) ->
+             (* might need to add some variables in [args] and [rhs] *)
+             let eta_expand_args = CCList.drop (List.length args) vars |> List.map U.var in
+             let pats = List.map (fun t -> P_term t) (args @ eta_expand_args) in
+             pats, Red.app_whnf rhs eta_expand_args, side, Subst.empty)
+          l
+      and local_state = {
+        root=U.app_const id (List.map U.var vars); (* defined term *)
+        renaming=Subst.empty;
+        env;
+      } in
+      (* compile equations into flat pattern matches *)
+      let new_rhs = compile_equations ~local_state vars cases in
+      (* apply global renaming *)
+      let new_rhs = U.eval_renaming ~subst:local_state.renaming new_rhs in
+      let vars = List.map (Subst.deref_rec ~subst:local_state.renaming) vars in
+      Stmt.Eqn_single (vars,new_rhs)
 
 let uniq_eqn_st env st =
   let loc = Stmt.loc st in
   let info = Stmt.info st in
   match Stmt.view st with
-  | Stmt.Axiom (Stmt.Axiom_rec l) ->
+    | Stmt.Axiom (Stmt.Axiom_rec l) ->
       Utils.debugf ~section 5 "@[<2>compile equations@ `@[%a@]`@]"
         (fun k->k PStmt.print_rec_defs l);
       let l' = List.map
-        (fun def ->
-          let d = Stmt.defined_of_rec def in
-          let id = Stmt.id_of_defined d in
-          let ty = Stmt.ty_of_defined d in
-          let rec_eqns = uniq_eqns ~id ~ty ~env def.Stmt.rec_eqns in
-          {def with Stmt.rec_eqns; })
-        l
+          (fun def ->
+             let d = Stmt.defined_of_rec def in
+             let id = Stmt.id_of_defined d in
+             let ty = Stmt.ty_of_defined d in
+             let rec_eqns = uniq_eqns ~id ~ty ~env def.Stmt.rec_eqns in
+             {def with Stmt.rec_eqns; })
+          l
       in
       let env = Env.declare_rec_funs ?loc ~env l' in
       env, Stmt.axiom_rec ~info l'
-  | Stmt.Axiom (Stmt.Axiom_spec l) ->
+    | Stmt.Axiom (Stmt.Axiom_spec l) ->
       env, Stmt.axiom_spec ~info l
-  | Stmt.Axiom (Stmt.Axiom_std l) ->
+    | Stmt.Axiom (Stmt.Axiom_std l) ->
       env, Stmt.axiom ~info l
-  | Stmt.Decl d ->
+    | Stmt.Decl d ->
       let env = Env.declare_defined ?loc ~env d in
       env, Stmt.decl_of_defined ~info d
-  | Stmt.TyDef (k,ty) ->
+    | Stmt.TyDef (k,ty) ->
       (* declare (co)data, so it can be used in encoding *)
       let env = Env.def_data ?loc ~env ~kind:k ty in
       env, Stmt.mk_ty_def ~info k ty
-  | Stmt.Pred (wf, k, l) ->
+    | Stmt.Pred (wf, k, l) ->
       let env = Env.def_preds ?loc ~env ~wf ~kind:k l in
       env, Stmt.mk_pred ~info ~wf k l
-  | Stmt.Copy c ->
+    | Stmt.Copy c ->
       let env = Env.add_copy ?loc ~env c in
       env, Stmt.copy ~info c
-  | Stmt.Goal g ->
+    | Stmt.Goal g ->
       env, Stmt.goal ~info g
 
 let uniq_eqns_pb pb =
@@ -372,9 +374,9 @@ let pipe ~decode ~print ~check =
       let module PPb = Problem.Print(P)(P) in
       Format.printf "@[<v2>@{<Yellow>after uniq equations@}: %a@]@." PPb.print)
     @
-    Utils.singleton_if check () ~f:(fun () ->
-      let module C = TypeCheck.Make(T) in
-      C.empty () |> C.check_problem)
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.empty () |> C.check_problem)
   and decode _ x = decode x in
   Transform.make
     ~on_encoded

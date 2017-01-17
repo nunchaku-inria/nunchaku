@@ -13,8 +13,6 @@ module T = TermInner.Default
 module U = T.U
 module P = T.P
 module PStmt = Stmt.Print(P)(P)
-module TM = TermMono.Make(T)
-module TMI = TermMono
 module TyI = TypeMono
 module Ty = TypeMono.Make(T)
 module Red = Reduce.Make(T)
@@ -27,9 +25,9 @@ let fpf = Format.fprintf
 exception Error of string
 
 let () = Printexc.register_printer
-  (function
-    | Error msg -> Some (Utils.err_sprintf "elim HOF:@ %s" msg)
-    | _ -> None)
+    (function
+      | Error msg -> Some (Utils.err_sprintf "elim HOF:@ %s" msg)
+      | _ -> None)
 
 let error_ msg = raise (Error msg)
 let errorf_ msg = CCFormat.ksprintf msg ~f:error_
@@ -82,7 +80,7 @@ module FunMap = CCMap.Make(struct type t = fun_ let compare = compare_fun end)
 (* print arity map *)
 let pp_arities out tbl =
   let pp_pair out (id,set) = fpf out "@[%a → @[%a@] over %d@]"
-    pp_fun id pp_arity_set set (List.length set.as_ty_args)
+      pp_fun id pp_arity_set set (List.length set.as_ty_args)
   in
   fpf out "@[<v>%a@]"
     (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_pair)
@@ -106,18 +104,18 @@ let add_arity_ m (f:fun_) n ty_args ty_ret : arity_set FunMap.t =
 let as_fun_ ~env id =
   let info = Env.find_exn ~env id in
   match info.Env.def with
-  | Env.Fun_def _
-  | Env.Fun_spec _
-  | Env.Copy_abstract _
-  | Env.Copy_concrete _
-  | Env.NoDef ->
+    | Env.Fun_def _
+    | Env.Fun_spec _
+    | Env.Copy_abstract _
+    | Env.Copy_concrete _
+    | Env.NoDef ->
       let tyvars, args, ret = U.ty_unfold info.Env.ty in
       assert (tyvars=[]); (* mono, see {!inv} *)
       Some (args, ret)
-  | Env.Data (_,_,_)
-  | Env.Cstor (_,_,_,_) (* always fully applied *)
-  | Env.Copy_ty _ -> None
-  | Env.Pred (_,_,_,_,_) -> assert false (* see {!inv} *)
+    | Env.Data (_,_,_)
+    | Env.Cstor (_,_,_,_) (* always fully applied *)
+    | Env.Copy_ty _ -> None
+    | Env.Pred (_,_,_,_,_) -> assert false (* see {!inv} *)
 
 let ty_is_ho_ ty =
   let _, args, _ = U.ty_unfold ty in
@@ -137,57 +135,57 @@ let add_arity_select_ m id n ty =
   assert (args <> []); (* at least one arg: the datatype *)
   add_arity_ m (F_select (id,n)) 1 args ret
 
-let ty_term_ ~env t = U.ty_exn ~sigma:(Env.find_ty ~env) t
+let ty_term_ ~env t = U.ty_exn ~env t
 
 (* compute set of arities for higher-order functions *)
 let compute_arities_term ~env m t =
   let m = ref m in
-  let rec aux t = match TM.repr t with
-    | TMI.Const id ->
-        begin match as_fun_ ~env id with
+  let rec aux t = match T.repr t with
+    | TI.Const id ->
+      begin match as_fun_ ~env id with
         | Some ([], _)
         | None -> ()  (* constant, just ignore *)
         | Some (ty_args, ty_ret) ->
-            (* function that is applied to 0 arguments (e.g. as a parameter) *)
-            m := add_arity_ !m (F_id id) 0 ty_args ty_ret
-        end
-    | TMI.Var v when var_is_ho_ v ->
-        (* higher order variable *)
-        m := add_arity_var_ !m v
-    | TMI.Builtin (`DataSelect (id,n)) ->
-        let ty = ty_term_ ~env t in
-        m := add_arity_select_ !m id n ty
-    | TMI.App (f, l) ->
-        assert (l<>[]);
-        begin match TM.repr f with
-        | TMI.App _ -> assert false
-        | TMI.Const id ->
-            begin match as_fun_ ~env id with
-              | Some ([],_) -> assert false
-              | None -> ()   (* not a function *)
-              | Some (ty_args, ty_ret) ->
-                  assert (List.length ty_args >= List.length l);
-                  m := add_arity_ !m (F_id id) (List.length l) ty_args ty_ret
-            end;
-            (* explore subterms *)
-            List.iter aux l
-        | TMI.Var v ->
-            assert (var_is_ho_ v);
-            (* higher order variable applied to [l] *)
-            let tyvars, args, ret = U.ty_unfold (Var.ty v) in
-            assert (tyvars=[]); (* mono, see {!inv} *)
-            assert (List.length args >= List.length l);
-            m := add_arity_ !m (F_var v) (List.length l) args ret
-        | TMI.Builtin (`DataSelect (id,n)) ->
-            let ty = ty_term_ ~env f in
-            let tyvars, args, ret = U.ty_unfold ty in
-            assert (tyvars=[]); (* mono, see {!inv} *)
-            assert (List.length args >= List.length l);
-            (* selector applied, and unapplied *)
-            m := add_arity_select_ !m id n ty;
-            m := add_arity_ !m (F_select (id, n)) (List.length l) args ret
+          (* function that is applied to 0 arguments (e.g. as a parameter) *)
+          m := add_arity_ !m (F_id id) 0 ty_args ty_ret
+      end
+    | TI.Var v when var_is_ho_ v ->
+      (* higher order variable *)
+      m := add_arity_var_ !m v
+    | TI.Builtin (`DataSelect (id,n)) ->
+      let ty = ty_term_ ~env t in
+      m := add_arity_select_ !m id n ty
+    | TI.App (f, l) ->
+      assert (l<>[]);
+      begin match T.repr f with
+        | TI.App _ -> assert false
+        | TI.Const id ->
+          begin match as_fun_ ~env id with
+            | Some ([],_) -> assert false
+            | None -> ()   (* not a function *)
+            | Some (ty_args, ty_ret) ->
+              assert (List.length ty_args >= List.length l);
+              m := add_arity_ !m (F_id id) (List.length l) ty_args ty_ret
+          end;
+          (* explore subterms *)
+          List.iter aux l
+        | TI.Var v ->
+          assert (var_is_ho_ v);
+          (* higher order variable applied to [l] *)
+          let tyvars, args, ret = U.ty_unfold (Var.ty v) in
+          assert (tyvars=[]); (* mono, see {!inv} *)
+          assert (List.length args >= List.length l);
+          m := add_arity_ !m (F_var v) (List.length l) args ret
+        | TI.Builtin (`DataSelect (id,n)) ->
+          let ty = ty_term_ ~env f in
+          let tyvars, args, ret = U.ty_unfold ty in
+          assert (tyvars=[]); (* mono, see {!inv} *)
+          assert (List.length args >= List.length l);
+          (* selector applied, and unapplied *)
+          m := add_arity_select_ !m id n ty;
+          m := add_arity_ !m (F_select (id, n)) (List.length l) args ret
         | _ -> aux_rec t
-        end
+      end
     | _ -> aux_rec t
   (* recurse *)
   and aux_rec t =
@@ -225,29 +223,29 @@ let compute_arities_stmt ~env m (stmt:(_,_) Stmt.t) =
   in
   let m = match Stmt.view stmt with
     | Stmt.Axiom (Stmt.Axiom_rec l) ->
-        (* function defined with "rec": always consider it fully applied *)
-        List.fold_left
-          (fun m def ->
-            (* declare defined ID with full arity *)
-            let id = def.Stmt.rec_defined.Stmt.defined_head in
-            let m = add_full_arity (F_id id) def.Stmt.rec_defined.Stmt.defined_ty m in
-            (* add arity 0 to higher-order parameter variables *)
-            let m = match def.Stmt.rec_eqns with
-              | Stmt.Eqn_single (vars,_rhs) ->
-                  List.fold_left
-                    (fun m v -> if var_is_ho_ v then add_arity_var_ m v else m)
-                    m vars
-              | _ -> assert false (* by typing *)
-            in
-            m)
-          m l
+      (* function defined with "rec": always consider it fully applied *)
+      List.fold_left
+        (fun m def ->
+           (* declare defined ID with full arity *)
+           let id = def.Stmt.rec_defined.Stmt.defined_head in
+           let m = add_full_arity (F_id id) def.Stmt.rec_defined.Stmt.defined_ty m in
+           (* add arity 0 to higher-order parameter variables *)
+           let m = match def.Stmt.rec_eqns with
+             | Stmt.Eqn_single (vars,_rhs) ->
+               List.fold_left
+                 (fun m v -> if var_is_ho_ v then add_arity_var_ m v else m)
+                 m vars
+             | _ -> assert false (* by typing *)
+           in
+           m)
+        m l
     | Stmt.Copy c ->
-        (* consider the abstract/concrete functions are applied to 1 arg *)
-        m
-        |> add_full_arity (F_id c.Stmt.copy_abstract) c.Stmt.copy_abstract_ty
-        |> add_arity1 (F_id c.Stmt.copy_abstract) c.Stmt.copy_abstract_ty
-        |> add_full_arity (F_id c.Stmt.copy_concrete) c.Stmt.copy_concrete_ty
-        |> add_arity1 (F_id c.Stmt.copy_concrete) c.Stmt.copy_concrete_ty
+      (* consider the abstract/concrete functions are applied to 1 arg *)
+      m
+      |> add_full_arity (F_id c.Stmt.copy_abstract) c.Stmt.copy_abstract_ty
+      |> add_arity1 (F_id c.Stmt.copy_abstract) c.Stmt.copy_abstract_ty
+      |> add_full_arity (F_id c.Stmt.copy_concrete) c.Stmt.copy_concrete_ty
+      |> add_arity1 (F_id c.Stmt.copy_concrete) c.Stmt.copy_concrete_ty
     | _ -> m
   in
   Stmt.fold m stmt ~ty:f ~term:f
@@ -280,7 +278,7 @@ let compute_arities_pb ~env pb =
     - replace any term of the form [plus x y] with [app_H (plus x) y],
     - introduce [proto] function(s) [proto_H : H -> nat]
     - axiomatize extensionality for [H]
-  *)
+*)
 
 type handle =
   | H_leaf of encoded_ty (* leaf type *)
@@ -321,30 +319,30 @@ type fun_encoding = {
 
 type decode_state = {
   dst_app_symbols: unit ID.Tbl.t;
-    (* set of application symbols *)
+  (* set of application symbols *)
   mutable dst_handle_id: ID.t option;
-    (* identifier for reifying "->" in handles *)
+  (* identifier for reifying "->" in handles *)
   mutable fun_encodings: fun_encoding FunMap.t;
-    (* partially applied function/variable -> how to encode it *)
+  (* partially applied function/variable -> how to encode it *)
   mutable app_symbols: apply_fun Ty.Map.t;
-    (* type -> corresponding apply symbol *)
+  (* type -> corresponding apply symbol *)
   mutable dst_gensym: int;
-    (* counter for new symbols *)
+  (* counter for new symbols *)
 }
 
 type state = {
   env: (term, ty) Env.t;
-    (* environment (to get signatures, etc.) *)
+  (* environment (to get signatures, etc.) *)
   arities: arity_set FunMap.t;
-    (* set of arities for partially applied symbols/variables *)
+  (* set of arities for partially applied symbols/variables *)
   mutable app_count: int;
-    (* used for generating new names *)
+  (* used for generating new names *)
   mutable new_stmts : (term, ty) Stmt.t CCVector.vector;
-    (* used for new declarations. [id, type, attribute list] *)
+  (* used for new declarations. [id, type, attribute list] *)
   mutable unsat_means_unknown: bool;
-    (* did we have to do some approximation? *)
+  (* did we have to do some approximation? *)
   decode: decode_state;
-    (* bookkeeping for, later, decoding *)
+  (* bookkeeping for, later, decoding *)
 }
 
 let pp_apply_fun out f =
@@ -380,8 +378,8 @@ let create_state ~env arities = {
 
 let get_or_create_handle_id ~state : ID.t lazy_t =
   lazy (match state.decode.dst_handle_id with
-  | Some i -> i
-  | None ->
+    | Some i -> i
+    | None ->
       let id = ID.make "to" in
       state.decode.dst_handle_id <- Some id;
       let ty_id = U.ty_arrow_l [U.ty_type; U.ty_type] U.ty_type in
@@ -404,8 +402,8 @@ let get_handle_id_decode ~state : ID.t lazy_t =
 let encode_ty_ ~(handle_id:ID.t lazy_t) t : encoded_ty =
   let rec aux t = match T.repr t with
     | TI.TyArrow (a,b) ->
-        let to_ = Lazy.force handle_id in
-        U.ty_app (U.ty_const to_) [aux a; aux b]
+      let to_ = Lazy.force handle_id in
+      U.ty_app (U.ty_const to_) [aux a; aux b]
     | _ -> U.map () t ~bind:(fun () v ->(),v) ~f:(fun () -> aux)
   in
   aux t
@@ -415,8 +413,8 @@ let ty_of_handle_ ~(handle_id:ID.t lazy_t) t : encoded_ty =
   let rec aux = function
     | H_leaf t -> t
     | H_arrow (t, h') ->
-        let id = Lazy.force handle_id in
-        U.ty_app (U.const id) [t; aux h']
+      let id = Lazy.force handle_id in
+      U.ty_app (U.const id) [t; aux h']
   in
   aux t
 
@@ -431,8 +429,8 @@ let extensionality_for_app_ app_fun : (_,_) Stmt.t =
   let app_id = app_fun.af_id in
   let _, args, _ = U.ty_unfold app_fun.af_ty in
   match args with
-  | [] -> assert false
-  | handle :: args' ->
+    | [] -> assert false
+    | handle :: args' ->
       (* handle: the actual function type;
          args': the actual arguments *)
       let f = Var.make ~ty:handle ~name:"f" in
@@ -447,9 +445,9 @@ let extensionality_for_app_ app_fun : (_,_) Stmt.t =
       let form =
         U.forall_l [f;g]
           (U.or_
-            [ U.eq (U.var f) (U.var g)
-            ; U.exists_l vars (U.neq t1 t2)
-            ])
+             [ U.eq (U.var f) (U.var g)
+             ; U.exists_l vars (U.neq t1 t2)
+             ])
       in
       Stmt.axiom1 ~info:Stmt.info_default form
 
@@ -487,8 +485,8 @@ let rec split_chunks_ prev lens l = match lens, l with
   | [], [] -> []
   | [], _ -> [l,[]]  (* return remaining elements *)
   | len :: lens', _ ->
-      let c, l' = CCList.take_drop (len-prev) l in
-      (c,l') :: split_chunks_ len lens' l'
+    let c, l' = CCList.take_drop (len-prev) l in
+    (c,l') :: split_chunks_ len lens' l'
 
 let pp_chunks out =
   let pp_tys out = fpf out "@[%a@]" CCFormat.(list P.print) in
@@ -515,14 +513,14 @@ let introduce_apply_syms ~state f : fun_encoding =
   let chunks = split_chunks_ 0 l ty_args in
   Utils.debugf ~section 4 "@[<2>process `%a :@ @[%a@]`@ chunks: @[%a@]@]"
     (fun k->k
-      pp_fun f P.print (U.ty_arrow_l ty_args ty_ret) pp_chunks chunks);
+        pp_fun f P.print (U.ty_arrow_l ty_args ty_ret) pp_chunks chunks);
 
   (* special case for first chunk, which doesn't need an application
      symbol *)
   let first_args, first_handle, n_args, app_l, m, chunks' =
     match chunks with
-    | [] -> assert false
-    | (args, remaining_args) :: chunks' ->
+      | [] -> assert false
+      | (args, remaining_args) :: chunks' ->
         (* first application: no app symbol, only the function itself *)
         let handle =
           handle_arrow_l remaining_args (H_leaf ty_ret)
@@ -539,20 +537,20 @@ let introduce_apply_syms ~state f : fun_encoding =
   let _, _, _, m =
     List.fold_left
       (fun (prev_handle, n_args, app_l, m) chunk ->
-        (* we already applied the function to [n_args] using [app_l] *)
-        let args, remaining_args = chunk in
-        (* not the initial application: need an app symbol.
-           type of app symbol is
-            [handle := prev_handle -> args -> (remaining_args to ty_ret)] *)
-        let handle_ret = handle_arrow_l remaining_args (H_leaf ty_ret) in
-        let args' = ty_of_handle_ ~handle_id prev_handle :: args in
-        let app_fun = app_of_handle_ ~state args' handle_ret in
-        let n_args' = List.length args + n_args in
-        let app_l' = TC_app app_fun :: app_l in
-        let m = IntMap.add n_args' (List.rev app_l') m in
-        (* return handle_ret, because it is the type obtained by
-           fully applying [app_fun] *)
-        handle_ret, n_args', app_l', m
+         (* we already applied the function to [n_args] using [app_l] *)
+         let args, remaining_args = chunk in
+         (* not the initial application: need an app symbol.
+            type of app symbol is
+             [handle := prev_handle -> args -> (remaining_args to ty_ret)] *)
+         let handle_ret = handle_arrow_l remaining_args (H_leaf ty_ret) in
+         let args' = ty_of_handle_ ~handle_id prev_handle :: args in
+         let app_fun = app_of_handle_ ~state args' handle_ret in
+         let n_args' = List.length args + n_args in
+         let app_l' = TC_app app_fun :: app_l in
+         let m = IntMap.add n_args' (List.rev app_l') m in
+         (* return handle_ret, because it is the type obtained by
+            fully applying [app_fun] *)
+         handle_ret, n_args', app_l', m
       )
       (first_handle, n_args, app_l, m)
       chunks'
@@ -584,21 +582,21 @@ let rec apply_app_funs_ tower l =
   Utils.debugf ~section 5 "@[<2>apply_tower@ @[%a@]@ to @[%a@]@]"
     (fun k->k pp_fe_tower tower (CCFormat.list P.print) l);
   match tower with
-  | [] ->
+    | [] ->
       begin match l with
-      | []
-      | _::_::_ -> assert false
-      | [res] -> res
+        | []
+        | _::_::_ -> assert false
+        | [res] -> res
       end
-  | f :: tower' ->
+    | f :: tower' ->
       let arity = sc_arity_ f in
       let head, (args, l') = match f, l with
         | _, [] -> assert false
         | TC_first_param _, f :: args' ->
-            (* first parameter on the tower = the function to apply *)
-            f, CCList.take_drop arity args'
+          (* first parameter on the tower = the function to apply *)
+          f, CCList.take_drop arity args'
         | TC_app af, _ ->
-            U.const af.af_id, CCList.take_drop arity l
+          U.const af.af_id, CCList.take_drop arity l
       in
       assert (List.length args = arity);
       (* compute closure, then push it on l *)
@@ -613,9 +611,6 @@ let elim_hof_ty ~state subst ty =
 let ty_of_fun_encoding_ ~state fe =
   let handle_id = get_or_create_handle_id ~state in
   U.ty_arrow_l fe.fe_args (ty_of_handle_ ~handle_id fe.fe_ret_handle)
-
-let ty_term_ ~state t =
-  U.ty_exn ~sigma:(Env.find_ty ~env:state.env) t
 
 type renaming_subst = (T.t, T.t Var.t) Subst.t
 
@@ -636,33 +631,33 @@ let elim_hof_term ~state subst pol t =
     | TI.Var v -> Subst.find_exn ~subst v |> U.var
     | TI.TyArrow _ -> aux_ty subst t (* type: encode it *)
     | TI.App (f,l) ->
-        let as_hof = match T.repr f with
-          | TI.Const id when FunMap.mem (F_id id) state.arities ->
-            let fe = fun_encoding_for ~state (F_id id) in
-            Some (f, fe)
-          | TI.Var v when FunMap.mem (F_var v) state.arities ->
-            let f' = U.var (Subst.find_exn ~subst v) in
-            let fe = fun_encoding_for ~state (F_var v) in
-            Some (f', fe)
-          | TI.Builtin (`DataSelect (id_c, i))
-            when FunMap.mem (F_select (id_c,i)) state.arities ->
-            let fe = fun_encoding_for ~state (F_select (id_c,i)) in
-            Some (f, fe)
-          | _ -> None
-        in
-        begin match as_hof with
-          | Some (new_f, fun_encoding) ->
-            let l = List.map (aux subst Pol.NoPol) l in
-            (* replace by applications symbols, based on [length l] *)
-            let n = List.length l in
-            (* stack of application functions to use *)
-            let app_l = IntMap.find n fun_encoding.fe_stack in
-            apply_app_funs_ app_l (new_f::l)
-          | None ->
-            aux' subst pol t
-        end
-    | TI.Bind ((`Forall | `Exists) as q, v, _) when var_is_ho_ v ->
-      begin match U.approx_infinite_quant_pol q pol with
+      let as_hof = match T.repr f with
+        | TI.Const id when FunMap.mem (F_id id) state.arities ->
+          let fe = fun_encoding_for ~state (F_id id) in
+          Some (f, fe)
+        | TI.Var v when FunMap.mem (F_var v) state.arities ->
+          let f' = U.var (Subst.find_exn ~subst v) in
+          let fe = fun_encoding_for ~state (F_var v) in
+          Some (f', fe)
+        | TI.Builtin (`DataSelect (id_c, i))
+          when FunMap.mem (F_select (id_c,i)) state.arities ->
+          let fe = fun_encoding_for ~state (F_select (id_c,i)) in
+          Some (f, fe)
+        | _ -> None
+      in
+      begin match as_hof with
+        | Some (new_f, fun_encoding) ->
+          let l = List.map (aux subst Pol.NoPol) l in
+          (* replace by applications symbols, based on [length l] *)
+          let n = List.length l in
+          (* stack of application functions to use *)
+          let app_l = IntMap.find n fun_encoding.fe_stack in
+          apply_app_funs_ app_l (new_f::l)
+        | None ->
+          aux' subst pol t
+      end
+    | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, _) when var_is_ho_ v ->
+      begin match U.approx_infinite_quant_pol_binder q pol with
         | `Keep -> aux' subst pol t  (* ok *)
         | `Unsat_means_unknown res ->
           state.unsat_means_unknown <- true;
@@ -671,7 +666,7 @@ let elim_hof_term ~state subst pol t =
             (fun k->k P.print t P.print res P.print (Var.ty v));
           res
       end
-    | TI.Builtin (`Eq (a,_)) when ty_is_ho_ (ty_term_ ~state a) ->
+    | TI.Builtin (`Eq (a,_)) when ty_is_ho_ (ty_term_ ~env:state.env a) ->
       (* higher-order comparison --> requires approximation *)
       (* TODO:
          [a = b asserting has_proto a] for noPol,
@@ -715,15 +710,15 @@ let encode_toplevel_ty ~state ty =
 
 (* translate a "single rec" into an "app rec" *)
 let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
-: (_, _) Stmt.t list
-=
+  : (_, _) Stmt.t list
+  =
   let elim_eqn
     : (term,ty) Stmt.rec_def -> (term,ty) Stmt.rec_def
     = fun def ->
       let defined = def.Stmt.rec_defined in
       let id = defined.Stmt.defined_head in
       match def.Stmt.rec_eqns with
-      | Stmt.Eqn_single (vars, rhs) ->
+        | Stmt.Eqn_single (vars, rhs) ->
           if FunMap.mem (F_id id) state.arities then (
             (* higher-order function *)
             let fe = introduce_apply_syms ~state (F_id id) in
@@ -761,13 +756,13 @@ let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
           ) else (
             Utils.debugf ~section 5
               "@[<2>keep structure of FO def of `%a`@]" (fun k->k ID.print id);
-            let tr_term subst = elim_hof_term ~state subst (ID.polarity id) in
+            let tr_term = elim_hof_term ~state in
             let tr_type _subst ty = encode_toplevel_ty ~state ty in
             Stmt.map_rec_def_bind Subst.empty def
               ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
           )
-      | Stmt.Eqn_nested _
-      | Stmt.Eqn_app _ -> assert false
+        | Stmt.Eqn_nested _
+        | Stmt.Eqn_app _ -> assert false
   in
   let defs = List.map elim_eqn defs in
   [Stmt.axiom_rec ~info defs]
@@ -776,7 +771,7 @@ let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
    statements because of the declarations of new application symbols. *)
 let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
   let info = Stmt.info stmt in
-  let tr_term pol subst = elim_hof_term ~state subst pol in
+  let tr_term = elim_hof_term ~state in
   let tr_type _subst ty = encode_toplevel_ty ~state ty in
   let handle_id = get_or_create_handle_id ~state in
   Utils.debugf ~section 3 "@[<2>@{<cyan>> elim HOF in stmt@}@ `@[%a@]`@]" (fun k->k PStmt.print stmt);
@@ -794,23 +789,23 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
     ty'
   in
   let stmt' = match Stmt.view stmt with
-  | Stmt.Decl d ->
+    | Stmt.Decl d ->
       let id = Stmt.id_of_defined d in
       let ty' =
         if FunMap.mem (F_id id) state.arities
         then encode_fun id
         else encode_toplevel_ty ~state (Stmt.ty_of_defined d)
-            (* keep as is, not a partially applied fun; still have to modify type *)
+        (* keep as is, not a partially applied fun; still have to modify type *)
       in
       [Stmt.decl ~info id ty' ~attrs:(Stmt.attrs_of_defined d)]
-  | Stmt.Axiom (Stmt.Axiom_rec l) -> elim_hof_rec ~state ~info l
-  | Stmt.Axiom (Stmt.Axiom_spec spec) ->
+    | Stmt.Axiom (Stmt.Axiom_rec l) -> elim_hof_rec ~state ~info l
+    | Stmt.Axiom (Stmt.Axiom_spec spec) ->
       let subst, vars =
         Utils.fold_map (bind_hof_var ~state) Subst.empty spec.Stmt.spec_ty_vars
       in
       let spec =
         { Stmt.
-          spec_axioms=List.map (tr_term Pol.Pos subst) spec.Stmt.spec_axioms;
+          spec_axioms=List.map (tr_term subst Pol.Pos) spec.Stmt.spec_axioms;
           spec_ty_vars=vars;
           spec_defined=
             List.map
@@ -827,50 +822,50 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
               spec.Stmt.spec_defined;
         } in
       [Stmt.axiom_spec ~info spec]
-  | Stmt.TyDef (kind,l) ->
+    | Stmt.TyDef (kind,l) ->
       let l =
         let open Stmt in
         List.map
           (fun tydef ->
              { tydef with
-               ty_cstors =
-                 ID.Map.map
-                   (fun c ->
-                      { c with
-                        cstor_args=List.map (encode_ty_ ~handle_id) c.cstor_args;
-                        cstor_type=encode_toplevel_ty ~state c.cstor_type;
-                      })
-                   tydef.ty_cstors;
-               ty_type = encode_toplevel_ty ~state tydef.ty_type;
+                 ty_cstors =
+                   ID.Map.map
+                     (fun c ->
+                        { c with
+                            cstor_args=List.map (encode_ty_ ~handle_id) c.cstor_args;
+                            cstor_type=encode_toplevel_ty ~state c.cstor_type;
+                        })
+                     tydef.ty_cstors;
+                 ty_type = encode_toplevel_ty ~state tydef.ty_type;
              })
           l
       in
       [Stmt.mk_ty_def ~info kind l]
-  | Stmt.Copy c ->
+    | Stmt.Copy c ->
       let subst, copy_vars = bind_hof_vars ~state Subst.empty c.Stmt.copy_vars in
       let copy_of = encode_ty_ ~handle_id c.Stmt.copy_of in
       let copy_to = encode_ty_ ~handle_id c.Stmt.copy_to in
       let copy_wrt = match c.Stmt.copy_wrt with
         | Stmt.Wrt_nothing -> Stmt.Wrt_nothing
-        | Stmt.Wrt_subset p -> Stmt.Wrt_subset (tr_term Pol.NoPol subst p)
-        | Stmt.Wrt_quotient (tty, r) -> Stmt.Wrt_quotient (tty, tr_term Pol.NoPol subst r)
+        | Stmt.Wrt_subset p -> Stmt.Wrt_subset (tr_term subst Pol.NoPol p)
+        | Stmt.Wrt_quotient (tty, r) -> Stmt.Wrt_quotient (tty, tr_term subst Pol.NoPol r)
       in
       let c' = {
         c with Stmt.
-          copy_wrt;
-          copy_vars;
-          copy_of;
-          copy_to;
-          copy_abstract_ty=U.ty_arrow copy_of copy_to;
-          copy_concrete_ty=U.ty_arrow copy_to copy_of;
+            copy_wrt;
+            copy_vars;
+            copy_of;
+            copy_to;
+            copy_abstract_ty=U.ty_arrow copy_of copy_to;
+            copy_concrete_ty=U.ty_arrow copy_to copy_of;
       } in
       [Stmt.copy ~info c']
-  | Stmt.Axiom _
-  | Stmt.Pred (_,_,_)
-  | Stmt.Goal _ ->
+    | Stmt.Axiom _
+    | Stmt.Pred (_,_,_)
+    | Stmt.Goal _ ->
       let stmt' =
         Stmt.map_bind Subst.empty stmt
-          ~bind:(bind_hof_var ~state) ~term:(tr_term Pol.Pos) ~ty:tr_type
+          ~bind:(bind_hof_var ~state) ~term:tr_term ~ty:tr_type
       in
       [stmt']
   in
@@ -879,7 +874,7 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
   CCVector.clear state.new_stmts;
   if new_stmts<>[]
   then Utils.debugf ~section 3 "@[<2>@{<cyan>< new declarations@}:@ @[<v>%a@]@]"
-    (fun k->k (CCFormat.list ~start:"" ~stop:"" ~sep:"" PStmt.print) new_stmts);
+      (fun k->k (CCFormat.list ~start:"" ~stop:"" ~sep:"" PStmt.print) new_stmts);
   Utils.debugf ~section 3 "@[<2>@{<cyan>< obtain stmts@}@ `[@[<hv>%a@]]`@]"
     (fun k->k (CCFormat.list ~start:"" ~stop:"" PStmt.print) stmt');
   new_stmts @ stmt'
@@ -915,23 +910,23 @@ let rec decode_term ~state ~(map:const_map) subst t =
   Utils.debugf ~section 5 "@[<2>decode_term `@[%a@]`@ with @[%a@]@]"
     (fun k->k P.print t (Subst.print P.print) subst);
   match T.repr t with
-  | TI.Const id -> map id (* translate this [id], if needed *)
-  | TI.Var v -> Subst.find_or ~subst ~default:t v
-  | TI.App (f, l) ->
+    | TI.Const id -> map id (* translate this [id], if needed *)
+    | TI.Var v -> Subst.find_or ~subst ~default:t v
+    | TI.App (f, l) ->
       begin match T.repr f, state.dst_handle_id, l with
         | TI.Const id, Some id', [a;b] when ID.equal id id' ->
-            (* [to a b] becomes [a -> b] again *)
-            U.ty_arrow
-              (decode_term ~state ~map subst a)
-              (decode_term ~state ~map subst b)
+          (* [to a b] becomes [a -> b] again *)
+          U.ty_arrow
+            (decode_term ~state ~map subst a)
+            (decode_term ~state ~map subst b)
         | TI.Const id, _, hd :: l' when ID.Tbl.mem state.dst_app_symbols id ->
-            (* app symbol: remove app, apply [hd] to [l'] and evaluate *)
-            let hd = decode_term ~state ~map subst hd in
-            let l' = List.map (decode_term ~state ~map subst) l' in
-            Red.app_whnf hd l'
+          (* app symbol: remove app, apply [hd] to [l'] and evaluate *)
+          let hd = decode_term ~state ~map subst hd in
+          let l' = List.map (decode_term ~state ~map subst) l' in
+          Red.app_whnf hd l'
         | _ -> decode_term' ~state ~map subst t
       end
-  | _ -> decode_term' ~state ~map subst t
+    | _ -> decode_term' ~state ~map subst t
 
 and decode_term' ~state ~map subst t =
   U.map subst t
@@ -1027,12 +1022,12 @@ let map_ho_consts_to_funs ~state m : const_map * (unit -> (_,_) M.value_def list
   let rec map_id
     : const_map
     = fun id -> match ID.Map.get id all_fun_const with
-    | None -> U.const id
-    | Some (ty,h) ->
-      begin match ID.Tbl.get const_tbl id with
-        | Some t -> t
-        | None -> tr_functional_cst id ty h
-      end
+      | None -> U.const id
+      | Some (ty,h) ->
+        begin match ID.Tbl.get const_tbl id with
+          | Some t -> t
+          | None -> tr_functional_cst id ty h
+        end
   (* find the function corresponding to
      the constant [c] of type [to 'a (to 'b 'c)];
      @param app the application symbol corresponding to [to 'a (to 'b 'c)]
@@ -1103,31 +1098,31 @@ let extract_subtree_ m f_id tower : (_,_) DT.t * M.symbol_kind =
     | TC_first_param _ :: _ -> assert false
     | [TC_app af] -> find_dt_ m af.af_id
     | TC_app af :: tower' ->
-        (* find and transform [dt] for [f] *)
-        let dt, _ = find_dt_ m af.af_id in
-        (* first variable, is replaced by [hd] *)
-        let vars = match DT.vars dt with
-          | _::b -> b
-          | [] -> assert false
-        in
-        let hd = U.app hd (List.map U.var vars) in
-        (* merge with [dt] for remaining tower functions *)
-        let dt', k = aux hd tower' in
-        let new_dt = M.DT_util.join dt dt' in
-        new_dt, k
+      (* find and transform [dt] for [f] *)
+      let dt, _ = find_dt_ m af.af_id in
+      (* first variable, is replaced by [hd] *)
+      let vars = match DT.vars dt with
+        | _::b -> b
+        | [] -> assert false
+      in
+      let hd = U.app hd (List.map U.var vars) in
+      (* merge with [dt] for remaining tower functions *)
+      let dt', k = aux hd tower' in
+      let new_dt = M.DT_util.join dt dt' in
+      new_dt, k
   in
   match tower with
     | []
     | TC_app _ ::_ -> assert false
     | TC_first_param _ :: tower' ->
-        let dt, _ = find_dt_ m f_id in
-        (* in the surrounding application symbols, replace first arg with [hd] *)
-        let vars = DT.vars dt in
-        let hd = U.app_const f_id (List.map U.var vars) in
-        (* merge with rest of DT *)
-        let dt', k = aux hd tower' in
-        let new_dt = M.DT_util.join dt dt' in
-        new_dt, k
+      let dt, _ = find_dt_ m f_id in
+      (* in the surrounding application symbols, replace first arg with [hd] *)
+      let vars = DT.vars dt in
+      let hd = U.app_const f_id (List.map U.var vars) in
+      (* merge with rest of DT *)
+      let dt', k = aux hd tower' in
+      let new_dt = M.DT_util.join dt dt' in
+      new_dt, k
 
 (* for every function [f], look its fun_encoding for full arity so as
    to obtain the tower. Lookup models for every app symbol involved and
@@ -1180,9 +1175,9 @@ let pipe_with ?on_decoded ~decode ~print ~check =
       let module PPb = Problem.Print(P)(P) in
       Format.printf "@[<v2>@{<Yellow>after elimination of HOF@}: %a@]@." PPb.print)
     @
-    Utils.singleton_if check () ~f:(fun () ->
-      let module C = TypeCheck.Make(T) in
-      C.empty () |> C.check_problem)
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.empty () |> C.check_problem)
   in
   Transform.make
     ?on_decoded

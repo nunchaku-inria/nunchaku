@@ -22,8 +22,8 @@ val solve :
   ?print_model:bool ->
   problem ->
   ((model_term, model_ty) Problem.Res.t * Scheduling.shortcut) Scheduling.Fut.t
-  (** [solve pb] returns a {b task} that, when executed, will return
-      a model or UNSAT (see {!Solver_intf.Res.t}). *)
+(** [solve pb] returns a {b task} that, when executed, will return
+    a model or UNSAT (see {!Solver_intf.Res.t}). *)
 
 val is_available : unit -> bool
 (** test whether the solver is available (e.g. if the library is
@@ -39,12 +39,12 @@ exception CVC4_error of string
 val options_l : string list
 
 (** Task for running CVC4 on a problem, with a set of options
-  @return a tasks
-  @param options: flags to pass the solver (default "").
-  @param slice total amount of time allotted to CVC4
-  @param prio priority of the task
-  @param dump if [Some f], do not call the solver, but write the problem into file [f]
-  @raise CVC4_error if the solver failed with an error
+    @return a tasks
+    @param options: flags to pass the solver (default "").
+    @param slice total amount of time allotted to CVC4
+    @param prio priority of the task
+    @param dump if [Some f], do not call the solver, but write the problem into file [f]
+    @raise CVC4_error if the solver failed with an error
 *)
 val call :
   ?options:string ->
