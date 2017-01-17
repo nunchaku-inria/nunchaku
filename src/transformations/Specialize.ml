@@ -500,16 +500,56 @@ type specialization_decision =
 (* maximum size of the cardinal of a closure variable's type. *)
 let max_closure_var_type_card = 10 (* FUDGE *)
 
-(* TODO: if we have a "total" annotation on functions (including [unique_unsafe])
+(* NOTE: if we have a "total" annotation on functions (including [unique_unsafe])
    or Coq functions, we can avoid generating congruence axioms for those
-   functions.
+   functions, even if they are recursive.
 *)
 
 (* is the function deterministic?
    this should be a safe approximation, that is, only return [true] if we
    are {b sure} that the function is. When in doubt, return [false] *)
-let fun_is_deterministic ~self:_ (_f:ID.t): bool =
-  false (* TODO *)
+let fun_is_deterministic ~self (f:ID.t): bool =
+  let info = Env.find_exn ~env:(Trav.env self) f in
+  let res = match Env.def info with
+    | Env.Fun_def (defs, def, _) ->
+      (* check that the definitions contain none of:
+         - unknown
+         - recursion
+         to do so, we analyze the definition of [f] *)
+      let rec_ids =
+        Stmt.defined_of_recs defs
+        |> Sequence.map Stmt.id_of_defined
+        |> ID.Set.of_seq
+      in
+      (* check if any subterm of [t] is an unknown, or one of the
+         mutually recursive functions *)
+      let check_def_deterministic (t:term): bool =
+        U.to_seq t
+        |> Sequence.for_all
+          (fun t -> match T.repr t with
+             | TI.Const id -> not (ID.Set.mem id rec_ids)
+             | TI.Builtin (`Undefined_self _ | `Undefined_atom _ | `Unparsable _) ->
+               false (* not deterministic *)
+             | TI.Builtin (`Ite _ | `And _ | `Or _ | `Not _ | `Eq _ |
+                           `False | `True | `Imply _ | `DataTest _ |
+                           `DataSelect _ | `Guard _) -> true
+             | TI.TyMeta _ -> assert false
+             | TI.Match _ | TI.TyArrow _ | TI.TyBuiltin _
+             | TI.Let _ | TI.Bind _
+             | TI.App _ | TI.Var _ -> true)
+      in
+      begin match def.Stmt.rec_eqns with
+        | Stmt.Eqn_nested _
+        | Stmt.Eqn_app (_,_,_,_) -> false (* too complicated to handle *)
+        | Stmt.Eqn_single (_,rhs) -> check_def_deterministic rhs
+      end
+    | Env.Copy_abstract _ | Env.Copy_concrete _
+    | Env.Fun_spec _ | Env.Pred _ | Env.NoDef
+    | Env.Copy_ty _ | Env.Cstor _ | Env.Data _ -> false
+  in
+  Utils.debugf ~section 4 "@[<2>symbol `%a` deterministic? %B@]"
+    (fun k->k ID.print_full f res);
+  res
 
 (* do NOT specialize if at least one closure argument
    has a type which is too large (see {!max_closure_var_type_card})
@@ -538,7 +578,7 @@ let arg_has_small_ty_closure_vars ~self t: bool =
 let decide_if_specialize ~self f ty l : specialization_decision =
   (* apply to type arguments *)
   let info = Env.find_exn ~env:(Trav.env self) f in
-  let is_deterministic = fun_is_deterministic ~self f in
+  let is_deterministic = lazy (fun_is_deterministic ~self f) in
   match Env.def info with
     | Env.Fun_def _ ->
       (* only inline defined functions, not constructors or axiomatized symbols *)
@@ -556,7 +596,7 @@ let decide_if_specialize ~self f ty l : specialization_decision =
              && not (U.is_var arg)
              && heuristic_should_specialize_arg arg ty
              (* will we have to pay specialization with evil congruence axioms? *)
-             && (is_deterministic || arg_has_small_ty_closure_vars ~self arg)
+             && (Lazy.force is_deterministic || arg_has_small_ty_closure_vars ~self arg)
              then `Specialize (i, arg)
              else `Keep arg)
         |> CCList.partition_map
