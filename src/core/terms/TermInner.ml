@@ -280,6 +280,11 @@ module type UTIL_REPR = sig
   (** [free_vars t] computes the set of free variables of [t].
       @param bound variables bound on the path *)
 
+  val free_vars_seq : ?bound:VarSet.t -> t_ Sequence.t -> VarSet.t
+  (** Similar to {!free_vars} but for a sequence of terms *)
+
+  val free_vars_list : ?bound:VarSet.t -> t_ list -> VarSet.t
+
   val is_var : t_ -> bool
   val is_const : t_ -> bool
 
@@ -446,6 +451,11 @@ module UtilRepr(T : REPR)
 
   let free_vars ?bound t =
     to_seq_free_vars ?bound t |> VarSet.of_seq
+
+  let free_vars_seq ?bound seq =
+    seq |> Sequence.flat_map (to_seq_free_vars ?bound) |> VarSet.of_seq
+
+  let free_vars_list ?bound l = free_vars_seq ?bound (Sequence.of_list l)
 
   let is_var t = match T.repr t with Var _ -> true | _ -> false
   let is_const t = match T.repr t with Const _ -> true | _ -> false
@@ -1632,9 +1642,12 @@ module Util(T : S)
         | TyArrow (a1, b1), TyArrow (a2,b2) ->
           let subst = match_ subst a1 a2 in
           match_ subst b1 b2
-        | Bind _, _ -> invalid_arg "pattern is not first-order"
+        | Bind _, _
         | Let (_, _, _), _
-        | Match _, _ -> invalid_arg "pattern is not first-order"
+        | Match _, _ ->
+          error_unif_ "pattern is not first-order" t1 t2
+          (* let module P = Print(T) in
+          Utils.invalid_argf "pattern `@[%a@]` is not first-order" P.print t1 *)
         | TyBuiltin b1, TyBuiltin b2 when TyBuiltin.equal b1 b2 -> subst
         | TyMeta _, _ -> assert false
         | Builtin _, _

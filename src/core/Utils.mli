@@ -174,6 +174,9 @@ val not_implementedf: ('a, Format.formatter, unit, 'b) format4 -> 'a
 val failwithf : ('a, Format.formatter, unit, 'b) format4 -> 'a
 (** Format version of {!failwith} *)
 
+val invalid_argf : ('a, Format.formatter, unit, 'b) format4 -> 'a
+(** Format version of {!invalid_arg} *)
+
 val err_of_exn: exn -> _ or_error
 (** Make an error out of an exception, with the stack trace *)
 
