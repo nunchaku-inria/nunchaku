@@ -20,8 +20,8 @@ module Make(T : TI.S) = struct
       subst: subst;
       guard: T.t Builtin.guard;
     }
-    val make : subst:subst -> T.t -> T.t list -> t
-    val const : subst:subst -> T.t -> t
+    val make : guard:T.t Builtin.guard -> subst:subst -> T.t -> T.t list -> t
+    val const : guard:T.t Builtin.guard -> subst:subst -> T.t -> t
     val set_head : t -> T.t -> t
     val map_guard : (T.t -> T.t) -> t -> t
     val to_term : ?rec_:bool -> t -> T.t
@@ -43,10 +43,10 @@ module Make(T : TI.S) = struct
       | _ -> st
 
     (* build a state and enforce invariant *)
-    let make ~subst f l =
-      norm_st {head=f; args=l; subst; guard=Builtin.empty_guard; }
+    let make ~guard ~subst f l =
+      norm_st {head=f; args=l; subst; guard; }
 
-    let const ~subst t = make ~subst t []
+    let const ~guard ~subst t = make ~guard ~subst t []
 
     let set_head st t = norm_st {st with head=t}
 
@@ -133,26 +133,26 @@ module Make(T : TI.S) = struct
           end
 
     (* evaluate [b] using [eval]. *)
-    let eval_app_builtin ~eval ~subst (b:T.t Builtin.t) args =
-      (* auxiliary function to evaluate subterms *)
+    let eval_app_builtin ~eval ~subst ~guard (b:T.t Builtin.t) args =
+      (* auxiliary function to evaluate subterms. No guard initially. *)
       let eval_term ~subst t =
-        State.make ~subst t []
+        State.make ~guard:Builtin.empty_guard ~subst t []
         |> eval
         |> State.to_term ~rec_:true
       in
       match b with
         | `True | `False ->
           assert (args=[]);
-          State.const ~subst (U.builtin b)(* normal form *)
+          State.const ~guard ~subst (U.builtin b)(* normal form *)
         | `And _ | `Imply _ | `Not _ | `Or _ | `Eq _ ->
           assert (args = []);
           begin match
               eval_bool_builtin ~eval:eval_term ~subst b
               |> as_bool_
             with
-              | BTrue -> State.const ~subst U.true_
-              | BFalse -> State.const ~subst U.false_
-              | BPartial t -> State.const ~subst t
+              | BTrue -> State.const ~guard ~subst U.true_
+              | BFalse -> State.const ~guard ~subst U.false_
+              | BPartial t -> State.const ~guard ~subst t
           end
         | `Ite (a,b,c) ->
           (* special case: ite can reduce further if [a] reduces to
@@ -160,9 +160,9 @@ module Make(T : TI.S) = struct
           begin match
               eval_term ~subst a |> as_bool_
             with
-              | BTrue -> eval (State.make ~subst b args)
-              | BFalse -> eval (State.make ~subst c args)
-              | BPartial a' -> State.make ~subst (U.ite a' b c) args
+              | BTrue -> eval (State.make ~guard ~subst b args)
+              | BFalse -> eval (State.make ~guard ~subst c args)
+              | BPartial a' -> State.make ~guard ~subst (U.ite a' b c) args
           end
         | `DataTest _ ->
           Utils.not_implemented "evaluation of DataTest"
@@ -173,7 +173,7 @@ module Make(T : TI.S) = struct
         | `Undefined_atom _
         | `Guard _ ->
           (* no evaluation *)
-          State.make ~subst (U.builtin b) args
+          State.make ~guard ~subst (U.builtin b) args
 
     (* see whether [st] matches a case in [m] *)
     let lookup_case_ st m def = match T.repr st.head with
@@ -208,7 +208,7 @@ module Make(T : TI.S) = struct
         | TI.Const _ -> st
         | TI.Builtin (`False | `True) -> st
         | TI.Builtin b ->
-          eval_app_builtin ~eval:whnf_ ~subst:st.subst b st.args
+          eval_app_builtin ~guard:st.guard ~eval:whnf_ ~subst:st.subst b st.args
         | TI.Var v ->
           (* dereference, if any *)
           begin match Subst.find ~subst:st.subst v with
@@ -222,17 +222,17 @@ module Make(T : TI.S) = struct
             | a :: args' ->
               (* beta-redex *)
               let subst = Subst.add ~subst:st.subst v a in
-              whnf_ (State.make ~subst body args')
+              whnf_ (State.make ~guard:st.guard ~subst body args')
           end
         | TI.Match (t, l, def) ->
-          let st_t = whnf_ (State.const ~subst:st.subst t) in
+          let st_t = whnf_ (State.const ~guard:Builtin.empty_guard ~subst:st.subst t) in
           (* see whether [st] matches some case *)
           begin match lookup_case_ st_t l def with
             | None ->
               (* just replace the head *)
               State.set_head st (U.match_with (State.to_term st_t) l ~def)
             | Some (rhs, args, subst) ->
-              whnf_ (State.make ~subst rhs args)
+              whnf_ (State.make ~guard:st.guard ~subst rhs args)
           end
         | TI.Bind (Binder.TyForall, _, _) -> assert false
         | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Mu), _, _) -> st
@@ -242,7 +242,9 @@ module Make(T : TI.S) = struct
         | TI.TyMeta _ -> assert false
 
     and whnf ?(subst=Subst.empty) t args =
-      let {head; args; subst; guard} = whnf_ (State.make ~subst t args) in
+      let {head; args; subst; guard} =
+        whnf_ (State.make ~guard:Builtin.empty_guard ~subst t args)
+      in
       head, args, subst, guard
 
     (* strong normal form *)
@@ -256,7 +258,7 @@ module Make(T : TI.S) = struct
         | TI.Const _ -> st
         | TI.Builtin (`Guard _) -> assert false
         | TI.Builtin b ->
-          eval_app_builtin ~eval:snf_ ~subst:st.subst b st.args
+          eval_app_builtin ~guard:st.guard ~eval:snf_ ~subst:st.subst b st.args
         | TI.Bind (Binder.TyForall,_,_) -> st
         | TI.TyArrow (_,_) ->
           st (* NOTE: depend types might require beta-reduction in types *)
@@ -273,7 +275,7 @@ module Make(T : TI.S) = struct
           let t = snf_term ~subst:st.subst t in
           enter_snf_ st v u (fun v u -> U.let_ v t u)
         | TI.Match (t,l,def) ->
-          let st_t = snf_ (State.const ~subst:st.subst t) in
+          let st_t = snf_ (State.const ~guard:Builtin.empty_guard ~subst:st.subst t) in
           (* see whether [st] matches some case *)
           begin match lookup_case_ st_t l def with
             | None ->
@@ -287,13 +289,14 @@ module Make(T : TI.S) = struct
               in
               State.set_head st (U.match_with (State.to_term st_t) l ~def)
             | Some (rhs, args, subst) ->
-              whnf_ (State.make ~subst rhs args)
+              whnf_ (State.make ~guard:st.guard ~subst rhs args)
           end
         | TI.TyMeta _ -> assert false
 
     (* compute the SNF of this term in [subst] *)
     and snf_term ~subst t =
-      State.to_term ~rec_:true (snf_ (State.const ~subst t))
+      State.to_term ~rec_:true
+        (snf_ (State.const ~guard:Builtin.empty_guard ~subst t))
 
     (* enter the scope of [v] and compute [snf t] *)
     and enter_snf_ st v t f =
@@ -308,15 +311,15 @@ module Make(T : TI.S) = struct
   (** {6 Reduction State} *)
 
   let whnf ?(subst=Subst.empty) t =
-    let st = Full.whnf_ (State.const ~subst t) in
+    let st = Full.whnf_ (State.const ~guard:Builtin.empty_guard ~subst t) in
     State.to_term st
 
   let app_whnf ?(subst=Subst.empty) f l =
-    let st = Full.whnf_ (State.make ~subst f l) in
+    let st = Full.whnf_ (State.make ~guard:Builtin.empty_guard ~subst f l) in
     State.to_term st
 
   let snf ?(subst=Subst.empty) t =
-    let st = Full.snf_ (State.const ~subst t) in
+    let st = Full.snf_ (State.const ~guard:Builtin.empty_guard ~subst t) in
     State.to_term ~rec_:true st
 
   (* if [t = f x1...xn var], this returns [Some (f x1...xn)] *)
