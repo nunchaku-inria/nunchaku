@@ -25,6 +25,7 @@ module type SKOLEM = sig
   val create: ?prefix:string -> unit -> state
 
   val skolemize :
+    ?prefix:string ->
     state ->
     vars:ty Var.t list ->
     ty_ret:ty ->

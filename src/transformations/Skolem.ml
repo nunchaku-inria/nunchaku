@@ -35,6 +35,7 @@ module type SKOLEM = sig
   val create: ?prefix:string -> unit -> state
 
   val skolemize :
+    ?prefix:string ->
     state ->
     vars:ty Var.t list ->
     ty_ret:ty ->
@@ -75,18 +76,19 @@ module Make(Assoc : sig type t end)
     new_sym=[];
   }
 
-  let fresh_id_ state : ID.t =
+  let fresh_id_ ?prefix state : ID.t =
+    let prefix = CCOpt.get_or ~default:state.prefix prefix in
     let n = state.name in
     state.name <- n+1;
-    let id = ID.make (state.prefix ^ string_of_int n) in
+    let id = ID.make (prefix ^ string_of_int n) in
     id
 
-  let skolemize state ~vars ~ty_ret mk_assoc =
+  let skolemize ?prefix state ~vars ~ty_ret mk_assoc =
     (* type of Skolem function *)
     let ty_args = List.map Var.ty vars in
     let ty = List.fold_right U.ty_arrow ty_args ty_ret in
     (* create new skolem function *)
-    let skolem_id = fresh_id_ state in
+    let skolem_id = fresh_id_ ?prefix state in
     let assoc = mk_assoc ty in
     ID.Tbl.add state.tbl skolem_id assoc;
     state.new_sym <- (skolem_id, assoc):: state.new_sym;
@@ -166,7 +168,8 @@ let skolemize_ ~state ?(in_goal=false) pol t =
           (* type of Skolem function *)
           let ty_ret = aux env Pol.NoPol (Var.ty v) in
           let skolem_id, _ty, _ =
-            Sk.skolemize state.sk ~ty_ret ~vars:env.vars
+            Sk.skolemize state.sk
+              ~ty_ret ~vars:env.vars ~prefix:(Var.name v)
               (fun ty -> { sym_defines=t; sym_decode=in_goal; sym_ty=ty })
           in
           let skolem = U.app (U.const skolem_id) (List.map U.var env.vars) in
