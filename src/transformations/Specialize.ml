@@ -138,9 +138,10 @@ module Arg : sig
   val to_list : t -> (int * T.t) list
   val vars : t -> ty Var.t list
   val make : (int * T.t) list -> t
+  val pp_iterms : (int * T.t) list CCFormat.printer
 end = struct
   type t = {
-    terms: (int * T.t) list; (* sorted *)
+    terms: (int * T.t) list; (* (argument position, argument). sorted by position. *)
     vars: ty Var.t list;
   }
 
@@ -152,8 +153,8 @@ end = struct
     let vars =
       Sequence.of_list l
       |> Sequence.map snd
-      |> Sequence.flat_map (U.to_seq_free_vars ?bound:None)
-      |> VarSet.of_seq |> VarSet.to_list
+      |> U.free_vars_seq ?bound:None
+      |> VarSet.to_list
     in
     {terms; vars}
   let mem i a = List.mem_assoc i a.terms
@@ -175,9 +176,10 @@ end = struct
   let hash_fun a h = CCHash.(list (pair int U.hash_fun_alpha_eq)) a.terms h
   let hash = CCHash.apply hash_fun
 
-  let print out a =
-    let pp_pair out (i,t) = fpf out "@[%d -> %a@]" i P.print t in
-    fpf out "[@[<hv>%a@]]" (CCFormat.list ~start:"" ~stop:"" pp_pair) a.terms
+  let pp_iterm out (i,t) = fpf out "@[%d -> %a@]" i P.print t
+  let pp_iterms out =
+    fpf out "[@[<hv>%a@]]" (CCFormat.list ~start:"" ~stop:"" pp_iterm)
+  let print out a = pp_iterms out a.terms
   let section = section
   let fail = errorf
 end
@@ -948,11 +950,13 @@ let dispatch = {
    iff "\exists \sigma. args2\sigma = args1") *)
 module InstanceGraph = struct
   type vertex = {
-    v_id: ID.t; (* name of the specialized function *)
-    v_spec_of: ID.t; (* name of generic function *)
-    v_spec_on: Arg.t; (* arguments on which [v_spec_of] is specialized *)
-    v_args: term list; (* [v_id v_spec_on = v_spec_of v_args] *)
-    v_term: term; (* [v_spec_of v_args] *)
+    v_spec_id: ID.t; (* name of the specialized function *)
+    v_non_spec_id: ID.t; (* name of the generic function, before specialization *)
+    v_all_args: term list; (* all arguments to [v_non_spec_id] *)
+    v_spec_args: (int * term) list;
+    v_other_args: term list;
+    v_closure_vars: ty Var.t list; (* free variables of [v_spec_args] *)
+    v_pattern: term; (* [v_spec_id v_all_args], only used as pattern *)
   }
 
   type parent_edge = (term, ty) Subst.t * vertex
@@ -968,21 +972,26 @@ module InstanceGraph = struct
     (* list of all args used, plus their (optional) parent *)
   }
 
+  (* the specialized term this vertex represents *)
+  let specialized_term_of_vertex (v:vertex): term =
+    let t =
+      U.app_const v.v_spec_id (List.map U.var v.v_closure_vars @ v.v_other_args)
+    in
+    Red.snf t
+
   (* [subsumes_ v1 v2] returns [Some sigma] if [sigma v1.term = v2.term], None otherwise *)
-  let subsumes_ v1 v2 = U.match_ v1.v_term v2.v_term
+  let subsumes_ v1 v2 = U.match_ v1.v_pattern v2.v_pattern
 
   (* add edges to some parent for every non-root vertex in [l] *)
   let find_parents l =
     let find_parent v =
       CCList.find_map
         (fun v' ->
-           if ID.equal v.v_id v'.v_id then None
+           if ID.equal v.v_spec_id v'.v_spec_id then None
            else CCOpt.map (fun sigma -> sigma, v') (subsumes_ v' v))
         l
     in
     List.map (fun v -> v, find_parent v) l
-
-  let app_const id l = U.app (U.const id) l
 
   let fresh_var = Var.make_gen ~names:"v_ig_%d"
   let fresh_var_t ty = U.var (fresh_var ty)
@@ -990,9 +999,7 @@ module InstanceGraph = struct
   (* rename variables in [t] *)
   let rename_vars l =
     let vars =
-      Sequence.of_list l
-      |> Sequence.flat_map (U.to_seq_free_vars ?bound:None)
-      |> VarSet.of_seq
+      U.free_vars_list ?bound:None l
       |> VarSet.to_list in
     let vars' = List.map Var.fresh_copy vars in
     let subst = Subst.add_list ~subst:Subst.empty vars vars' in
@@ -1006,11 +1013,14 @@ module InstanceGraph = struct
       |> List.map
         (function
           | `Same ->
-            let v_args = List.map fresh_var_t ty_args in
-            let v_term = app_const id v_args in
-            {v_id=id; v_spec_of=id; v_spec_on=Arg.empty; v_args; v_term; }
+            let v_all_args = List.map fresh_var_t ty_args in
+            let v_pattern = U.app_const id v_all_args in
+            let v_spec_args=[] in
+            let v_other_args=v_all_args in
+            {v_spec_id=id; v_non_spec_id=id; v_spec_args; v_closure_vars=[];
+             v_other_args; v_all_args; v_pattern; }
           | `New (arg,nf) ->
-            let v_args =
+            let v_all_args =
               List.mapi
                 (fun i a ->
                    try Arg.get i arg
@@ -1018,8 +1028,17 @@ module InstanceGraph = struct
                 vars
               |> rename_vars
             in
-            let v_term = app_const nf.nf_id v_args in
-            {v_id=nf.nf_id; v_spec_of=id; v_spec_on=arg; v_args; v_term}
+            let v_spec_args, v_other_args =
+              List.mapi (fun i a -> i,a) v_all_args
+              |> List.partition (fun (i,_) -> Arg.mem i arg)
+            in
+            let v_other_args = List.map snd v_other_args in
+            let v_closure_vars =
+              U.free_vars_list (List.map snd v_spec_args) |> VarSet.to_list
+            in
+            let v_pattern = U.app_const id v_all_args in
+            {v_spec_id=nf.nf_id; v_non_spec_id=id; v_spec_args;
+             v_closure_vars; v_other_args; v_all_args; v_pattern}
         )
       |> find_parents
     in
@@ -1043,7 +1062,7 @@ module InstanceGraph = struct
 
   let print out g =
     let pp_vertex out v =
-      fpf out "{@[%a on %a@]}" ID.print v.v_id Arg.print v.v_spec_on in
+      fpf out "{@[%a on %a@]}" ID.print v.v_spec_id Arg.pp_iterms v.v_spec_args in
     let pp_edge out = function
       | None -> ()
       | Some (sigma,v') ->
@@ -1054,19 +1073,13 @@ module InstanceGraph = struct
       (CCFormat.list ~start:"" ~stop:"" pp_item) g.vertices
 end
 
-(* each vertex corresponds to a (specialized) term *)
-let spec_term_of_vertex v =
-  let open InstanceGraph in
-  let closure_vars = Arg.vars v.v_spec_on in
-  let args = Utils.filteri (fun i _ -> not (Arg.mem i v.v_spec_on)) v.v_args in
-  let t = U.app_const v.v_id (List.map U.var closure_vars @ args) in
-  Red.snf t
-
 let mk_congruence_axiom v1 v2 =
   let module IG = InstanceGraph in
-  assert (List.length v1.IG.v_args = List.length v2.IG.v_args);
-  let eqns = List.map2 U.eq v1.IG.v_args v2.IG.v_args in
-  let concl = U.eq (spec_term_of_vertex v1) (spec_term_of_vertex v2) in
+  assert (List.length v1.IG.v_all_args = List.length v2.IG.v_all_args);
+  let eqns = List.map2 U.eq v1.IG.v_all_args v2.IG.v_all_args in
+  let concl =
+    U.eq (IG.specialized_term_of_vertex v1) (IG.specialized_term_of_vertex v2)
+  in
   let ax = U.imply_l eqns concl in
   U.close_forall ax
 
@@ -1081,25 +1094,28 @@ let mk_congruence_axiom v1 v2 =
 *)
 let mk_self_congruence (v:InstanceGraph.vertex): term option =
   let module IG = InstanceGraph in
-  let arg = v.IG.v_spec_on in
-  let vars = Arg.vars arg in
+  let vars = v.IG.v_closure_vars in
   if vars=[] then None
   else (
-    let vars1 = List.mapi (fun i v -> Var.makef ~ty:(Var.ty v) "x_%d" i) vars in
-    let vars2 = List.mapi (fun i v -> Var.makef ~ty:(Var.ty v) "y_%d" i) vars in
-    let subst1 = Var.Subst.of_list vars1 vars in
-    let subst2 = Var.Subst.of_list vars2 vars in
+    let vars1 =
+      List.map (fun v -> Var.makef ~ty:(Var.ty v) "left_%s" (Var.name v)) vars
+    and vars2 =
+      List.map (fun v -> Var.makef ~ty:(Var.ty v) "right_%s" (Var.name v)) vars
+    in
+    let subst1 = Var.Subst.of_list vars vars1 in
+    let subst2 = Var.Subst.of_list vars vars2 in
+    let spec_term = IG.specialized_term_of_vertex v in
     let conds =
       List.map
-         (fun a ->
+         (fun arg ->
             U.eq
-              (U.eval_renaming ~subst:subst1 a)
-              (U.eval_renaming ~subst:subst2 a))
-         v.IG.v_args
+              (U.eval_renaming ~subst:subst1 arg)
+              (U.eval_renaming ~subst:subst2 arg))
+         v.IG.v_all_args
     and conclusion =
       U.eq
-        (U.eval_renaming ~subst:subst1 v.IG.v_term)
-        (U.eval_renaming ~subst:subst2 v.IG.v_term)
+        (U.eval_renaming ~subst:subst1 spec_term)
+        (U.eval_renaming ~subst:subst2 spec_term)
     in
     U.forall_l (vars1@vars2) (U.imply_l conds conclusion)
     |> CCOpt.return
@@ -1116,7 +1132,7 @@ let add_congruence_axioms push_stmt g =
     |> Sequence.iter
       (fun (v1,v2) ->
          (* only emit an axiom once for every pair of distinct vertices *)
-         if ID.compare v1.IG.v_id v2.IG.v_id < 0
+         if ID.compare v1.IG.v_spec_id v2.IG.v_spec_id < 0
          then (
            let ax = mk_congruence_axiom v1 v2 in
            push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax)
@@ -1129,8 +1145,8 @@ let add_congruence_axioms push_stmt g =
        (* [v2.term\sigma = v1.term], push the corresponding axiom *)
        let ax =
          U.eq
-           (spec_term_of_vertex v1)
-           (U.eval ~subst:sigma (spec_term_of_vertex v2))
+           (IG.specialized_term_of_vertex v1)
+           (U.eval ~subst:sigma (IG.specialized_term_of_vertex v2))
          |> U.close_forall
        in
        push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax));
