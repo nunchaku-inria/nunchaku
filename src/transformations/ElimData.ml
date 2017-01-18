@@ -928,14 +928,14 @@ module Make(M : sig val mode : mode end) = struct
     DTU.apply_l dt args |> DTU.to_term
 
   (* evaluate a boolean function def *)
-  let eval_bool_fundef (f:fun_def) (args:T.t list) : bool option =
+  let eval_bool_fundef (f:fun_def) (args:T.t list) : (bool, T.t) Result.result =
     let _, k = f in
     assert (k = Model.Symbol_prop);
     let res = eval_fundef f args in
     match T.repr res with
-      | TI.Builtin `True -> Some true
-      | TI.Builtin `False -> Some false
-      | _ -> None
+      | TI.Builtin `True -> Result.Ok true
+      | TI.Builtin `False -> Result.Ok  false
+      | _ -> Result.Error res
 
   let find_test_ dec id =
     try ID.Map.find id dec.dec_test
@@ -992,11 +992,12 @@ module Make(M : sig val mode : mode end) = struct
                   (fun ecstor ->
                      let fundef = find_test_ dec (fst ecstor.ecstor_test) in
                      match eval_bool_fundef fundef [t] with
-                       | None ->
+                       | Result.Error res ->
                          errorf "cannot evaluate whether `%a`@ \
-                                 starts with constructor `%a`"
-                           P.print t ID.print (fst ecstor.ecstor_cstor)
-                       | Some b -> b)
+                                 starts with constructor `%a`;@ \
+                                 check yields `@[%a@]`, not a boolean"
+                           P.print t ID.print (fst ecstor.ecstor_cstor) P.print res
+                       | Result.Ok b -> b)
                   ety.ety_cstors
               with Not_found ->
                 errorf "no constructor corresponds to `%a`" P.print t
