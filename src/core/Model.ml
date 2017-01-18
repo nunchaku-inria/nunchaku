@@ -611,7 +611,7 @@ let fold ?(values=const_fst_) ?(finite_types=const_fst_) acc m =
 let print pt pty out m =
   let pplist ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp in
   let pp_type out (ty,dom) =
-    fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]"
+    fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
       pty ty (pplist ~sep:", " ID.print) dom
   and pp_value out (t,dt,_) =
     fpf out "@[<2>val @[%a@]@ :=@ %a@]."
