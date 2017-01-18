@@ -29,6 +29,7 @@ Library nunchaku_core
                     Scheduling, Polarity, Traversal, ProblemMetadata,
                     AnalyzeType, Prelude, TypeCheck, Lazy_list,
                     Sexp_lib, Sexp_lex, Precedence, Binder, Builtin,
+                    Cardinal_encode,
                     terms/TermInner,
                     terms/TermTyped,
                     terms/Pattern,

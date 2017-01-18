@@ -174,46 +174,23 @@ let ensure_maps_to_predicate state ty =
   aux ret;
   ()
 
+module CE = Cardinal_encode.Make(T)
+
 (* type of pred [p] has at most [n] elements, return axiom
    [exists x1...xn. p x_i & forall y. p y => (y = x1 | .... | y = xn)] *)
-let encode_max_card_ ~(pred:ID.t) n =
-  let mk_pred = U.app_const pred in
-  let xs =
-    CCList.init n
-      (fun i -> Var.makef ~ty:U.ty_unitype "x_%d" i)
-  and y =
-    Var.make ~name:"y" ~ty:U.ty_unitype
-  in
-  let guard_pred_x = U.and_ (List.map (fun x -> mk_pred [U.var x]) xs) in
-  let form_y_belongs_xs =
-    U.forall y
-      (U.imply
-         (mk_pred [U.var y])
-         (U.or_
-            (List.map (fun x -> U.eq (U.var x) (U.var y)) xs)))
-  in
+let encode_max_card_ state n =
   let ax =
-    U.exists_l xs
-      (U.and_ [guard_pred_x; form_y_belongs_xs])
+    CE.encode_max_card U.ty_unitype n
+    |> encode_term state Var.Subst.empty
   in
   [Stmt.axiom1 ~info:Stmt.info_default ax]
 
 (* the type of [pred] has at least [n] elements, return list of axiom
    [exists x1...xn. pred x_i & xi != xj] *)
-let encode_min_card_ ~(pred:ID.t) n =
-  let mk_pred = U.app_const pred in
-  let xs =
-    CCList.init n
-      (fun i -> Var.makef ~ty:U.ty_unitype "x_%d" i)
-  in
-  let guard_pred_x = U.and_ (List.map (fun x -> mk_pred [U.var x]) xs) in
-  let pairwise_distinct =
-    CCList.diagonal xs
-    |> List.map (fun (x1,x2) -> U.neq (U.var x1) (U.var x2))
-  in
+let encode_min_card_ state n =
   let ax =
-    U.exists_l xs
-      (U.and_ (guard_pred_x :: pairwise_distinct))
+    CE.encode_min_card U.ty_unitype n
+    |> encode_term state Var.Subst.empty
   in
   [Stmt.axiom1 ~info:Stmt.info_default ax]
 
@@ -236,8 +213,8 @@ let encode_stmt_ state st : (_,_) Stmt.t list =
           (* emit some constraint on the predicate for cardinalities *)
           CCList.flat_map
             (function
-              | Stmt.Attr_card_max i -> encode_max_card_ ~pred:p i
-              | Stmt.Attr_card_min i -> encode_min_card_ ~pred:p i
+              | Stmt.Attr_card_max i -> encode_max_card_ state i
+              | Stmt.Attr_card_min i -> encode_min_card_ state i
               | _ -> [])
             attrs
         | _::_ ->
