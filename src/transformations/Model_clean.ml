@@ -42,7 +42,7 @@ let renaming_rules_of_model_ m =
        CCList.Idx.foldi
          (fun acc i id ->
             let name = CCFormat.sprintf "$%s_%d" prefix i in
-            let rhs = ID.make name in
+            let rhs = ID.fresh_copy_name id name in
             ID.Map.add id rhs acc)
          acc dom)
     ID.Map.empty

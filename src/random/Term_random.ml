@@ -22,6 +22,7 @@ let print_term = P.print
 module S = struct
   let a = ID.make "a"
   let b = ID.make "b"
+  let c = ID.make "c"
   let list = ID.make "list"
   let pair = ID.make "pair"
 
@@ -38,6 +39,10 @@ module S = struct
   let f_b = ID.make "f_b"
   let g_b = ID.make "g_b"
   let h_b = ID.make "h_b"
+
+  let c0 = ID.make_full ~needs_at:false ~distinct:true "$c0"
+  let c1 = ID.make_full ~needs_at:false ~distinct:true "$c1"
+  let c2 = ID.make_full ~needs_at:false ~distinct:true "$c2"
 
   let p0 = ID.make "p0"
   let p1 = ID.make "p1"
@@ -76,6 +81,9 @@ let base_sig =
     ; f_b, U.(ty_arrow_l [U.ty_const b; U.ty_const a] (U.ty_const b))
     ; g_b, U.(ty_arrow_l [U.ty_const b] (U.ty_const b))
     ; h_b, U.(ty_arrow_l [app_const_ list [U.ty_const b]] (U.ty_const b))
+    ; c0, U.ty_const c
+    ; c1, U.ty_const c
+    ; c2, U.ty_const c
     ; p0, U.ty_prop
     ; p1, U.ty_prop
     ; p2, U.ty_prop

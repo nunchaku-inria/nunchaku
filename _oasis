@@ -27,7 +27,7 @@ Library nunchaku_core
                     UntypedAST, Model, TypeUnify, Problem, FO, Reduce,
                     Env, Statement, FO_tptp, FO_rel, Cardinality,
                     Scheduling, Polarity, Traversal, ProblemMetadata,
-                    AnalyzeType, Prelude, TypeCheck, Lazy_list,
+                    AnalyzeType, Prelude, TypeCheck, Lazy_list, Bit_set,
                     Sexp_lib, Sexp_lex, Precedence, Binder, Builtin,
                     Cardinal_encode,
                     terms/TermInner,

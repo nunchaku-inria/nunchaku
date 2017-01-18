@@ -1,34 +1,62 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
+module Fields = Bit_set.Make(struct end)
+
+type fields = Fields.t
+
 type t = {
   name: string;
   id: int;
-  needs_at: bool;
+  fields: Fields.t;
   pol: Polarity.t;
 }
 type _t = t
 
+let field_needs_at = Fields.mk_field ()
+(** Field to indicate whether printed [id] should be preceded by '@' *)
+
+let field_distinct = Fields.mk_field ()
+(** Field to indicate whether the [id] is distinct from
+    every other ID that has this field. It is useful for evaluation
+    purpose. *)
+
+let () = Fields.freeze ()
+
 (* make fresh variables *)
-let make_full =
+let make_inner_ =
   let n = ref 0 in
-  fun ?(pol=Polarity.NoPol) ~needs_at name ->
+  fun ?(pol=Polarity.NoPol) ~fields name ->
     if name="" then invalid_arg "ID.make";
     let id = !n in
     if id < 0 then failwith "id counter overflow";
     incr n;
-    {name; id; needs_at; pol; }
+    {name; id; fields; pol; }
+
+let make_fields = make_inner_
+
+let make_full ?pol ?(distinct=false) ~needs_at name =
+  let fields =
+    Fields.empty
+    |> Fields.set field_needs_at needs_at
+    |> Fields.set field_distinct distinct
+  in
+  make_inner_ ?pol ~fields name
 
 let make n = make_full ~needs_at:false n
 
 let make_f msg = CCFormat.ksprintf msg ~f:make
 
-let fresh_copy v = make_full ~needs_at:v.needs_at ~pol:v.pol v.name
+let fresh_copy_name v s = make_inner_ ~fields:v.fields ~pol:v.pol s
+let fresh_copy v = fresh_copy_name v v.name
 
 let name v = v.name
 let id v = v.id
 let polarity v = v.pol
-let needs_at v = v.needs_at
+
+let fields v = v.fields
+let needs_at v = Fields.get field_needs_at v.fields
+let is_distinct v = Fields.get field_distinct v.fields
 
 let is_pos v = v.pol = Polarity.Pos
 let is_neg v = v.pol = Polarity.Neg
@@ -40,13 +68,22 @@ let compare v1 v2 = Pervasives.compare v1.id v2.id
 let hash_fun v h = CCHash.int v.id h
 let hash v = v.id land max_int (* >= 0 *)
 
+(*
 let print_normal out v =
-  if v.needs_at
+  let suffix = if is_distinct v then "!" else "" in
+  if needs_at v
+  then Format.fprintf out "@@%s%s%s" v.name (Polarity.to_string v.pol) suffix
+  else Format.fprintf out "%s%s%s" v.name (Polarity.to_string v.pol) suffix
+
+*)
+
+let print_normal out v =
+  if needs_at v
   then Format.fprintf out "@@%s%s" v.name (Polarity.to_string v.pol)
   else Format.fprintf out "%s%s" v.name (Polarity.to_string v.pol)
 
 let to_string_normal v =
-  if v.needs_at
+  if needs_at v
   then Printf.sprintf "@@%s%s" v.name (Polarity.to_string v.pol)
   else v.name ^ Polarity.to_string v.pol
 
@@ -59,7 +96,7 @@ let to_string_slug v =
   v.name ^ suffix
 
 let print_full out v =
-  if v.needs_at
+  if needs_at v
   then Format.fprintf out "@@%s%s/%d" v.name (Polarity.to_string v.pol) v.id
   else Format.fprintf out "%s%s/%d" v.name (Polarity.to_string v.pol) v.id
 
