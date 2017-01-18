@@ -164,13 +164,18 @@ let match_default_except ~env c_id t : _ TI.default_case =
           | _ -> false]
    @param k the leaf to put inside the only successful branch
      of the tree: [k subst] must return some boolean term,
-    where [subst] is a substitution of [vars(args)] *)
+    where [subst] is a substitution of [freevars(args)]
+   @param vars the new input variables, we are defining [some_pred vars := …]
+      from a clause [forall …. guard => some_pred args]
+*)
 let mk_match_tree ~env ~subst vars args ~k : term =
   assert (List.length vars = List.length args);
   (* [subst]: current substitution on vars(args)
      [conds]: set of side conditions (non-linear matching) *)
   let rec aux subst conds vars args = match vars, args with
-    | [], [] -> k subst (* successful branch *)
+    | [], [] ->
+      (* Successful branch. *)
+      k subst
     | [], _
     | _, [] -> assert false
     | v :: vars_tail, arg :: args_tail ->
@@ -244,11 +249,18 @@ let encode_clause_match ~env vars args ~c_vars ~c_guard =
   let res =
     mk_match_tree ~env ~subst:Var.Subst.empty vars args
       ~k:(fun subst ->
+        (* gather elements of [c_vars] that are not bound in [subst], and
+           quantify existentially on them *)
+        let ex_vars =
+          List.filter (fun v -> not (Var.Subst.mem ~subst v)) c_vars
+        in
         (* all variables of [args] should be bound *)
-        assert (List.for_all (fun v -> Var.Subst.mem ~subst v) c_vars);
-        match c_guard with
-          | None -> U.true_
-          | Some g -> U.eval ~subst g)
+        begin match c_guard with
+          | None ->
+            assert (ex_vars = []);
+            U.true_
+          | Some g -> U.exists_l ex_vars (U.eval ~subst g)
+        end)
   in
   res
 
