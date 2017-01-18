@@ -231,7 +231,7 @@ let singleton_if check ~f x = if check then [f x] else []
 
 let arg_choice l f =
   let pick s =
-    let s = s |> String.trim |> String.lowercase in
+    let s = s |> String.trim |> String.lowercase_ascii in
     try f (List.assoc s l)
     with Not_found -> assert false
   in
@@ -287,7 +287,7 @@ let enable_warn_ w () = toggle_warning w true
 
 let () =
   Options.add_list
-    [ 
+    [
       ("--warn-overlapping-match"
       , Arg.Unit (enable_warn_ Warn_overlapping_match)
       , " enable warning on overlapping cases of pattern-matching");
