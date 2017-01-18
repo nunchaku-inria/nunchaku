@@ -178,18 +178,18 @@ module CE = Cardinal_encode.Make(T)
 
 (* type of pred [p] has at most [n] elements, return axiom
    [exists x1...xn. p x_i & forall y. p y => (y = x1 | .... | y = xn)] *)
-let encode_max_card_ state n =
+let encode_max_card_ state ty n =
   let ax =
-    CE.encode_max_card U.ty_unitype n
+    CE.encode_max_card ty n
     |> encode_term state Var.Subst.empty
   in
   [Stmt.axiom1 ~info:Stmt.info_default ax]
 
 (* the type of [pred] has at least [n] elements, return list of axiom
    [exists x1...xn. pred x_i & xi != xj] *)
-let encode_min_card_ state n =
+let encode_min_card_ state ty n =
   let ax =
-    CE.encode_min_card U.ty_unitype n
+    CE.encode_min_card ty n
     |> encode_term state Var.Subst.empty
   in
   [Stmt.axiom1 ~info:Stmt.info_default ax]
@@ -209,12 +209,13 @@ let encode_stmt_ state st : (_,_) Stmt.t list =
         | [] ->
           (* atomic type, easy *)
           let p = ID.make_f "is_%a" ID.print_name id in
-          add_pred_ state (U.const id) p;
+          let ty = U.ty_const id in
+          add_pred_ state ty p;
           (* emit some constraint on the predicate for cardinalities *)
           CCList.flat_map
             (function
-              | Stmt.Attr_card_max i -> encode_max_card_ state i
-              | Stmt.Attr_card_min i -> encode_min_card_ state i
+              | Stmt.Attr_card_max i -> encode_max_card_ state ty i
+              | Stmt.Attr_card_min i -> encode_min_card_ state ty i
               | _ -> [])
             attrs
         | _::_ ->
