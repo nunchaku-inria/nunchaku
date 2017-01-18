@@ -14,6 +14,7 @@ module P = T.P
 module PStmt = Stmt.Print(P)(P)
 module AT = AnalyzeType.Make(T)
 module Pol = Polarity
+module Red = Reduce.Make(T)
 module TyMo = (val TypeMono.default)
 
 type term = T.t
@@ -925,7 +926,7 @@ module Make(M : sig val mode : mode end) = struct
   let eval_fundef (f:fun_def) (args:T.t list) : T.t =
     let dt, _ = f in
     assert (DT.num_vars dt >= List.length args);
-    DTU.apply_l dt args |> DTU.to_term
+    DTU.apply_l dt args |> DTU.to_term |> Red.whnf
 
   (* evaluate a boolean function def *)
   let eval_bool_fundef (f:fun_def) (args:T.t list) : (bool, T.t) Result.result =
