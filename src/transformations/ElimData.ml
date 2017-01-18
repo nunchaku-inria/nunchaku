@@ -305,7 +305,11 @@ module Make(M : sig val mode : mode end) = struct
        replace [t] by [let x := u in t] and remove cell from [share].
        NOTE: careful about the dependencies between subterms and superterms
        during traversal, let-bindings must be correctly ordered *)
-  let introduce_lets share (t:term) ~(start:[`All | `Vars of ty Var.t list]): term =
+  let introduce_lets
+      (share:sharing_state)
+      (t:term)
+      ~(start:[`All | `Vars of ty Var.t list])
+    : term =
     let all_guards = ref [] in
     let all_lets = ref [] in
     (* the set of cells to introduce *)
