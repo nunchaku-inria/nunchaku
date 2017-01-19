@@ -164,7 +164,7 @@ module Print(T : REPR)
     | Builtin (`Ite (a,b,c)) when is_if_ c ->
       (* special case to avoid deep nesting of ifs *)
       let pp_middle out (a,b) =
-        fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]"
+        fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]@]"
           (print' P.Ite) a (print' P.Ite) b
       in
       let middle, last = unroll_if_ c in
@@ -189,7 +189,7 @@ module Print(T : REPR)
           ID.print id (pp_list_ ~sep:" " Var.print_full) vars print t
       and pp_def out = function
         | Default_none -> ()
-        | Default_some (d,_) -> fpf out "@ @[<hv2> | default ->@ %a@]" print d
+        | Default_some (d,_) -> fpf out "@ @[<hv2>| default ->@ %a@]" print d
       in
       fpf out "@[<hv>@[<hv2>match @[%a@] with@ %a%a@]@ end@]"
         print t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
