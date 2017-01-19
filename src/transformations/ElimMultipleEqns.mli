@@ -1,7 +1,12 @@
 
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
-(** {1 Transform a problem with multiple equations per defined Symbol into one with single equations} *)
+(** {1 Merge Multiple Equations into One} *)
+
+(** The goal is to transform a problem where definitions have
+    multiple equations (à la Haskell or Isabelle/HOL),
+    into a problem where each ID has a single equations
+*)
 
 open Nunchaku_core
 
