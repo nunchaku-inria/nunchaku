@@ -315,6 +315,11 @@ module type UTIL_REPR = sig
       [([a;b], [a;b;c], d)]
   *)
 
+  val app_const_unfold : t_ -> (ID.t * t_ list) option
+  (** [app_const_unfold (app_const id l)] returns [Some (id,l)];
+      [app_const_unfold (const id)] returns [Some (id, [])];
+      otherwise it returns [None] *)
+
   val ty_is_Type : t_ -> bool
   (** t == Type? *)
 
@@ -529,6 +534,15 @@ module UtilRepr(T : REPR)
       | _ -> [], t
     in
     aux1 t
+
+  let app_const_unfold t = match T.repr t with
+    | Const id -> Some (id, [])
+    | App (f, l) ->
+      begin match T.repr f with
+        | Const id -> Some (id, l)
+        | _ -> None
+      end
+    | _ -> None
 
   let ty_is_Type t = match T.repr t with
     | TyBuiltin `Type -> true

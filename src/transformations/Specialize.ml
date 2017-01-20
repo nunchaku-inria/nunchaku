@@ -1351,7 +1351,7 @@ let dt_of_spec_dt state ~vars (dt,dsf) : (_,_) DT.t =
   let dt =
     List.fold_right
       (fun (_,v,arg) dt ->
-         DT.cases v ~default:None ~tests:[arg, dt])
+         DT.mk_tests v ~default:None ~tests:[arg, dt])
       spec_args dt
   in
   (* now pivot so that:

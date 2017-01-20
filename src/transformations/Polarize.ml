@@ -499,7 +499,7 @@ let filter_dt_ ~polarized ~default:d dt : (_,_) DT.t =
   Utils.debugf ~section 5
     "@[<v>retain branches that yield %B for `%a`@ from `@[%a@]`@]"
     (fun k->k is_pos ID.print polarized (Model.DT.print P.print' P.print) dt);
-  let rec aux dt = match dt with
+  let rec aux dt : _ option = match dt with
     | DT.Yield t ->
       (* evaluate as fully as possible, hoping for [true] or [false] *)
       let t = Red.whnf t in
@@ -516,19 +516,37 @@ let filter_dt_ ~polarized ~default:d dt : (_,_) DT.t =
              but branch `@[%a@]`@ yields `@[%a@]`@]"
             ID.print polarized DTU.print dt P.print t
       end
-    | DT.Cases {DT.var; tests; default} ->
-      let tests =
+    | DT.Cases {DT.var; tests=DT.Tests l; default} ->
+      let l =
         CCList.filter_map
           (fun (lhs,rhs) -> match aux rhs with
              | None -> None
              | Some rhs' -> Some (lhs, rhs'))
-          tests
+          l
       and default =
         CCOpt.flat_map aux default
       in
-      if tests=[] && default=None
+      if l=[] && default=None
       then None (* empty *)
-      else Some (DT.cases var ~tests ~default)
+      else Some (DT.mk_tests var ~tests:l ~default)
+    | DT.Cases {DT.var; tests=DT.Match (m,missing); default} ->
+      let new_m, new_missing =
+        ID.Map.fold
+          (fun id (vars,rhs) (new_m,new_missing) ->
+             match aux rhs with
+               | None ->
+                 (* remove! *)
+                 new_m, ID.Map.add id (List.length vars) new_missing
+               | Some rhs ->
+                 ID.Map.add id (vars,rhs) new_m, new_missing)
+          m
+          (ID.Map.empty, missing)
+      and default =
+        CCOpt.flat_map aux default
+      in
+      if ID.Map.is_empty new_m && CCOpt.is_none default
+      then None
+      else Some (DT.mk_match var ~by_cstor:new_m ~missing:new_missing ~default)
   in
   CCOpt.get_lazy
     (fun () -> DT.const (DT.vars dt) (DT.yield d))
