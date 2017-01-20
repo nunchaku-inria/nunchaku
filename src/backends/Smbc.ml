@@ -353,17 +353,18 @@ let error_parse_model msg = raise (Parse_result_error msg)
 let error_parse_modelf msg = Utils.exn_ksprintf ~f:error_parse_model msg
 
 module StrMap = CCMap.Make(String)
+module DTU = Model.DT_util
 
 (* local mapping/typing env for variables *)
 type parse_env = [`Var of ty Var.t | `Subst of term] StrMap.t
 
-let empty_env : parse_env = StrMap.empty
+let empty_penv : parse_env = StrMap.empty
 
-let id_of_tip (env:parse_env) (s:string):
+let id_of_tip (penv:parse_env) (s:string):
   [`Var of _ Var.t | `Const of ID.t | `Undef of ID.t | `Subst of term] =
   (* look first in the local environment for bound variables,
      then in the {!ID.Erase} table *)
-  begin match StrMap.get s env with
+  begin match StrMap.get s penv with
     | Some (`Var v) -> `Var v
     | Some (`Subst t) -> `Subst t
     | None ->
@@ -384,48 +385,99 @@ let id_of_tip (env:parse_env) (s:string):
       end
   end
 
-let rec term_of_tip (env:parse_env) (t:A.term): term = match t with
+let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
   | A.True -> U.true_
   | A.False -> U.false_
-  | A.Const c -> term_of_id env c
+  | A.Const c -> term_of_id penv c
   | A.App (f,l) ->
-    let f = term_of_id env f in
-    U.app f (List.map (term_of_tip env) l)
+    let f = term_of_id penv f in
+    U.app f (List.map (term_of_tip ~env penv) l)
   | A.HO_app (f,a) ->
-    U.app (term_of_tip env f) [term_of_tip env a]
-  | A.Match (_,_) ->
-    (* TODO: how? *)
-    error_parse_model "cannot deal with match-based models yet, sorry"
-  | A.If (a,b,c) ->
-    U.ite (term_of_tip env a)(term_of_tip env b)(term_of_tip env c)
-  | A.Let (l,u) ->
-    let env = List.fold_left
-        (fun env (s,t) ->
-           let t = term_of_tip env t in
-           StrMap.add s (`Subst t) env)
-        env l
+    U.app (term_of_tip ~env penv f) [term_of_tip ~env penv a]
+  | A.Match (u,l) ->
+    let u = term_of_tip ~env penv u in
+    (* recover type info on [u] *)
+    let ty_u = U.ty_exn ~env u in
+    let tydef = match U.info_of_ty_exn ~env ty_u |> Env.def with
+      | Env.Data (_, _, tydef) -> tydef
+      | _ ->
+        error_parse_modelf
+          "expected `@[%a@]`,@ of type `@[%a@]`,@ to be a datatype"
+          P.print u P.print ty_u
     in
-    term_of_tip env u
+    (* build match tree *)
+    let m, def =
+      List.fold_left
+        (fun (m, def) branch -> match branch, def with
+           | A.Match_case (c_str, vars, rhs), _ ->
+             let c_id = match id_of_string c_str with
+               | Some i -> i
+               | None ->
+                 error_parse_modelf
+                   "cannot find a constructor corresponding to `%s`" c_str
+             in
+             let c_ty_args = match ID.Map.get c_id (Stmt.tydef_cstors tydef) with
+               | None ->
+                 error_parse_modelf "id `%a` should be a constructor of `@[%a@]`"
+                   ID.print c_id P.print ty_u
+               | Some cstor -> cstor.Stmt.cstor_args
+             in
+             assert (List.length c_ty_args = List.length vars);
+             let penv, vars =
+               CCList.fold_map add_typed_var penv (List.combine vars c_ty_args)
+             in
+             let rhs = term_of_tip ~env penv rhs in
+             ID.Map.add c_id (vars,rhs) m, def
+           | A.Match_default _, Some _ ->
+             error_parse_modelf
+               "two distinct \"default\" clauses in `@[%a@]`"
+               A.pp_term t
+           | A.Match_default rhs, None ->
+             m, Some (term_of_tip ~env penv rhs))
+        (ID.Map.empty, None)
+        l
+    in
+    let def = match def with
+      | None -> TI.Default_none
+      | Some rhs ->
+        let missing =
+          Stmt.tydef_cstors tydef
+          |> ID.Map.filter (fun id _ -> not (ID.Map.mem id m))
+          |> ID.Map.map (fun cstor -> List.length cstor.Stmt.cstor_args)
+        in
+        TI.Default_some (rhs, missing)
+    in
+    U.match_with u m ~def
+  | A.If (a,b,c) ->
+    U.ite (term_of_tip ~env penv a)(term_of_tip ~env penv b)(term_of_tip ~env penv c)
+  | A.Let (l,u) ->
+    let penv = List.fold_left
+        (fun penv (s,t) ->
+           let t = term_of_tip ~env penv t in
+           StrMap.add s (`Subst t) penv)
+        penv l
+    in
+    term_of_tip ~env penv u
   | A.Fun (v,body) ->
-    let env, v = typed_var_of_tip env v in
-    let body = term_of_tip env body in
+    let penv, v = typed_var_of_tip penv v in
+    let body = term_of_tip ~env penv body in
     U.fun_ v body
-  | A.Eq (a,b) -> U.eq (term_of_tip env a)(term_of_tip env b)
-  | A.Imply (a,b) -> U.imply (term_of_tip env a)(term_of_tip env b)
+  | A.Eq (a,b) -> U.eq (term_of_tip ~env penv a)(term_of_tip ~env penv b)
+  | A.Imply (a,b) -> U.imply (term_of_tip ~env penv a)(term_of_tip ~env penv b)
   | A.And l ->
-    let l = List.map (term_of_tip env) l in
+    let l = List.map (term_of_tip ~env penv) l in
     U.and_ l
   | A.Or l ->
-    let l = List.map (term_of_tip env) l in
+    let l = List.map (term_of_tip ~env penv) l in
     U.or_ l
-  | A.Not a -> U.not_ (term_of_tip env a)
+  | A.Not a -> U.not_ (term_of_tip ~env penv a)
   | A.Forall (v,body) ->
-    let env, v = CCList.fold_map typed_var_of_tip env v in
-    let body = term_of_tip env body in
+    let penv, v = CCList.fold_map typed_var_of_tip penv v in
+    let body = term_of_tip ~env penv body in
     U.forall_l v body
   | A.Exists (v,body) ->
-    let env, v = CCList.fold_map typed_var_of_tip env v in
-    let body = term_of_tip env body in
+    let penv, v = CCList.fold_map typed_var_of_tip penv v in
+    let body = term_of_tip ~env penv body in
     U.exists_l v body
   | A.Cast (_,_) -> assert false
 
@@ -442,11 +494,14 @@ and ty_of_tip (ty:A.ty): ty = match ty with
   | A.Ty_arrow (l, ret) ->
     U.ty_arrow_l (List.map ty_of_tip l) (ty_of_tip ret)
   | A.Ty_app (f, l) ->
-    U.ty_app (term_of_id empty_env f) (List.map ty_of_tip l)
+    U.ty_app (term_of_id empty_penv f) (List.map ty_of_tip l)
 
 and typed_var_of_tip (env:parse_env) (s,ty) =
-  let id = ID.make s in
   let ty = ty_of_tip ty in
+  add_typed_var env (s,ty)
+
+and add_typed_var env (s,ty) =
+  let id = ID.make s in
   let v = Var.of_id id ~ty in
   StrMap.add s (`Var v) env, v
 
@@ -532,61 +587,52 @@ let extract_to_outer_function (t:term): term =
 
 (* convert a term into a decision tree *)
 let dt_of_term (t:term): (term,ty) Model.DT.t =
-  (* split [t] into a list of equations [var = t'] where [var in vars] *)
-  let rec get_eqns_exn ~vars t : (_,_) Model.DT.flat_test list =
-    let mk_eq = Model.DT.mk_flat_test in
-    Utils.debugf 5 "get_eqns @[%a@]" (fun k->k P.print t);
-    let fail() =
-      error_parse_modelf
-        "expected a test <var = term>@ with <var> among [@[%a@]],@ but got `@[%a@]`@]"
-        (CCFormat.list Var.print_full) vars P.print t
-    in
-    match T.repr t with
-      | TI.Builtin (`And l) -> CCList.flat_map (get_eqns_exn ~vars) l
-      | TI.Builtin (`Eq (t1, t2)) ->
-        begin match T.repr t1, T.repr t2 with
-          | TI.Var v, _ when List.exists (Var.equal v) vars -> [mk_eq v t2]
-          | _, TI.Var v when List.exists (Var.equal v) vars -> [mk_eq v t1]
-          | _ -> fail()
-        end
-      | TI.Var v when List.exists (Var.equal v) vars ->
-        assert (U.ty_is_Prop (Var.ty v));
-        [mk_eq v U.true_]
-      | TI.Var _ ->
-        error_parse_modelf
-          "expected a boolean variable among @[%a@],@ but got @[%a@]@]"
-          (CCFormat.list Var.print_full) vars P.print t
-      | _ -> fail()
+  let fail_ ~vars t =
+    error_parse_modelf
+      "expected leaf or test against a variable in [@[%a@]],@ got: `@[%a]@`"
+      (CCFormat.list Var.print_full) vars P.print t
   in
-  let open Sequence.Infix in
-  let rec conv_body ~vars t : ((_,_) Model.DT.flat_test list * term) Sequence.t =
+  (* recursive conversion *)
+  let rec conv_body ~vars t : (_,_) Model.DT.t =
     match T.repr t with
       | TI.Builtin (`Ite (a,b,c)) ->
-        let tests = get_eqns_exn ~vars a in
-        Sequence.append
-          (conv_body ~vars b >|= fun (cond,bod) -> tests @ cond, bod)
-          (conv_body ~vars c >|= fun (cond,bod) -> cond, bod)
+        begin match T.repr a with
+          | TI.Var v when List.exists (Var.equal v) vars ->
+            let b = conv_body ~vars b in
+            let c = conv_body ~vars c in
+            DTU.ite v ~then_:b ~else_:c
+          | _ -> fail_ ~vars t
+        end
       | TI.Const _ | TI.App _ | TI.Var _ | TI.Bind _ | TI.Builtin _
         ->
-        Sequence.return ([], t)
-      | TI.Match _ -> Utils.not_implemented "parsing `match` from SMBC" (* TODO *)
+        Model.DT.yield t
+      | TI.Match (u, m, def) ->
+        begin match T.repr u with
+          | TI.Var v when List.exists (Var.equal v) vars ->
+            let m =
+              ID.Map.map
+                (fun (local_vars, rhs) ->
+                   local_vars, conv_body ~vars:(local_vars @ vars) rhs)
+                m
+            and def, missing = match def with
+              | TI.Default_none -> None, ID.Map.empty
+              | TI.Default_some (d,missing) ->
+                Some (conv_body ~vars d), missing
+            in
+            Model.DT.mk_match v ~by_cstor:m ~default:def ~missing
+          | _ ->
+            fail_ ~vars t
+        end
       | TI.Let _
-      | TI.TyMeta _ | TI.TyArrow _ | TI.TyBuiltin _ -> assert false
+      | TI.TyMeta _ | TI.TyArrow _ | TI.TyBuiltin _ ->
+        fail_ ~vars t
   in
   let vars, body = U.fun_unfold t in
   (* change the shape of [body] so it looks more like a decision tree *)
-  let cases = conv_body ~vars body |> Sequence.to_list in
-  let flat = {
-    Model.DT.
-    fdt_vars=vars;
-    fdt_default=None;
-    fdt_cases=cases;
-  } in
-  let dt = Model.DT.of_flat ~equal:U.equal ~hash:U.hash flat in
+  let dt = conv_body ~vars body in
   Utils.debugf ~section 5
-    "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@ using ft `@[%a@]`@]"
-    (fun k->k P.print body (Model.DT.print P.print' P.print) dt
-        (Model.DT.print_flat P.print') flat);
+    "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
+    (fun k->k P.print body (Model.DT.print P.print' P.print) dt);
   dt
 
 module A_res = A.Smbc_res
@@ -613,7 +659,7 @@ let convert_model ~env (m:A_res.model): (_,_) Model.t =
          let ty = ty_of_tip ty in
          let dom =
            List.map
-             (fun s -> match id_of_tip empty_env s with
+             (fun s -> match id_of_tip empty_penv s with
                 | `Subst _
                 | `Var _ -> error_parse_modelf "invalid domain element %s" s
                 | `Const id
@@ -622,10 +668,10 @@ let convert_model ~env (m:A_res.model): (_,_) Model.t =
          in
          Model.add_finite_type m ty dom
        | A_res.Val (a,b) ->
-         let a = term_of_tip empty_env a in
+         let a = term_of_tip ~env empty_penv a in
          (* conversion of [b] into a proper decision tree *)
          let b =
-           term_of_tip empty_env b
+           term_of_tip ~env empty_penv b
            |> extract_to_outer_function
            |> dt_of_term
          in
