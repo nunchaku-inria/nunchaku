@@ -35,14 +35,6 @@ exception Error of string
 (** list of different available options, starting with "" *)
 val options_l : string list
 
-(** Task for running CVC4 on a problem, with a set of options
-    @return a tasks
-    @param options: flags to pass the solver (default "").
-    @param slice total amount of time allotted to CVC4
-    @param prio priority of the task
-    @param dump if [Some f], do not call the solver, but write the problem into file [f]
-    @raise CVC4_error if the solver failed with an error
-*)
 val call :
   ?options:string ->
   ?prio:int ->
@@ -53,10 +45,19 @@ val call :
   print_model:bool ->
   problem ->
   (model_term, model_ty) Problem.Res.t Scheduling.Task.t
+(** Task for running CVC4 on a problem, with a set of options
+    @return a tasks
+    @param options: flags to pass the solver (default "").
+    @param slice total amount of time allotted to CVC4
+    @param prio priority of the task
+    @param dump if [Some f], do not call the solver, but write the problem into file [f]
+    @raise CVC4_error if the solver failed with an error
+*)
 
 val pipes :
   ?options:string list ->
   ?slice:float ->
+  ?schedule_options:bool ->
   print:bool ->
   dump:string option ->
   print_smt:bool ->
@@ -66,5 +67,11 @@ val pipes :
     (model_term, model_ty) Problem.Res.t Scheduling.Task.t list,
     'c, 'c) Transform.transformation
 (** Transformation corresponding to calling CVC4 on
-    the input problem, with each set of option in [options] *)
+    the input problem, with each set of option in [options].
 
+    @param schedule_options if [true], then the time slice will be
+      divided into smaller slices. Each slice is used by an instance
+      of CVC4 with different parameters.
+      Disable if you want the first instance(s) CVC4 to potentially
+      use the full amount of time.
+*)

@@ -80,6 +80,7 @@ let print_model_ = ref false
 let enable_polarize_ = ref true
 let enable_specialize_ = ref true
 let skolems_in_model_ = ref true
+let cvc4_schedule = ref true
 let timeout_ = ref 30
 let version_ = ref false
 let dump_ : [`No | `Yes | `Into of string] ref = ref `No
@@ -193,6 +194,8 @@ let options =
       ; "--no-specialize", Arg.Clear enable_specialize_, " disable specialization"
       ; "--skolems-in-model", Arg.Set skolems_in_model_, " enable skolem constants in models"
       ; "--no-skolems-in-model", Arg.Clear skolems_in_model_, " disable skolem constants in models"
+      ; "--cvc4-schedule", Arg.Set cvc4_schedule, " enable scheduling of multiple CVC4 instances"
+      ; "--cvc4-no-schedule", Arg.Clear cvc4_schedule, " enable scheduling of multiple CVC4 instances"
       ; "--solvers", Arg.String set_solvers_, " solvers to use " ^ list_solvers_ ()
       ; "-s", Arg.String set_solvers_, " synonym for --solvers"
       ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
@@ -304,6 +307,7 @@ let make_cvc4 ~j () =
       ~slice:(1. *. float j)
       ~dump:(get_dump_file ())
       ~print:!print_all_
+      ~schedule_options:!cvc4_schedule
       ~print_smt:(!print_all_ || !print_smt_)
       ~print_model:(!print_all_ || !print_raw_model_)
       ()

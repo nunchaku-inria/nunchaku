@@ -834,7 +834,9 @@ let options_l =
 
 (* solve problem using CVC4 before [deadline] *)
 let call
-    ?(options="") ?prio ?slice ~print ~dump ~print_smt ~print_model problem
+    ?(options="") ?prio ?slice
+    ~print ~dump ~print_smt ~print_model
+    problem
   =
   if print then (
     Format.printf "@[<v2>FO problem:@ %a@]@." FO.print_problem problem;
@@ -860,15 +862,18 @@ let call
       S.Task.return (Res.Unknown [Res.U_other (info, "--dump")]) S.No_shortcut
   end
 
-let pipes ?(options=[""]) ?slice ~print ~dump ~print_smt ~print_model () =
-  (* each process' slice is only 1/n of the global CVC4 slice *)
+let pipes
+    ?(options=[""]) ?slice ?(schedule_options=true)
+    ~print ~dump ~print_smt ~print_model
+    () =
   let slice =
-    CCOpt.map
-      (fun s ->
-         let n = List.length options in
-         assert (n > 0);
-         s /. float n)
-      slice
+    if schedule_options
+    then (
+      let n = List.length options in
+      assert (n > 0);
+      (* each process' slice is only [1/n] of the global CVC4 slice *)
+      CCOpt.map (fun s -> s /. float n) slice
+    ) else slice
   in
   let encode pb =
     List.mapi
