@@ -353,7 +353,6 @@ let error_parse_model msg = raise (Parse_result_error msg)
 let error_parse_modelf msg = Utils.exn_ksprintf ~f:error_parse_model msg
 
 module StrMap = CCMap.Make(String)
-module DTU = Model.DT_util
 
 (* local mapping/typing env for variables *)
 type parse_env = [`Var of ty Var.t | `Subst of term] StrMap.t
@@ -589,42 +588,69 @@ let extract_to_outer_function (t:term): term =
 let dt_of_term (t:term): (term,ty) Model.DT.t =
   let fail_ ~vars t =
     error_parse_modelf
-      "expected leaf or test against a variable in [@[%a@]],@ got: `@[%a]@`"
+      "expected leaf or test against a variable in [@[%a@]],@ got: `@[%a@]`"
       (CCFormat.list Var.print_full) vars P.print t
+  in
+  (* check that [t] is an equation [v = t'], return [t'] *)
+  let get_eqn_exn v t: term =
+    let fail() =
+      error_parse_modelf
+        "expected a test <%a = term>,@ but got `@[%a@]`@]"
+        Var.print_full v P.print t
+    in
+    Utils.debugf 5 "get_eqn var=`%a` on: `@[%a@]`"
+      (fun k->k Var.print_full v P.print t);
+    match T.repr t with
+      | TI.Builtin (`Eq (t1, t2)) ->
+        begin match T.repr t1, T.repr t2 with
+          | TI.Var v', _ when Var.equal v v' -> t2
+          | _, TI.Var v' when Var.equal v v' -> t1
+          | _ -> fail()
+        end
+      | TI.Var v' when Var.equal v v' ->
+        assert (U.ty_is_Prop (Var.ty v'));
+        U.true_
+      | TI.Var _ ->
+        error_parse_modelf
+          "expected a boolean variable among @[%a@],@ but got @[%a@]@]"
+          Var.print_full v P.print t
+      | _ -> fail()
   in
   (* recursive conversion *)
   let rec conv_body ~vars t : (_,_) Model.DT.t =
-    match T.repr t with
-      | TI.Builtin (`Ite (a,b,c)) ->
-        begin match T.repr a with
-          | TI.Var v when List.exists (Var.equal v) vars ->
-            let b = conv_body ~vars b in
-            let c = conv_body ~vars c in
-            DTU.ite v ~then_:b ~else_:c
-          | _ -> fail_ ~vars t
-        end
-      | TI.Const _ | TI.App _ | TI.Var _ | TI.Bind _ | TI.Builtin _
-        ->
-        Model.DT.yield t
-      | TI.Match (u, m, def) ->
+    match T.repr t, vars with
+      | _, [] -> Model.DT.yield t
+      | TI.Builtin (`Ite (_,_,_)), v :: vars_tail ->
+        let tests, else_ = U.ite_unfold t in
+        let tests =
+          List.map
+            (fun (a, b) -> get_eqn_exn v a, conv_body ~vars:vars_tail b)
+            tests
+        and default =
+          Some (conv_body ~vars:vars_tail else_)
+        in
+        Model.DT.mk_tests v ~tests ~default
+      | (TI.Const _ | TI.App _ | TI.Var _ | TI.Bind _ | TI.Builtin _), _::_ ->
+        (* yield early, as a constant branch *)
+        Model.DT.const vars (Model.DT.yield t)
+      | TI.Match (u, m, def), v :: vars_tail ->
         begin match T.repr u with
-          | TI.Var v when List.exists (Var.equal v) vars ->
+          | TI.Var v' when Var.equal v v' ->
             let m =
               ID.Map.map
                 (fun (local_vars, rhs) ->
-                   local_vars, conv_body ~vars:(local_vars @ vars) rhs)
+                   local_vars, conv_body ~vars:(local_vars @ vars_tail) rhs)
                 m
             and def, missing = match def with
               | TI.Default_none -> None, ID.Map.empty
               | TI.Default_some (d,missing) ->
-                Some (conv_body ~vars d), missing
+                Some (conv_body ~vars:vars_tail d), missing
             in
             Model.DT.mk_match v ~by_cstor:m ~default:def ~missing
           | _ ->
             fail_ ~vars t
         end
-      | TI.Let _
-      | TI.TyMeta _ | TI.TyArrow _ | TI.TyBuiltin _ ->
+      | (TI.Let _ | TI.TyMeta _ | TI.TyArrow _ | TI.TyBuiltin _), _::_ ->
         fail_ ~vars t
   in
   let vars, body = U.fun_unfold t in
