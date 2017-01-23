@@ -75,6 +75,7 @@ Library nunchaku_transformations
                     ElimRecursion,
                     ElimMultipleEqns,
                     ElimIndPreds,
+                    ElimQuantifiers,
                     ElimCopy,
                     Polarize,
                     Unroll,
