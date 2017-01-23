@@ -64,6 +64,7 @@ let print_elim_multi_eqns = ref false
 let print_polarize_ = ref false
 let print_unroll_ = ref false
 let print_elim_preds_ = ref false
+let print_elim_quant_ = ref false
 let print_elim_data_ = ref false
 let print_elim_codata_ = ref false
 let print_copy_ = ref false
@@ -433,14 +434,20 @@ let make_model_pipeline () =
          ~check ~polarize_rec:!polarize_rec_
      else Transform.nop ()) @@@
     Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
-    (*
+    (* skolemize first, to have proper decoding of model *)
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-       *)
     Tr.ElimIndPreds.pipe ~mode:`Use_match
       ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-    Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+    Tr.ElimQuantifiers.pipe
+      ~mode:Tr.ElimQuantifiers.([Elim_quant_data; Elim_quant_fun; Elim_eq_fun])
+      ~print:(!print_elim_quant_ || !print_all_) ~check @@@
+    (*
+    Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+    Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+       *)
+    Tr.Lift_undefined.pipe ~print:!print_all_ ~check @@@
     Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
     close_task smbc
   and pipe_cvc4 =

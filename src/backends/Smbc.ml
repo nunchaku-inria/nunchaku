@@ -42,7 +42,7 @@ let () = Printexc.register_printer
       | Error msg -> Some (Utils.err_sprintf "[SMBC backend] %s" msg)
       | Out_of_scope msg -> Some (Printf.sprintf "problem is out of scope for SMBC: %s" msg)
       | Conversion_error t ->
-        Some (CCFormat.sprintf "problem could not be converted to TIP: %a" P.print t)
+        Some (Utils.err_sprintf "problem could not be converted to TIP: %a" P.print t)
       | Parse_result_error msg -> Some ("could not parse result: " ^ msg)
       | _ -> None)
 
@@ -51,7 +51,12 @@ let out_of_scopef msg = Utils.exn_ksprintf msg ~f:out_of_scope
 
 
 let erase = ID.Erase.create_state ()
-let id_to_string id = ID.Erase.to_name erase id
+let id_to_string =
+  let escape_ _id name = match name with
+    | "distinct" | "match" | "case" -> name ^ "_"
+    | _ -> name
+  in
+  ID.Erase.to_name erase ~encode:escape_
 let id_of_string s = try Some (ID.Erase.of_name erase s) with Not_found -> None
 
 (** {2 Local Transformation}
@@ -122,8 +127,13 @@ let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
       | `DataSelect (c,i) -> A.const (data_select_fun st c i |> id_to_string)
       | `Undefined_atom _
       | `Undefined_self _ -> raise (Conversion_error t)
+      | `Guard (t,g) ->
+        (* use builtin "asserting" *)
+        let t = term_to_tip st t in
+        let g = U.and_nodup g.Builtin.asserting |> term_to_tip st in
+        A.app "asserting" [t; g]
       | `Unparsable _
-      | `Guard _ -> assert false (* TODO: better error: should not happen *)
+        -> assert false (* TODO: better error: should not happen *)
     end
   | TI.Bind (Binder.Fun,v,body) ->
     A.fun_ (conv_typed_var v) (term_to_tip  st body)
@@ -216,12 +226,26 @@ let decl_to_tip id ty : A.statement =
       (ty_to_tip ty_ret)
   )
 
+let decl_attrs_to_tip state (id:ID.t) attrs: A.statement list =
+  CCList.filter_map
+    (function
+      | Stmt.Attr_card_max n ->
+        let module CE = Cardinal_encode.Make(T) in
+        let ax = CE.encode_max_card (U.ty_const id) n |> term_to_tip state in
+        Some (A.assert_ ax)
+      | Stmt.Attr_card_min n ->
+        let module CE = Cardinal_encode.Make(T) in
+        let ax = CE.encode_min_card (U.ty_const id) n |> term_to_tip state in
+        Some (A.assert_ ax)
+      | _ -> None)
+    attrs
+
 let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
   let new_st = match Stmt.view st with
-    | Stmt.Decl {Stmt.defined_head=id; defined_ty=ty; _} ->
+    | Stmt.Decl {Stmt.defined_head=id; defined_ty=ty; defined_attrs=attrs; } ->
       let vars, _, _ = U.ty_unfold ty in
       if vars=[]
-      then [decl_to_tip id ty]
+      then decl_to_tip id ty :: decl_attrs_to_tip state id attrs
       else out_of_scopef "cannot encode to TIP poly statement %a" PStmt.print st
     | Stmt.Axiom (Stmt.Axiom_std l) ->
       List.map (fun ax -> A.assert_ (term_to_tip state ax)) l
@@ -328,31 +352,33 @@ let print_pb out (pb:problem): unit =
 let error_parse_model msg = raise (Parse_result_error msg)
 let error_parse_modelf msg = Utils.exn_ksprintf ~f:error_parse_model msg
 
-module StmtrMap = CCMap.Make(String)
+module StrMap = CCMap.Make(String)
 
 (* local mapping/typing env for variables *)
-type parse_env = [`Var of ty Var.t | `Subst of term] StmtrMap.t
+type parse_env = [`Var of ty Var.t | `Subst of term] StrMap.t
 
-let empty_env : parse_env = StmtrMap.empty
+let empty_env : parse_env = StrMap.empty
 
 let id_of_tip (env:parse_env) (s:string):
   [`Var of _ Var.t | `Const of ID.t | `Undef of ID.t | `Subst of term] =
-  begin match id_of_string s with
-    | None when s.[0] = '$' ->
-      (* domain element *)
-      let id = ID.make s in
-      ID.Erase.add_name erase s id;
-      `Const id
-    | None when s.[0] = '?' ->
-      (* unknown *)
-      let id = ID.make s in
-      ID.Erase.add_name erase s id;
-      `Undef id
-    | Some id -> `Const id
+  (* look first in the local environment for bound variables,
+     then in the {!ID.Erase} table *)
+  begin match StrMap.get s env with
+    | Some (`Var v) -> `Var v
+    | Some (`Subst t) -> `Subst t
     | None ->
-      begin match StmtrMap.get s env with
-        | Some (`Var v) -> `Var v
-        | Some (`Subst t) -> `Subst t
+      begin match id_of_string s with
+        | None when s.[0] = '$' ->
+          (* domain element. They have the "distinct" property *)
+          let id = ID.make_full ~needs_at:false ~distinct:true s in
+          ID.Erase.add_name erase s id;
+          `Const id
+        | None when s.[0] = '?' ->
+          (* unknown *)
+          let id = ID.make s in
+          ID.Erase.add_name erase s id;
+          `Undef id
+        | Some id -> `Const id
         | None ->
           error_parse_modelf "expected ID, got unknown `%s`" s
       end
@@ -376,7 +402,7 @@ let rec term_of_tip (env:parse_env) (t:A.term): term = match t with
     let env = List.fold_left
         (fun env (s,t) ->
            let t = term_of_tip env t in
-           StmtrMap.add s (`Subst t) env)
+           StrMap.add s (`Subst t) env)
         env l
     in
     term_of_tip env u
@@ -422,7 +448,87 @@ and typed_var_of_tip (env:parse_env) (s,ty) =
   let id = ID.make s in
   let ty = ty_of_tip ty in
   let v = Var.of_id id ~ty in
-  StmtrMap.add s (`Var v) env, v
+  StrMap.add s (`Var v) env, v
+
+(* convert a term with functions inside tests into one single function
+   with tests in the body.
+   Example:
+   [if a then (fun x. if x then (fun y.true) else (fun y.false)) else (fun x' y'. x and y)]
+   should become
+   [fun x y.
+    if a then
+      if x then true else false
+    else x and y]
+*)
+let extract_to_outer_function (t:term): term =
+  let rec merge_ty_lists l1 l2 = match l1, l2 with
+    | [], _ | _, [] -> []
+    | ty1 :: tail1, ty2 :: tail2 ->
+      assert (U.equal ty1 ty2); (* by well-typedness *)
+      ty1 :: merge_ty_lists tail1 tail2
+  in
+  (* first, find the list of variables' types that
+     are available in *all* branches in the same order.
+     Above it would return [typeof x, typeof y] *)
+  let rec extract_ty_args t : ty list = match T.repr t with
+    | TI.Bind (Binder.Fun, v, u) -> Var.ty v :: extract_ty_args u
+    | TI.Builtin (`Ite (_, a, b)) -> merge_ty_lists (extract_ty_args a) (extract_ty_args b)
+    | TI.Match (_, m, def) ->
+      assert (not (ID.Map.is_empty m));
+      let id, (_, rhs) = ID.Map.min_binding m in
+      let args0 = extract_ty_args rhs in
+      let m = ID.Map.remove id m in
+      let args =
+        ID.Map.fold
+          (fun _ (_, rhs) m -> merge_ty_lists m (extract_ty_args rhs))
+          m args0
+      in
+      begin match def with
+        | TI.Default_none -> args
+        | TI.Default_some (rhs,_) ->
+          merge_ty_lists args (extract_ty_args rhs)
+      end
+    | _ -> []
+  in
+  (* transform [t] to extract its function part outside
+     @param vars the list of variables still available to rename
+      function parameters in [t]
+     @param subst variables already substituted *)
+  let rec transform fun_vars subst t = match T.repr t, fun_vars with
+    | _, [] ->
+      (* no more variables, must be a leaf, just rename variables *)
+      U.eval_renaming ~subst t
+    | TI.Bind (Binder.Fun, v, body), new_v :: vars_tail ->
+      assert (not (Var.Subst.mem ~subst v));
+      let subst = Var.Subst.add ~subst v new_v in
+      transform vars_tail subst body
+    | TI.Builtin (`Ite (a,b,c)), _ ->
+      U.ite
+        (U.eval_renaming ~subst a)
+        (transform fun_vars subst b)
+        (transform fun_vars subst c)
+    | TI.Match (u, m, def), _ ->
+      U.match_with
+        (U.eval_renaming ~subst u)
+        (ID.Map.map
+           (fun (vars, rhs) ->
+              let subst, vars =
+                CCList.fold_map Var.Subst.rename_var subst vars
+              in
+              vars, transform fun_vars subst rhs)
+           m)
+        ~def:(TI.map_default_case (transform fun_vars subst) def)
+    | _ ->
+      assert false (* [fun_vars=[]] should hold *)
+  in
+  let ty_args = extract_ty_args t in
+  let module TyMo = TypeMono.Make(T) in
+  let vars =
+    List.mapi
+      (fun i ty -> Var.makef ~ty "%s_%d" (TyMo.mangle ~sep:"_" ty) i)
+      ty_args
+  in
+  U.fun_l vars (transform vars Var.Subst.empty t)
 
 (* convert a term into a decision tree *)
 let dt_of_term (t:term): (term,ty) Model.DT.t =
@@ -432,7 +538,7 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
     Utils.debugf 5 "get_eqns @[%a@]" (fun k->k P.print t);
     let fail() =
       error_parse_modelf
-        "expected a test <var = term>@ with <var> among @[%a@],@ but got `@[%a@]`@]"
+        "expected a test <var = term>@ with <var> among [@[%a@]],@ but got `@[%a@]`@]"
         (CCFormat.list Var.print_full) vars P.print t
     in
     match T.repr t with
@@ -469,7 +575,7 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
   in
   let vars, body = U.fun_unfold t in
   (* change the shape of [body] so it looks more like a decision tree *)
-  let cases = conv_body ~vars t |> Sequence.to_list in
+  let cases = conv_body ~vars body |> Sequence.to_list in
   let flat = {
     Model.DT.
     fdt_vars=vars;
@@ -477,13 +583,30 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
     fdt_cases=cases;
   } in
   let dt = Model.DT.of_flat ~equal:U.equal ~hash:U.hash flat in
-  Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
-    (fun k->k P.print body (Model.DT.print P.print' P.print) dt);
+  Utils.debugf ~section 5
+    "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@ using ft `@[%a@]`@]"
+    (fun k->k P.print body (Model.DT.print P.print' P.print) dt
+        (Model.DT.print_flat P.print') flat);
   dt
 
 module A_res = A.Smbc_res
 
-let convert_model (m:A_res.model): (_,_) Model.t =
+let convert_model ~env (m:A_res.model): (_,_) Model.t =
+  let find_kind (t:term): Model.symbol_kind =
+    let fail() =
+      Utils.warningf Utils.Warn_model_parsing_error
+        "cannot find symbol_kind for `@[%a@]`" P.print t;
+      Model.Symbol_fun
+    in
+    match T.repr t with
+      | TI.Const id ->
+        begin match Env.find_ty ~env id with
+          | Some ty ->
+            if U.ty_returns_Prop ty then Model.Symbol_prop else Model.Symbol_fun
+          | None -> fail()
+        end
+      | _ -> fail()
+  in
   List.fold_left
     (fun m e -> match e with
        | A_res.Ty (ty, dom) ->
@@ -500,22 +623,28 @@ let convert_model (m:A_res.model): (_,_) Model.t =
          Model.add_finite_type m ty dom
        | A_res.Val (a,b) ->
          let a = term_of_tip empty_env a in
-         let b = term_of_tip empty_env b |> dt_of_term in
-         (* TODO: find actual kind *)
-         let k = Model.Symbol_fun in
+         (* conversion of [b] into a proper decision tree *)
+         let b =
+           term_of_tip empty_env b
+           |> extract_to_outer_function
+           |> dt_of_term
+         in
+         let k = find_kind a in
          Model.add_value m (a,b,k))
     Model.empty m
 
-let convert_res ~info (res:A_res.t): (_,_) Res.t * S.shortcut = match res with
+let convert_res ~env ~info ~meta (res:A_res.t): (_,_) Res.t * S.shortcut = match res with
   | A_res.Timeout -> Res.Unknown [Res.U_timeout info], S.No_shortcut
   | A_res.Unknown s -> Res.Unknown [Res.U_other (info,s)], S.No_shortcut
+  | A_res.Unsat when meta.ProblemMetadata.unsat_means_unknown ->
+    Res.Unknown [Res.U_incomplete info], S.No_shortcut
   | A_res.Unsat -> Res.Unsat info, S.Shortcut
   | A_res.Sat m ->
-    let m = convert_model m in
+    let m = convert_model ~env m in
     Res.Sat (m,info), S.Shortcut
 
 (* parse [stdout, errcode] into a proper result *)
-let parse_res ~info (out:string) (errcode:int): (term,ty) Res.t * S.shortcut =
+let parse_res ~env ~info ~meta (out:string) (errcode:int): (term,ty) Res.t * S.shortcut =
   if errcode<>0
   then
     let msg = Printf.sprintf "smbc failed with errcode %d, output:\n%s" errcode out in
@@ -525,7 +654,7 @@ let parse_res ~info (out:string) (errcode:int): (term,ty) Res.t * S.shortcut =
       let lexbuf = Lexing.from_string out in
       Location.set_file lexbuf "<output of smbc>";
       let res = Tip_parser.parse_smbc_res Tip_lexer.token lexbuf in
-      convert_res ~info res
+      convert_res ~env ~info ~meta res
     with e ->
       Res.Error (e,info), S.Shortcut
   )
@@ -555,42 +684,47 @@ let solve ~deadline pb =
         timeout depth_step_
     in
     Utils.debugf ~section 5 "smbc call: `%s`" (fun k->k cmd);
-    let fut =
-      S.popen cmd
-        ~f:(fun (stdin,stdout) ->
-          Utils.debugf ~lock:true ~section 5 "smbc input:@ @[<v>%a@]" (fun k->k print_pb pb);
-          (* send problem *)
-          let fmt = Format.formatter_of_out_channel stdin in
-          Format.fprintf fmt "%a@." print_pb pb;
-          flush stdin;
-          close_out stdin;
-          CCIO.read_all stdout)
-    in
-    match S.Fut.get fut with
-      | S.Fut.Done (E.Ok (stdout, errcode)) ->
-        Utils.debugf ~lock:true ~section 2
-          "@[<2>smbc exited with %d, stdout:@ `%s`@]"
-          (fun k->k errcode stdout);
-        let info = mk_info() in
-        parse_res ~info stdout errcode
-      | S.Fut.Fail (Out_of_scope msg)
-      | S.Fut.Done (E.Error (Out_of_scope msg)) ->
-        Utils.debugf ~section 3 "@[out of scope because:@ %s@]"
-          (fun k->k msg);
-        let info = mk_info ~msg () in
-        Res.Unknown [Res.U_out_of_scope info], S.No_shortcut (* out of scope *)
-      | S.Fut.Done (E.Error e) ->
-        let info = mk_info() in
-        Res.Error (e,info), S.Shortcut
-      | S.Fut.Stopped ->
-        let info = mk_info() in
-        Res.Unknown [Res.U_timeout info], S.No_shortcut
-      | S.Fut.Fail e ->
-        (* return error *)
-        Utils.debugf ~lock:true ~section 1 "@[<2>smbc failed with@ `%s`@]"
-          (fun k->k (Printexc.to_string e));
-        let info = mk_info() in
-        Res.Error (e,info), S.Shortcut
+    (* print problem into a TIP string;
+       also serves to check Out_of_scope *)
+    try
+      let pb_string = CCFormat.sprintf "@[<v>%a@]@." print_pb pb in
+      let fut =
+        S.popen cmd
+          ~f:(fun (stdin,stdout) ->
+            Utils.debugf ~lock:true ~section 5 "smbc input:@ %s" (fun k->k pb_string);
+            (* send problem *)
+            output_string stdin pb_string;
+            flush stdin;
+            close_out stdin;
+            CCIO.read_all stdout)
+      in
+      begin match S.Fut.get fut with
+        | S.Fut.Done (E.Ok (stdout, errcode)) ->
+          Utils.debugf ~lock:true ~section 2
+            "@[<2>smbc exited with %d, stdout:@ `%s`@]"
+            (fun k->k errcode stdout);
+          let info = mk_info() in
+          (* need environment to re-infer some types *)
+          let env = Problem.env pb in
+          parse_res ~env ~info ~meta:(Problem.metadata pb) stdout errcode
+        | S.Fut.Done (E.Error e) ->
+          let info = mk_info() in
+          Res.Error (e,info), S.Shortcut
+        | S.Fut.Stopped ->
+          let info = mk_info() in
+          Res.Unknown [Res.U_timeout info], S.No_shortcut
+        | S.Fut.Fail e ->
+          (* return error *)
+          Utils.debugf ~lock:true ~section 1 "@[<2>smbc failed with@ `%s`@]"
+            (fun k->k (Printexc.to_string e));
+          let info = mk_info() in
+          Res.Error (e,info), S.Shortcut
+      end
+    with Out_of_scope msg ->
+      Utils.debugf ~section 3 "@[out of scope because:@ %s@]"
+        (fun k->k msg);
+      let info = mk_info ~msg () in
+      Res.Unknown [Res.U_out_of_scope info], S.No_shortcut (* out of scope *)
   )
 
 let call_real ~print_model ~prio problem =
