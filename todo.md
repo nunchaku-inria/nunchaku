@@ -4,6 +4,10 @@
 
 ## Main
 
+- add `def f (x:a) (y:b): c := <rhs>` to the parser
+  and possibly to printer (after `elim_multi_eqns`), for easier
+  human input
+
 - [ ] make a proper SMBC pipeline
   * [x] in smbc, need to support projectors/destructors
   * [x] removal of bad quantifiers/equality
