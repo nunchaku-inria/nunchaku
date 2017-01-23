@@ -42,7 +42,7 @@ type 'a t =
   | `Eq of 'a * 'a
   | `DataTest of id (** Test whether [t : tau] starts with given constructor *)
   | `DataSelect of id * int (** Select n-th argument of given constructor *)
-  | `Undefined_self of id * 'a (** Undefined case. argument=the undefined term *)
+  | `Undefined_self of 'a (** Undefined case. argument=the undefined term *)
   | `Undefined_atom of id * 'a (** Undefined term (name+type) *)
   | `Unparsable of 'a (** could not parse model properly. Param=ty *)
   | `Guard of 'a * 'a guard (** term + some boolean conditions *)
@@ -87,14 +87,8 @@ let pp pterm out : _ t -> unit = function
   | `DataTest id -> fpf out "is-%s" (ID.name id)
   | `DataSelect (id, n) ->
     fpf out "select-%s-%d" (ID.name id) n
-  | `Undefined_self (id,t) ->
-    if !ID.print_undefined_id
-    then fpf out "undefined_%d %a" (ID.id id) pterm t
-    else fpf out "?__ %a" pterm t
-  | `Undefined_atom (id,_ty) ->
-    if !ID.print_undefined_id
-    then fpf out "undefined_%d" (ID.id id)
-    else CCFormat.string out "?__"
+  | `Undefined_self t -> fpf out "?__ %a" pterm t
+  | `Undefined_atom (id,_ty) -> fpf out "?__%d" (ID.id id)
   | `Unparsable ty -> fpf out "@[<2>?__unparsable@ @[%a@]@]" pterm ty
   | `Guard (t, o) ->
     assert (o.asserting<>[]);
@@ -114,7 +108,7 @@ let equal
     | `Eq(a1,b1), `Eq (a2,b2) -> eqterm a1 a2 && eqterm b1 b2
     | `DataTest id, `DataTest id' -> ID.equal id id'
     | `DataSelect (id, n), `DataSelect (id', n') -> n=n' && ID.equal id id'
-    | `Undefined_self (a,t1), `Undefined_self (b,t2) -> ID.equal a b && eqterm t1 t2
+    | `Undefined_self t1, `Undefined_self t2 -> eqterm t1 t2
     | `Undefined_atom (a,t1), `Undefined_atom (b,t2) -> ID.equal a b && eqterm t1 t2
     | `Unparsable t1, `Unparsable t2 -> eqterm t1 t2
     | `Guard (t1, g1), `Guard (t2, g2) ->
@@ -139,7 +133,7 @@ let map : f:('a -> 'b) -> 'a t -> 'b t
     | `Or l -> `Or (List.map f l)
     | `Not t -> `Not (f t)
     | `DataSelect (c,n) -> `DataSelect (c,n)
-    | `Undefined_self (id, t) -> `Undefined_self (id, f t)
+    | `Undefined_self t -> `Undefined_self (f t)
     | `Undefined_atom (id, t) -> `Undefined_atom (id, f t)
     | `Unparsable t -> `Unparsable (f t)
     | `Guard (t, g) ->
@@ -160,7 +154,7 @@ let fold : f:('acc -> 'a -> 'acc) -> x:'acc -> 'a t -> 'acc
     | `Eq (a,b) -> f (f acc a) b
     | `Unparsable t
     | `Undefined_atom (_,t)
-    | `Undefined_self (_,t) -> f acc t
+    | `Undefined_self t -> f acc t
     | `Guard (t, g) ->
       let acc = f acc t in
       List.fold_left f acc g.asserting
@@ -189,7 +183,7 @@ let fold2 :
       let acc = f acc b1 b2 in
       f acc c1 c2
     | `Eq (a1,b1), `Eq (a2,b2) -> let acc = f acc a1 a2 in f acc b1 b2
-    | `Undefined_self (i1,t1), `Undefined_self (i2,t2)
+    | `Undefined_self t1, `Undefined_self t2 -> f acc t1 t2
     | `Undefined_atom (i1,t1), `Undefined_atom (i2,t2) ->
       if ID.equal i1 i2 then f acc t1 t2 else fail()
     | `Unparsable t1, `Unparsable t2 -> f acc t1 t2
@@ -217,7 +211,7 @@ let iter : ('a -> unit) -> 'a t -> unit
     | `Eq (a,b) -> f a; f b
     | `Unparsable t
     | `Undefined_atom (_,t)
-    | `Undefined_self (_,t) -> f t
+    | `Undefined_self t -> f t
     | `Guard (t,g) ->
       f t;
       List.iter f g.asserting;
@@ -241,8 +235,8 @@ let to_sexp
       | `DataTest id -> str ("is-" ^ ID.to_string id)
       | `DataSelect (id, n) ->
         str (CCFormat.sprintf "select-%s-%d" (ID.name id) n)
-      | `Undefined_self (id,t) ->
-        lst [str "?__"; str (ID.to_string id); cterm t]
+      | `Undefined_self t ->
+        lst [str "?__"; cterm t]
       | `Undefined_atom _ -> str "?__"
       | `Unparsable ty ->
         lst [str "?__unparsable"; cterm ty]

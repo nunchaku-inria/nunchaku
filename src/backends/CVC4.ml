@@ -251,7 +251,7 @@ let print_problem out (decode, pb) =
       fpf out "(@[%a@ %a@])" print_tester c print_term t
     | FO.DataSelect (c,n,t) ->
       fpf out "(@[%a@ %a@])" print_select (c,n) print_term t
-    | FO.Undefined (_,t) -> print_term out t (* tailcall, probably *)
+    | FO.Undefined t -> print_term out t (* tailcall, probably *)
     | FO.Undefined_atom _ -> errorf_ "cannot print `undefined_atom` in SMTlib"
     | FO.Unparsable _ -> errorf_ "cannot print `unparsable` in SMTlib"
     | FO.Fun (v,t) ->

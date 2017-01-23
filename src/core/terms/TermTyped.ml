@@ -159,8 +159,7 @@ module Util(T : S)
       builtin ?loc ~ty:(ty_exn t) (`Guard (t, g))
 
   let undefined_self ?loc t =
-    let id = ID.make "_" in
-    builtin ?loc ~ty:(ty_exn t) (`Undefined_self (id,t))
+    builtin ?loc ~ty:(ty_exn t) (`Undefined_self t)
 
   let ty_builtin ?loc b =
     build ?loc ~ty:ty_type (TI.TyBuiltin b)

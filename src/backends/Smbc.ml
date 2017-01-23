@@ -121,7 +121,7 @@ let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
       | `DataTest c -> A.const (data_test_fun st c |> id_to_string)
       | `DataSelect (c,i) -> A.const (data_select_fun st c i |> id_to_string)
       | `Undefined_atom _
-      | `Undefined_self (_,_) -> raise (Conversion_error t)
+      | `Undefined_self _ -> raise (Conversion_error t)
       | `Unparsable _
       | `Guard _ -> assert false (* TODO: better error: should not happen *)
     end

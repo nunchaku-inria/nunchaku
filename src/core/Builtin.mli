@@ -32,7 +32,7 @@ type 'a t =
   | `Or of 'a list
   | `True
   | `Undefined_atom of id * 'a
-  | `Undefined_self of id * 'a
+  | `Undefined_self of 'a
   | `Unparsable of 'a ]
 
 val prec : 'a t -> Precedence.t

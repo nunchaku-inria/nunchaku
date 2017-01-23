@@ -1002,9 +1002,7 @@ module Util(T : S)
   let neq a b = not_ (eq a b)
   let ite a b c = app_builtin (`Ite (a,b,c)) []
 
-  let undefined_self t =
-    let id = ID.make "_" in
-    builtin (`Undefined_self (id,t))
+  let undefined_self t = builtin (`Undefined_self t)
 
   let undefined_atom ~ty =
     let id = ID.make "_" in
@@ -1297,8 +1295,8 @@ module Util(T : S)
     | Builtin (`True | `False | `DataSelect _ | `DataTest _) ->
       (* partially applied, or constant *)
       t
-    | Builtin (`Undefined_self (id,t)) ->
-      builtin (`Undefined_self (id, f b_acc P.NoPol t))
+    | Builtin (`Undefined_self t) ->
+      builtin (`Undefined_self (f b_acc P.NoPol t))
     | Builtin (`Undefined_atom (id,t)) ->
       builtin (`Undefined_atom (id, f b_acc P.NoPol t))
     | Builtin (`Guard (t, g)) ->
@@ -1566,7 +1564,7 @@ module Util(T : S)
               | _ ->
                 failwith "cannot infer type, wrong argument to DataSelect"
             end
-          | `Undefined_self (_,t) ->aux t
+          | `Undefined_self t -> aux t
           | `Undefined_atom (_,ty) -> ty
           | `Guard (t, _) -> aux t
         end
