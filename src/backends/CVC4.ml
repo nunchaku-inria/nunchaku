@@ -22,15 +22,17 @@ type model_ty = FO.Ty.t
 module DSexp = Sexp_lib.Decoder
 
 exception Error of string
-exception CVC4_error of string
+exception Backend_err of string
 
 let error_ e = raise (Error e)
 let errorf_ fmt = CCFormat.ksprintf fmt ~f:error_
 
+let cvc4_error_ msg = raise (Backend_err msg)
+let cvc4_errorf_ msg = CCFormat.ksprintf ~f:cvc4_error_ "@[in CVC4:@ %s@]" msg
+
 let () = Printexc.register_printer
     (function
       | Error msg -> Some (Utils.err_sprintf "@[in the interface to CVC4:@ %s@]" msg)
-      | CVC4_error msg -> Some (Utils.err_sprintf "@[in CVC4:@ %s@]" msg)
       | _ -> None)
 
 module T = FO.T
@@ -624,7 +626,7 @@ let get_model_ ~print_model ~decode s : (_,_) Model.t =
 
 (* read the result *)
 let read_res_ ~info ~print_model ~decode s =
-  match DSexp.next s.sexp with
+  try match DSexp.next s.sexp with
     | `Ok (`Atom "unsat") ->
       Utils.debug ~section 5 "CVC4 returned `unsat`";
       Res.Unsat (Lazy.force info)
@@ -640,16 +642,19 @@ let read_res_ ~info ~print_model ~decode s =
       Res.Unknown [Res.U_other (Lazy.force info, "")]
     | `Ok (`List [`Atom "error"; `Atom s]) ->
       Utils.debugf ~section 5 "@[<2>CVC4 returned `error %s`@]" (fun k->k s);
-      Res.Error (CVC4_error s, Lazy.force info)
+      Res.Unknown [Res.U_backend_error (Lazy.force info, cvc4_error_ s)]
     | `Ok sexp ->
       let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ `%a`@]"
           Sexp_lib.pp sexp
       in
-      Res.Error (Error msg, Lazy.force info)
+      Res.Unknown [Res.U_backend_error (Lazy.force info, msg)]
     | `Error e -> Res.Error (Error e, Lazy.force info)
     | `End ->
       Utils.debug ~section 5 "no answer from CVC4, assume it timeouted";
       Res.Unknown [Res.U_timeout (Lazy.force info)]
+  with
+    | Backend_err msg ->
+      Res.Unknown [Res.U_backend_error (Lazy.force info, msg)]
 
 let mk_info (decode:decode_state): Res.info =
   let time = Utils.Time.get_timer decode.timer in
@@ -880,4 +885,5 @@ let pipes ?(options=[""]) ?slice ~print ~dump ~print_smt ~print_model () =
         [ Ty, Mono; Eqn, Absent; Copy, Absent; Match, Absent ])
   in
   Transform.make ~input_spec ~name ~encode ~decode:(fun _ x -> x) ()
+
 

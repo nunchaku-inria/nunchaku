@@ -32,9 +32,6 @@ val is_available : unit -> bool
 (** Error in the interface to CVC4 *)
 exception Error of string
 
-(** Error from CVC4 itself *)
-exception CVC4_error of string
-
 (** list of different available options, starting with "" *)
 val options_l : string list
 

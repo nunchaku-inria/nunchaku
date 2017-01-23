@@ -150,6 +150,7 @@ module Res = struct
     | U_out_of_scope of info
     | U_incomplete of info
     | U_other of info * string
+    | U_backend_error of info * string
 
   type (+'t,+'ty) t =
     | Unsat of info
@@ -190,6 +191,7 @@ module Res = struct
     | U_out_of_scope i -> fpf out "OUT_OF_SCOPE %a" print_info i
     | U_incomplete i -> fpf out "INCOMPLETE %a" print_info i
     | U_other (i,s) -> fpf out "INCOMPLETE %a %s" print_info i s
+    | U_backend_error (i,s) -> fpf out "BACKEND_ERROR %a %s" print_info i s
 
   let print_info_opt out = function
     | None -> ()

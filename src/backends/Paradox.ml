@@ -126,14 +126,17 @@ let solve ~deadline pb =
              let info = mk_info () in
              parse_res ~info ~meta:pb.FO_tptp.pb_meta stdout
            | S.Fut.Done (E.Error e) ->
-             Res.Error (e, mk_info()), S.Shortcut
+             Res.Unknown
+               [Res.U_backend_error (mk_info(), Printexc.to_string e)],
+             S.No_shortcut
            | S.Fut.Stopped ->
              Res.Unknown [Res.U_timeout (mk_info())], S.No_shortcut
            | S.Fut.Fail e ->
              (* return error *)
              Utils.debugf ~lock:true ~section 1 "@[<2>paradox failed with@ %s@]"
                (fun k->k (Printexc.to_string e));
-             Res.Error (e, mk_info()), S.Shortcut
+             Res.Unknown [Res.U_backend_error (mk_info(), Printexc.to_string e)],
+             S.No_shortcut
       )
   )
 

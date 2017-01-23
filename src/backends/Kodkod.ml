@@ -397,7 +397,7 @@ module Parser = struct
     else if errcode <> 0
     then (
       let msg = CCFormat.sprintf "kodkod failed (errcode %d), stdout:@ `%s`@." errcode s in
-      Res.Error (Failure msg, info), S.Shortcut
+      Res.Unknown [Res.U_backend_error (info, msg)], S.No_shortcut
     ) else (
       let delim = "---OUTCOME---" in
       let i =
@@ -461,14 +461,16 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
           (fun k->k errcode stdout);
         Parser.res state stdout errcode
       | S.Fut.Done (E.Error e) ->
-        Res.Error (e,mk_info state), S.Shortcut
+        Res.Unknown [Res.U_backend_error (mk_info state, Printexc.to_string e)],
+        S.No_shortcut
       | S.Fut.Stopped ->
         Res.Unknown [Res.U_timeout (mk_info state)], S.No_shortcut
       | S.Fut.Fail e ->
         (* return error *)
         Utils.debugf ~lock:true ~section 1 "@[<2>kodkod failed with@ `%s`@]"
           (fun k->k (Printexc.to_string e));
-        Res.Error (e, mk_info state), S.Shortcut
+        Res.Unknown [Res.U_backend_error (mk_info state, Printexc.to_string e)],
+        S.No_shortcut
   )
 
 let default_size_ = 2 (* FUDGE *)

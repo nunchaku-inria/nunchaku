@@ -693,8 +693,8 @@ let convert_res ~env ~info ~meta (res:A_res.t): (_,_) Res.t * S.shortcut = match
 let parse_res ~env ~info ~meta (out:string) (errcode:int): (term,ty) Res.t * S.shortcut =
   if errcode<>0
   then
-    let msg = Printf.sprintf "smbc failed with errcode %d, output:\n%s" errcode out in
-    Res.Error (Error msg, info), S.Shortcut
+    let msg = Printf.sprintf "smbc failed with errcode %d, output:\n`%s`" errcode out in
+    Res.Unknown [Res.U_backend_error (info, msg)], S.No_shortcut
   else (
     try
       let lexbuf = Lexing.from_string out in
