@@ -87,6 +87,7 @@ Library nunchaku_transformations
                     Elim_infinite,
                     Trans_ho_fo,
                     Trans_fo_tptp,
+                    Lift_undefined,
                     FoToRelational
   Install:          true
   FindlibName:      transformations
