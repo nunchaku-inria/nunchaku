@@ -489,6 +489,18 @@ let defined_of_copy c yield : unit =
   yield (mk_defined ~attrs:[] c.copy_concrete c.copy_concrete_ty);
   ()
 
+let defined_seq (stmt:(_,_)t): _ defined Sequence.t =
+  begin match view stmt with
+    | Decl d -> Sequence.return d
+    | Axiom (Axiom_rec defs) -> defined_of_recs defs
+    | Axiom (Axiom_spec s) -> defined_of_spec s
+    | Axiom (Axiom_std _)
+    | Goal _ -> Sequence.empty
+    | TyDef (_,l) -> defined_of_datas l
+    | Pred (_,_,l) -> defined_of_preds l
+    | Copy c -> defined_of_copy c
+  end
+
 let ids_of_copy c =
   Sequence.of_list [c.copy_id; c.copy_concrete; c.copy_abstract]
 
