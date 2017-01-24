@@ -77,7 +77,7 @@ type +'ty ty_constructor = {
 
 (** A (co)inductive type. The type variables [ty_vars] occur freely in
     the constructors' types. *)
-type +'ty tydef = {
+type +'ty data_type = {
   ty_id : id;
   ty_vars : 'ty Var.t list;
   ty_type : 'ty; (** shortcut for [type -> type -> ... -> type] *)
@@ -85,7 +85,8 @@ type +'ty tydef = {
 }
 
 (** Mutual definitions of several types *)
-type +'ty mutual_types = 'ty tydef list
+type +'ty data_types = 'ty data_type list
+
 
 (** Flavour of axiom *)
 type (+'t,+'ty) axiom =
@@ -129,7 +130,7 @@ type (+'t, +'ty) copy = {
 type (+'term, +'ty) view =
   | Decl of 'ty defined
   | Axiom of ('term, 'ty) axiom
-  | TyDef of [`Data | `Codata] * 'ty mutual_types
+  | TyDef of [`Data | `Codata] * 'ty data_types
   | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty) pred_def list
   | Copy of ('term, 'ty) copy
   | Goal of 'term
@@ -153,10 +154,10 @@ let info_of_loc loc = { loc; name=None; }
 let mk_defined ~attrs id ty =
   { defined_head=id; defined_ty=ty; defined_attrs=attrs; }
 
-let tydef_vars t = t.ty_vars
-let tydef_id t = t.ty_id
-let tydef_type t = t.ty_type
-let tydef_cstors t = t.ty_cstors
+let data_vars t = t.ty_vars
+let data_id t = t.ty_id
+let data_type t = t.ty_type
+let data_cstors t = t.ty_cstors
 
 let view t = t.view
 let info t = t.info
@@ -182,7 +183,7 @@ let codata ~info l = mk_ty_def ~info `Codata l
 let copy ~info c = make_ ~info (Copy c)
 let goal ~info t = make_ ~info (Goal t)
 
-let mk_mutual_ty id ~ty_vars ~cstors ~ty =
+let mk_data_type id ~ty_vars ~cstors ~ty =
   let ty_cstors =
     List.fold_left
       (fun m (cstor_name, cstor_args, cstor_type) ->
@@ -214,7 +215,7 @@ let find_rec_def ~defs id =
     defs
 
 (* find a (co)inductive type declaration for [id] *)
-let find_tydef ~defs id =
+let find_data_type ~defs id =
   CCList.find_pred
     (fun tydef -> ID.equal id tydef.ty_id)
     defs
@@ -335,7 +336,7 @@ let map_preds_bind ~bind ~term ~ty acc l =
 
 let map_preds ~term ~ty l = List.map (map_pred ~term ~ty) l
 
-let map_ty_def_bind ~bind ~ty:fty acc tydef =
+let map_data_bind ~bind ~ty:fty acc tydef =
   let acc', ty_vars = Utils.fold_map bind acc tydef.ty_vars in
   {tydef with
      ty_type=fty acc tydef.ty_type;
@@ -349,11 +350,11 @@ let map_ty_def_bind ~bind ~ty:fty acc tydef =
          tydef.ty_cstors;
   }
 
-let map_ty_def ~ty l =
+let map_data_type ~ty l =
   let bind () v = (), Var.update_ty v ~f:ty in
-  map_ty_def_bind () l ~bind ~ty:(fun () -> ty)
+  map_data_bind () l ~bind ~ty:(fun () -> ty)
 
-let map_ty_defs ~ty l = List.map (map_ty_def ~ty) l
+let map_data_types ~ty l = List.map (map_data_type ~ty) l
 
 let map_bind ~bind ~term:ft ~ty:fty acc st =
   let info = st.info in
@@ -370,7 +371,7 @@ let map_bind ~bind ~term:ft ~ty:fty acc st =
           axiom_rec ~info (map_rec_defs_bind ~bind ~term:ft ~ty:fty acc t)
       end
     | TyDef (k, l) ->
-      let l = List.map (map_ty_def_bind acc ~bind ~ty:fty) l in
+      let l = List.map (map_data_bind acc ~bind ~ty:fty) l in
       mk_ty_def ~info k l
     | Pred (wf, k, preds) ->
       let preds = map_preds_bind ~bind ~term:ft ~ty:fty acc preds in
@@ -632,7 +633,7 @@ module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
       ID.print c.copy_abstract Pty.print c.copy_abstract_ty
       ID.print c.copy_concrete Pty.print c.copy_concrete_ty
 
-  let print_tydef out tydef =
+  let print_data_type out tydef =
     let ppcstors out c =
       fpf out "@[<hv2>%a %a@]"
         ID.print c.cstor_name (pplist ~sep:" " (Pty.print' Precedence.App)) c.cstor_args in
@@ -642,13 +643,13 @@ module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
       (pplist_prefix ~first:" | " ~pre:" | " ppcstors)
       (ID.Map.to_list tydef.ty_cstors |> List.map snd)
 
-  let print_tydefs out (k,l) =
+  let print_data_types out (k,l) =
     fpf out "@[<hv2>%s@ "
       (match k with `Data -> "data" | `Codata -> "codata");
     List.iteri
       (fun i tydef ->
          if i>0 then fpf out "@,and ";
-         print_tydef out tydef)
+         print_data_type out tydef)
       l;
     fpf out ".@]"
 
@@ -666,7 +667,7 @@ module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
       let pp_wf out = function `Wf -> fpf out "[wf]" | `Not_wf -> () in
       let pp_k out = function `Pred -> fpf out "pred" | `Copred -> fpf out "copred" in
       fpf out "@[<hv>%a%a %a.@]" pp_k k pp_wf wf print_pred_defs l
-    | TyDef (k, l) -> print_tydefs out (k,l)
+    | TyDef (k, l) -> print_data_types out (k,l)
     | Copy c -> fpf out "@[<2>%a.@]" print_copy c
     | Goal t -> fpf out "@[<2>goal %a.@]" Pt.print t
 end

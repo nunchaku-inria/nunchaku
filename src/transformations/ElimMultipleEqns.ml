@@ -56,7 +56,7 @@ type ('a, 'b, 'ty) decision_node =
   | DN_bind of 'b list (* only accepts variables *)
 
 and ('a, 'b, 'ty) decision_node_match = {
-  dn_tydef: term Stmt.tydef; (* all constructors required *)
+  dn_data_ty: term Stmt.data_type; (* all constructors required *)
   dn_by_cstor: 'a list ID.Map.t; (* cstor -> sub-list of cases *)
   dn_wildcard: 'b list; (* matching anything *)
 }
@@ -73,9 +73,9 @@ let pp_path out p =
   Format.fprintf out "[@[<hv>%a@]]"
     (CCFormat.list ~sep:"," pp_path_cell) (List.rev p)
 
-let dnode_of_tydef (tydef: _ Stmt.tydef): (_,_,_) decision_node =
+let dnode_of_tydef (tydef: _ Stmt.data_type): (_,_,_) decision_node =
   DN_match {
-    dn_tydef=tydef;
+    dn_data_ty=tydef;
     dn_by_cstor=ID.Map.empty;
     dn_wildcard=[];
   }
@@ -93,7 +93,7 @@ let dnode_add_bool (d:(_,_,_) decision_node) b x = match d, b with
     errorf_ "@[<2>expected boolean decision node@]"
 
 (* all constructors of [d] *)
-let dnode_all_cstors (d:(_,_,_)decision_node_match) = Stmt.tydef_cstors d.dn_tydef
+let dnode_all_cstors (d:(_,_,_)decision_node_match) = Stmt.data_cstors d.dn_data_ty
 
 (* add [x] to constructor [c] in node [d] *)
 let dnode_add_cstor (d:(_,_,_)decision_node) c x = match d with
@@ -101,7 +101,7 @@ let dnode_add_cstor (d:(_,_,_)decision_node) c x = match d with
     let allowed_cstors = dnode_all_cstors d in
     if not (ID.Map.mem c allowed_cstors) then (
       errorf_ "@[<2>%a is not a constructor of %a@ (these are @[%a@])@]"
-        ID.print c ID.print d.dn_tydef.Stmt.ty_id
+        ID.print c ID.print d.dn_data_ty.Stmt.ty_id
         (CCFormat.seq ID.print) (ID.Map.keys allowed_cstors);
     );
     (* add [x] to the list [l] of subtrees already present for case [c] *)
@@ -297,7 +297,7 @@ and compile_dnode lst v next_vars dn : term = match dn with
              "@[<2>compile_dnode for `%a` on cstor `%a`@ cases: [@[%a@]]@]"
              (fun k -> k Var.print v ID.print id (CCFormat.list pp_eqn) cases);
            (* fresh vars for the constructor's arguments *)
-           let cstor = ID.Map.find id dn.dn_tydef.Stmt.ty_cstors in
+           let cstor = ID.Map.find id dn.dn_data_ty.Stmt.ty_cstors in
            let local_vars = List.mapi
                (fun i ty ->
                   Var.makef ~ty "%s_%d" (TyMo.mangle ~sep:"_" ty) (i+lst.offset))

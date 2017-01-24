@@ -67,7 +67,7 @@ let zero ~state = U.const state.nat_ty.zero
 (* how to declare [nat] *)
 let declare_nat ~state =
   let ty_nat = nat ~state in
-  let def = Stmt.mk_mutual_ty state.nat_ty.nat
+  let def = Stmt.mk_data_type state.nat_ty.nat
       ~ty_vars:[]
       ~ty:U.ty_type
       ~cstors:

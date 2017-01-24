@@ -198,7 +198,7 @@ module Make(T : TI.S) = struct
         Utils.debugf ~section 5 "@[<2>check well-formed:@ `@[%a@]`@]"
           (fun k->
              let module PStmt = Stmt.Print(P)(P) in
-             k PStmt.print_tydefs (`Data,l));
+             k PStmt.print_data_types (`Data,l));
         List.iter (check_non_zero_ env cache) l
       | _ -> ()
 

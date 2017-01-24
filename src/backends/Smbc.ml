@@ -415,7 +415,7 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
                  error_parse_modelf
                    "cannot find a constructor corresponding to `%s`" c_str
              in
-             let c_ty_args = match ID.Map.get c_id (Stmt.tydef_cstors tydef) with
+             let c_ty_args = match ID.Map.get c_id (Stmt.data_cstors tydef) with
                | None ->
                  error_parse_modelf "id `%a` should be a constructor of `@[%a@]`"
                    ID.print c_id P.print ty_u
@@ -440,7 +440,7 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
       | None -> TI.Default_none
       | Some rhs ->
         let missing =
-          Stmt.tydef_cstors tydef
+          Stmt.data_cstors tydef
           |> ID.Map.filter (fun id _ -> not (ID.Map.mem id m))
           |> ID.Map.map (fun cstor -> List.length cstor.Stmt.cstor_args)
         in

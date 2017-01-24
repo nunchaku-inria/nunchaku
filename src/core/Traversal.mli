@@ -58,9 +58,9 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) : sig
     do_data:
       (t ->
        depth:int -> [`Data | `Codata] ->
-       term Statement.tydef ->
+       term Statement.data_type ->
        Arg.t ->
-       term Statement.tydef)
+       term Statement.data_type)
         option;
 
     do_ty_def:

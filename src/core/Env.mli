@@ -23,14 +23,14 @@ type (+'t, +'ty) def =
 
   | Data of
       [`Codata | `Data] *
-        'ty Statement.mutual_types *
-        'ty Statement.tydef
+        'ty Statement.data_types *
+        'ty Statement.data_type
   (** ID is a (co)data *)
 
   | Cstor of
       [`Codata | `Data] *
-        'ty Statement.mutual_types *
-        'ty Statement.tydef *
+        'ty Statement.data_types *
+        'ty Statement.data_type *
         'ty Statement.ty_constructor
   (** ID is a constructor (of the given type) *)
 
@@ -130,7 +130,7 @@ val def_data:
   ?loc:loc ->
   env:('t, 'ty) t ->
   kind:[`Data | `Codata] ->
-  'ty Statement.mutual_types ->
+  'ty Statement.data_types ->
   ('t, 'ty) t
 (** Define a new set of mutually recursive (co)data types.
     Also defines their constructors.

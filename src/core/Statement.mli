@@ -79,7 +79,7 @@ type +'ty ty_constructor = {
 
 (** A (co)inductive type. The type variables [ty_vars] occur freely in
     the constructors' types. *)
-type +'ty tydef = {
+type +'ty data_type = {
   ty_id : id;
   ty_vars : 'ty Var.t list;
   ty_type : 'ty; (** shortcut for [type -> type -> ... -> type] *)
@@ -87,7 +87,7 @@ type +'ty tydef = {
 }
 
 (** Mutual definitions of several types *)
-type +'ty mutual_types = 'ty tydef list
+type +'ty data_types = 'ty data_type list
 
 (** Flavour of axiom *)
 type (+'t,+'ty) axiom =
@@ -131,7 +131,7 @@ type (+'t, +'ty) copy = {
 type (+'term, +'ty) view =
   | Decl of 'ty defined
   | Axiom of ('term, 'ty) axiom
-  | TyDef of [`Data | `Codata] * 'ty mutual_types
+  | TyDef of [`Data | `Codata] * 'ty data_types
   | Pred of [`Wf | `Not_wf] * [`Pred | `Copred] * ('term, 'ty) pred_def list
   | Copy of ('term, 'ty) copy
   | Goal of 'term
@@ -151,10 +151,10 @@ type (+'t, +'ty) statement = ('t, 'ty) t
 
 val mk_defined : attrs:decl_attr list -> ID.t -> 'ty -> 'ty defined
 
-val tydef_vars : 'ty tydef -> 'ty Var.t list
-val tydef_id : _ tydef -> id
-val tydef_type : 'ty tydef -> 'ty
-val tydef_cstors : 'ty tydef -> 'ty ty_constructor ID.Map.t
+val data_vars : 'ty data_type -> 'ty Var.t list
+val data_id : _ data_type  -> id
+val data_type : 'ty data_type -> 'ty
+val data_cstors : 'ty data_type -> 'ty ty_constructor ID.Map.t
 
 val info_default : info
 val info_of_loc : Location.t option -> info
@@ -165,7 +165,7 @@ val name : (_,_) t -> string option
 val info : (_,_) t -> info
 
 val mk_axiom : info:info -> ('a,'ty) axiom -> ('a, 'ty) t
-val mk_ty_def : info:info -> [`Data | `Codata] -> 'ty mutual_types -> (_, 'ty) t
+val mk_ty_def : info:info -> [`Data | `Codata] -> 'ty data_types -> (_, 'ty) t
 
 val decl : info:info -> attrs:decl_attr list -> id -> 'a -> (_, 'a) t
 (** declare a type/function/predicate *)
@@ -183,9 +183,9 @@ val axiom_spec : info:info -> ('a,'ty) spec_defs -> ('a,'ty) t
 val axiom_rec : info:info -> ('a,'ty) rec_defs -> ('a,'ty) t
 (** Axiom that is part of an admissible (mutual, partial) definition. *)
 
-val data : info:info -> 'ty mutual_types -> (_, 'ty) t
+val data : info:info -> 'ty data_types -> (_, 'ty) t
 
-val codata : info:info -> 'ty mutual_types -> (_, 'ty) t
+val codata : info:info -> 'ty data_types -> (_, 'ty) t
 
 val pred : info:info -> wf:[`Wf | `Not_wf] ->
   ('t, 'ty) pred_def list -> ('t, 'ty) t
@@ -201,12 +201,12 @@ val copy : info:info -> ('t, 'ty) copy -> ('t, 'ty) t
 val goal : info:info -> 'a -> ('a,_) t
 (** The goal of the problem *)
 
-val mk_mutual_ty:
+val mk_data_type:
   ID.t ->
   ty_vars:'ty Var.t list ->
   cstors:(ID.t * 'ty list * 'ty) list ->
   ty:'ty ->
-  'ty tydef
+  'ty data_type
 (** Constructor for {!tydef} *)
 
 val mk_copy :
@@ -226,7 +226,7 @@ val mk_copy :
 
 val find_rec_def : defs:('a, 'b) rec_def list -> ID.t -> ('a, 'b) rec_def option
 
-val find_tydef : defs:'a tydef list -> ID.t -> 'a tydef option
+val find_data_type : defs:'a data_types -> ID.t -> 'a data_type option
 
 val find_pred : defs:('a, 'b) pred_def list -> ID.t -> ('a, 'b) pred_def option
 
@@ -290,15 +290,15 @@ val map_rec_defs_bind :
   ('t, 'ty) rec_defs ->
   ('t2, 'ty2) rec_defs
 
-val map_ty_def :
+val map_data_type :
   ty:('ty -> 'ty2) ->
-  'ty tydef ->
-  'ty2 tydef
+  'ty data_type ->
+  'ty2 data_type
 
-val map_ty_defs :
+val map_data_types :
   ty:('ty -> 'ty2) ->
-  'ty mutual_types ->
-  'ty2 mutual_types
+  'ty data_types ->
+  'ty2 data_types
 
 val map_spec_defs :
   term:('t -> 't2) ->
@@ -400,8 +400,8 @@ val defined_of_spec : (_, 'ty) spec_defs -> 'ty defined Sequence.t
 val defined_of_pred : (_, 'ty) pred_def -> 'ty defined
 val defined_of_preds : (_, 'ty) pred_def list -> 'ty defined Sequence.t
 val defined_of_cstor : 'ty ty_constructor -> 'ty defined
-val defined_of_data : 'ty tydef -> 'ty defined Sequence.t
-val defined_of_datas : 'ty mutual_types -> 'ty defined Sequence.t
+val defined_of_data : 'ty data_type -> 'ty defined Sequence.t
+val defined_of_datas : 'ty data_types -> 'ty defined Sequence.t
 val defined_of_copy : (_, 'ty) copy -> 'ty defined Sequence.t
 
 val defined_seq : (_, 'ty) t -> 'ty defined Sequence.t
@@ -430,8 +430,8 @@ module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) : sig
   val print_eqns : ID.t -> (Pt.t, Pty.t) equations printer
   val print_rec_def : (Pt.t, Pty.t) rec_def printer
   val print_rec_defs : (Pt.t, Pty.t) rec_def list printer
-  val print_tydef : Pty.t tydef printer
-  val print_tydefs : ([`Data | `Codata] * Pty.t tydef list) printer
+  val print_data_type : Pty.t data_type printer
+  val print_data_types : ([`Data | `Codata] * Pty.t data_types) printer
   val print_copy : (Pt.t, Pty.t) copy printer
   val print : (Pt.t, Pty.t) t printer
 end

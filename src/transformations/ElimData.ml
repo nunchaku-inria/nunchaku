@@ -834,13 +834,13 @@ module Make(M : sig val mode : mode end) = struct
     | Stmt.Pred _, M_data -> assert false (* invariant broken *)
     | Stmt.TyDef (`Codata, l), M_codata ->
       Utils.debugf ~section 2 "@[<2>encode codata@ `@[%a@]`@]"
-        (fun k->k PStmt.print_tydefs (`Codata, l));
+        (fun k->k PStmt.print_data_types(`Codata, l));
       let new_st = encode_codata state l in
       state.new_env <- Env.add_statement_l ~env:state.new_env new_st;
       new_st
     | Stmt.TyDef (`Data, l), M_data ->
       Utils.debugf ~section 2 "@[<2>encode data@ `@[%a@]`@]"
-        (fun k->k PStmt.print_tydefs (`Data, l));
+        (fun k->k PStmt.print_data_types (`Data, l));
       let new_st = encode_data state l in
       state.new_env <- Env.add_statement_l ~env:state.new_env new_st;
       new_st

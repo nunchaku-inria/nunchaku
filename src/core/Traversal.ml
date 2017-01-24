@@ -131,7 +131,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     | PS_pred of [`Wf | `Not_wf] * [`Pred | `Copred] * (term, ty) Stmt.pred_def
     | PS_spec of (term, ty) Stmt.spec_defs
     | PS_decl of ty Stmt.defined
-    | PS_data of [`Data | `Codata] * ty Stmt.tydef
+    | PS_data of [`Data | `Codata] * ty Stmt.data_type
     | PS_copy of (term, ty) Stmt.copy
     | PS_goal of term
     | PS_axiom of term list
@@ -255,7 +255,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
       | PS_data (k,d) ->
         Format.fprintf out "%s %a"
           (match k with `Data -> "data" | `Codata -> "codata")
-          PStmt.print_tydef d
+          PStmt.print_data_type d
       | PS_copy c -> Format.fprintf out "@[copy %a@]" ID.print c.Stmt.copy_id
       | PS_axiom l ->
         Format.fprintf out "@[axiom@ %a@]" (pp_list P.print) l
@@ -319,9 +319,9 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     do_data:
       (t ->
        depth:int -> [`Data | `Codata] ->
-       term Statement.tydef ->
+       term Statement.data_type ->
        Arg.t ->
-       term Statement.tydef)
+       term Statement.data_type)
         option;
 
     do_ty_def:
@@ -461,7 +461,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
       | Stmt.TyDef (k, l) ->
         begin match t.dispatch.do_ty_def with
           | None ->
-            let l = Stmt.map_ty_defs ~ty:(tr_type ()) l in
+            let l = Stmt.map_data_types ~ty:(tr_type ()) l in
             List.iter
               (fun d ->
                  let ps = mk_ps_ ~info (PS_data (k,d)) in
@@ -595,7 +595,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     | [] -> assert false
     | {ps_view=PS_data (k1,d1); ps_info=info; _} as ps1 :: tail ->
       let l = List.fold_left (merge_into_data k1 ps1) [d1] tail in
-      Stmt.mk_ty_def ~info k1 l
+      Stmt.mk_ty_def  ~info k1 l
     | {ps_view=PS_pred (wf1,k1,p1); ps_info=info; _} as ps1 :: tail ->
       let l = List.fold_left (merge_into_pred wf1 k1 ps1) [p1] tail in
       Stmt.mk_pred ~info ~wf:wf1 k1 l
