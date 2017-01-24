@@ -404,6 +404,9 @@ val defined_of_data : 'ty tydef -> 'ty defined Sequence.t
 val defined_of_datas : 'ty mutual_types -> 'ty defined Sequence.t
 val defined_of_copy : (_, 'ty) copy -> 'ty defined Sequence.t
 
+val defined_seq : (_, 'ty) t -> 'ty defined Sequence.t
+(** All identifiers defined in this statement *)
+
 val ids_of_copy : (_,_) copy -> ID.t Sequence.t
 
 (** {2 Print} *)

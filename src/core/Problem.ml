@@ -150,6 +150,7 @@ module Res = struct
     | U_out_of_scope of info
     | U_incomplete of info
     | U_other of info * string
+    | U_backend_error of info * string
 
   type (+'t,+'ty) t =
     | Unsat of info
@@ -182,7 +183,7 @@ module Res = struct
       | None -> ()
       | Some s -> Format.fprintf out ",@ message=\"%s\"" s
     in
-    Format.fprintf out "{@[<2>backend:%s, time:%.1fs%a@]}"
+    Format.fprintf out "@[<2>{backend:%s, time:%.1fs%a}@]"
       i.backend i.time pp_msg i.message
 
   let print_unknown_info out = function
@@ -190,6 +191,7 @@ module Res = struct
     | U_out_of_scope i -> fpf out "OUT_OF_SCOPE %a" print_info i
     | U_incomplete i -> fpf out "INCOMPLETE %a" print_info i
     | U_other (i,s) -> fpf out "INCOMPLETE %a %s" print_info i s
+    | U_backend_error (i,s) -> fpf out "BACKEND_ERROR %a %s" print_info i s
 
   let print_info_opt out = function
     | None -> ()
@@ -197,7 +199,7 @@ module Res = struct
 
   let print pt pty out = function
     | Unsat i -> fpf out "UNSAT %a" print_info i
-    | Error (e,i) -> fpf out "ERROR %s %a" (Printexc.to_string e) print_info i
+    | Error (e,i) -> fpf out "ERROR %s@ %a" (Printexc.to_string e) print_info i
     | Unknown l -> fpf out "UNKNOWN (@[%a@])" (Utils.pp_list print_unknown_info) l
     | Sat (m,i) ->
       fpf out "@[<hv>@[<v2>SAT: {@,@[<v>%a@]@]@,}@,%a@]"

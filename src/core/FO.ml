@@ -42,7 +42,7 @@ type ('t, 'ty) view =
   | App of id * 't list
   | DataTest of id * 't
   | DataSelect of id * int * 't
-  | Undefined of id * 't (** ['t] is not defined here *)
+  | Undefined of 't (** ['t] is not defined here *)
   | Undefined_atom of id * 'ty toplevel_ty * 't list (** some undefined term of given type, + args *)
   | Unparsable of 'ty (** could not parse term *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
@@ -169,7 +169,7 @@ module T = struct
     | App (f1,l1), App (f2,l2) ->
       ID.equal f1 f2 && CCList.equal equal l1 l2
     | Var v1, Var v2 -> Var.equal v1 v2
-    | Undefined (i1,t1), Undefined (i2,t2)
+    | Undefined t1, Undefined t2 -> equal t1 t2
     | DataTest (i1,t1), DataTest(i2,t2) -> ID.equal i1 i2 && equal t1 t2
     | DataSelect (i1,n1,t1), DataSelect(i2,n2,t2) ->
       ID.equal i1 i2 && n1=n2 && equal t1 t2
@@ -202,7 +202,7 @@ module T = struct
   let var v = make_ (Var v)
   let data_test c t = make_ (DataTest (c,t))
   let data_select c n t = make_ (DataSelect (c,n,t))
-  let undefined c t = make_ (Undefined (c,t))
+  let undefined t = make_ (Undefined t)
   let undefined_atom c ty l = make_ (Undefined_atom (c,ty,l))
   let unparsable ty = make_ (Unparsable ty)
   let let_ v t u = make_ (Let(v,t,u))
@@ -246,7 +246,7 @@ module T = struct
           -> List.iter aux l
         | DataTest (_,t)
         | DataSelect (_,_,t)
-        | Undefined (_,t)
+        | Undefined t
         | Fun (_,t)
         | Mu (_,t)
         | Forall (_,t)
@@ -341,8 +341,8 @@ let rec print_term out t = match T.view t with
     fpf out "(@[<2>is-%a@ %a@])" ID.print c print_term t
   | DataSelect (c,n,t) ->
     fpf out "(@[<2>select-%a-%d@ %a@])" ID.print c n print_term t
-  | Undefined (c,t) ->
-    fpf out "(@[<2>undefined-%a@ %a@])" ID.print c print_term t
+  | Undefined t ->
+    fpf out "(@[<2>undefined@ %a@])" print_term t
   | Undefined_atom (c,ty,[]) ->
     fpf out "(@[<2>undefined-%a@ ty:%a@])" ID.print c print_toplevel_ty ty
   | Undefined_atom (c,ty,l) ->
@@ -548,7 +548,7 @@ module Util = struct
         | Builtin _
         | DataTest (_,_)
         | DataSelect (_,_,_)
-        | Undefined (_,_)
+        | Undefined _
         | Undefined_atom _
         | Unparsable _
         | Mu (_,_)

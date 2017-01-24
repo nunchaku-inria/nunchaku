@@ -63,7 +63,8 @@ rule token = parse
   | "UNSAT" { RESULT_UNSAT }
   | "UNKNOWN" { RESULT_UNKNOWN }
   | "TIMEOUT" { RESULT_TIMEOUT }
-  | ":model" { RESULT_MODEL }
+  | ":model" { RESULT_ATOM_MODEL }
+  | ":reason" { RESULT_ATOM_REASON }
   | ident { IDENT(Lexing.lexeme lexbuf) }
   | quoted {
       (* TODO: unescape *)

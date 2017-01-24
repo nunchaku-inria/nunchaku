@@ -74,8 +74,8 @@ module Of_ho(T : TI.S) = struct
     | TI.Builtin (`Ite (a,b,c)) ->
       FO.T.ite
         (conv_term ~env a) (conv_term ~env b) (conv_term ~env c)
-    | TI.Builtin (`Undefined_self (c,t)) ->
-      FO.T.undefined c (conv_term ~env t)
+    | TI.Builtin (`Undefined_self t) ->
+      FO.T.undefined (conv_term ~env t)
     | TI.Builtin (`Undefined_atom (c,ty)) ->
       FO.T.undefined_atom c (conv_top_ty ty) []
     | TI.Builtin (`Unparsable ty) -> FO.T.unparsable (conv_ty ty)
@@ -319,8 +319,8 @@ module To_ho(T : TI.S) = struct
         U.exists v (convert_term t)
       | FO.Var v ->
         U.var (Var.update_ty v ~f:(convert_ty))
-      | FO.Undefined(c,t) ->
-        U.builtin (`Undefined_self (c,convert_term t))
+      | FO.Undefined t ->
+        U.builtin (`Undefined_self (convert_term t))
       | FO.Undefined_atom (c,ty,l) ->
         let l = List.map convert_term l in
         U.app

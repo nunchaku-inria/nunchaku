@@ -29,18 +29,26 @@ type state = {
   false_ : ID.t;
   pseudo_prop: ID.t;
   env: (term,ty) Env.t;
+  new_sig : ty ID.Tbl.t; (* types after translation *)
   mutable declared: bool; (* did we declare prop_? *)
   mutable needed: bool; (* do we need prop_? *)
 }
 
 let create_state ~env () =
-  { true_ = ID.make "true_";
+  let st = {
+    true_ = ID.make "true_";
     false_ = ID.make "false_";
     pseudo_prop = ID.make "prop_";
     declared = false;
     needed = false;
     env;
-  }
+    new_sig=ID.Tbl.create 25;
+  } in
+  ID.Tbl.add st.new_sig st.pseudo_prop U.ty_type;
+  let ty_pprop = U.ty_const st.pseudo_prop in
+  ID.Tbl.add st.new_sig st.true_ ty_pprop;
+  ID.Tbl.add st.new_sig st.false_ ty_pprop;
+  st
 
 (** {2 Encoding} *)
 
@@ -79,7 +87,7 @@ let find_ty state (t:term) : ty = U.ty_exn ~env:state.env t
 (* translate a type
    @param top true if toplevel; only toplevel props are
      preserved *)
-let rec transform_ty state ~top ty =
+let transform_ty state ~top ty =
   let rec aux top ty = match Ty.repr ty with
     | TyI.Builtin `Prop ->
       if top then ty
@@ -97,6 +105,11 @@ let rec transform_ty state ~top ty =
   in
   aux top ty
 
+(* find the new type of an ID *)
+let find_new_ty state (t:term) : ty =
+  U.ty_of_signature_exn t
+    ~sigma:(fun id -> ID.Tbl.get state.new_sig id)
+
 (* rename [v], and maybe update its type from [prop] to [pseudo_prop], since
    we cannot quantify on propositions *)
 and transform_var state v =
@@ -108,14 +121,6 @@ let rename_var state subst v =
   let v' = transform_var state v in
   Var.Subst.add ~subst v v', v'
 
-(* TODO: rewrite this as a type-driven pass:
-   - carry around old_env, new_env
-   - recurse in subterms, translate them, infer their new type
-   - if new type is prop and we expect prop_, use `ite`
-     if new type is prop_ and we expect prop, use `= true_`
-     (careful with builtins, in particular boolean ones)
-*)
-
 (* does [t : prop]? *)
 let has_ty_prop_ state t : bool =
   let ty = find_ty state t in
@@ -124,12 +129,27 @@ let has_ty_prop_ state t : bool =
 let get_true_ state : T.t = state.needed <- true; U.const state.true_
 let get_false_ state : T.t = state.needed <- true; U.const state.false_
 
+(* TODO: rewrite this as a type-driven pass:
+   - carry around old_env, new_env
+   - recurse in subterms, translate them, infer their new type
+   - if new type is prop and we expect prop_, use `ite`
+     if new type is prop_ and we expect prop, use `= true_`
+     (careful with builtins, in particular boolean ones)
+*)
+
+let ty_is_pseudo_prop state ty = U.equal ty (U.const state.pseudo_prop)
+
 (* traverse a term, replacing any argument [a : prop]
    with [if a then pseudo_true else pseudo_false];
-   also, change variables' types *)
+   also, change variables' types: no boolean variable should remain *)
 let transform_term state subst t =
-  (* translate [t], keeping its toplevel type  *)
-  let rec aux subst t = match T.repr t with
+  let wrap_prop t : T.t =
+    U.ite t (get_true_ state) (get_false_ state)
+  in
+  (* translate [t], keeping its toplevel type unless it is
+     a boolean variable *)
+  let rec aux_top subst t = match T.repr t with
+    | TI.Const _ -> t
     | TI.Var v ->
       (* no toplevel propositional variable *)
       if U.ty_is_Prop (Var.ty v)
@@ -139,17 +159,16 @@ let transform_term state subst t =
         U.var v'
       )
     | TI.App (f, l) ->
-      let ty_f = find_ty state f in
-      let _, ty_args, _ = U.ty_unfold ty_f in
       (* translate head and arguments *)
-      let f' = aux subst f in
+      let _, ty_args, _ = find_ty state f |> U.ty_unfold in
+      let f' = aux_top subst f in
       assert (List.length l = List.length ty_args);
       let l' =
         List.map2
           (fun arg ty ->
              if U.ty_is_Prop ty
-             then aux_expect_prop' subst arg
-             else aux subst arg)
+             then aux_expect_prop' subst arg (* argument position *)
+             else aux_top subst arg)
           l
           ty_args
       in
@@ -157,50 +176,108 @@ let transform_term state subst t =
     | TI.Builtin (`Eq (a,b)) when has_ty_prop_ state a ->
       (* transform [a <=> b] into [a = b] where [a:prop_] *)
       U.eq (aux_expect_prop' subst a) (aux_expect_prop' subst b)
-    | _ ->
+    | TI.Let (v, t, u) ->
+      begin match T.repr u with
+        | TI.Var v' when Var.equal v v' -> aux_top subst t (* subst on the fly *)
+        | _ ->
+          (* might have to change [v]'s type *)
+          let new_v =
+            Var.fresh_copy v
+            |> Var.update_ty ~f:(transform_ty state ~top:false)
+          in
+          (* if [v] was a boolean, it now has to be a pseudo prop,
+             which means [t] might have to be wrapped *)
+          let new_t =
+            if ty_is_pseudo_prop state (Var.ty new_v)
+            then aux_expect_prop' subst t
+            else aux_top subst t
+          in
+          let subst = Var.Subst.add ~subst v new_v in
+          let new_u = aux_top subst u in
+          U.let_ new_v new_t new_u
+      end
+    | TI.Builtin `True -> U.true_
+    | TI.Builtin `False -> U.false_
+    | TI.Builtin ((`Not _ | `And _ | `Or _ | `Imply _ | `Eq _) as b) ->
+      (* boolean formulas are ok *)
+      let b = Builtin.map b ~f:(aux_top subst) in
+      U.builtin b
+    | TI.Builtin (`Undefined_self t) -> U.undefined_self (aux_top subst t)
+    | TI.Builtin (`Guard (t,g)) ->
+      let t' = aux_top subst t in
+      let g' = Builtin.map_guard (aux_top subst) g in
+      U.guard t' g'
+    | TI.Bind ((Binder.Forall | Binder.Exists) as b, v, body) ->
+      let subst, v = rename_var state subst v in
+      U.mk_bind b v (aux_top subst body)
+    | TI.Builtin (`Undefined_atom _|`Ite _|`DataTest _|`DataSelect _|`Unparsable _)
+    | TI.Bind ((Binder.Fun|Binder.TyForall|Binder.Mu), _, _)
+    | TI. Match (_, _, _) | TI.TyBuiltin _ | TI.TyArrow (_, _)
+      ->
+      (* cannot be a boolean, translation can proceed *)
       U.map subst t
-        ~bind:(rename_var state) ~f:aux
-  (* we expect [t] to have type [prop_] after translation *)
+        ~bind:(rename_var state) ~f:aux_top
+    | TI.TyMeta _ -> assert false
+
+  (* we expect a term of type [prop'] after translation *)
   and aux_expect_prop' subst t = match T.repr t with
     | TI.Var v ->
       assert state.needed;
       let v' = Var.Subst.find_exn ~subst v in
-      assert (U.equal (Var.ty v') (U.const state.pseudo_prop));
+      assert (ty_is_pseudo_prop state (Var.ty v'));
       U.var v' (* no casting needed *)
     | TI.Builtin `True -> get_true_ state
     | TI.Builtin `False -> get_false_ state
     | TI.Builtin (`Not _ | `And _ | `Or _ | `Imply _ | `Eq _) ->
       (* prop: wrap in if/then/else *)
-      let t' = aux subst t in
+      let t' = aux_top subst t in
       wrap_prop t'
     | TI.Builtin (`Guard (t,g)) ->
-      let t' = aux_expect_prop' subst t in
-      let g' = Builtin.map_guard (aux subst) g in
-      U.guard t' g'
-    | TI.Builtin (`Ite _ | `DataTest _ | `DataSelect _
-                 | `Undefined_atom _ | `Undefined_self _ | `Unparsable _) ->
-      wrap_prop (aux subst t)
+      let new_t = aux_expect_prop' subst t in
+      let new_g = Builtin.map_guard (aux_top subst) g in
+      U.guard new_t new_g
     | _ ->
-      wrap_prop (aux subst t)
-  and wrap_prop t : T.t =
-    U.ite t (get_true_ state) (get_false_ state)
+      (* we expect [prop'], see what we get by translating [t] *)
+      let new_t = aux_top subst t in
+      let new_ty = find_new_ty state new_t in
+      if ty_is_pseudo_prop state new_ty
+      then new_t
+      else (
+        assert (U.ty_is_Prop new_ty);
+        wrap_prop new_t
+      )
   in
-  aux subst t
+  aux_top subst t
 
-let transform_statement state st : (_,_) Stmt.t =
+let transform_statement state stmt : (_,_) Stmt.t =
   Utils.debugf ~section 3 "@[<2>transform @{<cyan>statement@}@ `@[%a@]`@]"
-    (fun k->k PStmt.print st);
-  let info = Stmt.info st in
-  match Stmt.view st with
-    | Stmt.Decl d ->
-      let d = Stmt.map_defined d ~f:(transform_ty state ~top:true) in
-      Stmt.decl_of_defined ~info d
-    | _ ->
-      (* NOTE: maybe not robust if there are [copy] types *)
-      Stmt.map_bind Var.Subst.empty st
+    (fun k->k PStmt.print stmt);
+  (* how to translate a "defined" *)
+  let tr_defined d =
+    Stmt.map_defined d ~f:(transform_ty state ~top:true)
+  in
+  (* declare new symbols {b before} processing [stmt]: it makes it
+     easier to deal with recursive definitions *)
+  begin
+    Stmt.defined_seq stmt
+    |> Sequence.map tr_defined
+    |> Sequence.iter
+      (fun d -> ID.Tbl.add state.new_sig d.Stmt.defined_head d.Stmt.defined_ty);
+  end;
+  (* new statement, + [true] if the statement was already declared *)
+  let stmt' = match Stmt.view stmt with
+    | Stmt.Copy _ -> assert false (* precond *)
+    | Stmt.Decl _
+    | Stmt.TyDef (_,_)
+    | Stmt.Axiom _
+    | Stmt.Goal _
+    | Stmt.Pred (_,_,_) ->
+      Stmt.map_bind Var.Subst.empty stmt
         ~bind:(rename_var state)
         ~term:(fun subst _pol -> transform_term state subst)
         ~ty:(fun _ -> transform_ty state ~top:true)
+  in
+  stmt'
 
 let transform_problem pb =
   let env = Problem.env pb in
@@ -304,6 +381,7 @@ let pipe_with ~decode ~print ~check =
     ~name
     ~input_spec:Transform.Features.(of_list
           [Ind_preds, Absent; Ty, Mono; Eqn, Absent;
+           Copy, Absent;
            If_then_else, Present; HOF, Absent])
     ~map_spec:Transform.Features.(update Prop_args Absent)
     ~on_encoded

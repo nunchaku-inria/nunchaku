@@ -42,7 +42,7 @@ let renaming_rules_of_model_ m =
        CCList.Idx.foldi
          (fun acc i id ->
             let name = CCFormat.sprintf "$%s_%d" prefix i in
-            let rhs = ID.make name in
+            let rhs = ID.fresh_copy_name id name in
             ID.Map.add id rhs acc)
          acc dom)
     ID.Map.empty
@@ -149,7 +149,7 @@ let remove_recursion m : (_,_) Model.t =
 let remove_trivial_tests m : (_,_) Model.t =
   let rec aux dt = match dt with
     | DT.Yield _ -> dt
-    | DT.Cases {DT.var; tests; default=d} ->
+    | DT.Cases {DT.var; tests=DT.Tests l; default=d} ->
       let others, tests =
         CCList.fold_filter_map
           (fun o (lhs,rhs) ->
@@ -158,7 +158,7 @@ let remove_trivial_tests m : (_,_) Model.t =
                | TI.Var v' when Var.equal var v' ->
                  rhs :: o, None
                | _ -> o, Some (lhs, rhs))
-          [] tests
+          [] l
       in
       (* if some tests became trivial, they might replace [default] *)
       let default = match d, others with
@@ -166,7 +166,11 @@ let remove_trivial_tests m : (_,_) Model.t =
         | None, o1 :: _ -> Some o1
         | Some d, _ -> Some (aux d)
       in
-      DT.cases var ~tests ~default
+      DT.mk_tests var ~tests ~default
+    | DT.Cases {DT.var; tests=DT.Match (m,missing); default=d} ->
+      let default = CCOpt.map aux d in
+      let m = ID.Map.map (fun (vars,rhs) -> vars, aux rhs) m in
+      DT.mk_match var ~by_cstor:m ~missing ~default
   in
   Model.filter_map m
     ~finite_types:(fun tup -> Some tup)

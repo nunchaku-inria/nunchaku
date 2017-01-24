@@ -54,8 +54,8 @@ module Make(T : TI.S) = struct
   let check_same_ a b ty_a ty_b =
     if not (U.equal ty_a ty_b)
     then errorf_
-        "@[<2>expected `@[%a@]` : `@[%a@]@ and@ \
-         `@[%a@]` : `@[%a@]` to have the same type@]"
+        "@[<2>expected@ @[`@[%a@]` : `@[%a@]`@]@ and@ \
+         @[<2>`@[%a@]`@ : `@[%a@]`@]@ to have the same type@]"
         P.print a P.print ty_a P.print b P.print ty_b;
     ()
 
@@ -120,7 +120,7 @@ module Make(T : TI.S) = struct
           | `Unparsable ty
           | `Undefined_atom (_,ty) ->
             ignore (check_is_ty ~env bound ty); ty
-          | `Undefined_self (_,t) -> check ~env bound t
+          | `Undefined_self t -> check ~env bound t
           | `Guard (t, g) ->
             List.iter (check_is_prop ~env bound) g.Builtin.asserting;
             check ~env bound t

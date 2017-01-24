@@ -22,15 +22,17 @@ type model_ty = FO.Ty.t
 module DSexp = Sexp_lib.Decoder
 
 exception Error of string
-exception CVC4_error of string
+exception Backend_err of string
 
 let error_ e = raise (Error e)
 let errorf_ fmt = CCFormat.ksprintf fmt ~f:error_
 
+let cvc4_error_ msg = raise (Backend_err msg)
+let cvc4_errorf_ msg = CCFormat.ksprintf ~f:cvc4_error_ "@[in CVC4:@ %s@]" msg
+
 let () = Printexc.register_printer
     (function
       | Error msg -> Some (Utils.err_sprintf "@[in the interface to CVC4:@ %s@]" msg)
-      | CVC4_error msg -> Some (Utils.err_sprintf "@[in CVC4:@ %s@]" msg)
       | _ -> None)
 
 module T = FO.T
@@ -251,7 +253,7 @@ let print_problem out (decode, pb) =
       fpf out "(@[%a@ %a@])" print_tester c print_term t
     | FO.DataSelect (c,n,t) ->
       fpf out "(@[%a@ %a@])" print_select (c,n) print_term t
-    | FO.Undefined (_,t) -> print_term out t (* tailcall, probably *)
+    | FO.Undefined t -> print_term out t (* tailcall, probably *)
     | FO.Undefined_atom _ -> errorf_ "cannot print `undefined_atom` in SMTlib"
     | FO.Unparsable _ -> errorf_ "cannot print `unparsable` in SMTlib"
     | FO.Fun (v,t) ->
@@ -624,7 +626,7 @@ let get_model_ ~print_model ~decode s : (_,_) Model.t =
 
 (* read the result *)
 let read_res_ ~info ~print_model ~decode s =
-  match DSexp.next s.sexp with
+  try match DSexp.next s.sexp with
     | `Ok (`Atom "unsat") ->
       Utils.debug ~section 5 "CVC4 returned `unsat`";
       Res.Unsat (Lazy.force info)
@@ -640,16 +642,19 @@ let read_res_ ~info ~print_model ~decode s =
       Res.Unknown [Res.U_other (Lazy.force info, "")]
     | `Ok (`List [`Atom "error"; `Atom s]) ->
       Utils.debugf ~section 5 "@[<2>CVC4 returned `error %s`@]" (fun k->k s);
-      Res.Error (CVC4_error s, Lazy.force info)
+      Res.Unknown [Res.U_backend_error (Lazy.force info, cvc4_error_ s)]
     | `Ok sexp ->
       let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ `%a`@]"
           Sexp_lib.pp sexp
       in
-      Res.Error (Error msg, Lazy.force info)
+      Res.Unknown [Res.U_backend_error (Lazy.force info, msg)]
     | `Error e -> Res.Error (Error e, Lazy.force info)
     | `End ->
       Utils.debug ~section 5 "no answer from CVC4, assume it timeouted";
       Res.Unknown [Res.U_timeout (Lazy.force info)]
+  with
+    | Backend_err msg ->
+      Res.Unknown [Res.U_backend_error (Lazy.force info, msg)]
 
 let mk_info (decode:decode_state): Res.info =
   let time = Utils.Time.get_timer decode.timer in
@@ -829,7 +834,9 @@ let options_l =
 
 (* solve problem using CVC4 before [deadline] *)
 let call
-    ?(options="") ?prio ?slice ~print ~dump ~print_smt ~print_model problem
+    ?(options="") ?prio ?slice
+    ~print ~dump ~print_smt ~print_model
+    problem
   =
   if print then (
     Format.printf "@[<v2>FO problem:@ %a@]@." FO.print_problem problem;
@@ -855,15 +862,18 @@ let call
       S.Task.return (Res.Unknown [Res.U_other (info, "--dump")]) S.No_shortcut
   end
 
-let pipes ?(options=[""]) ?slice ~print ~dump ~print_smt ~print_model () =
-  (* each process' slice is only 1/n of the global CVC4 slice *)
+let pipes
+    ?(options=[""]) ?slice ?(schedule_options=true)
+    ~print ~dump ~print_smt ~print_model
+    () =
   let slice =
-    CCOpt.map
-      (fun s ->
-         let n = List.length options in
-         assert (n > 0);
-         s /. float n)
-      slice
+    if schedule_options
+    then (
+      let n = List.length options in
+      assert (n > 0);
+      (* each process' slice is only [1/n] of the global CVC4 slice *)
+      CCOpt.map (fun s -> s /. float n) slice
+    ) else slice
   in
   let encode pb =
     List.mapi
@@ -880,4 +890,5 @@ let pipes ?(options=[""]) ?slice ~print ~dump ~print_smt ~print_model () =
         [ Ty, Mono; Eqn, Absent; Copy, Absent; Match, Absent ])
   in
   Transform.make ~input_spec ~name ~encode ~decode:(fun _ x -> x) ()
+
 

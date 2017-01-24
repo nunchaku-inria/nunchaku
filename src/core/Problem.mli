@@ -127,6 +127,7 @@ module Res : sig
     | U_out_of_scope of info
     | U_incomplete of info
     | U_other of info * string
+    | U_backend_error of info * string
 
   type (+'t,+'ty) t =
     | Unsat of info

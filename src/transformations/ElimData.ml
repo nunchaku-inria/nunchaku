@@ -14,6 +14,7 @@ module P = T.P
 module PStmt = Stmt.Print(P)(P)
 module AT = AnalyzeType.Make(T)
 module Pol = Polarity
+module Red = Reduce.Make(T)
 module TyMo = (val TypeMono.default)
 
 type term = T.t
@@ -304,7 +305,11 @@ module Make(M : sig val mode : mode end) = struct
        replace [t] by [let x := u in t] and remove cell from [share].
        NOTE: careful about the dependencies between subterms and superterms
        during traversal, let-bindings must be correctly ordered *)
-  let introduce_lets share (t:term) ~(start:[`All | `Vars of ty Var.t list]): term =
+  let introduce_lets
+      (share:sharing_state)
+      (t:term)
+      ~(start:[`All | `Vars of ty Var.t list])
+    : term =
     let all_guards = ref [] in
     let all_lets = ref [] in
     (* the set of cells to introduce *)
@@ -925,17 +930,17 @@ module Make(M : sig val mode : mode end) = struct
   let eval_fundef (f:fun_def) (args:T.t list) : T.t =
     let dt, _ = f in
     assert (DT.num_vars dt >= List.length args);
-    DTU.apply_l dt args |> DTU.to_term
+    DTU.apply_l dt args |> DTU.to_term |> Red.whnf
 
   (* evaluate a boolean function def *)
-  let eval_bool_fundef (f:fun_def) (args:T.t list) : bool option =
+  let eval_bool_fundef (f:fun_def) (args:T.t list) : (bool, T.t) Result.result =
     let _, k = f in
     assert (k = Model.Symbol_prop);
     let res = eval_fundef f args in
     match T.repr res with
-      | TI.Builtin `True -> Some true
-      | TI.Builtin `False -> Some false
-      | _ -> None
+      | TI.Builtin `True -> Result.Ok true
+      | TI.Builtin `False -> Result.Ok  false
+      | _ -> Result.Error res
 
   let find_test_ dec id =
     try ID.Map.find id dec.dec_test
@@ -992,11 +997,12 @@ module Make(M : sig val mode : mode end) = struct
                   (fun ecstor ->
                      let fundef = find_test_ dec (fst ecstor.ecstor_test) in
                      match eval_bool_fundef fundef [t] with
-                       | None ->
+                       | Result.Error res ->
                          errorf "cannot evaluate whether `%a`@ \
-                                 starts with constructor `%a`"
-                           P.print t ID.print (fst ecstor.ecstor_cstor)
-                       | Some b -> b)
+                                 starts with constructor `%a`;@ \
+                                 check yields `@[%a@]`, not a boolean"
+                           P.print t ID.print (fst ecstor.ecstor_cstor) P.print res
+                       | Result.Ok b -> b)
                   ety.ety_cstors
               with Not_found ->
                 errorf "no constructor corresponds to `%a`" P.print t

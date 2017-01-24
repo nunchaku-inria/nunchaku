@@ -20,7 +20,7 @@ exception Error of string
 
 let () = Printexc.register_printer
     (function
-      | Error msg -> Some (CCFormat.sprintf "@[<2>error in elim_ind_pred:@ %s@]" msg)
+      | Error msg -> Some (Utils.err_sprintf "@[<2>elim_ind_pred:@ %s@]" msg)
       | _ -> None)
 
 type term = T.t
@@ -163,17 +163,30 @@ let match_default_except ~env c_id t : _ TI.default_case =
             end
           | _ -> false]
    @param k the leaf to put inside the only successful branch
-     of the tree: [k subst] must return some boolean term,
-    where [subst] is a substitution of [vars(args)] *)
+     of the tree: [k subst conds] must return some boolean term,
+    where [subst] is a substitution of a subset of [freevars(args)]
+     and [conds] are side-conditions to satisfy
+   @param vars the new input variables, we are defining [some_pred vars := …]
+      from a clause [forall …. guard => some_pred args]
+*)
 let mk_match_tree ~env ~subst vars args ~k : term =
   assert (List.length vars = List.length args);
   (* [subst]: current substitution on vars(args)
      [conds]: set of side conditions (non-linear matching) *)
   let rec aux subst conds vars args = match vars, args with
-    | [], [] -> k subst (* successful branch *)
+    | [], [] ->
+      (* Successful branch. *)
+      k subst conds
     | [], _
     | _, [] -> assert false
     | v :: vars_tail, arg :: args_tail ->
+      (* we need to express that [v = arg] *)
+      (* default case: [if (v=arg) then (recurse) else false] *)
+      let default() =
+        let cond = U.eq (U.var v) arg in
+        aux subst (cond::conds) vars_tail args_tail
+      in
+      (* try to use pattern matching, which is more accurate and efficient *)
       begin match T.repr arg with
         | TI.Var v_a ->
           begin match Var.Subst.find ~subst v_a with
@@ -195,11 +208,6 @@ let mk_match_tree ~env ~subst vars args ~k : term =
           in
           U.match_with (U.var v) (ID.Map.singleton c_id ([], ok_case)) ~def:default
         | TI.App (f, l) ->
-          let fail() =
-            errorf_ "cannot deconstruct inductive predicate \
-                     in case `@[%a@]`@ (not a variable nor a constructor)"
-              P.print f
-          in
           begin match T.repr f with
             | TI.Const c_id ->
               let info = Env.find_exn ~env c_id in
@@ -224,14 +232,12 @@ let mk_match_tree ~env ~subst vars args ~k : term =
                   U.match_with (U.var v)
                     (ID.Map.singleton c_id (new_vars,ok_case))
                     ~def:default
-                | _ -> fail()
+                | _ -> default()
               end
-            | _ -> fail()
+            | _ -> default()
           end
         | _ ->
-          errorf_ "cannot deconstruct inductive predicate \
-                   in case `@[%a@]`@ (not a variable nor a constructor)"
-            P.print arg
+          default()
       end
   in
   aux subst [] vars args
@@ -243,12 +249,22 @@ let mk_match_tree ~env ~subst vars args ~k : term =
 let encode_clause_match ~env vars args ~c_vars ~c_guard =
   let res =
     mk_match_tree ~env ~subst:Var.Subst.empty vars args
-      ~k:(fun subst ->
+      ~k:(fun subst conds ->
+        (* gather elements of [c_vars] that are not bound in [subst], and
+           quantify existentially on them *)
+        let ex_vars =
+          List.filter (fun v -> not (Var.Subst.mem ~subst v)) c_vars
+        in
         (* all variables of [args] should be bound *)
-        assert (List.for_all (fun v -> Var.Subst.mem ~subst v) c_vars);
-        match c_guard with
-          | None -> U.true_
-          | Some g -> U.eval ~subst g)
+        let all_conds =
+          CCList.cons_maybe c_guard conds
+          |> U.and_
+        in
+        begin match T.repr all_conds with
+          | TI.Builtin `True -> U.true_
+          | _ ->
+            U.exists_l ex_vars (U.eval ~subst all_conds)
+        end)
   in
   res
 

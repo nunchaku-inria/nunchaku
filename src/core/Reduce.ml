@@ -100,7 +100,6 @@ module Make(T : TI.S) = struct
         | `Eq (a,b) ->
           let a = eval ~subst a in
           let b = eval ~subst b in
-          (* TODO: if [a] and [b] fully evaluated, return False? *)
           begin match as_bool_ a, as_bool_ b with
             | BTrue, BTrue
             | BFalse, BFalse -> U.true_
@@ -108,9 +107,18 @@ module Make(T : TI.S) = struct
             | BFalse, BTrue -> U.false_
             | BPartial _, _
             | _, BPartial _ ->
-              if U.equal_with ~subst a b
-              then U.true_
-              else U.eq a b
+              begin match T.repr a, T.repr b with
+                | TI.Const id_a, TI.Const id_b
+                  when ID.is_distinct id_a && ID.is_distinct id_b ->
+                  (* equality is always decidable for those constants *)
+                  if ID.equal id_a id_b then U.true_ else U.false_
+                | _ ->
+                  (* can only answer positively. *)
+                  if U.equal_with ~subst a b
+                  then U.true_
+                  else U.eq a b
+                  (* TODO: if [a] and [b] fully evaluated, return [false]?*)
+              end
           end
         | `And l -> eval_and_l ~eval ~subst ~acc:[] l
         | `Or l -> eval_or_l ~eval ~subst ~acc:[] l
@@ -358,6 +366,17 @@ end
   module U = TermInner.Util(T)
   module Red = Make(T)
   module P = TermInner.Print(T)
+*)
+
+(* distinct IDs *)
+(*$R
+  let a = ID.make_full ~needs_at:false ~distinct:true "a" |> U.const in
+  let b = ID.make_full ~needs_at:false ~distinct:true "b" |> U.const in
+  let x = Var.make ~name:"x" ~ty:U.ty_unitype in
+  let fun_id = U.fun_ x (U.var x) in
+  assert_equal ~cmp:U.equal ~printer:P.to_string U.false_ (Red.whnf (U.eq a b));
+  assert_equal ~cmp:U.equal ~printer:P.to_string U.false_
+    (Red.whnf (U.or_ [U.eq a b; U.not_ (U.eq (U.app fun_id [a]) a)]));
 *)
 
 (* idempotence of WHNF *)

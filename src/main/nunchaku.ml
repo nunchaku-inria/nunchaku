@@ -64,6 +64,7 @@ let print_elim_multi_eqns = ref false
 let print_polarize_ = ref false
 let print_unroll_ = ref false
 let print_elim_preds_ = ref false
+let print_elim_quant_ = ref false
 let print_elim_data_ = ref false
 let print_elim_codata_ = ref false
 let print_copy_ = ref false
@@ -79,6 +80,7 @@ let print_model_ = ref false
 let enable_polarize_ = ref true
 let enable_specialize_ = ref true
 let skolems_in_model_ = ref true
+let cvc4_schedule = ref true
 let timeout_ = ref 30
 let version_ = ref false
 let dump_ : [`No | `Yes | `Into of string] ref = ref `No
@@ -192,6 +194,8 @@ let options =
       ; "--no-specialize", Arg.Clear enable_specialize_, " disable specialization"
       ; "--skolems-in-model", Arg.Set skolems_in_model_, " enable skolem constants in models"
       ; "--no-skolems-in-model", Arg.Clear skolems_in_model_, " disable skolem constants in models"
+      ; "--cvc4-schedule", Arg.Set cvc4_schedule, " enable scheduling of multiple CVC4 instances"
+      ; "--cvc4-no-schedule", Arg.Clear cvc4_schedule, " enable scheduling of multiple CVC4 instances"
       ; "--solvers", Arg.String set_solvers_, " solvers to use " ^ list_solvers_ ()
       ; "-s", Arg.String set_solvers_, " synonym for --solvers"
       ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
@@ -303,6 +307,7 @@ let make_cvc4 ~j () =
       ~slice:(1. *. float j)
       ~dump:(get_dump_file ())
       ~print:!print_all_
+      ~schedule_options:!cvc4_schedule
       ~print_smt:(!print_all_ || !print_smt_)
       ~print_model:(!print_all_ || !print_raw_model_)
       ()
@@ -433,14 +438,20 @@ let make_model_pipeline () =
          ~check ~polarize_rec:!polarize_rec_
      else Transform.nop ()) @@@
     Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
-    (*
+    (* skolemize first, to have proper decoding of model *)
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
       ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-       *)
     Tr.ElimIndPreds.pipe ~mode:`Use_match
       ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-    Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
+    Tr.ElimQuantifiers.pipe
+      ~mode:Tr.ElimQuantifiers.([Elim_quant_data; Elim_quant_fun; Elim_eq_fun])
+      ~print:(!print_elim_quant_ || !print_all_) ~check @@@
+    (*
+    Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
+    Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+       *)
+    Tr.Lift_undefined.pipe ~print:!print_all_ ~check @@@
     Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
     close_task smbc
   and pipe_cvc4 =

@@ -164,7 +164,7 @@ module Print(T : REPR)
     | Builtin (`Ite (a,b,c)) when is_if_ c ->
       (* special case to avoid deep nesting of ifs *)
       let pp_middle out (a,b) =
-        fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]"
+        fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]@]"
           (print' P.Ite) a (print' P.Ite) b
       in
       let middle, last = unroll_if_ c in
@@ -189,7 +189,7 @@ module Print(T : REPR)
           ID.print id (pp_list_ ~sep:" " Var.print_full) vars print t
       and pp_def out = function
         | Default_none -> ()
-        | Default_some (d,_) -> fpf out "@ @[<hv2> | default ->@ %a@]" print d
+        | Default_some (d,_) -> fpf out "@ @[<hv2>| default ->@ %a@]" print d
       in
       fpf out "@[<hv>@[<hv2>match @[%a@] with@ %a%a@]@ end@]"
         print t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
@@ -314,6 +314,15 @@ module type UTIL_REPR = sig
       [ty_unfold (forall a b, a -> b -> c -> d)] will return
       [([a;b], [a;b;c], d)]
   *)
+
+  val app_const_unfold : t_ -> (ID.t * t_ list) option
+  (** [app_const_unfold (app_const id l)] returns [Some (id,l)];
+      [app_const_unfold (const id)] returns [Some (id, [])];
+      otherwise it returns [None] *)
+
+  val ite_unfold : t_ -> (t_ * t_) list * t_
+  (** [ite_unfold (if a b (if a' b' … e))] returns [[(a,b);(a',b')…],e],
+      i.e. a series of "if/then" and a final "else" *)
 
   val ty_is_Type : t_ -> bool
   (** t == Type? *)
@@ -529,6 +538,23 @@ module UtilRepr(T : REPR)
       | _ -> [], t
     in
     aux1 t
+
+  let app_const_unfold t = match T.repr t with
+    | Const id -> Some (id, [])
+    | App (f, l) ->
+      begin match T.repr f with
+        | Const id -> Some (id, l)
+        | _ -> None
+      end
+    | _ -> None
+
+  let ite_unfold t =
+    let rec aux l t = match T.repr t with
+      | Builtin (`Ite (a,b,c)) ->
+        aux ((a,b)::l) c
+      | _ -> List.rev l, t
+    in
+    aux [] t
 
   let ty_is_Type t = match T.repr t with
     | TyBuiltin `Type -> true
@@ -988,9 +1014,7 @@ module Util(T : S)
   let neq a b = not_ (eq a b)
   let ite a b c = app_builtin (`Ite (a,b,c)) []
 
-  let undefined_self t =
-    let id = ID.make "_" in
-    builtin (`Undefined_self (id,t))
+  let undefined_self t = builtin (`Undefined_self t)
 
   let undefined_atom ~ty =
     let id = ID.make "_" in
@@ -1283,8 +1307,8 @@ module Util(T : S)
     | Builtin (`True | `False | `DataSelect _ | `DataTest _) ->
       (* partially applied, or constant *)
       t
-    | Builtin (`Undefined_self (id,t)) ->
-      builtin (`Undefined_self (id, f b_acc P.NoPol t))
+    | Builtin (`Undefined_self t) ->
+      builtin (`Undefined_self (f b_acc P.NoPol t))
     | Builtin (`Undefined_atom (id,t)) ->
       builtin (`Undefined_atom (id, f b_acc P.NoPol t))
     | Builtin (`Guard (t, g)) ->
@@ -1552,7 +1576,7 @@ module Util(T : S)
               | _ ->
                 failwith "cannot infer type, wrong argument to DataSelect"
             end
-          | `Undefined_self (_,t) ->aux t
+          | `Undefined_self t -> aux t
           | `Undefined_atom (_,ty) -> ty
           | `Guard (t, _) -> aux t
         end

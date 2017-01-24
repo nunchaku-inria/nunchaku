@@ -249,7 +249,7 @@ let rec encode state (t:FO.T.t) : encode_res = match FO.T.view t with
   | FO.DataTest (_,_)
   | FO.DataSelect (_,_,_) ->
     error "should have eliminated data{test/select} earlier"
-  | FO.Undefined (_,t) -> encode state t
+  | FO.Undefined t -> encode state t
   | FO.Fun (_,_) ->
     errorf "cannot translate function `@[%a@]` to FO_rel" FO.print_term t
   | FO.Mu (_,_)
