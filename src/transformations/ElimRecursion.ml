@@ -110,17 +110,17 @@ let spf = CCFormat.sprintf
 let () = Printexc.register_printer
     (function
       | TranslationFailed (t,msg) ->
-        Some (spf "@[<2>translation of `@[%a@]` failed:@ %s@]" P.print t msg)
+        Some (spf "@[<2>translation of `@[%a@]` failed:@ %s@]" P.pp t msg)
       | DecodingFailed (None, msg) ->
         Some (spf "@[<2>decoding failed:@ %s@]" msg)
       | DecodingFailed (Some t, msg) ->
-        Some (spf "@[<2>decoding of `@[%a@]` failed:@ %s@]" P.print t msg)
+        Some (spf "@[<2>decoding of `@[%a@]` failed:@ %s@]" P.pp t msg)
       | Error msg -> Some (spf "@[<2>Error in ElimRec:@ %s@]" msg)
       | _ -> None)
 
 let pp_hof out hof =
   fpf out "{@[handle_cstor=`%a`,@ app_syms=@[%a@]@]}"
-    ID.print hof.handle_ty (ID.Set.print ID.print) hof.app_symbs
+    ID.pp hof.handle_ty (ID.Set.print ID.pp) hof.app_symbs
 
 (* find the set of HOF-elim symbols used in [pb] *)
 let gather_hof_ pb =
@@ -148,7 +148,7 @@ let gather_hof_ pb =
              | true, _, None -> Some id, app_m (* found `to` *)
              | true, _, Some i2 ->
                errorf_ "both %a and %a are handle constructors, impossible"
-                 ID.print id ID.print i2
+                 ID.pp id ID.pp i2
              | false, true, _ -> h_ty, ID.Set.add id app_m
              | false, false, _ -> acc
            end
@@ -215,7 +215,7 @@ let rec tr_term_rec_ ~guards ~state subst t =
           if List.length l <> List.length fundef.fun_concretization
           then fail_tr_ t
               "defined function %a is partially applied (%d arguments, expected %d)"
-              ID.print id (List.length l) (List.length fundef.fun_concretization);
+              ID.pp id (List.length l) (List.length fundef.fun_concretization);
           (* existential variable *)
           let alpha = Var.make ~name:"a" ~ty:fundef.fun_abstract_ty in
           let eqns = ref [] in
@@ -268,7 +268,7 @@ and tr_term_rec_' ~guards ~state subst t =
 
 let tr_term ~state subst t =
   Utils.debugf ~section 4
-    "@[<2>convert toplevel term@ `@[%a@]`@]" (fun k -> k P.print t);
+    "@[<2>convert toplevel term@ `@[%a@]`@]" (fun k -> k P.pp t);
   tr_term_rec_ ~guards:true ~state subst t
 
 (* translate a top-level formula *)
@@ -281,7 +281,7 @@ let as_var_exn_ t = match T.repr t with
 (* add an [encoding] to the state *)
 let add_encoding ~state fun_encoding =
   Utils.debugf ~section 5 "@[<2>add fun encoding for `%a`@]"
-    (fun k->k ID.print fun_encoding.fun_encoded_fun);
+    (fun k->k ID.pp fun_encoding.fun_encoded_fun);
   ID.Tbl.add state.decode.encoded_fun fun_encoding.fun_encoded_fun fun_encoding;
   ID.Tbl.add state.decode.abstract_ty fun_encoding.fun_abstract_ty_id fun_encoding;
   List.iter
@@ -479,7 +479,7 @@ let should_box_ ~state id ty : bool =
   in
   Utils.debugf ~section 2
     "@[<2>@{<Cyan>decision to box@} `@[%a : %a@]`:@ %B (card of domain = %a)@]"
-    (fun k->k ID.print id P.print ty res Card.print card);
+    (fun k->k ID.pp id P.pp ty res Card.pp card);
   res
 
 (* transform each axiom, considering case_head as rec. defined. *)
@@ -518,7 +518,7 @@ let tr_rec_defs ~info ~state l =
            Utils.debugf ~section 1
              "@[<2>recursion elimination in@ @[%a@]@ \
               failed on subterm @[%a@]:@ %s@]"
-             (fun k -> k PStmt.print (Stmt.axiom_rec ~info l) P.print t msg);
+             (fun k -> k PStmt.pp (Stmt.axiom_rec ~info l) P.pp t msg);
            raise e)
       l
   in
@@ -601,11 +601,11 @@ type finite_domains = finite_domain ID.Tbl.t
 
 let pp_domain out d =
   let pp_tuple out (id,l) =
-    fpf out "%a → (@[%a@])" ID.print id
-      (CCFormat.list ~start:"" ~stop:"" P.print) l
+    fpf out "%a → (@[%a@])" ID.pp id
+      (CCFormat.list ~start:"" ~stop:"" P.pp) l
   in
   fpf out "[@[<v2>`%a`:@ %a@]]"
-    ID.print d.dom_fun.fun_encoded_fun
+    ID.pp d.dom_fun.fun_encoded_fun
     (CCFormat.seq ~start:"" ~stop:"" ~sep:" " pp_tuple) (ID.Map.to_seq d.dom_args)
 
 type proj_fun = (T.t, T.t) DT.t
@@ -651,7 +651,7 @@ let pass2_ projs (doms:finite_domains) =
                      try ID.Tbl.find projs f_id
                      with Not_found ->
                        fail_decode_ "could not find value of projection function %a on %a"
-                         ID.print f_id ID.print val_id
+                         ID.pp f_id ID.pp val_id
                    in
                    (* evaluate *)
                    M.DT_util.apply proj (U.const val_id) |> M.DT_util.to_term
@@ -712,15 +712,15 @@ let pass3_ ~state doms m =
         (* remove junk from the definition of [t] *)
         let dom =
           try ID.Tbl.find doms f_id
-          with Not_found -> errorf_ "could not find domain for %a" ID.print f_id
+          with Not_found -> errorf_ "could not find domain for %a" ID.pp f_id
         in
         Utils.debugf ~section 3
           "@[<hv2>decoding recursive fun @[%a@] :=@ `@[%a@]`…@]"
-          (fun k->k ID.print f_id M.DT_util.print dt);
+          (fun k->k ID.pp f_id M.DT_util.pp dt);
         let dt' = decode_fun_ dom dt in
         Utils.debugf ~section 3
           "@[<hv2>decoding of recursive fun @[%a@] :=@ `@[%a@]`@ is `@[%a@]`@]"
-          (fun k->k ID.print f_id M.DT_util.print dt M.DT_util.print dt');
+          (fun k->k ID.pp f_id M.DT_util.pp dt M.DT_util.pp dt');
         Some (t, dt', k)
       | _ -> Some (t,dt,k))
     ~finite_types:(fun ((ty,_) as pair) -> match T.repr ty with
@@ -730,14 +730,14 @@ let pass3_ ~state doms m =
 
 let decode_model ~state m =
   Utils.debugf ~section 3 "@[<2>decode model:@ @[%a@]@]"
-    (fun k->k (Model.print P.print' P.print) m);
+    (fun k->k (Model.pp P.pp' P.pp) m);
   let projs, domains = pass1_ ~state m in
   pass2_ projs domains;
   Utils.debugf ~section 2 "@[<2>domains:@ @[%a@]@]"
     (fun k->k (CCFormat.seq ~start:"" ~stop:"" pp_domain) (ID.Tbl.values domains));
   let m = pass3_ ~state domains m in
   Utils.debugf ~section 3 "@[<2>model after decoding:@ @[%a@]@]"
-    (fun k->k (Model.print P.print' P.print) m);
+    (fun k->k (Model.pp P.pp' P.pp) m);
   m
 
 (** {6 Pipe} *)
@@ -746,7 +746,7 @@ let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module PPb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after elimination of recursion@}: %a@]@." PPb.print)
+      Format.printf "@[<v2>@{<Yellow>after elimination of recursion@}: %a@]@." PPb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
         let module C = TypeCheck.Make(T) in
@@ -768,7 +768,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after elim_rec@}:@ %a@]@."
-         (Problem.Res.print P.print' P.print)]
+         (Problem.Res.pp P.pp' P.pp)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model ~state) in

@@ -175,9 +175,9 @@ val mem : env:(_,_) t -> id:id -> bool
 
 module type PRINT_TERM = sig
   type t
-  val print : t CCFormat.printer
+  val pp : t CCFormat.printer
 end
 
 module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) : sig
-  val print : (Pt.t, Pty.t) t printer
+  val pp : (Pt.t, Pty.t) t printer
 end

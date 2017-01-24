@@ -48,35 +48,35 @@ let input_ = ref I_guess
 let output_ = ref O_nunchaku
 let check_all_ = ref true
 let polarize_rec_ = ref true
-let print_ = ref false
-let print_all_ = ref false
-let print_pipeline_ = ref false
-let print_typed_ = ref false
-let print_skolem_ = ref false
-let print_mono_ = ref false
-let print_elim_match_ = ref false
-let print_elim_recursion_ = ref false
-let print_elim_hof_ = ref false
-let print_lambda_lift_ = ref false
-let print_specialize_ = ref false
-let print_elim_infinite = ref false
-let print_elim_multi_eqns = ref false
-let print_polarize_ = ref false
-let print_unroll_ = ref false
-let print_elim_preds_ = ref false
-let print_elim_quant_ = ref false
-let print_elim_data_ = ref false
-let print_elim_codata_ = ref false
-let print_copy_ = ref false
-let print_intro_guards_ = ref false
-let print_elim_ite_ = ref false
-let print_elim_prop_args_ = ref false
-let print_elim_types_ = ref false
-let print_fo_ = ref false
-let print_fo_to_rel_ = ref false
-let print_smt_ = ref false
-let print_raw_model_ = ref false
-let print_model_ = ref false
+let pp_ = ref false
+let pp_all_ = ref false
+let pp_pipeline_ = ref false
+let pp_typed_ = ref false
+let pp_skolem_ = ref false
+let pp_mono_ = ref false
+let pp_elim_match_ = ref false
+let pp_elim_recursion_ = ref false
+let pp_elim_hof_ = ref false
+let pp_lambda_lift_ = ref false
+let pp_specialize_ = ref false
+let pp_elim_infinite = ref false
+let pp_elim_multi_eqns = ref false
+let pp_polarize_ = ref false
+let pp_unroll_ = ref false
+let pp_elim_preds_ = ref false
+let pp_elim_quant_ = ref false
+let pp_elim_data_ = ref false
+let pp_elim_codata_ = ref false
+let pp_copy_ = ref false
+let pp_intro_guards_ = ref false
+let pp_elim_ite_ = ref false
+let pp_elim_prop_args_ = ref false
+let pp_elim_types_ = ref false
+let pp_fo_ = ref false
+let pp_fo_to_rel_ = ref false
+let pp_smt_ = ref false
+let pp_raw_model_ = ref false
+let pp_model_ = ref false
 let enable_polarize_ = ref true
 let enable_specialize_ = ref true
 let skolems_in_model_ = ref true
@@ -126,58 +126,58 @@ let options =
   let open CCFun in
   Arg.align @@ List.sort Pervasives.compare @@ (
     Utils.Options.get_all () @
-      [ "--print-input", Arg.Set print_, " print input"
-      ; "--print-all", Arg.Set print_all_, " print every step of the pipeline"
-      ; "--print-pipeline", Arg.Set print_pipeline_, " print full pipeline and exit"
-      ; "--print-typed", Arg.Set print_typed_, " print input after typing"
-      ; "--print-" ^ Tr.Skolem.name, Arg.Set print_skolem_, " print input after Skolemization"
-      ; "--print-" ^ Tr.Monomorphization.name, Arg.Set print_mono_, " print input after monomorphization"
-      ; "--print-" ^ Tr.ElimPatternMatch.name
-      , Arg.Set print_elim_match_
+      [ "--pp-input", Arg.Set pp_, " print input"
+      ; "--pp-all", Arg.Set pp_all_, " print every step of the pipeline"
+      ; "--pp-pipeline", Arg.Set pp_pipeline_, " print full pipeline and exit"
+      ; "--pp-typed", Arg.Set pp_typed_, " print input after typing"
+      ; "--pp-" ^ Tr.Skolem.name, Arg.Set pp_skolem_, " print input after Skolemization"
+      ; "--pp-" ^ Tr.Monomorphization.name, Arg.Set pp_mono_, " print input after monomorphization"
+      ; "--pp-" ^ Tr.ElimPatternMatch.name
+      , Arg.Set pp_elim_match_
       , " print input after elimination of pattern matching"
-      ; "--print-" ^ Tr.ElimIndPreds.name
-      , Arg.Set print_elim_preds_
+      ; "--pp-" ^ Tr.ElimIndPreds.name
+      , Arg.Set pp_elim_preds_
       , " print input after elimination of (co)inductive predicates"
-      ; "--print-" ^ Tr.ElimRecursion.name
-      , Arg.Set print_elim_recursion_
+      ; "--pp-" ^ Tr.ElimRecursion.name
+      , Arg.Set pp_elim_recursion_
       , " print input after elimination of recursive functions"
-      ; "--print-" ^ Tr.Specialize.name
-      , Arg.Set print_specialize_
+      ; "--pp-" ^ Tr.Specialize.name
+      , Arg.Set pp_specialize_
       , " print input after specialization"
-      ; "--print-" ^ Tr.LambdaLift.name, Arg.Set print_lambda_lift_, " print after λ-lifting"
-      ; "--print-" ^ Tr.Elim_HOF.name
-      , Arg.Set print_elim_hof_
+      ; "--pp-" ^ Tr.LambdaLift.name, Arg.Set pp_lambda_lift_, " print after λ-lifting"
+      ; "--pp-" ^ Tr.Elim_HOF.name
+      , Arg.Set pp_elim_hof_
       , " print input after elimination of higher-order/partial functions"
-      ; "--print-" ^ Tr.ElimMultipleEqns.name
-      , Arg.Set print_elim_multi_eqns
+      ; "--pp-" ^ Tr.ElimMultipleEqns.name
+      , Arg.Set pp_elim_multi_eqns
       , " print input after elimination of multiple equations"
-      ; "--print-" ^ Tr.Elim_infinite.name
-      , Arg.Set print_elim_infinite
+      ; "--pp-" ^ Tr.Elim_infinite.name
+      , Arg.Set pp_elim_infinite
       , " print input after elimination of infinite types"
 
-      ; "--print-" ^ Tr.Polarize.name , Arg.Set print_polarize_, " print input after polarization"
-      ; "--print-" ^ Tr.Unroll.name, Arg.Set print_unroll_, " print input after unrolling"
-      ; "--print-" ^ Tr.ElimCopy.name, Arg.Set print_copy_, " print input after elimination of copy types"
-      ; "--print-" ^ Tr.ElimData.Data.name
-      , Arg.Set print_elim_data_
+      ; "--pp-" ^ Tr.Polarize.name , Arg.Set pp_polarize_, " print input after polarization"
+      ; "--pp-" ^ Tr.Unroll.name, Arg.Set pp_unroll_, " print input after unrolling"
+      ; "--pp-" ^ Tr.ElimCopy.name, Arg.Set pp_copy_, " print input after elimination of copy types"
+      ; "--pp-" ^ Tr.ElimData.Data.name
+      , Arg.Set pp_elim_data_
       , " print input after elimination of (co)datatypes"
-      ; "--print-" ^ Tr.ElimData.Codata.name
-      , Arg.Set print_elim_codata_
+      ; "--pp-" ^ Tr.ElimData.Codata.name
+      , Arg.Set pp_elim_codata_
       , " print input after elimination of (co)datatypes"
-      ; "--print-" ^ Tr.IntroGuards.name, Arg.Set print_intro_guards_,
+      ; "--pp-" ^ Tr.IntroGuards.name, Arg.Set pp_intro_guards_,
         " print input after introduction of guards"
-      ; "--print-" ^ Tr.Elim_ite.name, Arg.Set print_elim_ite_,
+      ; "--pp-" ^ Tr.Elim_ite.name, Arg.Set pp_elim_ite_,
         " print input after elimination of if/then/else"
-      ; "--print-" ^ Tr.Elim_prop_args.name, Arg.Set print_elim_prop_args_,
+      ; "--pp-" ^ Tr.Elim_prop_args.name, Arg.Set pp_elim_prop_args_,
         " print input after elimination of propositional function subterms"
-      ; "--print-" ^ Tr.ElimTypes.name, Arg.Set print_elim_types_,
+      ; "--pp-" ^ Tr.ElimTypes.name, Arg.Set pp_elim_types_,
         " print input after elimination of types"
-      ; "--print-fo", Arg.Set print_fo_, " print first-order problem"
-      ; "--print-" ^ Tr.FoToRelational.name, Arg.Set print_fo_to_rel_,
+      ; "--pp-fo", Arg.Set pp_fo_, " print first-order problem"
+      ; "--pp-" ^ Tr.FoToRelational.name, Arg.Set pp_fo_to_rel_,
         " print first-order relational problem"
-      ; "--print-smt", Arg.Set print_smt_, " print SMT problem"
-      ; "--print-raw-model", Arg.Set print_raw_model_, " print raw model"
-      ; "--print-model", Arg.Set print_model_, " print model after cleanup"
+      ; "--pp-smt", Arg.Set pp_smt_, " print SMT problem"
+      ; "--pp-raw-model", Arg.Set pp_raw_model_, " print raw model"
+      ; "--pp-model", Arg.Set pp_model_, " print model after cleanup"
       ; "--checks", Arg.Set check_all_, " check invariants after each pass"
       ; "--no-checks", Arg.Clear check_all_, " disable checking invariants after each pass"
       ; "--color", call_with true CCFormat.set_color_default, " enable color"
@@ -210,7 +210,7 @@ let options =
       ]
   )
 
-let print_version_if_needed () =
+let pp_version_if_needed () =
   if !version_ then (
     Format.printf "nunchaku %s %s@." Const.version GitVersion.id;
     exit 0
@@ -260,10 +260,10 @@ let parse_prelude files =
     files
   >|= fun () -> res
 
-let print_input_if_needed statements =
-  if !print_ then
+let pp_input_if_needed statements =
+  if !pp_ then
     Format.printf "@[<v2>input: {@,@[<v>%a@]@]@,}@."
-      (CCVector.print ~start:"" ~stop:"" ~sep:"" A.print_statement)
+      (CCVector.print ~start:"" ~stop:"" ~sep:"" A.pp_statement)
       statements;
   ()
 
@@ -306,10 +306,10 @@ let make_cvc4 ~j () =
       ~options:Backends.CVC4.options_l
       ~slice:(1. *. float j)
       ~dump:(get_dump_file ())
-      ~print:!print_all_
+      ~print:!pp_all_
       ~schedule_options:!cvc4_schedule
-      ~print_smt:(!print_all_ || !print_smt_)
-      ~print_model:(!print_all_ || !print_raw_model_)
+      ~print_smt:(!pp_all_ || !pp_smt_)
+      ~print_model:(!pp_all_ || !pp_raw_model_)
       ()
     @@@ id
   else fail
@@ -319,9 +319,9 @@ let make_paradox () =
   if List.mem S_paradox !solvers && Backends.Paradox.is_available ()
   then
     Backends.Paradox.pipe
-      ~print_model:(!print_all_ || !print_raw_model_)
+      ~print_model:(!pp_all_ || !pp_raw_model_)
       ~dump:(get_dump_file ())
-      ~print:!print_all_ ()
+      ~print:!pp_all_ ()
     @@@ id
   else fail
 
@@ -330,9 +330,9 @@ let make_kodkod () =
   if List.mem S_kodkod !solvers && Backends.Kodkod.is_available ()
   then
     Backends.Kodkod.pipe
-      ~print:!print_all_
+      ~print:!pp_all_
       ~dump:(get_dump_file ())
-      ~print_model:(!print_all_ || !print_raw_model_)
+      ~print_model:(!pp_all_ || !pp_raw_model_)
       ()
     @@@ id
   else fail
@@ -342,9 +342,9 @@ let make_smbc () =
   if List.mem S_smbc !solvers && Backends.Smbc.is_available ()
   then
     Backends.Smbc.pipe
-      ~print:!print_all_
+      ~print:!pp_all_
       ~dump:(get_dump_file ())
-      ~print_model:(!print_all_ || !print_raw_model_)
+      ~print_model:(!pp_all_ || !pp_raw_model_)
       ()
     @@@ id
   else fail
@@ -361,118 +361,118 @@ let make_model_pipeline () =
   let kodkod = make_kodkod () in
   let smbc = make_smbc () in
   let pipe_common k =
-    Step_tyinfer.pipe ~print:(!print_typed_ || !print_all_) @@@
+    Step_tyinfer.pipe ~print:(!pp_typed_ || !pp_all_) @@@
     Step_conv_ty.pipe () @@@
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
-      ~print:(!print_skolem_ || !print_all_) ~check ~mode:`Sk_types @@@
+      ~print:(!pp_skolem_ || !pp_all_) ~check ~mode:`Sk_types @@@
     k
   and pipe_mono_common k =
     Tr.Monomorphization.pipe
-      ~always_mangle:false ~print:(!print_mono_ || !print_all_) ~check @@@
-    Tr.Elim_infinite.pipe ~print:(!print_elim_infinite || !print_all_) ~check @@@
-    Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
+      ~always_mangle:false ~print:(!pp_mono_ || !pp_all_) ~check @@@
+    Tr.Elim_infinite.pipe ~print:(!pp_elim_infinite || !pp_all_) ~check @@@
+    Tr.ElimCopy.pipe ~print:(!pp_copy_ || !pp_all_) ~check @@@
     Tr.ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~check
-      ~print:(!print_elim_multi_eqns || !print_all_) @@@
+      ~print:(!pp_elim_multi_eqns || !pp_all_) @@@
     (if !enable_specialize_
-     then Tr.Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check
+     then Tr.Specialize.pipe ~print:(!pp_specialize_ || !pp_all_) ~check
      else Transform.nop ()) @@@
     k
   and pipe_common_paradox_kodkod k =
-    Tr.ElimData.Codata.pipe ~print:(!print_elim_codata_ || !print_all_) ~check @@@
+    Tr.ElimData.Codata.pipe ~print:(!pp_elim_codata_ || !pp_all_) ~check @@@
     (if !enable_polarize_
-     then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
+     then Tr.Polarize.pipe ~print:(!pp_polarize_ || !pp_all_)
          ~check ~polarize_rec:!polarize_rec_
      else Transform.nop ()) @@@
-    Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+    Tr.Unroll.pipe ~print:(!pp_unroll_ || !pp_all_) ~check @@@
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
-      ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
-    Tr.ElimIndPreds.pipe ~print:(!print_elim_preds_ || !print_all_)
+      ~print:(!pp_skolem_ || !pp_all_) ~mode:`Sk_all ~check @@@
+    Tr.ElimIndPreds.pipe ~print:(!pp_elim_preds_ || !pp_all_)
       ~check ~mode:`Use_selectors @@@
-    Tr.ElimData.Data.pipe ~print:(!print_elim_data_ || !print_all_) ~check @@@
-    Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
-    Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
-    Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
-    Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
-    Tr.Elim_prop_args.pipe ~print:(!print_elim_prop_args_ || !print_all_) ~check @@@
+    Tr.ElimData.Data.pipe ~print:(!pp_elim_data_ || !pp_all_) ~check @@@
+    Tr.LambdaLift.pipe ~print:(!pp_lambda_lift_ || !pp_all_) ~check @@@
+    Tr.Elim_HOF.pipe ~print:(!pp_elim_hof_ || !pp_all_) ~check @@@
+    Tr.ElimRecursion.pipe ~print:(!pp_elim_recursion_ || !pp_all_) ~check @@@
+    Tr.IntroGuards.pipe ~print:(!pp_intro_guards_ || !pp_all_) ~check @@@
+    Tr.Elim_prop_args.pipe ~print:(!pp_elim_prop_args_ || !pp_all_) ~check @@@
     k
   and pipe_paradox =
-    Tr.ElimTypes.pipe ~print:(!print_elim_types_ || !print_all_) ~check @@@
-    Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
+    Tr.ElimTypes.pipe ~print:(!pp_elim_types_ || !pp_all_) ~check @@@
+    Tr.Model_clean.pipe ~print:(!pp_model_ || !pp_all_) @@@
     close_task (
-      Step_tofo.pipe ~print:!print_all_ () @@@
-      Tr.Elim_ite.pipe ~print:(!print_elim_ite_ || !print_all_) @@@
+      Step_tofo.pipe ~print:!pp_all_ () @@@
+      Tr.Elim_ite.pipe ~print:(!pp_elim_ite_ || !pp_all_) @@@
       Tr.Trans_fo_tptp.pipe @@@
       paradox
     )
   and pipe_kodkod =
-    Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
+    Tr.Model_clean.pipe ~print:(!pp_model_ || !pp_all_) @@@
     close_task (
-      Step_tofo.pipe ~print:!print_all_ () @@@
-      Tr.FoToRelational.pipe ~print:(!print_fo_to_rel_ || !print_all_) @@@
+      Step_tofo.pipe ~print:!pp_all_ () @@@
+      Tr.FoToRelational.pipe ~print:(!pp_fo_to_rel_ || !pp_all_) @@@
       kodkod
     )
   and pipe_smbc =
     Tr.Monomorphization.pipe
-      ~always_mangle:true ~print:(!print_mono_ || !print_all_) ~check @@@
-    Tr.Elim_infinite.pipe ~print:(!print_elim_infinite || !print_all_) ~check @@@
-    Tr.ElimCopy.pipe ~print:(!print_copy_ || !print_all_) ~check @@@
+      ~always_mangle:true ~print:(!pp_mono_ || !pp_all_) ~check @@@
+    Tr.Elim_infinite.pipe ~print:(!pp_elim_infinite || !pp_all_) ~check @@@
+    Tr.ElimCopy.pipe ~print:(!pp_copy_ || !pp_all_) ~check @@@
     Tr.ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~check
-      ~print:(!print_elim_multi_eqns || !print_all_) @@@
+      ~print:(!pp_elim_multi_eqns || !pp_all_) @@@
     (if !enable_specialize_
-     then Tr.Specialize.pipe ~print:(!print_specialize_ || !print_all_) ~check
+     then Tr.Specialize.pipe ~print:(!pp_specialize_ || !pp_all_) ~check
      else Transform.nop ()) @@@
     (*
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
-      ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+      ~print:(!pp_skolem_ || !pp_all_) ~mode:`Sk_all ~check @@@
        *)
     Tr.ElimPatternMatch.pipe ~mode:Tr.ElimPatternMatch.Elim_codata_match
-      ~print:(!print_elim_codata_ || !print_all_) ~check @@@
-    Tr.ElimData.Codata.pipe ~print:(!print_elim_codata_ || !print_all_) ~check @@@
+      ~print:(!pp_elim_codata_ || !pp_all_) ~check @@@
+    Tr.ElimData.Codata.pipe ~print:(!pp_elim_codata_ || !pp_all_) ~check @@@
     (if !enable_polarize_
-     then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
+     then Tr.Polarize.pipe ~print:(!pp_polarize_ || !pp_all_)
          ~check ~polarize_rec:!polarize_rec_
      else Transform.nop ()) @@@
-    Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+    Tr.Unroll.pipe ~print:(!pp_unroll_ || !pp_all_) ~check @@@
     (* skolemize first, to have proper decoding of model *)
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
-      ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+      ~print:(!pp_skolem_ || !pp_all_) ~mode:`Sk_all ~check @@@
     Tr.ElimIndPreds.pipe ~mode:`Use_match
-      ~print:(!print_elim_preds_ || !print_all_) ~check @@@
+      ~print:(!pp_elim_preds_ || !pp_all_) ~check @@@
     Tr.ElimQuantifiers.pipe
       ~mode:Tr.ElimQuantifiers.([Elim_quant_data; Elim_quant_fun; Elim_eq_fun])
-      ~print:(!print_elim_quant_ || !print_all_) ~check @@@
+      ~print:(!pp_elim_quant_ || !pp_all_) ~check @@@
     (*
-    Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
-    Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
+    Tr.LambdaLift.pipe ~print:(!pp_lambda_lift_ || !pp_all_) ~check @@@
+    Tr.Elim_HOF.pipe ~print:(!pp_elim_hof_ || !pp_all_) ~check @@@
        *)
-    Tr.Lift_undefined.pipe ~print:!print_all_ ~check @@@
-    Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
+    Tr.Lift_undefined.pipe ~print:!pp_all_ ~check @@@
+    Tr.Model_clean.pipe ~print:(!pp_model_ || !pp_all_) @@@
     close_task smbc
   and pipe_cvc4 =
     (if !enable_polarize_
-     then Tr.Polarize.pipe ~print:(!print_polarize_ || !print_all_)
+     then Tr.Polarize.pipe ~print:(!pp_polarize_ || !pp_all_)
          ~check ~polarize_rec:!polarize_rec_
      else Transform.nop ()) @@@
-    Tr.Unroll.pipe ~print:(!print_unroll_ || !print_all_) ~check @@@
+    Tr.Unroll.pipe ~print:(!pp_unroll_ || !pp_all_) ~check @@@
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
-      ~print:(!print_skolem_ || !print_all_) ~mode:`Sk_all ~check @@@
+      ~print:(!pp_skolem_ || !pp_all_) ~mode:`Sk_all ~check @@@
     Tr.ElimIndPreds.pipe
       ~mode:`Use_selectors
-      ~print:(!print_elim_preds_ || !print_all_) ~check @@@
-    Tr.LambdaLift.pipe ~print:(!print_lambda_lift_ || !print_all_) ~check @@@
-    Tr.Elim_HOF.pipe ~print:(!print_elim_hof_ || !print_all_) ~check @@@
-    Tr.ElimRecursion.pipe ~print:(!print_elim_recursion_ || !print_all_) ~check @@@
-    Tr.IntroGuards.pipe ~print:(!print_intro_guards_ || !print_all_) ~check @@@
-    Tr.Model_clean.pipe ~print:(!print_model_ || !print_all_) @@@
+      ~print:(!pp_elim_preds_ || !pp_all_) ~check @@@
+    Tr.LambdaLift.pipe ~print:(!pp_lambda_lift_ || !pp_all_) ~check @@@
+    Tr.Elim_HOF.pipe ~print:(!pp_elim_hof_ || !pp_all_) ~check @@@
+    Tr.ElimRecursion.pipe ~print:(!pp_elim_recursion_ || !pp_all_) ~check @@@
+    Tr.IntroGuards.pipe ~print:(!pp_intro_guards_ || !pp_all_) ~check @@@
+    Tr.Model_clean.pipe ~print:(!pp_model_ || !pp_all_) @@@
     close_task (
-      Step_tofo.pipe ~print:!print_all_ () @@@
+      Step_tofo.pipe ~print:!pp_all_ () @@@
       Transform.Pipe.flatten cvc4
     )
   in
@@ -482,7 +482,7 @@ let make_model_pipeline () =
          pipe_smbc
          (pipe_mono_common @@
           Tr.ElimPatternMatch.pipe ~mode:Tr.ElimPatternMatch.Elim_both
-            ~print:(!print_elim_match_ || !print_all_) ~check @@@
+            ~print:(!pp_elim_match_ || !pp_all_) ~check @@@
           fork
             (pipe_common_paradox_kodkod (fork pipe_paradox pipe_kodkod))
             pipe_cvc4))
@@ -552,7 +552,7 @@ let main_model ~output statements =
   (* run pipeline *)
   let pipe = make_model_pipeline() in
   Transform.Pipe.check pipe;
-  assert (not !print_pipeline_);
+  assert (not !pp_pipeline_);
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   run_tasks ~j:!j ~deadline pipe statements
   >|= fun res ->
@@ -562,20 +562,20 @@ let main_model ~output statements =
       Format.printf "@[<hv2>%a@]@." Sexp_lib.pp s
     | Res.Sat (m,i), O_nunchaku when m.Model.potentially_spurious ->
       Format.printf "@[<v>@[<v2>SAT: (potentially spurious) {@,@[<v>%a@]@]@,}@,%a@]@."
-        (Model.print P.print' P.print) m Res.print_info i;
+        (Model.pp P.pp' P.pp) m Res.pp_info i;
     | Res.Sat (m,i), O_nunchaku ->
       Format.printf "@[<v>@[<v2>SAT: {@,@[<v>%a@]@]@,}@,%a@]@."
-        Model.Default.print_standard m Res.print_info i;
+        Model.Default.pp_standard m Res.pp_info i;
     | Res.Sat (m,i), O_tptp ->
       (* XXX: if potentially spurious, what should we print? *)
       let module PM = Nunchaku_parsers.TPTP_print in
-      Format.printf "@[<v2>%a@]@,%% %a@." PM.print_model m Res.print_info i
+      Format.printf "@[<v2>%a@]@,%% %a@." PM.pp_model m Res.pp_info i
     | Res.Unsat i, O_nunchaku ->
-      Format.printf "@[UNSAT@]@.%a@." Res.print_info i
+      Format.printf "@[UNSAT@]@.%a@." Res.pp_info i
     | Res.Unsat i, O_tptp ->
-      Format.printf "@[SZS Status: Unsatisfiable@]@.%% %a@." Res.print_info i
+      Format.printf "@[SZS Status: Unsatisfiable@]@.%% %a@." Res.pp_info i
     | Res.Unknown l, _ ->
-      Format.printf "@[UNKNOWN@]@.(@[<hv>%a@])@." (Utils.pp_list Res.print_unknown_info) l
+      Format.printf "@[UNKNOWN@]@.(@[<hv>%a@])@." (Utils.pp_list Res.pp_unknown_info) l
     | Res.Error (e,_), _ ->
       raise e
 
@@ -584,10 +584,10 @@ let main () =
   let open E.Infix in
   CCFormat.set_color_default true; (* default: enable colors *)
   Arg.parse options set_file "usage: nunchaku [options] file";
-  print_version_if_needed ();
-  if !print_pipeline_ then (
+  pp_version_if_needed ();
+  if !pp_pipeline_ then (
     let pipe = make_model_pipeline() in
-    Format.printf "@[Pipeline: %a@]@." Transform.Pipe.print pipe;
+    Format.printf "@[Pipeline: %a@]@." Transform.Pipe.pp pipe;
     Transform.Pipe.check pipe;
     exit 0
   );
@@ -596,7 +596,7 @@ let main () =
   >>= fun statements ->
   parse_file ~into:statements ~input:!input_ ()
   >>= fun statements ->
-  print_input_if_needed statements;
+  pp_input_if_needed statements;
   main_model ~output:!output_ statements
 
 let () =

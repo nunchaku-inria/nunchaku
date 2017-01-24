@@ -114,7 +114,7 @@ let copy_subset_as_uninterpreted_ty state ~info ~(pred:term) c : (_, _) Stmt.t l
   let ty_c = U.ty_const id_c in
   ID.Tbl.add state.copy_as_uninterpreted id_c ();
   Utils.debugf ~section 3 "@[copy type %a:@ should_be_incomplete=%B@]"
-    (fun k -> k ID.print id_c incomplete);
+    (fun k -> k ID.pp id_c incomplete);
   (* be sure to register approximated types *)
   if incomplete then (
     TyTbl.add state.incomplete_types ty_c ();
@@ -182,7 +182,7 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
   let ty_c = U.ty_const id_c in
   ID.Tbl.add state.copy_as_uninterpreted id_c ();
   Utils.debugf ~section 3 "@[copy type %a:@ should_be_incomplete=%B@]"
-    (fun k -> k ID.print id_c incomplete);
+    (fun k -> k ID.pp id_c incomplete);
   if incomplete then (
     TyTbl.add state.incomplete_types ty_c ();
   );
@@ -338,7 +338,7 @@ let decode_concrete_ st m : term ID.Map.t =
         let c, dt =
           try ID.Map.find id concrete_funs
           with Not_found ->
-            errorf "could not find concretize function for %a in model" ID.print id
+            errorf "could not find concretize function for %a in model" ID.pp id
         in
         List.fold_left
           (fun map dom_id ->
@@ -372,7 +372,7 @@ let decode_model (st:decode_state) m : (_,_) Model.t =
   let map = decode_concrete_ st m in
   Utils.debugf ~section 3
     "@[<2>decode model with map@ @[<hv>%a@]@]"
-    (fun k->k (ID.Map.print ID.print P.print) map);
+    (fun k->k (ID.Map.print ID.pp P.pp) map);
   let tr_term = decode_term map in
   Model.filter_map m
     ~finite_types:(fun (ty,dom) -> match T.repr ty with
@@ -401,7 +401,7 @@ let pipe ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module Ppb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after %s@}:@ %a@]@." name Ppb.print)
+      Format.printf "@[<v2>@{<Yellow>after %s@}:@ %a@]@." name Ppb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
         let module C = TypeCheck.Make(T) in

@@ -8,7 +8,7 @@ module type ARG = sig
   val equal : t -> t -> bool
   val hash : t -> int
 
-  val print : t CCFormat.printer
+  val pp : t CCFormat.printer
   val section : Utils.Section.t
   val fail : ('a, Format.formatter, unit, 'b) format4 -> 'a
 end

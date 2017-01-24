@@ -42,7 +42,7 @@ let () = Printexc.register_printer
       | Error msg -> Some (Utils.err_sprintf "[SMBC backend] %s" msg)
       | Out_of_scope msg -> Some (Printf.sprintf "problem is out of scope for SMBC: %s" msg)
       | Conversion_error t ->
-        Some (Utils.err_sprintf "problem could not be converted to TIP: %a" P.print t)
+        Some (Utils.err_sprintf "problem could not be converted to TIP: %a" P.pp t)
       | Parse_result_error msg -> Some ("could not parse result: " ^ msg)
       | _ -> None)
 
@@ -98,7 +98,7 @@ let data_select_fun st c i : ID.t =
     | Some id -> id
     | None ->
       Utils.failwithf
-        "cannot find TIP id for data select `select-%a-%d`" ID.print_full c i
+        "cannot find TIP id for data select `select-%a-%d`" ID.pp_full c i
 
 let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
   | TI.Const id -> A.const (id_to_string id)
@@ -142,7 +142,7 @@ let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
   | TI.Bind (Binder.Exists,v,body) ->
     A.exists [conv_typed_var v] (term_to_tip st body)
   | TI.Bind (Binder.TyForall,_,_)
-  | TI.Bind (Binder.Mu,_,_) -> out_of_scopef "cannot convert to TIP µ %a" P.print t
+  | TI.Bind (Binder.Mu,_,_) -> out_of_scopef "cannot convert to TIP µ %a" P.pp t
   | TI.Let (v,t,u) ->
     A.let_ [conv_var v, term_to_tip st t] (term_to_tip st u)
   | TI.Match (u,map,def) ->
@@ -169,7 +169,7 @@ and ty_to_tip(t:term): A.ty = match T.repr t with
     let l = List.map ty_to_tip l in
     begin match T.repr f with
       | TI.Const id -> A.ty_app (id_to_string id) l
-      | _ -> out_of_scopef "cannot convert to TIP ty %a" P.print t
+      | _ -> out_of_scopef "cannot convert to TIP ty %a" P.pp t
     end
   | TI.TyArrow (a,b) -> A.ty_arrow (ty_to_tip a)(ty_to_tip b)
   | TI.TyBuiltin `Prop -> A.ty_bool
@@ -207,7 +207,7 @@ and data_test_fun (st:state) (c:ID.t): ID.t =
     let def = A.fun_def {A.fr_decl=decl; fr_body=body} in
     (* save and declare *)
     Utils.debugf ~section 3 "@[<2>define `is-%a` as@ `@[%a@]`@]"
-      (fun k->k ID.print_full c A.pp_stmt def);
+      (fun k->k ID.pp_full c A.pp_stmt def);
     CCVector.push st.local_statements def;
     ID.Tbl.add st.data_test_tbl c id;
     id
@@ -246,7 +246,7 @@ let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
       let vars, _, _ = U.ty_unfold ty in
       if vars=[]
       then decl_to_tip id ty :: decl_attrs_to_tip state id attrs
-      else out_of_scopef "cannot encode to TIP poly statement %a" PStmt.print st
+      else out_of_scopef "cannot encode to TIP poly statement %a" PStmt.pp st
     | Stmt.Axiom (Stmt.Axiom_std l) ->
       List.map (fun ax -> A.assert_ (term_to_tip state ax)) l
     | Stmt.Axiom (Stmt.Axiom_spec s) ->
@@ -271,7 +271,7 @@ let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
         List.map
           (fun def ->
              if def.Stmt.rec_ty_vars <> [] then (
-               out_of_scopef "polymorphic `@[%a@]`" PStmt.print st;
+               out_of_scopef "polymorphic `@[%a@]`" PStmt.pp st;
              );
              let {Stmt.defined_head=id; defined_ty=ty; _} = def.Stmt.rec_defined in
              let name = id_to_string id in
@@ -299,7 +299,7 @@ let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
     | Stmt.Goal g ->
       let neg_g = term_to_tip state (U.not_ g) in
       [A.assert_not ~ty_vars:[] neg_g]
-    | Stmt.TyDef (`Codata,_) -> out_of_scopef "cannot encode Codata %a" PStmt.print st
+    | Stmt.TyDef (`Codata,_) -> out_of_scopef "cannot encode Codata %a" PStmt.pp st
     | Stmt.TyDef (`Data, l) ->
       (* declare datatypes, along with their selectors *)
       let l =
@@ -336,7 +336,7 @@ let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
   local_statements state @ new_st
 
 (* print a problem as TIP *)
-let print_pb out (pb:problem): unit =
+let pp_pb out (pb:problem): unit =
   let env = Problem.env pb in
   let state = mk_state env in
   Problem.statements pb
@@ -402,7 +402,7 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
       | _ ->
         error_parse_modelf
           "expected `@[%a@]`,@ of type `@[%a@]`,@ to be a datatype"
-          P.print u P.print ty_u
+          P.pp u P.pp ty_u
     in
     (* build match tree *)
     let m, def =
@@ -418,7 +418,7 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
              let c_ty_args = match ID.Map.get c_id (Stmt.data_cstors tydef) with
                | None ->
                  error_parse_modelf "id `%a` should be a constructor of `@[%a@]`"
-                   ID.print c_id P.print ty_u
+                   ID.pp c_id P.pp ty_u
                | Some cstor -> cstor.Stmt.cstor_args
              in
              assert (List.length c_ty_args = List.length vars);
@@ -589,17 +589,17 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
   let fail_ ~vars t =
     error_parse_modelf
       "expected leaf or test against a variable in [@[%a@]],@ got: `@[%a@]`"
-      (CCFormat.list Var.print_full) vars P.print t
+      (CCFormat.list Var.pp_full) vars P.pp t
   in
   (* check that [t] is an equation [v = t'], return [t'] *)
   let get_eqn_exn v t: term =
     let fail() =
       error_parse_modelf
         "expected a test <%a = term>,@ but got `@[%a@]`@]"
-        Var.print_full v P.print t
+        Var.pp_full v P.pp t
     in
     Utils.debugf 5 "get_eqn var=`%a` on: `@[%a@]`"
-      (fun k->k Var.print_full v P.print t);
+      (fun k->k Var.pp_full v P.pp t);
     match T.repr t with
       | TI.Builtin (`Eq (t1, t2)) ->
         begin match T.repr t1, T.repr t2 with
@@ -613,7 +613,7 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
       | TI.Var _ ->
         error_parse_modelf
           "expected a boolean variable among @[%a@],@ but got @[%a@]@]"
-          Var.print_full v P.print t
+          Var.pp_full v P.pp t
       | _ -> fail()
   in
   (* recursive conversion *)
@@ -658,7 +658,7 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
   let dt = conv_body ~vars body in
   Utils.debugf ~section 5
     "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
-    (fun k->k P.print body (Model.DT.print P.print' P.print) dt);
+    (fun k->k P.pp body (Model.DT.pp P.pp' P.pp) dt);
   dt
 
 module A_res = A.Smbc_res
@@ -667,7 +667,7 @@ let convert_model ~env (m:A_res.model): (_,_) Model.t =
   let find_kind (t:term): Model.symbol_kind =
     let fail() =
       Utils.warningf Utils.Warn_model_parsing_error
-        "cannot find symbol_kind for `@[%a@]`" P.print t;
+        "cannot find symbol_kind for `@[%a@]`" P.pp t;
       Model.Symbol_fun
     in
     match T.repr t with
@@ -759,7 +759,7 @@ let solve ~deadline pb =
     (* print problem into a TIP string;
        also serves to check Out_of_scope *)
     try
-      let pb_string = CCFormat.sprintf "@[<v>%a@]@." print_pb pb in
+      let pb_string = CCFormat.sprintf "@[<v>%a@]@." pp_pb pb in
       let fut =
         S.popen cmd
           ~f:(fun (stdin,stdout) ->
@@ -804,12 +804,12 @@ let call_real ~print_model ~prio problem =
     (fun ~deadline () ->
        let res, short = solve ~deadline problem in
        Utils.debugf ~section 2 "@[<2>smbc result:@ %a@]"
-         (fun k->k Res.print_head res);
+         (fun k->k Res.pp_head res);
        begin match res with
          | Res.Sat (m,_) when print_model ->
            let pp_ty oc _ = CCFormat.string oc "$i" in
            Format.printf "@[<2>raw smbc model:@ @[%a@]@]@."
-             (Model.print P.print' pp_ty) m
+             (Model.pp P.pp' pp_ty) m
          | _ -> ()
        end;
        res, short)
@@ -818,7 +818,7 @@ let call_real ~print_model ~prio problem =
 let call ?(print_model=false) ?prio ~print ~dump problem =
   if print then (
     let module P_pb = Problem.Print(P)(P) in
-    Format.printf "@[<v2>SMBC problem:@ %a@]@." P_pb.print problem;
+    Format.printf "@[<v2>SMBC problem:@ %a@]@." P_pb.pp problem;
   );
   begin match dump with
     | None -> call_real ~print_model ~prio problem
@@ -828,7 +828,7 @@ let call ?(print_model=false) ?prio ~print ~dump problem =
       CCIO.with_out file
         (fun oc ->
            let out = Format.formatter_of_out_channel oc in
-           Format.fprintf out "@[<v>; generated by nunchaku@ %a@]@." print_pb problem);
+           Format.fprintf out "@[<v>; generated by nunchaku@ %a@]@." pp_pb problem);
       let i = Res.mk_info ~backend:"smbc" ~time:0. () in
       S.Task.return (Res.Unknown [Res.U_other (i, "--dump")]) S.No_shortcut
   end

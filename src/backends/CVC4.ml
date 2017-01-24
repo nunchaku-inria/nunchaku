@@ -207,130 +207,130 @@ let const_of_ty_nth ~decode gty i =
   CCFormat.sprintf "@[<h>%s_%d@]" (const_of_ty ~decode gty) i
 
 (* print processed problem *)
-let print_problem out (decode, pb) =
+let pp_problem out (decode, pb) =
   (* print ID and remember its name for parsing model afterward *)
-  let rec print_id out id =
+  let rec pp_id out id =
     (* find a unique name for this ID *)
     let name = id_to_name ~decode id in
     CCFormat.string out name
 
   (* print [is-c] for a constructor [c] *)
-  and print_tester out c =
+  and pp_tester out c =
     let name = Printf.sprintf "is-%s" (id_to_name ~decode c) in
     Hashtbl.replace decode.name_to_id name (DataTest c);
     CCFormat.string out name
 
   (* print [select-c-n] to select the n-th argument of [c] *)
-  and print_select out (c,n) =
+  and pp_select out (c,n) =
     let name = Printf.sprintf "_select_%s_%d" (id_to_name ~decode c) n in
     Hashtbl.replace decode.name_to_id name (DataSelect (c,n));
     CCFormat.string out name
 
   (* print type (a monomorphic type) in SMT *)
-  and print_ty out ty = match Ty.view ty with
+  and pp_ty out ty = match Ty.view ty with
     | FO.TyBuiltin b -> pp_builtin_cvc4 out b
-    | FO.TyApp (f, []) -> print_id out f
+    | FO.TyApp (f, []) -> pp_id out f
     | FO.TyApp (f, l) ->
       fpf out "@[(%a@ %a)@]"
-        print_id f (pp_list print_ty) l
+        pp_id f (pp_list pp_ty) l
 
   (* print type in SMT syntax *)
-  and print_ty_decl out ty =
+  and pp_ty_decl out ty =
     let args, ret = ty in
-    fpf out "%a %a" (pp_list ~start:"(" ~stop:")" print_ty) args print_ty ret
+    fpf out "%a %a" (pp_list ~start:"(" ~stop:")" pp_ty) args pp_ty ret
 
-  and print_term out t = match T.view t with
+  and pp_term out t = match T.view t with
     | FO.Builtin b ->
       begin match b with
         | `Int n -> CCFormat.int out n
       end
-    | FO.Var v -> Var.print_full out v
-    | FO.App (f,[]) -> print_id out f
+    | FO.Var v -> Var.pp_full out v
+    | FO.App (f,[]) -> pp_id out f
     | FO.App (f,l) ->
       fpf out "(@[%a@ %a@])"
-        print_id f (pp_list print_term) l
+        pp_id f (pp_list pp_term) l
     | FO.DataTest (c,t) ->
-      fpf out "(@[%a@ %a@])" print_tester c print_term t
+      fpf out "(@[%a@ %a@])" pp_tester c pp_term t
     | FO.DataSelect (c,n,t) ->
-      fpf out "(@[%a@ %a@])" print_select (c,n) print_term t
-    | FO.Undefined t -> print_term out t (* tailcall, probably *)
+      fpf out "(@[%a@ %a@])" pp_select (c,n) pp_term t
+    | FO.Undefined t -> pp_term out t (* tailcall, probably *)
     | FO.Undefined_atom _ -> errorf_ "cannot print `undefined_atom` in SMTlib"
     | FO.Unparsable _ -> errorf_ "cannot print `unparsable` in SMTlib"
     | FO.Fun (v,t) ->
       fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
-        Var.print_full v print_ty (Var.ty v) print_term t
+        Var.pp_full v pp_ty (Var.ty v) pp_term t
     | FO.Let (v,t,u) ->
       fpf out "@[<3>(let@ ((%a %a))@ %a@])"
-        Var.print_full v print_term t print_term u
+        Var.pp_full v pp_term t pp_term u
     | FO.Mu _ -> Utils.not_implemented "cannot send MU-term to CVC4"
     | FO.Ite (a,b,c) ->
       fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
-        print_term a print_term b print_term c
+        pp_term a pp_term b pp_term c
     | FO.True -> CCFormat.string out "true"
     | FO.False -> CCFormat.string out "false"
-    | FO.Eq (a,b) -> fpf out "(@[=@ %a@ %a@])" print_term a print_term b
+    | FO.Eq (a,b) -> fpf out "(@[=@ %a@ %a@])" pp_term a pp_term b
     | FO.And [] -> CCFormat.string out "true"
-    | FO.And [f] -> print_term out f
+    | FO.And [f] -> pp_term out f
     | FO.And l ->
-      fpf out "(@[and@ %a@])" (pp_list print_term) l
+      fpf out "(@[and@ %a@])" (pp_list pp_term) l
     | FO.Or [] -> CCFormat.string out "false"
-    | FO.Or [f] -> print_term out f
+    | FO.Or [f] -> pp_term out f
     | FO.Or l ->
-      fpf out "(@[or@ %a@])" (pp_list print_term) l
+      fpf out "(@[or@ %a@])" (pp_list pp_term) l
     | FO.Not f ->
-      fpf out "(@[not@ %a@])" print_term f
+      fpf out "(@[not@ %a@])" pp_term f
     | FO.Imply (a,b) ->
-      fpf out "(@[=>@ %a@ %a@])" print_term a print_term b
+      fpf out "(@[=>@ %a@ %a@])" pp_term a pp_term b
     | FO.Equiv (a,b) ->
-      fpf out "(@[=@ %a@ %a@])" print_term a print_term b
+      fpf out "(@[=@ %a@ %a@])" pp_term a pp_term b
     | FO.Forall (v,f) ->
       fpf out "(@[<2>forall@ ((%a %a))@ %a@])"
-        Var.print_full v print_ty (Var.ty v) print_term f
+        Var.pp_full v pp_ty (Var.ty v) pp_term f
     | FO.Exists (v,f) ->
       fpf out "(@[<2>exists@ ((%a %a))@ %a@])"
-        Var.print_full v print_ty (Var.ty v) print_term f
+        Var.pp_full v pp_ty (Var.ty v) pp_term f
 
-  and print_statement out = function
+  and pp_statement out = function
     | FO.TyDecl (id,arity,_) ->
-      fpf out "(@[declare-sort@ %a@ %d@])" print_id id arity
+      fpf out "(@[declare-sort@ %a@ %d@])" pp_id id arity
     | FO.Decl (v,ty,_) ->
       fpf out "(@[<2>declare-fun@ %a@ %a@])"
-        print_id v print_ty_decl ty
+        pp_id v pp_ty_decl ty
     | FO.Axiom t ->
-      fpf out "(@[assert@ %a@])" print_term t
+      fpf out "(@[assert@ %a@])" pp_term t
     | FO.Goal t ->
-      fpf out "(@[assert@ %a@])" print_term t
+      fpf out "(@[assert@ %a@])" pp_term t
     | FO.CardBound (ty_id, which, n) ->
       let witness =
         try GTy_map.find (gty_const ty_id) decode.witnesses
         with Not_found ->
-          errorf_ "no witness declared for cardinality bound on %a" ID.print ty_id
+          errorf_ "no witness declared for cardinality bound on %a" ID.pp ty_id
       in
       begin match which with
         | `Max when n < 1 -> fpf out "(assert false)" (* absurd *)
-        | `Max -> fpf out "(@[assert (fmf.card %a %d)@])" print_id witness n
+        | `Max -> fpf out "(@[assert (fmf.card %a %d)@])" pp_id witness n
         | `Min when n <= 1 -> ()  (* obvious *)
-        | `Min -> fpf out "(@[assert (not (fmf.card %a %d))@])" print_id witness (n-1)
+        | `Min -> fpf out "(@[assert (not (fmf.card %a %d))@])" pp_id witness (n-1)
       end
     | FO.MutualTypes (k, l) ->
       let pp_arg out (c,i,ty) =
-        fpf out "(@[<h>%a %a@])" print_select (c,i) print_ty ty in
+        fpf out "(@[<h>%a %a@])" pp_select (c,i) pp_ty ty in
       let pp_cstor out c =
         (* add selectors *)
         let args = List.mapi (fun i ty -> c.FO.cstor_name,i,ty) c.FO.cstor_args in
-        fpf out "(@[<2>%a@ %a@])" print_id c.FO.cstor_name
+        fpf out "(@[<2>%a@ %a@])" pp_id c.FO.cstor_name
           (pp_list pp_arg) args
       in
-      let print_tydef out tydef =
+      let pp_tydef out tydef =
         fpf out "(@[<2>%a@ %a@])"
-          print_id tydef.FO.ty_name
+          pp_id tydef.FO.ty_name
           (pp_list pp_cstor) (ID.Map.to_list tydef.FO.ty_cstors |> List.map snd)
       in
       fpf out "(@[<2>%s@ (@[%a@])@ (@[<hv>%a@])@])"
         (match k with `Data -> "declare-datatypes"
                     | `Codata -> "declare-codatatypes")
-        (pp_list print_id) l.FO.tys_vars
-        (pp_list print_tydef) l.FO.tys_defs
+        (pp_list pp_id) l.FO.tys_vars
+        (pp_list pp_tydef) l.FO.tys_defs
 
   in
   (* send prelude *)
@@ -340,12 +340,12 @@ let print_problem out (decode, pb) =
   fpf out "(set-logic ALL_SUPPORTED)@,"; (* taïaut! *)
   (* write problem *)
   CCVector.print ~start:"" ~stop:"" ~sep:""
-    print_statement out pb.FO.Problem.statements;
+    pp_statement out pb.FO.Problem.statements;
   fpf out "@,(check-sat)@]@.";
   ()
 
 let send_ s problem =
-  fpf s.fmt "%a@." print_problem (s.decode, problem);
+  fpf s.fmt "%a@." pp_problem (s.decode, problem);
   Format.pp_print_flush s.fmt ();
   ()
 
@@ -518,7 +518,7 @@ let parse_fun_ ~decode ~arity:n term =
       | FO.Fun (v, t') ->
         let vars, body = get_args t' (n-1) in
         v :: vars, body
-      | _ -> errorf_ "expected %d-ary function,@ got `@[%a@]`" n FO.print_term t
+      | _ -> errorf_ "expected %d-ary function,@ got `@[%a@]`" n FO.pp_term t
   in
   (* parse term, then convert into [vars -> decision-tree] *)
   let t = parse_term_ ~decode term in
@@ -526,7 +526,7 @@ let parse_fun_ ~decode ~arity:n term =
   (* change the shape of [body] so it looks more like a decision tree *)
   let dt = FO.Util.dt_of_term ~vars body in
   Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
-    (fun k->k FO.print_term body (Model.DT.print FO.print_term' FO.print_ty) dt);
+    (fun k->k FO.pp_term body (Model.DT.pp FO.pp_term' FO.pp_ty) dt);
   dt
 
 let sym_get_const_ ~decode id = match ID.Tbl.find decode.symbols id with
@@ -542,7 +542,7 @@ let sym_get_ty_ ~decode id = match ID.Tbl.find decode.symbols id with
 let get_kind ~decode id =
   try ID.Map.find id decode.kinds
   with Not_found ->
-    errorf_ "could not find kind of %a" ID.print id
+    errorf_ "could not find kind of %a" ID.pp id
 
 (* state: decode_state *)
 let parse_model_ ~decode : Sexp_lib.t -> (_,_) Model.t = function
@@ -774,7 +774,7 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
   (* preprocess first *)
   let decode, problem' = preprocess pb in
   if print
-  then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem (decode, problem');
+  then Format.printf "@[<v2>SMT problem:@ %a@]@." pp_problem (decode, problem');
   (* enough time remaining? *)
   if now +. 0.1 > deadline
   then
@@ -791,7 +791,7 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
         send_ s problem';
         let r = res s in
         Utils.debugf ~lock:true ~section 3 "@[<2>result: %a@]"
-          (fun k->k (Res.print FO.print_term' FO.print_ty) r);
+          (fun k->k (Res.pp FO.pp_term' FO.pp_ty) r);
         close s;
         match r with
           | Res.Sat (_,_) -> r, S.Shortcut
@@ -839,7 +839,7 @@ let call
     problem
   =
   if print then (
-    Format.printf "@[<v2>FO problem:@ %a@]@." FO.print_problem problem;
+    Format.printf "@[<v2>FO problem:@ %a@]@." FO.pp_problem problem;
   );
   begin match dump with
     | None ->
@@ -856,7 +856,7 @@ let call
              let decode, problem' = preprocess problem in
              Format.fprintf out
                "@[<v>; generated by Nunchaku@ %a@]@."
-               print_problem (decode, problem');
+               pp_problem (decode, problem');
              mk_info decode)
       in
       S.Task.return (Res.Unknown [Res.U_other (info, "--dump")]) S.No_shortcut

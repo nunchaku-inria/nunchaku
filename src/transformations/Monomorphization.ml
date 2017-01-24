@@ -39,8 +39,8 @@ let () = Printexc.register_printer
 let fail_ msg = raise (InvalidProblem msg)
 let failf_ msg = Utils.exn_ksprintf msg ~f:fail_
 
-let print_ty = P.print
-let print_term = P.print
+let pp_ty = P.pp
+let pp_term = P.pp
 
 (* A tuple of arguments that a given function symbol should be
    instantiated with *)
@@ -80,13 +80,13 @@ module ArgTuple = struct
     let ty, subst = U.ty_apply_full ty ~terms:arg.m_args ~tys in
     U.eval ~subst ty, subst
 
-  let print out tup =
+  let pp out tup =
     let pp_mangled out = function
       | None -> ()
-      | Some id -> fpf out " as %a" ID.print id
+      | Some id -> fpf out " as %a" ID.pp id
     in
     fpf out "@[%a%a@]"
-      (CCFormat.list ~start:"(" ~stop:")" ~sep:", " print_ty) tup.args
+      (CCFormat.list ~start:"(" ~stop:")" ~sep:", " pp_ty) tup.args
       pp_mangled tup.mangled
 end
 
@@ -118,7 +118,7 @@ module St = struct
       let mangled' = ID.make mangled in
       Utils.debugf ~section 5
         "@[<2>save_mangled %a@ for %a (@[%a@])@]"
-        (fun k->k ID.print mangled' ID.print id (CCFormat.list P.print) tup);
+        (fun k->k ID.pp mangled' ID.pp id (CCFormat.list P.pp) tup);
       Hashtbl.add state.mangle mangled mangled';
       ID.Tbl.replace state.unmangle mangled' (id, tup);
       mangled'
@@ -129,7 +129,7 @@ module Trav = Traversal.Make(T)(struct
     type t = ArgTuple.t
     let equal = ArgTuple.equal
     let hash _ = 0
-    let print = ArgTuple.print
+    let pp = ArgTuple.pp
     let section = section
     let fail = failf_
   end)(St)
@@ -183,7 +183,7 @@ type local_state = {
 
 (* monomorphize term *)
 let rec mono_term ~self ~local_state (t:term) : term =
-  Utils.debugf ~section 5 "@[<2>mono term@ `@[%a@]`@]" (fun k->k P.print t);
+  Utils.debugf ~section 5 "@[<2>mono term@ `@[%a@]`@]" (fun k->k P.pp t);
   match T.repr t with
     | TI.Builtin b ->
       U.builtin (Builtin.map b ~f:(mono_term ~self ~local_state))
@@ -256,7 +256,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
               mono_term ~self ~local_state (U.app t l)
           end
         | _ ->
-          failf_ "@[<2>cannot monomorphize application term@ `@[%a@]`@]" print_term t
+          failf_ "@[<2>cannot monomorphize application term@ `@[%a@]`@]" pp_term t
       in
       U.guard t' guard
     | TI.Bind ((Binder.Fun | Binder.Forall | Binder.Exists | Binder.Mu) as b, v, t) ->
@@ -284,7 +284,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
         (mono_term ~self ~local_state b)
     | TI.TyMeta _ -> assert false
     | TI.Bind (Binder.TyForall,_,_) ->
-      failf_ "@[<2>cannot monomorphize quantified type@ @[%a@]@]" print_ty t
+      failf_ "@[<2>cannot monomorphize quantified type@ @[%a@]@]" pp_ty t
 
 and mono_var ~self ~local_state v : term Var.t =
   Var.update_ty v ~f:(mono_type ~self ~local_state)
@@ -351,7 +351,7 @@ let dispatch = {
   (* specialize mutual recursive definitions *)
   do_def = (fun self ~depth def arg ->
     Utils.debugf ~section 5 "monomorphize def %a on %a"
-      (fun k->k ID.print def.Stmt.rec_defined.Stmt.defined_head ArgTuple.print arg);
+      (fun k->k ID.pp def.Stmt.rec_defined.Stmt.defined_head ArgTuple.pp arg);
     let subst = match_rec ~def arg in
     (* we know [subst case.defined = (id args)], now
             specialize the axioms and other fields *)
@@ -371,7 +371,7 @@ let dispatch = {
 
   do_pred = (fun self ~depth _ _ def arg ->
     Utils.debugf ~section 5 "monomorphize pred %a on %a"
-      (fun k->k ID.print def.Stmt.pred_defined.Stmt.defined_head ArgTuple.print arg);
+      (fun k->k ID.pp def.Stmt.pred_defined.Stmt.defined_head ArgTuple.pp arg);
     let subst = match_pred ~def arg in
     (* we know [subst case.defined = (id args)], now
             specialize the axioms and other fields *)
@@ -399,7 +399,7 @@ let dispatch = {
   do_spec =
     Some (fun self ~depth ~loc:_ id spec tup ->
       Utils.debugf ~section 5 "monomorphize spec for %a on %a"
-        (fun k->k ID.print id ArgTuple.print tup);
+        (fun k->k ID.pp id ArgTuple.pp tup);
       assert (ArgTuple.length tup = List.length spec.Stmt.spec_ty_vars);
       let st = Trav.state self in
       (* flag every symbol as specialized. We can use [tup] for every
@@ -414,7 +414,7 @@ let dispatch = {
                ~args:(ArgTuple.args tup)
                ~m_args:(ArgTuple.m_args tup) in
            Utils.debugf ~section 4 "@[<2>specialization of `@[<2>%a@ %a@]` is done@]"
-             (fun k -> k ID.print id' ArgTuple.print tup');
+             (fun k -> k ID.pp id' ArgTuple.pp tup');
            Trav.mark_processed self id' tup';
         )
         spec.Stmt.spec_defined;
@@ -438,7 +438,7 @@ let dispatch = {
         mangle_ ~state:st tydef.Stmt.ty_id (ArgTuple.m_args tup) in
       let tup = {tup with ArgTuple.mangled; } in
       Utils.debugf ~section 5 "monomorphize data %a on %a"
-        (fun k->k ID.print tydef.Stmt.ty_id ArgTuple.print tup);
+        (fun k->k ID.pp tydef.Stmt.ty_id ArgTuple.pp tup);
       let ty = U.ty_type in
       (* specialize each constructor *)
       let cstors = ID.Map.fold
@@ -449,7 +449,7 @@ let dispatch = {
              (* apply, then convert type. Arity should match. *)
              let ty', subst = ArgTuple.app_poly_ty c.Stmt.cstor_type tup' in
              Utils.debugf ~section 5 "@[<hv2>monomorphize cstor `@[%a@ : %a@]`@ with @[%a@]@]"
-               (fun k->k ID.print id' P.print ty' (Subst.print P.print) subst);
+               (fun k->k ID.pp id' P.pp ty' (Subst.pp P.pp) subst);
              (* convert type and substitute in it *)
              let local_state = mk_local_state ~subst (depth+1) in
              let ty' = mono_term ~self ~local_state ty' in
@@ -473,7 +473,7 @@ let dispatch = {
       let st = Trav.state self in
       Utils.debugf ~section 3
         "@[<2>monomorphize copy type@ `@[%a@]`@ on (%a)@ at depth %d@]"
-        (fun k->k PStmt.print_copy c ArgTuple.print tup depth);
+        (fun k->k PStmt.pp_copy c ArgTuple.pp tup depth);
       (* ensure we do not encode this several times, from type/abstract/concrete *)
       Trav.mark_processed self c.Stmt.copy_id tup;
       Trav.mark_processed self c.Stmt.copy_abstract tup;
@@ -516,7 +516,7 @@ let dispatch = {
   do_ty_def = Some (fun self ?loc:_ d tup ->
       let id = Stmt.id_of_defined d in
       Utils.debugf ~section 5 "declare type for %a on %a"
-        (fun k->k ID.print id ArgTuple.print tup);
+        (fun k->k ID.pp id ArgTuple.pp tup);
       (* declare specialized type *)
       let new_id = match ArgTuple.mangled tup with
         | None -> id
@@ -530,18 +530,18 @@ let dispatch = {
 }
 
 (* TODO: gather by ID first *)
-let print_processed_ out trav =
+let pp_processed_ out trav =
   Trav.processed trav
   |> Format.fprintf out "@[<v>%a@]"
     (CCFormat.seq ~start:"" ~stop:"" ~sep:""
        (fun out (id,tup) ->
-          Format.fprintf out "@[<h>%a (%a)@]" ID.print id ArgTuple.print tup))
+          Format.fprintf out "@[<h>%a (%a)@]" ID.pp id ArgTuple.pp tup))
 
 let mono_statement t st =
   begin match Stmt.view st with
     | Stmt.Goal t ->
       if term_has_ty_vars t
-      then failf_ "goal `@[%a@]` contains type variables" P.print t
+      then failf_ "goal `@[%a@]` contains type variables" P.pp t
     | _ -> ()
   end;
   Trav.traverse_stmt t st
@@ -569,7 +569,7 @@ let monomorphize ?(depth_limit=256) ?(always_mangle=false) pb =
   let pb' = Problem.make ~meta res in
   (* some debug *)
   Utils.debugf ~section 3 "@[<2>instances:@ @[%a@]@]"
-    (fun k-> k print_processed_ traverse);
+    (fun k-> k pp_processed_ traverse);
   pb', state.St.unmangle
 
 (** {6 Decoding} *)
@@ -608,7 +608,7 @@ let pipe_with ~decode ~always_mangle ~print ~check =
     Utils.singleton_if print ()
       ~f:(fun () ->
         let module PPb = Problem.Print(P)(P) in
-        Format.printf "@[<v2>@{<Yellow>after mono@}: %a@]@." PPb.print)
+        Format.printf "@[<v2>@{<Yellow>after mono@}: %a@]@." PPb.pp)
     @
       Utils.singleton_if check ()
         ~f:(fun () ->

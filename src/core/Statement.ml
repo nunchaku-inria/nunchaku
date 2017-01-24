@@ -516,158 +516,158 @@ let pplist_prefix ~first ~pre pp out l =
        pp out x)
     l
 
-let print_attr out = function
+let pp_attr out = function
   | Attr_card_max i -> fpf out "max_card %d" i
   | Attr_card_min i -> fpf out "min_card %d" i
-  | Attr_card_hint c -> fpf out "card_hint %a" Cardinality.print c
+  | Attr_card_hint c -> fpf out "card_hint %a" Cardinality.pp c
   | Attr_incomplete -> CCFormat.string out "incomplete"
   | Attr_abstract -> CCFormat.string out "abstract"
   | Attr_infinite -> CCFormat.string out "infinite"
-  | Attr_finite_approx id -> fpf out "approx_of %a" ID.print id
+  | Attr_finite_approx id -> fpf out "approx_of %a" ID.pp id
   | Attr_infinite_upcast -> CCFormat.string out "upcast"
   | Attr_pseudo_prop -> CCFormat.string out "pseudo_prop"
   | Attr_pseudo_true -> CCFormat.string out "pseudo_true"
   | Attr_app_val -> CCFormat.string out "app_symbol"
   | Attr_is_handle_cstor -> CCFormat.string out "handle_type"
-  | Attr_proto_val (id, n) -> fpf out "proto_%d_of_%a" n ID.print id
+  | Attr_proto_val (id, n) -> fpf out "proto_%d_of_%a" n ID.pp id
   | Attr_never_box -> CCFormat.string out "never_box"
 
-let print_attrs out = function
+let pp_attrs out = function
   | [] -> ()
-  | l -> fpf out "@ [@[%a@]]" (pplist ~sep:"," print_attr) l
+  | l -> fpf out "@ [@[%a@]]" (pplist ~sep:"," pp_attr) l
 
 module type PRINT_TERM = sig
   type t
-  val print : t CCFormat.printer
-  val print' : Precedence.t -> t CCFormat.printer
+  val pp : t CCFormat.printer
+  val pp' : Precedence.t -> t CCFormat.printer
 end
 
 module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
   let pp_defined out d =
     fpf out "@[%a : %a%a@]"
-      ID.print d.defined_head Pty.print d.defined_ty print_attrs d.defined_attrs
+      ID.pp d.defined_head Pty.pp d.defined_ty pp_attrs d.defined_attrs
   and pp_typed_var out v =
-    fpf out "@[<2>%a:%a@]" Var.print_full v (Pty.print' Precedence.App) (Var.ty v)
+    fpf out "@[<2>%a:%a@]" Var.pp_full v (Pty.pp' Precedence.App) (Var.ty v)
 
   let pp_defined_list out =
     fpf out "@[<v>%a@]" (pplist_prefix ~first:"" ~pre:" and " pp_defined)
 
-  let print_eqns id out (e:(_,_) equations) =
+  let pp_eqns id out (e:(_,_) equations) =
     let pp_sides out l =
       if l=[] then ()
       else fpf out "@[<hv2>%a => @]@,"
-          (pplist ~sep:" && " (Pt.print' Precedence.App)) l
+          (pplist ~sep:" && " (Pt.pp' Precedence.App)) l
     in
     match e with
       | Eqn_app (_, vars, lhs, rhs) ->
         if vars=[]
-        then fpf out "@[<hv2>%a =@ %a@]" Pt.print lhs Pt.print rhs
+        then fpf out "@[<hv2>%a =@ %a@]" Pt.pp lhs Pt.pp rhs
         else fpf out "@[<hv2>forall @[<h>%a@].@ @[%a =@ %a@]@]"
-            (pplist ~sep:" " pp_typed_var) vars Pt.print lhs Pt.print rhs
+            (pplist ~sep:" " pp_typed_var) vars Pt.pp lhs Pt.pp rhs
       | Eqn_nested l ->
         pplist ~sep:";"
           (fun out  (vars,args,rhs,side) ->
              if vars=[]
              then fpf out "@[<hv>%a@[<2>%a@ %a@] =@ %a@]"
-                 pp_sides side ID.print id
-                 (pplist ~sep:" " (Pt.print' Precedence.App)) args Pt.print rhs
+                 pp_sides side ID.pp id
+                 (pplist ~sep:" " (Pt.pp' Precedence.App)) args Pt.pp rhs
              else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
-                 (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.print id
-                 (pplist ~sep:" " (Pt.print' Precedence.App)) args Pt.print rhs
+                 (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.pp id
+                 (pplist ~sep:" " (Pt.pp' Precedence.App)) args Pt.pp rhs
           ) out l
       | Eqn_single (vars,rhs) ->
-        fpf out "@[<2>%a %a =@ %a@]" ID.print id
-          (pplist ~sep:" " pp_typed_var) vars Pt.print rhs
+        fpf out "@[<2>%a %a =@ %a@]" ID.pp id
+          (pplist ~sep:" " pp_typed_var) vars Pt.pp rhs
 
-  let print_rec_def out d =
+  let pp_rec_def out d =
     fpf out "@[<hv2>%a :=@ %a@]"
       pp_defined d.rec_defined
-      (print_eqns d.rec_defined.defined_head) d.rec_eqns
+      (pp_eqns d.rec_defined.defined_head) d.rec_eqns
 
-  let print_rec_defs out l =
+  let pp_rec_defs out l =
     fpf out "@[<v>rec %a.@]"
-      (pplist_prefix ~first:"" ~pre:"and " print_rec_def) l
+      (pplist_prefix ~first:"" ~pre:"and " pp_rec_def) l
 
-  let print_spec_defs out d =
-    let printerms = pplist ~sep:";" Pt.print in
+  let pp_spec_defs out d =
+    let printerms = pplist ~sep:";" Pt.pp in
     fpf out "@[<hv2>spec %a :=@ %a.@]"
       pp_defined_list d.spec_defined printerms d.spec_axioms
 
-  let print_clause out (c:(_,_) pred_clause) =
+  let pp_clause out (c:(_,_) pred_clause) =
     match c.clause_vars, c.clause_guard with
-      | [], None -> Pt.print out c.clause_concl
+      | [], None -> Pt.pp out c.clause_concl
       | [], Some g ->
-        fpf out "@[<2>@[%a@]@ => @[%a@]@]" Pt.print g Pt.print c.clause_concl
+        fpf out "@[<2>@[%a@]@ => @[%a@]@]" Pt.pp g Pt.pp c.clause_concl
       | _::_ as vars, None ->
         fpf out "@[<2>forall %a.@ @[%a@]@]"
-          (pplist ~sep:" " Var.print_full) vars Pt.print c.clause_concl
+          (pplist ~sep:" " Var.pp_full) vars Pt.pp c.clause_concl
       | _::_ as vars, Some g ->
         fpf out "@[<2>forall %a.@ @[%a@] =>@ @[%a@]@]"
-          (pplist ~sep:" " Var.print_full) vars Pt.print g Pt.print c.clause_concl
+          (pplist ~sep:" " Var.pp_full) vars Pt.pp g Pt.pp c.clause_concl
 
-  let print_clauses out l =
-    fpf out "@[<v>%a@]" (pplist ~sep:"; " print_clause) l
+  let pp_clauses out l =
+    fpf out "@[<v>%a@]" (pplist ~sep:"; " pp_clause) l
 
-  let print_pred_def out pred =
+  let pp_pred_def out pred =
     fpf out "@[<hv2>@[%a@] :=@ %a@]"
       pp_defined pred.pred_defined
-      print_clauses pred.pred_clauses
+      pp_clauses pred.pred_clauses
 
-  let print_pred_defs out preds = pplist ~sep:" and " print_pred_def out preds
+  let pp_pred_defs out preds = pplist ~sep:" and " pp_pred_def out preds
 
-  let print_copy out c =
+  let pp_copy out c =
     let pp_wrt out = function
       | Wrt_nothing -> ()
-      | Wrt_subset p -> fpf out "@,@[<2>subset@ @[%a@]@]" Pt.print p
-      | Wrt_quotient (`Total, r) -> fpf out "@,@[<2>quotient@ @[%a@]@]" Pt.print r
-      | Wrt_quotient (`Partial, r) -> fpf out "@,@[<2>partial_quotient@ @[%a@]@]" Pt.print r
+      | Wrt_subset p -> fpf out "@,@[<2>subset@ @[%a@]@]" Pt.pp p
+      | Wrt_quotient (`Total, r) -> fpf out "@,@[<2>quotient@ @[%a@]@]" Pt.pp r
+      | Wrt_quotient (`Partial, r) -> fpf out "@,@[<2>partial_quotient@ @[%a@]@]" Pt.pp r
     in
     fpf out
       "@[<v2>copy @[<4>%a %a :=@ @[%a@]@]@ %a\
        @[abstract %a : @[%a@]@]@ \
        @[concrete %a : @[%a@]@]@]"
-      ID.print c.copy_id
-      (CCFormat.list ~start:"" ~stop:"" ~sep:" " Var.print_full) c.copy_vars
-      Pty.print c.copy_of
+      ID.pp c.copy_id
+      (CCFormat.list ~start:"" ~stop:"" ~sep:" " Var.pp_full) c.copy_vars
+      Pty.pp c.copy_of
       pp_wrt c.copy_wrt
-      ID.print c.copy_abstract Pty.print c.copy_abstract_ty
-      ID.print c.copy_concrete Pty.print c.copy_concrete_ty
+      ID.pp c.copy_abstract Pty.pp c.copy_abstract_ty
+      ID.pp c.copy_concrete Pty.pp c.copy_concrete_ty
 
-  let print_data_type out tydef =
+  let pp_data_type out tydef =
     let ppcstors out c =
       fpf out "@[<hv2>%a %a@]"
-        ID.print c.cstor_name (pplist ~sep:" " (Pty.print' Precedence.App)) c.cstor_args in
+        ID.pp c.cstor_name (pplist ~sep:" " (Pty.pp' Precedence.App)) c.cstor_args in
     fpf out "@[<hv2>@[%a %a@] :=@ @[<hv>%a@]@]"
-      ID.print tydef.ty_id
-      (pplist ~sep:" " Var.print_full) tydef.ty_vars
+      ID.pp tydef.ty_id
+      (pplist ~sep:" " Var.pp_full) tydef.ty_vars
       (pplist_prefix ~first:" | " ~pre:" | " ppcstors)
       (ID.Map.to_list tydef.ty_cstors |> List.map snd)
 
-  let print_data_types out (k,l) =
+  let pp_data_types out (k,l) =
     fpf out "@[<hv2>%s@ "
       (match k with `Data -> "data" | `Codata -> "codata");
     List.iteri
       (fun i tydef ->
          if i>0 then fpf out "@,and ";
-         print_data_type out tydef)
+         pp_data_type out tydef)
       l;
     fpf out ".@]"
 
-  let print out t = match t.view with
+  let pp out t = match t.view with
     | Decl d ->
       fpf out "@[<2>val %a.@]" pp_defined d
     | Axiom a ->
       begin match a with
         | Axiom_std l ->
-          fpf out "@[<hv2>axiom@ %a.@]" (pplist ~sep:"; " Pt.print) l
-        | Axiom_spec t -> print_spec_defs out t
-        | Axiom_rec t -> print_rec_defs out t
+          fpf out "@[<hv2>axiom@ %a.@]" (pplist ~sep:"; " Pt.pp) l
+        | Axiom_spec t -> pp_spec_defs out t
+        | Axiom_rec t -> pp_rec_defs out t
       end
     | Pred (wf, k, l) ->
       let pp_wf out = function `Wf -> fpf out "[wf]" | `Not_wf -> () in
       let pp_k out = function `Pred -> fpf out "pred" | `Copred -> fpf out "copred" in
-      fpf out "@[<hv>%a%a %a.@]" pp_k k pp_wf wf print_pred_defs l
-    | TyDef (k, l) -> print_data_types out (k,l)
-    | Copy c -> fpf out "@[<2>%a.@]" print_copy c
-    | Goal t -> fpf out "@[<2>goal %a.@]" Pt.print t
+      fpf out "@[<hv>%a%a %a.@]" pp_k k pp_wf wf pp_pred_defs l
+    | TyDef (k, l) -> pp_data_types out (k,l)
+    | Copy c -> fpf out "@[<2>%a.@]" pp_copy c
+    | Goal t -> fpf out "@[<2>goal %a.@]" Pt.pp t
 end

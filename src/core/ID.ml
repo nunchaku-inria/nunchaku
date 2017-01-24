@@ -69,7 +69,7 @@ let hash_fun v h = CCHash.int v.id h
 let hash v = v.id land max_int (* >= 0 *)
 
 (*
-let print_normal out v =
+let pp_normal out v =
   let suffix = if is_distinct v then "!" else "" in
   if needs_at v
   then Format.fprintf out "@@%s%s%s" v.name (Polarity.to_string v.pol) suffix
@@ -77,7 +77,7 @@ let print_normal out v =
 
 *)
 
-let print_normal out v =
+let pp_normal out v =
   if needs_at v
   then Format.fprintf out "@@%s%s" v.name (Polarity.to_string v.pol)
   else Format.fprintf out "%s%s" v.name (Polarity.to_string v.pol)
@@ -95,14 +95,14 @@ let to_string_slug v =
   in
   v.name ^ suffix
 
-let print_full out v =
+let pp_full out v =
   if needs_at v
   then Format.fprintf out "@@%s%s/%d" v.name (Polarity.to_string v.pol) v.id
   else Format.fprintf out "%s%s/%d" v.name (Polarity.to_string v.pol) v.id
 
-let to_string_full = CCFormat.to_string print_full
+let to_string_full = CCFormat.to_string pp_full
 
-let print_name out v = CCFormat.string out v.name
+let pp_name out v = CCFormat.string out v.name
 
 (* debug mode: always print ID unique counters *)
 let always_print_full_ = ref false
@@ -112,8 +112,8 @@ let () =
     [ ("--pp-id", Arg.Set always_print_full_, " always print IDs numbers");
     ]
 
-let print out v =
-  if !always_print_full_ then print_full out v else print_normal out v
+let pp out v =
+  if !always_print_full_ then pp_full out v else pp_normal out v
 
 let to_string v =
   if !always_print_full_ then to_string_full v else to_string_normal v
@@ -162,7 +162,7 @@ module Erase = struct
     try Tbl.find state.id_to_name id
     with Not_found ->
       let name =
-        CCFormat.to_string print_name id
+        CCFormat.to_string pp_name id
         |> encode id
         |> find_unique_name_ state
       in

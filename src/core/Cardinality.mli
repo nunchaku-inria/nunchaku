@@ -49,4 +49,4 @@ val quasi_finite_nonzero : t (** ≥ 1 *)
 
 include Intf.EQ with type t := t
 include Intf.HASH with type t := t
-val print : t CCFormat.printer
+val pp : t CCFormat.printer

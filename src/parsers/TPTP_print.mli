@@ -13,8 +13,8 @@ type form = term
 type ty = term
 type model = (term, ty) Model.t
 
-val print_term : term printer
+val pp_term : term printer
 
-val print_form : form printer
+val pp_form : form printer
 
-val print_model : model printer
+val pp_model : model printer

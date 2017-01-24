@@ -55,7 +55,7 @@ let declare_sym_default ~state ~ctx s arity =
       A.ty_arrow_list args ty_prop
   in
   Utils.debugf ~section 1 "declare `%s` with (default) type `%a`"
-    (fun k-> k s A.print_term ty);
+    (fun k-> k s A.pp_term ty);
   (* declare [s : ty] *)
   StrTbl.replace state.declared s ();
   CCVector.push state.into (A.decl ~attrs:[] s ty);
@@ -285,7 +285,7 @@ let preprocess seq =
   let ho_parses_ok = parses_ok TPTP_lexer.ho_form_of_string
   let fo_parses_ok = parses_ok TPTP_lexer.ho_form_of_string
 
-  let term_to_string = CCFormat.to_string A.print_term
+  let term_to_string = CCFormat.to_string A.pp_term
   let term_eq t1 t2 = (term_to_string t1) = (term_to_string t2)
 
   let pho = TPTP_lexer.ho_form_of_string_exn

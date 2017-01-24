@@ -27,7 +27,7 @@ let rec flatten_ty out t = match T.repr t with
     fpf out "%a_%a"
       flatten_ty f
       CCFormat.(list ~start:"" ~stop:"" ~sep:"_" flatten_ty) l
-  | TI.Const id -> ID.print_name out id
+  | TI.Const id -> ID.pp_name out id
   | TI.TyBuiltin b -> CCFormat.string out (TI.TyBuiltin.to_string b)
   | _ -> ()
 
@@ -51,7 +51,7 @@ let renaming_rules_of_model_ m =
 type rules = ID.t ID.Map.t
 
 let pp_rule_ out (l,r) =
-  fpf out "%a → @[%a@]" ID.print l ID.print r
+  fpf out "%a → @[%a@]" ID.pp l ID.pp r
 
 let rename_ i v =
   let name = Format.sprintf "v_%d" i in
@@ -134,7 +134,7 @@ let remove_recursion m : (_,_) Model.t =
             | Some dt ->
               let dt' = M.DT_util.apply_l dt l in
               Utils.debugf ~section 5 "@[<2>eval `@[%a@]`@ into `@[%a@]`@]"
-                (fun k->k P.print t M.DT_util.print dt');
+                (fun k->k P.pp t M.DT_util.pp dt');
               (* if there remain arguments, consider the [dt] as a function
                  anyway *)
               eval_t (M.DT_util.to_term dt')
@@ -186,5 +186,5 @@ let pipe ~print:must_print =
        if must_print then (
          let module P = TI.Print(T) in
          Format.printf "@[<v2>@{<Yellow>after model %s@}:@ %a@]@."
-           name (Problem.Res.print P.print' P.print) res');
+           name (Problem.Res.pp P.pp' P.pp) res');
        res')

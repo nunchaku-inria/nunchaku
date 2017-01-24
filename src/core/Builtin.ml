@@ -63,21 +63,21 @@ let prec : _ t -> Precedence.t = function
   | `Undefined_self _ -> P.App
   | _ -> P.Top
 
-let rec print_infix_list pterm s out l = match l with
+let rec pp_infix_list pterm s out l = match l with
   | [] -> assert false
   | [t] -> pterm out t
   | t :: l' ->
     fpf out "@[%a@]@ %s %a"
-      pterm t s (print_infix_list pterm s) l'
+      pterm t s (pp_infix_list pterm s) l'
 
 let pp pterm out : _ t -> unit = function
   | `True -> CCFormat.string out "true"
   | `False -> CCFormat.string out "false"
   | `Not x -> fpf out "@[<2>~@ %a@]" pterm x
   | `Or l ->
-    fpf out "@[<hv>%a@]" (print_infix_list pterm "||") l
+    fpf out "@[<hv>%a@]" (pp_infix_list pterm "||") l
   | `And l ->
-    fpf out "@[<hv>%a@]" (print_infix_list pterm "&&") l
+    fpf out "@[<hv>%a@]" (pp_infix_list pterm "&&") l
   | `Imply (a,b) -> fpf out "@[@[%a@]@ @[<2>=>@ @[%a@]@]@]" pterm a pterm b
   | `Eq (a,b) ->
     fpf out "@[<hv>%a@ @[<hv>=@ %a@]@]" pterm a pterm b

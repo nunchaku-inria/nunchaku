@@ -39,7 +39,7 @@ include Intf.PRINT with type t := t
 
 val to_string : t -> string
 
-val print_opt : Format.formatter -> t option -> unit
+val pp_opt : Format.formatter -> t option -> unit
 
 val to_string_opt : t option -> string
 

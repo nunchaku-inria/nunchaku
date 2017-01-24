@@ -41,7 +41,7 @@ val rebind : var:'a t -> 'a -> unit
 val update : f:('a -> 'b) -> 'a t -> 'b t
 (** Update the linked content, if any *)
 
-val print : Format.formatter -> _ t -> unit
+val pp : Format.formatter -> _ t -> unit
 val to_string : _ t -> string
 
 

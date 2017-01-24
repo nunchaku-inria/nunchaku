@@ -45,20 +45,20 @@ type form = T.t
 type ty = T.t
 type model = (term, ty) Model.t
 
-let print_builtin print_inner out : term Builtin.t -> unit = function
+let pp_builtin pp_inner out : term Builtin.t -> unit = function
   | `True -> CCFormat.string out "$true"
   | `False -> CCFormat.string out "$false"
   | `Eq (a,b) ->
-    fpf out "@[<hv>%a =@ %a@]" print_inner a print_inner b
-  | `Undefined_atom _ -> error_ "cannot print undefined atom"
-  | `Undefined_self t -> print_inner out t
-  | `Not f -> fpf out "~ %a" print_inner f
+    fpf out "@[<hv>%a =@ %a@]" pp_inner a pp_inner b
+  | `Undefined_atom _ -> error_ "cannot pp undefined atom"
+  | `Undefined_self t -> pp_inner out t
+  | `Not f -> fpf out "~ %a" pp_inner f
   | `And l ->
-    fpf out "@[<hv>%a@]" (pp_list ~sep:" & " print_inner) l
+    fpf out "@[<hv>%a@]" (pp_list ~sep:" & " pp_inner) l
   | `Or l ->
-    fpf out "@[<hv>%a@]" (pp_list ~sep:" | " print_inner) l
+    fpf out "@[<hv>%a@]" (pp_list ~sep:" | " pp_inner) l
   | `Imply (a,b) ->
-    fpf out "@[<hv>%a =>@ %a@]" print_inner a print_inner b
+    fpf out "@[<hv>%a =>@ %a@]" pp_inner a pp_inner b
   | `DataTest _
   | `DataSelect _
   | `Guard _
@@ -70,27 +70,27 @@ let erase_state = ID.Erase.create_state()
 
 let id_to_name id = ID.Erase.to_name erase_state id
 
-let print_var out v = CCFormat.string out (Var.id v |> id_to_name)
+let pp_var out v = CCFormat.string out (Var.id v |> id_to_name)
 
-let rec print_term out t = match T.repr t with
-  | TI.Var v -> print_var out v
+let rec pp_term out t = match T.repr t with
+  | TI.Var v -> pp_var out v
   | TI.Bind (Binder.Fun,v,t) ->
-    fpf out "@[<2>^[%a]:@ %a@]" print_typed_var v print_inner t
+    fpf out "@[<2>^[%a]:@ %a@]" pp_typed_var v pp_inner t
   | TI.Bind (Binder.Mu,_,_) -> Utils.not_implemented "print mu in TPTP"
   | TI.Let _ -> Utils.not_implemented "print let in TPTP"
   | TI.Match _ -> Utils.not_implemented "print match in TPTP"
   | TI.Builtin (`Unparsable _) -> error_ "cannot print `unparsable` in TPTP"
   | TI.Builtin (`Ite (a,b,c)) ->
     fpf out "$ite_t(@[<hv>%a,@ %a,@ %a@])"
-      print_term a print_term b print_term c
+      pp_term a pp_term b pp_term c
   | TI.Bind (Binder.Forall, v,t) ->
-    fpf out "@[<2>![%a]:@ %a@]" print_typed_var v print_inner t
+    fpf out "@[<2>![%a]:@ %a@]" pp_typed_var v pp_inner t
   | TI.Bind (Binder.Exists, v,t) ->
-    fpf out "@[<2>?[%a]:@ %a@]" print_typed_var v print_inner t
+    fpf out "@[<2>?[%a]:@ %a@]" pp_typed_var v pp_inner t
   | TI.TyArrow (a,b) ->
-    fpf out "@[<2>%a >@ %a@]" print_inner a print_ty b
+    fpf out "@[<2>%a >@ %a@]" pp_inner a pp_ty b
   | TI.Bind (Binder.TyForall, v,t) ->
-    fpf out "@[<2>!>[%a]:@ %a@]" print_var v print_inner t
+    fpf out "@[<2>!>[%a]:@ %a@]" pp_var v pp_inner t
   | TI.Const c -> CCFormat.string out (id_to_name c)
   | TI.App (_, []) -> assert false
   | TI.App (f, l) ->
@@ -98,36 +98,36 @@ let rec print_term out t = match T.repr t with
       | TI.Const _
       | TI.Var _ ->
         fpf out "@[<2>%a(%a)@]"
-          print_inner f (pp_list ~sep:", " print_term) l
+          pp_inner f (pp_list ~sep:", " pp_term) l
       | TI.Builtin _ -> assert false
       | _ ->
         Utils.not_implementedf
           "@[<2>print_model:@ could not apply `@[%a@]`@ to arguments [@[%a@]]@]"
-          print_term f (pp_list ~sep:","P.print) l
+          pp_term f (pp_list ~sep:","P.pp) l
     end
   | TI.TyMeta _ -> assert false
-  | TI.Builtin b -> print_builtin print_inner out b
+  | TI.Builtin b -> pp_builtin pp_inner out b
   | TI.TyBuiltin `Type -> CCFormat.string out "$tType"
   | TI.TyBuiltin `Kind -> error_ "cannot print `kind` in TPTP"
   | TI.TyBuiltin `Unitype -> CCFormat.string out "$i"
   | TI.TyBuiltin `Prop -> CCFormat.string out "$o"
 
-and print_ty out t = print_term out t
-and print_form out t = print_term out t
+and pp_ty out t = pp_term out t
+and pp_form out t = pp_term out t
 
-and print_inner out t = match T.repr t with
+and pp_inner out t = match T.repr t with
   | TI.Var _
   | TI.TyMeta _
   | TI.TyBuiltin _
   | TI.Const _
   | TI.App (_,_)
-  | TI.Let (_,_,_) -> print_term out t
+  | TI.Let (_,_,_) -> pp_term out t
   | TI.Builtin _
   | TI.Bind _
   | TI.Match _
-  | TI.TyArrow (_,_) -> fpf out "(@[<2>%a@])" print_term t
+  | TI.TyArrow (_,_) -> fpf out "(@[<2>%a@])" pp_term t
 
-and print_typed_var out v = fpf out "%a:%a" print_var v print_ty (Var.ty v)
+and pp_typed_var out v = fpf out "%a:%a" pp_var v pp_ty (Var.ty v)
 
 type tptp_statement = {
   role: role;
@@ -156,7 +156,7 @@ let mk_cst id =
 let find_var_ ~state v =
   try ID.Tbl.find state.pre_vars (Var.id v)
   with Not_found ->
-    errorf_ "variable %a should be in scope" Var.print v
+    errorf_ "variable %a should be in scope" Var.pp v
 
 (* preprocess terms:
    - find and replace constants by "distinct" constants.
@@ -184,7 +184,7 @@ let rec preprocess_term ~state t = match T.repr t with
     let v' = find_var_ ~state v in
     U.let_ v' t u
   | TI.Bind (Binder.Mu, _,_) ->
-    errorf_ "cannot represent `@[%a@]`@ in TPTP" P.print t
+    errorf_ "cannot represent `@[%a@]`@ in TPTP" P.pp t
   | TI.Match _ -> Utils.not_implemented "replace in match"
   | TI.Builtin (`Ite (a,b,c)) ->
     let a = preprocess_term ~state a in
@@ -312,7 +312,7 @@ let preprocess_model (m:model) : tptp_model =
   CCVector.freeze res
 
 (* print a model *)
-let print_model out (m:model) =
+let pp_model out (m:model) =
   (* generate new names for TPTP statements *)
   let mk_name =
     let n = ref 0 in
@@ -324,7 +324,7 @@ let print_model out (m:model) =
   (* print a single component of the model *)
   let pp_stmt out {form; role; } =
     let name = mk_name "nun_model" in
-    fpf out "@[<2>fof(%s, %a,@ @[%a@]).@]" name pp_role role print_form form
+    fpf out "@[<2>fof(%s, %a,@ @[%a@]).@]" name pp_role role pp_form form
   in
   let header = "% --------------- begin TPTP model ------------"
   and footer = "% --------------- end TPTP model --------------" in

@@ -27,7 +27,7 @@ module Of_ho(T : TI.S) = struct
   let fail_ t msg =
     failf
       "@[<2>term `@[%a@]` is not in the first-order fragment:@ %s@]"
-      P.print t msg
+      P.pp t msg
 
   let rec conv_ty t = match T.repr t with
     | TI.Var _ -> fail_ t "variable in type"
@@ -128,7 +128,7 @@ module Of_ho(T : TI.S) = struct
 
   let conv_form ~env f =
     Utils.debugf 3 ~section
-      "@[<2>convert to FO the formula@ `@[%a@]`@]" (fun k -> k P.print f);
+      "@[<2>convert to FO the formula@ `@[%a@]`@]" (fun k -> k P.pp f);
     conv_term ~env f
 
   let convert_eqns
@@ -196,7 +196,7 @@ module Of_ho(T : TI.S) = struct
               | St.Attr_card_max n -> Some (FO.CardBound (id, `Max, n))
               | St.Attr_card_min n -> Some (FO.CardBound (id, `Min, n))
               | St.Attr_infinite ->
-                failf "@[<2>infinite type `%a`@ should have been eliminated@]" ID.print id
+                failf "@[<2>infinite type `%a`@ should have been eliminated@]" ID.pp id
               | _ -> None)
             attrs
         in
@@ -358,7 +358,7 @@ module Make(T1 : TermInner.S) = struct
     let on_encoded =
       Utils.singleton_if print ()
         ~f:(fun () ->
-          Format.printf "@[<v2>@{<Yellow>after to_fo@}: {@,@[%a@]@,}@]@." FO.print_problem)
+          Format.printf "@[<v2>@{<Yellow>after to_fo@}: {@,@[%a@]@,}@]@." FO.pp_problem)
     in
     Transform.make
       ~name:"to_fo"

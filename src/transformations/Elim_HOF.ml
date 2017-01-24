@@ -60,9 +60,9 @@ type fun_ =
   | F_select of ID.t * int (* data-select (id,i) *)
 
 let pp_fun out = function
-  | F_id i -> ID.print out i
-  | F_var v -> Var.print_full out v
-  | F_select (id,i) -> Format.fprintf out "select-%a-%d" ID.print id i
+  | F_id i -> ID.pp out i
+  | F_var v -> Var.pp_full out v
+  | F_select (id,i) -> Format.fprintf out "select-%a-%d" ID.pp id i
 
 let compare_fun f1 f2 =
   let to_int_ = function F_id _ -> 0 | F_var _ -> 1 | F_select _ -> 2 in
@@ -289,8 +289,8 @@ and encoded_ty = ty
 let handle_leaf x = H_leaf x
 
 let rec pp_handle out = function
-  | H_leaf ty -> Format.fprintf out "(@[leaf@ `@[%a@]`@])" P.print ty
-  | H_arrow (a,b) -> Format.fprintf out "(@[arrow@ `@[%a@]`@ %a@])" P.print a pp_handle b
+  | H_leaf ty -> Format.fprintf out "(@[leaf@ `@[%a@]`@])" P.pp ty
+  | H_arrow (a,b) -> Format.fprintf out "(@[arrow@ `@[%a@]`@ %a@])" P.pp a pp_handle b
 
 (** {2 State for Encoding and Decoding} *)
 
@@ -346,7 +346,7 @@ type state = {
 }
 
 let pp_apply_fun out f =
-  fpf out "@[<2>%a/%d :@ `@[%a@]`@]" ID.print f.af_id f.af_arity P.print f.af_ty
+  fpf out "@[<2>%a/%d :@ `@[%a@]`@]" ID.pp f.af_id f.af_arity P.pp f.af_ty
 
 let pp_sc out = function
   | TC_first_param n -> fpf out "first_param (arity %d)" n
@@ -462,7 +462,7 @@ let app_of_handle_ ~(state:state) (args:ty list) (ret:handle) : apply_fun =
     let app_id = ID.make ("app_" ^ string_of_int i) in
     let ty_app = U.ty_arrow_l args (ty_of_handle_ ~handle_id ret) in
     Utils.debugf ~section 5 "@[<2>declare app_sym `@[%a :@ @[%a@]@]@ for handle @[%a@]@]`"
-      (fun k->k ID.print app_id P.print ty_app P.print h);
+      (fun k->k ID.pp app_id P.pp ty_app P.pp h);
     (* save application symbol in [app_symbols] *)
     let app_fun = {
       af_id=app_id;
@@ -489,7 +489,7 @@ let rec split_chunks_ prev lens l = match lens, l with
     (c,l') :: split_chunks_ len lens' l'
 
 let pp_chunks out =
-  let pp_tys out = fpf out "@[%a@]" CCFormat.(list P.print) in
+  let pp_tys out = fpf out "@[%a@]" CCFormat.(list P.pp) in
   let pp_pair out (a,b) = fpf out "@[(%a, remaining %a)@]" pp_tys a pp_tys b in
   fpf out "[@[%a@]]" CCFormat.(list ~start:"" ~stop:"" pp_pair)
 
@@ -513,7 +513,7 @@ let introduce_apply_syms ~state f : fun_encoding =
   let chunks = split_chunks_ 0 l ty_args in
   Utils.debugf ~section 4 "@[<2>process `%a :@ @[%a@]`@ chunks: @[%a@]@]"
     (fun k->k
-        pp_fun f P.print (U.ty_arrow_l ty_args ty_ret) pp_chunks chunks);
+        pp_fun f P.pp (U.ty_arrow_l ty_args ty_ret) pp_chunks chunks);
 
   (* special case for first chunk, which doesn't need an application
      symbol *)
@@ -580,7 +580,7 @@ let sc_arity_ = function
 (* apply the list of apply_fun to [l]. Arities should match. *)
 let rec apply_app_funs_ tower l =
   Utils.debugf ~section 5 "@[<2>apply_tower@ @[%a@]@ to @[%a@]@]"
-    (fun k->k pp_fe_tower tower (CCFormat.list P.print) l);
+    (fun k->k pp_fe_tower tower (CCFormat.list P.pp) l);
   match tower with
     | [] ->
       begin match l with
@@ -663,7 +663,7 @@ let elim_hof_term ~state subst pol t =
           state.unsat_means_unknown <- true;
           Utils.debugf ~section 3
             "@[<2>encode `@[%a@]`@ as `@[%a@]`,@ quantifying over type `@[%a@]`@]"
-            (fun k->k P.print t P.print res P.print (Var.ty v));
+            (fun k->k P.pp t P.pp res P.pp (Var.ty v));
           res
       end
     | TI.Builtin (`Eq (a,_)) when ty_is_ho_ (ty_term_ ~env:state.env a) ->
@@ -677,7 +677,7 @@ let elim_hof_term ~state subst pol t =
           state.unsat_means_unknown <- true;
           Utils.debugf ~section 3
             "@[<2>encode HO equality `@[%a@]`@ as `@[%a@]`@]"
-            (fun k->k P.print t P.print res);
+            (fun k->k P.pp t P.pp res);
           res
       end
     | TI.Let _
@@ -725,13 +725,13 @@ let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
             let arity = List.length vars in
             Utils.debugf ~section 5
               "@[<2>transform def of %a (arity %d) into App_rec@]"
-              (fun k->k ID.print id arity);
+              (fun k->k ID.pp id arity);
             (* stack of apply function *)
             let stack =
               try IntMap.find arity fe.fe_stack
               with Not_found ->
                 errorf_ "rec-defined function %a should have full arity %d"
-                  ID.print id arity
+                  ID.pp id arity
             in
             let subst, vars = bind_hof_vars ~state Subst.empty vars in
             (* LHS: app (f x y) z *)
@@ -755,7 +755,7 @@ let elim_hof_rec ~info ~state (defs:(_,_) Stmt.rec_defs)
             }
           ) else (
             Utils.debugf ~section 5
-              "@[<2>keep structure of FO def of `%a`@]" (fun k->k ID.print id);
+              "@[<2>keep structure of FO def of `%a`@]" (fun k->k ID.pp id);
             let tr_term = elim_hof_term ~state in
             let tr_type _subst ty = encode_toplevel_ty ~state ty in
             Stmt.map_rec_def_bind Subst.empty def
@@ -774,18 +774,18 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
   let tr_term = elim_hof_term ~state in
   let tr_type _subst ty = encode_toplevel_ty ~state ty in
   let handle_id = get_or_create_handle_id ~state in
-  Utils.debugf ~section 3 "@[<2>@{<cyan>> elim HOF in stmt@}@ `@[%a@]`@]" (fun k->k PStmt.print stmt);
+  Utils.debugf ~section 3 "@[<2>@{<cyan>> elim HOF in stmt@}@ `@[%a@]`@]" (fun k->k PStmt.pp stmt);
   (* find the new type of the given partially applied function [id : ty] *)
   let encode_fun id =
     Utils.debugf ~section 3
       "introduce application symbols and handle types for %a…"
-      (fun k->k ID.print id);
+      (fun k->k ID.pp id);
     let fun_encoding = introduce_apply_syms ~state (F_id id) in
     let ty' =
       U.ty_arrow_l fun_encoding.fe_args
         (ty_of_handle_ ~handle_id fun_encoding.fe_ret_handle) in
     Utils.debugf ~section 4 "@[<2>fun %a now has type `@[%a@]`@]"
-      (fun k->k ID.print id P.print ty');
+      (fun k->k ID.pp id P.pp ty');
     ty'
   in
   let stmt' = match Stmt.view stmt with
@@ -874,9 +874,9 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
   CCVector.clear state.new_stmts;
   if new_stmts<>[]
   then Utils.debugf ~section 3 "@[<2>@{<cyan>< new declarations@}:@ @[<v>%a@]@]"
-      (fun k->k (CCFormat.list ~start:"" ~stop:"" ~sep:"" PStmt.print) new_stmts);
+      (fun k->k (CCFormat.list ~start:"" ~stop:"" ~sep:"" PStmt.pp) new_stmts);
   Utils.debugf ~section 3 "@[<2>@{<cyan>< obtain stmts@}@ `[@[<hv>%a@]]`@]"
-    (fun k->k (CCFormat.list ~start:"" ~stop:"" PStmt.print) stmt');
+    (fun k->k (CCFormat.list ~start:"" ~stop:"" PStmt.pp) stmt');
   new_stmts @ stmt'
 
 let elim_hof pb =
@@ -908,7 +908,7 @@ type const_map = ID.t -> T.t
     @param map map some constants to other terms *)
 let rec decode_term ~state ~(map:const_map) subst t =
   Utils.debugf ~section 5 "@[<2>decode_term `@[%a@]`@ with @[%a@]@]"
-    (fun k->k P.print t (Subst.print P.print) subst);
+    (fun k->k P.pp t (Subst.pp P.pp) subst);
   match T.repr t with
     | TI.Const id -> map id (* translate this [id], if needed *)
     | TI.Var v -> Subst.find_or ~subst ~default:t v
@@ -949,14 +949,14 @@ let find_dt_ m id =
       m.Model.values
   in
   match res with
-    | None -> errorf_ "could not find model for function %a" ID.print id
+    | None -> errorf_ "could not find model for function %a" ID.pp id
     | Some tup -> tup
 
 (* translate a DT's terms and variables *)
 let tr_dt ?(subst=Subst.empty) ~state ~map dt =
   Utils.debugf ~section 5 "@[<hv2>decode@ `@[%a@]`@ with @[%a@]@]"
     (fun k->k
-        (Model.DT.print P.print' P.print) dt (Subst.print P.print) subst);
+        (Model.DT.pp P.pp' P.pp) dt (Subst.pp P.pp) subst);
   (* first, replace vars *)
   let dt' =
     let vars = DT.vars dt in
@@ -996,7 +996,7 @@ let all_fun_consts_ ~state m : (ty * handle) ID.Map.t =
         | Some h ->
           Utils.debugf ~section 5
             "@[<2>type `@[%a@]`@ is a handle type @[%a@],@ for %a@]"
-            (fun k->k P.print ty pp_handle h (CCFormat.list ID.print) ids);
+            (fun k->k P.pp ty pp_handle h (CCFormat.list ID.pp) ids);
           List.fold_left (fun m i -> ID.Map.add i (ty,h) m) m ids
     )
 
@@ -1015,7 +1015,7 @@ let map_ho_consts_to_funs ~state m : const_map * (unit -> (_,_) M.value_def list
   let add_to_tbl id t =
     ID.Tbl.add const_tbl id t;
     Utils.debugf ~section 5
-      "@[<2>translate name %a into %a@]" (fun k->k ID.print id P.print t);
+      "@[<2>translate name %a into %a@]" (fun k->k ID.pp id P.pp t);
   in
   (* if [id] is a domain constant, then map it to a lambda term,
      otherwise keep it intact *)
@@ -1043,7 +1043,7 @@ let map_ho_consts_to_funs ~state m : const_map * (unit -> (_,_) M.value_def list
       | None ->
         Utils.debugf ~section 5
           "cannot find app symbol for `@[%a@],@ handle `@[%a@]`,@ full type `@[%a@]``"
-          (fun k->k ID.print id pp_handle h P.print ty_app);
+          (fun k->k ID.pp id pp_handle h P.pp ty_app);
         (* return a new undefined function *)
         let _, ty_args, ty_ret = U.ty_unfold ty' in
         let vars =
@@ -1063,7 +1063,7 @@ let map_ho_consts_to_funs ~state m : const_map * (unit -> (_,_) M.value_def list
   and tr_partial_fun (app:ID.t) ty (c:ID.t) =
     Utils.debugf ~section 5
       "@[<2>tr fun constant `@[%a@] : @[%a@]`@ with app symbol `%a`@]"
-      (fun k->k ID.print c P.print ty ID.print app);
+      (fun k->k ID.pp c P.pp ty ID.pp app);
     let _, _args, ret = U.ty_unfold ty in
     (* give a name to the function *)
     let c' = new_fun_name_ ~state in
@@ -1075,7 +1075,7 @@ let map_ho_consts_to_funs ~state m : const_map * (unit -> (_,_) M.value_def list
     CCList.Ref.push fun_defs (t', dt, k);
     Utils.debugf ~section 5
       "@[... decode `%a`@ into `@[%a@ := @[%a@]@]`@]"
-      (fun k->k ID.print c ID.print c' M.DT_util.print dt);
+      (fun k->k ID.pp c ID.pp c' M.DT_util.pp dt);
     t'
   (* compute a decision tree for this constant *)
   and compute_dt app (c:ID.t) : (_,_) DT.t =
@@ -1173,7 +1173,7 @@ let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module PPb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after elimination of HOF@}: %a@]@." PPb.print)
+      Format.printf "@[<v2>@{<Yellow>after elimination of HOF@}: %a@]@." PPb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
         let module C = TypeCheck.Make(T) in
@@ -1197,7 +1197,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after elim_HOF@}:@ %a@]@."
-         (Problem.Res.print P.print' P.print)]
+         (Problem.Res.pp P.pp' P.pp)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model ~state) in

@@ -13,7 +13,7 @@ module T = TermInner.Default
 type term = T.t
 type ty = T.t
 
-val print_term : T.t CCFormat.printer
+val pp_term : T.t CCFormat.printer
 
 (** signature used to generate random terms *)
 val base_sig : ty ID.Map.t
@@ -43,6 +43,6 @@ val generate : ?rand:rstate -> 'a rgen -> 'a
 val generate_l : ?n:int -> ?rand:rstate -> 'a rgen -> 'a list
 
 (**/**)
-val print_rules : unit -> unit
+val pp_rules : unit -> unit
 (**/**)
 

@@ -24,7 +24,7 @@ let () = Printexc.register_printer
     (function
       | Error msg -> Some (Utils.err_sprintf "ty cardinality: %s" msg)
       | Polymorphic -> Some (Utils.err_sprintf "type is polymorphic")
-      | EmptyData id -> Some (Utils.err_sprintf "data %a is empty" ID.print id)
+      | EmptyData id -> Some (Utils.err_sprintf "data %a is empty" ID.pp id)
       | _ -> None)
 
 module Make(T : TI.S) = struct
@@ -94,7 +94,7 @@ module Make(T : TI.S) = struct
           begin match op with
             | Save ->
               Utils.debugf ~section 5 "@[<2>card `@[%a@]` =@ %a@]"
-                (fun k -> k P.print ty Card.print res);
+                (fun k -> k P.pp ty Card.pp res);
               save_ cache ty res
             | Do_not_save -> ()
           end;
@@ -182,7 +182,7 @@ module Make(T : TI.S) = struct
       | Env.Fun_spec (_,_)
       | Env.Pred (_,_,_,_,_)
       | Env.Copy_abstract _
-      | Env.Copy_concrete _ -> errorf_ "%a is not a type" ID.print id
+      | Env.Copy_concrete _ -> errorf_ "%a is not a type" ID.pp id
     in
     res
 
@@ -198,7 +198,7 @@ module Make(T : TI.S) = struct
         Utils.debugf ~section 5 "@[<2>check well-formed:@ `@[%a@]`@]"
           (fun k->
              let module PStmt = Stmt.Print(P)(P) in
-             k PStmt.print_data_types (`Data,l));
+             k PStmt.pp_data_types (`Data,l));
         List.iter (check_non_zero_ env cache) l
       | _ -> ()
 

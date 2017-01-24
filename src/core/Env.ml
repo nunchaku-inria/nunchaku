@@ -67,7 +67,7 @@ exception UndefinedID of ID.t
 
 let pp_invalid_def_ out = function
   | InvalidDef (id, msg) ->
-    Format.fprintf out "@[<2>invalid definition for `%a`:@ %s@]" ID.print id msg
+    Format.fprintf out "@[<2>invalid definition for `%a`:@ %s@]" ID.pp id msg
   | _ -> assert false
 
 let () = Printexc.register_printer
@@ -75,7 +75,7 @@ let () = Printexc.register_printer
       | InvalidDef _ as e ->
         Some (Utils.err_sprintf "env: %a" pp_invalid_def_ e)
       | UndefinedID id ->
-        Some (Utils.err_sprintf "env: undefined ID `%a`" ID.print id)
+        Some (Utils.err_sprintf "env: undefined ID `%a`" ID.pp id)
       | _ -> None
     )
 
@@ -258,34 +258,34 @@ let find_ty ~env id = CCOpt.map (fun x -> x.ty) (find ~env id)
 
 module type PRINT_TERM = sig
   type t
-  val print : t CCFormat.printer
+  val pp : t CCFormat.printer
 end
 
 module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
   let fpf = Format.fprintf
 
-  let print_def out = function
+  let pp_def out = function
     | Fun_def _ -> CCFormat.string out "<rec>"
     | Fun_spec _ -> CCFormat.string out "<spec>"
     | Data _ -> CCFormat.string out "<data>"
     | Cstor (_,_,_,{ Stmt.cstor_type; _ }) ->
-      fpf out "<cstor : `%a`>" Pty.print cstor_type
+      fpf out "<cstor : `%a`>" Pty.pp cstor_type
     | Pred _ -> CCFormat.string out "<pred>"
-    | Copy_ty { Stmt.copy_of; _ } -> fpf out "<copy of `%a`>" Pty.print copy_of
+    | Copy_ty { Stmt.copy_of; _ } -> fpf out "<copy of `%a`>" Pty.pp copy_of
     | Copy_abstract { Stmt.copy_id; _ } ->
-      fpf out "<copy abstract of `%a`>" ID.print copy_id
+      fpf out "<copy abstract of `%a`>" ID.pp copy_id
     | Copy_concrete { Stmt.copy_id; _ } ->
-      fpf out "<copy concrete of `%a`>" ID.print copy_id
+      fpf out "<copy concrete of `%a`>" ID.pp copy_id
     | NoDef -> CCFormat.string out "<no def>"
 
-  let print_info out i =
-    fpf out "@[<2>@,: `@[%a@]`@ := %a%a@]" Pty.print i.ty
-      print_def i.def Stmt.print_attrs i.decl_attrs
+  let pp_info out i =
+    fpf out "@[<2>@,: `@[%a@]`@ := %a%a@]" Pty.pp i.ty
+      pp_def i.def Stmt.pp_attrs i.decl_attrs
 
-  let print out e =
-    let print_pair out (id,info) =
-      fpf out "@[%a %a@]" ID.print id print_info info
+  let pp out e =
+    let pp_pair out (id,info) =
+      fpf out "@[%a %a@]" ID.pp id pp_info info
     in
     fpf out "@[<v>@[<v2>env {@,@[<v>%a@]@]@,}@]"
-      (CCFormat.seq ~start:"" ~stop:"" print_pair) (ID.PerTbl.to_seq e.infos)
+      (CCFormat.seq ~start:"" ~stop:"" pp_pair) (ID.PerTbl.to_seq e.infos)
 end

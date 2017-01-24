@@ -58,7 +58,7 @@ module Features : sig
   (** [check t ~spec] returns [Check_ok] if all features required by [spec] are
       valid in [t], and [Check_fail (key, expected, actual)] otherwise *)
 
-  val print : t printer
+  val pp : t printer
 end
 
 (** {2 Single Transformation} *)
@@ -186,7 +186,7 @@ module Pipe : sig
       the pipeline fit with their input.
       It is assumed we start with {!Features.full} *)
 
-  val print : (_,_,_,_) t printer
+  val pp : (_,_,_,_) t printer
 end
 
 val run : pipe:('a, 'b, 'c, 'd) Pipe.t ->

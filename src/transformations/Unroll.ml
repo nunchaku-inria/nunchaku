@@ -196,7 +196,7 @@ let define_preds ~state kind l =
       (* unroll the predicates *)
       Utils.debugf ~section 5
         "@[<2>unroll predicate(s)@ `@[%a@]`@]"
-        (fun k->k PStmt.print_pred_defs l);
+        (fun k->k PStmt.pp_pred_defs l);
       let new_decls = ref [] in
       (* maybe we haven't declared [nat] yet *)
       if not state.declared_nat then (
@@ -207,7 +207,7 @@ let define_preds ~state kind l =
       (* push the "regular" unrolling constants for each ID *)
       List.iter
         (fun id ->
-           let n = ID.make (CCFormat.sprintf "decr_%a" ID.print_name id) in
+           let n = ID.make (CCFormat.sprintf "decr_%a" ID.pp_name id) in
            (* from now on, [id] will become [id n] *)
            ID.Tbl.add state.map id (`Unroll n);
            ID.Tbl.add state.decr n ();
@@ -290,7 +290,7 @@ let filter_dt_ dt : (_,_) DT.t =
     | removed_var :: _ ->
       Utils.debugf ~section 5
         "@[<v>remove var @[%a@]@ from `@[%a@]`@]"
-        (fun k->k Var.print_full removed_var (Model.DT.print P.print' P.print) dt);
+        (fun k->k Var.pp_full removed_var (Model.DT.pp P.pp' P.pp) dt);
     | [] -> assert false
   end;
   M.DT_util.remove_first_var dt
@@ -326,7 +326,7 @@ let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module Ppb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after unrolling@}:@ %a@]@." Ppb.print)
+      Format.printf "@[<v2>@{<Yellow>after unrolling@}:@ %a@]@." Ppb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
         let module C = TypeCheck.Make(T) in
@@ -345,7 +345,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after unrolling@}:@ %a@]@."
-         (Problem.Res.print P.print' P.print)]
+         (Problem.Res.pp P.pp' P.pp)]
     else []
   in
   pipe_with ~on_decoded

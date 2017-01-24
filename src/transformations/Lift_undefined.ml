@@ -59,7 +59,7 @@ let pop_decls state =
 let decl_new state (t:term) ty : ID.t =
   let id = ID.make (TyMo.mangle ~sep:"_" ty) in
   Utils.debugf ~section 5 "(@[declare_new %a:@ `@[%a@]`@])"
-    (fun k->k ID.print id P.print ty);
+    (fun k->k ID.pp id P.pp ty);
   CCVector.push state.new_decls (id, ty);
   assert (not (U.Tbl.mem state.tbl t));
   U.Tbl.add state.tbl t id;
@@ -71,7 +71,7 @@ let find_args (t:term): term list = match T.repr t with
   | TI.Const _ -> []
   | TI.App (_, l) -> l
   | _ ->
-    errorf_ "cannot find type arguments for `undefined_self @[%a@]`" P.print t
+    errorf_ "cannot find type arguments for `undefined_self @[%a@]`" P.pp t
 
 (* recursive traversal of terms, lifting unknowns.
    We carry a substitution around so that the unknowns' arguments are
@@ -152,7 +152,7 @@ let pipe ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module Ppb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after %s@}:@ %a@]@." name Ppb.print)
+      Format.printf "@[<v2>@{<Yellow>after %s@}:@ %a@]@." name Ppb.pp)
     @
     Utils.singleton_if check () ~f:(fun () ->
       let module C = TypeCheck.Make(T) in

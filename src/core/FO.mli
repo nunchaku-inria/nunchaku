@@ -21,7 +21,7 @@ module TyBuiltin : sig
     ]
   val equal : t -> t -> bool
   val compare : t -> t -> int
-  val print : t printer
+  val pp : t printer
 end
 
 module Builtin : sig
@@ -30,7 +30,7 @@ module Builtin : sig
     ]
   val equal : t -> t -> bool
   val compare : t -> t -> int
-  val print : t printer
+  val pp : t printer
 end
 
 (** Term *)
@@ -207,10 +207,10 @@ val tys_of_statement : (_, 'ty) statement -> 'ty Sequence.t
 
 (** {2 IO} *)
 
-val print_ty : Ty.t printer
-val print_toplevel_ty : Ty.toplevel_ty printer
-val print_term : T.t printer
-val print_term' : _ -> T.t printer
-val print_statement : (T.t, Ty.t) statement printer
-val print_model : (T.t * T.t) list printer
-val print_problem : (T.t, Ty.t) Problem.t printer
+val pp_ty : Ty.t printer
+val pp_toplevel_ty : Ty.toplevel_ty printer
+val pp_term : T.t printer
+val pp_term' : _ -> T.t printer
+val pp_statement : (T.t, Ty.t) statement printer
+val pp_model : (T.t * T.t) list printer
+val pp_problem : (T.t, Ty.t) Problem.t printer

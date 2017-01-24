@@ -38,6 +38,6 @@ let rebind ~var x =
 let update ~f v =
   {v with deref=CCOpt.map f v.deref; }
 
-let print oc v = Format.fprintf oc "?%a" ID.print_full v.id
+let pp oc v = Format.fprintf oc "?%a" ID.pp_full v.id
 let to_string v = "?" ^ ID.to_string v.id
 

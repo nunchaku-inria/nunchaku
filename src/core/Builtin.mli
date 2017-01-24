@@ -37,7 +37,7 @@ type 'a t =
 
 val prec : 'a t -> Precedence.t
 
-val print_infix_list :
+val pp_infix_list :
   'a CCFormat.printer ->
   string ->
   'a list CCFormat.printer

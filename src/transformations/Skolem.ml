@@ -94,7 +94,7 @@ module Make(Assoc : sig type t end)
     state.new_sym <- (skolem_id, assoc):: state.new_sym;
     Utils.debugf ~section 2
       "@[<2>new Skolem symbol `%a :@ @[%a@]`@]"
-      (fun k-> k ID.print skolem_id P.print ty);
+      (fun k-> k ID.pp skolem_id P.pp ty);
     skolem_id, ty, assoc
 
   let pop_new_decls state =
@@ -261,10 +261,10 @@ let skolemize_pb ~state pb =
 
 let fpf = Format.fprintf
 
-let print_state out st =
+let pp_state out st =
   let pp_sym out (id,s) =
     fpf out "@[<2>%a: %a@ standing for `@[%a@]`@]"
-      ID.print id P.print s.sym_ty P.print s.sym_defines
+      ID.pp id P.pp s.sym_ty P.pp s.sym_defines
   in
   fpf out "@[<2>skolem table {@,%a@]@,}"
     (CCFormat.seq pp_sym) (Sk.all_skolems st.sk)
@@ -293,7 +293,7 @@ let pipe_with ~mode ~decode ~print ~check =
     Utils.singleton_if print ()
       ~f:(fun () ->
         let module Ppb = Problem.Print(P)(P) in
-        Format.printf "@[<v2>@{<Yellow>after Skolemization@}: %a@]@." Ppb.print)
+        Format.printf "@[<v2>@{<Yellow>after Skolemization@}: %a@]@." Ppb.pp)
     @
       Utils.singleton_if check ()
         ~f:(fun () ->
@@ -303,7 +303,7 @@ let pipe_with ~mode ~decode ~print ~check =
   Transform.make
     ~name
     ~on_encoded
-    ~print:print_state
+    ~print:pp_state
     ~encode:(fun pb ->
       let state = create ~mode () in
       let pb = skolemize_pb ~state pb in

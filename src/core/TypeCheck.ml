@@ -39,11 +39,11 @@ module Make(T : TI.S) = struct
   let find_ty_ ~env id =
     try Env.find_ty_exn ~env id
     with Not_found ->
-      errorf_ "identifier %a not defined in scope" ID.print_full id
+      errorf_ "identifier %a not defined in scope" ID.pp_full id
 
   let err_ty_mismatch t exp act =
     errorf_ "@[<2>type of `@[%a@]`@ should be `@[%a@]`,@ but is `@[%a@]`@]"
-      P.print t P.print exp P.print act
+      P.pp t P.pp exp P.pp act
 
   (* check that [ty = prop] *)
   let check_prop t ty =
@@ -56,14 +56,14 @@ module Make(T : TI.S) = struct
     then errorf_
         "@[<2>expected@ @[`@[%a@]` : `@[%a@]`@]@ and@ \
          @[<2>`@[%a@]`@ : `@[%a@]`@]@ to have the same type@]"
-        P.print a P.print ty_a P.print b P.print ty_b;
+        P.pp a P.pp ty_a P.pp b P.pp ty_b;
     ()
 
   let check_same_ty ty_a ty_b =
     if not (U.equal ty_a ty_b)
     then errorf_
         "@[types@ `@[%a@]`@ and `@[%a@]`@ should be the same@]"
-        P.print ty_a P.print ty_b;
+        P.pp ty_a P.pp ty_b;
     ()
 
   module VarSet = U.VarSet
@@ -127,7 +127,7 @@ module Make(T : TI.S) = struct
         end
       | TI.Var v ->
         if not (VarSet.mem v bound)
-        then errorf_ "variable %a not bound in scope" Var.print_full v;
+        then errorf_ "variable %a not bound in scope" Var.pp_full v;
         Var.ty v
       | TI.App (f,l) ->
         U.ty_apply (check ~env bound f)
@@ -208,7 +208,7 @@ module Make(T : TI.S) = struct
     then
       errorf_
         "@[<2>type of `@[%a@]` in `@[%a@]`@ should be a type or `type`,@ but is `@[%a@]`@]"
-        Var.print_full v P.print t P.print tyv;
+        Var.pp_full v P.pp t P.pp tyv;
     ()
 
   and check_is_ty ~env bound t =
@@ -232,7 +232,7 @@ module Make(T : TI.S) = struct
         then (
           let module PStmt = Statement.Print(P)(P) in
           errorf_ "in equation `@[%a@]`,@ variables @[%a@]@ occur in RHS-term but are not bound"
-            (PStmt.print_eqns id) eqn (VarSet.print Var.print_full) diff
+            (PStmt.pp_eqns id) eqn (VarSet.print Var.pp_full) diff
         );
         let bound' = List.fold_left (check_var ~env) bound vars in
         check_is_prop ~env bound'
@@ -255,7 +255,7 @@ module Make(T : TI.S) = struct
 
   let check_statement t st =
     Utils.debugf ~section 4 "@[<2>type check@ `@[%a@]`@]"
-      (fun k-> let module PStmt = Statement.Print(P)(P) in k PStmt.print st);
+      (fun k-> let module PStmt = Statement.Print(P)(P) in k PStmt.pp st);
     (* update env *)
     let env = Env.add_statement ~env:t.env st in
     let t' = {t with env; } in

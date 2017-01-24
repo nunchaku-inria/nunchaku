@@ -141,10 +141,10 @@ module DT : sig
   val check_ : (_,_) t -> unit
   (** check some invariants *)
 
-  val print : 't prec_printer -> 'ty printer -> ('t, 'ty) t printer
+  val pp : 't prec_printer -> 'ty printer -> ('t, 'ty) t printer
 
-  val print_flat_test : 't prec_printer -> ('t, _) flat_test printer
-  val print_flat : 't prec_printer -> ('t, _) flat_dt printer
+  val pp_flat_test : 't prec_printer -> ('t, _) flat_test printer
+  val pp_flat : 't prec_printer -> ('t, _) flat_dt printer
 
   val to_sexp : 't to_sexp -> 'ty to_sexp ->('t, 'ty) t to_sexp
   (** for model display *)
@@ -221,7 +221,7 @@ module DT_util : sig
   val to_term : dt -> term
   (** Convert the decision tree to a term *)
 
-  val print : dt printer
+  val pp : dt printer
 end
 
 (** {2 Models} *)
@@ -301,7 +301,7 @@ val filter :
   ('t, 'ty) t ->
   ('t, 'ty) t
 
-val print : 't prec_printer -> 'ty printer -> ('t,'ty) t printer
+val pp : 't prec_printer -> 'ty printer -> ('t,'ty) t printer
 (** Debug printing *)
 
 val to_sexp : 't to_sexp -> 'ty to_sexp -> ('t,'ty) t to_sexp
@@ -314,6 +314,6 @@ module Default : sig
 
   val to_sexp : t to_sexp
 
-  val print_standard : t printer
+  val pp_standard : t printer
   (** Printer suitable for parsing from the caller *)
 end

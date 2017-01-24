@@ -30,23 +30,23 @@ exception IllFormed of string * string * loc option (* what, msg, loc *)
 exception TypeError of string * attempt_stack
 
 (* print a stack *)
-let print_stack out st =
-  let print_frame out t =
+let pp_stack out st =
+  let pp_frame out t =
     fpf out "@[<hv 2>trying to infer type of@ `@[%a@]`@ at %a@]"
-      A.print_term t Loc.print_opt (Loc.get_loc t) in
+      A.pp_term t Loc.pp_opt (Loc.get_loc t) in
   fpf out "@[<hv>%a@]"
-    (CCFormat.list ~start:"" ~stop:"" ~sep:" " print_frame) st
+    (CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_frame) st
 
 let () = Printexc.register_printer
     (function
       | ScopingError (v, msg, loc) ->
         Some (Utils.err_sprintf "@[scoping for var %s:@ %s@ at %a@]"
-            v msg Loc.print_opt loc)
+            v msg Loc.pp_opt loc)
       | IllFormed(what, msg, loc) ->
         Some (Utils.err_sprintf "@[<2>ill-formed %s:@ %s@ at %a@]"
-            what msg Loc.print_opt loc)
+            what msg Loc.pp_opt loc)
       | TypeError (msg, stack) ->
-        Some (Utils.err_sprintf "@[<2>type error:@ %s@ %a@]" msg print_stack stack)
+        Some (Utils.err_sprintf "@[<2>type error:@ %s@ %a@]" msg pp_stack stack)
       | _ -> None
     )
 
@@ -157,7 +157,7 @@ module Convert(Term : TermTyped.S) = struct
 
     let add_datatype ~env id cstors =
       if ID.Tbl.mem env.datatypes id
-      then ill_formedf ~kind:"datatype" "%a already defined" ID.print id;
+      then ill_formedf ~kind:"datatype" "%a already defined" ID.pp id;
       ID.Tbl.add env.datatypes id cstors
 
     let find_var ?loc ~env v =
@@ -215,7 +215,7 @@ module Convert(Term : TermTyped.S) = struct
       | A.Builtin `Type -> U.ty_type
       | A.Builtin `Unitype -> U.ty_unitype
       | A.Builtin s ->
-        ill_formedf ?loc ~kind:"type" "%a is not a type" A.Builtin.print s
+        ill_formedf ?loc ~kind:"type" "%a is not a type" A.Builtin.pp s
       | A.App (f, l) ->
         U.ty_app ?loc
           (convert_ty_ ~stack ~env f)
@@ -228,7 +228,7 @@ module Convert(Term : TermTyped.S) = struct
             (* var: _ ... _ -> Type mandatory *)
             unify_in_ctx_ ~stack (U.ty_returns t) U.ty_type;
             U.ty_const ?loc id
-          | Var v -> ill_formedf ~kind:"type" "term variable %a in type" Var.print v
+          | Var v -> ill_formedf ~kind:"type" "term variable %a in type" Var.pp v
           | TyVar v ->
             unify_in_ctx_ ~stack
               (U.ty_returns (Var.ty v))
@@ -321,7 +321,7 @@ module Convert(Term : TermTyped.S) = struct
   let ty_apply t l =
     let apply_error t =
       type_errorf ~stack:[]
-        "cannot apply type `@[%a@]` to anything" P.print t
+        "cannot apply type `@[%a@]` to anything" P.pp t
     in
     let rec app_ ~subst t l = match TyPoly.repr t, l with
       | _, [] -> Subst.eval ~subst t
@@ -514,7 +514,7 @@ module Convert(Term : TermTyped.S) = struct
                if ID.Map.mem c m
                then ill_formedf ?loc ~kind:"match"
                    "constructor %a occurs twice in the list of cases"
-                   ID.print c;
+                   ID.pp c;
                (* make scoped variables and infer their type from [t] *)
                let vars' = List.map
                    (fun v ->
@@ -563,7 +563,7 @@ module Convert(Term : TermTyped.S) = struct
           | `Missing l ->
             ill_formedf ?loc ~kind:"match"
               "pattern match is not exhaustive (missing [@[%a@]])"
-              (CCFormat.list ID.print) l
+              (CCFormat.list ID.pp) l
         in
         (* ok, we're done here *)
         U.match_with ~ty t m ~def
@@ -605,7 +605,7 @@ module Convert(Term : TermTyped.S) = struct
         type_errorf ~stack
           "@[<2>term of type @[%a@] cannot accept argument(s),@ \
            but was given [@[<hv>%a@]]@]"
-          P.print ty (CCFormat.list ~start:"" ~stop:"" A.print_term) l
+          P.pp ty (CCFormat.list ~start:"" ~stop:"" A.pp_term) l
       | TyI.Meta var, b :: l' ->
         (* must be an arrow type. We do not infer forall types *)
         assert (MetaVar.can_bind var);
@@ -638,7 +638,7 @@ module Convert(Term : TermTyped.S) = struct
     (* fresh variable *)
     let ty_var = fresh_ty_var_ ~name:v in
     Utils.debugf ~section 3 "@[<2>new variable %a@ for %s@ within `@[%a@]`"
-      (fun k-> k P.print ty_var v A.print_term t);
+      (fun k-> k P.pp ty_var v A.pp_term t);
     (* unify with expected type *)
     CCOpt.iter
       (fun ty -> unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty))
@@ -674,7 +674,7 @@ module Convert(Term : TermTyped.S) = struct
   let () = Printexc.register_printer
       (function
         | InvalidTerm (t, msg) ->
-          Some (Utils.err_sprintf "@[<2>invalid term `@[%a@]`:@ %s@]" P.print t msg)
+          Some (Utils.err_sprintf "@[<2>invalid term `@[%a@]`:@ %s@]" P.pp t msg)
         | _ -> None)
 
   let invalid_term_ t msg = raise (InvalidTerm (t,msg))
@@ -728,26 +728,26 @@ module Convert(Term : TermTyped.S) = struct
 
   let check_ty_is_prenex_ ?loc t =
     if not (is_prenex_ t)
-    then ill_formedf ?loc "type `@[%a@]` is not prenex" P.print t
+    then ill_formedf ?loc "type `@[%a@]` is not prenex" P.pp t
 
   (* does [t] contain only prenex types? If not, convert it into [term2] *)
   let check_prenex_types_ ?loc t =
     if not (is_prenex_ t)
     then ill_formedf ?loc
-        "term `@[%a@]`@ contains non-prenex types" P.print t
+        "term `@[%a@]`@ contains non-prenex types" P.pp t
 
   let check_ty_is_mono_ ?loc t =
     if not (is_mono_ t)
     then ill_formedf ?loc
-        "type `@[%a@]`@ is not monomorphic" P.print t
+        "type `@[%a@]`@ is not monomorphic" P.pp t
 
   let check_mono_var_ v =
     if not (is_mono_var_ v)
-    then ill_formedf "variable %a has a non-monomorphic type" Var.print v
+    then ill_formedf "variable %a has a non-monomorphic type" Var.pp v
 
   let generalize ~close t =
     Utils.debugf ~section 5 "@[<2>generalize@ `@[%a@]`,@ by %s@]"
-      (fun k->k P.print t
+      (fun k->k P.pp t
           (match close with `Fun -> "fun" | `Forall -> "forall" | `NoClose -> "no_close"));
     (* type meta-variables *)
     let vars = U.free_meta_vars t |> ID.Map.to_list in
@@ -772,7 +772,7 @@ module Convert(Term : TermTyped.S) = struct
     in
     if new_vars <> [] then
       Utils.debugf ~section 3 "@[generalized `@[%a@]`@ w.r.t @[%a@]@]"
-        (fun k-> k P.print t (CCFormat.list Var.print) new_vars);
+        (fun k-> k P.pp t (CCFormat.list Var.pp) new_vars);
     t, new_vars
 
   (* convert [t] into a prop, call [f], generalize [t] *)
@@ -871,7 +871,7 @@ module Convert(Term : TermTyped.S) = struct
                | `Bad vars' ->
                  ill_formedf ?loc ~kind:"spec"
                    "term `@[%a@]`@ contains non-generalized variables @[%a@]"
-                   P.print t (CCFormat.list MetaVar.print) vars'
+                   P.pp t (CCFormat.list MetaVar.pp) vars'
              end;
              match check_vars ~vars:(VarSet.of_list spec_ty_vars) ~rel:`Subset t with
                | `Ok -> ()
@@ -879,7 +879,7 @@ module Convert(Term : TermTyped.S) = struct
                  ill_formedf ?loc ~kind:"spec"
                    "axiom contains type variables @[`%a`@]@ \
                     that do not occur in defined term@ @[`%a`@]"
-                   (CCFormat.list Var.print) bad_vars P.print t
+                   (CCFormat.list Var.pp) bad_vars P.pp t
            in
            convert_prop_ ~before_generalize ~env:env' ax)
         ax_l
@@ -979,7 +979,7 @@ module Convert(Term : TermTyped.S) = struct
       | `Bad vars' ->
         ill_formedf ?loc ~kind
           "@[<2>term `@[%a@]`@ contains non-generalized variables @[%a@]@]"
-          P.print t (CCFormat.list MetaVar.print) vars'
+          P.pp t (CCFormat.list MetaVar.pp) vars'
     end;
     match check_vars ~vars:(VarSet.of_list ty_vars) ~rel:`Subset t with
       | `Ok -> ()
@@ -988,8 +988,8 @@ module Convert(Term : TermTyped.S) = struct
           "@[<2>equation `@[%a@]`,@ in definition of `@[%a@]`,@ \
            contains type variables `@[%a@]` that do not occur \
            in defined term@]"
-          A.print_term untyped_ax ID.print id
-          (CCFormat.list Var.print) vars'
+          A.pp_term untyped_ax ID.pp id
+          (CCFormat.list Var.pp) vars'
 
   let prepare_defs ~env l =
     Utils.fold_map
@@ -1003,7 +1003,7 @@ module Convert(Term : TermTyped.S) = struct
          let vars = CCList.init n
              (fun i -> Var.make ~ty:U.ty_type ~name:(CCFormat.sprintf "a_%d" i)) in
          Utils.debugf ~section 4 "@[<2>locally define %s as `@[%a@]`@]"
-           (fun k -> k v P.print v_as_t);
+           (fun k -> k v P.pp v_as_t);
          (* declare [v] in the scope of equations *)
          let env' = TyEnv.add_def ~env:env' v ~as_:v_as_t in
          env', (id,ty,vars,l))
@@ -1039,7 +1039,7 @@ module Convert(Term : TermTyped.S) = struct
                     | None ->
                       ill_formedf ?loc
                         "@[<2>expected `@[forall <vars>.@ @[%a@] @[<hv><args>@ =@ <rhs>@]@]`@]"
-                        ID.print id
+                        ID.pp id
                     | Some (vars,args,rhs) ->
                       List.iter (check_prenex_types_ ?loc) args;
                       (* make sure that functions are totally applied *)
@@ -1119,7 +1119,7 @@ module Convert(Term : TermTyped.S) = struct
       | None -> ()
       | Some id ->
         ill_formedf ?loc
-          "@[<2>inductive predicate `%a` requires at least one base case@]" ID.print id
+          "@[<2>inductive predicate `%a` requires at least one base case@]" ID.pp id
 
   let convert_preds ?loc ~env kind l =
     (* first, build new variables for the defined terms,
@@ -1152,7 +1152,7 @@ module Convert(Term : TermTyped.S) = struct
                     | None ->
                       ill_formedf ?loc
                         "@[<2>expected `@[forall <vars>.@ <optional guard> => %a <args>@]`@]"
-                        ID.print id
+                        ID.pp id
                     | Some (vars,g,rhs) ->
                       CCOpt.iter (check_prenex_types_ ?loc) g;
                       {Stmt.
@@ -1189,7 +1189,7 @@ module Convert(Term : TermTyped.S) = struct
            in
            let id = ID.make_full ~needs_at:false name in
            Utils.debugf ~section 3 "@[(co)inductive type %a: %a@]"
-             (fun k-> k ID.print id P.print ty);
+             (fun k-> k ID.pp id P.pp ty);
            (* declare *)
            let env' = TyEnv.add_decl ~env name ~id ty in
            env', (id,vars,ty,cstors))
@@ -1220,7 +1220,7 @@ module Convert(Term : TermTyped.S) = struct
                 let id' = ID.make_full ~needs_at:(vars<>[]) name in
                 let env = TyEnv.add_decl ~env name ~id:id' ty' in
                 Utils.debugf ~section 3 "@[constructor %a: %a@]"
-                  (fun k-> k ID.print id' P.print ty');
+                  (fun k-> k ID.pp id' P.pp ty');
                 TyEnv.add_cstor ~env ~name id' ty';
                 (* newly built constructor *)
                 check_ty_is_prenex_ ?loc ty';
@@ -1267,7 +1267,7 @@ module Convert(Term : TermTyped.S) = struct
         ill_formedf ?loc ~kind:"copy"
           "@[<2>the type variables@ @[%a@]@ do not occur \
            in both the copy and the definition@]"
-          (CCFormat.list Var.print_full) subset
+          (CCFormat.list Var.pp_full) subset
     end;
     let abstract = ID.make_full ~needs_at:(vars<>[]) c.A.abstract in
     let ty_abstract = ty_forall_l_ vars (U.ty_arrow ty_of ty_new) in
@@ -1344,7 +1344,7 @@ module Convert(Term : TermTyped.S) = struct
           if not (is_infinite_ ~env id')
           then ill_formedf ?loc ~kind:"attributes"
               "`%a` cannot be a finite approximation of `%a`,@ \
-               which is not infinite" ID.print id ID.print id'
+               which is not infinite" ID.pp id ID.pp id'
         | Stmt.Attr_infinite_upcast ->
           let ok =
             match TyPoly.repr ty with
@@ -1359,7 +1359,7 @@ module Convert(Term : TermTyped.S) = struct
           if not ok
           then ill_formedf ?loc ~kind:"attributes"
               "expect type of `%a` to be `<finite approx> → <infinite type>`,@ \
-               but got `@[%a@]`" ID.print id P.print ty;
+               but got `@[%a@]`" ID.pp id P.pp ty;
         | _ -> ()
       )
       l;
@@ -1372,7 +1372,7 @@ module Convert(Term : TermTyped.S) = struct
     let loc = st.A.stmt_loc in
     let info = {Stmt.name; loc; } in
     Utils.debugf ~section 2 "@[<hv2>infer types in@ `@[%a@]`@ at %a@]"
-      (fun k-> k A.print_statement st Loc.print_opt loc);
+      (fun k-> k A.pp_statement st Loc.pp_opt loc);
     let st', env = match st.A.stmt_value with
       | A.Include _ ->
         ill_formed ?loc ~kind:"statement" "includes should have been eliminated"
@@ -1414,7 +1414,7 @@ module Convert(Term : TermTyped.S) = struct
                  l
              then ill_formedf ?loc ~kind:"def"
                  "right-hand side of definition contains defined symbol %a"
-                 ID.print id1)
+                 ID.pp id1)
           s;
         Stmt.axiom_rec ~info s, env
       | A.Data l ->
@@ -1438,7 +1438,7 @@ module Convert(Term : TermTyped.S) = struct
         Stmt.goal ~info t, env
     in
     Utils.debugf ~section 2 "@[<2>checked statement@ `@[%a@]`@]"
-      (fun k-> k PStmt.print st');
+      (fun k-> k PStmt.pp st');
     st', env
 
   let convert_statement ~env st =
@@ -1482,7 +1482,7 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
         ~f:(fun () ->
           let module P = TI.Print(T1) in
           let module PPb = Problem.Print(P)(P) in
-          Format.printf "@[<v2>@{<Yellow>after type inference@}: %a@]@." PPb.print)
+          Format.printf "@[<v2>@{<Yellow>after type inference@}: %a@]@." PPb.pp)
     in
     Transform.make
       ~on_encoded

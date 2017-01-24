@@ -156,16 +156,16 @@ type rename_kind =
   | R_let of [`Form | `Rel] (* let binding *)
 
 (* print in kodkodi syntax *)
-let print_pb state pb out () : unit =
+let pp_pb state pb out () : unit =
   (* local substitution for renaming variables *)
   let subst : (FO_rel.var_ty, string) Var.Subst.t ref = ref Var.Subst.empty in
   let id2name id =
     try ID.Map.find id state.name_of_id
-    with Not_found -> errorf "kodkod: no name for `%a`" ID.print id
+    with Not_found -> errorf "kodkod: no name for `%a`" ID.pp id
   and su2offset su =
     try SUMap.find su state.univ_map |> fst
     with Not_found ->
-      errorf "kodkod: no offset for `%a`" FO_rel.print_sub_universe su
+      errorf "kodkod: no offset for `%a`" FO_rel.pp_sub_universe su
   in
   (* print a sub-universe as a range *)
   let rec pp_su_range out (su:FO_rel.sub_universe): unit =
@@ -250,7 +250,7 @@ let print_pb state pb out () : unit =
     | FO_rel.Tuple_set ts -> pp_ts out ts
     | FO_rel.Var v ->
       begin match Var.Subst.find ~subst:!subst v with
-        | None -> errorf "var `%a` not in scope" Var.print_full v
+        | None -> errorf "var `%a` not in scope" Var.pp_full v
         | Some s -> CCFormat.string out s
       end
     | FO_rel.Unop (FO_rel.Flip, e) -> fpf out "~ %a" pp_rel e
@@ -291,7 +291,7 @@ let print_pb state pb out () : unit =
        let id = d.FO_rel.decl_id in
        let name = ID.Map.find id state.name_of_id in
        fpf out "@[<h>bounds %s /* %a */ : [%a, %a] @."
-         name ID.print id pp_ts d.FO_rel.decl_low pp_ts d.FO_rel.decl_high)
+         name ID.pp id pp_ts d.FO_rel.decl_low pp_ts d.FO_rel.decl_high)
     pb.FO_rel.pb_decls;
   (* goal *)
   fpf out "@[<v2>solve@ %a;@]@."
@@ -321,7 +321,7 @@ let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
           on their type *)
        let decl =
          try ID.Map.find id state.decls
-         with Not_found -> errorf "could not find declaration for %a" ID.print id
+         with Not_found -> errorf "could not find declaration for %a" ID.pp id
        in
        (* convert offsets to proper atoms *)
        let tuples =
@@ -449,7 +449,7 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         ~f:(fun (stdin,stdout) ->
           (* send problem *)
           let fmt = Format.formatter_of_out_channel stdin in
-          Format.fprintf fmt "%a@." (print_pb state pb) ();
+          Format.fprintf fmt "%a@." (pp_pb state pb) ();
           flush stdin;
           close_out stdin;
           CCIO.read_all stdout)
@@ -481,10 +481,10 @@ let default_increment_ = 2 (* FUDGE *)
 let rec call_rec ~timer ~print ~size ~deadline pb : res * Scheduling.shortcut =
   let state = create_state ~timer ~default_size:size pb in
   if print
-  then Format.printf "@[<v>kodkod problem:@ ```@ %a@,```@]@." (print_pb state pb) ();
+  then Format.printf "@[<v>kodkod problem:@ ```@ %a@,```@]@." (pp_pb state pb) ();
   let res, short = solve ~deadline state pb in
   Utils.debugf ~section 2 "@[<2>kodkod result for size %d:@ %a@]"
-    (fun k->k size Res.print_head res);
+    (fun k->k size Res.pp_head res);
   match res with
     | Res.Unsat i when state.trivially_unsat ->
       (* stop increasing the size *)
@@ -512,7 +512,7 @@ let call_real ~print_model ~prio ~print pb =
          | Res.Sat (m,_) when print_model ->
            let pp_ty oc _ = CCFormat.string oc "$i" in
            Format.printf "@[<2>@{<Yellow>raw kodkod model@}:@ @[%a@]@]@."
-             (Model.print (CCFun.const FO_rel.print_expr) pp_ty) m
+             (Model.pp (CCFun.const FO_rel.pp_expr) pp_ty) m
          | _ -> ()
        end;
        res, short)
@@ -530,7 +530,7 @@ let call ?(print_model=false) ?(prio=10) ~print ~dump pb = match dump with
          let state = create_state ~timer:(Utils.Time.start_timer()) ~default_size:2 pb in
          Format.fprintf out
            "@[<v>%a@]@."
-           (print_pb state pb) ());
+           (pp_pb state pb) ());
     let i = Res.mk_info ~backend:"kodkod" ~time:0. () in
     S.Task.return (Res.Unknown [Res.U_other (i, "--dump")]) S.No_shortcut
 

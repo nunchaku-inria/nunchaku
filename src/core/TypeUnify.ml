@@ -32,7 +32,7 @@ module Make(T : TI.REPR) = struct
   let fpf = Format.fprintf
   let spf = CCFormat.sprintf
 
-  let pp_ty = P.print
+  let pp_ty = P.pp
 
   let () = Printexc.register_printer
       (function
@@ -96,7 +96,7 @@ module Make(T : TI.REPR) = struct
               let var' = Subst.find_exn ~subst:!bound v2 in
               if Var.equal var var' then ()
               else failf ~stack "bound variables %a and %a are incompatible"
-                  Var.print v1 Var.print v2
+                  Var.pp v1 Var.pp v2
             with Not_found ->
               fail ~stack "incompatible variables"
           end
@@ -106,13 +106,13 @@ module Make(T : TI.REPR) = struct
           if occur_check_ ~var ty2
           then
             failf ~stack
-              "cycle detected (variable %a occurs in type)" MetaVar.print var
+              "cycle detected (variable %a occurs in type)" MetaVar.pp var
           else MetaVar.bind ~var ty2
         | _, TyI.Meta var when MetaVar.can_bind var ->
           if occur_check_ ~var ty1
           then
             failf ~stack
-              "cycle detected (variable %a occurs in type)" MetaVar.print var
+              "cycle detected (variable %a occurs in type)" MetaVar.pp var
           else MetaVar.bind ~var ty1
         | TyI.App (f1,l1), TyI.App (f2,l2) ->
           (* NOTE: if partial application in types is allowed,

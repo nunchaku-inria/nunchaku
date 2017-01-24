@@ -20,7 +20,7 @@ module TyBuiltin = struct
     ]
   let equal = (=)
   let compare = Pervasives.compare
-  let print out = function
+  let pp out = function
     | `Unitype -> CCFormat.string out "unitype"
     | `Prop -> CCFormat.string out "prop"
 end
@@ -31,7 +31,7 @@ module Builtin = struct
     ]
   let equal = (=)
   let compare = Pervasives.compare
-  let print out = function
+  let pp out = function
     | `Int n -> CCFormat.int out n
 end
 
@@ -316,110 +316,110 @@ let fpf = Format.fprintf
 
 let pp_list_ ?(sep=" ") out p = CCFormat.list ~start:"" ~stop:"" ~sep out p
 
-let rec print_ty out ty = match Ty.view ty with
-  | TyApp (id, []) -> ID.print out id
+let rec pp_ty out ty = match Ty.view ty with
+  | TyApp (id, []) -> ID.pp out id
   | TyApp (id, l) ->
-    fpf out "@[<2>(%a@ %a)@]" ID.print id (pp_list_ print_ty) l
-  | TyBuiltin b -> TyBuiltin.print out b
+    fpf out "@[<2>(%a@ %a)@]" ID.pp id (pp_list_ pp_ty) l
+  | TyBuiltin b -> TyBuiltin.pp out b
 
-let print_toplevel_ty out (args, ret) =
-  if args=[] then print_ty out ret
-  else fpf out "@[<2>(%a -> %a)@]" (pp_list_ ~sep:" × " print_ty) args print_ty ret
+let pp_toplevel_ty out (args, ret) =
+  if args=[] then pp_ty out ret
+  else fpf out "@[<2>(%a -> %a)@]" (pp_list_ ~sep:" × " pp_ty) args pp_ty ret
 
-let rec print_term out t = match T.view t with
-  | Builtin b -> Builtin.print out b
-  | Var v -> Var.print_full out v
-  | App (f,[]) -> ID.print out f
+let rec pp_term out t = match T.view t with
+  | Builtin b -> Builtin.pp out b
+  | Var v -> Var.pp_full out v
+  | App (f,[]) -> ID.pp out f
   | App (f,l) ->
-    fpf out "(@[<2>%a@ %a@])" ID.print f (pp_list_ print_term) l
+    fpf out "(@[<2>%a@ %a@])" ID.pp f (pp_list_ pp_term) l
   | Fun (v,t) ->
     fpf out "(@[<2>fun %a:%a.@ %a@])"
-      Var.print_full v print_ty (Var.ty v) print_term t
+      Var.pp_full v pp_ty (Var.ty v) pp_term t
   | Mu (v,t) ->
-    fpf out "(@[<2>mu %a.@ %a@])" Var.print_full v print_term t
+    fpf out "(@[<2>mu %a.@ %a@])" Var.pp_full v pp_term t
   | DataTest (c,t) ->
-    fpf out "(@[<2>is-%a@ %a@])" ID.print c print_term t
+    fpf out "(@[<2>is-%a@ %a@])" ID.pp c pp_term t
   | DataSelect (c,n,t) ->
-    fpf out "(@[<2>select-%a-%d@ %a@])" ID.print c n print_term t
+    fpf out "(@[<2>select-%a-%d@ %a@])" ID.pp c n pp_term t
   | Undefined t ->
-    fpf out "(@[<2>undefined@ %a@])" print_term t
+    fpf out "(@[<2>undefined@ %a@])" pp_term t
   | Undefined_atom (c,ty,[]) ->
-    fpf out "(@[<2>undefined-%a@ ty:%a@])" ID.print c print_toplevel_ty ty
+    fpf out "(@[<2>undefined-%a@ ty:%a@])" ID.pp c pp_toplevel_ty ty
   | Undefined_atom (c,ty,l) ->
     fpf out "(@[<2>undefined-%a@ ty:%a@ %a@])"
-      ID.print c print_toplevel_ty ty (pp_list_ print_term) l
+      ID.pp c pp_toplevel_ty ty (pp_list_ pp_term) l
   | Unparsable ty ->
-    fpf out "(@[<2>unparsable ty:%a@])" print_ty ty
+    fpf out "(@[<2>unparsable ty:%a@])" pp_ty ty
   | Let (v,t,u) ->
     fpf out "(@[<2>let@ %a =@ %a in@ %a@])"
-      Var.print_full v print_term t print_term u
+      Var.pp_full v pp_term t pp_term u
   | Ite (a,b,c) ->
     fpf out "(@[<2>ite@ %a@ %a@ %a@])"
-      print_term a print_term b print_term c
+      pp_term a pp_term b pp_term c
   | True -> CCFormat.string out "true"
   | False -> CCFormat.string out "false"
-  | Eq (a,b) -> fpf out "(@[%a =@ %a@])" print_term a print_term b
-  | And l -> fpf out "(@[<hv1>and@ %a@])" (pp_list_ print_term) l
-  | Or l ->  fpf out "(@[<hv1>or@ %a@])" (pp_list_ print_term) l
-  | Not f -> fpf out "(@[not@ %a@])" print_term f
-  | Imply (a,b) -> fpf out "(@[<hv>%a@ =>@ %a@])" print_term a print_term b
-  | Equiv (a,b) -> fpf out "(@[<hv>%a@ <=>@ %a@])" print_term a print_term b
+  | Eq (a,b) -> fpf out "(@[%a =@ %a@])" pp_term a pp_term b
+  | And l -> fpf out "(@[<hv1>and@ %a@])" (pp_list_ pp_term) l
+  | Or l ->  fpf out "(@[<hv1>or@ %a@])" (pp_list_ pp_term) l
+  | Not f -> fpf out "(@[not@ %a@])" pp_term f
+  | Imply (a,b) -> fpf out "(@[<hv>%a@ =>@ %a@])" pp_term a pp_term b
+  | Equiv (a,b) -> fpf out "(@[<hv>%a@ <=>@ %a@])" pp_term a pp_term b
   | Forall (v,f) ->
-    fpf out "(@[forall %a@ %a@])" Var.print_full v print_term f
+    fpf out "(@[forall %a@ %a@])" Var.pp_full v pp_term f
   | Exists (v,f) ->
-    fpf out "(@[exists %a@ %a@])" Var.print_full v print_term f
+    fpf out "(@[exists %a@ %a@])" Var.pp_full v pp_term f
 
-let print_term' _prec = print_term
+let pp_term' _prec = pp_term
 
-let print_model out m =
-  let pp_pair out (t,u) = fpf out "@[%a -> %a@]" print_term t print_term u in
+let pp_model out m =
+  let pp_pair out (t,u) = fpf out "@[%a -> %a@]" pp_term t pp_term u in
   fpf out "@[model {@,@[<hv>%a@]}@]"
     (CCFormat.list ~start:"" ~stop:"" ~sep:","  pp_pair) m
 
-let print_attr out = function
+let pp_attr out = function
   | Attr_pseudo_prop -> fpf out "pseudo_prop"
   | Attr_pseudo_true -> fpf out "pseudo_true"
 
-let print_attrs out = function
+let pp_attrs out = function
   | [] -> ()
-  | l -> fpf out " [@[%a@]]" (pp_list_ ~sep:"," print_attr) l
+  | l -> fpf out " [@[%a@]]" (pp_list_ ~sep:"," pp_attr) l
 
-let print_statement out s = match s with
+let pp_statement out s = match s with
   | TyDecl (id, n, attrs) ->
-    fpf out "@[<2>type %a (arity %d%a).@]" ID.print id n print_attrs attrs
+    fpf out "@[<2>type %a (arity %d%a).@]" ID.pp id n pp_attrs attrs
   | Decl (v, ty, attrs) ->
-    fpf out "@[<2>val %a@ : %a%a.@]" ID.print v print_toplevel_ty ty print_attrs attrs
-  | Axiom t -> fpf out "@[<2>axiom %a.@]" print_term t
+    fpf out "@[<2>val %a@ : %a%a.@]" ID.pp v pp_toplevel_ty ty pp_attrs attrs
+  | Axiom t -> fpf out "@[<2>axiom %a.@]" pp_term t
   | CardBound (ty_id, which, n) ->
     let s = match which with `Max -> "max_card" | `Min -> "min_card" in
-    fpf out "@[<2>%s %a@ = %d.@]" s ID.print ty_id n
+    fpf out "@[<2>%s %a@ = %d.@]" s ID.pp ty_id n
   | MutualTypes (k, l) ->
-    let pp_arg = print_ty in
+    let pp_arg = pp_ty in
     let pp_tyvars_ out = function
       | [] -> ()
-      | l -> fpf out "pi %a. " (pp_list_ ID.print) l
+      | l -> fpf out "pi %a. " (pp_list_ ID.pp) l
     in
     let pp_cstor out c = match c.cstor_args with
-      | [] -> ID.print out c.cstor_name
+      | [] -> ID.pp out c.cstor_name
       | _ ->
-        fpf out "@[<2>(%a@ %a)@]" ID.print c.cstor_name
+        fpf out "@[<2>(%a@ %a)@]" ID.pp c.cstor_name
           (pp_list_ ~sep:" " pp_arg) c.cstor_args
     in
-    let print_tydef out tydef =
+    let pp_tydef out tydef =
       fpf out "@[<hv2>%a :=@ %a@]"
-        ID.print tydef.ty_name
+        ID.pp tydef.ty_name
         (pp_list_ ~sep:" | " pp_cstor)
         (ID.Map.to_list tydef.ty_cstors |> List.map snd)
     in
     fpf out "@[<hv2>%s %a@,%a.@]"
       (match k with `Data -> "data" | `Codata -> "codata")
       pp_tyvars_ l.tys_vars
-      (pp_list_ ~sep:" and " print_tydef) l.tys_defs
-  | Goal t -> fpf out "@[<2>goal %a.@]" print_term t
+      (pp_list_ ~sep:" and " pp_tydef) l.tys_defs
+  | Goal t -> fpf out "@[<2>goal %a.@]" pp_term t
 
-let print_problem out pb =
+let pp_problem out pb =
   fpf out "@[<v>%a@]"
-    (CCVector.print ~start:"" ~stop:"" ~sep:"" print_statement)
+    (CCVector.print ~start:"" ~stop:"" ~sep:"" pp_statement)
     (Problem.statements pb)
 
 (** {2 Utils} *)
@@ -430,19 +430,19 @@ module Util = struct
   type cond = (T.t, Ty.t) DT.flat_test
 
   exception Parse_err of unit lazy_t
-  (* evaluate the lazy -> print a warning *)
+  (* evaluate the lazy -> pp a warning *)
 
   let mk_eq = DT.mk_flat_test
   let mk_true v = mk_eq v T.true_
 
   (* split [t] into a list of equations [var = t'] where [var in vars] *)
   let rec get_eqns_exn ~vars t : cond list =
-    Utils.debugf 5 "get_eqns @[%a@]" (fun k->k print_term t);
+    Utils.debugf 5 "get_eqns @[%a@]" (fun k->k pp_term t);
     let fail() =
       let msg = lazy (
         Utils.warningf Utils.Warn_model_parsing_error
           "expected a test <var = term>@ with <var> among @[%a@],@ but got `@[%a@]`@]"
-          (CCFormat.list Var.print_full) vars print_term t
+          (CCFormat.list Var.pp_full) vars pp_term t
       ) in
       raise (Parse_err msg)
     in
@@ -461,7 +461,7 @@ module Util = struct
         let msg = lazy (
           Utils.warningf Utils.Warn_model_parsing_error
             "expected a boolean variable among @[%a@],@ but got @[%a@]@]"
-            (CCFormat.list Var.print_full) vars print_term t
+            (CCFormat.list Var.pp_full) vars pp_term t
         ) in
         raise (Parse_err msg)
       | _ -> fail()

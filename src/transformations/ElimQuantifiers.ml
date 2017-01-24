@@ -112,7 +112,7 @@ let encode_term (state:state) lenv (pol:Pol.t) (t:term) : term =
           Utils.debugf ~section 3
             "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
              quantifying over infinite encoded type `@[%a@]`@]"
-            (fun k->k P.print t P.print res Pol.pp pol P.print (Var.ty v));
+            (fun k->k P.pp t P.pp res Pol.pp pol P.pp (Var.ty v));
           res
         | `Keep ->
           (* make a fresh undefined constant, parametrized over all
@@ -202,7 +202,7 @@ let pipe ~print ~check ~mode =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module Ppb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after %s@}:@ %a@]@." name Ppb.print)
+      Format.printf "@[<v2>@{<Yellow>after %s@}:@ %a@]@." name Ppb.pp)
     @
     Utils.singleton_if check () ~f:(fun () ->
       let module C = TypeCheck.Make(T) in

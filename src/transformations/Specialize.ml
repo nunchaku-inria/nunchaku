@@ -113,10 +113,10 @@ module CallGraph = struct
     CCGraph.make_tuple children
      *)
 
-  let print out g =
+  let pp out g =
     let pp_node out = function
       | Non_identical -> CCFormat.string out "<non-identical>"
-      | Arg (id,n) -> fpf out "arg(%a,%d)" ID.print id n
+      | Arg (id,n) -> fpf out "arg(%a,%d)" ID.pp id n
     in
     let pp_pair out (n,c) =
       fpf out "@[<2>%a ->@ [@[%a@]]@]"
@@ -176,10 +176,10 @@ end = struct
   let hash_fun a h = CCHash.(list (pair int U.hash_fun_alpha_eq)) a.terms h
   let hash = CCHash.apply hash_fun
 
-  let pp_iterm out (i,t) = fpf out "@[%d -> %a@]" i P.print t
+  let pp_iterm out (i,t) = fpf out "@[%d -> %a@]" i P.pp t
   let pp_iterms out =
     fpf out "[@[<hv>%a@]]" (CCFormat.list ~start:"" ~stop:"" pp_iterm)
-  let print out a = pp_iterms out a.terms
+  let pp out a = pp_iterms out a.terms
   let section = section
   let fail = errorf
 end
@@ -415,11 +415,11 @@ let compute_specializable_args_def ~self (defs : (_,_) Stmt.rec_defs) =
        Utils.debugf ~section 3 "@[<2>can specialize `@[%a : %a@]` on:@ @[%a@]@]"
          (fun k->
             let ty = def.Stmt.rec_defined.Stmt.defined_ty in
-            k ID.print_full id P.print ty CCFormat.(array bool) bv);
+            k ID.pp_full id P.pp ty CCFormat.(array bool) bv);
     )
     defs;
   Utils.debugf ~section 5 "@[<2>call graph: @[%a@]@]"
-    (fun k->k CallGraph.print cga.cga_graph);
+    (fun k->k CallGraph.pp cga.cga_graph);
   ()
 
 (* similar to {!compute_specializable_args_def} *)
@@ -443,11 +443,11 @@ let compute_specializable_args_pred ~self (preds : (_,_) Stmt.pred_def list) =
        Utils.debugf ~section 3 "@[<2>can specialize `@[%a : %a@]` on:@ @[%a@]@]"
          (fun k->
             let ty = pred.Stmt.pred_defined.Stmt.defined_ty in
-            k ID.print_full id P.print ty CCFormat.(array bool) bv);
+            k ID.pp_full id P.pp ty CCFormat.(array bool) bv);
     )
     preds;
   Utils.debugf ~section 5 "@[<2>call graph: @[%a@]@]"
-    (fun k->k CallGraph.print cga.cga_graph);
+    (fun k->k CallGraph.pp cga.cga_graph);
   ()
 
 (* can [i]-th argument of [f] be specialized? *)
@@ -456,7 +456,7 @@ let can_specialize_ ~state f i =
     let bv = ID.Tbl.find state.specializable_args f in
     bv.(i)
   with Not_found ->
-    errorf "could not find specializable_args[%a]" ID.print_full f
+    errorf "could not find specializable_args[%a]" ID.pp_full f
 
 (* before processing a statement, analyse the call graph *)
 let analyze_cg_st ~self stmt =
@@ -550,7 +550,7 @@ let fun_is_deterministic ~self (f:ID.t): bool =
     | Env.Copy_ty _ | Env.Cstor _ | Env.Data _ -> false
   in
   Utils.debugf ~section 4 "@[<2>symbol `%a` deterministic? %B@]"
-    (fun k->k ID.print_full f res);
+    (fun k->k ID.pp_full f res);
   res
 
 (* do NOT specialize if at least one closure argument
@@ -639,7 +639,7 @@ let find_new_fun_exn ~state f args =
     | Some res -> res
     | None ->
       errorf "@[<2>could not find new definition for %a on @[%a@]@]"
-        ID.print f Arg.print args
+        ID.pp f Arg.pp args
 
 let add_instance ~self f i: unit =
   let state = Trav.state self in
@@ -695,7 +695,7 @@ let rec specialize_term ~self ~depth subst t =
                  [new_ty] is the type of the specialized version of [f] *)
               Utils.debugf ~section 5
                 "@[<2>@{<Cyan>specialize@} `@[%a@]`@ on @[%a@]@ with new type `@[%a@]`@]"
-                (fun k->k P.print t Arg.print spec_args P.print new_ty);
+                (fun k->k P.pp t Arg.pp spec_args P.pp new_ty);
               let nf = get_new_fun ~self ~depth f_id ~old_ty:ty ~new_ty spec_args in
               (* ensure that [nf] is defined *)
               Trav.call_dep self ~depth f_id spec_args;
@@ -766,7 +766,7 @@ let specialize_eqns
   (term,term) Stmt.equations -> Arg.t -> (term,term) Stmt.equations
   = fun ~self ~depth id eqns args ->
     Utils.debugf ~section 2 "@[<2>specialize@ `@[%a@]`@ on @[%a@]@]"
-      (fun k->k (PStmt.print_eqns id) eqns Arg.print args);
+      (fun k->k (PStmt.pp_eqns id) eqns Arg.pp args);
     let state = Trav.state self in
     match eqns with
       | Stmt.Eqn_single (vars, rhs) ->
@@ -814,7 +814,7 @@ let specialize_clause
   (term,term) Stmt.pred_clause -> Arg.t -> (term,term) Stmt.pred_clause
   = fun ~self ~depth id c args ->
     Utils.debugf ~section 2 "@[<2>specialize@ `@[%a@]`@ on @[%a@]@]"
-      (fun k->k PStmt.print_clause c Arg.print args);
+      (fun k->k PStmt.pp_clause c Arg.pp args);
     let state = Trav.state self in
     if Arg.is_empty args then (
       (* still need to traverse the clause *)
@@ -883,7 +883,7 @@ let dispatch = {
   (* specialize mutual recursive definitions *)
   do_def = (fun self ~depth def args ->
     Utils.debugf ~section 5 "@[<2>specialize def `@[%a@]`@ on `@[%a@]`@]"
-      (fun k->k ID.print def.Stmt.rec_defined.Stmt.defined_head Arg.print args);
+      (fun k->k ID.pp def.Stmt.rec_defined.Stmt.defined_head Arg.pp args);
     let st = Trav.state self in
     let id = def |> Stmt.defined_of_rec |> Stmt.id_of_defined in
     let eqns = specialize_eqns ~self ~depth id def.Stmt.rec_eqns args in
@@ -900,7 +900,7 @@ let dispatch = {
   (* specialize (co)inductive predicates *)
   do_pred = (fun self ~depth _wf _kind pred args ->
     Utils.debugf ~section 5 "@[<2>specialize pred `@[%a@]`@ on `@[%a@]`@]"
-      (fun k->k ID.print pred.Stmt.pred_defined.Stmt.defined_head Arg.print args);
+      (fun k->k ID.pp pred.Stmt.pred_defined.Stmt.defined_head Arg.pp args);
     let st = Trav.state self in
     assert (pred.Stmt.pred_tyvars=[]);
     let id = pred.Stmt.pred_defined.Stmt.defined_head in
@@ -1060,16 +1060,16 @@ module InstanceGraph = struct
     |> Sequence.filter_map
       (function (_,None) -> None | (v1,Some v2) -> Some (v1,v2))
 
-  let print out g =
+  let pp out g =
     let pp_vertex out v =
-      fpf out "{@[%a on %a@]}" ID.print v.v_spec_id Arg.pp_iterms v.v_spec_args in
+      fpf out "{@[%a on %a@]}" ID.pp v.v_spec_id Arg.pp_iterms v.v_spec_args in
     let pp_edge out = function
       | None -> ()
       | Some (sigma,v') ->
-        fpf out " --> @[%a@] with @[%a@]" pp_vertex v' (Subst.print P.print) sigma
+        fpf out " --> @[%a@] with @[%a@]" pp_vertex v' (Subst.pp P.pp) sigma
     in
     let pp_item out (v,e) = fpf out "@[<2>%a@,%a@]" pp_vertex v pp_edge e in
-    fpf out "@[<2>instance graph for %a:@ @[<v>%a@]@]" ID.print g.id
+    fpf out "@[<2>instance graph for %a:@ @[<v>%a@]@]" ID.pp g.id
       (CCFormat.list ~start:"" ~stop:"" pp_item) g.vertices
 end
 
@@ -1184,7 +1184,7 @@ let specialize_problem pb =
          let ty = Env.find_ty_exn ~env:(Trav.env trav) id in
          let _, ty_args, _ = U.ty_unfold ty in
          let g = InstanceGraph.make id ty_args nfs.nfs_instances in
-         Utils.debugf ~section 2 "%a" (fun k->k InstanceGraph.print g);
+         Utils.debugf ~section 2 "%a" (fun k->k InstanceGraph.pp g);
          add_congruence_axioms (CCVector.push res) g;
        ))
     state.new_funs;
@@ -1211,7 +1211,7 @@ let is_spec_const (state:decode_state) (t:T.t) = match T.repr t with
 
 let find_spec (state:decode_state) id : decode_state_fun =
   try ID.Tbl.find state id
-  with Not_found -> errorf "could not find the decoding data for %a" ID.print id
+  with Not_found -> errorf "could not find the decoding data for %a" ID.pp id
 
 (* each element [i, t] of [args] is inserted in position [i] in [l]
    preconds:
@@ -1231,7 +1231,7 @@ let insert_pos l args : _ list =
   aux 0 l args
 
 let pp_dsf out dsf =
-  fpf out "@[(spec %a on @[%a@])@]" ID.print dsf.dsf_spec_of Arg.print dsf.dsf_arg
+  fpf out "@[(spec %a on @[%a@])@]" ID.pp dsf.dsf_spec_of Arg.pp dsf.dsf_arg
 
 (* convert a specialized function into a λ-term that evaluates to the
    non-specialized function when fully applied *)
@@ -1262,7 +1262,7 @@ let dsf_to_fun (dsf:decode_state_fun) : T.t =
   let res = U.fun_l vars body in
   Utils.debugf ~section 5
     "@[<2>dsf_to_fun `@[%a@]`@ --> `@[%a@]`@]"
-    (fun k->k pp_dsf dsf P.print res);
+    (fun k->k pp_dsf dsf P.pp res);
   assert (U.is_closed res);
   res
 
@@ -1276,14 +1276,14 @@ let rec decode_term_rec (state:decode_state) subst t =
     | TI.Const f_id when is_spec_fun state f_id ->
       let dsf = find_spec state f_id in
       Utils.debugf ~section 5 "@[<2>decode `@[%a@]`@ from %a@]"
-        (fun k->k P.print t pp_dsf dsf);
+        (fun k->k P.pp t pp_dsf dsf);
       dsf_to_fun dsf
     | TI.App (f, l) ->
       begin match T.repr f with
         | TI.Const f_id when is_spec_fun state f_id ->
           let dsf = find_spec state f_id in
           Utils.debugf ~section 5 "@[<2>decode `@[%a@]`@ from %a@]"
-            (fun k->k P.print t pp_dsf dsf);
+            (fun k->k P.pp t pp_dsf dsf);
           (* decode arguments, and decode specialized function *)
           let l' = List.map (decode_term_rec state subst) l in
           let f' =
@@ -1300,7 +1300,7 @@ and decode_term_rec' state subst t =
 let decode_term state t : T.t =
   let t' = decode_term_rec state Subst.empty t in
   Utils.debugf ~section 5
-    "@[<2>decode_term `@[%a@]`@ into `@[%a@]`@]" (fun k->k P.print t P.print t');
+    "@[<2>decode_term `@[%a@]`@ into `@[%a@]`@]" (fun k->k P.pp t P.pp t');
   t'
 
 type aggregate_model = {
@@ -1335,8 +1335,8 @@ let dt_of_spec_dt state ~vars (dt,dsf) : (_,_) DT.t =
   Utils.debugf ~section 5
     "@[<2>generalize dt@ `@[<2>@[%a@]@]`@ on vars @[%a@]@ with arg %a@]"
     (fun k->k
-        DTU.print dt (CCFormat.list Var.print_full) vars
-        Arg.print dsf.dsf_arg);
+        DTU.pp dt (CCFormat.list Var.pp_full) vars
+        Arg.pp dsf.dsf_arg);
   let n_closure_vars = List.length (Arg.vars dsf.dsf_arg) in
   assert (List.length (DT.vars dt)
     = List.length vars - Arg.length dsf.dsf_arg + n_closure_vars);
@@ -1371,7 +1371,7 @@ let dt_of_spec_dt state ~vars (dt,dsf) : (_,_) DT.t =
   (* decode terms *)
   let dt = DT.map dt ~ty:CCFun.id ~term:(decode_term state) in
   Utils.debugf ~section 5 "@[<2>... obtaining@ `@[<v>%a@]`@]"
-    (fun k->k DTU.print dt);
+    (fun k->k DTU.pp dt);
   dt
 
 (* TODO: if the function is also non-specialized, only take its model? *)
@@ -1412,7 +1412,7 @@ let decode_model state m =
           None (* drop models of specialized funs *)
         | _ ->
           Utils.debugf ~section 5
-            "@[<2>decode DT `@[%a@]`@]" (fun k->k DTU.print dt);
+            "@[<2>decode DT `@[%a@]`@]" (fun k->k DTU.pp dt);
           let dt =
             DTU.rename_vars dt
             |> DT.map ~term:(decode_term_rec state Subst.empty) ~ty:CCFun.id
@@ -1428,7 +1428,7 @@ let decode_model state m =
        let dt = dt_of_am state am in
        Utils.debugf ~section 3
          "@[<2>decoded DT for %a:@ %a@]"
-         (fun k->k ID.print f_id DTU.print dt);
+         (fun k->k ID.pp f_id DTU.pp dt);
        Model.add_value m (t, dt, am.am_kind))
     spec_funs
     m'
@@ -1439,7 +1439,7 @@ let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module P = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after specialization@}: %a@]@." P.print)
+      Format.printf "@[<v2>@{<Yellow>after specialization@}: %a@]@." P.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
         let module C = TypeCheck.Make(T) in
@@ -1459,7 +1459,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after specialize@}:@ %a@]@."
-         (Problem.Res.print P.print' P.print)]
+         (Problem.Res.pp P.pp' P.pp)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model state) in
