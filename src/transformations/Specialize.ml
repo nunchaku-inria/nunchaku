@@ -1107,11 +1107,11 @@ let mk_self_congruence (v:InstanceGraph.vertex): term option =
     let spec_term = IG.specialized_term_of_vertex v in
     let conds =
       List.map
-         (fun arg ->
-            U.eq
-              (U.eval_renaming ~subst:subst1 arg)
-              (U.eval_renaming ~subst:subst2 arg))
-         v.IG.v_all_args
+        (fun arg ->
+           U.eq
+             (U.eval_renaming ~subst:subst1 arg)
+             (U.eval_renaming ~subst:subst2 arg))
+        v.IG.v_all_args
     and conclusion =
       U.eq
         (U.eval_renaming ~subst:subst1 spec_term)

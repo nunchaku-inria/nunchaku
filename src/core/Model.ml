@@ -523,8 +523,8 @@ module DT_util = struct
     let l =
       CCList.filter_map
         (fun (c,subst) -> match c with
-          | DT.Yield _ -> assert false
-          | DT.Cases {DT.default; _} -> CCOpt.map (fun x->x,subst) default)
+           | DT.Yield _ -> assert false
+           | DT.Cases {DT.default; _} -> CCOpt.map (fun x->x,subst) default)
         l
     in
     begin match l with

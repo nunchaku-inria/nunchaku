@@ -7,7 +7,7 @@
 
     Positive existentials are replaced by fresh constants declared at
     top-level, negative ones are replaced by [false].
-    *)
+*)
 
 open Nunchaku_core
 

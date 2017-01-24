@@ -154,9 +154,9 @@ let pipe ~print ~check =
       let module Ppb = Problem.Print(P)(P) in
       Format.printf "@[<v2>@{<Yellow>after %s@}:@ %a@]@." name Ppb.pp)
     @
-    Utils.singleton_if check () ~f:(fun () ->
-      let module C = TypeCheck.Make(T) in
-      C.empty () |> C.check_problem)
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.empty () |> C.check_problem)
   in
   let decode st = Problem.Res.map_m ~f:(decode_model st) in
   Transform.make

@@ -1670,8 +1670,8 @@ module Util(T : S)
         | Let (_, _, _), _
         | Match _, _ ->
           error_unif_ "pattern is not first-order" t1 t2
-          (* let module P = Print(T) in
-          Utils.invalid_argf "pattern `@[%a@]` is not first-order" P.pp t1 *)
+        (* let module P = Print(T) in
+           Utils.invalid_argf "pattern `@[%a@]` is not first-order" P.pp t1 *)
         | TyBuiltin b1, TyBuiltin b2 when TyBuiltin.equal b1 b2 -> subst
         | TyMeta _, _ -> assert false
         | Builtin _, _

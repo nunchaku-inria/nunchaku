@@ -195,7 +195,7 @@ let add_path (lst:local_state) (v:ty Var.t) (p:pattern): local_state =
 
    @param vars list of distinct variables on the LHS of the new unique equation
    @param l the list of equations in the current branch
-  invariant: [List.length vars = List.length e.eqn_pats] for every [e in l]
+   invariant: [List.length vars = List.length e.eqn_pats] for every [e in l]
 *)
 let rec compile_equations lst vars (l:equation list) : term =
   begin match vars, l with
