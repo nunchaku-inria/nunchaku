@@ -466,6 +466,11 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
   | A.And l ->
     let l = List.map (term_of_tip ~env penv) l in
     U.and_ l
+  | A.Distinct l ->
+    List.map (term_of_tip ~env penv) l
+    |> CCList.diagonal
+    |> List.map (fun (a,b) -> U.neq a b)
+    |> U.and_
   | A.Or l ->
     let l = List.map (term_of_tip ~env penv) l in
     U.or_ l

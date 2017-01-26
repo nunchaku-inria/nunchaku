@@ -28,6 +28,7 @@
 %token FALSE
 %token OR
 %token AND
+%token DISTINCT
 %token NOT
 %token EQ
 %token IF
@@ -281,6 +282,7 @@ term:
   | LEFT_PAREN OR l=term+ RIGHT_PAREN { A.or_ l }
   | LEFT_PAREN AND l=term+ RIGHT_PAREN { A.and_ l }
   | LEFT_PAREN NOT t=term RIGHT_PAREN { A.not_ t }
+  | LEFT_PAREN DISTINCT l=term+ RIGHT_PAREN { A.distinct l }
   | LEFT_PAREN EQ a=term b=term RIGHT_PAREN { A.eq a b }
   | LEFT_PAREN ARROW a=term b=term RIGHT_PAREN { A.imply a b }
   | LEFT_PAREN f=IDENT args=term+ RIGHT_PAREN { A.app f args }

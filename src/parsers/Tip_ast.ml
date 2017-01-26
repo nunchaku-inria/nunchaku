@@ -43,6 +43,7 @@ type term =
   | And of term list
   | Or of term list
   | Not of term
+  | Distinct of term list
   | Cast of term * ty (* type cast *)
   | Forall of (var * ty) list * term
   | Exists of (var * ty) list * term
@@ -109,6 +110,7 @@ let eq a b = Eq (a,b)
 let imply a b = Imply(a,b)
 let and_ l = And l
 let or_ l = Or l
+let distinct l = Distinct l
 let cast t ~ty = Cast (t, ty)
 let forall vars f = match vars with [] -> f | _ -> Forall (vars, f)
 let exists vars f = match vars with [] -> f | _ -> Exists (vars, f)
@@ -192,6 +194,7 @@ let rec pp_term out (t:term) = match t with
   | And l -> fpf out "(@[<hv>and@ %a@])" (pp_list pp_term) l
   | Or l -> fpf out "(@[<hv>or@ %a@])" (pp_list pp_term) l
   | Not t -> fpf out "(not %a)" pp_term t
+  | Distinct l -> fpf out "(@[distinct@ %a@])" (pp_list pp_term) l
   | Cast (t, ty) -> fpf out "(@[<hv2>as@ @[%a@]@ @[%a@]@])" pp_term t pp_ty ty
   | Forall (vars,f) ->
     fpf out "(@[<hv2>forall@ (@[%a@])@ %a@])" (pp_list pp_typed_var) vars pp_term f
