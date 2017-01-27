@@ -596,8 +596,9 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
       "expected leaf or test against a variable in [@[%a@]],@ got: `@[%a@]`"
       (CCFormat.list Var.pp_full) vars P.pp t
   in
-  (* check that [t] is an equation [v = t'], return [t'] *)
-  let get_eqn_exn v t: term =
+  (* check that [t] is an equation [v = t'], return [t'].
+     otherwise returns [None] *)
+  let get_eqn_exn v vars_tail t: term option =
     let fail() =
       error_parse_modelf
         "expected a test <%a = term>,@ but got `@[%a@]`@]"
@@ -608,13 +609,16 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
     match T.repr t with
       | TI.Builtin (`Eq (t1, t2)) ->
         begin match T.repr t1, T.repr t2 with
-          | TI.Var v', _ when Var.equal v v' -> t2
-          | _, TI.Var v' when Var.equal v v' -> t1
+          | TI.Var v', _ when Var.equal v v' -> Some t2
+          | _, TI.Var v' when Var.equal v v' -> Some t1
+          | TI.Var v', _ when List.exists (Var.equal v') vars_tail -> None
+          | _, TI.Var v' when List.exists (Var.equal v') vars_tail -> None
           | _ -> fail()
         end
       | TI.Var v' when Var.equal v v' ->
         assert (U.ty_is_Prop (Var.ty v'));
-        U.true_
+        Some U.true_
+      | TI.Var v' when List.exists (Var.equal v') vars_tail -> None
       | TI.Var _ ->
         error_parse_modelf
           "expected a boolean variable among @[%a@],@ but got @[%a@]@]"
@@ -627,14 +631,24 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
       | _, [] -> Model.DT.yield t
       | TI.Builtin (`Ite (_,_,_)), v :: vars_tail ->
         let tests, else_ = U.ite_unfold t in
-        let tests =
-          List.map
-            (fun (a, b) -> get_eqn_exn v a, conv_body ~vars:vars_tail b)
+        let tests_v, other_tests =
+          CCList.partition_map
+            (fun (a, b) ->
+               match get_eqn_exn v vars_tail a with
+                 | Some t ->
+                   let b = conv_body ~vars:vars_tail b in
+                   `Left (t, b)
+                 | None -> `Right (a, b))
             tests
-        and default =
-          Some (conv_body ~vars:vars_tail else_)
         in
-        Model.DT.mk_tests v ~tests ~default
+        (* default contains both tests on [vars_tail] and the [else_] branch *)
+        let default =
+          let t' =
+            List.fold_right (fun (a,b) c -> U.ite a b c) other_tests else_
+          in
+          Some (conv_body ~vars:vars_tail t')
+        in
+        Model.DT.mk_tests v ~tests:tests_v ~default
       | (TI.Const _ | TI.App _ | TI.Var _ | TI.Bind _ | TI.Builtin _), _::_ ->
         (* yield early, as a constant branch *)
         Model.DT.const vars (Model.DT.yield t)
@@ -652,6 +666,9 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
                 Some (conv_body ~vars:vars_tail d), missing
             in
             Model.DT.mk_match v ~by_cstor:m ~default:def ~missing
+          | TI.Var v' when List.exists (Var.equal v') vars_tail ->
+            (* test on a variable that comes later. *)
+            Model.DT.const [v] (conv_body ~vars:vars_tail t)
           | _ ->
             fail_ ~vars t
         end
