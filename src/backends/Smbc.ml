@@ -448,7 +448,7 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
     in
     U.match_with u m ~def
   | A.If (a,b,c) ->
-    U.ite (term_of_tip ~env penv a)(term_of_tip ~env penv b)(term_of_tip ~env penv c)
+    U.No_simp.ite (term_of_tip ~env penv a)(term_of_tip ~env penv b)(term_of_tip ~env penv c)
   | A.Let (l,u) ->
     let penv = List.fold_left
         (fun penv (s,t) ->
@@ -461,20 +461,20 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
     let penv, v = typed_var_of_tip penv v in
     let body = term_of_tip ~env penv body in
     U.fun_ v body
-  | A.Eq (a,b) -> U.eq (term_of_tip ~env penv a)(term_of_tip ~env penv b)
-  | A.Imply (a,b) -> U.imply (term_of_tip ~env penv a)(term_of_tip ~env penv b)
+  | A.Eq (a,b) -> U.No_simp.eq (term_of_tip ~env penv a)(term_of_tip ~env penv b)
+  | A.Imply (a,b) -> U.No_simp.imply (term_of_tip ~env penv a)(term_of_tip ~env penv b)
   | A.And l ->
     let l = List.map (term_of_tip ~env penv) l in
-    U.and_ l
+    U.No_simp.and_ l
   | A.Distinct l ->
     List.map (term_of_tip ~env penv) l
     |> CCList.diagonal
-    |> List.map (fun (a,b) -> U.neq a b)
-    |> U.and_
+    |> List.map (fun (a,b) -> U.No_simp.neq a b)
+    |> U.No_simp.and_
   | A.Or l ->
     let l = List.map (term_of_tip ~env penv) l in
-    U.or_ l
-  | A.Not a -> U.not_ (term_of_tip ~env penv a)
+    U.No_simp.or_ l
+  | A.Not a -> U.No_simp.not_ (term_of_tip ~env penv a)
   | A.Forall (v,body) ->
     let penv, v = CCList.fold_map typed_var_of_tip penv v in
     let body = term_of_tip ~env penv body in
