@@ -653,6 +653,21 @@ module type UTIL = sig
   val data_select : ID.t -> int -> t_ -> t_
   val unparsable : ty:t_ -> t_
 
+  (** No simplifications *)
+  module No_simp : sig
+    val builtin : t_ Builtin.t -> t_
+    val app_builtin : t_ Builtin.t -> t_ list -> t_
+
+    val eq : t_ -> t_ -> t_
+    val neq : t_ -> t_ -> t_
+    val imply : t_ -> t_ -> t_
+    val imply_l : t_ list -> t_ -> t_
+    val and_ : t_ list -> t_
+    val or_ : t_ list -> t_
+    val not_ : t_ -> t_
+    val ite : t_ -> t_ -> t_ -> t_
+  end
+
   val and_nodup : t_ list -> t_
 
   val asserting : t_ -> t_ list -> t_
@@ -1035,6 +1050,25 @@ module Util(T : S)
         builtin (`Guard (t, g))
 
   let asserting t p = guard t {Builtin.asserting=p}
+
+  module No_simp = struct
+    let builtin b = T.build (Builtin b)
+    let app_builtin b l = app (builtin b) l
+
+    let not_ t = builtin (`Not t)
+    let and_ l = builtin (`And l)
+    let or_ l = builtin (`Or l)
+    let imply a b = builtin (`Imply (a,b))
+
+    let imply_l l ret = match l with
+      | [] -> ret
+      | [a] -> imply a ret
+      | _ -> imply (and_ l) ret
+
+    let eq a b = builtin (`Eq (a,b))
+    let neq a b = not_ (eq a b)
+    let ite a b c = app_builtin (`Ite (a,b,c)) []
+  end
 
   let ty_builtin b = T.build (TyBuiltin b)
   let ty_const id = const id
