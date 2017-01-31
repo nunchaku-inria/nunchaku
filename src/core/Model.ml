@@ -376,8 +376,16 @@ module DT_util = struct
   let rec eval_subst ~subst = function
     | DT.Yield t -> DT.yield (U.eval ~subst t)
     | DT.Cases {DT.var; tests; default} ->
-      assert (not (Subst.mem ~subst var));
-      let tests = match tests with
+      (* some variables are renamed (those introduced by a [match] branch),
+         some other aren't *)
+      let var' = match Var.Subst.find ~subst var with
+        | None -> var
+        | Some t ->
+          begin match T.repr t with
+            | TI.Var v' ->  v'
+            | _ -> assert false
+          end
+      and tests = match tests with
         | DT.Tests l ->
           l
           |> List.map
@@ -392,7 +400,7 @@ module DT_util = struct
           |> DT.match_ ~missing
       in
       let default = CCOpt.map (eval_subst ~subst) default in
-      DT.mk_cases var tests ~default
+      DT.mk_cases var' tests ~default
 
   let rec map_vars ~subst = function
     | DT.Yield t -> DT.yield (U.eval_renaming ~subst t)
