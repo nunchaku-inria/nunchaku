@@ -26,7 +26,7 @@ module To_tptp = struct
   let conv_var v =
     if is_unitype_ (Var.ty v)
     then Var.set_ty v ~ty:TT.Unitype
-    else errorf_ "variable `%a` does not have type `unitype`" Var.print_full v
+    else errorf_ "variable `%a` does not have type `unitype`" Var.pp_full v
 
   (* intermediate structure, for having only one conversion into terms and
      into formulas *)
@@ -49,8 +49,8 @@ module To_tptp = struct
     | DataSelect (_,_,_)
     | Undefined_atom _
     | Unparsable _ ->
-      errorf_ "cannot convert `@[%a@]` to TPTP" print_term t
-    | Fun (_,_) -> errorf_ "cannot convert function `@[%a@]` to TPTP" print_term t
+      errorf_ "cannot convert `@[%a@]` to TPTP" pp_term t
+    | Fun (_,_) -> errorf_ "cannot convert function `@[%a@]` to TPTP" pp_term t
     | Let (v,t,u) ->
       (* expand `let` *)
       let t = conv_as_term subst t in
@@ -76,7 +76,7 @@ module To_tptp = struct
 
   and conv_as_term subst t = match conv_rec subst t with
     | T t -> t
-    | F _ -> errorf_ "@[expected term,@ but `@[%a@]` is a formula@]" print_term t
+    | F _ -> errorf_ "@[expected term,@ but `@[%a@]` is a formula@]" pp_term t
 
   and conv_as_form subst t = match conv_rec subst t with
     | F t -> t
@@ -87,7 +87,7 @@ module To_tptp = struct
   let conv_statement st = match st with
     | TyDecl _
     | Decl _ -> None
-    | MutualTypes _ -> errorf_ "@[cannot convert@ statement `@[%a@]`@]" print_statement st
+    | MutualTypes _ -> errorf_ "@[cannot convert@ statement `@[%a@]`@]" pp_statement st
     | CardBound _ -> assert false (* TODO warning? *)
     | Axiom f -> Some (TT.axiom (conv_form f))
     | Goal f -> Some (TT.axiom (conv_form f)) (* careful, not a conjecture *)

@@ -60,7 +60,7 @@ let find_pred state (t:T.t): ID.t =
   assert (Ty.is_ty t);
   try Ty.Map.find t state.ty_to_pred
   with Not_found ->
-    errorf_ "could not find the predicate for type@ `@[%a@]`" P.print t
+    errorf_ "could not find the predicate for type@ `@[%a@]`" P.pp t
 
 let encode_var subst v =
   let v' = Var.fresh_copy v |> Var.set_ty ~ty:U.ty_unitype in
@@ -115,7 +115,7 @@ let add_pred_ state ty pred =
   state.ty_to_pred <- Ty.Map.add ty pred state.ty_to_pred;
   state.pred_to_ty <- ID.Map.add pred ty state.pred_to_ty;
   Utils.debugf ~section 3 "@[<2>map type `@[%a@]`@ to predicate `%a`@]"
-    (fun k->k P.print ty ID.print pred);
+    (fun k->k P.pp ty ID.pp pred);
   let ty_pred = U.ty_arrow U.ty_unitype U.ty_prop in
   (* declare the predicate *)
   let decl_pred =
@@ -142,7 +142,7 @@ let map_to_predicate state ty =
   with Not_found ->
     begin match Ty.repr ty with
       | TyI.Const id ->
-        errorf_ "atomic type `%a` should have been mapped to a predicate" ID.print id
+        errorf_ "atomic type `%a` should have been mapped to a predicate" ID.pp id
       | TyI.Arrow _ -> assert false
       | TyI.Builtin `Unitype ->
         None (* no need to declare *)
@@ -152,11 +152,11 @@ let map_to_predicate state ty =
         error_ "cannot make a predicate for `prop`"
       | TyI.App (f, l) ->
         match as_id_ f with
-          | None -> errorf_ "expected constructor type, got `@[%a@]`" P.print ty
+          | None -> errorf_ "expected constructor type, got `@[%a@]`" P.pp ty
           | Some id ->
             let n = List.length l in
             if not (ID.Tbl.mem state.parametrized_ty id)
-            then errorf_ "type constructor `%a`/%d has not been declared" ID.print id n;
+            then errorf_ "type constructor `%a`/%d has not been declared" ID.pp id n;
             (* find name *)
             let name = ID.make_f "@[<h>is_%s@]" (mangle_ty_ ty) in
             add_pred_ state ty name;
@@ -208,7 +208,7 @@ let encode_stmt_ state st : (_,_) Stmt.t list =
       begin match args with
         | [] ->
           (* atomic type, easy *)
-          let p = ID.make_f "is_%a" ID.print_name id in
+          let p = ID.make_f "is_%a" ID.pp_name id in
           let ty = U.ty_const id in
           add_pred_ state ty p;
           (* emit some constraint on the predicate for cardinalities *)
@@ -275,7 +275,7 @@ let encode_stmt_ state st : (_,_) Stmt.t list =
 
 let encode_stmt state st =
   Utils.debugf ~section 3 "@[<2>encode statement@ `@[%a@]`@]"
-    (fun k->k PStmt.print st);
+    (fun k->k PStmt.pp st);
   let st' = encode_stmt_ state st in
   let res =
     CCList.append
@@ -336,7 +336,7 @@ let rebuild_types state m : retyping =
                    Some id
                  | TI.Builtin `False
                  | TI.Builtin (`Undefined_atom _) -> None
-                 | _ -> errorf_ "unexpected value for %a on %a" ID.print pred_id ID.print id
+                 | _ -> errorf_ "unexpected value for %a on %a" ID.pp pred_id ID.pp id
             )
             uni_domain
         in
@@ -349,8 +349,8 @@ let rebuild_types state m : retyping =
         let dom = ID.Map.values map |> Sequence.to_list in
         Utils.debugf ~section 3
           "@[<2>domain of type `%a`@ is {@[%a@]},@ map to @[[%a]@]@]"
-          (fun k->k P.print ty (CCFormat.list ID.print) dom
-              (ID.Map.print ID.print ID.print) map);
+          (fun k->k P.pp ty (CCFormat.list ID.pp) dom
+              (ID.Map.print ID.pp ID.pp) map);
         { rety_domains = Ty.Map.add ty dom rety.rety_domains;
           rety_map = Ty.Map.add ty map rety.rety_map
         }
@@ -359,7 +359,7 @@ let rebuild_types state m : retyping =
 let ty_of_id_ state id =
   match Env.find_ty ~env:state.env id with
     | Some t -> t
-    | None -> errorf_ "could not find the type of `@[%a@]`" ID.print id
+    | None -> errorf_ "could not find the type of `@[%a@]`" ID.pp id
 
 (* what should be the type of [t]? We assume [t] is not a constant
    from the domain of [unitype] *)
@@ -369,7 +369,7 @@ let rec expected_ty state t = match T.repr t with
     let _, _, ret = expected_ty state f |> U.ty_unfold in
     ret
   | TI.Builtin (`Undefined_atom (_,ty)) -> ty
-  | _ -> errorf_ "could not find the expected type of `@[%a@]`" P.print t
+  | _ -> errorf_ "could not find the expected type of `@[%a@]`" P.pp t
 
 let retype_find rety ty = Ty.Map.get ty rety.rety_map
 
@@ -387,7 +387,7 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
         | Some v' -> U.var v'
         | None ->
           errorf_ "variable `%a` not bound in `@[%a@]`"
-            Var.print_full v (Var.Subst.print Var.print_full) subst
+            Var.pp_full v (Var.Subst.pp Var.pp_full) subst
       end
     | TI.App (f, l) when is_undefined_atom_ f ->
       (* must infer type of [f] using arguments: its expected type
@@ -427,14 +427,14 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
         | Some v' -> U.var v', Var.ty v'
         | None ->
           errorf_ "variable `%a` not bound in `@[%a@]`"
-            Var.print_full v (Var.Subst.print Var.print_full) subst
+            Var.pp_full v (Var.Subst.pp Var.pp_full) subst
       end
     | TI.Const _ -> t, expected_ty state t
     | TI.App (f, _) ->
       (* use the expected type of [f],  then fallback on [aux] *)
       let _, _, ty_ret = expected_ty state f |> U.ty_unfold in
       aux t ty_ret, ty_ret
-    | _ -> errorf_ "could not infer expected type of `@[%a@]`" P.print t
+    | _ -> errorf_ "could not infer expected type of `@[%a@]`" P.pp t
   in
   aux t ty
 
@@ -470,7 +470,7 @@ let decode_model ~state m =
         | _ ->
           Utils.debugf ~section 5
             "@[<2>decode @[%a@]@ := `@[%a@]@]"
-            (fun k->k P.print t (M.DT.print P.print' P.print) dt);
+            (fun k->k P.pp t (M.DT.pp P.pp' P.pp) dt);
           let ty = expected_ty state t in
           let ty_ret = U.ty_returns ty in
           let dt = decode_vars ty dt in
@@ -507,7 +507,7 @@ let pipe_with ?on_decoded ~decode ~print ~check =
     Utils.singleton_if print ()
       ~f:(fun () ->
         let module Ppb = Problem.Print(P)(P) in
-        Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name Ppb.print)
+        Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name Ppb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
         let module C = TypeCheck.Make(T) in
@@ -529,7 +529,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after %s@}:@ %a@]@."
-         name (Problem.Res.print P.print' P.print)]
+         name (Problem.Res.pp P.pp' P.pp)]
     else []
   in
   pipe_with ~check ~print ~on_decoded

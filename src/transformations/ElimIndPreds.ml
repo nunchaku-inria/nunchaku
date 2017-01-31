@@ -149,7 +149,7 @@ let match_default_except ~env c_id t : _ TI.default_case =
         |> ID.Map.of_seq
       in
       TI.Default_some (t, map)
-    | _ -> errorf_ "`%a` should be a constructor" ID.print c_id
+    | _ -> errorf_ "`%a` should be a constructor" ID.pp c_id
   end
 
 (* build a match tree [t] such that [vars=args => t --> k()]
@@ -278,7 +278,7 @@ let encode_clause ~mode ~env (id:ID.t) vars (c:(_,_) Stmt.pred_clause): term =
       errorf_
         "@[<2>expect conclusion of clause to be of the \
          form@ `%a <arg_1...arg_%d>`,@ but got `@[%a@]`@]"
-        ID.print id arity P.print c.Stmt.clause_concl
+        ID.pp id arity P.pp c.Stmt.clause_concl
     in
     match T.repr c.Stmt.clause_concl with
       | TI.App (f, l) ->
@@ -318,7 +318,7 @@ let pred_to_def
   (term, term) Stmt.rec_def
   = fun ~mode ~env pred ->
     Utils.debugf ~section 3 "@[<2>pred_to_def@ `@[%a@]`@]"
-      (fun k->k PStmt.print_pred_def pred);
+      (fun k->k PStmt.pp_pred_def pred);
     assert (pred.Stmt.pred_tyvars = []); (* mono *)
     let d = pred.Stmt.pred_defined in
     let id = d.Stmt.defined_head in
@@ -382,7 +382,7 @@ let pipe_with ~decode ~print ~check ~mode =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module Ppb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after elimination of inductive predicates@}:@ %a@]@." Ppb.print)
+      Format.printf "@[<v2>@{<Yellow>after elimination of inductive predicates@}:@ %a@]@." Ppb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
         let module C = TypeCheck.Make(T) in

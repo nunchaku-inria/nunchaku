@@ -75,9 +75,9 @@ val conjecture : ?name:string -> form -> statement
 val erase : ID.Erase.state
 (** Used to map IDs to names during printing *)
 
-val print_role_tptp : role CCFormat.printer
-val print_term_tptp : term CCFormat.printer
-val print_form_tptp : form CCFormat.printer
-val print_statement_tptp : statement CCFormat.printer
-val print_problem_tptp : problem CCFormat.printer
+val pp_role_tptp : role CCFormat.printer
+val pp_term_tptp : term CCFormat.printer
+val pp_form_tptp : form CCFormat.printer
+val pp_statement_tptp : statement CCFormat.printer
+val pp_problem_tptp : problem CCFormat.printer
 

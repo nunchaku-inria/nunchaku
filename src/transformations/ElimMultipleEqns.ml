@@ -56,26 +56,26 @@ type ('a, 'b, 'ty) decision_node =
   | DN_bind of 'b list (* only accepts variables *)
 
 and ('a, 'b, 'ty) decision_node_match = {
-  dn_tydef: term Stmt.tydef; (* all constructors required *)
+  dn_data_ty: term Stmt.data_type; (* all constructors required *)
   dn_by_cstor: 'a list ID.Map.t; (* cstor -> sub-list of cases *)
   dn_wildcard: 'b list; (* matching anything *)
 }
 
 let pp_pat out = function
   | P_any -> Format.fprintf out "_"
-  | P_term t -> P.print out t
+  | P_term t -> P.pp out t
 
 let pp_path_cell out c : unit =
   Format.fprintf out "{@[%a =?= %a@]}"
-    Var.print c.path_var pp_pat c.path_pat
+    Var.pp c.path_var pp_pat c.path_pat
 
 let pp_path out p =
   Format.fprintf out "[@[<hv>%a@]]"
     (CCFormat.list ~sep:"," pp_path_cell) (List.rev p)
 
-let dnode_of_tydef (tydef: _ Stmt.tydef): (_,_,_) decision_node =
+let dnode_of_tydef (tydef: _ Stmt.data_type): (_,_,_) decision_node =
   DN_match {
-    dn_tydef=tydef;
+    dn_data_ty=tydef;
     dn_by_cstor=ID.Map.empty;
     dn_wildcard=[];
   }
@@ -93,7 +93,7 @@ let dnode_add_bool (d:(_,_,_) decision_node) b x = match d, b with
     errorf_ "@[<2>expected boolean decision node@]"
 
 (* all constructors of [d] *)
-let dnode_all_cstors (d:(_,_,_)decision_node_match) = Stmt.tydef_cstors d.dn_tydef
+let dnode_all_cstors (d:(_,_,_)decision_node_match) = Stmt.data_cstors d.dn_data_ty
 
 (* add [x] to constructor [c] in node [d] *)
 let dnode_add_cstor (d:(_,_,_)decision_node) c x = match d with
@@ -101,15 +101,15 @@ let dnode_add_cstor (d:(_,_,_)decision_node) c x = match d with
     let allowed_cstors = dnode_all_cstors d in
     if not (ID.Map.mem c allowed_cstors) then (
       errorf_ "@[<2>%a is not a constructor of %a@ (these are @[%a@])@]"
-        ID.print c ID.print d.dn_tydef.Stmt.ty_id
-        (CCFormat.seq ID.print) (ID.Map.keys allowed_cstors);
+        ID.pp c ID.pp d.dn_data_ty.Stmt.ty_id
+        (CCFormat.seq ID.pp) (ID.Map.keys allowed_cstors);
     );
     (* add [x] to the list [l] of subtrees already present for case [c] *)
     let l = try ID.Map.find c d.dn_by_cstor with Not_found -> [] in
     DN_match { d with dn_by_cstor = ID.Map.add c (x::l) d.dn_by_cstor }
-  | DN_if _ -> errorf_ "cannot match against `@[%a@],@ boolean case" ID.print c
+  | DN_if _ -> errorf_ "cannot match against `@[%a@],@ boolean case" ID.pp c
   | DN_bind _ ->
-    errorf_ "cannot match against `@[%a@]`,@ variable binding only" ID.print c
+    errorf_ "cannot match against `@[%a@]`,@ variable binding only" ID.pp c
 
 (* A single equation with patterns in the left-hand side,
    being progressively converted to [id vars = rhs] along
@@ -126,8 +126,8 @@ let pp_eqn out (e:equation): unit =
   Format.fprintf out
     "{case @[<hv>[@[@[%a@]] -> `@[%a@]`@]@ when: [@[%a@]]@ with: @[%a@]@]}"
     (CCFormat.list pp_pat) e.eqn_pats
-    P.print e.eqn_rhs (CCFormat.list P.print) e.eqn_side_conds
-    (Subst.print Var.print_full) e.eqn_subst
+    P.pp e.eqn_rhs (CCFormat.list P.pp) e.eqn_side_conds
+    (Subst.pp Var.pp_full) e.eqn_subst
 
 let dnode_of_ty ~env (ty:ty): (_,_,ty) decision_node =
   if U.ty_is_Prop ty
@@ -146,7 +146,7 @@ let dnode_of_ty ~env (ty:ty): (_,_,ty) decision_node =
         | Env.Copy_abstract _
         | Env.Copy_concrete _
         | Env.Cstor (_,_,_,_) ->
-          errorf_ "@[`@[%a@]`@ is not a type.@]" ID.print ty_id
+          errorf_ "@[`@[%a@]`@ is not a type.@]" ID.pp ty_id
         | Env.Copy_ty _
         | Env.NoDef ->
           (* [v] is of a non-matchable type, but we can still bind
@@ -195,7 +195,7 @@ let add_path (lst:local_state) (v:ty Var.t) (p:pattern): local_state =
 
    @param vars list of distinct variables on the LHS of the new unique equation
    @param l the list of equations in the current branch
-  invariant: [List.length vars = List.length e.eqn_pats] for every [e in l]
+   invariant: [List.length vars = List.length e.eqn_pats] for every [e in l]
 *)
 let rec compile_equations lst vars (l:equation list) : term =
   begin match vars, l with
@@ -204,7 +204,7 @@ let rec compile_equations lst vars (l:equation list) : term =
       (* simple case: no side conditions, one RHS *)
       Utils.debugf ~section 5
         "@[<2>compile by evaluating@ term: `@[%a@]`@ in: `@[%a@]`@]"
-        (fun k->k P.print eqn_rhs (Subst.print Var.print_full) subst);
+        (fun k->k P.pp eqn_rhs (Subst.pp Var.pp_full) subst);
       U.eval_renaming ~subst eqn_rhs
     | [], l ->
       (* reverse list, because the first clauses in pattern-match are the
@@ -217,8 +217,8 @@ let rec compile_equations lst vars (l:equation list) : term =
         Utils.debugf ~section 5
           "@[<2>build decision node for `@[%a : %a@]`,@ @[tail: [@[%a@]]@]@ \
            with: @[<1>%a@]@ @[at: %a@]@]"
-          (fun k->k Var.print_full v P.print (Var.ty v)
-              (CCFormat.list Var.print_full) vars_tail
+          (fun k->k Var.pp_full v P.pp (Var.ty v)
+              (CCFormat.list Var.pp_full) vars_tail
               (CCFormat.list pp_eqn) l pp_path lst.path);
         let ty = Var.ty v in
         dnode_of_ty ~env:lst.env ty
@@ -245,7 +245,7 @@ and yield_list lst (l:equation list): term = match l with
     U.ite (U.and_ sides) (U.eval_renaming ~subst e.eqn_rhs) else_
   | {eqn_rhs=t; eqn_side_conds=[]; eqn_subst=subst; _} :: _ :: _ ->
     Utils.warningf Utils.Warn_overlapping_match
-      "@[ignore terms following `@[%a@]`, for it has no side condition@]" P.print t;
+      "@[ignore terms following `@[%a@]`, for it has no side condition@]" P.pp t;
     U.eval_renaming ~subst t
   | {eqn_side_conds=_::_; eqn_subst=subst; _} as e :: tail ->
     (* try [sides], yielding [t], otherwise fall back on [l'] *)
@@ -295,9 +295,9 @@ and compile_dnode lst v next_vars dn : term = match dn with
         (fun id cases ->
            Utils.debugf ~section 5
              "@[<2>compile_dnode for `%a` on cstor `%a`@ cases: [@[%a@]]@]"
-             (fun k -> k Var.print v ID.print id (CCFormat.list pp_eqn) cases);
+             (fun k -> k Var.pp v ID.pp id (CCFormat.list pp_eqn) cases);
            (* fresh vars for the constructor's arguments *)
-           let cstor = ID.Map.find id dn.dn_tydef.Stmt.ty_cstors in
+           let cstor = ID.Map.find id dn.dn_data_ty.Stmt.ty_cstors in
            let local_vars = List.mapi
                (fun i ty ->
                   Var.makef ~ty "%s_%d" (TyMo.mangle ~sep:"_" ty) (i+lst.offset))
@@ -373,7 +373,7 @@ let uniq_eqn_st env st =
   match Stmt.view st with
     | Stmt.Axiom (Stmt.Axiom_rec l) ->
       Utils.debugf ~section 5 "@[<2>compile equations@ `@[%a@]`@]"
-        (fun k->k PStmt.print_rec_defs l);
+        (fun k->k PStmt.pp_rec_defs l);
       let l' = List.map
           (fun def ->
              let d = Stmt.defined_of_rec def in
@@ -416,7 +416,7 @@ let pipe ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module PPb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after uniq equations@}: %a@]@." PPb.print)
+      Format.printf "@[<v2>@{<Yellow>after uniq equations@}: %a@]@." PPb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
         let module C = TypeCheck.Make(T) in

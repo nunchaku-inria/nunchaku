@@ -99,10 +99,10 @@ end
 
 module type PRINT = sig
   type t
-  val print : t printer
-  val print' : Precedence.t -> t printer
-  val print_in_app : t printer
-  val print_in_binder : t printer
+  val pp : t printer
+  val pp' : Precedence.t -> t printer
+  val pp_in_app : t printer
+  val pp_in_binder : t printer
   val to_string : t -> string
 
   val to_sexp : t -> Sexp_lib.t
@@ -156,60 +156,60 @@ module Print(T : REPR)
     )
     else Format.kfprintf (fun _ -> ()) out fmt
 
-  let rec print' p out t = match T.repr t with
+  let rec pp' p out t = match T.repr t with
     | TyBuiltin b -> CCFormat.string out (TyBuiltin.to_string b)
-    | Const id -> ID.print out id
-    | TyMeta v -> MetaVar.print out v
-    | Var v -> Var.print_full out v
+    | Const id -> ID.pp out id
+    | TyMeta v -> MetaVar.pp out v
+    | Var v -> Var.pp_full out v
     | Builtin (`Ite (a,b,c)) when is_if_ c ->
       (* special case to avoid deep nesting of ifs *)
       let pp_middle out (a,b) =
         fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]@]"
-          (print' P.Ite) a (print' P.Ite) b
+          (pp' P.Ite) a (pp' P.Ite) b
       in
       let middle, last = unroll_if_ c in
       assert (not (is_if_ last));
       wrap P.Ite p out
         "@[<hv>@[<2>if@ @[%a@]@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
-        (print' P.Ite) a (print' P.Ite) b
+        (pp' P.Ite) a (pp' P.Ite) b
         (pp_list_ ~sep:"" pp_middle) middle
-        (print' P.Ite) last
+        (pp' P.Ite) last
     | Builtin b ->
       let p' = Builtin.prec b in
-      wrap p' p out "%a" (Builtin.pp (print' p')) b
+      wrap p' p out "%a" (Builtin.pp (pp' p')) b
     | App (f,l) ->
-      wrap P.App p out "@[<2>%a@ %a@]" print_in_app f
-        (pp_list_ ~sep:" " print_in_app) l
+      wrap P.App p out "@[<2>%a@ %a@]" pp_in_app f
+        (pp_list_ ~sep:" " pp_in_app) l
     | Let (v,t,u) ->
       wrap P.Top p out "@[let @[<2>%a :=@ %a@] in@ %a@]"
-        Var.print_full v print t print u
+        Var.pp_full v pp t pp u
     | Match (t,l, def) ->
       let pp_case out (id,(vars,t)) =
         fpf out "@[<hv2>| @[<hv2>%a %a@] ->@ %a@]"
-          ID.print id (pp_list_ ~sep:" " Var.print_full) vars print t
+          ID.pp id (pp_list_ ~sep:" " Var.pp_full) vars pp t
       and pp_def out = function
         | Default_none -> ()
-        | Default_some (d,_) -> fpf out "@ @[<hv2>| default ->@ %a@]" print d
+        | Default_some (d,_) -> fpf out "@ @[<hv2>| default ->@ %a@]" pp d
       in
       fpf out "@[<hv>@[<hv2>match @[%a@] with@ %a%a@]@ end@]"
-        print t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
+        pp t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
         pp_def def
     | Bind (b, _, _) ->
       let s = Binder.to_string b in
       let vars, body = unroll_binder b t in
       wrap P.Bind p out "@[<2>%s @[<hv>%a@].@ %a@]" s
-        (pp_list_ ~sep:" " pp_typed_var) vars print_in_binder body
+        (pp_list_ ~sep:" " pp_typed_var) vars pp_in_binder body
     | TyArrow (a,b) ->
       (* TODO: left should have [P.Arrow] but ignoring the right-assoc *)
-      wrap P.Arrow p out "@[<2>%a ->@ %a@]" (print' P.App) a (print' P.Arrow) b
+      wrap P.Arrow p out "@[<2>%a ->@ %a@]" (pp' P.App) a (pp' P.Arrow) b
   and pp_typed_var out v =
     let ty = Var.ty v in
-    fpf out "(@[%a:@,@[%a@]@])" Var.print_full v print ty
-  and print_in_app out t = print' P.App out t
-  and print_in_binder out t = print' P.Bind out t
-  and print out t = print' P.Top out t
+    fpf out "(@[%a:@,@[%a@]@])" Var.pp_full v pp ty
+  and pp_in_app out t = pp' P.App out t
+  and pp_in_binder out t = pp' P.Bind out t
+  and pp out t = pp' P.Top out t
 
-  let to_string = CCFormat.to_string print
+  let to_string = CCFormat.to_string pp
 
   let str = Sexp_lib.atom
   let lst = Sexp_lib.list
@@ -386,7 +386,7 @@ module UtilRepr(T : REPR)
       (function
         | No_head t ->
           let module P = Print(T) in
-          Some (CCFormat.sprintf "term `@[%a@]` has no head" P.print t)
+          Some (CCFormat.sprintf "term `@[%a@]` has no head" P.pp t)
         | _ -> None)
 
   let head_sym_exn t =
@@ -652,6 +652,21 @@ module type UTIL = sig
   val data_test : ID.t -> t_ -> t_
   val data_select : ID.t -> int -> t_ -> t_
   val unparsable : ty:t_ -> t_
+
+  (** No simplifications *)
+  module No_simp : sig
+    val builtin : t_ Builtin.t -> t_
+    val app_builtin : t_ Builtin.t -> t_ list -> t_
+
+    val eq : t_ -> t_ -> t_
+    val neq : t_ -> t_ -> t_
+    val imply : t_ -> t_ -> t_
+    val imply_l : t_ list -> t_ -> t_
+    val and_ : t_ list -> t_
+    val or_ : t_ list -> t_
+    val not_ : t_ -> t_
+    val ite : t_ -> t_ -> t_ -> t_
+  end
 
   val and_nodup : t_ list -> t_
 
@@ -1035,6 +1050,25 @@ module Util(T : S)
         builtin (`Guard (t, g))
 
   let asserting t p = guard t {Builtin.asserting=p}
+
+  module No_simp = struct
+    let builtin b = T.build (Builtin b)
+    let app_builtin b l = app (builtin b) l
+
+    let not_ t = builtin (`Not t)
+    let and_ l = builtin (`And l)
+    let or_ l = builtin (`Or l)
+    let imply a b = builtin (`Imply (a,b))
+
+    let imply_l l ret = match l with
+      | [] -> ret
+      | [a] -> imply a ret
+      | _ -> imply (and_ l) ret
+
+    let eq a b = builtin (`Eq (a,b))
+    let neq a b = not_ (eq a b)
+    let ite a b c = app_builtin (`Ite (a,b,c)) []
+  end
 
   let ty_builtin b = T.build (TyBuiltin b)
   let ty_const id = const id
@@ -1452,20 +1486,20 @@ module Util(T : S)
           let module P = Print(T) in
           let pp_t out = function
             | None -> ()
-            | Some t -> fpf out "`@[%a@]`@ : " P.print t
+            | Some t -> fpf out "`@[%a@]`@ : " P.pp t
           in
           let msg = Utils.err_sprintf
               "@[<hv2>type error@ when applying @[%a%a@]@ on @[%a : %a@]@ in subst @[%a@]: %s@]"
-              pp_t ae.ae_term P.print_in_app ae.ae_ty
-              (CCFormat.list P.print_in_app) ae.ae_args
-              (CCFormat.list P.print_in_app) ae.ae_args_ty
-              (Subst.print P.print) ae.ae_subst ae.ae_msg
+              pp_t ae.ae_term P.pp_in_app ae.ae_ty
+              (CCFormat.list P.pp_in_app) ae.ae_args
+              (CCFormat.list P.pp_in_app) ae.ae_args_ty
+              (Subst.pp P.pp) ae.ae_subst ae.ae_msg
           in Some msg
         | UnifError (msg, t1, t2) ->
           let module P = Print(T) in
           let msg = CCFormat.sprintf
               "@[<hv2>unification error@ for %a@ and@ %a: %s@]"
-              P.print_in_app t1 P.print_in_app t2 msg
+              P.pp_in_app t1 P.pp_in_app t2 msg
           in Some msg
         | _ -> None
       )
@@ -1670,8 +1704,8 @@ module Util(T : S)
         | Let (_, _, _), _
         | Match _, _ ->
           error_unif_ "pattern is not first-order" t1 t2
-          (* let module P = Print(T) in
-          Utils.invalid_argf "pattern `@[%a@]` is not first-order" P.print t1 *)
+        (* let module P = Print(T) in
+           Utils.invalid_argf "pattern `@[%a@]` is not first-order" P.pp t1 *)
         | TyBuiltin b1, TyBuiltin b2 when TyBuiltin.equal b1 b2 -> subst
         | TyMeta _, _ -> assert false
         | Builtin _, _

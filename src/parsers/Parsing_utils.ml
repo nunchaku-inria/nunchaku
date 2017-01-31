@@ -21,9 +21,9 @@ exception ParseError of Loc.t option * string
 let () = Printexc.register_printer
     (function
       | LexError (loc, msg) ->
-        Some (CCFormat.sprintf "@[<2>lexing error:@ %s@ at %a@]" msg Loc.print_opt loc)
+        Some (CCFormat.sprintf "@[<2>lexing error:@ %s@ at %a@]" msg Loc.pp_opt loc)
       | ParseError (loc,msg) ->
-        Some (CCFormat.sprintf "@[<2>parsing error:@ %s@ at %a@]" msg Loc.print_opt loc)
+        Some (CCFormat.sprintf "@[<2>parsing error:@ %s@ at %a@]" msg Loc.pp_opt loc)
       | _ -> None
     )
 

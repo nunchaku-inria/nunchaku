@@ -97,7 +97,7 @@ module Features = struct
     | Prop_args -> "prop_args"
     | Copy -> "copy"
 
-  let print out (m:t) =
+  let pp out (m:t) =
     let pp_k out x = CCFormat.string out (str_of_key x) in
     let pp_v out x = CCFormat.string out (str_of_value x) in
     Format.fprintf out "@[<hv>%a@]" (M.print ~start:"" ~stop:"" pp_k pp_v) m
@@ -205,7 +205,7 @@ module Pipe = struct
     fork_l (List.map (fun t -> t @@@ kont) l)
 
   let fpf = Format.fprintf
-  let print out t =
+  let pp out t =
     let rec pp : type a b c d. (a,b,c,d) t printer
       = fun out t -> match t with
         | Id -> fpf out "id"
@@ -228,7 +228,7 @@ module Pipe = struct
          features: @[%a@],@ state: @[%a@]@]"
         name (Features.str_of_key k)
         (Features.str_of_value expected) (Features.str_of_value actual)
-        Features.print spec Features.print f
+        Features.pp spec Features.pp f
 
   let check p =
     let rec aux

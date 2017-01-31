@@ -13,7 +13,7 @@ type processed_problem
 
 val preprocess : problem -> processed_problem
 
-val print_problem : Format.formatter -> processed_problem -> unit
+val pp_problem : Format.formatter -> processed_problem -> unit
 
 val solve :
   ?options:string ->

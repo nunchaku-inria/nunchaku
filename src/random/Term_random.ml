@@ -17,7 +17,7 @@ module Subst = Var.Subst
 type term = T.t
 type ty = T.t
 
-let print_term = P.print
+let pp_term = P.pp
 
 module S = struct
   let a = ID.make "a"
@@ -119,14 +119,14 @@ type backward_rule = {
 }
 
 let pp_build_rule out = function
-  | AppID id -> ID.print out id
+  | AppID id -> ID.pp out id
   | AppBuiltin _ -> CCFormat.string out "<builtin>"
-  | AppVar v -> Var.print_full out v
+  | AppVar v -> Var.pp_full out v
 
 let pp_rule out r =
   Format.fprintf out "(@[<2>%a :-@ {@[<hv>%a@]}@ using %a, vars @[%a@]@])"
-    P.print r.target (CCFormat.list ~start:"" ~stop:"" P.print) r.goals
-    pp_build_rule r.build (CCFormat.list Var.print_full) r.vars
+    P.pp r.target (CCFormat.list ~start:"" ~stop:"" P.pp) r.goals
+    pp_build_rule r.build (CCFormat.list Var.pp_full) r.vars
 
 type backward_rules = backward_rule list
 
@@ -265,7 +265,7 @@ and gen_atom_ rules ty subst vars size =
       rules
   in
   if possible_rules=[] then (
-    Format.printf "no rule applies for @[%a@]@." P.print ty;
+    Format.printf "no rule applies for @[%a@]@." P.pp ty;
     assert false;
   );
   let open G in
@@ -311,7 +311,7 @@ let rec shrink t = match T.repr t with
 
 let mk_arbitrary_ g =
   QCheck.make
-    ~print:(CCFormat.sprintf "@[<4>%a@]" print_term)
+    ~print:(CCFormat.sprintf "@[<4>%a@]" pp_term)
     ~shrink
     ~small:U.size
     g
@@ -328,7 +328,7 @@ let generate_l ?n ?(rand=mk_rand()) g =
   let n = CCOpt.get_lazy (fun () -> G.(1 -- 50) rand) n in
   G.list_repeat n g rand
 
-let print_rules() =
+let pp_rules() =
   Format.printf "rules:@ @[<v>%a@]@."
     (CCFormat.list ~start:"" ~stop:"" pp_rule) rules
 

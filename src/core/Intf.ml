@@ -21,7 +21,7 @@ end
 
 module type PRINT = sig
   type t
-  val print : Format.formatter -> t -> unit
+  val pp : Format.formatter -> t -> unit
 end
 
 

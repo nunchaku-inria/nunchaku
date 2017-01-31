@@ -100,7 +100,7 @@ module Make(T : TI.REPR)
     let rec pp_ out t = match repr t with
       | Builtin b -> CCFormat.string out (Builtin.to_string b)
       | Arrow (a,b) -> Format.fprintf out "%a_to_%a" pp_ a pp_ b
-      | Const id -> ID.print_name out id
+      | Const id -> ID.pp_name out id
       | App (_,[]) -> assert false
       | App (a,l) ->
         Format.fprintf out "%a_%a"

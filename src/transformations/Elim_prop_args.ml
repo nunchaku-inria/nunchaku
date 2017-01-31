@@ -251,7 +251,7 @@ let transform_term state subst t =
 
 let transform_statement state stmt : (_,_) Stmt.t =
   Utils.debugf ~section 3 "@[<2>transform @{<cyan>statement@}@ `@[%a@]`@]"
-    (fun k->k PStmt.print stmt);
+    (fun k->k PStmt.pp stmt);
   (* how to translate a "defined" *)
   let tr_defined d =
     Stmt.map_defined d ~f:(transform_ty state ~top:true)
@@ -370,7 +370,7 @@ let pipe_with ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module PPb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name PPb.print)
+      Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name PPb.pp)
     @
       Utils.singleton_if check ()
         ~f:(fun () ->

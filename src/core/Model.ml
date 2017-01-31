@@ -101,37 +101,37 @@ module DT = struct
       in
       mk_cases var tests ~default
 
-  let rec print pt pty out t =
+  let rec pp pt pty out t =
     let pp_default out = function
       | None -> ()
-      | Some d -> fpf out ";@ default: %a" (print pt pty) d
+      | Some d -> fpf out ";@ default: %a" (pp pt pty) d
     in
     begin match t with
       | Yield t -> pt Precedence.Top out t
       | Cases {tests=Tests []; default=None; _} -> assert false
       | Cases {tests=Tests []; var; default=Some d} ->
         fpf out "@[<hv1>cases (@[%a:%a@])@ {default: %a@,}@]"
-          Var.print_full var pty (Var.ty var) (print pt pty) d
+          Var.pp_full var pty (Var.ty var) (pp pt pty) d
       | Cases ({tests=Tests l; _} as cases) ->
         let pp_test out (lhs,rhs) =
-          fpf out "@[<2>@[%a@] =>@ %a@]" (pt Precedence.Arrow) lhs (print pt pty) rhs
+          fpf out "@[<2>@[%a@] =>@ %a@]" (pt Precedence.Arrow) lhs (pp pt pty) rhs
         and pp_default out = function
           | None -> ()
-          | Some d -> fpf out ";@ default: %a" (print pt pty) d
+          | Some d -> fpf out ";@ default: %a" (pp pt pty) d
         in
         let pp_tests = CCFormat.list ~start:"" ~stop:"" ~sep:"; " pp_test in
         fpf out "@[<hv1>cases (@[%a:%a@])@ {@[<v>%a%a@]@,}@]"
-          Var.print_full cases.var pty (Var.ty cases.var)
+          Var.pp_full cases.var pty (Var.ty cases.var)
           pp_tests l pp_default cases.default
       | Cases ({tests=Match (m,_); _} as cases) ->
         let pp_branch out (id,(vars,rhs)) =
           fpf out "{@[<2>@[%a %a@] ->@ %a@]}"
-            ID.print id
-            (CCFormat.list ~sep:" " Var.print_full) vars (print pt pty) rhs
+            ID.pp id
+            (CCFormat.list ~sep:" " Var.pp_full) vars (pp pt pty) rhs
         in
         let pp_m out m = CCFormat.seq ~sep:"; " pp_branch out (ID.Map.to_seq m) in
         fpf out "@[<hv1>cases (@[%a:%a@])@ {@[<v>%a%a@]@,}@]"
-          Var.print_full cases.var pty (Var.ty cases.var)
+          Var.pp_full cases.var pty (Var.ty cases.var)
           pp_m m pp_default cases.default
     end
 
@@ -223,13 +223,13 @@ module DT = struct
     let pp_ =
       let pterm _ out _ = CCFormat.string out "<term>" in
       let pty out _ = CCFormat.string out "<ty>" in
-      print pterm pty
+      pp pterm pty
     in
     let fail_var v dt =
-      Utils.failwithf "var %a@ does not match %a" Var.print_full v pp_ dt
+      Utils.failwithf "var %a@ does not match %a" Var.pp_full v pp_ dt
     and fail_vars v v' dt =
       Utils.failwithf "var %a and %a@ do not match in %a"
-        Var.print_full v Var.print_full v' pp_ dt
+        Var.pp_full v Var.pp_full v' pp_ dt
     and fail_fun dt =
       Utils.failwithf "unexpected function@ %a" pp_ dt
     in
@@ -342,21 +342,21 @@ module DT = struct
         mk_fun fdt.fdt_vars (mk_ite tail d)
       | None, [] -> assert false
 
-  let print_flat_test pt out {ft_var=v; ft_term=t} =
-    fpf out "@[%a = %a@]" Var.print_full v (pt Precedence.Eq) t
+  let pp_flat_test pt out {ft_var=v; ft_term=t} =
+    fpf out "@[%a = %a@]" Var.pp_full v (pt Precedence.Eq) t
 
-  let print_flat pt out fdt =
+  let pp_flat pt out fdt =
     let pplist ~sep pp = CCFormat.list ~start:"" ~stop:"" ~sep pp in
     let pp_case out (tests,rhs) =
       fpf out "@[<2>(@[%a@]) =>@ %a@]"
-        (pplist ~sep:" && " (print_flat_test pt)) tests (pt Precedence.Arrow) rhs
+        (pplist ~sep:" && " (pp_flat_test pt)) tests (pt Precedence.Arrow) rhs
     and pp_default out = function
       | None -> ()
       | Some d -> fpf out ",@ default=%a" (pt Precedence.App) d
     in
     let pp_cases = pplist ~sep:"" pp_case in
     fpf out "{@[<hv1>vars=(@[%a@]),@ tests=[@[<v>%a@]]%a@,@]}"
-      (pplist ~sep:" " Var.print_full) fdt.fdt_vars
+      (pplist ~sep:" " Var.pp_full) fdt.fdt_vars
       pp_cases fdt.fdt_cases
       pp_default fdt.fdt_default
 end
@@ -376,8 +376,16 @@ module DT_util = struct
   let rec eval_subst ~subst = function
     | DT.Yield t -> DT.yield (U.eval ~subst t)
     | DT.Cases {DT.var; tests; default} ->
-      assert (not (Subst.mem ~subst var));
-      let tests = match tests with
+      (* some variables are renamed (those introduced by a [match] branch),
+         some other aren't *)
+      let var' = match Var.Subst.find ~subst var with
+        | None -> var
+        | Some t ->
+          begin match T.repr t with
+            | TI.Var v' ->  v'
+            | _ -> assert false
+          end
+      and tests = match tests with
         | DT.Tests l ->
           l
           |> List.map
@@ -392,7 +400,7 @@ module DT_util = struct
           |> DT.match_ ~missing
       in
       let default = CCOpt.map (eval_subst ~subst) default in
-      DT.mk_cases var tests ~default
+      DT.mk_cases var' tests ~default
 
   let rec map_vars ~subst = function
     | DT.Yield t -> DT.yield (U.eval_renaming ~subst t)
@@ -422,7 +430,7 @@ module DT_util = struct
   let () = Printexc.register_printer
       (function
         | Case_not_found t ->
-          Some (Utils.err_sprintf "case not found: `%a`" P.print t)
+          Some (Utils.err_sprintf "case not found: `%a`" P.pp t)
         | _ -> None)
 
   let find_cases ?(subst=Subst.empty) t cases =
@@ -515,7 +523,7 @@ module DT_util = struct
       then merge_match_ l
       else (
         Utils.invalid_argf "DT_util.merge_l: mixed match/tests on `%a`"
-          Var.print_full var
+          Var.pp_full var
       )
 
   (* merge the default-subtree, if any *)
@@ -523,8 +531,8 @@ module DT_util = struct
     let l =
       CCList.filter_map
         (fun (c,subst) -> match c with
-          | DT.Yield _ -> assert false
-          | DT.Cases {DT.default; _} -> CCOpt.map (fun x->x,subst) default)
+           | DT.Yield _ -> assert false
+           | DT.Cases {DT.default; _} -> CCOpt.map (fun x->x,subst) default)
         l
     in
     begin match l with
@@ -645,7 +653,7 @@ module DT_util = struct
       | DT.Cases {DT.tests=DT.Match _; var; _} ->
         (* TODO: maybe in some cases we can push the matching in the "yield"? *)
         Utils.invalid_argf
-          "remove_vars: cannot remove `%a`,@ used in match" Var.print_full var
+          "remove_vars: cannot remove `%a`,@ used in match" Var.pp_full var
       | DT.Cases {DT.var=v; tests=DT.Tests l; default} ->
         if CCList.Set.mem ~eq:Var.equal v vars
         then (
@@ -731,7 +739,7 @@ module DT_util = struct
     in
     U.fun_l vars (aux dt)
 
-  let print : dt printer = DT.print P.print' P.print
+  let pp : dt printer = DT.pp P.pp' P.pp
 end
 
 (** {2 Models} *)
@@ -819,15 +827,15 @@ let fold ?(values=const_fst_) ?(finite_types=const_fst_) acc m =
     ~finite_types:(fun x -> acc := finite_types !acc x);
   !acc
 
-let print pt pty out m =
+let pp pt pty out m =
   let pplist ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp in
   let pp_type out (ty,dom) =
     fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
-      pty ty (pplist ~sep:", " ID.print) dom
+      pty ty (pplist ~sep:", " ID.pp) dom
   and pp_value out (t,dt,_) =
     fpf out "@[<2>val @[%a@]@ :=@ %a@]."
       (pt Precedence.Top) t
-      (DT.print pt pty) dt
+      (DT.pp pt pty) dt
   in
   (* only print non-empty lists *)
   let pp_nonempty_list pp out l =
@@ -880,14 +888,14 @@ module Default = struct
   let pp_simple_atom out = function
     | SA_ty (ty,dom) ->
       fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
-        P.print ty (pplist ~sep:", " ID.print) dom
+        P.pp ty (pplist ~sep:", " ID.pp) dom
     | SA_val (t,u) ->
       fpf out "@[<2>val @[%a@]@ :=@ %a@]."
-        P.print t (P.print' Precedence.Arrow) u
+        P.pp t (P.pp' Precedence.Arrow) u
 
   let pp_simple out = fpf out "@[<v>%a@]" (pplist ~sep:"" pp_simple_atom)
 
-  let print_standard out m =
+  let pp_standard out m =
     let s = to_simple m in
     pp_simple out s
 end

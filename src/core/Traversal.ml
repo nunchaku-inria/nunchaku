@@ -11,7 +11,7 @@ module type ARG = sig
   val equal : t -> t -> bool
   val hash : t -> int
 
-  val print : t CCFormat.printer
+  val pp : t CCFormat.printer
   val section : Utils.Section.t
   val fail : ('a, Format.formatter, unit, 'b) format4 -> 'a
 end
@@ -131,7 +131,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     | PS_pred of [`Wf | `Not_wf] * [`Pred | `Copred] * (term, ty) Stmt.pred_def
     | PS_spec of (term, ty) Stmt.spec_defs
     | PS_decl of ty Stmt.defined
-    | PS_data of [`Data | `Codata] * ty Stmt.tydef
+    | PS_data of [`Data | `Codata] * ty Stmt.data_type
     | PS_copy of (term, ty) Stmt.copy
     | PS_goal of term
     | PS_axiom of term list
@@ -242,24 +242,24 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     let pp_list pp = CCFormat.list ~start:"" ~stop:"" pp in
     match ps.ps_view with
       | PS_rec r ->
-        Format.fprintf out "@[%a@]" PStmt.print_rec_def r
+        Format.fprintf out "@[%a@]" PStmt.pp_rec_def r
       | PS_pred (wf,k,p) ->
         Format.fprintf out "@[%s%s %a@]"
           (match k with `Pred -> "pred" | `Copred -> "copred")
           (match wf with `Wf -> "[wf]" | `Not_wf -> "")
-          PStmt.print_pred_def p
+          PStmt.pp_pred_def p
       | PS_spec s ->
-        Format.fprintf out "@[%a@]" PStmt.print_spec_defs s
+        Format.fprintf out "@[%a@]" PStmt.pp_spec_defs s
       | PS_decl d ->
         Format.fprintf out "@[val %a@]" PStmt.pp_defined d
       | PS_data (k,d) ->
         Format.fprintf out "%s %a"
           (match k with `Data -> "data" | `Codata -> "codata")
-          PStmt.print_tydef d
-      | PS_copy c -> Format.fprintf out "@[copy %a@]" ID.print c.Stmt.copy_id
+          PStmt.pp_data_type d
+      | PS_copy c -> Format.fprintf out "@[copy %a@]" ID.pp c.Stmt.copy_id
       | PS_axiom l ->
-        Format.fprintf out "@[axiom@ %a@]" (pp_list P.print) l
-      | PS_goal t -> Format.fprintf out "@[goal %a@]" P.print t
+        Format.fprintf out "@[axiom@ %a@]" (pp_list P.pp) l
+      | PS_goal t -> Format.fprintf out "@[goal %a@]" P.pp t
 
   type t = {
     max_depth: int;
@@ -319,9 +319,9 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     do_data:
       (t ->
        depth:int -> [`Data | `Codata] ->
-       term Statement.tydef ->
+       term Statement.data_type ->
        Arg.t ->
-       term Statement.tydef)
+       term Statement.data_type)
         option;
 
     do_ty_def:
@@ -353,7 +353,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
   let mark_processed_ t (id:ID.t) (arg:Arg.t): unit =
     assert (not (has_processed t id arg));
     Utils.debugf ~section 4 "mark_processed `%a` (%a)"
-      (fun k->k ID.print id Arg.print arg);
+      (fun k->k ID.pp id Arg.pp arg);
     IDArgTbl.add t.graph (id,arg) ()
 
   let mark_processed t id arg =
@@ -377,7 +377,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     let id = def |> Stmt.defined_of_rec |> Stmt.id_of_defined in
     Utils.debugf ~section 3
       "@[<2>@{<Cyan>process rec case@} `%a` for@ (%a)@ at depth %d@]"
-      (fun k -> k ID.print id Arg.print arg depth);
+      (fun k -> k ID.pp id Arg.pp arg depth);
     let def' = t.dispatch.do_def t ~depth def arg in
     let info = {Stmt.name=None; loc; } in
     let ps = mk_ps_ ~info (PS_rec def') in
@@ -389,7 +389,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     let id = def |> Stmt.defined_of_pred |> Stmt.id_of_defined in
     Utils.debugf ~section 3
       "@[<2>@{<Cyan>process pred case@} `%a` for@ (%a)@ at depth %d@]"
-      (fun k -> k ID.print id Arg.print arg depth);
+      (fun k -> k ID.pp id Arg.pp arg depth);
     let def' = t.dispatch.do_pred t ~depth wf k def arg in
     let info = {Stmt.name=None; loc; } in
     let ps = mk_ps_ ~info (PS_pred (wf,k,def')) in
@@ -408,7 +408,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
 
   let traverse_stmt_ ~after_env t (st:(term,ty) Stmt.t) : unit =
     Utils.debugf ~section 2 "@[<2>enter statement@ `%a`@]"
-      (fun k -> k PStmt.print st);
+      (fun k -> k PStmt.pp st);
     (* process statement *)
     t.env <- Env.add_statement ~env:t.env st;
     after_env t.env;
@@ -461,7 +461,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
       | Stmt.TyDef (k, l) ->
         begin match t.dispatch.do_ty_def with
           | None ->
-            let l = Stmt.map_ty_defs ~ty:(tr_type ()) l in
+            let l = Stmt.map_data_types ~ty:(tr_type ()) l in
             List.iter
               (fun d ->
                  let ps = mk_ps_ ~info (PS_data (k,d)) in
@@ -480,7 +480,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
 
   let rec do_new_statement_for_id_ t ~depth id arg : unit =
     let env_info = match Env.find ~env:t.env id with
-      | None -> Arg.fail "could not find definition of %a" ID.print id
+      | None -> Arg.fail "could not find definition of %a" ID.pp id
       | Some i -> i
     in
     check_depth_ t depth;
@@ -509,7 +509,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
             assert (ID.equal tydef.Stmt.ty_id id);
             Utils.debugf ~section 3
               "@[<2>@{<Cyan>process type decl@} `%a : %a`@ for %a@ at depth %d@]"
-              (fun k-> k ID.print id P.print tydef.Stmt.ty_type Arg.print arg depth);
+              (fun k-> k ID.pp id P.pp tydef.Stmt.ty_type Arg.pp arg depth);
             let tydef' = f t ~depth k tydef arg in
             let ps = mk_ps_ ~info:(Stmt.info_of_loc loc) (PS_data (k,tydef')) in
             add_graph_ t ps;
@@ -595,7 +595,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     | [] -> assert false
     | {ps_view=PS_data (k1,d1); ps_info=info; _} as ps1 :: tail ->
       let l = List.fold_left (merge_into_data k1 ps1) [d1] tail in
-      Stmt.mk_ty_def ~info k1 l
+      Stmt.mk_ty_def  ~info k1 l
     | {ps_view=PS_pred (wf1,k1,p1); ps_info=info; _} as ps1 :: tail ->
       let l = List.fold_left (merge_into_pred wf1 k1 ps1) [p1] tail in
       Stmt.mk_pred ~info ~wf:wf1 k1 l
@@ -622,7 +622,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     let find_id_ id =
       try ID.Tbl.find t.by_id id
       with Not_found ->
-        Arg.fail "could not find `%a` in new graph" ID.print id
+        Arg.fail "could not find `%a` in new graph" ID.pp id
     in
     (* instantiate SCC module *)
     let module Scc = SCC(struct

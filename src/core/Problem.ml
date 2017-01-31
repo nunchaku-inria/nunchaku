@@ -76,14 +76,14 @@ let map ~term ~ty pb = map_with ~term ~ty pb
 module Print(P1 : TermInner.PRINT)(P2 : TermInner.PRINT) = struct
   module PStmt = Statement.Print(P1)(P2)
 
-  let print out pb =
+  let pp out pb =
     let str_of_meta m =
       (if m.Metadata.sat_means_unknown then "(sat->?)" else "") ^
         (if m.Metadata.unsat_means_unknown then "(unsat->?)" else "")
     in
     fpf out "{%s@,%a@,}"
       (str_of_meta pb.metadata)
-      (CCVector.print ~start:"" ~stop:"" ~sep:"" PStmt.print)
+      (CCVector.print ~start:"" ~stop:"" ~sep:"" PStmt.pp)
       pb.statements
 end
 
@@ -172,13 +172,13 @@ module Res = struct
 
   let fpf = Format.fprintf
 
-  let print_head out = function
+  let pp_head out = function
     | Unsat _ -> fpf out "UNSAT"
     | Error (e,_) -> fpf out "ERROR %s" (Printexc.to_string e)
     | Unknown _ -> fpf out "UNKNOWN"
     | Sat (_,_) -> fpf out "SAT"
 
-  let print_info out i =
+  let pp_info out i =
     let pp_msg out = function
       | None -> ()
       | Some s -> Format.fprintf out ",@ message=\"%s\"" s
@@ -186,24 +186,24 @@ module Res = struct
     Format.fprintf out "@[<2>{backend:%s, time:%.1fs%a}@]"
       i.backend i.time pp_msg i.message
 
-  let print_unknown_info out = function
-    | U_timeout i -> fpf out "TIMEOUT %a" print_info i
-    | U_out_of_scope i -> fpf out "OUT_OF_SCOPE %a" print_info i
-    | U_incomplete i -> fpf out "INCOMPLETE %a" print_info i
-    | U_other (i,s) -> fpf out "INCOMPLETE %a %s" print_info i s
-    | U_backend_error (i,s) -> fpf out "BACKEND_ERROR %a %s" print_info i s
+  let pp_unknown_info out = function
+    | U_timeout i -> fpf out "TIMEOUT %a" pp_info i
+    | U_out_of_scope i -> fpf out "OUT_OF_SCOPE %a" pp_info i
+    | U_incomplete i -> fpf out "INCOMPLETE %a" pp_info i
+    | U_other (i,s) -> fpf out "INCOMPLETE %a %s" pp_info i s
+    | U_backend_error (i,s) -> fpf out "BACKEND_ERROR %a %s" pp_info i s
 
-  let print_info_opt out = function
+  let pp_info_opt out = function
     | None -> ()
-    | Some i -> print_info out i
+    | Some i -> pp_info out i
 
-  let print pt pty out = function
-    | Unsat i -> fpf out "UNSAT %a" print_info i
-    | Error (e,i) -> fpf out "ERROR %s@ %a" (Printexc.to_string e) print_info i
-    | Unknown l -> fpf out "UNKNOWN (@[%a@])" (Utils.pp_list print_unknown_info) l
+  let pp pt pty out = function
+    | Unsat i -> fpf out "UNSAT %a" pp_info i
+    | Error (e,i) -> fpf out "ERROR %s@ %a" (Printexc.to_string e) pp_info i
+    | Unknown l -> fpf out "UNKNOWN (@[%a@])" (Utils.pp_list pp_unknown_info) l
     | Sat (m,i) ->
       fpf out "@[<hv>@[<v2>SAT: {@,@[<v>%a@]@]@,}@,%a@]"
-        (Model.print pt pty) m print_info i
+        (Model.pp pt pty) m pp_info i
 
   let str = Sexp_lib.atom
   let lst = Sexp_lib.list

@@ -68,12 +68,12 @@ val to_string_slug : t -> string
 (** Pure alphanumerical identifier, see
     https://en.wikipedia.org/wiki/Semantic_URL#Slug *)
 
-val print_full : Format.formatter -> t -> unit
+val pp_full : Format.formatter -> t -> unit
 (** Print with the unique integer ID *)
 
 val to_string_full : t -> string
 
-val print_name : Format.formatter -> t -> unit
+val pp_name : Format.formatter -> t -> unit
 (** Print only the name, nothing else *)
 
 module Map : CCMap.S with type key = t

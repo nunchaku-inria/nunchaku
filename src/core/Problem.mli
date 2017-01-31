@@ -81,7 +81,7 @@ val map_with :
 
 (** Printer for a problem *)
 module Print(P1 : TermInner.PRINT)(P2:TermInner.PRINT) : sig
-  val print : (P1.t, P2.t) t printer
+  val pp : (P1.t, P2.t) t printer
 end
 
 (** {2 Convert the term representations} *)
@@ -144,13 +144,13 @@ module Res : sig
     ('t1, 'ty1) t ->
     ('t2, 'ty2) t
 
-  val print : (Precedence.t -> 't printer) -> 'ty printer -> ('t,'ty) t printer
+  val pp : (Precedence.t -> 't printer) -> 'ty printer -> ('t,'ty) t printer
 
-  val print_info : info printer
+  val pp_info : info printer
 
-  val print_unknown_info : unknown_info printer
+  val pp_unknown_info : unknown_info printer
 
-  val print_head : (_,_) t printer
+  val pp_head : (_,_) t printer
   (** print result, not content (i.e. not the model *)
 
   val to_sexp : 't to_sexp -> 'ty to_sexp -> ('t,'ty) t to_sexp

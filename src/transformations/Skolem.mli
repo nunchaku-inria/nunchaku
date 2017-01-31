@@ -65,7 +65,7 @@ val skolemize :
     @param in_goal if true, record skolem definitions so that they can
       appear in the model *)
 
-val print_state : Format.formatter -> state -> unit
+val pp_state : Format.formatter -> state -> unit
 
 val skolemize_pb :
   state:state ->

@@ -116,7 +116,7 @@ module Decoder = struct
       | E_end -> `End
       | E_error msg ->
         let loc = Location.of_lexbuf t.buf in
-        `Error (CCFormat.sprintf "parse error at %a: %s" Location.print loc msg)
+        `Error (CCFormat.sprintf "parse error at %a: %s" Location.pp loc msg)
 end
 
 let parse_string s : t or_error =

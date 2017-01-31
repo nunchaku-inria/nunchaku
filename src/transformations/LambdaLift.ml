@@ -139,7 +139,7 @@ let rec tr_term ~state local_state subst t = match T.repr t with
        which makes this safe *)
     let t' = TermTbl.find state.funs t in
     Utils.debugf ~section 5 "@[<2>re-use `@[%a@]`@ for `@[%a@]`@]"
-      (fun k->k P.print t' P.print t);
+      (fun k->k P.pp t' P.pp t);
     t'
   | TI.Bind (Binder.Fun, v, body) ->
     (* first, λ-lift in the body *)
@@ -166,7 +166,7 @@ let rec tr_term ~state local_state subst t = match T.repr t with
     (* declare new function *)
     decl_fun_ ~state ~attrs:[] new_fun ty;
     Utils.debugf ~section 5 "@[<2>declare `@[%a : %a@]`@ for `@[%a@]`@]"
-      (fun k->k ID.print new_fun P.print ty P.print t);
+      (fun k->k ID.pp new_fun P.pp ty P.pp t);
     (* how we define [new_fun] depends on whether it is mutually recursive
        with the surrounding rec/spec *)
     begin match local_state.in_scope with
@@ -284,7 +284,7 @@ let pipe_with ~decode ~print ~check =
     Utils.singleton_if print ()
       ~f:(fun () ->
         let module Ppb = Problem.Print(P)(P) in
-        Format.printf "@[<v2>@{<Yellow>after λ-lifting@}: %a@]@." Ppb.print)
+        Format.printf "@[<v2>@{<Yellow>after λ-lifting@}: %a@]@." Ppb.pp)
     @
       Utils.singleton_if check ()
         ~f:(fun () ->

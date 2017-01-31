@@ -52,7 +52,7 @@ let () = Printexc.register_printer
       | TranslationFailed (t,msg) ->
         Some (CCFormat.sprintf
             "@[<2>introduction of guards in@ `@[%a@]`@ failed:@ %s@]"
-            P.print t msg)
+            P.pp t msg)
       | _ -> None)
 
 let combine_polarized ~is_pos t g =
@@ -179,7 +179,7 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
         | _ ->
           fail_tr_ t
             "@[translation of `%a` impossible:@ cannot put guards `%a` under λ@]"
-            P.print t (Builtin.pp_guard P.print) g
+            P.pp t (Builtin.pp_guard P.pp) g
       end
     | TI.Bind (Binder.Mu, _, _) -> fail_tr_ t "translation of µ impossible"
     | TI.Let (v,t,u) ->
@@ -266,7 +266,7 @@ and tr_list ~state ~pol ~acc l =
   l, acc
 
 let tr_root ~state t =
-  Utils.debugf ~section 5 "@[<2>intro guards in@ `@[%a@]`@]" (fun k->k P.print t);
+  Utils.debugf ~section 5 "@[<2>intro guards in@ `@[%a@]`@]" (fun k->k P.pp t);
   let pol = Pol.Pos in
   let t', g = tr_term ~state ~pol t in
   combine_polarized ~is_pos:true t' g
@@ -290,7 +290,7 @@ let pipe ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module PPb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after introduction of guards@}: %a@]@." PPb.print)
+      Format.printf "@[<v2>@{<Yellow>after introduction of guards@}: %a@]@." PPb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
         let module C = TypeCheck.Make(T) in

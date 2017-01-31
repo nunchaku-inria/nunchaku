@@ -64,7 +64,7 @@ let smaller p ~than =
   (p.stop_line < than.stop_line
    ||  (p.stop_line = than.stop_line && p.stop_column <= than.stop_column))
 
-let print out pos =
+let pp out pos =
   if pos.start_line = pos.stop_line
   then
     Format.fprintf out "file '%s': line %d, col %d to %d"
@@ -75,13 +75,13 @@ let print out pos =
       pos.start_line pos.start_column
       pos.stop_line pos.stop_column
 
-let to_string = CCFormat.to_string print
+let to_string = CCFormat.to_string pp
 
-let print_opt out = function
+let pp_opt out = function
   | None -> Format.fprintf out "<no location>"
-  | Some pos -> print out pos
+  | Some pos -> pp out pos
 
-let to_string_opt = CCFormat.to_string print_opt
+let to_string_opt = CCFormat.to_string pp_opt
 
 (** {2 Value bundled with Location} *)
 

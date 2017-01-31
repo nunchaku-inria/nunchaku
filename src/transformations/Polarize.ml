@@ -93,7 +93,7 @@ module Trav = Traversal.Make(T)(struct
     type t = action
     let equal = (=)
     let hash _ = 0
-    let print = pp_act
+    let pp = pp_act
     let section = section
     let fail = errorf_
   end)(St)
@@ -179,7 +179,7 @@ let rec polarize_term_rec
           | TI.Const id, _ when ID.Tbl.mem state.St.polarized id ->
             Utils.debugf ~section 5
               "@[<2>decision to polarize `%a` already taken@]"
-              (fun k->k ID.print_full id);
+              (fun k->k ID.pp_full id);
             (* we already chose whether [id] was polarized or not *)
             begin match ID.Tbl.find state.St.polarized id with
               | None ->
@@ -209,13 +209,13 @@ let rec polarize_term_rec
                 if should_polarize_rec ~state def
                 then (
                   Utils.debugf ~section 5 "@[<2>polarize fun `%a`@]"
-                    (fun k->k ID.print_full id);
+                    (fun k->k ID.pp_full id);
                   polarize_def_of ~self id pol;
                   let p = find_polarized_exn ~state id in
                   app_polarized pol p l
                 ) else (
                   Utils.debugf ~section 5 "@[<2>do not polarize fun `%a`@]"
-                    (fun k->k ID.print_full id);
+                    (fun k->k ID.pp_full id);
                   ID.Tbl.add state.St.polarized id None;
                   Trav.call_dep self ~depth:0 id `Keep;
                   U.app f l
@@ -226,7 +226,7 @@ let rec polarize_term_rec
                   (* constant: degenerate case of (co)inductive pred, no need
                      for polarization, and necessarily WF. *)
                   Utils.debugf ~section 5 "@[<2>do not polarize pred `%a`@]"
-                    (fun k->k ID.print_full id);
+                    (fun k->k ID.pp_full id);
                   ID.Tbl.add state.St.polarized id None;
                   Trav.call_dep self ~depth:0 id `Keep;
                   assert (l = []);
@@ -234,7 +234,7 @@ let rec polarize_term_rec
                 ) else (
                   (* polarize *)
                   Utils.debugf ~section 5 "@[<2>polarize pred `%a`@]"
-                    (fun k->k ID.print_full id);
+                    (fun k->k ID.pp_full id);
                   polarize_def_of ~self id pol;
                   let p = find_polarized_exn ~state id in
                   app_polarized pol p l
@@ -279,7 +279,7 @@ let define_rec
     let defined = def.rec_defined in
     let defined = { defined with defined_head=(if is_pos then p.pos else p.neg); } in
     Utils.debugf ~section 5 "@[<2>polarize def `@[%a@]`@ on %B@]"
-      (fun k->k PStmt.print_rec_def def is_pos);
+      (fun k->k PStmt.pp_rec_def def is_pos);
     let pol = if is_pos then Pol.Pos else Pol.Neg in
     let rec_eqns =
       map_eqns_bind Var.Subst.empty pol def.rec_eqns
@@ -340,7 +340,7 @@ let dispatch = {
     let ty = Stmt.ty_of_defined d in
     let st = Trav.state self in
     Utils.debugf ~section 5 "@[<2>polarize def `@[%a@]`@ on %a@]"
-      (fun k->k ID.print id pp_act act);
+      (fun k->k ID.pp id pp_act act);
     match act with
       | `Keep ->
         ID.Tbl.replace st.St.polarized id None;
@@ -369,7 +369,7 @@ let dispatch = {
     if act<>`Keep
     then
       Utils.debugf ~section 2 "polarize (co)inductive predicate %a on (%a)"
-        (fun k->k ID.print id pp_act act);
+        (fun k->k ID.pp id pp_act act);
     match act with
       | `Keep ->
         ID.Tbl.add st.St.polarized id None;
@@ -466,7 +466,7 @@ and rewrite' ~subst sys t =
 let find_polarized_ ~(state:decode_state) id =
   try ID.Tbl.find state id
   with Not_found ->
-    errorf_ "could not find polarized symbol `%a` when decoding" ID.print id
+    errorf_ "could not find polarized symbol `%a` when decoding" ID.pp id
 
 (* build a rewrite system from the given model. The rewrite system erases
    polarized IDs into their non-polarized version. *)
@@ -478,7 +478,7 @@ let make_rw_sys_ ~state m : rw_sys =
         (* rewrite into the unpolarized version *)
         let id', _is_pos, _, _p = find_polarized_ ~state id in
         Utils.debugf ~section 4 "@[<2>decoding:@ rewrite %a into %a@]"
-          (fun k->k ID.print id ID.print id');
+          (fun k->k ID.pp id ID.pp id');
         ID.Map.add id id' sys
       | _ -> sys)
 
@@ -498,7 +498,7 @@ let filter_dt_ ~polarized ~default:d dt : (_,_) DT.t =
   let is_pos = ID.is_pos polarized in
   Utils.debugf ~section 5
     "@[<v>retain branches that yield %B for `%a`@ from `@[%a@]`@]"
-    (fun k->k is_pos ID.print polarized (Model.DT.print P.print' P.print) dt);
+    (fun k->k is_pos ID.pp polarized (Model.DT.pp P.pp' P.pp) dt);
   let rec aux dt : _ option = match dt with
     | DT.Yield t ->
       (* evaluate as fully as possible, hoping for [true] or [false] *)
@@ -514,7 +514,7 @@ let filter_dt_ ~polarized ~default:d dt : (_,_) DT.t =
           errorf_
             "@[<2>expected decision tree for %a@ to yield only true/false@ \
              but branch `@[%a@]`@ yields `@[%a@]`@]"
-            ID.print polarized DTU.print dt P.print t
+            ID.pp polarized DTU.pp dt P.pp t
       end
     | DT.Cases {DT.var; tests=DT.Tests l; default} ->
       let l =
@@ -630,7 +630,7 @@ let pipe_with ?on_decoded ~decode ~polarize_rec ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module Ppb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after polarization@}:@ %a@]@." Ppb.print)
+      Format.printf "@[<v2>@{<Yellow>after polarization@}:@ %a@]@." Ppb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
         let module C = TypeCheck.Make(T) in
@@ -648,7 +648,7 @@ let pipe ~polarize_rec ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after polarize@}:@ %a@]@."
-         (Problem.Res.print P.print' P.print)]
+         (Problem.Res.pp P.pp' P.pp)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model ~state) in
