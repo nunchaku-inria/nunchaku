@@ -98,9 +98,10 @@ module Features = struct
     | Copy -> "copy"
 
   let pp out (m:t) =
-    let pp_k out x = CCFormat.string out (str_of_key x) in
-    let pp_v out x = CCFormat.string out (str_of_value x) in
-    Format.fprintf out "@[<hv>%a@]" (M.print ~start:"" ~stop:"" pp_k pp_v) m
+    let pp_pair out (k,v) =
+      Format.fprintf out "%s -> %s" (str_of_key k) (str_of_value v)
+    in
+    Format.fprintf out "@[<hv>%a@]" (Utils.pp_seq pp_pair) (M.to_seq m)
 end
 
 (** {2 Single Transformation} *)

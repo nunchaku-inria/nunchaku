@@ -372,7 +372,8 @@ let decode_model (st:decode_state) m : (_,_) Model.t =
   let map = decode_concrete_ st m in
   Utils.debugf ~section 3
     "@[<2>decode model with map@ @[<hv>%a@]@]"
-    (fun k->k (ID.Map.print ID.pp P.pp) map);
+    (fun k->k (Utils.pp_seq CCFormat.(pair ~sep:(return "@ -> ") ID.pp P.pp))
+        (ID.Map.to_seq map));
   let tr_term = decode_term map in
   Model.filter_map m
     ~finite_types:(fun (ty,dom) -> match T.repr ty with

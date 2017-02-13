@@ -920,7 +920,7 @@ module Make(M : sig val mode : mode end) = struct
             | Some (Test _) ->
               {dec with dec_test=ID.Map.add id (dt,k) dec.dec_test}
             | Some (Select (c,i)) ->
-              let m = ID.Map.get_or ~or_:IntMap.empty c dec.dec_select in
+              let m = ID.Map.get_or ~default:IntMap.empty c dec.dec_select in
               let m = IntMap.add i (dt,k) m in
               {dec with dec_select=ID.Map.add c m dec.dec_select}
             | Some (Cstor _ | Axiom_rec) -> dec

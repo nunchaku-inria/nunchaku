@@ -150,7 +150,7 @@ let create_ ~print_model ~decode (ic,oc) =
   Gc.finalise close s; (* close on finalize *)
   s
 
-let pp_list ?(sep=" ") ?(start="") ?(stop="") pp = CCFormat.list ~sep ~start ~stop pp
+let pp_list ?(sep=" ") pp = Utils.pp_list ~sep pp
 
 (* add numeric suffix to [name] until it is an unused name *)
 let find_unique_name_ ~decode name0 =
@@ -237,7 +237,7 @@ let pp_problem out (decode, pb) =
   (* print type in SMT syntax *)
   and pp_ty_decl out ty =
     let args, ret = ty in
-    fpf out "%a %a" (pp_list ~start:"(" ~stop:")" pp_ty) args pp_ty ret
+    fpf out "%a %a" (CCFormat.within "(" ")" (pp_list pp_ty)) args pp_ty ret
 
   and pp_term out t = match T.view t with
     | FO.Builtin b ->
@@ -339,8 +339,8 @@ let pp_problem out (decode, pb) =
   fpf out "(set-option :interactive-mode true)@,";
   fpf out "(set-logic ALL_SUPPORTED)@,"; (* taïaut! *)
   (* write problem *)
-  CCVector.print ~start:"" ~stop:"" ~sep:""
-    pp_statement out pb.FO.Problem.statements;
+  Utils.pp_seq ~sep:""
+    pp_statement out (CCVector.to_seq pb.FO.Problem.statements);
   fpf out "@,(check-sat)@]@.";
   ()
 
@@ -428,7 +428,7 @@ and parse_term_sub_ ~decode = function
         (* adjust: the current term, i.e. the constant, doesn't have
            a binder, so its stack slot should not count *)
         let n = n+1 in
-        begin match CCList.Idx.get decode.db_stack n with
+        begin match CCList.get_at_idx n decode.db_stack with
           | None -> errorf_ "De Bruijn index %d not bound" n
           | Some r ->
             match !r with
@@ -598,7 +598,7 @@ let send_get_model_ out decode =
     | Q_type _ -> fpf out "(fmf.card.val %a)" pp_id id
   in
   fpf out "(@[<hv2>get-value@ (@[<hv>%a@])@])"
-    (CCFormat.seq ~start:"" ~sep:" " ~stop:"" pp_mquery)
+    (Utils.pp_seq ~sep:" " pp_mquery)
     (ID.Tbl.to_seq decode.symbols)
 
 (* read model from CVC4 instance [s] *)

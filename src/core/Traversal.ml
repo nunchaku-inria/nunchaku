@@ -239,7 +239,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
       end
 
   let pp_ps out ps =
-    let pp_list pp = CCFormat.list ~start:"" ~stop:"" pp in
+    let pp_list pp = Utils.pp_list pp in
     match ps.ps_view with
       | PS_rec r ->
         Format.fprintf out "@[%a@]" PStmt.pp_rec_def r

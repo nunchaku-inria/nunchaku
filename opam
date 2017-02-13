@@ -24,7 +24,7 @@ remove: [
 ]
 depends: [
     "ocamlfind" {build}
-    "containers" { >= "0.16" < "1.0" }
+    "containers" { >= "1.0" }
     "menhir" {build}
     "sequence"
     "base-unix"

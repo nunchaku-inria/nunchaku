@@ -506,7 +506,7 @@ let ids_of_copy c =
   Sequence.of_list [c.copy_id; c.copy_concrete; c.copy_abstract]
 
 let fpf = Format.fprintf
-let pplist ?(start="") ?(stop="") ~sep pp = CCFormat.list ~start ~stop ~sep pp
+let pplist ~sep pp = Utils.pp_list ~sep pp
 
 (* print list with prefix before every item *)
 let pplist_prefix ~first ~pre pp out l =
@@ -627,7 +627,7 @@ module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
        @[abstract %a : @[%a@]@]@ \
        @[concrete %a : @[%a@]@]@]"
       ID.pp c.copy_id
-      (CCFormat.list ~start:"" ~stop:"" ~sep:" " Var.pp_full) c.copy_vars
+      (Utils.pp_list ~sep:" " Var.pp_full) c.copy_vars
       Pty.pp c.copy_of
       pp_wrt c.copy_wrt
       ID.pp c.copy_abstract Pty.pp c.copy_abstract_ty

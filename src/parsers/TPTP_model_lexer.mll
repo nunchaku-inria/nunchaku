@@ -87,6 +87,6 @@ rule token = parse
   let parse_str_ p s = p token (Lexing.from_string s)
 
   let try_parse_ p s =
-    try CCError.return (parse_str_ p s)
-    with e -> CCError.fail (Printexc.to_string e)
+    try CCResult.return (parse_str_ p s)
+    with e -> CCResult.fail (Printexc.to_string e)
 }

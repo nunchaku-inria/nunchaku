@@ -117,7 +117,7 @@ let mk_fi_predicates name vars (l:term list) : statement =
   in
   Fi_predicates (name, id, vars, List.map snd l)
 
-let pp_list_ pp = CCFormat.list ~sep:" " ~start:"" ~stop:"" pp
+let pp_list_ pp = Utils.pp_list ~sep:" " pp
 
 let rec pp_term out = function
   | Var v -> CCFormat.string out v
@@ -159,7 +159,7 @@ let pp_statement out st =
 
 let pp_statements out =
   Format.fprintf out "[@[<hv>%a@]]"
-    (CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_statement)
+    (Utils.pp_list ~sep:" " pp_statement)
 
 (** {2 Conversion to Model} *)
 

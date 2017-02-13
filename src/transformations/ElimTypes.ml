@@ -350,7 +350,8 @@ let rebuild_types state m : retyping =
         Utils.debugf ~section 3
           "@[<2>domain of type `%a`@ is {@[%a@]},@ map to @[[%a]@]@]"
           (fun k->k P.pp ty (CCFormat.list ID.pp) dom
-              (ID.Map.print ID.pp ID.pp) map);
+              (Utils.pp_seq CCFormat.(pair ~sep:(return "@ -> ") ID.pp ID.pp))
+              (ID.Map.to_seq map));
         { rety_domains = Ty.Map.add ty dom rety.rety_domains;
           rety_map = Ty.Map.add ty map rety.rety_map
         }
@@ -411,7 +412,7 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
         | Some map ->
           (* if [id] is a unitype domain constant, replace it *)
           ID.Map.get id map
-          |> CCOpt.maybe U.const t
+          |> CCOpt.map_or ~default:t U.const
       end
     | _ ->
       U.map () t

@@ -83,8 +83,8 @@ module Print(P1 : TermInner.PRINT)(P2 : TermInner.PRINT) = struct
     in
     fpf out "{%s@,%a@,}"
       (str_of_meta pb.metadata)
-      (CCVector.print ~start:"" ~stop:"" ~sep:"" PStmt.pp)
-      pb.statements
+      (Utils.pp_seq ~sep:"" PStmt.pp)
+      (CCVector.to_seq pb.statements)
 end
 
 module Convert(T1 : TermInner.REPR)(T2 : TermInner.BUILD) = struct

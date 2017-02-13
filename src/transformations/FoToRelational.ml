@@ -116,7 +116,7 @@ let id_of_ty ty : ID.t =
     | FO.TyApp (a,l) ->
       Format.fprintf out "%a_%a"
         ID.pp_name a
-        (CCFormat.list ~start:"" ~stop:"" ~sep:"_" pp_) l
+        (Utils.pp_list ~sep:"_" pp_) l
   in
   match FO.Ty.view ty with
     | FO.TyApp (id,[]) -> id
@@ -541,9 +541,10 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
       with Not_found ->
         errorf "could not find domain of type %a@ in @[%a@]"
           ID.pp su.FO_rel.su_name
-          (ID.Map.print ID.pp (CCFormat.list ID.pp)) ty_by_id
+          (Utils.pp_seq CCFormat.Dump.(pair ID.pp (list ID.pp)))
+          (ID.Map.to_seq ty_by_id)
     in
-    if CCList.Set.mem ~eq:ID.equal id ids
+    if CCList.mem ~eq:ID.equal id ids
     then Some id
     else None
   in
