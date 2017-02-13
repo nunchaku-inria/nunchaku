@@ -99,8 +99,8 @@ let attrs_of_ty state (ty:ty): Stmt.decl_attr list =
   (if AT.is_abstract state.env ty
    then [Stmt.Attr_abstract] else [])
   @
-  (if AT.is_incomplete state.env ty
-   then [Stmt.Attr_incomplete] else [])
+    (if AT.is_incomplete state.env ty
+     then [Stmt.Attr_incomplete] else [])
 
 (* [c] is a subset copy type with predicate [pred]; encode it as a new
    uninterpreted type [c], where [abstract] and [concrete] are regular functions
@@ -114,7 +114,7 @@ let copy_subset_as_uninterpreted_ty state ~info ~(pred:term) c : (_, _) Stmt.t l
   let ty_c = U.ty_const id_c in
   ID.Tbl.add state.copy_as_uninterpreted id_c ();
   Utils.debugf ~section 3 "@[copy type %a:@ should_be_incomplete=%B@]"
-    (fun k -> k ID.print id_c incomplete);
+    (fun k -> k ID.pp id_c incomplete);
   (* be sure to register approximated types *)
   if incomplete then (
     TyTbl.add state.incomplete_types ty_c ();
@@ -168,7 +168,7 @@ let copy_subset_as_uninterpreted_ty state ~info ~(pred:term) c : (_, _) Stmt.t l
     )
   in
   [decl_c; decl_abs; decl_conc; ax_abs_conc; ax_pred_conc]
-    @ ax_defined
+  @ ax_defined
 
 (* [c] is a quotient copy type with relation [rel]; encode it as a new
    uninterpreted type [c], where [abstract] and [concrete] are regular functions
@@ -182,7 +182,7 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
   let ty_c = U.ty_const id_c in
   ID.Tbl.add state.copy_as_uninterpreted id_c ();
   Utils.debugf ~section 3 "@[copy type %a:@ should_be_incomplete=%B@]"
-    (fun k -> k ID.print id_c incomplete);
+    (fun k -> k ID.pp id_c incomplete);
   if incomplete then (
     TyTbl.add state.incomplete_types ty_c ();
   );
@@ -223,8 +223,8 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
     let conc_b = U.app_const c.Stmt.copy_concrete [U.var b] in
     U.forall_l [a; b]
       (U.imply
-        (Red.app_whnf rel [conc_a; conc_b])
-        (U.eq (U.var a) (U.var b)))
+         (Red.app_whnf rel [conc_a; conc_b])
+         (U.eq (U.var a) (U.var b)))
     |> Stmt.axiom1 ~info
   (* if complete (concrete type is finite and small enough),
      axiom [forall c:conc. (rel c c =>)? rel c (concrete (abstract c))] *)
@@ -249,7 +249,7 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
     )
   in
   [decl_c; decl_abs; decl_conc; ax_abs_conc; ax_rel_conc; ax_partition]
-    @ ax_defined
+  @ ax_defined
 
 let is_incomplete_type_ state ty = TyTbl.mem state.incomplete_types ty
 let is_abstract_type_ state ty = TyTbl.mem state.abstract_types ty
@@ -257,10 +257,10 @@ let is_abstract_type_ state ty = TyTbl.mem state.abstract_types ty
 (* encode terms, perform the required approximations *)
 let encode_term state pol t =
   let rec aux pol t = match T.repr t with
-    | TI.Bind ((`Forall | `Exists) as q, v, _)
+    | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, _)
       when is_incomplete_type_ state (Var.ty v) ->
       (* might approximate this quantifier *)
-      begin match U.approx_infinite_quant_pol q pol with
+      begin match U.approx_infinite_quant_pol_binder q pol with
         | `Keep -> aux' pol t
         | `Unsat_means_unknown res ->
           (* drop quantifier *)
@@ -338,7 +338,7 @@ let decode_concrete_ st m : term ID.Map.t =
         let c, dt =
           try ID.Map.find id concrete_funs
           with Not_found ->
-            errorf "could not find concretize function for %a in model" ID.print id
+            errorf "could not find concretize function for %a in model" ID.pp id
         in
         List.fold_left
           (fun map dom_id ->
@@ -355,7 +355,7 @@ let decode_term (map:term ID.Map.t) (t:term): term =
     | TI.Const id ->
       begin match ID.Map.get id map with
         | None -> t
-          | Some t' -> t'
+        | Some t' -> t'
       end
     | TI.App (f, l) ->
       let f = aux f in
@@ -372,7 +372,8 @@ let decode_model (st:decode_state) m : (_,_) Model.t =
   let map = decode_concrete_ st m in
   Utils.debugf ~section 3
     "@[<2>decode model with map@ @[<hv>%a@]@]"
-    (fun k->k (ID.Map.print ID.print P.print) map);
+    (fun k->k (Utils.pp_seq CCFormat.(pair ~sep:(return "@ -> ") ID.pp P.pp))
+        (ID.Map.to_seq map));
   let tr_term = decode_term map in
   Model.filter_map m
     ~finite_types:(fun (ty,dom) -> match T.repr ty with
@@ -401,11 +402,11 @@ let pipe ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module Ppb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after %s@}:@ %a@]@." name Ppb.print)
+      Format.printf "@[<v2>@{<Yellow>after %s@}:@ %a@]@." name Ppb.pp)
     @
-    Utils.singleton_if check () ~f:(fun () ->
-      let module C = TypeCheck.Make(T) in
-      C.empty () |> C.check_problem)
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.empty () |> C.check_problem)
   in
   let decode st = Problem.Res.map_m ~f:(decode_model st) in
   Transform.make

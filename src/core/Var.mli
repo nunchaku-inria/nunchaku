@@ -54,10 +54,10 @@ val make_gen : names:(int -> string, unit, string) format -> 'a -> 'a t
 (** [make_gen ~names] creates a new generator of fresh variables
     whose names follow the naming scheme [names] (a formatter with one "%d") *)
 
-val print : _ t CCFormat.printer
+val pp : _ t CCFormat.printer
 val to_string : _ t -> string
 
-val print_full : _ t CCFormat.printer
+val pp_full : _ t CCFormat.printer
 val to_string_full : _ t -> string
 
 (** {2 Substitutions} *)
@@ -111,7 +111,7 @@ module Subst : sig
   val to_list : ('ty,'a) t -> ('ty var * 'a) list
   val to_seq : ('ty,'a) t -> ('ty var * 'a) Sequence.t
 
-  val print : 'a CCFormat.printer -> (_, 'a) t CCFormat.printer
+  val pp : 'a CCFormat.printer -> (_, 'a) t CCFormat.printer
 end
 
 (** {2 Data structures} *)

@@ -14,7 +14,7 @@ module P = T.P
 module PStmt = Stmt.Print(P)(P)
 module AT = AnalyzeType.Make(T)
 module Pol = Polarity
-module UEnv = Env.Util(T)
+module Red = Reduce.Make(T)
 module TyMo = (val TypeMono.default)
 
 type term = T.t
@@ -152,17 +152,17 @@ module Make(M : sig val mode : mode end) = struct
 
   let get_select_exn_ state id i : ID.t = match get_select_ state id i with
     | Some res -> res
-    | None -> errorf "could not find encoding of `select-%a-%d`" ID.print id i
+    | None -> errorf "could not find encoding of `select-%a-%d`" ID.pp id i
 
   let get_test_ state id : ID.t option = Tbl.get state.map (Test id)
 
   let get_test_exn state id : ID.t = match get_test_ state id with
     | Some res -> res
-    | None -> errorf "could not find encoding of `is-%a`" ID.print id
+    | None -> errorf "could not find encoding of `is-%a`" ID.pp id
 
   (* compute type of [t], using both envs *)
   let ty_exn ~state (t:T.t) =
-    U.ty_exn t
+    U.ty_of_signature_exn t
       ~sigma:(fun id ->
         let open CCOpt in
         Env.find_ty ~env:state.env id
@@ -170,7 +170,7 @@ module Make(M : sig val mode : mode end) = struct
 
   (* is [ty] a type that is being encoded? *)
   let is_encoded_ty state (ty:T.t): bool =
-    match UEnv.info_of_ty ~env:state.env ty, mode with
+    match U.info_of_ty ~env:state.env ty, mode with
       | Result.Ok {Env.def=Env.Data (`Data, _, _); _}, M_data
       | Result.Ok {Env.def=Env.Data (`Codata, _, _); _}, M_codata -> true
       | _ -> false
@@ -235,7 +235,7 @@ module Make(M : sig val mode : mode end) = struct
     let g = { ss_env=env; ss_num=0 } in
     share_of_globals g
 
-  let pp_cell out (c:sharing_cell) = Var.print_full out c.sc_var
+  let pp_cell out (c:sharing_cell) = Var.pp_full out c.sc_var
 
   let cell_of_var state (v:_ Var.t): sharing_cell option =
     Var.Subst.find ~subst:state.ss_var_to_cell v
@@ -247,14 +247,14 @@ module Make(M : sig val mode : mode end) = struct
     let add_to_deps cell =
       let fv = U.free_vars cell.sc_term in
       U.VarSet.to_seq fv
-        |> Sequence.iter
-          (fun v ->
-             let l = Var.Subst.find_or ~subst:share.ss_terms_depending_on v ~default:[] in
-             Utils.debugf ~section 5 "@[<2>deps(%a) +=@ %a (:= `@[%a@]`)@]"
-               (fun k->k Var.print_full v Var.print_full
-                   cell.sc_var P.print cell.sc_term);
-             share.ss_terms_depending_on <-
-               Var.Subst.add ~subst:share.ss_terms_depending_on v (cell :: l))
+      |> Sequence.iter
+        (fun v ->
+           let l = Var.Subst.find_or ~subst:share.ss_terms_depending_on v ~default:[] in
+           Utils.debugf ~section 5 "@[<2>deps(%a) +=@ %a (:= `@[%a@]`)@]"
+             (fun k->k Var.pp_full v Var.pp_full
+                 cell.sc_var P.pp cell.sc_term);
+           share.ss_terms_depending_on <-
+             Var.Subst.add ~subst:share.ss_terms_depending_on v (cell :: l))
     in
     try U.Map.find t share.ss_tbl
     with Not_found ->
@@ -272,7 +272,7 @@ module Make(M : sig val mode : mode end) = struct
       in
       Utils.debugf ~section 5
         "@[<2>introduce def %a@ := `@[%a@]`@ depends on: (@[%a@])@]"
-        (fun k->k Var.print v P.print t (Utils.pp_list pp_cell) sc_depends_on);
+        (fun k->k Var.pp v P.pp t (Utils.pp_list pp_cell) sc_depends_on);
       let cell = {
         sc_var=v;
         sc_term=t;
@@ -305,7 +305,11 @@ module Make(M : sig val mode : mode end) = struct
        replace [t] by [let x := u in t] and remove cell from [share].
        NOTE: careful about the dependencies between subterms and superterms
        during traversal, let-bindings must be correctly ordered *)
-  let introduce_lets share (t:term) ~(start:[`All | `Vars of ty Var.t list]): term =
+  let introduce_lets
+      (share:sharing_state)
+      (t:term)
+      ~(start:[`All | `Vars of ty Var.t list])
+    : term =
     let all_guards = ref [] in
     let all_lets = ref [] in
     (* the set of cells to introduce *)
@@ -316,7 +320,7 @@ module Make(M : sig val mode : mode end) = struct
     (* first, collect all cells by DFS *)
     let rec visit_terms_depending_on v =
       Utils.debugf ~section 5 "@[<2>visit_terms_depending_on %a@]"
-        (fun k->k Var.print v);
+        (fun k->k Var.pp v);
       begin match Var.Subst.find ~subst:share.ss_terms_depending_on v with
         | None -> ()
         | Some cells ->
@@ -367,7 +371,7 @@ module Make(M : sig val mode : mode end) = struct
       U.let_l (List.rev !all_lets) (U.asserting t guards)
     in
     Utils.debugf ~section 5 "@[<2>`@[%a@]`@ becomes@ `@[%a@]`@]"
-      (fun k->k P.print t P.print new_t);
+      (fun k->k P.pp t P.pp new_t);
     new_t
 
   let tr_term state (pol:Pol.t) (t:T.t) : T.t =
@@ -414,7 +418,7 @@ module Make(M : sig val mode : mode end) = struct
           | Some id' -> U.const id'
           | None ->
             if mode = M_data
-            then errorf "could not find encoding of `select-%a-%d`" ID.print id i
+            then errorf "could not find encoding of `select-%a-%d`" ID.pp id i
             else t
         end
       | TI.Builtin (`DataTest id) ->
@@ -422,7 +426,7 @@ module Make(M : sig val mode : mode end) = struct
           | Some id' -> U.const id'
           | None ->
             if mode = M_data
-            then errorf "could not find encoding of `is-%a`" ID.print id
+            then errorf "could not find encoding of `is-%a`" ID.pp id
             else t
         end
       | TI.Let (v, t, u) ->
@@ -433,17 +437,17 @@ module Make(M : sig val mode : mode end) = struct
         (* process [t] and re-build let *)
         let t' = tr_term_rec share Pol.NoPol t in
         U.let_ v t' u'
-      | TI.Bind ((`Forall | `Exists) as q, v, _)
+      | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, _)
         when is_infinite_and_encoded_ty state (Var.ty v) ->
         (* quantifier over an infinite (co)data, must approximate
            depending on the polarity *)
-        begin match U.approx_infinite_quant_pol q pol with
+        begin match U.approx_infinite_quant_pol_binder q pol with
           | `Unsat_means_unknown res ->
             state.unsat_means_unknown <- true;
             Utils.debugf ~section 3
               "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
                quantifying over infinite encoded type `@[%a@]`@]"
-              (fun k->k P.print t P.print res Pol.pp pol P.print (Var.ty v));
+              (fun k->k P.pp t P.pp res Pol.pp pol P.pp (Var.ty v));
             res
           | `Keep ->
             tr_bind share pol q t
@@ -452,17 +456,17 @@ module Make(M : sig val mode : mode end) = struct
         begin match b with
           | `Eq (t1,_) when not (U.ty_is_Prop (ty_exn ~state t1)) ->
             tr_term_aux share pol t
-            (* equality is ok *)
+          (* equality is ok *)
           | `Imply _ | `And _ | `Or _ | `Eq _ | `Ite _ ->
             (* boolean connectives: do not let sharing pass through for now, to
                play safe with polarities. *)
-            U.builtin (TI.Builtin.map b ~f:(tr_term_block_lets share pol))
+            U.builtin (Builtin.map b ~f:(tr_term_block_lets share pol))
           | _ -> tr_term_aux share pol t
         end
-      | TI.Bind ((`Forall | `Exists | `Fun) as b, _, _) -> tr_bind share pol b t
-      | TI.Match (t,m) ->
-        if is_encoded_ty state (UEnv.ty_exn ~env:state.env t)
-        then errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.print t
+      | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun) as b, _, _) -> tr_bind share pol b t
+      | TI.Match (t,m,def) ->
+        if is_encoded_ty state (U.ty_exn ~env:state.env t)
+        then errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.pp t
         else (
           let t = tr_term_rec share pol t in
           let m =
@@ -472,15 +476,18 @@ module Make(M : sig val mode : mode end) = struct
                  let rhs = introduce_lets share rhs ~start:(`Vars vars) in
                  vars, rhs)
               m
+          and def = TI.map_default_case
+              (fun rhs -> tr_term_rec share pol rhs)
+              def
           in
-          U.match_with t m
+          U.match_with t m ~def
         )
       | _ -> tr_term_aux share pol t
     (* properly encode [t], which starts with [binder]. We have to
        introduce let-definitions that depend on the bound variables inside
        the binder, not outside.
        The other let-definitions can percolate through the binder though *)
-    and tr_bind share pol (binder:TI.Binder.t) t =
+    and tr_bind share pol (binder:Binder.t) t =
       let vars, body = U.bind_unfold binder t in
       let body' = tr_term_rec share pol body in
       let body' = introduce_lets share body' ~start:(`Vars vars) in
@@ -521,13 +528,13 @@ module Make(M : sig val mode : mode end) = struct
         (fun _ cstor acc ->
            let c_id = cstor.cstor_name in
            add_ state (Cstor c_id) c_id;
-           let test = ID.make_f "is_%a" ID.print_name c_id in
+           let test = ID.make_f "is_%a" ID.pp_name c_id in
            let ty_test = U.ty_arrow (U.const ty.ty_id) U.ty_prop in
            add_ state (Test c_id) test;
            let selectors =
              List.mapi
                (fun i ty_arg ->
-                  let s = ID.make_f "select_%a_%d" ID.print_name c_id i in
+                  let s = ID.make_f "select_%a_%d" ID.pp_name c_id i in
                   let ty_s = U.ty_arrow (U.const ty.ty_id) ty_arg in
                   add_ state (Select (c_id, i)) s;
                   s, ty_s)
@@ -582,7 +589,7 @@ module Make(M : sig val mode : mode end) = struct
          let data_ty = U.const ety.ety_id in
          (* [forall x, not (is_c1 x & is_c2 x)] *)
          let ax_disjointness =
-           let x = Var.makef ~ty:data_ty "v_%a" ID.print_name ety.ety_id in
+           let x = Var.makef ~ty:data_ty "v_%a" ID.pp_name ety.ety_id in
            U.forall x
              (U.and_
                 (CCList.diagonal ety.ety_cstors
@@ -618,7 +625,7 @@ module Make(M : sig val mode : mode end) = struct
              ety.ety_cstors
          (* [forall x, Or_c is_c x] *)
          and ax_exhaustiveness =
-           let x = Var.makef ~ty:data_ty "v_%a" ID.print_name ety.ety_id in
+           let x = Var.makef ~ty:data_ty "v_%a" ID.pp_name ety.ety_id in
            U.forall x
              (U.or_
                 (List.map
@@ -643,7 +650,7 @@ module Make(M : sig val mode : mode end) = struct
       | _ -> false
     in
     (* [id_c : id -> id -> prop], with negative polarity *)
-    let id_c = ID.make_f "occurs_in_%a" ID.print_name id in
+    let id_c = ID.make_f "occurs_in_%a" ID.pp_name id in
     let ty_c = U.ty_arrow_l [U.const id; U.const id] U.ty_prop in
     let def_c = Stmt.mk_defined ~attrs:[Stmt.Attr_never_box] id_c ty_c in
     ID.Tbl.add state.decode id_c Axiom_rec;
@@ -720,7 +727,7 @@ module Make(M : sig val mode : mode end) = struct
         (fun ety ->
            let id_ty = ety.ety_id in
            (* [id_c : id -> id -> prop] *)
-           let id_c = ID.make_f "eq_corec_%a" ID.print_name id_ty in
+           let id_c = ID.make_f "eq_corec_%a" ID.pp_name id_ty in
            ID.Tbl.add state.decode id_c Axiom_rec;
            id_ty, id_c, ety)
         etys
@@ -827,24 +834,24 @@ module Make(M : sig val mode : mode end) = struct
     | Stmt.Pred _, M_data -> assert false (* invariant broken *)
     | Stmt.TyDef (`Codata, l), M_codata ->
       Utils.debugf ~section 2 "@[<2>encode codata@ `@[%a@]`@]"
-        (fun k->k PStmt.print_tydefs (`Codata, l));
+        (fun k->k PStmt.pp_data_types(`Codata, l));
       let new_st = encode_codata state l in
       state.new_env <- Env.add_statement_l ~env:state.new_env new_st;
       new_st
     | Stmt.TyDef (`Data, l), M_data ->
       Utils.debugf ~section 2 "@[<2>encode data@ `@[%a@]`@]"
-        (fun k->k PStmt.print_tydefs (`Data, l));
+        (fun k->k PStmt.pp_data_types (`Data, l));
       let new_st = encode_data state l in
       state.new_env <- Env.add_statement_l ~env:state.new_env new_st;
       new_st
     | Stmt.Pred (wf, kind, l), _ ->
       Utils.debugf ~section 2 "@[<2>encode inductive pred@ `@[%a@]`@]"
-        (fun k->k PStmt.print stmt);
+        (fun k->k PStmt.pp stmt);
       let new_stmt = encode_pred ~info:(Stmt.info stmt) state wf kind l in
       [new_stmt]
     | _ ->
       Utils.debugf ~section 2 "@[<2>encode statement@ `@[%a@]`@]"
-        (fun k->k PStmt.print stmt);
+        (fun k->k PStmt.pp stmt);
       let stmt =
         Stmt.map stmt ~term:(tr_term state Pol.Pos) ~ty:(tr_ty state Pol.NoPol)
       in
@@ -913,7 +920,7 @@ module Make(M : sig val mode : mode end) = struct
             | Some (Test _) ->
               {dec with dec_test=ID.Map.add id (dt,k) dec.dec_test}
             | Some (Select (c,i)) ->
-              let m = ID.Map.get_or ~or_:IntMap.empty c dec.dec_select in
+              let m = ID.Map.get_or ~default:IntMap.empty c dec.dec_select in
               let m = IntMap.add i (dt,k) m in
               {dec with dec_select=ID.Map.add c m dec.dec_select}
             | Some (Cstor _ | Axiom_rec) -> dec
@@ -923,22 +930,22 @@ module Make(M : sig val mode : mode end) = struct
   let eval_fundef (f:fun_def) (args:T.t list) : T.t =
     let dt, _ = f in
     assert (DT.num_vars dt >= List.length args);
-    DTU.apply_l dt args |> DTU.to_term
+    DTU.apply_l dt args |> DTU.to_term |> Red.whnf
 
   (* evaluate a boolean function def *)
-  let eval_bool_fundef (f:fun_def) (args:T.t list) : bool option =
+  let eval_bool_fundef (f:fun_def) (args:T.t list) : (bool, T.t) Result.result =
     let _, k = f in
     assert (k = Model.Symbol_prop);
     let res = eval_fundef f args in
     match T.repr res with
-      | TI.Builtin `True -> Some true
-      | TI.Builtin `False -> Some false
-      | _ -> None
+      | TI.Builtin `True -> Result.Ok true
+      | TI.Builtin `False -> Result.Ok  false
+      | _ -> Result.Error res
 
   let find_test_ dec id =
     try ID.Map.find id dec.dec_test
     with Not_found ->
-      errorf "could not find, in model,@ the value for tester `%a`" ID.print id
+      errorf "could not find, in model,@ the value for tester `%a`" ID.pp id
 
   let find_select_ dec c i =
     try
@@ -946,7 +953,7 @@ module Make(M : sig val mode : mode end) = struct
       IntMap.find i map
     with Not_found ->
       errorf "could not find, in model,@ the value for %d-th selector of `%a`"
-        i ID.print c
+        i ID.pp c
 
   (* we are under this cstor, for which the variable [msc_var] was provisioned.
      If we use [msc_var] we should set [msc_used] to true so that the
@@ -982,7 +989,7 @@ module Make(M : sig val mode : mode end) = struct
                    constructor it actually is *)
             Utils.debugf ~section 5
               "@[<2>constant `%a`@ corresponds to (co)data `%a`@]"
-              (fun k->k ID.print id ID.print ety.ety_id);
+              (fun k->k ID.pp id ID.pp ety.ety_id);
             (* find which constructor corresponds to [t] *)
             let ecstor =
               try
@@ -990,14 +997,15 @@ module Make(M : sig val mode : mode end) = struct
                   (fun ecstor ->
                      let fundef = find_test_ dec (fst ecstor.ecstor_test) in
                      match eval_bool_fundef fundef [t] with
-                       | None ->
+                       | Result.Error res ->
                          errorf "cannot evaluate whether `%a`@ \
-                                 starts with constructor `%a`"
-                           P.print t ID.print (fst ecstor.ecstor_cstor)
-                       | Some b -> b)
+                                 starts with constructor `%a`;@ \
+                                 check yields `@[%a@]`, not a boolean"
+                           P.pp t ID.pp (fst ecstor.ecstor_cstor) P.pp res
+                       | Result.Ok b -> b)
                   ety.ety_cstors
               with Not_found ->
-                errorf "no constructor corresponds to `%a`" P.print t
+                errorf "no constructor corresponds to `%a`" P.pp t
             in
             (* var in case we need to bind *)
             let msc = {
@@ -1021,7 +1029,7 @@ module Make(M : sig val mode : mode end) = struct
             (* add mu-binder if needed *)
             let t' = if msc.msc_used then U.mu msc.msc_var t' else t' in
             Utils.debugf ~section 5 "@[<2>term `@[%a@]`@ is decoded into `@[%a@]`@]"
-              (fun k->k P.print t P.print t');
+              (fun k->k P.pp t P.pp t');
             t'
         end
       | _ ->
@@ -1074,10 +1082,10 @@ module Make(M : sig val mode : mode end) = struct
           let module C = TypeCheck.Make(T) in
           C.empty () |> C.check_problem)
       @
-      Utils.singleton_if print ()
-        ~f:(fun () ->
-          let module Ppb = Problem.Print(P)(P) in
-          Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name Ppb.print)
+        Utils.singleton_if print ()
+          ~f:(fun () ->
+            let module Ppb = Problem.Print(P)(P) in
+            Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name Ppb.pp)
     in
     Transform.make
       ~name
@@ -1093,7 +1101,7 @@ module Make(M : sig val mode : mode end) = struct
     let on_decoded = if print
       then
         [Format.printf "@[<2>@{<Yellow>res after %s@}:@ %a@]@."
-           name (Problem.Res.print P.print' P.print)]
+           name (Problem.Res.pp P.pp' P.pp)]
       else []
     in
     let decode state = Problem.Res.map_m ~f:(decode_model state) in

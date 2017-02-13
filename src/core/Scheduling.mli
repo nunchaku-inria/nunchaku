@@ -3,8 +3,8 @@
 
 (** {1 Scheduling of sub-processes}
 
-  We need to run several instances of a solver in parallel, with distinct
-  options. This module provides a clean interface to do that.
+    We need to run several instances of a solver in parallel, with distinct
+    options. This module provides a clean interface to do that.
 *)
 
 type 'a or_error = ('a, exn) CCResult.t

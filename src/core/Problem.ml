@@ -50,8 +50,8 @@ let flat_map_statements ~f pb =
   let res = CCVector.create () in
   CCVector.iter
     (fun st ->
-      let new_stmts = f st in
-      List.iter (CCVector.push res) new_stmts
+       let new_stmts = f st in
+       List.iter (CCVector.push res) new_stmts
     ) pb.statements;
   let res = CCVector.freeze res in
   { metadata=pb.metadata; statements=res; }
@@ -62,10 +62,10 @@ let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
     let res = CCVector.create () in
     CCVector.iter
       (fun st ->
-        let st' = Statement.map ~term ~ty st in
-        CCVector.append_seq res (Sequence.of_list (before ()));
-        CCVector.push res st';
-        CCVector.append_seq res (Sequence.of_list (after ()));
+         let st' = Statement.map ~term ~ty st in
+         CCVector.append_seq res (Sequence.of_list (before ()));
+         CCVector.push res st';
+         CCVector.append_seq res (Sequence.of_list (after ()));
       ) p.statements;
     CCVector.freeze res
   );
@@ -76,15 +76,15 @@ let map ~term ~ty pb = map_with ~term ~ty pb
 module Print(P1 : TermInner.PRINT)(P2 : TermInner.PRINT) = struct
   module PStmt = Statement.Print(P1)(P2)
 
-  let print out pb =
+  let pp out pb =
     let str_of_meta m =
       (if m.Metadata.sat_means_unknown then "(sat->?)" else "") ^
-      (if m.Metadata.unsat_means_unknown then "(unsat->?)" else "")
+        (if m.Metadata.unsat_means_unknown then "(unsat->?)" else "")
     in
     fpf out "{%s@,%a@,}"
       (str_of_meta pb.metadata)
-      (CCVector.print ~start:"" ~stop:"" ~sep:"" PStmt.print)
-      pb.statements
+      (Utils.pp_seq ~sep:"" PStmt.pp)
+      (CCVector.to_seq pb.statements)
 end
 
 module Convert(T1 : TermInner.REPR)(T2 : TermInner.BUILD) = struct
@@ -106,10 +106,10 @@ exception IllFormed of string
 (** Ill-formed problem *)
 
 let () = Printexc.register_printer
-  (function
-    | IllFormed msg -> Some (Printf.sprintf "problem is ill-formed: %s" msg)
-    | _ -> None
-  )
+    (function
+      | IllFormed msg -> Some (Printf.sprintf "problem is ill-formed: %s" msg)
+      | _ -> None
+    )
 
 let ill_formed_ msg = raise (IllFormed msg)
 let ill_formedf_ msg = Utils.exn_ksprintf msg ~f:ill_formed_
@@ -123,8 +123,8 @@ let goal pb =
       | None -> ill_formed_ "no goal"
     else
       match CCVector.get pb.statements i with
-      | {Statement.view=Statement.Goal g;_} -> aux (Some g) (i+1)
-      | _ -> aux acc (i+1)
+        | {Statement.view=Statement.Goal g;_} -> aux (Some g) (i+1)
+        | _ -> aux acc (i+1)
   in
   aux None 0
 
@@ -150,6 +150,7 @@ module Res = struct
     | U_out_of_scope of info
     | U_incomplete of info
     | U_other of info * string
+    | U_backend_error of info * string
 
   type (+'t,+'ty) t =
     | Unsat of info
@@ -171,37 +172,38 @@ module Res = struct
 
   let fpf = Format.fprintf
 
-  let print_head out = function
+  let pp_head out = function
     | Unsat _ -> fpf out "UNSAT"
     | Error (e,_) -> fpf out "ERROR %s" (Printexc.to_string e)
     | Unknown _ -> fpf out "UNKNOWN"
     | Sat (_,_) -> fpf out "SAT"
 
-  let print_info out i =
+  let pp_info out i =
     let pp_msg out = function
       | None -> ()
-      | Some s -> Format.fprintf out ",@ message=%S" s
+      | Some s -> Format.fprintf out ",@ message=\"%s\"" s
     in
-    Format.fprintf out "{@[<2>backend:%s, time:%.1fs%a@]}"
+    Format.fprintf out "@[<2>{backend:%s, time:%.1fs%a}@]"
       i.backend i.time pp_msg i.message
 
-  let print_unknown_info out = function
-    | U_timeout i -> fpf out "TIMEOUT %a" print_info i
-    | U_out_of_scope i -> fpf out "OUT_OF_SCOPE %a" print_info i
-    | U_incomplete i -> fpf out "INCOMPLETE %a" print_info i
-    | U_other (i,s) -> fpf out "INCOMPLETE %a %s" print_info i s
+  let pp_unknown_info out = function
+    | U_timeout i -> fpf out "TIMEOUT %a" pp_info i
+    | U_out_of_scope i -> fpf out "OUT_OF_SCOPE %a" pp_info i
+    | U_incomplete i -> fpf out "INCOMPLETE %a" pp_info i
+    | U_other (i,s) -> fpf out "INCOMPLETE %a %s" pp_info i s
+    | U_backend_error (i,s) -> fpf out "BACKEND_ERROR %a %s" pp_info i s
 
-  let print_info_opt out = function
+  let pp_info_opt out = function
     | None -> ()
-    | Some i -> print_info out i
+    | Some i -> pp_info out i
 
-  let print pt pty out = function
-    | Unsat i -> fpf out "UNSAT %a" print_info i
-    | Error (e,i) -> fpf out "ERROR %s %a" (Printexc.to_string e) print_info i
-    | Unknown l -> fpf out "UNKNOWN (@[%a@])" (Utils.pp_list print_unknown_info) l
+  let pp pt pty out = function
+    | Unsat i -> fpf out "UNSAT %a" pp_info i
+    | Error (e,i) -> fpf out "ERROR %s@ %a" (Printexc.to_string e) pp_info i
+    | Unknown l -> fpf out "UNKNOWN (@[%a@])" (Utils.pp_list pp_unknown_info) l
     | Sat (m,i) ->
       fpf out "@[<hv>@[<v2>SAT: {@,@[<v>%a@]@]@,}@,%a@]"
-        (Model.print pt pty) m print_info i
+        (Model.pp pt pty) m pp_info i
 
   let str = Sexp_lib.atom
   let lst = Sexp_lib.list

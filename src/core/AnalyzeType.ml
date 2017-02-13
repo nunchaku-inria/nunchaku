@@ -21,11 +21,11 @@ let errorf_ msg = CCFormat.ksprintf msg ~f:error_
 let section = Utils.Section.make "ty_cardinality"
 
 let () = Printexc.register_printer
-  (function
-    | Error msg -> Some (Utils.err_sprintf "ty cardinality: %s" msg)
-    | Polymorphic -> Some (Utils.err_sprintf "type is polymorphic")
-    | EmptyData id -> Some (Utils.err_sprintf "data %a is empty" ID.print id)
-    | _ -> None)
+    (function
+      | Error msg -> Some (Utils.err_sprintf "ty cardinality: %s" msg)
+      | Polymorphic -> Some (Utils.err_sprintf "type is polymorphic")
+      | EmptyData id -> Some (Utils.err_sprintf "data %a is empty" ID.pp id)
+      | _ -> None)
 
 module Make(T : TI.S) = struct
   module U = TI.Util(T)
@@ -35,10 +35,10 @@ module Make(T : TI.S) = struct
   type 'a env = ('a, ty) Env.t
 
   module TyTbl = CCHashtbl.Make(struct
-    type t = T.t
-    let equal = U.equal
-    let hash = U.hash
-  end)
+      type t = T.t
+      let equal = U.equal
+      let hash = U.hash
+    end)
 
   type cache_state =
     | Cached of Card.t
@@ -82,23 +82,23 @@ module Make(T : TI.S) = struct
     : save_op -> _ env -> cache -> ty -> Card.t
     = fun op env cache ty ->
       match TyTbl.get cache.state ty with
-      | Some (Cached c)
-      | Some (Assume c) -> c
-      | None ->
-        let res = match T.repr ty with
-          | TI.Const id -> eval_id_ op env cache id
-          (* TODO: make more precise for e.g. "list nat" (or mangle) *)
-          | _ -> Card.quasi_finite_nonzero (* approx *)
-        in
-        (* maybe cache *)
-        begin match op with
-          | Save ->
-            Utils.debugf ~section 5 "@[<2>card `@[%a@]` =@ %a@]"
-              (fun k -> k P.print ty Card.print res);
-            save_ cache ty res
-          | Do_not_save -> ()
-        end;
-        res
+        | Some (Cached c)
+        | Some (Assume c) -> c
+        | None ->
+          let res = match T.repr ty with
+            | TI.Const id -> eval_id_ op env cache id
+            (* TODO: make more precise for e.g. "list nat" (or mangle) *)
+            | _ -> Card.quasi_finite_nonzero (* approx *)
+          in
+          (* maybe cache *)
+          begin match op with
+            | Save ->
+              Utils.debugf ~section 5 "@[<2>card `@[%a@]` =@ %a@]"
+                (fun k -> k P.pp ty Card.pp res);
+              save_ cache ty res
+            | Do_not_save -> ()
+          end;
+          res
 
   (* compute the sum of products of cardinalities of [def]'s constructors
      type arguments, under the assumption [assume] for [def.ty_id] *)
@@ -131,58 +131,58 @@ module Make(T : TI.S) = struct
     if not (U.ty_is_Type info.Env.ty) then raise Polymorphic;
     let res = match Env.def info with
       | Env.Data (`Data,_,def) ->
-          (* check [def] is not an empty data *)
-          check_non_zero_ env cache def;
-          compute_sum_ op env cache def (Assume Card.infinite)
+        (* check [def] is not an empty data *)
+        check_non_zero_ env cache def;
+        compute_sum_ op env cache def (Assume Card.infinite)
       | Env.Data (`Codata,_,def) ->
-          (* first approximation *)
-          let approx =
-            compute_sum_ Do_not_save env cache def (Assume Card.one)
-          in
-          begin match approx with
-            | Card.Exact z when Z.equal z Z.one ->
-                (* special case: unary codata, such as [stream] *)
-                Card.one
-            | Card.QuasiFiniteGEQ z when Z.compare z Z.one <= 0 ->
-                (* we do not know whether this is 0, 1 or more *)
-                Card.unknown
-            | _ ->
-                (* regular computation of the sum of products of constructors.
-                   Since cardinal is not one, we can assume it's +∞ *)
-                compute_sum_ op env cache def (Assume Card.infinite)
-          end
+        (* first approximation *)
+        let approx =
+          compute_sum_ Do_not_save env cache def (Assume Card.one)
+        in
+        begin match approx with
+          | Card.Exact z when Z.equal z Z.one ->
+            (* special case: unary codata, such as [stream] *)
+            Card.one
+          | Card.QuasiFiniteGEQ z when Z.compare z Z.one <= 0 ->
+            (* we do not know whether this is 0, 1 or more *)
+            Card.unknown
+          | _ ->
+            (* regular computation of the sum of products of constructors.
+               Since cardinal is not one, we can assume it's +∞ *)
+            compute_sum_ op env cache def (Assume Card.infinite)
+        end
       | Env.Copy_ty c ->
-          let underlying = eval_ty_ op env cache c.Stmt.copy_of in (* cardinality of definition *)
-          begin match c.Stmt.copy_wrt with
-            | Stmt.Wrt_nothing -> underlying
-            | Stmt.Wrt_subset _
-            | Stmt.Wrt_quotient _ ->
-              (* approximation *)
-              if Card.is_finite underlying then Card.quasi_finite_nonzero else Card.unknown
-          end
+        let underlying = eval_ty_ op env cache c.Stmt.copy_of in (* cardinality of definition *)
+        begin match c.Stmt.copy_wrt with
+          | Stmt.Wrt_nothing -> underlying
+          | Stmt.Wrt_subset _
+          | Stmt.Wrt_quotient _ ->
+            (* approximation *)
+            if Card.is_finite underlying then Card.quasi_finite_nonzero else Card.unknown
+        end
       | Env.NoDef ->
-          (* uninterpreted datatype: use hints and other specific params *)
-          let attrs = info.Env.decl_attrs in
-          (* default case *)
-          let default = match cache.default_card with
-            | None -> Card.quasi_finite_nonzero
-            | Some i -> Card.of_int i
-          in
-          CCList.find_map
-            (function
-              | Stmt.Attr_card_min n ->
-                Some (Card.QuasiFiniteGEQ (Z.of_int n))
-              | Stmt.Attr_infinite -> Some Card.infinite
-              | Stmt.Attr_card_hint c -> Some c
-              | _ -> None)
-            attrs
-          |> CCOpt.get_or ~default
+        (* uninterpreted datatype: use hints and other specific params *)
+        let attrs = info.Env.decl_attrs in
+        (* default case *)
+        let default = match cache.default_card with
+          | None -> Card.quasi_finite_nonzero
+          | Some i -> Card.of_int i
+        in
+        CCList.find_map
+          (function
+            | Stmt.Attr_card_min n ->
+              Some (Card.QuasiFiniteGEQ (Z.of_int n))
+            | Stmt.Attr_infinite -> Some Card.infinite
+            | Stmt.Attr_card_hint c -> Some c
+            | _ -> None)
+          attrs
+        |> CCOpt.get_or ~default
       | Env.Cstor _
       | Env.Fun_def (_,_,_)
       | Env.Fun_spec (_,_)
       | Env.Pred (_,_,_,_,_)
       | Env.Copy_abstract _
-      | Env.Copy_concrete _ -> errorf_ "%a is not a type" ID.print id
+      | Env.Copy_concrete _ -> errorf_ "%a is not a type" ID.pp id
     in
     res
 
@@ -194,13 +194,13 @@ module Make(T : TI.S) = struct
 
   let check_non_zero ?(cache=create_cache ()) env stmt =
     match Stmt.view stmt with
-    | Stmt.TyDef (`Data, l) ->
+      | Stmt.TyDef (`Data, l) ->
         Utils.debugf ~section 5 "@[<2>check well-formed:@ `@[%a@]`@]"
           (fun k->
-            let module PStmt = Stmt.Print(P)(P) in
-            k PStmt.print_tydefs (`Data,l));
+             let module PStmt = Stmt.Print(P)(P) in
+             k PStmt.pp_data_types (`Data,l));
         List.iter (check_non_zero_ env cache) l
-    | _ -> ()
+      | _ -> ()
 
   let rec is_incomplete env ty = match T.repr ty with
     | TI.Const id ->

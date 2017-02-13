@@ -56,6 +56,11 @@ let rec conv_term (t:A.term): UA.term = match t with
     UA.app (UA.var f) (List.map conv_term l)
   | A.HO_app (a,b) ->
     UA.app (conv_term a) [conv_term b]
+  | A.Distinct l ->
+    List.map conv_term l
+    |> CCList.diagonal
+    |> List.map (fun (a,b) -> UA.neq a b)
+    |> UA.and_
   | A.If (a,b,c) ->
     UA.ite (conv_term a)(conv_term b)(conv_term c)
   | A.Match (u,branches) ->

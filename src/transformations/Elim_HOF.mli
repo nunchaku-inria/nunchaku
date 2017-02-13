@@ -27,8 +27,8 @@ val pipe :
   check:bool ->
   ((term, term) Problem.t,
    (term, term) Problem.t,
-    (term, term) Problem.Res.t,
-    (term, term) Problem.Res.t) Transform.t
+   (term, term) Problem.Res.t,
+   (term, term) Problem.Res.t) Transform.t
 
 (** Generic Pipe Component
     @param decode the decode function that takes an applied [(module S)]
@@ -40,5 +40,5 @@ val pipe_with :
   check:bool ->
   ((term, term) Problem.t,
    (term, term) Problem.t,
-    'c, 'd
+   'c, 'd
   ) Transform.t

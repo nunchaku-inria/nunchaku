@@ -15,8 +15,8 @@ exception ScopingError of string * string * loc option
 
 (** {2 Type Inference/Checking}
 
-  Functions exposed by this functor will mutate in place their input,
-  by calling [Term.Ty.bind]. *)
+    Functions exposed by this functor will mutate in place their input,
+    by calling [Term.Ty.bind]. *)
 
 type attempt_stack = UntypedAST.term list
 (** a trace of inference attempts with a message and optional location
@@ -51,7 +51,7 @@ module Convert(T : TermTyped.S) : sig
       @raise TypeError if it fails to  type properly *)
 
   val generalize : close:[`Forall | `Fun | `NoClose] ->
-                   term -> term * term var list
+    term -> term * term var list
   (** Generalize a T.t [t] by parametrizing it over its free {b type}
       variables.
       @param close decides how [t] is generalized
@@ -96,7 +96,7 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) : sig
   val pipe :
     print:bool ->
     (UntypedAST.statement CCVector.ro_vector,
-      (term1, term1) Problem.t, 'a, 'a)
+     (term1, term1) Problem.t, 'a, 'a)
       Transform.t
   (** Pipeline component. Takes input and output Term representations. *)
 
@@ -104,6 +104,6 @@ module Make(T1 : TermTyped.S)(T2 : TermInner.S) : sig
     decode:('c -> 'd) ->
     print:bool ->
     (UntypedAST.statement CCVector.ro_vector,
-      (term1, term1) Problem.t, 'c, 'd)
-    Transform.t
+     (term1, term1) Problem.t, 'c, 'd)
+      Transform.t
 end

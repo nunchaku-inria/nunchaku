@@ -58,7 +58,7 @@ module Features : sig
   (** [check t ~spec] returns [Check_ok] if all features required by [spec] are
       valid in [t], and [Check_fail (key, expected, actual)] otherwise *)
 
-  val print : t printer
+  val pp : t printer
 end
 
 (** {2 Single Transformation} *)
@@ -128,19 +128,19 @@ module Pipe : sig
     | Fail : ('a, 'b, 'c, 'd) t (** yields empty list *)
     | Flatten :
         ('a, 'b list, 'c, 'd) t ->
-        ('a, 'b, 'c, 'd) t
+      ('a, 'b, 'c, 'd) t
     | Close :
         ('b1 -> ('c1 -> 'd) -> 'b2 * ('c2 -> 'd)) *
-        ('a, 'b1, 'c1, 'd) t ->
-        ('a, 'b2, 'c2, 'd) t
+          ('a, 'b1, 'c1, 'd) t ->
+      ('a, 'b2, 'c2, 'd) t
     | Comp :
         ('a, 'b, 'e, 'f) transformation *
-        ('b, 'c, 'd, 'e) t ->
-        ('a, 'c, 'd, 'f) t
+          ('b, 'c, 'd, 'e) t ->
+      ('a, 'c, 'd, 'f) t
     | Fork :
         ('a, 'b, 'c, 'd) t *
-        ('a, 'b, 'c, 'd) t ->
-        ('a, 'b, 'c, 'd) t
+          ('a, 'b, 'c, 'd) t ->
+      ('a, 'b, 'c, 'd) t
 
   (** Every constructor from here is "smart":
       - Fail is right-absorbing (e.g. [compose f fail = fail])
@@ -186,11 +186,11 @@ module Pipe : sig
       the pipeline fit with their input.
       It is assumed we start with {!Features.full} *)
 
-  val print : (_,_,_,_) t printer
+  val pp : (_,_,_,_) t printer
 end
 
 val run : pipe:('a, 'b, 'c, 'd) Pipe.t ->
-          'a ->
-          ('b * ('c -> 'd)) Lazy_list.t
+  'a ->
+  ('b * ('c -> 'd)) Lazy_list.t
 (** [run ~pipe x] runs [x] through the pipe [pipe], in a lazy way,
     and yields values of type ['b] along with a conversion function back *)

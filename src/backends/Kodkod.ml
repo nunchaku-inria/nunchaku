@@ -33,23 +33,23 @@ type offset = int
 
 type state = {
   default_size: int;
-    (* cardinal for sub-universes in which it's unspecified *)
+  (* cardinal for sub-universes in which it's unspecified *)
   name_of_id: kodkod_name ID.Map.t;
-    (* map names to kodkod names *)
+  (* map names to kodkod names *)
   id_of_name: ID.t StrMap.t;
-    (* map kodkod names to IDs *)
+  (* map kodkod names to IDs *)
   univ_map: (offset * FO_rel.atom IntMap.t) SUMap.t;
   (* sub-universe ->
        its offset in the global universe
        a map from offsets to atoms of the sub-universe *)
   univ_size: int;
-    (* total size of the universe *)
+  (* total size of the universe *)
   decls: FO_rel.decl ID.Map.t;
-    (* declarations *)
+  (* declarations *)
   mutable trivially_unsat: bool;
-    (* hack: was last "unsat" actually "trivially_unsat"? *)
+  (* hack: was last "unsat" actually "trivially_unsat"? *)
   timer: Utils.Time.timer;
-    (* timer *)
+  (* timer *)
 }
 
 let errorf msg = Utils.failwithf msg
@@ -115,7 +115,7 @@ let name_of_arity (m:name_map) n: name_map * string =
     | 2 -> "r"
     | n -> Printf.sprintf "m%d_" n
   in
-  let offset = StrMap.get_or ~or_:0 prefix m in
+  let offset = StrMap.get_or ~default:0 prefix m in
   let m' = StrMap.add prefix (offset+1) m in
   let name = prefix ^ string_of_int offset in
   m', name
@@ -149,28 +149,28 @@ let create_state ~timer ~default_size (pb:FO_rel.problem) : state =
   }
 
 let fpf = Format.fprintf
-let pp_list ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp
+let pp_list ~sep pp = Utils.pp_list ~sep pp
 
 type rename_kind =
   | R_quant (* quantifier *)
   | R_let of [`Form | `Rel] (* let binding *)
 
 (* print in kodkodi syntax *)
-let print_pb state pb out () : unit =
+let pp_pb state pb out () : unit =
   (* local substitution for renaming variables *)
   let subst : (FO_rel.var_ty, string) Var.Subst.t ref = ref Var.Subst.empty in
   let id2name id =
     try ID.Map.find id state.name_of_id
-    with Not_found -> errorf "kodkod: no name for `%a`" ID.print id
+    with Not_found -> errorf "kodkod: no name for `%a`" ID.pp id
   and su2offset su =
     try SUMap.find su state.univ_map |> fst
     with Not_found ->
-      errorf "kodkod: no offset for `%a`" FO_rel.print_sub_universe su
+      errorf "kodkod: no offset for `%a`" FO_rel.pp_sub_universe su
   in
   (* print a sub-universe as a range *)
   let rec pp_su_range out (su:FO_rel.sub_universe): unit =
     let offset = su2offset su in
-    let card = CCOpt.get state.default_size su.FO_rel.su_card in
+    let card = CCOpt.get_or ~default:state.default_size su.FO_rel.su_card in
     if offset=0
     then fpf out "u%d" card
     else fpf out "u%d@@%d" card offset
@@ -250,7 +250,7 @@ let print_pb state pb out () : unit =
     | FO_rel.Tuple_set ts -> pp_ts out ts
     | FO_rel.Var v ->
       begin match Var.Subst.find ~subst:!subst v with
-        | None -> errorf "var `%a` not in scope" Var.print_full v
+        | None -> errorf "var `%a` not in scope" Var.pp_full v
         | Some s -> CCFormat.string out s
       end
     | FO_rel.Unop (FO_rel.Flip, e) -> fpf out "~ %a" pp_rel e
@@ -291,7 +291,7 @@ let print_pb state pb out () : unit =
        let id = d.FO_rel.decl_id in
        let name = ID.Map.find id state.name_of_id in
        fpf out "@[<h>bounds %s /* %a */ : [%a, %a] @."
-         name ID.print id pp_ts d.FO_rel.decl_low pp_ts d.FO_rel.decl_high)
+         name ID.pp id pp_ts d.FO_rel.decl_low pp_ts d.FO_rel.decl_high)
     pb.FO_rel.pb_decls;
   (* goal *)
   fpf out "@[<v2>solve@ %a;@]@."
@@ -321,7 +321,7 @@ let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
           on their type *)
        let decl =
          try ID.Map.find id state.decls
-         with Not_found -> errorf "could not find declaration for %a" ID.print id
+         with Not_found -> errorf "could not find declaration for %a" ID.pp id
        in
        (* convert offsets to proper atoms *)
        let tuples =
@@ -397,7 +397,7 @@ module Parser = struct
     else if errcode <> 0
     then (
       let msg = CCFormat.sprintf "kodkod failed (errcode %d), stdout:@ `%s`@." errcode s in
-      Res.Error (Failure msg, info), S.Shortcut
+      Res.Unknown [Res.U_backend_error (info, msg)], S.No_shortcut
     ) else (
       let delim = "---OUTCOME---" in
       let i =
@@ -449,7 +449,7 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         ~f:(fun (stdin,stdout) ->
           (* send problem *)
           let fmt = Format.formatter_of_out_channel stdin in
-          Format.fprintf fmt "%a@." (print_pb state pb) ();
+          Format.fprintf fmt "%a@." (pp_pb state pb) ();
           flush stdin;
           close_out stdin;
           CCIO.read_all stdout)
@@ -461,14 +461,16 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
           (fun k->k errcode stdout);
         Parser.res state stdout errcode
       | S.Fut.Done (E.Error e) ->
-        Res.Error (e,mk_info state), S.Shortcut
+        Res.Unknown [Res.U_backend_error (mk_info state, Printexc.to_string e)],
+        S.No_shortcut
       | S.Fut.Stopped ->
         Res.Unknown [Res.U_timeout (mk_info state)], S.No_shortcut
       | S.Fut.Fail e ->
         (* return error *)
         Utils.debugf ~lock:true ~section 1 "@[<2>kodkod failed with@ `%s`@]"
           (fun k->k (Printexc.to_string e));
-        Res.Error (e, mk_info state), S.Shortcut
+        Res.Unknown [Res.U_backend_error (mk_info state, Printexc.to_string e)],
+        S.No_shortcut
   )
 
 let default_size_ = 2 (* FUDGE *)
@@ -479,25 +481,25 @@ let default_increment_ = 2 (* FUDGE *)
 let rec call_rec ~timer ~print ~size ~deadline pb : res * Scheduling.shortcut =
   let state = create_state ~timer ~default_size:size pb in
   if print
-    then Format.printf "@[<v>kodkod problem:@ ```@ %a@,```@]@." (print_pb state pb) ();
-    let res, short = solve ~deadline state pb in
-    Utils.debugf ~section 2 "@[<2>kodkod result for size %d:@ %a@]"
-      (fun k->k size Res.print_head res);
-    match res with
-      | Res.Unsat i when state.trivially_unsat ->
-        (* stop increasing the size *)
+  then Format.printf "@[<v>kodkod problem:@ ```@ %a@,```@]@." (pp_pb state pb) ();
+  let res, short = solve ~deadline state pb in
+  Utils.debugf ~section 2 "@[<2>kodkod result for size %d:@ %a@]"
+    (fun k->k size Res.pp_head res);
+  match res with
+    | Res.Unsat i when state.trivially_unsat ->
+      (* stop increasing the size *)
+      Res.Unknown [Res.U_incomplete i], S.No_shortcut
+    | Res.Unsat i ->
+      let now = Unix.gettimeofday () in
+      if deadline -. now > 0.5
+      then
+        (* unsat, and we still have some time: retry with a bigger size *)
+        call_rec ~timer ~print ~size:(size + default_increment_) ~deadline pb
+      else
+        (* we fixed a maximal cardinal, so maybe there's an even bigger
+           model, but we cannot know for sure *)
         Res.Unknown [Res.U_incomplete i], S.No_shortcut
-      | Res.Unsat i ->
-        let now = Unix.gettimeofday () in
-        if deadline -. now > 0.5
-        then
-          (* unsat, and we still have some time: retry with a bigger size *)
-          call_rec ~timer ~print ~size:(size + default_increment_) ~deadline pb
-        else
-          (* we fixed a maximal cardinal, so maybe there's an even bigger
-             model, but we cannot know for sure *)
-          Res.Unknown [Res.U_incomplete i], S.No_shortcut
-      | _ -> res, short
+    | _ -> res, short
 
 let call_real ~print_model ~prio ~print pb =
   S.Task.make ~prio
@@ -510,7 +512,7 @@ let call_real ~print_model ~prio ~print pb =
          | Res.Sat (m,_) when print_model ->
            let pp_ty oc _ = CCFormat.string oc "$i" in
            Format.printf "@[<2>@{<Yellow>raw kodkod model@}:@ @[%a@]@]@."
-             (Model.print (CCFun.const FO_rel.print_expr) pp_ty) m
+             (Model.pp (CCFun.const FO_rel.pp_expr) pp_ty) m
          | _ -> ()
        end;
        res, short)
@@ -528,7 +530,7 @@ let call ?(print_model=false) ?(prio=10) ~print ~dump pb = match dump with
          let state = create_state ~timer:(Utils.Time.start_timer()) ~default_size:2 pb in
          Format.fprintf out
            "@[<v>%a@]@."
-           (print_pb state pb) ());
+           (pp_pb state pb) ());
     let i = Res.mk_info ~backend:"kodkod" ~time:0. () in
     S.Task.return (Res.Unknown [Res.U_other (i, "--dump")]) S.No_shortcut
 

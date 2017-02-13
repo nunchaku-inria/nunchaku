@@ -35,15 +35,15 @@ let errorf_ msg = Utils.exn_ksprintf msg ~f:error_
 
 type state = {
   mutable ty_to_pred: ID.t Ty.Map.t;
-    (* type -> predicate for this type *)
+  (* type -> predicate for this type *)
   mutable pred_to_ty: T.t ID.Map.t;
-    (* predicate -> type it encodes *)
+  (* predicate -> type it encodes *)
   parametrized_ty: unit ID.Tbl.t;
-    (* parametrized ty *)
+  (* parametrized ty *)
   env: (T.t,T.t) Env.t;
-    (* signature, for decoding purpose *)
+  (* signature, for decoding purpose *)
   side_axioms: (T.t, T.t) Statement.t CCVector.vector;
-    (* new declarations *)
+  (* new declarations *)
 }
 
 let create_state ~env () = {
@@ -60,7 +60,7 @@ let find_pred state (t:T.t): ID.t =
   assert (Ty.is_ty t);
   try Ty.Map.find t state.ty_to_pred
   with Not_found ->
-    errorf_ "could not find the predicate for type@ `@[%a@]`" P.print t
+    errorf_ "could not find the predicate for type@ `@[%a@]`" P.pp t
 
 let encode_var subst v =
   let v' = Var.fresh_copy v |> Var.set_ty ~ty:U.ty_unitype in
@@ -69,26 +69,27 @@ let encode_var subst v =
 
 let rec encode_term state subst t = match T.repr t with
   | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
-  | TI.Bind ((`Forall | `Exists) as b, v, body) ->
+  | TI.Bind ((Binder.Forall | Binder.Exists) as b, v, body) ->
     let p = find_pred state (Var.ty v) in
     let subst, v' = encode_var subst v in
     (* add guard, just under the quantifier. *)
     begin match b with
-      | `Forall ->
+      | Binder.Forall ->
         (* [forall v:t. F] -> [forall v. is_t v => F] *)
         U.forall v'
           (U.imply
              (U.app_const p [U.var v'])
              (encode_term state subst body))
-      | `Exists ->
+      | Binder.Exists ->
         (* [exists v:t. F] -> [exists v. is_t v & F] *)
         U.exists v'
           (U.and_
-             [ U.app_const p [U.var v']
-             ; encode_term state subst body ])
+             [ U.app_const p [U.var v'];
+               encode_term state subst body ])
+      | _ -> assert false
     end
-  | TI.Bind (`Fun, _, _) -> Utils.not_implemented "elim_types for λ"
-  | TI.Bind (`TyForall, _, _) -> assert false
+  | TI.Bind (Binder.Fun, _, _) -> Utils.not_implemented "elim_types for λ"
+  | TI.Bind (Binder.TyForall, _, _) -> assert false
   | _ ->
     U.map subst t ~f:(encode_term state) ~bind:encode_var
 
@@ -114,12 +115,12 @@ let add_pred_ state ty pred =
   state.ty_to_pred <- Ty.Map.add ty pred state.ty_to_pred;
   state.pred_to_ty <- ID.Map.add pred ty state.pred_to_ty;
   Utils.debugf ~section 3 "@[<2>map type `@[%a@]`@ to predicate `%a`@]"
-    (fun k->k P.print ty ID.print pred);
+    (fun k->k P.pp ty ID.pp pred);
   let ty_pred = U.ty_arrow U.ty_unitype U.ty_prop in
   (* declare the predicate *)
   let decl_pred =
     Stmt.decl ~info:Stmt.info_default ~attrs:[] pred ty_pred
-      in
+  in
   (* witness that the type is inhabited.  *)
   let ax_inhabited =
     let v = Var.makef ~ty:U.ty_unitype "witness_%s" (mangle_ty_ ty) in
@@ -135,13 +136,13 @@ let as_id_ ty = match T.repr ty with
   | _ -> None
 
 (* ensure the type maps to some predicate, and return it
-  @return Some p where p is the predicate for this type, or None if ty=unitype *)
+   @return Some p where p is the predicate for this type, or None if ty=unitype *)
 let map_to_predicate state ty =
   try Some (Ty.Map.find ty state.ty_to_pred)
   with Not_found ->
     begin match Ty.repr ty with
       | TyI.Const id ->
-        errorf_ "atomic type `%a` should have been mapped to a predicate" ID.print id
+        errorf_ "atomic type `%a` should have been mapped to a predicate" ID.pp id
       | TyI.Arrow _ -> assert false
       | TyI.Builtin `Unitype ->
         None (* no need to declare *)
@@ -151,15 +152,15 @@ let map_to_predicate state ty =
         error_ "cannot make a predicate for `prop`"
       | TyI.App (f, l) ->
         match as_id_ f with
-        | None -> errorf_ "expected constructor type, got `@[%a@]`" P.print ty
-        | Some id ->
-          let n = List.length l in
-          if not (ID.Tbl.mem state.parametrized_ty id)
-          then errorf_ "type constructor `%a`/%d has not been declared" ID.print id n;
-          (* find name *)
-          let name = ID.make_f "@[<h>is_%s@]" (mangle_ty_ ty) in
-          add_pred_ state ty name;
-          Some name
+          | None -> errorf_ "expected constructor type, got `@[%a@]`" P.pp ty
+          | Some id ->
+            let n = List.length l in
+            if not (ID.Tbl.mem state.parametrized_ty id)
+            then errorf_ "type constructor `%a`/%d has not been declared" ID.pp id n;
+            (* find name *)
+            let name = ID.make_f "@[<h>is_%s@]" (mangle_ty_ ty) in
+            add_pred_ state ty name;
+            Some name
     end
 
 (* ensure  that the immediate arguments and return type map to predicates *)
@@ -173,130 +174,108 @@ let ensure_maps_to_predicate state ty =
   aux ret;
   ()
 
+module CE = Cardinal_encode.Make(T)
+
 (* type of pred [p] has at most [n] elements, return axiom
    [exists x1...xn. p x_i & forall y. p y => (y = x1 | .... | y = xn)] *)
-let encode_max_card_ ~(pred:ID.t) n =
-  let mk_pred = U.app_const pred in
-  let xs =
-    CCList.init n
-      (fun i -> Var.makef ~ty:U.ty_unitype "x_%d" i)
-  and y =
-    Var.make ~name:"y" ~ty:U.ty_unitype
-  in
-  let guard_pred_x = U.and_ (List.map (fun x -> mk_pred [U.var x]) xs) in
-  let form_y_belongs_xs =
-    U.forall y
-      (U.imply
-         (mk_pred [U.var y])
-         (U.or_
-            (List.map (fun x -> U.eq (U.var x) (U.var y)) xs)))
-  in
+let encode_max_card_ state ty n =
   let ax =
-    U.exists_l xs
-      (U.and_ [guard_pred_x; form_y_belongs_xs])
+    CE.encode_max_card ty n
+    |> encode_term state Var.Subst.empty
   in
   [Stmt.axiom1 ~info:Stmt.info_default ax]
 
 (* the type of [pred] has at least [n] elements, return list of axiom
    [exists x1...xn. pred x_i & xi != xj] *)
-let encode_min_card_ ~(pred:ID.t) n =
-  let mk_pred = U.app_const pred in
-  let xs =
-    CCList.init n
-      (fun i -> Var.makef ~ty:U.ty_unitype "x_%d" i)
-  in
-  let guard_pred_x = U.and_ (List.map (fun x -> mk_pred [U.var x]) xs) in
-  let pairwise_distinct =
-    CCList.diagonal xs
-    |> List.map (fun (x1,x2) -> U.neq (U.var x1) (U.var x2))
-  in
+let encode_min_card_ state ty n =
   let ax =
-    U.exists_l xs
-      (U.and_ (guard_pred_x :: pairwise_distinct))
+    CE.encode_min_card ty n
+    |> encode_term state Var.Subst.empty
   in
   [Stmt.axiom1 ~info:Stmt.info_default ax]
 
 let encode_stmt_ state st : (_,_) Stmt.t list =
   let info = Stmt.info st in
   match Stmt.view st with
-  | Stmt.Decl ({Stmt.defined_ty=ty; _} as d) when U.ty_returns_Type ty ->
-    let id = Stmt.id_of_defined d in
-    let attrs = Stmt.attrs_of_defined d in
-    (* type declaration *)
-    let _, args, _ = U.ty_unfold ty in
-    assert (List.for_all U.ty_is_Type args);
-    (* remove statement, but we might have some specific axioms
-       related to cardinalities *)
-    begin match args with
-      | [] ->
-        (* atomic type, easy *)
-        let p = ID.make_f "is_%a" ID.print_name id in
-        add_pred_ state (U.const id) p;
-        (* emit some constraint on the predicate for cardinalities *)
-        CCList.flat_map
-          (function
-            | Stmt.Attr_card_max i -> encode_max_card_ ~pred:p i
-            | Stmt.Attr_card_min i -> encode_min_card_ ~pred:p i
-            | _ -> [])
-          attrs
-      | _::_ ->
-        (* not atomic, we need to declare each instance later *)
-        ID.Tbl.add state.parametrized_ty id ();
-        []
-    end
-  | Stmt.Decl ({Stmt.defined_ty=ty; _} as d) when U.ty_returns_Prop ty ->
-    let id = Stmt.id_of_defined d in
-    let attrs = Stmt.attrs_of_defined d in
-    (* symbol declaration *)
-    ensure_maps_to_predicate state ty;
-    let _, args, _ = U.ty_unfold ty in
-    (* new type [term -> term -> ... -> term -> prop] *)
-    let ty' =
-      U.ty_arrow_l
-        (List.map (fun _ -> U.ty_unitype) args)
-        U.ty_prop
-    in
-    [ Stmt.decl ~info ~attrs id ty' ]
-  | Stmt.Decl d ->
-    let id = Stmt.id_of_defined d in
-    let attrs = Stmt.attrs_of_defined d in
-    let ty = Stmt.ty_of_defined d in
-    let _, args, ret = U.ty_unfold ty in
-    assert (not (U.ty_is_Prop ret));
-    (* declare every argument type, + the return type *)
-    let pred_ret = map_to_predicate state ret in
-    let preds = List.map (map_to_predicate state) args in
-    (* new type [term -> term -> ... -> term -> term] *)
-    let ty' =
-      U.ty_arrow_l
-        (List.map (fun _ -> U.ty_unitype) args)
-        U.ty_unitype
-    in
-    (* typing clause:
-      is_ty1(x1) & ... & is_tyn(xn) => is_ty(id(x1...xn)) *)
-    let ty_clause = match pred_ret with
-    | None -> U.true_
-    | Some p_ret ->
-      let vars = List.mapi (fun i _ -> Var.makef ~ty:U.ty_unitype "v_%d" i) args in
-      U.forall_l vars
-        (U.imply_l
-           (List.map2
-              (fun pred v -> match pred with
-                 | None -> U.true_
-                 | Some p -> U.app_const p [U.var v])
-              preds vars)
-           (U.app_const p_ret [U.app_const id (List.map U.var vars)]))
-    in
-    [ Stmt.decl ~info ~attrs id ty'; Stmt.axiom1 ~info ty_clause ]
-  | _ ->
-    [Stmt.map_bind Var.Subst.empty st
-      ~term:(encode_term state)
-      ~ty:(encode_ty state ~top:true)
-      ~bind:Var.Subst.rename_var]
+    | Stmt.Decl ({Stmt.defined_ty=ty; _} as d) when U.ty_returns_Type ty ->
+      let id = Stmt.id_of_defined d in
+      let attrs = Stmt.attrs_of_defined d in
+      (* type declaration *)
+      let _, args, _ = U.ty_unfold ty in
+      assert (List.for_all U.ty_is_Type args);
+      (* remove statement, but we might have some specific axioms
+         related to cardinalities *)
+      begin match args with
+        | [] ->
+          (* atomic type, easy *)
+          let p = ID.make_f "is_%a" ID.pp_name id in
+          let ty = U.ty_const id in
+          add_pred_ state ty p;
+          (* emit some constraint on the predicate for cardinalities *)
+          CCList.flat_map
+            (function
+              | Stmt.Attr_card_max i -> encode_max_card_ state ty i
+              | Stmt.Attr_card_min i -> encode_min_card_ state ty i
+              | _ -> [])
+            attrs
+        | _::_ ->
+          (* not atomic, we need to declare each instance later *)
+          ID.Tbl.add state.parametrized_ty id ();
+          []
+      end
+    | Stmt.Decl ({Stmt.defined_ty=ty; _} as d) when U.ty_returns_Prop ty ->
+      let id = Stmt.id_of_defined d in
+      let attrs = Stmt.attrs_of_defined d in
+      (* symbol declaration *)
+      ensure_maps_to_predicate state ty;
+      let _, args, _ = U.ty_unfold ty in
+      (* new type [term -> term -> ... -> term -> prop] *)
+      let ty' =
+        U.ty_arrow_l
+          (List.map (fun _ -> U.ty_unitype) args)
+          U.ty_prop
+      in
+      [ Stmt.decl ~info ~attrs id ty' ]
+    | Stmt.Decl d ->
+      let id = Stmt.id_of_defined d in
+      let attrs = Stmt.attrs_of_defined d in
+      let ty = Stmt.ty_of_defined d in
+      let _, args, ret = U.ty_unfold ty in
+      assert (not (U.ty_is_Prop ret));
+      (* declare every argument type, + the return type *)
+      let pred_ret = map_to_predicate state ret in
+      let preds = List.map (map_to_predicate state) args in
+      (* new type [term -> term -> ... -> term -> term] *)
+      let ty' =
+        U.ty_arrow_l
+          (List.map (fun _ -> U.ty_unitype) args)
+          U.ty_unitype
+      in
+      (* typing clause:
+         is_ty1(x1) & ... & is_tyn(xn) => is_ty(id(x1...xn)) *)
+      let ty_clause = match pred_ret with
+        | None -> U.true_
+        | Some p_ret ->
+          let vars = List.mapi (fun i _ -> Var.makef ~ty:U.ty_unitype "v_%d" i) args in
+          U.forall_l vars
+            (U.imply_l
+               (List.map2
+                  (fun pred v -> match pred with
+                     | None -> U.true_
+                     | Some p -> U.app_const p [U.var v])
+                  preds vars)
+               (U.app_const p_ret [U.app_const id (List.map U.var vars)]))
+      in
+      [ Stmt.decl ~info ~attrs id ty'; Stmt.axiom1 ~info ty_clause ]
+    | _ ->
+      [Stmt.map_bind Var.Subst.empty st
+         ~term:(fun subst _ -> encode_term state subst)
+         ~ty:(encode_ty state ~top:true)
+         ~bind:Var.Subst.rename_var]
 
 let encode_stmt state st =
   Utils.debugf ~section 3 "@[<2>encode statement@ `@[%a@]`@]"
-    (fun k->k PStmt.print st);
+    (fun k->k PStmt.pp st);
   let st' = encode_stmt_ state st in
   let res =
     CCList.append
@@ -357,7 +336,7 @@ let rebuild_types state m : retyping =
                    Some id
                  | TI.Builtin `False
                  | TI.Builtin (`Undefined_atom _) -> None
-                 | _ -> errorf_ "unexpected value for %a on %a" ID.print pred_id ID.print id
+                 | _ -> errorf_ "unexpected value for %a on %a" ID.pp pred_id ID.pp id
             )
             uni_domain
         in
@@ -370,8 +349,9 @@ let rebuild_types state m : retyping =
         let dom = ID.Map.values map |> Sequence.to_list in
         Utils.debugf ~section 3
           "@[<2>domain of type `%a`@ is {@[%a@]},@ map to @[[%a]@]@]"
-          (fun k->k P.print ty (CCFormat.list ID.print) dom
-              (ID.Map.print ID.print ID.print) map);
+          (fun k->k P.pp ty (CCFormat.list ID.pp) dom
+              (Utils.pp_seq CCFormat.(pair ~sep:(return "@ -> ") ID.pp ID.pp))
+              (ID.Map.to_seq map));
         { rety_domains = Ty.Map.add ty dom rety.rety_domains;
           rety_map = Ty.Map.add ty map rety.rety_map
         }
@@ -380,7 +360,7 @@ let rebuild_types state m : retyping =
 let ty_of_id_ state id =
   match Env.find_ty ~env:state.env id with
     | Some t -> t
-    | None -> errorf_ "could not find the type of `@[%a@]`" ID.print id
+    | None -> errorf_ "could not find the type of `@[%a@]`" ID.pp id
 
 (* what should be the type of [t]? We assume [t] is not a constant
    from the domain of [unitype] *)
@@ -390,7 +370,7 @@ let rec expected_ty state t = match T.repr t with
     let _, _, ret = expected_ty state f |> U.ty_unfold in
     ret
   | TI.Builtin (`Undefined_atom (_,ty)) -> ty
-  | _ -> errorf_ "could not find the expected type of `@[%a@]`" P.print t
+  | _ -> errorf_ "could not find the expected type of `@[%a@]`" P.pp t
 
 let retype_find rety ty = Ty.Map.get ty rety.rety_map
 
@@ -408,7 +388,7 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
         | Some v' -> U.var v'
         | None ->
           errorf_ "variable `%a` not bound in `@[%a@]`"
-            Var.print_full v (Var.Subst.print Var.print_full) subst
+            Var.pp_full v (Var.Subst.pp Var.pp_full) subst
       end
     | TI.App (f, l) when is_undefined_atom_ f ->
       (* must infer type of [f] using arguments: its expected type
@@ -432,7 +412,7 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
         | Some map ->
           (* if [id] is a unitype domain constant, replace it *)
           ID.Map.get id map
-          |> CCOpt.maybe U.const t
+          |> CCOpt.map_or ~default:t U.const
       end
     | _ ->
       U.map () t
@@ -448,14 +428,14 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
         | Some v' -> U.var v', Var.ty v'
         | None ->
           errorf_ "variable `%a` not bound in `@[%a@]`"
-            Var.print_full v (Var.Subst.print Var.print_full) subst
+            Var.pp_full v (Var.Subst.pp Var.pp_full) subst
       end
     | TI.Const _ -> t, expected_ty state t
     | TI.App (f, _) ->
       (* use the expected type of [f],  then fallback on [aux] *)
       let _, _, ty_ret = expected_ty state f |> U.ty_unfold in
       aux t ty_ret, ty_ret
-    | _ -> errorf_ "could not infer expected type of `@[%a@]`" P.print t
+    | _ -> errorf_ "could not infer expected type of `@[%a@]`" P.pp t
   in
   aux t ty
 
@@ -491,24 +471,24 @@ let decode_model ~state m =
         | _ ->
           Utils.debugf ~section 5
             "@[<2>decode @[%a@]@ := `@[%a@]@]"
-            (fun k->k P.print t (M.DT.print P.print' P.print) dt);
+            (fun k->k P.pp t (M.DT.pp P.pp' P.pp) dt);
           let ty = expected_ty state t in
           let ty_ret = U.ty_returns ty in
           let dt = decode_vars ty dt in
           let dt' =
             DT.filter_map dt
               ~test:(fun v t ->
-                 let ty_v = Var.ty v in
-                 match T.repr t, retype_find rety ty_v with
-                   | TI.Const id, Some map when not (ID.Map.mem id map) ->
-                     (* [ty_v] is a finite type whose elements
-                            have been encoded into [domain map].
-                            Since [t] is a constant outside this
-                            domain, the test is necessarily false
-                            and must be removed *)
-                     None
-                   | _ ->
-                     Some (dec_t t ty_v))
+                let ty_v = Var.ty v in
+                match T.repr t, retype_find rety ty_v with
+                  | TI.Const id, Some map when not (ID.Map.mem id map) ->
+                    (* [ty_v] is a finite type whose elements
+                           have been encoded into [domain map].
+                           Since [t] is a constant outside this
+                           domain, the test is necessarily false
+                           and must be removed *)
+                    None
+                  | _ ->
+                    Some (dec_t t ty_v))
               ~yield:(fun t -> dec_t t ty_ret)
           in
           let t' = dec_t t ty in
@@ -528,11 +508,11 @@ let pipe_with ?on_decoded ~decode ~print ~check =
     Utils.singleton_if print ()
       ~f:(fun () ->
         let module Ppb = Problem.Print(P)(P) in
-        Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name Ppb.print)
+        Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name Ppb.pp)
     @
-    Utils.singleton_if check () ~f:(fun () ->
-      let module C = TypeCheck.Make(T) in
-      C.empty () |> C.check_problem)
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.empty () |> C.check_problem)
   in
   Transform.make
     ~name
@@ -550,7 +530,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after %s@}:@ %a@]@."
-         name (Problem.Res.print P.print' P.print)]
+         name (Problem.Res.pp P.pp' P.pp)]
     else []
   in
   pipe_with ~check ~print ~on_decoded

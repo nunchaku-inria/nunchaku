@@ -9,8 +9,8 @@ module Time = struct
   let total, start =
     let start = Unix.gettimeofday () in
     (function () ->
-      let stop = Unix.gettimeofday () in
-      stop -. start),
+       let stop = Unix.gettimeofday () in
+       stop -. start),
     (function () -> start)
 
   type timer = {
@@ -57,10 +57,10 @@ module Section = struct
     let rec add s = match s.descr with
       | Root -> true
       | Sub (name, parent, _) ->
-          let parent_is_root = add parent in
-          if not parent_is_root then Buffer.add_char buf '.';
-          Buffer.add_string buf name;
-          false
+        let parent_is_root = add parent in
+        if not parent_is_root then Buffer.add_char buf '.';
+        Buffer.add_string buf name;
+        false
     in
     ignore (add s);
     Buffer.contents buf
@@ -103,16 +103,26 @@ module Section = struct
       | Sub (_, parent, []) -> cur_level_rec parent
       | Sub (_, parent, [i]) -> max (cur_level_rec parent) (cur_level_rec i)
       | Sub (_, parent, inheriting) ->
-          List.fold_left
-            (fun m i -> max m (cur_level_rec i))
-            (cur_level_rec parent) inheriting
+        List.fold_left
+          (fun m i -> max m (cur_level_rec i))
+          (cur_level_rec parent) inheriting
     else s.level
 
   (* inlinable function *)
   let cur_level s =
     if s.level = null_level
-      then cur_level_rec s
-      else s.level
+    then cur_level_rec s
+    else s.level
+
+  (* CLI options to set the debug levels *)
+  let cli_options () =
+    iter
+    |> Sequence.map
+      (fun (name,sec) ->
+         "--debug" ^ (if name="" then "" else "."^name),
+         Arg.Int (set_debug sec),
+         " verbosity level for " ^ (if name="" then "all messages" else name))
+    |> Sequence.to_rev_list
 end
 
 let set_debug = Section.set_debug Section.root
@@ -127,7 +137,7 @@ let debugf_real lock section msg k =
   if section == Section.root
   then Format.fprintf debug_fmt_ "@[<hov 3>@{<Black>%.3f[]@}@ " now
   else Format.fprintf debug_fmt_ "@[<hov 3>@{<Black>%.3f[%s]@}@ "
-    now section.Section.full_name;
+      now section.Section.full_name;
   try
     k (Format.kfprintf
         (fun fmt -> Format.fprintf fmt "@]@."; if lock then Mutex.unlock debug_lock_)
@@ -157,15 +167,15 @@ module Callback = struct
   let count_ = ref 0
 
   let register t ~f =
-      let id = !count_ in
-      incr count_;
-      t.lst <- Cons (id, f, t.lst);
-      id
+    let id = !count_ in
+    incr count_;
+    t.lst <- Cons (id, f, t.lst);
+    id
 
   let rec remove_rec_ l id = match l with
     | Nil -> Nil
     | Cons (id', f, l') ->
-        if id=id' then l' else Cons (id', f, remove_rec_ l' id)
+      if id=id' then l' else Cons (id', f, remove_rec_ l' id)
 
   let remove t ~id = t.lst <- remove_rec_ t.lst id
 
@@ -184,11 +194,11 @@ end
 let vec_fold_map f acc v =
   let v' = CCVector.create () in
   let acc = CCVector.fold
-    (fun acc x ->
-      let acc, y = f acc x in
-      CCVector.push v' y;
-      acc
-    ) acc v
+      (fun acc x ->
+         let acc, y = f acc x in
+         CCVector.push v' y;
+         acc
+      ) acc v
   in
   acc, v'
 
@@ -198,9 +208,9 @@ let fold_mapi ~f ~x:acc l =
   let rec aux f acc i l = match l with
     | [] -> acc, []
     | x :: tail ->
-        let acc, y = f i acc x in
-        let acc, tail' = aux f acc (i+1) tail in
-        acc, y :: tail'
+      let acc, y = f i acc x in
+      let acc, tail' = aux f acc (i+1) tail in
+      acc, y :: tail'
   in
   aux f acc 0 l
 
@@ -210,8 +220,8 @@ let filteri f l =
   let rec aux i = function
     | [] -> []
     | x :: tl ->
-        let tl' = aux (i+1) tl in
-        if f i x then x::tl' else tl'
+      let tl' = aux (i+1) tl in
+      if f i x then x::tl' else tl'
   in
   aux 0 l
 
@@ -221,11 +231,20 @@ let singleton_if check ~f x = if check then [f x] else []
 
 let arg_choice l f =
   let pick s =
-    let s = s |> String.trim |> String.lowercase in
+    let s = s |> String.trim |> String.lowercase_ascii in
     try f (List.assoc s l)
     with Not_found -> assert false
   in
   Arg.Symbol (List.map fst l, pick)
+
+module Options = struct
+  let all_ : (Arg.key * Arg.spec * Arg.doc) list ref = ref []
+
+  let get_all () = List.rev_append (Section.cli_options ()) !all_
+
+  let add o = all_ := o :: !all_
+  let add_list = List.iter add
+end
 
 (** {2 Warnings} *)
 
@@ -246,9 +265,9 @@ let is_warning_enabled w = List.mem w !warnings_
 
 let toggle_warning w b =
   if b && not (is_warning_enabled w)
-    then warnings_ := w :: !warnings_
+  then warnings_ := w :: !warnings_
   else if not b && is_warning_enabled w
-    then warnings_ := List.filter (fun w' -> w<>w') !warnings_;
+  then warnings_ := List.filter (fun w' -> w<>w') !warnings_;
   ()
 
 let warningf w msg =
@@ -257,36 +276,36 @@ let warningf w msg =
     Format.eprintf "@[<2>[@{<yellow>Warning@} %a:@ " pp_warn w;
     Format.kfprintf
       (fun out ->
-        Format.fprintf out "]@]@.";
-        ())
+         Format.fprintf out "]@]@.";
+         ())
       Format.err_formatter msg
   ) else Format.ikfprintf (fun _ -> ()) Format.err_formatter msg
 
 let warning b msg = warningf b "%s" msg
 
 let enable_warn_ w () = toggle_warning w true
-let options_warnings_ =
-  [ "--warn-overlapping-match"
+
+let () =
+  Options.add_list
+    [
+      ("--warn-overlapping-match"
       , Arg.Unit (enable_warn_ Warn_overlapping_match)
-      , " enable warning on overlapping cases of pattern-matching"
-  ; "-W1"
+      , " enable warning on overlapping cases of pattern-matching");
+      ("-W1"
       , Arg.Bool (toggle_warning Warn_overlapping_match)
-      , " <bool>: enable/disable --warn-overlapping-match"
-  ; "-W2"
+      , " <bool>: enable/disable --warn-overlapping-match");
+      ("-W2"
       , Arg.Bool (toggle_warning Warn_model_parsing_error)
-      , " <bool>: enable/disable warnings on model parsing errors"
-  ]
-
-let options_others_ : (Arg.key * Arg.spec * Arg.doc) list ref = ref []
-
-let add_option o = options_others_ := o :: !options_others_
+      , " <bool>: enable/disable warnings on model parsing errors");
+    ]
 
 (** {2 Misc} *)
 
 exception NotImplemented of string
 
-let pp_seq ?(sep=" ") p = CCFormat.seq ~start:"" ~stop:"" ~sep p
-let pp_list ?(sep=" ") p = CCFormat.list ~start:"" ~stop:"" ~sep p
+let pp_with_sep sep out () = Format.fprintf out "%s@ " sep
+let pp_seq ?(sep=" ") p = CCFormat.seq ~sep:(pp_with_sep sep) p
+let pp_list ?(sep=" ") p = CCFormat.list ~sep:(pp_with_sep sep) p
 
 (* print error prefix *)
 let pp_error_prefix out () = Format.fprintf out "@{<Red>Error@}: "
@@ -296,11 +315,11 @@ let err_sprintf fmt =
     ~f:(fun s -> CCFormat.sprintf "@[<2>%a%s@]" pp_error_prefix () s)
 
 let () = Printexc.register_printer
-  (function
-    | NotImplemented s ->
+    (function
+      | NotImplemented s ->
         Some (CCFormat.sprintf "%a feature `%s` is not implemented" pp_error_prefix () s)
-    | _ -> None
-  )
+      | _ -> None
+    )
 
 let not_implemented feat = raise (NotImplemented feat)
 
@@ -319,6 +338,7 @@ let exn_ksprintf ~f fmt =
 
 let not_implementedf fmt = exn_ksprintf fmt ~f:not_implemented
 let failwithf fmt = exn_ksprintf fmt ~f:failwith
+let invalid_argf fmt = exn_ksprintf fmt ~f:invalid_arg
 
 let ignore_catch f x =
   try ignore (f x)

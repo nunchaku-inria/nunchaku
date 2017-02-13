@@ -3,9 +3,9 @@
 
 (** {1 Environment}
 
-  Maps (co)inductive types to their definition, functions
-  to their specifications/axioms/recursive specifications,
-  constructors to their types, and any symbol to its type *)
+    Maps (co)inductive types to their definition, functions
+    to their specifications/axioms/recursive specifications,
+    constructors to their types, and any symbol to its type *)
 
 type id = ID.t
 type loc = Location.t
@@ -14,44 +14,44 @@ type 'a printer = Format.formatter -> 'a -> unit
 type (+'t, +'ty) def =
   | Fun_def of
       ('t, 'ty) Statement.rec_defs *
-      ('t, 'ty) Statement.rec_def *
-      loc option
-      (** ID is a defined fun/predicate. *)
+        ('t, 'ty) Statement.rec_def *
+        loc option
+  (** ID is a defined fun/predicate. *)
 
   | Fun_spec of
       ('t, 'ty) Statement.spec_defs * loc option
 
   | Data of
       [`Codata | `Data] *
-      'ty Statement.mutual_types *
-      'ty Statement.tydef
-      (** ID is a (co)data *)
+        'ty Statement.data_types *
+        'ty Statement.data_type
+  (** ID is a (co)data *)
 
   | Cstor of
       [`Codata | `Data] *
-      'ty Statement.mutual_types *
-      'ty Statement.tydef *
-      'ty Statement.ty_constructor
-      (** ID is a constructor (of the given type) *)
+        'ty Statement.data_types *
+        'ty Statement.data_type *
+        'ty Statement.ty_constructor
+  (** ID is a constructor (of the given type) *)
 
   | Pred of
       [`Wf | `Not_wf] *
-      [`Pred | `Copred] *
-      ('t, 'ty) Statement.pred_def *
-      ('t, 'ty) Statement.pred_def list *
-      loc option
+        [`Pred | `Copred] *
+        ('t, 'ty) Statement.pred_def *
+        ('t, 'ty) Statement.pred_def list *
+        loc option
 
   | Copy_ty of ('t, 'ty) Statement.copy
-    (** ID is the copy type *)
+  (** ID is the copy type *)
 
   | Copy_abstract of ('t, 'ty) Statement.copy
-    (** ID is the abstraction function *)
+  (** ID is the abstraction function *)
 
   | Copy_concrete of ('t, 'ty) Statement.copy
-    (** ID is the concretization function *)
+  (** ID is the concretization function *)
 
   | NoDef
-      (** Undefined symbol *)
+  (** Undefined symbol *)
 
 (** All information on a given symbol *)
 type (+'t, +'ty) info = {
@@ -130,7 +130,7 @@ val def_data:
   ?loc:loc ->
   env:('t, 'ty) t ->
   kind:[`Data | `Codata] ->
-  'ty Statement.mutual_types ->
+  'ty Statement.data_types ->
   ('t, 'ty) t
 (** Define a new set of mutually recursive (co)data types.
     Also defines their constructors.
@@ -170,29 +170,14 @@ val find_ty_exn : env:('t, 'ty) t -> id -> 'ty
 val find_ty : env:('t, 'ty) t -> id -> 'ty option
 (** Safe version of {!find_ty_exn} *)
 
-module Util(T : TermInner.S) : sig
-  type term = T.t
-  type ty = T.t
-
-  val ty : env:(term,ty) t -> term -> ty TermInner.or_error
-  (** Compute type of this term *)
-
-  val ty_exn : env:(term,ty) t -> term -> ty
-
-  val info_of_ty : env:(term,ty) t -> ty -> (term, ty) info TermInner.or_error
-  (** [info_of_ty ~env ty] finds the information related to the given
-      type. *)
-
-  exception No_head of ty
-
-  val info_of_ty_exn : env:(term,ty) t -> ty -> (term, ty) info
-  (** Unsafe version of {!info_of_ty}
-      @raise No_head if the type is not an (applied) constant *)
-end
-
 val mem : env:(_,_) t -> id:id -> bool
 (** @return true if the symbol is at least declared *)
 
-module Print(Pt : TermInner.PRINT)(Pty : TermInner.PRINT) : sig
-  val print : (Pt.t, Pty.t) t printer
+module type PRINT_TERM = sig
+  type t
+  val pp : t CCFormat.printer
+end
+
+module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) : sig
+  val pp : (Pt.t, Pty.t) t printer
 end

@@ -17,11 +17,12 @@ module Subst = Var.Subst
 type term = T.t
 type ty = T.t
 
-let print_term = P.print
+let pp_term = P.pp
 
 module S = struct
   let a = ID.make "a"
   let b = ID.make "b"
+  let c = ID.make "c"
   let list = ID.make "list"
   let pair = ID.make "pair"
 
@@ -38,6 +39,10 @@ module S = struct
   let f_b = ID.make "f_b"
   let g_b = ID.make "g_b"
   let h_b = ID.make "h_b"
+
+  let c0 = ID.make_full ~needs_at:false ~distinct:true "$c0"
+  let c1 = ID.make_full ~needs_at:false ~distinct:true "$c1"
+  let c2 = ID.make_full ~needs_at:false ~distinct:true "$c2"
 
   let p0 = ID.make "p0"
   let p1 = ID.make "p1"
@@ -76,6 +81,9 @@ let base_sig =
     ; f_b, U.(ty_arrow_l [U.ty_const b; U.ty_const a] (U.ty_const b))
     ; g_b, U.(ty_arrow_l [U.ty_const b] (U.ty_const b))
     ; h_b, U.(ty_arrow_l [app_const_ list [U.ty_const b]] (U.ty_const b))
+    ; c0, U.ty_const c
+    ; c1, U.ty_const c
+    ; c2, U.ty_const c
     ; p0, U.ty_prop
     ; p1, U.ty_prop
     ; p2, U.ty_prop
@@ -111,14 +119,14 @@ type backward_rule = {
 }
 
 let pp_build_rule out = function
-  | AppID id -> ID.print out id
+  | AppID id -> ID.pp out id
   | AppBuiltin _ -> CCFormat.string out "<builtin>"
-  | AppVar v -> Var.print_full out v
+  | AppVar v -> Var.pp_full out v
 
 let pp_rule out r =
   Format.fprintf out "(@[<2>%a :-@ {@[<hv>%a@]}@ using %a, vars @[%a@]@])"
-    P.print r.target (CCFormat.list ~start:"" ~stop:"" P.print) r.goals
-    pp_build_rule r.build (CCFormat.list Var.print_full) r.vars
+    P.pp r.target (Utils.pp_list P.pp) r.goals
+    pp_build_rule r.build (CCFormat.list Var.pp_full) r.vars
 
 type backward_rules = backward_rule list
 
@@ -192,20 +200,20 @@ let ty =
   let fun2 a b c = U.ty_arrow_l [a;b] c in
   let open G in
   fix
-     (fun self n ->
-        if n=0
-        then base
-        else (
-          (* for generating functions, take small type arguments *)
-          let small = min 3 (n-1) in
-          frequency
-            [ 3, base
-            ; 1, return list' <*> self (n-1)
-            ; 1, return pair' <*> self (n-1) <*> self (n-1)
-            ; 1, return fun1 <*> self small <*> self small
-            ; 1, return fun2 <*> self small <*> self small <*> self (n-1)
-            ]
-        ))
+    (fun self n ->
+       if n=0
+       then base
+       else (
+         (* for generating functions, take small type arguments *)
+         let small = min 3 (n-1) in
+         frequency
+           [ 3, base
+           ; 1, return list' <*> self (n-1)
+           ; 1, return pair' <*> self (n-1) <*> self (n-1)
+           ; 1, return fun1 <*> self small <*> self small
+           ; 1, return fun2 <*> self small <*> self small <*> self (n-1)
+           ]
+       ))
   |> sized'
 
 let mk_fresh_var_ = Var.make_gen ~names:"v_%d"
@@ -257,7 +265,7 @@ and gen_atom_ rules ty subst vars size =
       rules
   in
   if possible_rules=[] then (
-    Format.printf "no rule applies for @[%a@]@." P.print ty;
+    Format.printf "no rule applies for @[%a@]@." P.pp ty;
     assert false;
   );
   let open G in
@@ -303,7 +311,7 @@ let rec shrink t = match T.repr t with
 
 let mk_arbitrary_ g =
   QCheck.make
-    ~print:(CCFormat.sprintf "@[<4>%a@]" print_term)
+    ~print:(CCFormat.sprintf "@[<4>%a@]" pp_term)
     ~shrink
     ~small:U.size
     g
@@ -320,19 +328,18 @@ let generate_l ?n ?(rand=mk_rand()) g =
   let n = CCOpt.get_lazy (fun () -> G.(1 -- 50) rand) n in
   G.list_repeat n g rand
 
-let print_rules() =
-  Format.printf "rules:@ @[<v>%a@]@."
-    (CCFormat.list ~start:"" ~stop:"" pp_rule) rules
+let pp_rules() =
+  Format.printf "rules:@ @[<v>%a@]@." (Utils.pp_list pp_rule) rules
 
 (* test the random generator itself *)
 
 (*$inject
   module U = TermInner.Util(T)
-  *)
+*)
 
 (*$QR & ~count:300
   arbitrary_prop
-    (fun t -> match U.ty t ~sigma:(fun id -> ID.Map.get id base_sig) with
+    (fun t -> match U.ty_of_signature t ~sigma:(fun id -> ID.Map.get id base_sig) with
       | CCResult.Ok ty -> U.ty_is_Prop ty
       | CCResult.Error _ -> false)
 *)
@@ -341,7 +348,7 @@ let print_rules() =
   arbitrary
     (fun t ->
         (* just  see if it typechecks *)
-      match U.ty t ~sigma:(fun id -> ID.Map.get id base_sig) with
+      match U.ty_of_signature t ~sigma:(fun id -> ID.Map.get id base_sig) with
       | CCResult.Ok _ ->  true
       | CCResult.Error _ -> false)
 *)

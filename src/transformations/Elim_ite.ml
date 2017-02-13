@@ -68,7 +68,7 @@ let transform_term t =
     | FO.Builtin _
     | FO.DataTest (_,_)
     | FO.DataSelect (_,_,_)
-    | FO.Undefined (_,_)
+    | FO.Undefined _
     | FO.Undefined_atom _
     | FO.Unparsable _
     | FO.Mu (_,_)
@@ -118,19 +118,19 @@ let transform_term t =
   in
   let res = aux_top Var.Subst.empty t in
   Utils.debugf ~section 5 "@[<2>encoded `@[%a@]`@ into `@[%a@]@]"
-    (fun k->k FO.print_term t FO.print_term res);
+    (fun k->k FO.pp_term t FO.pp_term res);
   res
 
 let transform_statement st =
   Utils.debugf ~section 3 "@[<2>transform @{<cyan>statement@}@ `@[%a@]`@]"
-    (fun k->k FO.print_statement st);
+    (fun k->k FO.pp_statement st);
   match st with
-  | FO.TyDecl _
-  | FO.Decl _
-  | FO.CardBound _
-  | FO.MutualTypes _ -> st
-  | FO.Axiom f -> FO.Axiom (transform_term f)
-  | FO.Goal f -> FO.Goal (transform_term f)
+    | FO.TyDecl _
+    | FO.Decl _
+    | FO.CardBound _
+    | FO.MutualTypes _ -> st
+    | FO.Axiom f -> FO.Axiom (transform_term f)
+    | FO.Goal f -> FO.Goal (transform_term f)
 
 let transform_problem pb =
   let meta = FO.Problem.meta pb in
@@ -140,7 +140,7 @@ let pipe ~print =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       Format.printf "@[<2>@{<Yellow>after elim_ite@}: {@,@[%a@]@,}@]@."
-        FO.print_problem)
+        FO.pp_problem)
   in
   Transform.make
     ~name

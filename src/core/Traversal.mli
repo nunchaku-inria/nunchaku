@@ -8,7 +8,7 @@ module type ARG = sig
   val equal : t -> t -> bool
   val hash : t -> int
 
-  val print : t CCFormat.printer
+  val pp : t CCFormat.printer
   val section : Utils.Section.t
   val fail : ('a, Format.formatter, unit, 'b) format4 -> 'a
 end
@@ -58,10 +58,10 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) : sig
     do_data:
       (t ->
        depth:int -> [`Data | `Codata] ->
-       term Statement.tydef ->
+       term Statement.data_type ->
        Arg.t ->
-       term Statement.tydef)
-      option;
+       term Statement.data_type)
+        option;
 
     do_ty_def:
       (t ->
@@ -69,7 +69,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) : sig
        ty Statement.defined ->
        Arg.t ->
        ty Statement.defined)
-      option;
+        option;
   }
 
   val create :

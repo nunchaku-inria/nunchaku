@@ -3,7 +3,7 @@
 (** {1 Model} *)
 
 type 'a printer = Format.formatter -> 'a -> unit
-type 'a prec_printer = TermInner.prec -> 'a printer
+type 'a prec_printer = Precedence.t -> 'a printer
 type 'a to_sexp = 'a -> Sexp_lib.t
 
 (** {2 Decision Trees}
@@ -21,11 +21,17 @@ module DT : sig
   and (+'t, +'ty) cases = {
     var: 'ty Var.t;
     (* the variable being tested *)
-    tests: ('t, 'ty) case list;
+    tests: ('t, 'ty) tests_or_match;
     (* list of [if var=term, then sub-dt] *)
     default: ('t, 'ty) t option;
     (* sub-dt by default *)
   }
+
+  and ('t, 'ty) tests_or_match =
+    | Tests of ('t, 'ty) case list
+    | Match of
+        ('ty Var.t list * ('t, 'ty) t) ID.Map.t (* branches *)
+        * int ID.Map.t (* missing cases *)
 
   and ('t, 'ty) case = 't * ('t, 'ty) t
 
@@ -36,12 +42,41 @@ module DT : sig
   (** [const vars ret] is the constant function over [vars], that
       always return [ret] *)
 
-  val cases :
+  val tests_ : ('t, 'ty) case list -> ('t, 'ty) tests_or_match
+
+  val match_ :
+    missing:int ID.Map.t ->
+    ('ty Var.t list * ('t, 'ty) t) ID.Map.t ->
+    ('t,'ty) tests_or_match
+
+  val mk_cases :
+    'ty Var.t ->
+    ('t, 'ty) tests_or_match ->
+    default:('t, 'ty) t option ->
+    ('t, 'ty) t
+  (** @raise Invalid_argument if [tests= [] && default = None] *)
+
+  val mk_tests :
     'ty Var.t ->
     tests:('t, 'ty) case list ->
     default:('t, 'ty) t option ->
     ('t, 'ty) t
   (** @raise Invalid_argument if [tests= [] && default = None] *)
+
+  val mk_match :
+    'ty Var.t ->
+    by_cstor:('ty Var.t list * ('t, 'ty) t) ID.Map.t ->
+    missing:int ID.Map.t ->
+    default:('t, 'ty) t option ->
+    ('t, 'ty) t
+  (** @raise Invalid_argument if [tests= [] && default = None] *)
+
+  val map_tests_or_match :
+    term:('t1 -> 't2) ->
+    ty:('ty1 -> 'ty2) ->
+    f:(('t1, 'ty1) t -> ('t2, 'ty2) t) ->
+    ('t1, 'ty1) tests_or_match ->
+    ('t2, 'ty2) tests_or_match
 
   val map :
     term:('t1 -> 't2) ->
@@ -94,18 +129,22 @@ module DT : sig
       that order, asssuming [tests] only range over [vars].
       @param eq equality on terms *)
 
+  exception Unflattenable
+
   val flatten :
     ('t, 'ty) t ->
     ('t, 'ty) flat_dt
-  (** Flatten as an old style flat decision tree *)
+  (** Flatten as an old style flat decision tree
+      @raise Unflattenable if the DT contains unflattenable constructs
+      such as pattern matching *)
 
   val check_ : (_,_) t -> unit
   (** check some invariants *)
 
-  val print : 't prec_printer -> 'ty printer -> ('t, 'ty) t printer
+  val pp : 't prec_printer -> 'ty printer -> ('t, 'ty) t printer
 
-  val print_flat_test : 't prec_printer -> ('t, _) flat_test printer
-  val print_flat : 't prec_printer -> ('t, _) flat_dt printer
+  val pp_flat_test : 't prec_printer -> ('t, _) flat_test printer
+  val pp_flat : 't prec_printer -> ('t, _) flat_dt printer
 
   val to_sexp : 't to_sexp -> 'ty to_sexp ->('t, 'ty) t to_sexp
   (** for model display *)
@@ -182,7 +221,7 @@ module DT_util : sig
   val to_term : dt -> term
   (** Convert the decision tree to a term *)
 
-  val print : dt printer
+  val pp : dt printer
 end
 
 (** {2 Models} *)
@@ -262,7 +301,7 @@ val filter :
   ('t, 'ty) t ->
   ('t, 'ty) t
 
-val print : 't prec_printer -> 'ty printer -> ('t,'ty) t printer
+val pp : 't prec_printer -> 'ty printer -> ('t,'ty) t printer
 (** Debug printing *)
 
 val to_sexp : 't to_sexp -> 'ty to_sexp -> ('t,'ty) t to_sexp
@@ -275,6 +314,6 @@ module Default : sig
 
   val to_sexp : t to_sexp
 
-  val print_standard : t printer
+  val pp_standard : t printer
   (** Printer suitable for parsing from the caller *)
 end

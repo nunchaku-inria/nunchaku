@@ -39,7 +39,7 @@ include Intf.PRINT with type t := t
 
 val to_string : t -> string
 
-val print_opt : Format.formatter -> t option -> unit
+val pp_opt : Format.formatter -> t option -> unit
 
 val to_string_opt : t option -> string
 
@@ -58,7 +58,7 @@ val get_loc : _ with_loc -> t option
 
 (** {2 Lexbuf}
 
-  Utils to set/get the file in a lexbuf *)
+    Utils to set/get the file in a lexbuf *)
 
 val set_file : Lexing.lexbuf -> string -> unit
 (** Change the file name used for positions in this lexbuf *)

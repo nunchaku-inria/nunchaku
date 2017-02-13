@@ -22,16 +22,18 @@ type model_ty = FO.Ty.t
 module DSexp = Sexp_lib.Decoder
 
 exception Error of string
-exception CVC4_error of string
+exception Backend_err of string
 
 let error_ e = raise (Error e)
 let errorf_ fmt = CCFormat.ksprintf fmt ~f:error_
 
+let cvc4_error_ msg = raise (Backend_err msg)
+let cvc4_errorf_ msg = CCFormat.ksprintf ~f:cvc4_error_ "@[in CVC4:@ %s@]" msg
+
 let () = Printexc.register_printer
-  (function
-    | Error msg -> Some (Utils.err_sprintf "@[in the interface to CVC4:@ %s@]" msg)
-    | CVC4_error msg -> Some (Utils.err_sprintf "@[in CVC4:@ %s@]" msg)
-    | _ -> None)
+    (function
+      | Error msg -> Some (Utils.err_sprintf "@[in the interface to CVC4:@ %s@]" msg)
+      | _ -> None)
 
 module T = FO.T
 module Ty = FO.Ty
@@ -60,38 +62,38 @@ let gty_head ty = match Ty.view ty with
 
 let rec fobackty_of_ground_ty g = match Ty.view g with
   | FO.TyApp (id,l) ->
-      Ty.app id (List.map fobackty_of_ground_ty l)
+    Ty.app id (List.map fobackty_of_ground_ty l)
   | FO.TyBuiltin b -> Ty.builtin b
 
 type model_query =
   | Q_const
-      (* we want to know the value of this constant *)
+  (* we want to know the value of this constant *)
   | Q_fun of int
-      (* we want to know the value of this function (int: arity) *)
+  (* we want to know the value of this function (int: arity) *)
   | Q_type of ground_ty
-      (* [id -> ty] means that [id : ty] is a dummy value, and we  want
-         to know the finite domain of [ty] by asking [(fmf.card.val id)] *)
+  (* [id -> ty] means that [id : ty] is a dummy value, and we  want
+     to know the finite domain of [ty] by asking [(fmf.card.val id)] *)
 
 type decode_state = {
   kinds: symbol_kind ID.Map.t;
-    (* ID -> its kind *)
+  (* ID -> its kind *)
   id_to_name: string ID.Tbl.t;
-    (* maps ID to unique names *)
+  (* maps ID to unique names *)
   name_to_id: (string, decoded_sym) Hashtbl.t;
-    (* map (stringof ID) -> ID, and other builtins *)
+  (* map (stringof ID) -> ID, and other builtins *)
   symbols : model_query ID.Tbl.t;
-    (* set of symbols to ask values for in the model *)
+  (* set of symbols to ask values for in the model *)
   vars: Ty.t Var.t ID.Tbl.t;
-    (* variables in scope *)
+  (* variables in scope *)
   db_prefixes: (string,ground_ty) Hashtbl.t;
-    (* prefixes expected for De Bruijn indices *)
+  (* prefixes expected for De Bruijn indices *)
   timer: Utils.Time.timer;
-    (* time elapsed *)
+  (* time elapsed *)
   mutable db_stack: Ty.t Var.t option ref list;
-    (* stack of variables for mu-binders, with a bool ref.
-       If the ref is true, it means the variable is used at least once *)
+  (* stack of variables for mu-binders, with a bool ref.
+     If the ref is true, it means the variable is used at least once *)
   mutable witnesses : ID.t GTy_map.t;
-    (* type -> witness of this type *)
+  (* type -> witness of this type *)
 }
 
 let create_decode_state ~kinds () = {
@@ -148,7 +150,7 @@ let create_ ~print_model ~decode (ic,oc) =
   Gc.finalise close s; (* close on finalize *)
   s
 
-let pp_list ?(sep=" ") ?(start="") ?(stop="") pp = CCFormat.list ~sep ~start ~stop pp
+let pp_list ?(sep=" ") pp = Utils.pp_list ~sep pp
 
 (* add numeric suffix to [name] until it is an unused name *)
 let find_unique_name_ ~decode name0 =
@@ -189,10 +191,10 @@ let rec pp_gty ~decode out g =
          | _ -> '_')
   in
   match Ty.view g with
-  | FO.TyBuiltin b -> pp_builtin_cvc4 out b
-  | FO.TyApp (id, []) ->
+    | FO.TyBuiltin b -> pp_builtin_cvc4 out b
+    | FO.TyApp (id, []) ->
       CCFormat.string out (id_to_name ~decode id |> normalize_str)
-  | FO.TyApp (id,l) ->
+    | FO.TyApp (id,l) ->
       fpf out "_%s_%a_" (id_to_name ~decode id |> normalize_str)
         (pp_list ~sep:"_" (pp_gty ~decode)) l
 
@@ -205,130 +207,130 @@ let const_of_ty_nth ~decode gty i =
   CCFormat.sprintf "@[<h>%s_%d@]" (const_of_ty ~decode gty) i
 
 (* print processed problem *)
-let print_problem out (decode, pb) =
+let pp_problem out (decode, pb) =
   (* print ID and remember its name for parsing model afterward *)
-  let rec print_id out id =
+  let rec pp_id out id =
     (* find a unique name for this ID *)
     let name = id_to_name ~decode id in
     CCFormat.string out name
 
   (* print [is-c] for a constructor [c] *)
-  and print_tester out c =
+  and pp_tester out c =
     let name = Printf.sprintf "is-%s" (id_to_name ~decode c) in
     Hashtbl.replace decode.name_to_id name (DataTest c);
     CCFormat.string out name
 
   (* print [select-c-n] to select the n-th argument of [c] *)
-  and print_select out (c,n) =
+  and pp_select out (c,n) =
     let name = Printf.sprintf "_select_%s_%d" (id_to_name ~decode c) n in
     Hashtbl.replace decode.name_to_id name (DataSelect (c,n));
     CCFormat.string out name
 
   (* print type (a monomorphic type) in SMT *)
-  and print_ty out ty = match Ty.view ty with
+  and pp_ty out ty = match Ty.view ty with
     | FO.TyBuiltin b -> pp_builtin_cvc4 out b
-    | FO.TyApp (f, []) -> print_id out f
+    | FO.TyApp (f, []) -> pp_id out f
     | FO.TyApp (f, l) ->
-        fpf out "@[(%a@ %a)@]"
-          print_id f (pp_list print_ty) l
+      fpf out "@[(%a@ %a)@]"
+        pp_id f (pp_list pp_ty) l
 
   (* print type in SMT syntax *)
-  and print_ty_decl out ty =
+  and pp_ty_decl out ty =
     let args, ret = ty in
-    fpf out "%a %a" (pp_list ~start:"(" ~stop:")" print_ty) args print_ty ret
+    fpf out "%a %a" (CCFormat.within "(" ")" (pp_list pp_ty)) args pp_ty ret
 
-  and print_term out t = match T.view t with
+  and pp_term out t = match T.view t with
     | FO.Builtin b ->
-        begin match b with
+      begin match b with
         | `Int n -> CCFormat.int out n
-        end
-    | FO.Var v -> Var.print_full out v
-    | FO.App (f,[]) -> print_id out f
+      end
+    | FO.Var v -> Var.pp_full out v
+    | FO.App (f,[]) -> pp_id out f
     | FO.App (f,l) ->
-        fpf out "(@[%a@ %a@])"
-          print_id f (pp_list print_term) l
+      fpf out "(@[%a@ %a@])"
+        pp_id f (pp_list pp_term) l
     | FO.DataTest (c,t) ->
-        fpf out "(@[%a@ %a@])" print_tester c print_term t
+      fpf out "(@[%a@ %a@])" pp_tester c pp_term t
     | FO.DataSelect (c,n,t) ->
-        fpf out "(@[%a@ %a@])" print_select (c,n) print_term t
-    | FO.Undefined (_,t) -> print_term out t (* tailcall, probably *)
+      fpf out "(@[%a@ %a@])" pp_select (c,n) pp_term t
+    | FO.Undefined t -> pp_term out t (* tailcall, probably *)
     | FO.Undefined_atom _ -> errorf_ "cannot print `undefined_atom` in SMTlib"
     | FO.Unparsable _ -> errorf_ "cannot print `unparsable` in SMTlib"
     | FO.Fun (v,t) ->
-        fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
-          Var.print_full v print_ty (Var.ty v) print_term t
+      fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
+        Var.pp_full v pp_ty (Var.ty v) pp_term t
     | FO.Let (v,t,u) ->
-        fpf out "@[<3>(let@ ((%a %a))@ %a@])"
-          Var.print_full v print_term t print_term u
+      fpf out "@[<3>(let@ ((%a %a))@ %a@])"
+        Var.pp_full v pp_term t pp_term u
     | FO.Mu _ -> Utils.not_implemented "cannot send MU-term to CVC4"
     | FO.Ite (a,b,c) ->
-        fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
-          print_term a print_term b print_term c
+      fpf out "@[<2>(ite@ %a@ %a@ %a)@]"
+        pp_term a pp_term b pp_term c
     | FO.True -> CCFormat.string out "true"
     | FO.False -> CCFormat.string out "false"
-    | FO.Eq (a,b) -> fpf out "(@[=@ %a@ %a@])" print_term a print_term b
+    | FO.Eq (a,b) -> fpf out "(@[=@ %a@ %a@])" pp_term a pp_term b
     | FO.And [] -> CCFormat.string out "true"
-    | FO.And [f] -> print_term out f
+    | FO.And [f] -> pp_term out f
     | FO.And l ->
-        fpf out "(@[and@ %a@])" (pp_list print_term) l
+      fpf out "(@[and@ %a@])" (pp_list pp_term) l
     | FO.Or [] -> CCFormat.string out "false"
-    | FO.Or [f] -> print_term out f
+    | FO.Or [f] -> pp_term out f
     | FO.Or l ->
-        fpf out "(@[or@ %a@])" (pp_list print_term) l
+      fpf out "(@[or@ %a@])" (pp_list pp_term) l
     | FO.Not f ->
-        fpf out "(@[not@ %a@])" print_term f
+      fpf out "(@[not@ %a@])" pp_term f
     | FO.Imply (a,b) ->
-        fpf out "(@[=>@ %a@ %a@])" print_term a print_term b
+      fpf out "(@[=>@ %a@ %a@])" pp_term a pp_term b
     | FO.Equiv (a,b) ->
-        fpf out "(@[=@ %a@ %a@])" print_term a print_term b
+      fpf out "(@[=@ %a@ %a@])" pp_term a pp_term b
     | FO.Forall (v,f) ->
-        fpf out "(@[<2>forall@ ((%a %a))@ %a@])"
-          Var.print_full v print_ty (Var.ty v) print_term f
+      fpf out "(@[<2>forall@ ((%a %a))@ %a@])"
+        Var.pp_full v pp_ty (Var.ty v) pp_term f
     | FO.Exists (v,f) ->
-        fpf out "(@[<2>exists@ ((%a %a))@ %a@])"
-          Var.print_full v print_ty (Var.ty v) print_term f
+      fpf out "(@[<2>exists@ ((%a %a))@ %a@])"
+        Var.pp_full v pp_ty (Var.ty v) pp_term f
 
-  and print_statement out = function
+  and pp_statement out = function
     | FO.TyDecl (id,arity,_) ->
-        fpf out "(@[declare-sort@ %a@ %d@])" print_id id arity
+      fpf out "(@[declare-sort@ %a@ %d@])" pp_id id arity
     | FO.Decl (v,ty,_) ->
-        fpf out "(@[<2>declare-fun@ %a@ %a@])"
-          print_id v print_ty_decl ty
+      fpf out "(@[<2>declare-fun@ %a@ %a@])"
+        pp_id v pp_ty_decl ty
     | FO.Axiom t ->
-        fpf out "(@[assert@ %a@])" print_term t
+      fpf out "(@[assert@ %a@])" pp_term t
     | FO.Goal t ->
-        fpf out "(@[assert@ %a@])" print_term t
+      fpf out "(@[assert@ %a@])" pp_term t
     | FO.CardBound (ty_id, which, n) ->
-        let witness =
-          try GTy_map.find (gty_const ty_id) decode.witnesses
-          with Not_found ->
-            errorf_ "no witness declared for cardinality bound on %a" ID.print ty_id
-        in
-        begin match which with
-          | `Max when n < 1 -> fpf out "(assert false)" (* absurd *)
-          | `Max -> fpf out "(@[assert (fmf.card %a %d)@])" print_id witness n
-          | `Min when n <= 1 -> ()  (* obvious *)
-          | `Min -> fpf out "(@[assert (not (fmf.card %a %d))@])" print_id witness (n-1)
-        end
+      let witness =
+        try GTy_map.find (gty_const ty_id) decode.witnesses
+        with Not_found ->
+          errorf_ "no witness declared for cardinality bound on %a" ID.pp ty_id
+      in
+      begin match which with
+        | `Max when n < 1 -> fpf out "(assert false)" (* absurd *)
+        | `Max -> fpf out "(@[assert (fmf.card %a %d)@])" pp_id witness n
+        | `Min when n <= 1 -> ()  (* obvious *)
+        | `Min -> fpf out "(@[assert (not (fmf.card %a %d))@])" pp_id witness (n-1)
+      end
     | FO.MutualTypes (k, l) ->
       let pp_arg out (c,i,ty) =
-        fpf out "(@[<h>%a %a@])" print_select (c,i) print_ty ty in
+        fpf out "(@[<h>%a %a@])" pp_select (c,i) pp_ty ty in
       let pp_cstor out c =
         (* add selectors *)
         let args = List.mapi (fun i ty -> c.FO.cstor_name,i,ty) c.FO.cstor_args in
-        fpf out "(@[<2>%a@ %a@])" print_id c.FO.cstor_name
+        fpf out "(@[<2>%a@ %a@])" pp_id c.FO.cstor_name
           (pp_list pp_arg) args
       in
-      let print_tydef out tydef =
+      let pp_tydef out tydef =
         fpf out "(@[<2>%a@ %a@])"
-          print_id tydef.FO.ty_name
+          pp_id tydef.FO.ty_name
           (pp_list pp_cstor) (ID.Map.to_list tydef.FO.ty_cstors |> List.map snd)
       in
       fpf out "(@[<2>%s@ (@[%a@])@ (@[<hv>%a@])@])"
         (match k with `Data -> "declare-datatypes"
-          | `Codata -> "declare-codatatypes")
-        (pp_list print_id) l.FO.tys_vars
-        (pp_list print_tydef) l.FO.tys_defs
+                    | `Codata -> "declare-codatatypes")
+        (pp_list pp_id) l.FO.tys_vars
+        (pp_list pp_tydef) l.FO.tys_defs
 
   in
   (* send prelude *)
@@ -337,13 +339,13 @@ let print_problem out (decode, pb) =
   fpf out "(set-option :interactive-mode true)@,";
   fpf out "(set-logic ALL_SUPPORTED)@,"; (* taïaut! *)
   (* write problem *)
-  CCVector.print ~start:"" ~stop:"" ~sep:""
-    print_statement out pb.FO.Problem.statements;
+  Utils.pp_seq ~sep:""
+    pp_statement out (CCVector.to_seq pb.FO.Problem.statements);
   fpf out "@,(check-sat)@]@.";
   ()
 
 let send_ s problem =
-  fpf s.fmt "%a@." print_problem (s.decode, problem);
+  fpf s.fmt "%a@." pp_problem (s.decode, problem);
   Format.pp_print_flush s.fmt ();
   ()
 
@@ -381,19 +383,19 @@ let parse_id_ ~decode s = match parse_atom_ ~decode s with
 let rec parse_ty_ ~decode = function
   | `Atom "Bool" -> Ty.builtin `Prop
   | `Atom _ as f ->
-      let id = parse_id_ ~decode f in
-      Ty.const id
+    let id = parse_id_ ~decode f in
+    Ty.const id
   | `List (`Atom _ as f :: l) ->
-      let id = parse_id_ ~decode f in
-      let l = List.map (parse_ty_ ~decode) l in
-      Ty.app id l
+    let id = parse_id_ ~decode f in
+    let l = List.map (parse_ty_ ~decode) l in
+    Ty.app id l
   | _ -> error_ "invalid type"
 
 let parse_var_ ~decode = function
   | `List [`Atom _ as v; ty] ->
-      let id = parse_id_ ~decode v in
-      let ty = parse_ty_ ~decode ty in
-      Var.of_id ~ty id
+    let id = parse_id_ ~decode v in
+    let ty = parse_ty_ ~decode ty in
+    Var.of_id ~ty id
   | _ -> error_ "expected typed variable"
 
 let parse_int_ = function
@@ -406,8 +408,8 @@ let rec parse_term_ ~decode s =
   decode.db_stack <- r :: decode.db_stack;
   let res =
     CCFun.finally
-    ~h:(fun () -> decode.db_stack <- List.tl decode.db_stack)
-    ~f:(fun () -> parse_term_sub_ ~decode s)
+      ~h:(fun () -> decode.db_stack <- List.tl decode.db_stack)
+      ~f:(fun () -> parse_term_sub_ ~decode s)
   in
   match !r with
     | None -> res
@@ -416,86 +418,86 @@ and parse_term_sub_ ~decode = function
   | `Atom "true" -> T.true_
   | `Atom "false" -> T.false_
   | `Atom _ as t ->
-      begin match parse_atom_ ~decode t with
-        | ID id ->
-          (* can be a constant or a variable, depending on scoping *)
-          begin try T.var (ID.Tbl.find decode.vars id)
-            with Not_found -> T.const id
-          end
-        | De_bruijn (n,ty) ->
-          (* adjust: the current term, i.e. the constant, doesn't have
-             a binder, so its stack slot should not count *)
-          let n = n+1 in
-          begin match CCList.Idx.get decode.db_stack n with
-            | None -> errorf_ "De Bruijn index %d not bound" n
-            | Some r ->
-              match !r with
-                | Some v -> T.var v (* use same variable *)
-                | None ->
-                  (* introduce new variable *)
-                  let v = Var.make ~ty ~name:"self" in
-                  r := Some v;
-                  T.var v
-          end
-        | DataTest _
-        | DataSelect _ -> error_ "expected ID, got data test/select"
-      end
+    begin match parse_atom_ ~decode t with
+      | ID id ->
+        (* can be a constant or a variable, depending on scoping *)
+        begin try T.var (ID.Tbl.find decode.vars id)
+          with Not_found -> T.const id
+        end
+      | De_bruijn (n,ty) ->
+        (* adjust: the current term, i.e. the constant, doesn't have
+           a binder, so its stack slot should not count *)
+        let n = n+1 in
+        begin match CCList.get_at_idx n decode.db_stack with
+          | None -> errorf_ "De Bruijn index %d not bound" n
+          | Some r ->
+            match !r with
+              | Some v -> T.var v (* use same variable *)
+              | None ->
+                (* introduce new variable *)
+                let v = Var.make ~ty ~name:"self" in
+                r := Some v;
+                T.var v
+        end
+      | DataTest _
+      | DataSelect _ -> error_ "expected ID, got data test/select"
+    end
   | `List [`Atom "LAMBDA"; `List bindings; body] ->
-      (* lambda term *)
-      let bindings = List.map (parse_var_ ~decode) bindings in
-      (* enter scope of variables *)
-      within_scope ~decode bindings
-        (fun () ->
-          let body = parse_term_ ~decode body in
-          List.fold_right T.fun_ bindings body)
+    (* lambda term *)
+    let bindings = List.map (parse_var_ ~decode) bindings in
+    (* enter scope of variables *)
+    within_scope ~decode bindings
+      (fun () ->
+         let body = parse_term_ ~decode body in
+         List.fold_right T.fun_ bindings body)
   | `List [`Atom "ite"; a; b; c] ->
-      let a = parse_term_ ~decode a in
-      let b = parse_term_ ~decode b in
-      let c = parse_term_ ~decode c in
-      T.ite a b c
+    let a = parse_term_ ~decode a in
+    let b = parse_term_ ~decode b in
+    let c = parse_term_ ~decode c in
+    T.ite a b c
   | `List [`Atom "="; a; b] ->
-      let a = parse_term_ ~decode a in
-      let b = parse_term_ ~decode b in
-      T.eq a b
+    let a = parse_term_ ~decode a in
+    let b = parse_term_ ~decode b in
+    T.eq a b
   | `List [`Atom "not"; f] ->
-      let f = parse_term_ ~decode f in
-      T.not_ f
+    let f = parse_term_ ~decode f in
+    T.not_ f
   | `List (`Atom "and" :: l) ->
-      T.and_ (List.map (parse_term_ ~decode) l)
+    T.and_ (List.map (parse_term_ ~decode) l)
   | `List (`Atom "or" :: l) ->
-      T.or_ (List.map (parse_term_ ~decode) l)
+    T.or_ (List.map (parse_term_ ~decode) l)
   | `List [`Atom "forall"; `List bindings; f] ->
-      let bindings = List.map (parse_var_ ~decode) bindings in
-      within_scope ~decode bindings
-        (fun () ->
-          let f = parse_term_ ~decode f in
-          List.fold_right T.forall bindings f)
+    let bindings = List.map (parse_var_ ~decode) bindings in
+    within_scope ~decode bindings
+      (fun () ->
+         let f = parse_term_ ~decode f in
+         List.fold_right T.forall bindings f)
   | `List [`Atom "exists"; `List bindings; f] ->
-      let bindings = List.map (parse_var_ ~decode) bindings in
-      within_scope ~decode bindings
-        (fun () ->
-          let f = parse_term_ ~decode f in
-          List.fold_right T.exists bindings f)
+    let bindings = List.map (parse_var_ ~decode) bindings in
+    within_scope ~decode bindings
+      (fun () ->
+         let f = parse_term_ ~decode f in
+         List.fold_right T.exists bindings f)
   | `List [`Atom "=>"; a; b] ->
-      let a = parse_term_ ~decode a in
-      let b = parse_term_ ~decode b in
-      T.imply a b
+    let a = parse_term_ ~decode a in
+    let b = parse_term_ ~decode b in
+    T.imply a b
   | `List (`Atom _ as f :: l) ->
-      begin match parse_atom_ ~decode f, l with
-        | ID f, _ ->
-            (* regular function app *)
-            let l = List.map (parse_term_ ~decode) l in
-            T.app f l
-        | De_bruijn _, _ -> error_ "invalid arity for De Bruijn index"
-        | DataTest c, [t] ->
-            let t = parse_term_ ~decode t in
-            T.data_test c t
-        | DataTest _, _ -> error_ "invalid arity for DataTest"
-        | DataSelect (c,n), [t] ->
-            let t = parse_term_ ~decode t in
-            T.data_select c n t
-        | DataSelect _, _ -> error_ "invalid arity for DataSelect"
-      end
+    begin match parse_atom_ ~decode f, l with
+      | ID f, _ ->
+        (* regular function app *)
+        let l = List.map (parse_term_ ~decode) l in
+        T.app f l
+      | De_bruijn _, _ -> error_ "invalid arity for De Bruijn index"
+      | DataTest c, [t] ->
+        let t = parse_term_ ~decode t in
+        T.data_test c t
+      | DataTest _, _ -> error_ "invalid arity for DataTest"
+      | DataSelect (c,n), [t] ->
+        let t = parse_term_ ~decode t in
+        T.data_select c n t
+      | DataSelect _, _ -> error_ "invalid arity for DataSelect"
+    end
   | `List (`List _ :: _) -> error_ "non first-order list"
   | `List [] -> error_ "expected term, got empty list"
 
@@ -513,10 +515,10 @@ let parse_fun_ ~decode ~arity:n term =
     if n=0
     then [], t
     else match T.view t with
-    | FO.Fun (v, t') ->
+      | FO.Fun (v, t') ->
         let vars, body = get_args t' (n-1) in
         v :: vars, body
-    | _ -> errorf_ "expected %d-ary function,@ got `@[%a@]`" n FO.print_term t
+      | _ -> errorf_ "expected %d-ary function,@ got `@[%a@]`" n FO.pp_term t
   in
   (* parse term, then convert into [vars -> decision-tree] *)
   let t = parse_term_ ~decode term in
@@ -524,7 +526,7 @@ let parse_fun_ ~decode ~arity:n term =
   (* change the shape of [body] so it looks more like a decision tree *)
   let dt = FO.Util.dt_of_term ~vars body in
   Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
-    (fun k->k FO.print_term body (Model.DT.print FO.print_term' FO.print_ty) dt);
+    (fun k->k FO.pp_term body (Model.DT.pp FO.pp_term' FO.pp_ty) dt);
   dt
 
 let sym_get_const_ ~decode id = match ID.Tbl.find decode.symbols id with
@@ -540,7 +542,7 @@ let sym_get_ty_ ~decode id = match ID.Tbl.find decode.symbols id with
 let get_kind ~decode id =
   try ID.Map.find id decode.kinds
   with Not_found ->
-    errorf_ "could not find kind of %a" ID.print id
+    errorf_ "could not find kind of %a" ID.pp id
 
 (* state: decode_state *)
 let parse_model_ ~decode : Sexp_lib.t -> (_,_) Model.t = function
@@ -548,42 +550,42 @@ let parse_model_ ~decode : Sexp_lib.t -> (_,_) Model.t = function
   | `List assoc ->
     (* parse model *)
     let m = List.fold_left
-      (fun m -> function
-        | `List [`Atom _ as s; term] ->
-            (* regular constant, whose value we are interested in *)
-            let id = parse_id_ ~decode s in
-            let kind = get_kind ~decode id in
-            begin match sym_get_const_ ~decode id with
-            | `Const ->
-                let t = parse_term_ ~decode term in
-                Model.add_const m (T.const id, t, kind)
-            | `Fun n ->
-                let dt = parse_fun_ ~decode ~arity:n term in
-                Model.add_value m (T.const id, dt, kind)
-            end
-        | `List [`List [`Atom "fmf.card.val"; (`Atom _ as s)]; n] ->
-            (* finite domain *)
-            let id = parse_id_ ~decode s in
-            (* which type? *)
-            let gty = sym_get_ty_ ~decode id in
-            let ty = fobackty_of_ground_ty gty in
-            (* read cardinal *)
-            let n = parse_int_ n in
-            let terms = Sequence.(0 -- (n-1)
-              |> map
-                (fun i ->
-                  let name = const_of_ty_nth ~decode gty i in
-                  let id = match find_atom_ ~decode name with
-                    | ID id -> id
-                    | _ -> assert false
-                  in
-                  id)
-              |> to_rev_list
-            ) in
-            Model.add_finite_type m ty terms
-        | _ -> error_ "expected pair key/value in the model")
-      Model.empty
-      assoc
+        (fun m -> function
+           | `List [`Atom _ as s; term] ->
+             (* regular constant, whose value we are interested in *)
+             let id = parse_id_ ~decode s in
+             let kind = get_kind ~decode id in
+             begin match sym_get_const_ ~decode id with
+               | `Const ->
+                 let t = parse_term_ ~decode term in
+                 Model.add_const m (T.const id, t, kind)
+               | `Fun n ->
+                 let dt = parse_fun_ ~decode ~arity:n term in
+                 Model.add_value m (T.const id, dt, kind)
+             end
+           | `List [`List [`Atom "fmf.card.val"; (`Atom _ as s)]; n] ->
+             (* finite domain *)
+             let id = parse_id_ ~decode s in
+             (* which type? *)
+             let gty = sym_get_ty_ ~decode id in
+             let ty = fobackty_of_ground_ty gty in
+             (* read cardinal *)
+             let n = parse_int_ n in
+             let terms = Sequence.(0 -- (n-1)
+                                   |> map
+                                     (fun i ->
+                                        let name = const_of_ty_nth ~decode gty i in
+                                        let id = match find_atom_ ~decode name with
+                                          | ID id -> id
+                                          | _ -> assert false
+                                        in
+                                        id)
+                                   |> to_rev_list
+               ) in
+             Model.add_finite_type m ty terms
+           | _ -> error_ "expected pair key/value in the model")
+        Model.empty
+        assoc
     in
     m
 
@@ -596,7 +598,7 @@ let send_get_model_ out decode =
     | Q_type _ -> fpf out "(fmf.card.val %a)" pp_id id
   in
   fpf out "(@[<hv2>get-value@ (@[<hv>%a@])@])"
-    (CCFormat.seq ~start:"" ~sep:" " ~stop:"" pp_mquery)
+    (Utils.pp_seq ~sep:" " pp_mquery)
     (ID.Tbl.to_seq decode.symbols)
 
 (* read model from CVC4 instance [s] *)
@@ -606,16 +608,16 @@ let get_model_ ~print_model ~decode s : (_,_) Model.t =
   fpf s.fmt "%a@." send_get_model_ decode;
   (* read result back *)
   match DSexp.next s.sexp with
-  | `Error e -> error_ e
-  | `End -> error_ "unexpected end of input from CVC4: expected model"
-  | `Ok sexp ->
+    | `Error e -> error_ e
+    | `End -> error_ "unexpected end of input from CVC4: expected model"
+    | `Ok sexp ->
       if print_model
-        then Format.eprintf "@[raw model:@ @[<hv>%a@]@]@." Sexp_lib.pp sexp;
+      then Format.eprintf "@[raw model:@ @[<hv>%a@]@]@." Sexp_lib.pp sexp;
       let m = parse_model_ ~decode sexp in
       (* check all symbols are defined *)
       let ok =
         List.length m.Model.values
-          + List.length m.Model.finite_types
+        + List.length m.Model.finite_types
         =
         ID.Tbl.length decode.symbols
       in
@@ -624,32 +626,35 @@ let get_model_ ~print_model ~decode s : (_,_) Model.t =
 
 (* read the result *)
 let read_res_ ~info ~print_model ~decode s =
-  match DSexp.next s.sexp with
-  | `Ok (`Atom "unsat") ->
+  try match DSexp.next s.sexp with
+    | `Ok (`Atom "unsat") ->
       Utils.debug ~section 5 "CVC4 returned `unsat`";
       Res.Unsat (Lazy.force info)
-  | `Ok (`Atom "sat") ->
+    | `Ok (`Atom "sat") ->
       Utils.debug ~section 5 "CVC4 returned `sat`";
       let m = if ID.Tbl.length decode.symbols = 0
         then Model.empty
         else get_model_ ~print_model ~decode s
       in
       Res.Sat (m, Lazy.force info)
-  | `Ok (`Atom "unknown") ->
+    | `Ok (`Atom "unknown") ->
       Utils.debug ~section 5 "CVC4 returned `unknown`";
       Res.Unknown [Res.U_other (Lazy.force info, "")]
-  | `Ok (`List [`Atom "error"; `Atom s]) ->
+    | `Ok (`List [`Atom "error"; `Atom s]) ->
       Utils.debugf ~section 5 "@[<2>CVC4 returned `error %s`@]" (fun k->k s);
-      Res.Error (CVC4_error s, Lazy.force info)
-  | `Ok sexp ->
+      Res.Unknown [Res.U_backend_error (Lazy.force info, cvc4_error_ s)]
+    | `Ok sexp ->
       let msg = CCFormat.sprintf "@[unexpected answer from CVC4:@ `%a`@]"
-        Sexp_lib.pp sexp
+          Sexp_lib.pp sexp
       in
-      Res.Error (Error msg, Lazy.force info)
-  | `Error e -> Res.Error (Error e, Lazy.force info)
-  | `End ->
+      Res.Unknown [Res.U_backend_error (Lazy.force info, msg)]
+    | `Error e -> Res.Error (Error e, Lazy.force info)
+    | `End ->
       Utils.debug ~section 5 "no answer from CVC4, assume it timeouted";
       Res.Unknown [Res.U_timeout (Lazy.force info)]
+  with
+    | Backend_err msg ->
+      Res.Unknown [Res.U_backend_error (Lazy.force info, msg)]
 
 let mk_info (decode:decode_state): Res.info =
   let time = Utils.Time.get_timer decode.timer in
@@ -658,17 +663,17 @@ let mk_info (decode:decode_state): Res.info =
 let res t = match t.res with
   | Some r -> r
   | None when t.closed ->
-      let r = Res.Unknown [Res.U_timeout (mk_info t.decode)] in
-      t.res <- Some r;
-      r
+    let r = Res.Unknown [Res.U_timeout (mk_info t.decode)] in
+    t.res <- Some r;
+    r
   | None ->
-      let info = lazy (mk_info t.decode) in
-      let r =
-        try read_res_ ~info ~print_model:t.print_model ~decode:t.decode t
-        with e -> Res.Error (e, Lazy.force info)
-      in
-      t.res <- Some r;
-      r
+    let info = lazy (mk_info t.decode) in
+    let r =
+      try read_res_ ~info ~print_model:t.print_model ~decode:t.decode t
+      with e -> Res.Error (e, Lazy.force info)
+    in
+    t.res <- Some r;
+    r
 
 (* once processed, the problem also contains the set of symbols to
    read back from the model, and type witnesses *)
@@ -695,19 +700,19 @@ let preprocess pb : processed_problem =
   let add_ty_witnesses stmt l =
     List.fold_left
       (fun acc gty ->
-        if not (is_finite_ state gty) || GTy_map.mem gty state.witnesses
-        then acc (* already declared a witness for [gty], or [gty] is not
-                    a finite type *)
-        else (
-          (* add a dummy constant *)
-          let c = ID.make (CCFormat.sprintf "__nun_card_witness_%d" !n) in
-          incr n;
-          (* declare [c] *)
-          let ty_c = [], gty in
-          decl state c (Q_type gty);
-          state.witnesses <- GTy_map.add gty c state.witnesses;
-          FO.Decl (c, ty_c,[]) :: acc
-        ))
+         if not (is_finite_ state gty) || GTy_map.mem gty state.witnesses
+         then acc (* already declared a witness for [gty], or [gty] is not
+                     a finite type *)
+         else (
+           (* add a dummy constant *)
+           let c = ID.make (CCFormat.sprintf "__nun_card_witness_%d" !n) in
+           incr n;
+           (* declare [c] *)
+           let ty_c = [], gty in
+           decl state c (Q_type gty);
+           state.witnesses <- GTy_map.add gty c state.witnesses;
+           FO.Decl (c, ty_c,[]) :: acc
+         ))
       [stmt] l
     |> List.rev
   in
@@ -724,33 +729,33 @@ let preprocess pb : processed_problem =
   in
   let pb =
     FO.Problem.flat_map ~meta:(FO.Problem.meta pb)
-    (fun stmt -> match stmt with
-      | FO.Decl (id,(args,_),_) ->
-          let len = List.length args in
-          begin if len=0
-            then decl state id Q_const
-            else decl state id (Q_fun len)
-          end;
-          (* if args contains composite types, add witnesses for them *)
-          add_ty_witnesses stmt args
-      | FO.CardBound (id,_,_)
-      | FO.TyDecl (id,0,_) ->
-          add_ty_witnesses stmt [gty_const id]
-      | FO.MutualTypes (`Codata, l) ->
-          List.iter
-            (fun tydef ->
-               (* use De Bruijn prefixes *)
-               let ty = gty_const tydef.FO.ty_name in
-               let c = const_of_ty ~decode:state ty in
-               Utils.debugf ~section 5 "@[<2>declare `%s` as De Bruijn prefix@]" (fun k->k c);
-               add_db_prefix state c ty)
-            l.FO.tys_defs;
-          add_ty_witnesses_gen stmt
-      | FO.TyDecl _ (* witnesses will be added on demand *)
-      | FO.Axiom _
-      | FO.Goal _
-      | FO.MutualTypes (_,_) -> add_ty_witnesses_gen stmt)
-    pb
+      (fun stmt -> match stmt with
+         | FO.Decl (id,(args,_),_) ->
+           let len = List.length args in
+           begin if len=0
+             then decl state id Q_const
+             else decl state id (Q_fun len)
+           end;
+           (* if args contains composite types, add witnesses for them *)
+           add_ty_witnesses stmt args
+         | FO.CardBound (id,_,_)
+         | FO.TyDecl (id,0,_) ->
+           add_ty_witnesses stmt [gty_const id]
+         | FO.MutualTypes (`Codata, l) ->
+           List.iter
+             (fun tydef ->
+                (* use De Bruijn prefixes *)
+                let ty = gty_const tydef.FO.ty_name in
+                let c = const_of_ty ~decode:state ty in
+                Utils.debugf ~section 5 "@[<2>declare `%s` as De Bruijn prefix@]" (fun k->k c);
+                add_db_prefix state c ty)
+             l.FO.tys_defs;
+           add_ty_witnesses_gen stmt
+         | FO.TyDecl _ (* witnesses will be added on demand *)
+         | FO.Axiom _
+         | FO.Goal _
+         | FO.MutualTypes (_,_) -> add_ty_witnesses_gen stmt)
+      pb
   in
   state, pb
 
@@ -769,7 +774,7 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
   (* preprocess first *)
   let decode, problem' = preprocess pb in
   if print
-  then Format.printf "@[<v2>SMT problem:@ %a@]@." print_problem (decode, problem');
+  then Format.printf "@[<v2>SMT problem:@ %a@]@." pp_problem (decode, problem');
   (* enough time remaining? *)
   if now +. 0.1 > deadline
   then
@@ -786,7 +791,7 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
         send_ s problem';
         let r = res s in
         Utils.debugf ~lock:true ~section 3 "@[<2>result: %a@]"
-          (fun k->k (Res.print FO.print_term' FO.print_ty) r);
+          (fun k->k (Res.pp FO.pp_term' FO.pp_ty) r);
         close s;
         match r with
           | Res.Sat (_,_) -> r, S.Shortcut
@@ -829,10 +834,12 @@ let options_l =
 
 (* solve problem using CVC4 before [deadline] *)
 let call
-    ?(options="") ?prio ?slice ~print ~dump ~print_smt ~print_model problem
+    ?(options="") ?prio ?slice
+    ~print ~dump ~print_smt ~print_model
+    problem
   =
   if print then (
-    Format.printf "@[<v2>FO problem:@ %a@]@." FO.print_problem problem;
+    Format.printf "@[<v2>FO problem:@ %a@]@." FO.pp_problem problem;
   );
   begin match dump with
     | None ->
@@ -844,26 +851,29 @@ let call
       Utils.debugf ~section 1 "output CVC4 problem into `%s`" (fun k->k file);
       let info =
         CCIO.with_out file
-        (fun oc ->
-           let out = Format.formatter_of_out_channel oc in
-           let decode, problem' = preprocess problem in
-           Format.fprintf out
-             "@[<v>; generated by Nunchaku@ %a@]@."
-             print_problem (decode, problem');
-           mk_info decode)
+          (fun oc ->
+             let out = Format.formatter_of_out_channel oc in
+             let decode, problem' = preprocess problem in
+             Format.fprintf out
+               "@[<v>; generated by Nunchaku@ %a@]@."
+               pp_problem (decode, problem');
+             mk_info decode)
       in
       S.Task.return (Res.Unknown [Res.U_other (info, "--dump")]) S.No_shortcut
   end
 
-let pipes ?(options=[""]) ?slice ~print ~dump ~print_smt ~print_model () =
-  (* each process' slice is only 1/n of the global CVC4 slice *)
+let pipes
+    ?(options=[""]) ?slice ?(schedule_options=true)
+    ~print ~dump ~print_smt ~print_model
+    () =
   let slice =
-    CCOpt.map
-      (fun s ->
-         let n = List.length options in
-         assert (n > 0);
-         s /. float n)
-      slice
+    if schedule_options
+    then (
+      let n = List.length options in
+      assert (n > 0);
+      (* each process' slice is only [1/n] of the global CVC4 slice *)
+      CCOpt.map (fun s -> s /. float n) slice
+    ) else slice
   in
   let encode pb =
     List.mapi
@@ -873,11 +883,12 @@ let pipes ?(options=[""]) ?slice ~print ~dump ~print_smt ~print_model () =
          let print_smt = print_smt && i=0 in
          let prio = 30 + 10 * i in
          call ?slice ~options ~prio ~print ~dump ~print_smt ~print_model pb)
-    options, ()
+      options, ()
   in
   let input_spec =
     Transform.Features.(of_list
         [ Ty, Mono; Eqn, Absent; Copy, Absent; Match, Absent ])
   in
   Transform.make ~input_spec ~name ~encode ~decode:(fun _ x -> x) ()
+
 

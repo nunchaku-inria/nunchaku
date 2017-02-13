@@ -85,9 +85,8 @@ let hash = function
   | QuasiFiniteGEQ z -> Hashtbl.hash (13, Z.hash z)
   | Unknown -> 13
   | Infinite -> 17
-let hash_fun x = CCHash.int (hash x)
 
-let print out = function
+let pp out = function
   | Unknown -> CCFormat.string out "<unknown>"
   | Exact x -> Z.pp_print out x
   | QuasiFiniteGEQ z -> Format.fprintf out "[%a,∞]" Z.pp_print z

@@ -53,5 +53,17 @@ QTEST_PREAMBLE='open Nunchaku_core;; '
 watch:
 	while find src/ -print0 | xargs -0 inotifywait -e delete_self -e modify ; do \
 		echo "============ at `date` ==========" ; \
-		make ; \
+		make all ; \
 	done
+
+ocp-indent:
+	@which ocp-indent > /dev/null || { \
+	  	echo 'ocp-indent not found; please run `opam install ocp-indent`'; \
+		exit 1 ; \
+	  }
+
+reindent: ocp-indent
+	@find src '(' -name '*.ml' -or -name '*.mli' ')' -print0 | xargs -0 echo "reindenting: "
+	@find src '(' -name '*.ml' -or -name '*.mli' ')' -print0 | xargs -0 ocp-indent -i
+
+.PHONY: reindent ocp-indent watch

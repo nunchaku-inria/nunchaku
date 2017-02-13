@@ -1,6 +1,6 @@
 OASISFormat: 0.4
 Name:        nunchaku
-Version:     0.3.1
+Version:     0.4
 Homepage:    https://github.com/nunchaku/nunchaku
 Authors:     Simon Cruanes, Jasmin Blanchette
 License:     BSD-2-clause
@@ -27,11 +27,11 @@ Library nunchaku_core
                     UntypedAST, Model, TypeUnify, Problem, FO, Reduce,
                     Env, Statement, FO_tptp, FO_rel, Cardinality,
                     Scheduling, Polarity, Traversal, ProblemMetadata,
-                    AnalyzeType, Prelude, TypeCheck, Lazy_list,
-                    Sexp_lib, Sexp_lex,
+                    AnalyzeType, Prelude, TypeCheck, Lazy_list, Bit_set,
+                    Sexp_lib, Sexp_lex, Precedence, Binder, Builtin,
+                    Cardinal_encode,
                     terms/TermInner,
                     terms/TermTyped,
-                    terms/TermMono,
                     terms/Pattern,
                     types/TypePoly,
                     types/TypeMono
@@ -75,6 +75,7 @@ Library nunchaku_transformations
                     ElimRecursion,
                     ElimMultipleEqns,
                     ElimIndPreds,
+                    ElimQuantifiers,
                     ElimCopy,
                     Polarize,
                     Unroll,
@@ -85,6 +86,9 @@ Library nunchaku_transformations
                     Elim_prop_args,
                     Elim_ite,
                     Elim_infinite,
+                    Trans_ho_fo,
+                    Trans_fo_tptp,
+                    Lift_undefined,
                     FoToRelational
   Install:          true
   FindlibName:      transformations

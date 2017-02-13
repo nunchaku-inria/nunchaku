@@ -21,9 +21,9 @@ let section = Utils.Section.make name
 exception Error of string
 
 let () = Printexc.register_printer
-  (function
-    | Error msg -> Some (Utils.err_sprintf "%s:@ %s" name msg)
-    | _ -> None)
+    (function
+      | Error msg -> Some (Utils.err_sprintf "%s:@ %s" name msg)
+      | _ -> None)
 
 let fail_ msg = raise (Error msg)
 let failf msg = Utils.exn_ksprintf ~f:fail_ msg
@@ -66,12 +66,12 @@ let find_types_st (map,set) st = match Stmt.view st with
             (* ignore *)
             Utils.debugf ~section 3
               "@[<2>could not find infinite type `%a`@ of which `%a` is an approx@]"
-              (fun k->k ID.print id' ID.print id);
+              (fun k->k ID.pp id' ID.pp id);
             map, set
           | Some None -> ID.Map.add id' (Some id) map, set
           | Some (Some id'') ->
             failf "cannot have two approximations `%a` and `%a` for `%a`"
-              ID.print id ID.print id'' ID.print id'
+              ID.pp id ID.pp id'' ID.pp id'
         end
     end
   | _ -> map, set
@@ -94,16 +94,16 @@ let rec encode_term st subst pol t = match T.repr t with
   | TI.Var v ->
     begin match Subst.find ~subst v with
       | Some v' -> U.var v'
-      | None -> failf "scoping error for `%a`" Var.print_full v
+      | None -> failf "scoping error for `%a`" Var.pp_full v
     end
   | TI.Const id ->
     begin match ID.Map.get id st.to_approx with
       | None -> t
       | Some id' -> U.const id'
     end
-  | TI.Bind ((`Forall | `Exists) as q, v, body)
+  | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, body)
     when ty_is_infinite_ st (Var.ty v) ->
-    begin match U.approx_infinite_quant_pol q pol with
+    begin match U.approx_infinite_quant_pol_binder q pol with
       | `Keep ->
         let subst, v = bind_var st subst v in
         U.mk_bind q v (encode_term st subst pol body)
@@ -136,7 +136,7 @@ let encode_statement map st = match Stmt.view st with
   | Stmt.Decl {Stmt.defined_attrs=attrs; _} when has_upcast_attr_ attrs ->
     [] (* remove upcast functions *)
   | _ ->
-    let tr_term subst t = encode_term map subst Pol.Pos t in
+    let tr_term subst pol t = encode_term map subst pol t in
     let tr_ty subst ty = encode_term map subst Pol.NoPol ty in
     let st' =
       Stmt.map_bind
@@ -157,7 +157,7 @@ let encode_pb pb =
          match opt with
            | None ->
              (* declare new approx *)
-             let id' = ID.make_f "alpha_%a" ID.print_name id in
+             let id' = ID.make_f "alpha_%a" ID.pp_name id in
              let d =
                Stmt.decl id' U.ty_type
                  ~info:Stmt.info_default ~attrs:[Stmt.Attr_finite_approx id]
@@ -187,12 +187,12 @@ let pipe_with ~decode ~print ~check =
     Utils.singleton_if print ()
       ~f:(fun () ->
         let module PPb = Problem.Print(P)(P) in
-        Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name PPb.print)
+        Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name PPb.pp)
     @
-    Utils.singleton_if check ()
-      ~f:(fun () ->
-        let module C = TypeCheck.Make(T) in
-        C.empty () |> C.check_problem)
+      Utils.singleton_if check ()
+        ~f:(fun () ->
+          let module C = TypeCheck.Make(T) in
+          C.empty () |> C.check_problem)
   in
   Transform.make
     ~on_encoded

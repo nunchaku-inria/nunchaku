@@ -46,15 +46,15 @@ type fun_encoding = {
 
 type state = {
   mutable domains: domain TyTbl.t;
-    (* atomic type -> domain *)
+  (* atomic type -> domain *)
   funs: fun_encoding ID.Tbl.t;
-    (* function -> relation *)
+  (* function -> relation *)
   dom_of_id: domain ID.Tbl.t;
-    (* domain.dom_id -> domain *)
+  (* domain.dom_id -> domain *)
   pprop_dom: domain;
-    (* specific domain for pseudo-prop *)
+  (* specific domain for pseudo-prop *)
   ptrue: ID.t;
-    (* pseudo-true : pseudo-prop *)
+  (* pseudo-true : pseudo-prop *)
 }
 
 (* declaration of this function/relation *)
@@ -111,12 +111,12 @@ let create_state () =
 (* create a new ID that will "stand" for this type *)
 let id_of_ty ty : ID.t =
   let rec pp_ out t = match FO.Ty.view t with
-    | FO.TyBuiltin b -> FO.TyBuiltin.print out b
-    | FO.TyApp (a,[]) -> ID.print_name out a
+    | FO.TyBuiltin b -> FO.TyBuiltin.pp out b
+    | FO.TyApp (a,[]) -> ID.pp_name out a
     | FO.TyApp (a,l) ->
       Format.fprintf out "%a_%a"
-        ID.print_name a
-        (CCFormat.list ~start:"" ~stop:"" ~sep:"_" pp_) l
+        ID.pp_name a
+        (Utils.pp_list ~sep:"_" pp_) l
   in
   match FO.Ty.view ty with
     | FO.TyApp (id,[]) -> id
@@ -127,13 +127,13 @@ let id_of_ty ty : ID.t =
 (* ensure the type is declared *)
 let declare_ty ?card state (ty:FO.Ty.t) =
   if TyTbl.mem state.domains ty
-  then errorf "type `@[%a@]` declared twice" FO.print_ty ty;
+  then errorf "type `@[%a@]` declared twice" FO.pp_ty ty;
   (* TODO: handle cardinality constraints *)
   let dom_id = id_of_ty ty in
   let su = FO_rel.su_make ?card dom_id in
   let dom = { dom_id; dom_ty=ty; dom_su=su; } in
   Utils.debugf ~section 3 "@[<2>declare type %a@ = {@[%a@]}@]"
-    (fun k->k FO.print_ty ty FO_rel.print_sub_universe su);
+    (fun k->k FO.pp_ty ty FO_rel.pp_sub_universe su);
   TyTbl.add state.domains ty dom;
   ID.Tbl.add state.dom_of_id dom_id dom;
   dom
@@ -154,7 +154,7 @@ let su_of_ty state ty : FO_rel.sub_universe =
 
 let declare_fun state id f =
   Utils.debugf ~section 3 "@[<2>declare function@ `@[%a@]`@]"
-    (fun k->k FO_rel.print_decl (decl_of_fun id f));
+    (fun k->k FO_rel.pp_decl (decl_of_fun id f));
   ID.Tbl.add state.funs id f
 
 let fun_is_declared state id = ID.Tbl.mem state.funs id
@@ -227,7 +227,7 @@ let rec encode state (t:FO.T.t) : encode_res = match FO.T.view t with
     (* atomic formula. Two distinct encodings depending on whether
        it's a predicate or a function *)
     begin match find_fun_ state f with
-      | None -> errorf "function %a is undeclared" ID.print f;
+      | None -> errorf "function %a is undeclared" ID.pp f;
       | Some {fun_is_pred=true; _} ->
         let l = List.map (encode_term state) l in
         begin match List.rev l with
@@ -249,9 +249,9 @@ let rec encode state (t:FO.T.t) : encode_res = match FO.T.view t with
   | FO.DataTest (_,_)
   | FO.DataSelect (_,_,_) ->
     error "should have eliminated data{test/select} earlier"
-  | FO.Undefined (_,t) -> encode state t
+  | FO.Undefined t -> encode state t
   | FO.Fun (_,_) ->
-    errorf "cannot translate function `@[%a@]` to FO_rel" FO.print_term t
+    errorf "cannot translate function `@[%a@]` to FO_rel" FO.pp_term t
   | FO.Mu (_,_)
   | FO.Undefined_atom _
   | FO.Unparsable _ -> assert false
@@ -268,7 +268,7 @@ and encode_term state t: FO_rel.expr =
   match encode state t with
     | R_expr e -> e
     | R_form _ ->
-      errorf "@[<2>expected term,@ got formula @[%a@]@]" FO.print_term t
+      errorf "@[<2>expected term,@ got formula @[%a@]@]" FO.pp_term t
 
 (* an axiom expressing the well-typedness of [f], if needed.
    For instance, for [cons : i -> list -> list], it will return
@@ -383,16 +383,16 @@ let encode_statement state st : FO_rel.form list =
             ty_axiom state id ty_args ty_ret
           in
           Utils.debugf ~section 3 "@[<2>functionality axiom for %a:@ `@[%a@]`@]"
-            (fun k->k ID.print id FO_rel.print_form ax_functionality);
+            (fun k->k ID.pp id FO_rel.pp_form ax_functionality);
           Utils.debugf ~section 3 "@[<2>typing axiom for %a:@ `@[%a@]`@]"
-            (fun k->k ID.print id FO_rel.print_form ax_typing);
+            (fun k->k ID.pp id FO_rel.pp_form ax_typing);
           [ax_functionality; ax_typing]
       end
     | FO.Axiom f
     | FO.Goal f ->
       [encode_form state f]
     | FO.MutualTypes (_,_) ->
-      errorf "unexpected (co)data@ `@[%a@]`" FO.print_statement st
+      errorf "unexpected (co)data@ `@[%a@]`" FO.pp_statement st
     | FO.CardBound (id, k, n) ->
       (* the relation representing this type *)
       let dom = domain_of_ty state (FO.Ty.const id) in
@@ -476,9 +476,9 @@ let atoms_of_ts ts: FO_rel.atom Sequence.t =
 let atoms_of_model m: FO_rel.atom Sequence.t =
   fun yield ->
     Model.iter m
-    ~values:(fun (_,dt,_) -> match dt with
-      | DT.Yield (FO_rel.Tuple_set set) -> atoms_of_ts set yield
-      | _ -> assert false)
+      ~values:(fun (_,dt,_) -> match dt with
+        | DT.Yield (FO_rel.Tuple_set set) -> atoms_of_ts set yield
+        | _ -> assert false)
 
 module AM = CCMap.Make(struct
     type t = FO_rel.atom
@@ -492,7 +492,7 @@ let rename_atoms m: ID.t AM.t =
     (fun a ->
        let open FO_rel in
        let id =
-         ID.make_f "%a_%d" ID.print_name a.a_sub_universe.su_name a.a_index
+         ID.make_f "%a_%d" ID.pp_name a.a_sub_universe.su_name a.a_index
        in
        a, id)
   |> AM.of_seq
@@ -500,7 +500,7 @@ let rename_atoms m: ID.t AM.t =
 let id_of_atom_ map a : ID.t =
   try AM.find a map
   with Not_found ->
-    errorf "could not find ID for atom `%a`" FO_rel.print_atom a
+    errorf "could not find ID for atom `%a`" FO_rel.pp_atom a
 
 module M = Model
 
@@ -518,7 +518,7 @@ let find_ptrue state map m : ID.t =
               raise (Found_ptrue res)
             | _ ->
               errorf "unexpected model for pseudo-true: `@[%a@]`"
-                (DT.print (fun _ -> FO_rel.print_expr) FO_rel.print_sub_universe) set
+                (DT.pp (fun _ -> FO_rel.pp_expr) FO_rel.pp_sub_universe) set
           end
         | _ -> ()
       );
@@ -540,10 +540,11 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
       try ID.Map.find su.FO_rel.su_name ty_by_id
       with Not_found ->
         errorf "could not find domain of type %a@ in @[%a@]"
-          ID.print su.FO_rel.su_name
-          (ID.Map.print ID.print (CCFormat.list ID.print)) ty_by_id
+          ID.pp su.FO_rel.su_name
+          (Utils.pp_seq CCFormat.Dump.(pair ID.pp (list ID.pp)))
+          (ID.Map.to_seq ty_by_id)
     in
-    if CCList.Set.mem ~eq:ID.equal id ids
+    if CCList.mem ~eq:ID.equal id ids
     then Some id
     else None
   in
@@ -601,7 +602,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
       let t' = FO.T.const id in
       Utils.debugf ~section 3
         "@[<2>decode predicate `%a`@ as `@[%a@]`@]"
-        (fun k->k ID.print id (M.DT.print FO.print_term' FO.print_ty) dt);
+        (fun k->k ID.pp id (M.DT.pp FO.pp_term' FO.pp_ty) dt);
       M.add_value m (t', dt, M.Symbol_prop)
   end else begin match List.rev doms with
     | [] -> assert false (* impossible, needs at least to return arg *)
@@ -612,7 +613,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
           let t = FO.T.const id in
           let u = FO.T.const (id_of_atom_ map a) in
           M.add_const m (t,u,M.Symbol_fun)
-        | _ -> errorf "model for `%a` should have = 1 tuple" ID.print id
+        | _ -> errorf "model for `%a` should have = 1 tuple" ID.pp id
       end
     | _dom_ret :: args ->
       let dom_args = List.rev args in
@@ -660,7 +661,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
       let t' = FO.T.const id in
       Utils.debugf ~section 3
         "@[<2>decode function `%a`@ as `@[%a@]`@]"
-        (fun k->k ID.print id (M.DT.print FO.print_term' FO.print_ty) dt);
+        (fun k->k ID.pp id (M.DT.pp FO.pp_term' FO.pp_ty) dt);
       M.add_value m (t', dt, M.Symbol_fun)
   end
 
@@ -675,13 +676,13 @@ let rec decode_ty_dom_ map id (dom:domain) (set:FO_rel.tuple_set) : ID.t list =
           | [a] -> id_of_atom_ map a
           | _ as tup ->
             errorf "expected unary tuple in model of `%a`, got `%a`"
-              FO.print_ty dom.dom_ty FO_rel.print_tuple tup)
+              FO.pp_ty dom.dom_ty FO_rel.pp_tuple tup)
         tups
     | FO_rel.TS_product [set'] -> decode_ty_dom_ map id dom set'
     | FO_rel.TS_product _ ->
       (* should be a set of unary tuples *)
       errorf "in model of `%a`, expected a set of unary tuples"
-        FO.print_ty dom.dom_ty
+        FO.pp_ty dom.dom_ty
 
 (* transform the constant relations into FO constants/functions/predicates *)
 let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t =
@@ -691,15 +692,15 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
     |> Sequence.filter_map
       (fun (t,dt,_) -> match t, dt with
          | FO_rel.Const id, DT.Yield (FO_rel.Tuple_set set) ->
-            begin match ID.Tbl.get state.dom_of_id id with
-              | Some dom ->
-                let ids = decode_ty_dom_ map id dom set in
-                Some (dom.dom_id, ids)
-              | None when ID.equal id state.pprop_dom.dom_id ->
-                let ids = decode_ty_dom_ map id state.pprop_dom set in
-                Some (id, ids)
-              | None -> None
-            end
+           begin match ID.Tbl.get state.dom_of_id id with
+             | Some dom ->
+               let ids = decode_ty_dom_ map id dom set in
+               Some (dom.dom_id, ids)
+             | None when ID.equal id state.pprop_dom.dom_id ->
+               let ids = decode_ty_dom_ map id state.pprop_dom set in
+               Some (id, ids)
+             | None -> None
+           end
          | _ -> None)
     |> ID.Map.of_seq
   in
@@ -718,7 +719,7 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
               | Some ids ->
                 M.add_finite_type m (FO.Ty.const id) ids
               | None ->
-                errorf "`%a` is neither a function nor a type" ID.print id
+                errorf "`%a` is neither a function nor a type" ID.pp id
         end
       | _ -> assert false)
     M.empty
@@ -727,7 +728,7 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
 let decode state m =
   let map = rename_atoms m in
   let ptrue = find_ptrue state map m in
-  Utils.debugf ~section 3  "@[<2>pseudo-true := %a in model@]" (fun k->k ID.print ptrue);
+  Utils.debugf ~section 3  "@[<2>pseudo-true := %a in model@]" (fun k->k ID.pp ptrue);
   decode_constants_ ~ptrue state map m
 
 (** {2 Pipes} *)
@@ -741,7 +742,7 @@ let pipe_with ?on_decoded ~decode ~print =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       Format.printf "@[<2>@{<Yellow>after %s@}:@ %a@]@."
-        name FO_rel.print_problem)
+        name FO_rel.pp_problem)
   in
   Transform.make ~name ~input_spec ?on_decoded ~on_encoded
     ~encode:encode_pb ~decode ()
@@ -750,7 +751,7 @@ let pipe ~print =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after %s@}:@ %a@]@."
-         name (Problem.Res.print FO.print_term' FO.print_ty)]
+         name (Problem.Res.pp FO.pp_term' FO.pp_ty)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode state) in

@@ -12,7 +12,7 @@ type 'a gen = unit -> 'a option
 type t = [
   | `Atom of string
   | `List of t list
-  ]
+]
 type sexp = t
 
 let atom s = `Atom s
@@ -24,9 +24,9 @@ let _must_escape s =
     for i = 0 to String.length s - 1 do
       let c = String.unsafe_get s i in
       match c with
-      | ' ' | ';' | ')' | '(' | '"' | '\\' | '\n' | '\t' -> raise Exit
-      | _ when Char.code c > 127 -> raise Exit  (* non-ascii *)
-      | _ -> ()
+        | ' ' | ';' | ')' | '(' | '"' | '\\' | '\n' | '\t' -> raise Exit
+        | _ when Char.code c > 127 -> raise Exit  (* non-ascii *)
+        | _ -> ()
     done;
     false
   with Exit -> true
@@ -37,11 +37,11 @@ let rec pp out t = match t with
   | `List [] -> Format.pp_print_string out "()"
   | `List [x] -> Format.fprintf out "@[<hov2>(%a)@]" pp x
   | `List l ->
-      Format.fprintf out "@[<hov1>(";
-      List.iteri
-        (fun i t' -> (if i > 0 then Format.fprintf out "@ "; pp out t'))
-        l;
-      Format.fprintf out ")@]"
+    Format.fprintf out "@[<hov1>(";
+    List.iteri
+      (fun i t' -> (if i > 0 then Format.fprintf out "@ "; pp out t'))
+      l;
+    Format.fprintf out ")@]"
 
 let to_string = CCFormat.to_string pp
 
@@ -116,15 +116,15 @@ module Decoder = struct
       | E_end -> `End
       | E_error msg ->
         let loc = Location.of_lexbuf t.buf in
-        `Error (CCFormat.sprintf "parse error at %a: %s" Location.print loc msg)
+        `Error (CCFormat.sprintf "parse error at %a: %s" Location.pp loc msg)
 end
 
 let parse_string s : t or_error =
   let buf = Lexing.from_string s in
   let d = Decoder.of_lexbuf buf in
   match Decoder.next d with
-  | `End -> `Error "unexpected end of file"
-  | (`Ok _ | `Error _) as res -> res
+    | `End -> `Error "unexpected end of file"
+    | (`Ok _ | `Error _) as res -> res
 
 (*$T
   CCError.to_opt (parse_string "(abc d/e/f \"hello \\\" () world\" )") <> None
@@ -172,8 +172,8 @@ let parse_chan ic =
   let buf = Lexing.from_channel ic in
   let d = Decoder.of_lexbuf buf in
   match Decoder.next d with
-  | `End -> `Error "unexpected end of file"
-  | (`Ok _ | `Error _) as res -> res
+    | `End -> `Error "unexpected end of file"
+    | (`Ok _ | `Error _) as res -> res
 
 let parse_chan_list ic =
   let buf = Lexing.from_channel ic in

@@ -108,36 +108,36 @@ module E = ID.Erase
 let erase = E.create_state ()
 
 let fpf = Format.fprintf
-let pp_list ?(sep=", ") pp = CCFormat.list ~start:"" ~stop:"" ~sep pp
+let pp_list ?(sep=", ") pp = Utils.pp_list ~sep pp
 
-let print_role_tptp out = function
+let pp_role_tptp out = function
   | R_axiom -> CCFormat.string out "axiom"
   | R_conjecture -> CCFormat.string out "conjecture"
 
 let pp_var out v =
   (* build deterministic name for this variable *)
-  let n = Var.name v |> String.capitalize in
+  let n = Var.name v |> CCString.capitalize_ascii in
   let n = Printf.sprintf "%s_%d" n (Var.id v |> ID.id) in
   CCFormat.string out n
 
 (* map ID to a name, unambiguously *)
 let name_of_id_ id =
-  let encode _ = String.uncapitalize in
+  let encode _ = CCString.uncapitalize_ascii in
   E.to_name ~encode erase id
 
-let rec print_term_tptp out = function
+let rec pp_term_tptp out = function
   | Var v -> pp_var out v
   | App (id,[]) -> CCFormat.string out (name_of_id_ id)
   | App (id,l) ->
-    fpf out "%s(@[<hv>%a@])" (name_of_id_ id) (pp_list print_term_tptp) l
+    fpf out "%s(@[<hv>%a@])" (name_of_id_ id) (pp_list pp_term_tptp) l
   | Undefined_atom [] -> fpf out "$undefined"
-  | Undefined_atom l -> fpf out "$undefined(@[%a@])" (pp_list print_term_tptp) l
+  | Undefined_atom l -> fpf out "$undefined(@[%a@])" (pp_list pp_term_tptp) l
   | True -> CCFormat.string out "$true"
   | False -> CCFormat.string out "$false"
 
-let print_form_tptp out f =
+let pp_form_tptp out f =
   let rec aux out = function
-    | Atom t -> print_term_tptp out t
+    | Atom t -> pp_term_tptp out t
     | And [] | Or [] -> assert false
     | And l -> fpf out "(@[<hv>%a@])" (pp_list ~sep:" & " aux) l
     | Or l -> fpf out "(@[<hv>%a@])" (pp_list ~sep:" | " aux) l
@@ -147,18 +147,19 @@ let print_form_tptp out f =
     | Equiv (a,b) ->
       fpf out "(@[@[%a@] <=>@ @[%a@]@])" aux a aux b
     | Eq (a,b) ->
-      fpf out "(@[@[%a@] =@ @[%a@]@])" print_term_tptp a print_term_tptp b
+      fpf out "(@[@[%a@] =@ @[%a@]@])" pp_term_tptp a pp_term_tptp b
     | Neq (a,b) ->
-      fpf out "(@[@[%a@] !=@ @[%a@]@])" print_term_tptp a print_term_tptp b
+      fpf out "(@[@[%a@] !=@ @[%a@]@])" pp_term_tptp a pp_term_tptp b
     | Forall (v,f) -> fpf out "(@[![%a]:@ @[%a@]@])" pp_var v aux f
     | Exists (v,f) -> fpf out "(@[?[%a]:@ @[%a@]@])" pp_var v aux f
   in
   aux out f
 
-let print_statement_tptp out st =
+let pp_statement_tptp out st =
   fpf out "@[<2>fof(@[%s, %a,@ @[%a@]@]).@]"
-    st.st_name print_role_tptp st.st_role print_form_tptp st.st_form
+    st.st_name pp_role_tptp st.st_role pp_form_tptp st.st_form
 
-let print_problem_tptp out pb =
+let pp_problem_tptp out pb =
   fpf out "@[<v>%a@]"
-    (CCVector.print ~start:"" ~stop:"" ~sep:"" print_statement_tptp) pb.pb_statements
+    (Utils.pp_seq ~sep:"" pp_statement_tptp)
+    (CCVector.to_seq pb.pb_statements)

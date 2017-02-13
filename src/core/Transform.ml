@@ -97,10 +97,11 @@ module Features = struct
     | Prop_args -> "prop_args"
     | Copy -> "copy"
 
-  let print out (m:t) =
-    let pp_k out x = CCFormat.string out (str_of_key x) in
-    let pp_v out x = CCFormat.string out (str_of_value x) in
-    Format.fprintf out "@[<hv>%a@]" (M.print ~start:"" ~stop:"" pp_k pp_v) m
+  let pp out (m:t) =
+    let pp_pair out (k,v) =
+      Format.fprintf out "%s -> %s" (str_of_key k) (str_of_value v)
+    in
+    Format.fprintf out "@[<hv>%a@]" (Utils.pp_seq pp_pair) (M.to_seq m)
 end
 
 (** {2 Single Transformation} *)
@@ -161,19 +162,19 @@ module Pipe = struct
     | Fail : ('a, 'b, 'c, 'd) t (** yields empty list *)
     | Flatten :
         ('a, 'b list, 'c, 'd) t ->
-        ('a, 'b, 'c, 'd) t
+      ('a, 'b, 'c, 'd) t
     | Close :
         ('b1 -> ('c1 -> 'd) -> 'b2 * ('c2 -> 'd)) *
-        ('a, 'b1, 'c1, 'd) t ->
-        ('a, 'b2, 'c2, 'd) t
+          ('a, 'b1, 'c1, 'd) t ->
+      ('a, 'b2, 'c2, 'd) t
     | Comp :
         ('a, 'b, 'e, 'f) transformation *
-        ('b, 'c, 'd, 'e) t ->
-        ('a, 'c, 'd, 'f) t
+          ('b, 'c, 'd, 'e) t ->
+      ('a, 'c, 'd, 'f) t
     | Fork :
         ('a, 'b, 'c, 'd) t *
-        ('a, 'b, 'c, 'd) t ->
-        ('a, 'b, 'c, 'd) t
+          ('a, 'b, 'c, 'd) t ->
+      ('a, 'b, 'c, 'd) t
 
   let id = Id
   let fail = Fail
@@ -205,17 +206,17 @@ module Pipe = struct
     fork_l (List.map (fun t -> t @@@ kont) l)
 
   let fpf = Format.fprintf
-  let print out t =
+  let pp out t =
     let rec pp : type a b c d. (a,b,c,d) t printer
-    = fun out t -> match t with
-    | Id -> fpf out "id"
-    | Fail -> fpf out "fail"
-    | Flatten t -> fpf out "flatten {@[%a@]}" pp t
-    | Close (_, pipe) -> fpf out "close {@[%a@]}" pp pipe
-    | Comp (Ex tr, t') ->
-        fpf out "@[%s ≡≡@ %a@]" tr.name pp t'
-    | Fork (a,b) ->
-        fpf out "fork @[<v>{ @[%a@]@,| @[%a@]@,}@]" pp a pp b
+      = fun out t -> match t with
+        | Id -> fpf out "id"
+        | Fail -> fpf out "fail"
+        | Flatten t -> fpf out "flatten {@[%a@]}" pp t
+        | Close (_, pipe) -> fpf out "close {@[%a@]}" pp pipe
+        | Comp (Ex tr, t') ->
+          fpf out "@[%s ≡≡@ %a@]" tr.name pp t'
+        | Fork (a,b) ->
+          fpf out "fork @[<v>{ @[%a@]@,| @[%a@]@,}@]" pp a pp b
     in
     fpf out "@[%a@]" pp t
 
@@ -228,7 +229,7 @@ module Pipe = struct
          features: @[%a@],@ state: @[%a@]@]"
         name (Features.str_of_key k)
         (Features.str_of_value expected) (Features.str_of_value actual)
-        Features.print spec Features.print f
+        Features.pp spec Features.pp f
 
   let check p =
     let rec aux

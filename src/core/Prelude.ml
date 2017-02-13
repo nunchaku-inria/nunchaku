@@ -38,6 +38,8 @@ let sexp_to_term : Sexp_lib.t -> A.term =
     | `List [`Atom "pi"; `Atom v; t] -> A.ty_forall ~loc v (p t)
     | `List [`Atom "fun"; `Atom v; t] -> A.fun_ ~loc (v,None) (p t)
     | `List [`Atom "fun"; `Atom v; ty; t] -> A.fun_ ~loc (v,Some (p ty)) (p t)
+    | `List [`Atom "?__"; t] -> A.undefined ~loc (p t)
+    | `List [`Atom "let"; `Atom v; t; u] -> A.let_ ~loc v (p t) (p u)
     | `Atom "prop" -> A.ty_prop
     | `Atom "type" -> A.ty_type
     | `Atom "true" -> A.true_
@@ -50,8 +52,8 @@ let sexp_to_term : Sexp_lib.t -> A.term =
 
 let p_term s =
   match Sexp_lib.parse_string s with
-  | `Ok s -> sexp_to_term s
-  | `Error msg ->
+    | `Ok s -> sexp_to_term s
+    | `Error msg ->
       parse_errorf_ "could not parse `%s` as an S-expression: %s" s msg
 
 
@@ -67,38 +69,43 @@ let mk_stmt d =
 
 let decl_choice =
   let ax = p_term
-    "(forall p
+      "(forall p
        (=
         (choice p)
-        (asserting
-          (choice p)
-          (or (= p (fun x false))
-              (p (choice p)))))))"
+        (let
+          self (?__ (choice p))
+          (asserting
+            self
+            (or (= p (fun x false))
+                (p self))))))"
   in
   A.Rec [ ID.name choice, ty_choice_, [ax] ] |> mk_stmt
 
 let decl_unique =
   let ax = p_term
-    "(forall p
+      "(forall p
        (=
         (unique p)
-        (asserting
-         (unique p)
-         (or
-           (= p (fun x (= x (unique p))))
-           (= p (fun x false))
-           (exists x (exists y (and (!= x y) (p x) (p y)))))))))"
+        (let self (?__ (unique p))
+          (asserting
+           self
+           (or
+             (= p (fun x (= x self)))
+             (= p (fun x false))
+             (exists x (exists y (and (!= x y) (p x) (p y)))))))))"
   in
   A.Rec [ ID.name unique, ty_choice_, [ax] ] |> mk_stmt
 
 let decl_unique_unsafe =
   let ax = p_term
-    "(forall p
+      "(forall p
        (=
         (unique_unsafe p)
-        (asserting
-         (unique_unsafe p)
-         (p (unique_unsafe p)))))"
+        (let self 
+         (?__ (unique_unsafe p))
+          (asserting
+           self
+           (p self)))))"
   in
   A.Rec [ ID.name unique_unsafe, ty_choice_, [ax] ] |> mk_stmt
 

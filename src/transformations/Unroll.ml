@@ -19,12 +19,12 @@ let section = Utils.Section.make name
 type term = T.t
 
 type unroll =
-    [ `Unroll of ID.t
-    | `Unroll_in_def of term
-    ]
-  (* [`Unroll n] means we unroll the ID on the natural number [n]
-     [`Unroll_in_def t] means we are in the definition of the ID, and
-      use [t] as the unrolling parameter *)
+  [ `Unroll of ID.t
+  | `Unroll_in_def of term
+  ]
+(* [`Unroll n] means we unroll the ID on the natural number [n]
+   [`Unroll_in_def t] means we are in the definition of the ID, and
+    use [t] as the unrolling parameter *)
 
 (* the type of natural numbers used to make predicates well-founded, and its
    constructors *)
@@ -36,15 +36,15 @@ type nat_ty = {
 
 type state = {
   map: unroll ID.Tbl.t;
-    (* polarized ID -> unrolling for this ID *)
+  (* polarized ID -> unrolling for this ID *)
 
   nat_ty: nat_ty;
-    (* the triple [nat, 0, succ] *)
+  (* the triple [nat, 0, succ] *)
 
   mutable declared_nat: bool;
 
   decr: unit ID.Tbl.t;
-    (* set of decreasing witnesses *)
+  (* set of decreasing witnesses *)
 }
 
 type decode_state = state
@@ -67,7 +67,7 @@ let zero ~state = U.const state.nat_ty.zero
 (* how to declare [nat] *)
 let declare_nat ~state =
   let ty_nat = nat ~state in
-  let def = Stmt.mk_mutual_ty state.nat_ty.nat
+  let def = Stmt.mk_data_type state.nat_ty.nat
       ~ty_vars:[]
       ~ty:U.ty_type
       ~cstors:
@@ -80,16 +80,16 @@ let declare_nat ~state =
    their additional parameter. *)
 let rec rewrite_term ~state t =
   match T.repr t with
-  | TI.Const id ->
+    | TI.Const id ->
       (* shall we unroll [id]? *)
       begin try
-        let unroll = ID.Tbl.find state.map id in
-        match unroll with
-        | `Unroll id' -> U.app t [U.const id']
-        | `Unroll_in_def t' -> U.app t [t']
-      with Not_found -> t
+          let unroll = ID.Tbl.find state.map id in
+          match unroll with
+            | `Unroll id' -> U.app t [U.const id']
+            | `Unroll_in_def t' -> U.app t [t']
+        with Not_found -> t
       end
-  | _ ->
+    | _ ->
       U.map () t
         ~bind:(fun () v -> (), v)
         ~f:(fun () t -> rewrite_term ~state t)
@@ -98,18 +98,18 @@ let rec rewrite_term ~state t =
 let polarity_of_list_ = function
   | [] -> assert false
   | id :: l ->
-      let is_pos = match ID.polarity id with
-        | Polarity.NoPol ->
-            Utils.not_implemented "polarization is needed before unrolling"
-        | Polarity.Pos -> true
-        | Polarity.Neg -> false
-      in
-      (* check that all IDs have the same polarity *)
-      assert
-        (List.for_all
-          (fun id' -> (if is_pos then Pol.is_pos else Pol.is_neg) (ID.polarity id'))
-        l);
-      is_pos
+    let is_pos = match ID.polarity id with
+      | Polarity.NoPol ->
+        Utils.not_implemented "polarization is needed before unrolling"
+      | Polarity.Pos -> true
+      | Polarity.Neg -> false
+    in
+    (* check that all IDs have the same polarity *)
+    assert
+      (List.for_all
+         (fun id' -> (if is_pos then Pol.is_pos else Pol.is_neg) (ID.polarity id'))
+         l);
+    is_pos
 
 (* make a variable for each type *)
 let make_vars tys =
@@ -149,38 +149,38 @@ let unroll_preds ~state v is_pos l =
   (* make new definitions for unrolled predicates *)
   List.map
     (fun def ->
-      let d = def.Stmt.pred_defined in
-      let id = d.Stmt.defined_head in
-      (* modify the type of [id], add [nat_] as a first argument *)
-      let defined =
-        { d with
-          defined_ty = U.ty_arrow (nat ~state) d.Stmt.defined_ty;
-        } in
-      (* translate the clauses *)
-      let pred_clauses = List.map (tr_clause id) def.pred_clauses in
-      (* if we unroll a coinductive predicate in negative polarity,
-         we must add a base case [pred 0 _...._ = true].
-         We don't need anything for an inductive predicate
-         because [pred 0 _ = false] is the default semantic *)
-      let pred_clauses =
-        if is_pos then pred_clauses
-        else (
-          assert (ID.polarity id |> Pol.is_neg);
-          let _, ty_args, _ = U.ty_unfold def.pred_defined.defined_ty in
-          let vars = make_vars ty_args in
-          let vars_t = List.map U.var vars in
-          let c = {
-            clause_vars = vars;
-            clause_guard = None;
-            clause_concl = U.app (U.const id) (zero ~state :: vars_t);
-          } in
-          c :: pred_clauses
-        )
-      in
-      { def with
-        pred_defined=defined;
-        pred_clauses;
-      })
+       let d = def.Stmt.pred_defined in
+       let id = d.Stmt.defined_head in
+       (* modify the type of [id], add [nat_] as a first argument *)
+       let defined =
+         { d with
+             defined_ty = U.ty_arrow (nat ~state) d.Stmt.defined_ty;
+         } in
+       (* translate the clauses *)
+       let pred_clauses = List.map (tr_clause id) def.pred_clauses in
+       (* if we unroll a coinductive predicate in negative polarity,
+          we must add a base case [pred 0 _...._ = true].
+          We don't need anything for an inductive predicate
+          because [pred 0 _ = false] is the default semantic *)
+       let pred_clauses =
+         if is_pos then pred_clauses
+         else (
+           assert (ID.polarity id |> Pol.is_neg);
+           let _, ty_args, _ = U.ty_unfold def.pred_defined.defined_ty in
+           let vars = make_vars ty_args in
+           let vars_t = List.map U.var vars in
+           let c = {
+             clause_vars = vars;
+             clause_guard = None;
+             clause_concl = U.app (U.const id) (zero ~state :: vars_t);
+           } in
+           c :: pred_clauses
+         )
+       in
+       { def with
+           pred_defined=defined;
+           pred_clauses;
+       })
     l
 
 (* translate non-well-founded predicates.
@@ -193,60 +193,60 @@ let define_preds ~state kind l =
   match kind, is_pos with
     | `Pred, true
     | `Copred, false ->
-        (* unroll the predicates *)
-        Utils.debugf ~section 5
-          "@[<2>unroll predicate(s)@ `@[%a@]`@]"
-          (fun k->k PStmt.print_pred_defs l);
-        let new_decls = ref [] in
-        (* maybe we haven't declared [nat] yet *)
-        if not state.declared_nat then (
-          state.declared_nat <- true;
-          new_decls := declare_nat ~state :: !new_decls;
-        );
-        let v = Var.make ~name:"_decr" ~ty:(nat ~state) in
-        (* push the "regular" unrolling constants for each ID *)
-        List.iter
-          (fun id ->
-            let n = ID.make (CCFormat.sprintf "decr_%a" ID.print_name id) in
-            (* from now on, [id] will become [id n] *)
-            ID.Tbl.add state.map id (`Unroll n);
-            ID.Tbl.add state.decr n ();
-            let st = Stmt.decl ~info:Stmt.info_default ~attrs:[] n (nat ~state) in
-            new_decls := st :: !new_decls)
-          ids;
-        (* enter in "definition mode" for every defined predicate; locally
-          the unrolling shall be done with [id v] *)
-        List.iter
-          (fun id -> ID.Tbl.add state.map id (`Unroll_in_def (U.var v)))
-          ids;
-        CCFun.finally
-          ~f:(fun () ->
-            let l = unroll_preds ~state v is_pos l in
-            l, !new_decls)
-          ~h:(fun () ->
-            (* exit the definition mode *)
-            List.iter (fun id -> ID.Tbl.remove state.map id) ids)
+      (* unroll the predicates *)
+      Utils.debugf ~section 5
+        "@[<2>unroll predicate(s)@ `@[%a@]`@]"
+        (fun k->k PStmt.pp_pred_defs l);
+      let new_decls = ref [] in
+      (* maybe we haven't declared [nat] yet *)
+      if not state.declared_nat then (
+        state.declared_nat <- true;
+        new_decls := declare_nat ~state :: !new_decls;
+      );
+      let v = Var.make ~name:"_decr" ~ty:(nat ~state) in
+      (* push the "regular" unrolling constants for each ID *)
+      List.iter
+        (fun id ->
+           let n = ID.make (CCFormat.sprintf "decr_%a" ID.pp_name id) in
+           (* from now on, [id] will become [id n] *)
+           ID.Tbl.add state.map id (`Unroll n);
+           ID.Tbl.add state.decr n ();
+           let st = Stmt.decl ~info:Stmt.info_default ~attrs:[] n (nat ~state) in
+           new_decls := st :: !new_decls)
+        ids;
+      (* enter in "definition mode" for every defined predicate; locally
+         the unrolling shall be done with [id v] *)
+      List.iter
+        (fun id -> ID.Tbl.add state.map id (`Unroll_in_def (U.var v)))
+        ids;
+      CCFun.finally
+        ~f:(fun () ->
+          let l = unroll_preds ~state v is_pos l in
+          l, !new_decls)
+        ~h:(fun () ->
+          (* exit the definition mode *)
+          List.iter (fun id -> ID.Tbl.remove state.map id) ids)
     | _ ->
-        (* do not unroll *)
-        let l = Stmt.map_preds ~term:(rewrite_term ~state) ~ty:CCFun.id l in
-        l, []
+      (* do not unroll *)
+      let l = Stmt.map_preds ~term:(rewrite_term ~state) ~ty:CCFun.id l in
+      l, []
 
 let tr_statement ~state st =
   let info = Stmt.info st in
   match Stmt.view st with
-  | Stmt.Pred (`Not_wf, kind, l) ->
+    | Stmt.Pred (`Not_wf, kind, l) ->
       (* translate the definitions, and obtain additional declarations *)
       let l, decls = define_preds ~state kind l in
       let st' = Stmt.mk_pred ~info ~wf:`Wf kind l in
       (* XXX: if the declaration of [nat] is in [decls], it is last,
          therefore using {!List.rev_append} here is important *)
       List.rev_append decls [st']
-  | Stmt.Pred (`Wf, _, _)  (* keep, it's well founded *)
-  | Stmt.Axiom _
-  | Stmt.Copy _
-  | Stmt.Decl _
-  | Stmt.Goal _
-  | Stmt.TyDef _ ->
+    | Stmt.Pred (`Wf, _, _)  (* keep, it's well founded *)
+    | Stmt.Axiom _
+    | Stmt.Copy _
+    | Stmt.Decl _
+    | Stmt.Goal _
+    | Stmt.TyDef _ ->
       (* just rewrite terms to use the new unrolled predicates *)
       let st = Stmt.map st ~term:(rewrite_term ~state) ~ty:CCFun.id in
       [st]
@@ -265,18 +265,18 @@ module DT = M.DT
    term that is in the table *)
 let rec rewrite ~state t = match T.repr t with
   | TI.Const id ->
-      assert (not (ID.Tbl.mem state.map id)); (* argument missing *)
-      t
+    assert (not (ID.Tbl.mem state.map id)); (* argument missing *)
+    t
   | TI.App (f, l) ->
-      begin match T.repr f, l with
+    begin match T.repr f, l with
       | _, [] -> assert false
       | TI.Const id, _ :: l' when ID.Tbl.mem state.map id ->
-          (* [id] was unrolled, remove its first arg *)
-          let l' = List.map (rewrite ~state) l' in
-          U.app f l'
+        (* [id] was unrolled, remove its first arg *)
+        let l' = List.map (rewrite ~state) l' in
+        U.app f l'
       | _ ->
-          rewrite' ~state t
-      end
+        rewrite' ~state t
+    end
   | _ -> rewrite' ~state t
 and rewrite' ~state t =
   U.map () t
@@ -290,7 +290,7 @@ let filter_dt_ dt : (_,_) DT.t =
     | removed_var :: _ ->
       Utils.debugf ~section 5
         "@[<v>remove var @[%a@]@ from `@[%a@]`@]"
-        (fun k->k Var.print_full removed_var (Model.DT.print P.print' P.print) dt);
+        (fun k->k Var.pp_full removed_var (Model.DT.pp P.pp' P.pp) dt);
     | [] -> assert false
   end;
   M.DT_util.remove_first_var dt
@@ -326,11 +326,11 @@ let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module Ppb = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after unrolling@}:@ %a@]@." Ppb.print)
+      Format.printf "@[<v2>@{<Yellow>after unrolling@}:@ %a@]@." Ppb.pp)
     @
-    Utils.singleton_if check () ~f:(fun () ->
-      let module C = TypeCheck.Make(T) in
-      C.check_problem (C.empty ()))
+      Utils.singleton_if check () ~f:(fun () ->
+        let module C = TypeCheck.Make(T) in
+        C.check_problem (C.empty ()))
   in
   Transform.make
     ?on_decoded
@@ -345,7 +345,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after unrolling@}:@ %a@]@."
-         (Problem.Res.print P.print' P.print)]
+         (Problem.Res.pp P.pp' P.pp)]
     else []
   in
   pipe_with ~on_decoded

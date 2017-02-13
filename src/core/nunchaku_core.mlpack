@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: f9c5d50d2802bd31883bd05bfe9a70e2)
+# DO NOT EDIT (digest: fd037a9d815d1bb98b90af1ce0f5e1a5)
 ID
 Var
 MetaVar
@@ -26,11 +26,15 @@ AnalyzeType
 Prelude
 TypeCheck
 Lazy_list
+Bit_set
 Sexp_lib
 Sexp_lex
+Precedence
+Binder
+Builtin
+Cardinal_encode
 terms/TermInner
 terms/TermTyped
-terms/TermMono
 terms/Pattern
 types/TypePoly
 types/TypeMono

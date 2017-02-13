@@ -49,7 +49,7 @@ module type S = sig
 end
 
 module Make(T : TI.REPR)
-: S with module T = T
+  : S with module T = T
 = struct
   module T = T
 
@@ -85,10 +85,10 @@ module Make(T : TI.REPR)
     | TI.App (f,l) -> App (f, l)
     | TI.TyArrow (a, b) -> Arrow (a, b)
     | TI.Var v ->
-        begin match Subst.find ~subst v with
+      begin match Subst.find ~subst v with
         | None -> assert false
         | Some t' -> repr_with ~subst t'
-        end
+      end
     | TI.TyMeta _
     | TI.Builtin _
     | TI.Match _
@@ -100,11 +100,11 @@ module Make(T : TI.REPR)
     let rec pp_ out t = match repr t with
       | Builtin b -> CCFormat.string out (Builtin.to_string b)
       | Arrow (a,b) -> Format.fprintf out "%a_to_%a" pp_ a pp_ b
-      | Const id -> ID.print_name out id
+      | Const id -> ID.pp_name out id
       | App (_,[]) -> assert false
       | App (a,l) ->
         Format.fprintf out "%a_%a"
-          pp_ a (CCFormat.list ~start:"" ~stop:"" ~sep pp_) l
+          pp_ a (Utils.pp_list ~sep pp_) l
     in
     CCFormat.sprintf "@[<h>%a@]" pp_ t
 
@@ -118,7 +118,7 @@ module Make(T : TI.REPR)
     | Const id1, Const id2 -> ID.compare id1 id2
     | Builtin b1, Builtin b2 -> Builtin.compare b1 b2
     | App (c1,l1), App (c2,l2) ->
-      CCOrd.( cmp_ty c1 c2 <?> (list_ cmp_ty, l1, l2))
+      CCOrd.( cmp_ty c1 c2 <?> (list cmp_ty, l1, l2))
     | Arrow (l1,r1), Arrow (l2,r2) -> CCOrd.( cmp_ty l1 l2 <?> (cmp_ty, r1, r2))
     | Const _, _ | App _, _ | Arrow _, _ | Builtin _, _ ->
       Pervasives.compare (to_int_ (repr a)) (to_int_ (repr b))

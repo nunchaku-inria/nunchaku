@@ -180,14 +180,14 @@ val mk_problem :
 
 (** {2 IO} *)
 
-val print_atom : atom CCFormat.printer
-val print_tuple : tuple CCFormat.printer
-val print_tuple_set : tuple_set CCFormat.printer
-val print_sub_universe : sub_universe CCFormat.printer
-val print_var_ty : var_ty CCFormat.printer
-val print_universe : universe CCFormat.printer
-val print_expr : expr CCFormat.printer
-val print_int_expr : int_expr CCFormat.printer
-val print_form : form CCFormat.printer
-val print_decl : decl CCFormat.printer
-val print_problem : problem CCFormat.printer
+val pp_atom : atom CCFormat.printer
+val pp_tuple : tuple CCFormat.printer
+val pp_tuple_set : tuple_set CCFormat.printer
+val pp_sub_universe : sub_universe CCFormat.printer
+val pp_var_ty : var_ty CCFormat.printer
+val pp_universe : universe CCFormat.printer
+val pp_expr : expr CCFormat.printer
+val pp_int_expr : int_expr CCFormat.printer
+val pp_form : form CCFormat.printer
+val pp_decl : decl CCFormat.printer
+val pp_problem : problem CCFormat.printer

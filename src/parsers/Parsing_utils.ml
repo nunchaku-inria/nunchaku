@@ -19,13 +19,13 @@ exception LexError of Loc.t option * string
 exception ParseError of Loc.t option * string
 
 let () = Printexc.register_printer
-  (function
-    | LexError (loc, msg) ->
-        Some (CCFormat.sprintf "@[<2>lexing error:@ %s@ at %a@]" msg Loc.print_opt loc)
-    | ParseError (loc,msg) ->
-        Some (CCFormat.sprintf "@[<2>parsing error:@ %s@ at %a@]" msg Loc.print_opt loc)
-    | _ -> None
-  )
+    (function
+      | LexError (loc, msg) ->
+        Some (CCFormat.sprintf "@[<2>lexing error:@ %s@ at %a@]" msg Loc.pp_opt loc)
+      | ParseError (loc,msg) ->
+        Some (CCFormat.sprintf "@[<2>parsing error:@ %s@ at %a@]" msg Loc.pp_opt loc)
+      | _ -> None
+    )
 
 let lex_error_ ?loc fmt =
   Utils.exn_ksprintf fmt ~f:(fun msg -> raise (LexError (loc, msg)))
@@ -80,7 +80,7 @@ let error_include_ ?loc f =
   parse_error_ ?loc "@[<2>include not found:@ `%s`@]" f
 
 (* try the list of files, parse the first existing one.
-  @param p the parser to use to parse the file *)
+   @param p the parser to use to parse the file *)
 let rec try_files ?loc ~p f l = match l with
   | [] -> error_include_ ?loc f
   | f' :: _ when Sys.file_exists f' -> p f'
@@ -94,43 +94,43 @@ module Make(P : PARSER) : S = struct
     let rel_include f = Filename.concat basedir (Filename.basename f) in
     List.iter
       (fun st -> match st.A.stmt_value with
-        | A.Include (f, _which) ->
-            (* TODO: handle partial includes *)
-            (* include file *)
-            let files = match mode with
-            | `None -> [f]
-            | `Relative ->
-                [f; rel_include f]
-            | `Env envvar ->
-                try
-                  let dir = Sys.getenv envvar in
-                  [f; rel_include f; Filename.concat dir f]
-                with Not_found ->
-                  Utils.debugf ~section 1
-                    "@[could not find environment variable `%s`@ while trying to include `%s`@]"
-                    (fun k->k f envvar);
-                  [f; rel_include f]
-            in
-            try_files ?loc f files
-              ~p:(fun f ->
-                  parse_rec ?loc:st.A.stmt_loc ~mode ~basedir ~res (`File f))
-        | _ ->
-            (* simply keep the statement *)
-            CCVector.push res st)
+         | A.Include (f, _which) ->
+           (* TODO: handle partial includes *)
+           (* include file *)
+           let files = match mode with
+             | `None -> [f]
+             | `Relative ->
+               [f; rel_include f]
+             | `Env envvar ->
+               try
+                 let dir = Sys.getenv envvar in
+                 [f; rel_include f; Filename.concat dir f]
+               with Not_found ->
+                 Utils.debugf ~section 1
+                   "@[could not find environment variable `%s`@ while trying to include `%s`@]"
+                   (fun k->k f envvar);
+                 [f; rel_include f]
+           in
+           try_files ?loc f files
+             ~p:(fun f ->
+               parse_rec ?loc:st.A.stmt_loc ~mode ~basedir ~res (`File f))
+         | _ ->
+           (* simply keep the statement *)
+           CCVector.push res st)
       l
 
   and parse_rec ?loc ~mode ~basedir ~res (src : [`Stdin | `File of string]) =
     match src with
-    | `Stdin ->
+      | `Stdin ->
         let lexbuf = Lexing.from_channel stdin in
         Loc.set_file lexbuf "<stdin>"; (* for error reporting *)
         parse_buf_rec ?loc ~mode ~res ~basedir lexbuf
-    | `File f ->
+      | `File f ->
         CCIO.with_in f
           (fun ic ->
-            let lexbuf = Lexing.from_channel ic in
-            Loc.set_file lexbuf f;
-            parse_buf_rec ?loc ~mode ~basedir ~res lexbuf)
+             let lexbuf = Lexing.from_channel ic in
+             Loc.set_file lexbuf f;
+             parse_buf_rec ?loc ~mode ~basedir ~res lexbuf)
 
   let parse ?(mode=`Relative) ?into:(res=CCVector.create()) src =
     let basedir = match src with

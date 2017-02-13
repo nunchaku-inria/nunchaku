@@ -3,13 +3,13 @@
 
 (** {1 TPTP Preprocessor}
 
-  This file preprocesses TPTP problems to adapt them for Nunchaku:
+    This file preprocesses TPTP problems to adapt them for Nunchaku:
 
-  {ul
-  {- declare TPTP primitives}
-  {- declare symbols that are not explicitely declared}
-  {- add "$i" to variables that have no type}
-  }
+    {ul
+    {- declare TPTP primitives}
+    {- declare symbols that are not explicitely declared}
+    {- add "$i" to variables that have no type}
+    }
 *)
 
 open Nunchaku_core

@@ -19,5 +19,5 @@ val pipe :
   print:bool ->
   check:bool ->
   ((term, term) Problem.t,
-    (term, term) Problem.t,
-    'ret, 'ret) Transform.t
+   (term, term) Problem.t,
+   'ret, 'ret) Transform.t

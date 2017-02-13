@@ -48,9 +48,9 @@ let make_gen ~names =
     make ~ty ~name
 
 
-let print oc v = ID.print oc v.id
+let pp oc v = ID.pp oc v.id
 let to_string v = ID.to_string v.id
-let print_full oc v = ID.print_full oc v.id
+let pp_full oc v = ID.pp_full oc v.id
 let to_string_full v = ID.to_string v.id
 
 (** {2 Substitutions} *)
@@ -108,16 +108,16 @@ module Subst = struct
   let to_list s = M.fold (fun _ (v,x) acc -> (v,x)::acc) s []
   let to_seq s yield = M.iter (fun _ (v,x) -> yield (v,x)) s
 
-  let print pt out s =
+  let pp pt out s =
     let pp_pair out (v,t) =
-      Format.fprintf out "@[<2>%a →@ @[%a@]@]" print_full v pt t in
+      Format.fprintf out "@[<2>%a →@ @[%a@]@]" pp_full v pt t in
     Format.fprintf out "{@[<hv>%a@]}"
-      (CCFormat.seq ~start:"" ~stop:"" ~sep:", " pp_pair)
+      (Utils.pp_seq ~sep:", " pp_pair)
       (M.to_seq s |> Sequence.map snd)
 end
 
 module Set(Ty : sig type t end) = CCSet.Make(struct
-  type 'a _t = 'a t
-  type t = Ty.t _t
-  let compare = compare
-end)
+    type 'a _t = 'a t
+    type t = Ty.t _t
+    let compare = compare
+  end)

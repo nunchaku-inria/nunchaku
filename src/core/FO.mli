@@ -3,8 +3,8 @@
 
 (** {1 First-Order Monomorphic Terms and Formulas}
 
-  This is the end of the chain, where formulas and terms are ready to be
-  sent to some SMT solver. Types are monomorphic, formulas are first-order
+    This is the end of the chain, where formulas and terms are ready to be
+    sent to some SMT solver. Types are monomorphic, formulas are first-order
 *)
 
 type id = ID.t
@@ -21,7 +21,7 @@ module TyBuiltin : sig
     ]
   val equal : t -> t -> bool
   val compare : t -> t -> int
-  val print : t printer
+  val pp : t printer
 end
 
 module Builtin : sig
@@ -30,7 +30,7 @@ module Builtin : sig
     ]
   val equal : t -> t -> bool
   val compare : t -> t -> int
-  val print : t printer
+  val pp : t printer
 end
 
 (** Term *)
@@ -40,7 +40,7 @@ type ('t, 'ty) view =
   | App of id * 't list
   | DataTest of id * 't
   | DataSelect of id * int * 't
-  | Undefined of id * 't (** ['t] is not defined here *)
+  | Undefined of 't (** ['t] is not defined here *)
   | Undefined_atom of id * 'ty toplevel_ty * 't list (** some undefined term of given topleveltype, + args *)
   | Unparsable of 'ty (** could not parse term *)
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
@@ -135,7 +135,7 @@ module T : sig
   val app : id -> t list -> t
   val data_test : id -> t -> t
   val data_select : id -> int -> t -> t
-  val undefined : id -> t -> t
+  val undefined : t -> t
   val undefined_atom : id -> Ty.toplevel_ty -> t list -> t
   val unparsable : Ty.t -> t
   val var : Ty.t var -> t
@@ -207,39 +207,10 @@ val tys_of_statement : (_, 'ty) statement -> 'ty Sequence.t
 
 (** {2 IO} *)
 
-val print_ty : Ty.t printer
-val print_toplevel_ty : Ty.toplevel_ty printer
-val print_term : T.t printer
-val print_term' : _ -> T.t printer
-val print_statement : (T.t, Ty.t) statement printer
-val print_model : (T.t * T.t) list printer
-val print_problem : (T.t, Ty.t) Problem.t printer
-
-(** {2 Conversion} *)
-
-(** Assume there are no types (other than `Unitype), no datatypes, no
-    pattern match... *)
-module To_tptp : sig
-  exception Error of string
-
-  val conv_form : T.t -> FO_tptp.form
-  (** @raise Error if conversion failed *)
-
-  val conv_statement : (T.t, Ty.t) statement -> FO_tptp.statement option
-  (** convert the statement. Some statements will just disappear (mostly,
-      declarations).
-      @raise Error if conversion failed *)
-
-  val conv_problem : (T.t, Ty.t) Problem.t -> FO_tptp.problem
-end
-
-module Of_tptp : sig
-  val conv_ty : FO_tptp.ty -> Ty.t
-  val conv_term : FO_tptp.term -> T.t
-  val conv_form : FO_tptp.form -> T.t
-end
-
-val pipe_tptp :
-  ((T.t, Ty.t) Problem.t, FO_tptp.problem,
-    (FO_tptp.term, FO_tptp.ty) res,
-    (T.t, Ty.t) res) Transform.t
+val pp_ty : Ty.t printer
+val pp_toplevel_ty : Ty.toplevel_ty printer
+val pp_term : T.t printer
+val pp_term' : _ -> T.t printer
+val pp_statement : (T.t, Ty.t) statement printer
+val pp_model : (T.t * T.t) list printer
+val pp_problem : (T.t, Ty.t) Problem.t printer

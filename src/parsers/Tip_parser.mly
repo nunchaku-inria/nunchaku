@@ -28,6 +28,7 @@
 %token FALSE
 %token OR
 %token AND
+%token DISTINCT
 %token NOT
 %token EQ
 %token IF
@@ -59,7 +60,9 @@
 %token RESULT_UNKNOWN
 %token RESULT_VAL
 %token RESULT_TYPE
-%token RESULT_MODEL
+
+%token RESULT_ATOM_MODEL
+%token RESULT_ATOM_REASON
 
 %token <string>IDENT
 %token <string>QUOTED
@@ -279,6 +282,7 @@ term:
   | LEFT_PAREN OR l=term+ RIGHT_PAREN { A.or_ l }
   | LEFT_PAREN AND l=term+ RIGHT_PAREN { A.and_ l }
   | LEFT_PAREN NOT t=term RIGHT_PAREN { A.not_ t }
+  | LEFT_PAREN DISTINCT l=term+ RIGHT_PAREN { A.distinct l }
   | LEFT_PAREN EQ a=term b=term RIGHT_PAREN { A.eq a b }
   | LEFT_PAREN ARROW a=term b=term RIGHT_PAREN { A.imply a b }
   | LEFT_PAREN f=IDENT args=term+ RIGHT_PAREN { A.app f args }
@@ -338,11 +342,16 @@ smbc_model_entry:
         "expected SMBC model entry: (val term term) or (type ty domain)"
     }
 
+smbc_unknown_reason:
+  | { "" }
+  | RESULT_ATOM_REASON s=IDENT { s }
+  | RESULT_ATOM_REASON s=QUOTED { s }
+
 smbc_res:
   | LEFT_PAREN RESULT_RESULT RESULT_UNSAT RIGHT_PAREN { Res.Unsat }
-  | LEFT_PAREN RESULT_RESULT RESULT_UNKNOWN RIGHT_PAREN { Res.Unknown "" }
-  | LEFT_PAREN RESULT_RESULT RESULT_TIMEOUT RIGHT_PAREN { Res.Timeout }
-  | LEFT_PAREN RESULT_RESULT RESULT_SAT RESULT_MODEL? m=smbc_model RIGHT_PAREN { Res.Sat m }
+  | LEFT_PAREN RESULT_RESULT? RESULT_TIMEOUT RIGHT_PAREN { Res.Timeout }
+  | LEFT_PAREN RESULT_RESULT RESULT_SAT RESULT_ATOM_MODEL? m=smbc_model RIGHT_PAREN { Res.Sat m }
+  | LEFT_PAREN RESULT_RESULT RESULT_UNKNOWN r=smbc_unknown_reason RIGHT_PAREN { Res.Unknown r }
   | error
     {
       let loc = Loc.mk_pos $startpos $endpos in

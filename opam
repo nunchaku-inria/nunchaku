@@ -1,6 +1,6 @@
 opam-version: "1.2"
 name: "nunchaku"
-version: "0.3.1"
+version: "0.4"
 authors: ["Simon Cruanes" "Jasmin Blanchette"]
 maintainer: "simon.cruanes@inria.fr"
 build: [
@@ -24,7 +24,7 @@ remove: [
 ]
 depends: [
     "ocamlfind" {build}
-    "containers" { >= "0.16" < "1.0" }
+    "containers" { >= "1.0" }
     "menhir" {build}
     "sequence"
     "base-unix"

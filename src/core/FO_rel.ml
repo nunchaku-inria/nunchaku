@@ -121,7 +121,7 @@ let su_hash s = ID.hash s.su_name
 let su_compare s1 s2 =
   CCOrd.(
     ID.compare s1.su_name s2.su_name
-    <?> (option int_, s1.su_card, s2.su_card)
+    <?> (option int, s1.su_card, s2.su_card)
   )
 let su_equal s1 s2 = su_compare s1 s2 = 0
 
@@ -192,7 +192,7 @@ let atom su i = { a_sub_universe=su; a_index=i }
 let atom_cmp a1 a2 =
   CCOrd.(
     su_compare a1.a_sub_universe a2.a_sub_universe
-    <?> (int_, a1.a_index, a2.a_index)
+    <?> (int, a1.a_index, a2.a_index)
   )
 let atom_eq a1 a2 = atom_cmp a1 a2 = 0
 
@@ -203,27 +203,27 @@ let mk_problem ~meta:pb_meta ~univ:pb_univ ~decls:pb_decls ~goal:pb_goal =
 
 let fpf = Format.fprintf
 
-let pp_list ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp
+let pp_list ~sep pp = Utils.pp_list ~sep pp
 
-let print_atom out a =
-  fpf out "%a_%d" ID.print_name a.a_sub_universe.su_name a.a_index
+let pp_atom out a =
+  fpf out "%a_%d" ID.pp_name a.a_sub_universe.su_name a.a_index
 
-let print_sub_universe out s =
+let pp_sub_universe out s =
   let pp_card out = function
     | Some n -> Format.fprintf out "{0..%d}" (n-1)
     | None -> CCFormat.string out "<no card>"
   in
-  fpf out "%a_%a" ID.print_name s.su_name pp_card s.su_card
+  fpf out "%a_%a" ID.pp_name s.su_name pp_card s.su_card
 
-let print_tuple out (t:tuple) =
-  fpf out "(@[%a@])" (pp_list ~sep:"," print_atom) t
+let pp_tuple out (t:tuple) =
+  fpf out "(@[%a@])" (pp_list ~sep:"," pp_atom) t
 
-let rec print_tuple_set out (s:tuple_set) = match s with
+let rec pp_tuple_set out (s:tuple_set) = match s with
   | TS_product l ->
-    fpf out "(@[<hv>%a@])" (pp_list ~sep:" * " print_tuple_set) l
+    fpf out "(@[<hv>%a@])" (pp_list ~sep:" * " pp_tuple_set) l
   | TS_list l ->
-    fpf out "{@[<hv>%a@]}" (pp_list ~sep:", " print_tuple) l
-  | TS_all s -> print_sub_universe out s
+    fpf out "{@[<hv>%a@]}" (pp_list ~sep:", " pp_tuple) l
+  | TS_all s -> pp_sub_universe out s
 
 (* precedence level *)
 type prec =
@@ -247,7 +247,7 @@ let left_assoc = function
   | P_f_quant
   | P_unop -> false
 
-(* if [p1 < p2], then print [msg] surrounded with parenthesis, else print [msg] *)
+(* if [p1 < p2], then pp [msg] surrounded with parenthesis, else pp [msg] *)
 let wrapf_ p1 p2 out msg =
   let c = compare_prec p1 p2 in
   let wrap = if left_assoc p1 then c <= 0 else c<0 in
@@ -256,120 +256,120 @@ let wrapf_ p1 p2 out msg =
     (fun out -> if wrap then Format.pp_print_char out ')')
     out msg
 
-let print_unop out = function
+let pp_unop out = function
   | Flip -> CCFormat.string out "~"
   | Trans -> CCFormat.string out "^"
 
-let print_binop out = function
+let pp_binop out = function
   | Union -> fpf out "@<1>∪"
   | Inter -> fpf out "@<1>∩"
   | Diff -> CCFormat.string out "\\"
   | Join -> fpf out "@<1>·"
   | Product -> fpf out "@<2>→"
 
-let print_mult out = function
+let pp_mult out = function
   | M_no -> CCFormat.string out "no"
   | M_one -> CCFormat.string out "one"
   | M_lone -> CCFormat.string out "lone"
   | M_some -> CCFormat.string out "some"
 
-let rec print_expr_rec p out = function
+let rec pp_expr_rec p out = function
   | None_ -> fpf out "none"
-  | Const id -> ID.print out id
-  | Tuple_set s -> print_tuple_set out s
-  | Var v -> Var.print_full out v
+  | Const id -> ID.pp out id
+  | Tuple_set s -> pp_tuple_set out s
+  | Var v -> Var.pp_full out v
   | Unop (u, e) ->
     wrapf_ p P_unop out
-      "@[<2>%a@ %a@]" print_unop u (print_expr_rec P_unop) e
+      "@[<2>%a@ %a@]" pp_unop u (pp_expr_rec P_unop) e
   | Binop (o, a, b) ->
     wrapf_ p (P_binop o) out
       "@[<2>%a@ %a @[%a@]@]"
-      (print_expr_rec (P_binop o)) a
-      print_binop o
-      (print_expr_rec (P_binop o)) b
+      (pp_expr_rec (P_binop o)) a
+      pp_binop o
+      (pp_expr_rec (P_binop o)) b
   | If (a,b,c) ->
     fpf out "@[<hv2>if @[%a@]@ then @[%a@]@ else @[%a@]@]"
-      (print_form_rec P_top) a (print_expr_rec P_top) b (print_expr_rec P_top) c
+      (pp_form_rec P_top) a (pp_expr_rec P_top) b (pp_expr_rec P_top) c
   | Comprehension (v, f) ->
-    fpf out "{@[<2> %a@ | %a@]}" print_typed_var v (print_form_rec P_top) f
+    fpf out "{@[<2> %a@ | %a@]}" pp_typed_var v (pp_form_rec P_top) f
   | Let (v,t,u) ->
-    fpf out "@[<2>let @[%a := %a@]@ in @[%a@]@]" print_typed_var v
-      (print_expr_rec P_top) t (print_expr_rec p) u
+    fpf out "@[<2>let @[%a := %a@]@ in @[%a@]@]" pp_typed_var v
+      (pp_expr_rec P_top) t (pp_expr_rec p) u
 
-and print_int_expr out = function
-  | IE_sum e -> fpf out "(@[<1>sum@ %a@])" (print_expr_rec P_top) e
-  | IE_card e -> fpf out "#(@[%a@])" (print_expr_rec P_top) e
+and pp_int_expr out = function
+  | IE_sum e -> fpf out "(@[<1>sum@ %a@])" (pp_expr_rec P_top) e
+  | IE_card e -> fpf out "#(@[%a@])" (pp_expr_rec P_top) e
   | IE_cst i -> fpf out "%d" i
 
-and print_form_rec p out = function
+and pp_form_rec p out = function
   | True -> CCFormat.string out "true"
   | False -> CCFormat.string out "false"
   | Eq (a,b) ->
     fpf out "@[@[%a@]@ @[<2>=@ @[%a@]@]@]"
-      (print_expr_rec P_top) a (print_expr_rec P_top) b
+      (pp_expr_rec P_top) a (pp_expr_rec P_top) b
   | In (a,b) ->
     fpf out "@[@[%a@]@ @[<2>in@ @[%a@]@]@]"
-      (print_expr_rec P_top) a (print_expr_rec P_top) b
-  | Mult (m, e) -> fpf out "@[<2>%a@ @[%a@]@]" print_mult m (print_expr_rec P_top) e
+      (pp_expr_rec P_top) a (pp_expr_rec P_top) b
+  | Mult (m, e) -> fpf out "@[<2>%a@ @[%a@]@]" pp_mult m (pp_expr_rec P_top) e
   | Not f ->
-    wrapf_ p P_f_not out "@[<2>not@ @[%a@]@]" (print_form_rec P_f_not) f
+    wrapf_ p P_f_not out "@[<2>not@ @[%a@]@]" (pp_form_rec P_f_not) f
   | And l ->
     wrapf_ p P_f_and out "@[<hv>%a@]"
-      (print_infix_list (print_form_rec P_f_and) "&&") l
+      (pp_infix_list (pp_form_rec P_f_and) "&&") l
   | Or l ->
     wrapf_ p P_f_and out "@[<hv>%a@]"
-      (print_infix_list (print_form_rec P_f_or) "||") l
+      (pp_infix_list (pp_form_rec P_f_or) "||") l
   | Imply (a,b) ->
     wrapf_ p P_f_or out "(@[<hv>%a@ => %a@]"
-      (print_form_rec P_f_or) a (print_form_rec P_f_or) b
+      (pp_form_rec P_f_or) a (pp_form_rec P_f_or) b
   | Equiv (a,b) ->
     wrapf_ p P_f_or out "@[@[%a@]@ <=> %a@]"
-      (print_form_rec P_f_or) a (print_form_rec P_f_or) b
+      (pp_form_rec P_f_or) a (pp_form_rec P_f_or) b
   | Forall (v,f) ->
     wrapf_ p P_f_quant out "@[<2>forall @[%a@].@ @[%a@]@]"
-      print_typed_var v (print_form_rec P_f_quant) f
+      pp_typed_var v (pp_form_rec P_f_quant) f
   | Exists (v,f) ->
     wrapf_ p P_f_quant out "@[<2>exists @[%a@].@ @[%a@]@]"
-      print_typed_var v (print_form_rec P_f_quant) f
+      pp_typed_var v (pp_form_rec P_f_quant) f
   | F_let (v,a,b) ->
     wrapf_ p P_f_quant out "@[<2>let @[%a := %a@].@ @[%a@]@]"
-      print_typed_var v (print_expr_rec P_top) a (print_form_rec P_f_quant) b
+      pp_typed_var v (pp_expr_rec P_top) a (pp_form_rec P_f_quant) b
   | F_if (a,b,c) ->
     wrapf_ p P_f_and out "@[<hv2>if %a@ then %a@ else %a@]"
-      (print_form_rec P_top) a
-      (print_form_rec P_top) b
-      (print_form_rec P_f_and) c
+      (pp_form_rec P_top) a
+      (pp_form_rec P_top) b
+      (pp_form_rec P_f_and) c
   | Int_op (IO_leq, a, b) ->
-    fpf out "(@[%a@ =< %a@])" print_int_expr a print_int_expr b
+    fpf out "(@[%a@ =< %a@])" pp_int_expr a pp_int_expr b
 
-and print_infix_list pform s out l = match l with
+and pp_infix_list pform s out l = match l with
   | [] -> assert false
   | [t] -> pform out t
   | t :: l' ->
     fpf out "@[%a@]@ %s %a"
-      pform t s (print_infix_list pform s) l'
+      pform t s (pp_infix_list pform s) l'
 
-and print_var_ty out su = ID.print out su.su_name
+and pp_var_ty out su = ID.pp out su.su_name
 
-and print_typed_var out v =
+and pp_typed_var out v =
   fpf out "(@[<2>%a :@ %a@])"
-    Var.print_full v print_var_ty (Var.ty v)
+    Var.pp_full v pp_var_ty (Var.ty v)
 
-let print_expr = print_expr_rec P_top
-let print_form = print_form_rec P_top
+let pp_expr = pp_expr_rec P_top
+let pp_form = pp_form_rec P_top
 
-let print_universe out u =
+let pp_universe out u =
   let l = u.univ_prop :: u.univ_l in
-  fpf out "@[%a@]" (pp_list ~sep:" + " print_sub_universe) l
+  fpf out "@[%a@]" (pp_list ~sep:" + " pp_sub_universe) l
 
-let print_decl out d =
+let pp_decl out d =
   fpf out "@[<hv2>%a :@ arity=%d@ low=%a@ high=%a@]"
-    ID.print d.decl_id d.decl_arity
-    print_tuple_set d.decl_low
-    print_tuple_set d.decl_high
+    ID.pp d.decl_id d.decl_arity
+    pp_tuple_set d.decl_low
+    pp_tuple_set d.decl_high
 
-let print_problem out pb =
+let pp_problem out pb =
   fpf out "@[<v2>problem {@,univ=%a@,decls=[@[<v>%a@]]@,goal=@[<hv>%a@]@,@]}"
-    print_universe pb.pb_univ
-    (CCFormat.seq ~start:"" ~stop:"" print_decl) (ID.Map.values pb.pb_decls)
-    (pp_list ~sep:" && " print_form) pb.pb_goal
+    pp_universe pb.pb_univ
+    (Utils.pp_seq pp_decl) (ID.Map.values pb.pb_decls)
+    (pp_list ~sep:" && " pp_form) pb.pb_goal

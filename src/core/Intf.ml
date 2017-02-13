@@ -15,13 +15,12 @@ end
 
 module type HASH = sig
   type t
-  val hash_fun : t CCHash.hash_fun
   val hash : t -> int
 end
 
 module type PRINT = sig
   type t
-  val print : Format.formatter -> t -> unit
+  val pp : Format.formatter -> t -> unit
 end
 
 

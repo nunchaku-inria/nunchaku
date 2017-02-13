@@ -24,21 +24,20 @@ let mk_pos start stop =
     stop.pos_lnum (stop.pos_cnum - stop.pos_bol)
 
 let equal = (=)
-let hash = Hashtbl.hash
-let hash_fun x h = CCHash.int (hash x) h
+let hash (x:t) = Hashtbl.hash x
 
 let _min_pos (l1,c1) (l2,c2) =
   if l1 = l2
-    then l1, min c1 c2
+  then l1, min c1 c2
   else if l1 < l2
-    then l1, c1
+  then l1, c1
   else l2, c2
 
 let _max_pos (l1,c1) (l2,c2) =
   if l1 = l2
-    then l1, max c1 c2
+  then l1, max c1 c2
   else if l1 < l2
-    then l2, c2
+  then l2, c2
   else l1, c1
 
 let combine p1 p2 =
@@ -64,7 +63,7 @@ let smaller p ~than =
   (p.stop_line < than.stop_line
    ||  (p.stop_line = than.stop_line && p.stop_column <= than.stop_column))
 
-let print out pos =
+let pp out pos =
   if pos.start_line = pos.stop_line
   then
     Format.fprintf out "file '%s': line %d, col %d to %d"
@@ -75,13 +74,13 @@ let print out pos =
       pos.start_line pos.start_column
       pos.stop_line pos.stop_column
 
-let to_string = CCFormat.to_string print
+let to_string = CCFormat.to_string pp
 
-let print_opt out = function
+let pp_opt out = function
   | None -> Format.fprintf out "<no location>"
-  | Some pos -> print out pos
+  | Some pos -> pp out pos
 
-let to_string_opt = CCFormat.to_string print_opt
+let to_string_opt = CCFormat.to_string pp_opt
 
 (** {2 Value bundled with Location} *)
 
