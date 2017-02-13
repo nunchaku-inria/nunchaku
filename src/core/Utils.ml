@@ -231,7 +231,7 @@ let singleton_if check ~f x = if check then [f x] else []
 
 let arg_choice l f =
   let pick s =
-    let s = s |> String.trim |> String.lowercase_ascii in
+    let s = s |> String.trim |> CCString.lowercase_ascii in
     try f (List.assoc s l)
     with Not_found -> assert false
   in
@@ -303,7 +303,7 @@ let () =
 
 exception NotImplemented of string
 
-let pp_with_sep sep out () = Format.fprintf out "%s@ " sep
+let pp_with_sep sep out () = Format.fprintf out "%s@," sep
 let pp_seq ?(sep=" ") p = CCFormat.seq ~sep:(pp_with_sep sep) p
 let pp_list ?(sep=" ") p = CCFormat.list ~sep:(pp_with_sep sep) p
 
