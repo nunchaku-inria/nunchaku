@@ -8,7 +8,9 @@
   exception Error of Location.t * string
 
   let remove_quotes s =
-    assert (s.[0] = '\'' && s.[String.length s - 1] = '\'');
+    assert (
+      (s.[0] = '\'' && s.[String.length s - 1] = '\'') ||
+      (s.[0] = '"' && s.[String.length s - 1] = '"'));
     String.sub s 1 (String.length s - 2)
 }
 
