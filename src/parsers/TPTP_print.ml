@@ -219,7 +219,7 @@ and mk_var ~state v =
   let name = ID.name (Var.id v) in
   let name = match name.[0] with
     | 'A' .. 'Z' -> name
-    | 'a' .. 'b' -> String.capitalize_ascii name
+    | 'a' .. 'b' -> CCString.capitalize_ascii name
     | _ -> "V" ^ name
   in
   Var.make ~name ~ty:(preprocess_ty ~state (Var.ty v))
