@@ -26,7 +26,7 @@ let pp_guard pterm out g: unit =
     | [] -> ()
     | _::_ ->
       fpf out "@ @[<2>%s@ @[<hv>%a@]@]" name
-        (CCFormat.list ~start:"" ~stop:"" ~sep:" && " pterm) l
+        (Utils.pp_list ~sep:" && " pterm) l
   in
   Format.fprintf out "%a"
     (pp_case "asserting") g.asserting

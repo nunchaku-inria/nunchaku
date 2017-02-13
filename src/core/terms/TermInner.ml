@@ -115,9 +115,6 @@ module Print(T : REPR)
 
   type t = T.t
 
-  let pp_list_ ?(start="") ?(stop="") ~sep pp =
-    CCFormat.list ~start ~stop ~sep pp
-
   let is_if_ t = match T.repr t with
     | Builtin (`Ite _) -> true
     | _ -> false
@@ -172,33 +169,33 @@ module Print(T : REPR)
       wrap P.Ite p out
         "@[<hv>@[<2>if@ @[%a@]@]@ @[<2>then@ %a@]@ %a@ @[<2>else@ %a@]@]"
         (pp' P.Ite) a (pp' P.Ite) b
-        (pp_list_ ~sep:"" pp_middle) middle
+        (Utils.pp_list ~sep:"" pp_middle) middle
         (pp' P.Ite) last
     | Builtin b ->
       let p' = Builtin.prec b in
       wrap p' p out "%a" (Builtin.pp (pp' p')) b
     | App (f,l) ->
       wrap P.App p out "@[<2>%a@ %a@]" pp_in_app f
-        (pp_list_ ~sep:" " pp_in_app) l
+        (Utils.pp_list ~sep:" " pp_in_app) l
     | Let (v,t,u) ->
       wrap P.Top p out "@[let @[<2>%a :=@ %a@] in@ %a@]"
         Var.pp_full v pp t pp u
     | Match (t,l, def) ->
       let pp_case out (id,(vars,t)) =
         fpf out "@[<hv2>| @[<hv2>%a %a@] ->@ %a@]"
-          ID.pp id (pp_list_ ~sep:" " Var.pp_full) vars pp t
+          ID.pp id (Utils.pp_list ~sep:" " Var.pp_full) vars pp t
       and pp_def out = function
         | Default_none -> ()
         | Default_some (d,_) -> fpf out "@ @[<hv2>| default ->@ %a@]" pp d
       in
       fpf out "@[<hv>@[<hv2>match @[%a@] with@ %a%a@]@ end@]"
-        pp t (pp_list_ ~sep:"" pp_case) (ID.Map.to_list l)
+        pp t (Utils.pp_list ~sep:"" pp_case) (ID.Map.to_list l)
         pp_def def
     | Bind (b, _, _) ->
       let s = Binder.to_string b in
       let vars, body = unroll_binder b t in
       wrap P.Bind p out "@[<2>%s @[<hv>%a@].@ %a@]" s
-        (pp_list_ ~sep:" " pp_typed_var) vars pp_in_binder body
+        (Utils.pp_list ~sep:" " pp_typed_var) vars pp_in_binder body
     | TyArrow (a,b) ->
       (* TODO: left should have [P.Arrow] but ignoring the right-assoc *)
       wrap P.Arrow p out "@[<2>%a ->@ %a@]" (pp' P.App) a (pp' P.Arrow) b
@@ -699,11 +696,9 @@ module type UTIL = sig
   val close_forall : t_ -> t_
   (** [close_forall t] universally quantifies over free variables of [t] *)
 
-  val hash_fun : t_ CCHash.hash_fun
   val hash : t_ -> int
   (** Hash into a positive integer *)
 
-  val hash_fun_alpha_eq : t_ CCHash.hash_fun
   val hash_alpha_eq : t_ -> int
   (** Hash function that is not sensitive to alpha-renaming *)
 
@@ -1089,42 +1084,39 @@ module Util(T : S)
     let fvars = free_vars t |> VarSet.to_list in
     forall_l fvars t
 
-  let hash_fun_ hash_var t h =
+  let hash_ hash_var t =
     let d = ref 30 in (* number of nodes to explore *)
-    let rec hash_ t h =
-      if !d = 0 then h
+    let rec hash_ t =
+      if !d = 0 then 0x42
       else match T.repr t with
-        | Const id -> decr d; ID.hash_fun id h
-        | Var v -> decr d; hash_var v h
-        | App (f,l) -> hash_ f h |> CCHash.list hash_ l
-        | Builtin b -> CCHash.seq hash_ (Builtin.to_seq b) h
-        | Let (v,t,u) -> decr d; hash_var v h |> hash_ t |> hash_ u
-        | Bind (_,v,t) -> decr d; hash_var v h |> hash_ t
+        | Const id -> decr d; ID.hash id
+        | Var v -> decr d; hash_var v
+        | App (f,l) -> CCHash.combine3 20 (hash_ f) (CCHash.list hash_ l)
+        | Builtin b -> CCHash.combine2 30 (CCHash.seq hash_ (Builtin.to_seq b))
+        | Let (v,t,u) -> decr d; CCHash.combine4 40 (hash_var v) (hash_ t) (hash_ u)
+        | Bind (_,v,t) -> decr d; CCHash.combine3 50 (hash_var v) (hash_ t)
         | Match (t,l,def) ->
           decr d;
-          hash_ t h
-          |> CCHash.seq
-            (fun (vars,rhs) h -> CCHash.list hash_var vars h |> hash_ rhs)
-            (ID.Map.to_seq l |> Sequence.map snd)
-          |> (fun h->match def with
-            | Default_none -> h
-            | Default_some (t,_) -> hash_ t h)
-        | TyArrow (a,b) -> decr d; hash_ a h |> hash_ b
+          CCHash.combine4 60
+            (hash_ t)
+            CCHash.(seq (pair (list hash_var) hash_) 
+                (ID.Map.to_seq l |> Sequence.map snd))
+            (match def with
+              | Default_none -> 0x10
+              | Default_some (t,_) -> hash_ t)
+        | TyArrow (a,b) -> decr d; CCHash.combine3 70 (hash_ a) (hash_ b)
         | TyBuiltin _
-        | TyMeta _ -> h
+        | TyMeta _ -> 80
     in
-    hash_ t h
+    hash_ t
 
-  let hash_fun =
-    let hash_var_ v h = ID.hash_fun (Var.id v) h in
-    hash_fun_ hash_var_
+  let hash t =
+    let hash_var_ v = ID.hash (Var.id v) in
+    hash_ hash_var_ t
 
-  let hash_fun_alpha_eq =
-    let hash_var_ _ h = CCHash.string "var" h in
-    hash_fun_ hash_var_
-
-  let hash t = CCHash.apply hash_fun t
-  let hash_alpha_eq t = CCHash.apply hash_fun_alpha_eq t
+  let hash_alpha_eq t =
+    let hash_var_ _ = CCHash.string "var" in
+    hash_ hash_var_ t
 
   module Subst = Var.Subst
 

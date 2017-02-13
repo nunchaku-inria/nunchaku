@@ -242,7 +242,7 @@ let rec unroll_if_ t = match Loc.get t with
     (a,b) :: l, last
   | _ -> [], t
 
-let pp_list_ ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
+let pp_list_ ~sep p = Utils.pp_list ~sep p
 
 let rec pp_term out term = match Loc.get term with
   | Builtin s -> Builtin.pp out s
@@ -391,7 +391,7 @@ let pp_statement out st = match st.stmt_value with
 
 let pp_statement_list out l =
   Format.fprintf out "@[<v>%a@]"
-    (CCFormat.list ~start:"" ~stop:"" ~sep:"" pp_statement) l
+    (Utils.pp_list ~sep:"" pp_statement) l
 
 module TPTP = struct
   (* additional statements for any TPTP problem *)

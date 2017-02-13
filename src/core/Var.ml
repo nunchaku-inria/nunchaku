@@ -112,7 +112,7 @@ module Subst = struct
     let pp_pair out (v,t) =
       Format.fprintf out "@[<2>%a →@ @[%a@]@]" pp_full v pt t in
     Format.fprintf out "{@[<hv>%a@]}"
-      (CCFormat.seq ~start:"" ~stop:"" ~sep:", " pp_pair)
+      (Utils.pp_seq ~sep:", " pp_pair)
       (M.to_seq s |> Sequence.map snd)
 end
 

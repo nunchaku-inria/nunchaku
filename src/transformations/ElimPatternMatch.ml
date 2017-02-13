@@ -46,7 +46,7 @@ let elim_match ~mode ~env t =
   in
   let rec elim_match_ ~subst t = match T.repr t with
     | TI.Var v ->
-      CCOpt.get t (Subst.find ~subst v)
+      CCOpt.get_or ~default:t (Subst.find ~subst v)
     | TI.Const _ -> t
     | TI.App (f,l) -> U.app (elim_match_ ~subst f) (elim_match_l_ ~subst l)
     | TI.Builtin b -> U.builtin (Builtin.map b ~f:(elim_match_ ~subst))
@@ -78,7 +78,7 @@ let elim_match ~mode ~env t =
         | TermInner.Default_none ->
           (* remove first binding to make it the default case *)
           let c1, (vars1,rhs1) = ID.Map.choose l in
-          let subst0 = CCList.Idx.foldi
+          let subst0 = CCList.foldi
               (fun subst i vi -> Subst.add ~subst vi (mk_select_ c1 i t'))
               subst vars1
           in
@@ -89,7 +89,7 @@ let elim_match ~mode ~env t =
       (* series of ite with selectors on the other cases *)
       ID.Map.fold
         (fun c (vars,rhs) acc ->
-           let subst' = CCList.Idx.foldi
+           let subst' = CCList.foldi
                (fun subst i vi -> Subst.add ~subst vi (mk_select_ c i t'))
                subst vars
            in

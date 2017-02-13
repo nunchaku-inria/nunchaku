@@ -65,8 +65,7 @@ let is_polarized v = not (is_neutral v)
 
 let equal v1 v2 = v1.id = v2.id
 let compare v1 v2 = Pervasives.compare v1.id v2.id
-let hash_fun v h = CCHash.int v.id h
-let hash v = v.id land max_int (* >= 0 *)
+let hash v = CCHash.int v.id
 
 (*
 let pp_normal out v =

@@ -104,7 +104,7 @@ module Make(T : TI.REPR)
       | App (_,[]) -> assert false
       | App (a,l) ->
         Format.fprintf out "%a_%a"
-          pp_ a (CCFormat.list ~start:"" ~stop:"" ~sep pp_) l
+          pp_ a (Utils.pp_list ~sep pp_) l
     in
     CCFormat.sprintf "@[<h>%a@]" pp_ t
 
@@ -118,7 +118,7 @@ module Make(T : TI.REPR)
     | Const id1, Const id2 -> ID.compare id1 id2
     | Builtin b1, Builtin b2 -> Builtin.compare b1 b2
     | App (c1,l1), App (c2,l2) ->
-      CCOrd.( cmp_ty c1 c2 <?> (list_ cmp_ty, l1, l2))
+      CCOrd.( cmp_ty c1 c2 <?> (list cmp_ty, l1, l2))
     | Arrow (l1,r1), Arrow (l2,r2) -> CCOrd.( cmp_ty l1 l2 <?> (cmp_ty, r1, r2))
     | Const _, _ | App _, _ | Arrow _, _ | Builtin _, _ ->
       Pervasives.compare (to_int_ (repr a)) (to_int_ (repr b))

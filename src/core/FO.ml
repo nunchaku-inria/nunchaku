@@ -122,7 +122,7 @@ module Ty = struct
   let rec compare_ty t1 t2 = match t1.view, t2.view with
     | TyBuiltin b1, TyBuiltin b2 -> TyBuiltin.compare b1 b2
     | TyApp (c1,l1), TyApp (c2,l2) ->
-      CCOrd.( ID.compare c1 c2 <?> (list_ compare_ty, l1, l2))
+      CCOrd.( ID.compare c1 c2 <?> (list compare_ty, l1, l2))
     | TyApp _, _
     | TyBuiltin _, _ -> Pervasives.compare (to_int_ t1.view) (to_int_ t2.view)
 
@@ -314,7 +314,7 @@ let tys_of_statement st yield = st_to_seq_ st ~term:(fun _ -> ()) ~ty:yield
 
 let fpf = Format.fprintf
 
-let pp_list_ ?(sep=" ") out p = CCFormat.list ~start:"" ~stop:"" ~sep out p
+let pp_list_ ?(sep=" ") out p = Utils.pp_list ~sep out p
 
 let rec pp_ty out ty = match Ty.view ty with
   | TyApp (id, []) -> ID.pp out id
@@ -374,7 +374,7 @@ let pp_term' _prec = pp_term
 let pp_model out m =
   let pp_pair out (t,u) = fpf out "@[%a -> %a@]" pp_term t pp_term u in
   fpf out "@[model {@,@[<hv>%a@]}@]"
-    (CCFormat.list ~start:"" ~stop:"" ~sep:","  pp_pair) m
+    (Utils.pp_list  ~sep:","  pp_pair) m
 
 let pp_attr out = function
   | Attr_pseudo_prop -> fpf out "pseudo_prop"
@@ -419,8 +419,8 @@ let pp_statement out s = match s with
 
 let pp_problem out pb =
   fpf out "@[<v>%a@]"
-    (CCVector.print ~start:"" ~stop:"" ~sep:"" pp_statement)
-    (Problem.statements pb)
+    (Utils.pp_seq ~sep:"" pp_statement)
+    (Problem.statements pb |> CCVector.to_seq)
 
 (** {2 Utils} *)
 module Util = struct

@@ -119,7 +119,7 @@ module DT = struct
           | None -> ()
           | Some d -> fpf out ";@ default: %a" (pp pt pty) d
         in
-        let pp_tests = CCFormat.list ~start:"" ~stop:"" ~sep:"; " pp_test in
+        let pp_tests = Utils.pp_list ~sep:"; " pp_test in
         fpf out "@[<hv1>cases (@[%a:%a@])@ {@[<v>%a%a@]@,}@]"
           Var.pp_full cases.var pty (Var.ty cases.var)
           pp_tests l pp_default cases.default
@@ -127,9 +127,9 @@ module DT = struct
         let pp_branch out (id,(vars,rhs)) =
           fpf out "{@[<2>@[%a %a@] ->@ %a@]}"
             ID.pp id
-            (CCFormat.list ~sep:" " Var.pp_full) vars (pp pt pty) rhs
+            (Utils.pp_list ~sep:" " Var.pp_full) vars (pp pt pty) rhs
         in
-        let pp_m out m = CCFormat.seq ~sep:"; " pp_branch out (ID.Map.to_seq m) in
+        let pp_m out m = Utils.pp_seq ~sep:"; " pp_branch out (ID.Map.to_seq m) in
         fpf out "@[<hv1>cases (@[%a:%a@])@ {@[<v>%a%a@]@,}@]"
           Var.pp_full cases.var pty (Var.ty cases.var)
           pp_m m pp_default cases.default
@@ -280,7 +280,7 @@ module DT = struct
                with
                  | None -> (eqns, value) :: others
                  | Some (i, {ft_term=t; _}) ->
-                   let eqns' = CCList.Idx.remove eqns i in
+                   let eqns' = CCList.remove_at_idx i eqns in
                    TTbl.add_list by_term_tbl t (eqns', value);
                    others)
             []
@@ -346,7 +346,7 @@ module DT = struct
     fpf out "@[%a = %a@]" Var.pp_full v (pt Precedence.Eq) t
 
   let pp_flat pt out fdt =
-    let pplist ~sep pp = CCFormat.list ~start:"" ~stop:"" ~sep pp in
+    let pplist ~sep pp = Utils.pp_list ~sep pp in
     let pp_case out (tests,rhs) =
       fpf out "@[<2>(@[%a@]) =>@ %a@]"
         (pplist ~sep:" && " (pp_flat_test pt)) tests (pt Precedence.Arrow) rhs
@@ -578,7 +578,7 @@ module DT_util = struct
     | (DT.Cases {DT.var; tests=DT.Match (m,missing0); _}, subst) :: tail ->
       (* add one case to the map *)
       let merge_into_map subst id (vars,rhs) m =
-        let id_l = ID.Map.get_or id m ~or_:[] in
+        let id_l = ID.Map.get_or id m ~default:[] in
         ID.Map.add id ((vars,rhs,subst)::id_l) m
       in
       let m0 = ID.Map.map (fun (vars,rhs) -> [vars,rhs,subst]) m in
@@ -655,9 +655,9 @@ module DT_util = struct
         Utils.invalid_argf
           "remove_vars: cannot remove `%a`,@ used in match" Var.pp_full var
       | DT.Cases {DT.var=v; tests=DT.Tests l; default} ->
-        if CCList.Set.mem ~eq:Var.equal v vars
+        if CCList.mem ~eq:Var.equal v vars
         then (
-          let vars' = CCList.Set.remove ~eq:Var.equal v vars in
+          let vars' = CCList.remove_one ~eq:Var.equal v vars in
           (* merge the sub-trees *)
           let l =
             List.map
@@ -689,7 +689,7 @@ module DT_util = struct
     let vars = CCList.sort_uniq ~cmp:Var.compare vars in
     (* check that [vars] subset of current set of vars *)
     let cur_vars = DT.vars dt in
-    if not (List.for_all (fun x->CCList.Set.mem ~eq:Var.equal x cur_vars) vars)
+    if not (List.for_all (fun x->CCList.mem ~eq:Var.equal x cur_vars) vars)
     then invalid_arg "DT_util.remove_vars";
     aux Subst.empty vars dt
 
@@ -828,7 +828,7 @@ let fold ?(values=const_fst_) ?(finite_types=const_fst_) acc m =
   !acc
 
 let pp pt pty out m =
-  let pplist ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp in
+  let pplist ~sep pp = Utils.pp_list ~sep pp in
   let pp_type out (ty,dom) =
     fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
       pty ty (pplist ~sep:", " ID.pp) dom
@@ -883,7 +883,7 @@ module Default = struct
       ~values:(fun acc (t,dt,_) ->
         SA_val (t, DT_util.to_term dt) :: acc)
 
-  let pplist ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp
+  let pplist ~sep pp = Utils.pp_list ~sep pp
 
   let pp_simple_atom out = function
     | SA_ty (ty,dom) ->

@@ -125,7 +125,7 @@ let pp_build_rule out = function
 
 let pp_rule out r =
   Format.fprintf out "(@[<2>%a :-@ {@[<hv>%a@]}@ using %a, vars @[%a@]@])"
-    P.pp r.target (CCFormat.list ~start:"" ~stop:"" P.pp) r.goals
+    P.pp r.target (Utils.pp_list P.pp) r.goals
     pp_build_rule r.build (CCFormat.list Var.pp_full) r.vars
 
 type backward_rules = backward_rule list
@@ -329,8 +329,7 @@ let generate_l ?n ?(rand=mk_rand()) g =
   G.list_repeat n g rand
 
 let pp_rules() =
-  Format.printf "rules:@ @[<v>%a@]@."
-    (CCFormat.list ~start:"" ~stop:"" pp_rule) rules
+  Format.printf "rules:@ @[<v>%a@]@." (Utils.pp_list pp_rule) rules
 
 (* test the random generator itself *)
 

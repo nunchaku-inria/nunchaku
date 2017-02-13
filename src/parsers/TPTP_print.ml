@@ -38,7 +38,7 @@ let pp_role out = function
   | Role_predicate -> CCFormat.string out "fi_predicates"
   | Role_domain -> CCFormat.string out "fi_domain"
 
-let pp_list ~sep p = CCFormat.list ~start:"" ~stop:"" ~sep p
+let pp_list ~sep p = Utils.pp_list ~sep p
 
 type term = T.t
 type form = T.t
@@ -331,4 +331,4 @@ let pp_model out (m:model) =
   Utils.debug ~section 3 "preprocess model...";
   let m' = preprocess_model m in
   fpf out "@[<v>%s@,%a@,%s@]"
-    header (CCVector.print ~start:"" ~stop:"" ~sep:"" pp_stmt) m' footer
+    header (Utils.pp_seq ~sep:"" pp_stmt) (CCVector.to_seq m') footer

@@ -115,7 +115,7 @@ let name_of_arity (m:name_map) n: name_map * string =
     | 2 -> "r"
     | n -> Printf.sprintf "m%d_" n
   in
-  let offset = StrMap.get_or ~or_:0 prefix m in
+  let offset = StrMap.get_or ~default:0 prefix m in
   let m' = StrMap.add prefix (offset+1) m in
   let name = prefix ^ string_of_int offset in
   m', name
@@ -149,7 +149,7 @@ let create_state ~timer ~default_size (pb:FO_rel.problem) : state =
   }
 
 let fpf = Format.fprintf
-let pp_list ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp
+let pp_list ~sep pp = Utils.pp_list ~sep pp
 
 type rename_kind =
   | R_quant (* quantifier *)
@@ -170,7 +170,7 @@ let pp_pb state pb out () : unit =
   (* print a sub-universe as a range *)
   let rec pp_su_range out (su:FO_rel.sub_universe): unit =
     let offset = su2offset su in
-    let card = CCOpt.get state.default_size su.FO_rel.su_card in
+    let card = CCOpt.get_or ~default:state.default_size su.FO_rel.su_card in
     if offset=0
     then fpf out "u%d" card
     else fpf out "u%d@@%d" card offset

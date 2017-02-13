@@ -75,7 +75,7 @@ module CallGraph = struct
   let add g n1 n2 =
     try
       let c = IDIntTbl.find g n1 in
-      if not (CCList.Set.mem ~eq:node_equal n1 c.cell_children)
+      if not (CCList.mem ~eq:node_equal n1 c.cell_children)
       then c.cell_children <- n1 :: c.cell_children;
     with Not_found ->
       IDIntTbl.add g n1
@@ -120,10 +120,10 @@ module CallGraph = struct
     in
     let pp_pair out (n,c) =
       fpf out "@[<2>%a ->@ [@[%a@]]@]"
-        pp_node n (CCFormat.list ~start:"" ~stop:"" pp_node) c.cell_children
+        pp_node n (Utils.pp_list pp_node) c.cell_children
     in
     fpf out "@[<hv>@[<hv2>graph {@,@[<v>%a@]@]@,}@]"
-      (CCFormat.seq ~start:"" ~stop:"" pp_pair) (IDIntTbl.to_seq g)
+      (Utils.pp_seq pp_pair) (IDIntTbl.to_seq g)
 end
 
 (* Specialization of a function is parametrized by a set of (fixed)
@@ -173,12 +173,11 @@ end = struct
 
   let equal a b = equal_l a.terms b.terms
 
-  let hash_fun a h = CCHash.(list (pair int U.hash_fun_alpha_eq)) a.terms h
-  let hash = CCHash.apply hash_fun
+  let hash a = CCHash.(list (pair int U.hash_alpha_eq)) a.terms
 
   let pp_iterm out (i,t) = fpf out "@[%d -> %a@]" i P.pp t
   let pp_iterms out =
-    fpf out "[@[<hv>%a@]]" (CCFormat.list ~start:"" ~stop:"" pp_iterm)
+    fpf out "[@[<hv>%a@]]" (Utils.pp_list pp_iterm)
   let pp out a = pp_iterms out a.terms
   let section = section
   let fail = errorf
@@ -1070,7 +1069,7 @@ module InstanceGraph = struct
     in
     let pp_item out (v,e) = fpf out "@[<2>%a@,%a@]" pp_vertex v pp_edge e in
     fpf out "@[<2>instance graph for %a:@ @[<v>%a@]@]" ID.pp g.id
-      (CCFormat.list ~start:"" ~stop:"" pp_item) g.vertices
+      (Utils.pp_list pp_item) g.vertices
 end
 
 let mk_congruence_axiom v1 v2 =
@@ -1323,7 +1322,7 @@ let gather_spec_funs state m : aggregate_models =
         let dsf = find_spec state f_id in
         let id = dsf.dsf_spec_of in
         let am =
-          ID.Map.get_or id map ~or_:(am_empty kind dsf.dsf_ty_of)
+          ID.Map.get_or id map ~default:(am_empty kind dsf.dsf_ty_of)
         in
         let am = { am with am_models = (dt,dsf) :: am.am_models } in
         ID.Map.add id am map

@@ -71,7 +71,7 @@ let pp_path_cell out c : unit =
 
 let pp_path out p =
   Format.fprintf out "[@[<hv>%a@]]"
-    (CCFormat.list ~sep:"," pp_path_cell) (List.rev p)
+    (Utils.pp_list ~sep:"," pp_path_cell) (List.rev p)
 
 let dnode_of_tydef (tydef: _ Stmt.data_type): (_,_,_) decision_node =
   DN_match {

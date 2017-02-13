@@ -35,7 +35,7 @@ let pp_stack out st =
     fpf out "@[<hv 2>trying to infer type of@ `@[%a@]`@ at %a@]"
       A.pp_term t Loc.pp_opt (Loc.get_loc t) in
   fpf out "@[<hv>%a@]"
-    (CCFormat.list ~start:"" ~stop:"" ~sep:" " pp_frame) st
+    (Utils.pp_list ~sep:" " pp_frame) st
 
 let () = Printexc.register_printer
     (function
@@ -188,7 +188,7 @@ module Convert(Term : TermTyped.S) = struct
         Hashtbl.add tbl v var;
         var
 
-    let get_attrs ~env id = ID.Tbl.get_or ~or_:[] env.attrs id
+    let get_attrs ~env id = ID.Tbl.get_or ~default:[] env.attrs id
 
     let set_attrs ~env id l =
       assert (not (ID.Tbl.mem env.attrs id));
@@ -605,7 +605,7 @@ module Convert(Term : TermTyped.S) = struct
         type_errorf ~stack
           "@[<2>term of type @[%a@] cannot accept argument(s),@ \
            but was given [@[<hv>%a@]]@]"
-          P.pp ty (CCFormat.list ~start:"" ~stop:"" A.pp_term) l
+          P.pp ty (Utils.pp_list A.pp_term) l
       | TyI.Meta var, b :: l' ->
         (* must be an arrow type. We do not infer forall types *)
         assert (MetaVar.can_bind var);

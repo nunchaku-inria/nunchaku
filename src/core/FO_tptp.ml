@@ -108,7 +108,7 @@ module E = ID.Erase
 let erase = E.create_state ()
 
 let fpf = Format.fprintf
-let pp_list ?(sep=", ") pp = CCFormat.list ~start:"" ~stop:"" ~sep pp
+let pp_list ?(sep=", ") pp = Utils.pp_list ~sep pp
 
 let pp_role_tptp out = function
   | R_axiom -> CCFormat.string out "axiom"
@@ -161,4 +161,5 @@ let pp_statement_tptp out st =
 
 let pp_problem_tptp out pb =
   fpf out "@[<v>%a@]"
-    (CCVector.print ~start:"" ~stop:"" ~sep:"" pp_statement_tptp) pb.pb_statements
+    (Utils.pp_seq ~sep:"" pp_statement_tptp)
+    (CCVector.to_seq pb.pb_statements)

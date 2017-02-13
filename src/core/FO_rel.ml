@@ -121,7 +121,7 @@ let su_hash s = ID.hash s.su_name
 let su_compare s1 s2 =
   CCOrd.(
     ID.compare s1.su_name s2.su_name
-    <?> (option int_, s1.su_card, s2.su_card)
+    <?> (option int, s1.su_card, s2.su_card)
   )
 let su_equal s1 s2 = su_compare s1 s2 = 0
 
@@ -192,7 +192,7 @@ let atom su i = { a_sub_universe=su; a_index=i }
 let atom_cmp a1 a2 =
   CCOrd.(
     su_compare a1.a_sub_universe a2.a_sub_universe
-    <?> (int_, a1.a_index, a2.a_index)
+    <?> (int, a1.a_index, a2.a_index)
   )
 let atom_eq a1 a2 = atom_cmp a1 a2 = 0
 
@@ -203,7 +203,7 @@ let mk_problem ~meta:pb_meta ~univ:pb_univ ~decls:pb_decls ~goal:pb_goal =
 
 let fpf = Format.fprintf
 
-let pp_list ~sep pp = CCFormat.list ~sep ~start:"" ~stop:"" pp
+let pp_list ~sep pp = Utils.pp_list ~sep pp
 
 let pp_atom out a =
   fpf out "%a_%d" ID.pp_name a.a_sub_universe.su_name a.a_index
@@ -371,5 +371,5 @@ let pp_decl out d =
 let pp_problem out pb =
   fpf out "@[<v2>problem {@,univ=%a@,decls=[@[<v>%a@]]@,goal=@[<hv>%a@]@,@]}"
     pp_universe pb.pb_univ
-    (CCFormat.seq ~start:"" ~stop:"" pp_decl) (ID.Map.values pb.pb_decls)
+    (Utils.pp_seq pp_decl) (ID.Map.values pb.pb_decls)
     (pp_list ~sep:" && " pp_form) pb.pb_goal

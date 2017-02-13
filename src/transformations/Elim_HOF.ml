@@ -52,7 +52,7 @@ type arity_set = {
 }
 
 let pp_arity_set out set =
-  fpf out "{@[%a@]}" (IntSet.print ~start:"" ~stop:"" CCFormat.int) set.as_set
+  fpf out "{@[%a@]}" (Utils.pp_seq CCFormat.int) (IntSet.to_seq set.as_set)
 
 type fun_ =
   | F_id of ID.t
@@ -70,10 +70,10 @@ let compare_fun f1 f2 =
     | F_id id1, F_id id2 -> ID.compare id1 id2
     | F_var v1, F_var v2 -> Var.compare v1 v2
     | F_select (id1,i1), F_select (id2,i2) ->
-      CCOrd.( ID.compare id1 id2 <?> (int_, i1, i2))
+      CCOrd.( ID.compare id1 id2 <?> (int, i1, i2))
     | F_id _, _
     | F_var _, _
-    | F_select _, _ -> CCOrd.int_ (to_int_ f1) (to_int_ f2)
+    | F_select _, _ -> CCOrd.int (to_int_ f1) (to_int_ f2)
 
 module FunMap = CCMap.Make(struct type t = fun_ let compare = compare_fun end)
 
@@ -83,7 +83,7 @@ let pp_arities out tbl =
       pp_fun id pp_arity_set set (List.length set.as_ty_args)
   in
   fpf out "@[<v>%a@]"
-    (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_pair)
+    (Utils.pp_seq ~sep:"" pp_pair)
     (FunMap.to_seq tbl)
 
 (* With [id : ty_args -> ty_ret], report a use of [id] with [n] arguments
@@ -353,11 +353,12 @@ let pp_sc out = function
   | TC_app f -> pp_apply_fun out f
 
 let pp_fe_tower out =
-  fpf out "[@[<v>%a@]]" (CCFormat.list ~start:"" ~stop:"" ~sep:"" pp_sc)
+  fpf out "[@[<v>%a@]]" (Utils.pp_list ~sep:"" pp_sc)
 
-let pp_fun_encoding out =
+let pp_fun_encoding out m =
   fpf out "[@[<v>%a@]]"
-    (IntMap.print ~start:"" ~stop:"" ~sep:"" ~arrow:" -> " CCFormat.int pp_fe_tower)
+    (Utils.pp_seq ~sep:"" CCFormat.(pair ~sep:(return "@ -> ") int pp_fe_tower))
+    (IntMap.to_seq m)
 
 let create_state ~env arities = {
   env;
@@ -491,7 +492,7 @@ let rec split_chunks_ prev lens l = match lens, l with
 let pp_chunks out =
   let pp_tys out = fpf out "@[%a@]" CCFormat.(list P.pp) in
   let pp_pair out (a,b) = fpf out "@[(%a, remaining %a)@]" pp_tys a pp_tys b in
-  fpf out "[@[%a@]]" CCFormat.(list ~start:"" ~stop:"" pp_pair)
+  fpf out "[@[%a@]]" (Utils.pp_list pp_pair)
 
 (* introduce/get required app symbols for the given ID
    and store data structure that maps [arity -> sequence of apply symbs to use].
@@ -874,9 +875,9 @@ let elim_hof_statement ~state stmt : (_, _) Stmt.t list =
   CCVector.clear state.new_stmts;
   if new_stmts<>[]
   then Utils.debugf ~section 3 "@[<2>@{<cyan>< new declarations@}:@ @[<v>%a@]@]"
-      (fun k->k (CCFormat.list ~start:"" ~stop:"" ~sep:"" PStmt.pp) new_stmts);
+      (fun k->k (Utils.pp_list ~sep:"" PStmt.pp) new_stmts);
   Utils.debugf ~section 3 "@[<2>@{<cyan>< obtain stmts@}@ `[@[<hv>%a@]]`@]"
-    (fun k->k (CCFormat.list ~start:"" ~stop:"" PStmt.pp) stmt');
+    (fun k->k (Utils.pp_list PStmt.pp) stmt');
   new_stmts @ stmt'
 
 let elim_hof pb =

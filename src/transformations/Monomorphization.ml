@@ -85,8 +85,8 @@ module ArgTuple = struct
       | None -> ()
       | Some id -> fpf out " as %a" ID.pp id
     in
-    fpf out "@[%a%a@]"
-      (CCFormat.list ~start:"(" ~stop:")" ~sep:", " pp_ty) tup.args
+    fpf out "(@[%a%a@])"
+      (Utils.pp_list ~sep:", " pp_ty) tup.args
       pp_mangled tup.mangled
 end
 
@@ -533,7 +533,7 @@ let dispatch = {
 let pp_processed_ out trav =
   Trav.processed trav
   |> Format.fprintf out "@[<v>%a@]"
-    (CCFormat.seq ~start:"" ~stop:"" ~sep:""
+    (Utils.pp_seq ~sep:""
        (fun out (id,tup) ->
           Format.fprintf out "@[<h>%a (%a)@]" ID.pp id ArgTuple.pp tup))
 

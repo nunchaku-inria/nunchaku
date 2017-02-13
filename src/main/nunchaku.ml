@@ -114,7 +114,7 @@ let parse_solvers_ s =
     l
 
 let set_solvers_ s =
-  let l = parse_solvers_ s |> CCList.Set.uniq ~eq:(=) in
+  let l = parse_solvers_ s |> CCList.uniq ~eq:(=) in
   solvers := l
 
 let set_dump () = dump_ := `Yes
@@ -263,8 +263,8 @@ let parse_prelude files =
 let pp_input_if_needed statements =
   if !pp_ then
     Format.printf "@[<v2>input: {@,@[<v>%a@]@]@,}@."
-      (CCVector.print ~start:"" ~stop:"" ~sep:"" A.pp_statement)
-      statements;
+      (Utils.pp_seq ~sep:"" A.pp_statement)
+      (CCVector.to_seq statements);
   ()
 
 module Pipes = struct

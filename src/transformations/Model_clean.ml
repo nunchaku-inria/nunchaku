@@ -26,7 +26,7 @@ let rec flatten_ty out t = match T.repr t with
   | TI.App (f,l) ->
     fpf out "%a_%a"
       flatten_ty f
-      CCFormat.(list ~start:"" ~stop:"" ~sep:"_" flatten_ty) l
+      (Utils.pp_list ~sep:"_" flatten_ty) l
   | TI.Const id -> ID.pp_name out id
   | TI.TyBuiltin b -> CCFormat.string out (TI.TyBuiltin.to_string b)
   | _ -> ()
@@ -39,7 +39,7 @@ let renaming_rules_of_model_ m =
   List.fold_left
     (fun acc (t, dom) ->
        let prefix = pick_prefix_ t in
-       CCList.Idx.foldi
+       CCList.foldi
          (fun acc i id ->
             let name = CCFormat.sprintf "$%s_%d" prefix i in
             let rhs = ID.fresh_copy_name id name in
@@ -85,10 +85,10 @@ let rec rewrite_term_ (rules:rules) subst t : T.t = match T.repr t with
 let rename m : (_,_) Model.t =
   let rules = renaming_rules_of_model_ m in
   Utils.debugf 5 ~section "@[<2>apply rewrite rules@ @[<v>%a@]@]"
-    (fun k->k (CCFormat.seq ~start:"" ~stop:"" ~sep:"" pp_rule_) (ID.Map.to_seq rules));
+    (fun k->k (Utils.pp_seq ~sep:"" pp_rule_) (ID.Map.to_seq rules));
   (* update domains *)
   let finite_types =
-    let rename_id id = ID.Map.get_or ~or_:id id rules in
+    let rename_id id = ID.Map.get_or ~default:id id rules in
     List.map
       (fun (t, dom) -> t, List.map rename_id dom)
       m.Model.finite_types
