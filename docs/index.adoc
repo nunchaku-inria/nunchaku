@@ -2,4 +2,5 @@
 
 Documentation of Nunchaku's internals:
 
+- link:0.4[0.4]
 - link:0.3[0.3]
