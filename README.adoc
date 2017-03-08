@@ -21,7 +21,12 @@ used for reporting bugs.
 
 == Documentation
 
-the API documentation can be found at https://nunchaku-inria.github.io/nunchaku/.
+Root:: at link:doc/index.adoc[]
+Input formats:: at link:doc/input_lang.adoc[] (draft)
+Model format:: at link:doc/model_syntax.adoc[] (draft)
+Pipeline of Transformations:: at link:summary.adoc[]
+Internal API documentation:: can be found at https://nunchaku-inria.github.io/nunchaku/.
+
 == Build
 
 To build Nunchaku, there are several ways.
