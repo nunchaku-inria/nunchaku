@@ -936,56 +936,9 @@ SAT: {
 </ul></div>
 </div>
 <div class="sect2">
-<h3 id="_copy_types">Copy Types</h3>
-<div class="paragraph"><p>A copy type is used to define a type from another type. It can take
-the following forms:</p></div>
-<div class="dlist"><dl>
-<dt class="hdlist1">
-type alias
-</dt>
-<dd>
-<p>
-the simplest case (below, <code>pair1</code>)
-</p>
-</dd>
-<dt class="hdlist1">
-refinement type
-</dt>
-<dd>
-<p>
-a copy of a type, only retaining values of this
-  type that satisfy a given predicate
-</p>
-</dd>
-<dt class="hdlist1">
-quotient type
-</dt>
-<dd>
-<p>
-a copy of the type, quotiented by a relation
-  that <strong>must</strong> be an equivalence relation (reflexive symetric transitive).
-</p>
-</dd>
-</dl></div>
-<div class="listingblock">
-<div class="content">
-<pre><code>data pair a b := Pair a b.
-
-copy pair1 a := pair a a
-  abstract pair1_of_pair
-  concrete pair_of_pair1.
-
-val iota : type.
-
-goal forall (p:pair1 iota).
-     exists (x:iota) (y:iota).
-     pair_of_pair1 p = Pair x y.</code></pre>
-</div></div>
-</div>
-<div class="sect2">
 <h3 id="_term_and_types">Term and Types</h3>
 <div class="paragraph"><p>Terms are written in a ML-like language that should be easy to read.
-Types are polymorphic and all quantification should be prenex.</p></div>
+Types are polymorphic and all type quantification should be prenex.</p></div>
 <div class="dlist"><dl>
 <dt class="hdlist1">
 Types
@@ -1075,7 +1028,8 @@ let-bindings <code>let x := &lt;term&gt; in &lt;term&gt;</code>, where <code>x</
 </li>
 <li>
 <p>
-tests <code>if a b c</code> where <code>a:prop</code>
+tests <code>if a b c</code> where <code>a:prop</code> and <code>b,c</code> are terms that have the
+  same type (which is also the type of <code>if a b c</code>).
 </p>
 </li>
 <li>
@@ -1128,10 +1082,7 @@ implication <code>=&gt;</code>
 <p>
 equality <code>=</code> (note that equivalence is just equality on propositions)
 </p>
-<div class="literalblock">
-<div class="content">
-<pre><code>Negation binds tightly, and `&amp;&amp;` takes precedence over `||` and `=&gt;`.</code></pre>
-</div></div>
+<div class="paragraph"><p>Negation binds tightly, and <code>&amp;&amp;</code> takes precedence over <code>||</code> and <code>=&gt;</code>.</p></div>
 </li>
 </ul></div>
 </li>
@@ -1296,6 +1247,53 @@ TODO (like axiom, but also defines some symbols)
 </dl></div>
 </div>
 <div class="sect2">
+<h3 id="_copy_types">Copy Types</h3>
+<div class="paragraph"><p>A copy type is used to define a type from another type. It can take
+the following forms:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+type alias
+</dt>
+<dd>
+<p>
+the simplest case (below, <code>pair1</code>)
+</p>
+</dd>
+<dt class="hdlist1">
+refinement type
+</dt>
+<dd>
+<p>
+a copy of a type, only retaining values of this
+  type that satisfy a given predicate
+</p>
+</dd>
+<dt class="hdlist1">
+quotient type
+</dt>
+<dd>
+<p>
+a copy of the type, quotiented by a relation
+  that <strong>must</strong> be an equivalence relation (reflexive symetric transitive).
+</p>
+</dd>
+</dl></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>data pair a b := Pair a b.
+
+copy pair1 a := pair a a
+  abstract pair1_of_pair
+  concrete pair_of_pair1.
+
+val iota : type.
+
+goal forall (p:pair1 iota).
+     exists (x:iota) (y:iota).
+     pair_of_pair1 p = Pair x y.</code></pre>
+</div></div>
+</div>
+<div class="sect2">
 <h3 id="_include_directive">Include directive</h3>
 <div class="paragraph"><p>It is possible to write commonly used
 definitions and axioms in a file, and include that file from
@@ -1446,7 +1444,7 @@ coinductive predicate
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-08 16:36:29 CET
+Last updated 2017-03-08 16:39:17 CET
 </div>
 </div>
 </body>

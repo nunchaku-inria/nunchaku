@@ -106,35 +106,10 @@ SAT: {
 
 ----
 
-=== Copy Types
-
-A copy type is used to define a type from another type. It can take
-the following forms:
-
-type alias:: the simplest case (below, `pair1`)
-refinement type:: a copy of a type, only retaining values of this
-  type that satisfy a given predicate
-quotient type:: a copy of the type, quotiented by a relation
-  that *must* be an equivalence relation (reflexive symetric transitive).
-
-----
-data pair a b := Pair a b.
-
-copy pair1 a := pair a a
-  abstract pair1_of_pair
-  concrete pair_of_pair1.
-
-val iota : type.
-
-goal forall (p:pair1 iota).
-     exists (x:iota) (y:iota).
-     pair_of_pair1 p = Pair x y.
-----
-
 === Term and Types
 
 Terms are written in a ML-like language that should be easy to read.
-Types are polymorphic and all quantification should be prenex.
+Types are polymorphic and all type quantification should be prenex.
 
 Types::
 +
@@ -173,7 +148,8 @@ terms can be built using the following constructs:
   body must be of type `prop`.
 - let-bindings `let x := <term> in <term>`, where `x` is bound in
   the second term.
-- tests `if a b c` where `a:prop`
+- tests `if a b c` where `a:prop` and `b,c` are terms that have the
+  same type (which is also the type of `if a b c`).
 - shallow pattern-matching on (co)datatypes:
   `match <term> with <branches> end`. Each branch has the form
   `| <constructor> [<variable>]* -> <term>` and deals with
@@ -200,7 +176,7 @@ rec f : foo -> prop :=
   * implication `=>`
   * equality `=` (note that equivalence is just equality on propositions)
 +
-  Negation binds tightly, and `&&` takes precedence over `||` and `=>`.
+Negation binds tightly, and `&&` takes precedence over `||` and `=>`.
 +
 - parenthesing can be used to override precedences, e.g. in `if (f a) b c`.
 
@@ -322,6 +298,31 @@ axiom  p i = q i.
 ----
 +
 spec:: TODO (like axiom, but also defines some symbols)
+
+=== Copy Types
+
+A copy type is used to define a type from another type. It can take
+the following forms:
+
+type alias:: the simplest case (below, `pair1`)
+refinement type:: a copy of a type, only retaining values of this
+  type that satisfy a given predicate
+quotient type:: a copy of the type, quotiented by a relation
+  that *must* be an equivalence relation (reflexive symetric transitive).
+
+----
+data pair a b := Pair a b.
+
+copy pair1 a := pair a a
+  abstract pair1_of_pair
+  concrete pair_of_pair1.
+
+val iota : type.
+
+goal forall (p:pair1 iota).
+     exists (x:iota) (y:iota).
+     pair_of_pair1 p = Pair x y.
+----
 
 === Include directive
 
