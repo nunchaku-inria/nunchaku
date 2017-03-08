@@ -15,7 +15,7 @@ TPTP:: minimal support, mostly for benchmarks, file extension `.p`
 [[native-format]]
 == Native Format (`.nun`)
 
-A few example files can be found in in link:examples/[] and in
+A few example files can be found in in link:examples/index.html[] and in
 the https://github.com/nunchaku-inria/nunchaku-problems[nunchaku-problems repository].
 
 === A few examples

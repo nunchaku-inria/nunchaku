@@ -25,13 +25,12 @@ used for reporting bugs.
 
 == Documentation
 
-See https://nunchaku-inria.github.io/nunchaku/
-and link:/docs/index.adoc[the sources]
+See the website https://nunchaku-inria.github.io/nunchaku/
+and link:/docs/index.adoc[the documentation sources].
 
 == Build
 
 To build Nunchaku, there are several ways.
-
 
 === Released versions
 

@@ -2,7 +2,7 @@
 %.html: %.adoc
 	asciidoc $< > $@
 
-TARGETS=$(subst .adoc,.html,$(wildcard *.adoc))
+TARGETS=$(subst .adoc,.html,$(shell find -name '*.adoc'))
 
 all: $(TARGETS)
 
