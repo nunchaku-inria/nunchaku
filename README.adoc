@@ -1,4 +1,6 @@
 = Nunchaku
+:toc: macro
+:source-highlighter: pygments
 
 A counter-example finder for higher-order logic, designed to be used from
 various proof assistants. A spiritual successor to Nitpick.
@@ -11,6 +13,8 @@ under "development versions" on http://cvc4.cs.nyu.edu/downloads/.
 We have https://github.com/nunchaku-inria/nunchaku-problems[a set of problems]
 for tests and regressions, that can also be helpful to grasp the input syntax
 and see how to use the constructs of Nunchaku.
+
+toc::[]
 
 == Contact
 
