@@ -1119,6 +1119,28 @@ rec swap_foo : foo -&gt; foo :=
 
 goal (exists x. test_foo x) &amp;&amp; (exists x. swap_foo x = C).</code></pre>
 </div></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+Polymorphism
+</dt>
+<dd>
+<p>
+  The input of Nunchaku is polymorphic, and the polymorphism is explicit:
+  a polymorphic symbol will take explicit type parameters.
+  For example, <code>rec append : pi a. list a -&gt; list a -&gt; list a</code>
+  is a binary function on lists, but it takes 3 arguments (the type <code>a</code>
+  and the two lists).
+</p>
+<div class="paragraph"><p>Because Nunchaku&#8217;s native input is designed to be easy to read and write,
+and because Nunchaku performs type inference,
+type parameters can be omitted by default.
+However, sometimes Nunchaku might not be able to infer some type parameters
+and will complain. In this case, the notation <code>@append &lt;type&gt; &lt;list&gt; &lt;list&gt;</code>
+can be used to provide the type parameter explicitely.
+Similarly, in binders, the type of the variable is omitted by default
+by can be made explicit using <code>&lt;binder&gt; (x:&lt;type&gt;). &lt;body&gt;</code>.</p></div>
+</dd>
+</dl></div>
 </div>
 <div class="sect2">
 <h3 id="_statements">Statements</h3>
@@ -1482,7 +1504,7 @@ coinductive predicate
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-08 16:53:03 CET
+Last updated 2017-03-08 16:58:43 CET
 </div>
 </div>
 </body>

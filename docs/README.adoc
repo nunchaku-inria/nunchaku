@@ -4,6 +4,7 @@
 
 A counter-example finder for higher-order logic, designed to be used from
 various proof assistants. A spiritual successor to Nitpick.
+Documentation at https://nunchaku-inria.github.io/nunchaku/.
 
 Nunchaku relies upon recent versions
 of http://cvc4.cs.nyu.edu/web/[the CVC4 SMT-solver]. Currently it is
@@ -40,15 +41,18 @@ SAT: {
 A list of options can be obtained by calling `nunchaku --help`. A few
 particularly useful options are:
 
+- `--help` for listing options.
 - `--timeout <n>` (or `-t <n>`): maximal amount of seconds before returning "unknown"
 - `j <n>` for controlling the number of backend solvers active at the
-  same time
-- `--solvers s1,s2` (or `-s s1,s2`) for using only the listed solvers
+  same time.
+- `--solvers s1,s2` (or `-s s1,s2`) for using only the listed solvers.
 - `--debug <n>` (where `n=1,2,…5`) to enable debug printing.
   The maximal verbosity level is 5, and it is very verbose. Consider
   using `nunchaku --debug 5 foo.nun | less -R` to not drown
   in pages of text.
-- `-nc` to disable colored output if your terminal does not support it.
+- `--pp-all` (and each `--pp-<pass>`) for printing the problem
+  after each transformation.
+- `-nc` to disable colored output if your terminal does not support it..
 
 == Contact
 

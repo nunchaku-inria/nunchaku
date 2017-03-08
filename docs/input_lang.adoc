@@ -205,6 +205,22 @@ rec swap_foo : foo -> foo :=
 goal (exists x. test_foo x) && (exists x. swap_foo x = C).
 ----
 
+Polymorphism::
+  The input of Nunchaku is polymorphic, and the polymorphism is explicit:
+  a polymorphic symbol will take explicit type parameters.
+  For example, `rec append : pi a. list a -> list a -> list a`
+  is a binary function on lists, but it takes 3 arguments (the type `a`
+  and the two lists).
++
+Because Nunchaku's native input is designed to be easy to read and write,
+and because Nunchaku performs type inference,
+type parameters can be omitted by default.
+However, sometimes Nunchaku might not be able to infer some type parameters
+and will complain. In this case, the notation `@append <type> <list> <list>`
+can be used to provide the type parameter explicitely.
+Similarly, in binders, the type of the variable is omitted by default
+by can be made explicit using `<binder> (x:<type>). <body>`.
+
 === Statements
 
 Common statements are the following:

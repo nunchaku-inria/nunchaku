@@ -805,7 +805,8 @@ asciidoc.install(2);
 <div id="preamble">
 <div class="sectionbody">
 <div class="paragraph"><p>A counter-example finder for higher-order logic, designed to be used from
-various proof assistants. A spiritual successor to Nitpick.</p></div>
+various proof assistants. A spiritual successor to Nitpick.
+Documentation at <a href="https://nunchaku-inria.github.io/nunchaku/">https://nunchaku-inria.github.io/nunchaku/</a>.</p></div>
 <div class="paragraph"><p>Nunchaku relies upon recent versions
 of <a href="http://cvc4.cs.nyu.edu/web/">the CVC4 SMT-solver</a>. Currently it is
 necessary to use unreleased versions of CVC4, that can be found
@@ -845,18 +846,23 @@ particularly useful options are:</p></div>
 <div class="ulist"><ul>
 <li>
 <p>
+<code>--help</code> for listing options.
+</p>
+</li>
+<li>
+<p>
 <code>--timeout &lt;n&gt;</code> (or <code>-t &lt;n&gt;</code>): maximal amount of seconds before returning "unknown"
 </p>
 </li>
 <li>
 <p>
 <code>j &lt;n&gt;</code> for controlling the number of backend solvers active at the
-  same time
+  same time.
 </p>
 </li>
 <li>
 <p>
-<code>--solvers s1,s2</code> (or <code>-s s1,s2</code>) for using only the listed solvers
+<code>--solvers s1,s2</code> (or <code>-s s1,s2</code>) for using only the listed solvers.
 </p>
 </li>
 <li>
@@ -869,7 +875,13 @@ particularly useful options are:</p></div>
 </li>
 <li>
 <p>
-<code>-nc</code> to disable colored output if your terminal does not support it.
+<code>--pp-all</code> (and each <code>--pp-&lt;pass&gt;</code>) for printing the problem
+  after each transformation.
+</p>
+</li>
+<li>
+<p>
+<code>-nc</code> to disable colored output if your terminal does not support it..
 </p>
 </li>
 </ul></div>
@@ -1021,7 +1033,7 @@ TPTP (very partial support, extension <code>.p</code>)
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-08 16:50:57 CET
+Last updated 2017-03-08 17:00:38 CET
 </div>
 </div>
 </body>
