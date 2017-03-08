@@ -25,11 +25,8 @@ used for reporting bugs.
 
 == Documentation
 
-Root:: at link:doc/index.adoc[]
-Input formats:: at link:doc/input_lang.adoc[] (draft)
-Model format:: at link:doc/model_syntax.adoc[] (draft)
-Pipeline of Transformations:: at link:summary.adoc[]
-Internal API documentation:: can be found at https://nunchaku-inria.github.io/nunchaku/.
+See https://nunchaku-inria.github.io/nunchaku/
+and link:/docs/index.adoc[the sources]
 
 == Build
 
