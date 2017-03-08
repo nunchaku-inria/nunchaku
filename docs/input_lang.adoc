@@ -53,7 +53,56 @@ UNSAT
 {backend:cvc4, time:0.0s}
 ----
 +
--
+- A few datatypes, with polymorphism, recursive functions, and comments.
++
+----
+data nat :=
+  | zero
+  | succ nat.
+
+rec plus : nat -> nat -> nat :=
+  forall x. plus zero x = x;
+  forall x y. plus (succ x) y = succ (plus x y).
+
+# polymorphic list
+data list a :=
+  | nil
+  | cons a (list a).
+
+# rose tree (with a list of children)
+data tree :=
+  | node (list tree).
+
+rec size : tree -> nat :=
+  forall l. size (node l) = succ (size_list l)
+and size_list : list tree -> nat :=
+  size_list nil = zero;
+  forall t l. size_list (cons t l) = plus (size t) (size_list l).
+
+# compute the size of some tree
+goal
+  let t0 := node nil in
+  let t := node (cons t0 (cons t0 nil)) in
+  let t2 := node (cons t nil) in
+  exists n. size t2 = n.
+----
++
+Running Nunchaku gives us a model. The model might change depending
+on which solver succeeds first.
+In this particular case, the problem is solved by
+https://github.com/c-cube/smbc/[SMBC] (installable by `opam install smbc`).
+Note how the model defines the _witness_ for the `exists n. size t2 = n`
+to the actual size of the tree, 4.
++
+----
+$ nunchaku example.nun
+SAT: {
+  val _witness_of (exists (n/494:nat). size t2/493 = n/494) :=
+    succ (succ (succ (succ zero))).
+}
+{backend:smbc, time:0.0s}
+
+----
 
 === Copy Types
 
@@ -78,6 +127,176 @@ val iota : type.
 goal forall (p:pair1 iota).
      exists (x:iota) (y:iota).
      pair_of_pair1 p = Pair x y.
+----
+
+=== Term and Types
+
+Terms are written in a ML-like language that should be easy to read.
+
+The following example demonstrates a possible way of defining functions
+with `match` and `fun`:
++
+----
+data foo := A | B | C.
+
+rec test_foo : foo -> prop :=
+  forall x. test_foo x =
+    match x with
+    | A -> true
+    | B -> false
+    | C -> true
+    end.
+
+rec swap_foo : foo -> foo :=
+  swap_foo = (fun x.
+    match x with
+    | A -> B
+    | B -> C
+    | C -> A
+    end).
+
+goal (exists x. test_foo x) && (exists x. swap_foo x = C).
+----
+
+=== Statements
+
+Common statements are the following:
+
+declaration:: `val foo : bar` where `foo` is an identifier and `bar`
+  is a type or `type` (for declaring types themselves):
++
+----
+val i : type.
+val array : type -> type -> type.
+
+val i1 : i.
+val i2 : i.
+val some_array : array i prop.
+----
++
+(co)datatypes definitions::
++
+----
+# tuples
+data pair a b := Pair a b.
+
+# lists
+data list a := Nil | Cons a (list a).
+
+# mutually recursive list and tree
+data tree a := Tree a (tree_list a)
+and tree_list a := T_nil | T_cons (tree a) (tree_list a).
+
+# streams
+codata stream a := S_cons a (stream a).
+
+----
++
+(co)recursive definitions:: introduced using `rec <id> : <type> := <axioms>`.
+  Mutual definitions are separated using `and`. Each definition
+  declares a new identifier with its type, followed by a non-empty list
+  of formulas (separated by `;`) that must be universally-quantified
+  equations with the `<id>` as left-hand-side head.
++
+----
+rec <id> : <type> :=
+  <form> [; <form>]*
+[and <id> : <type> :=
+  <form> [; <form>]*]*.
+----
++
+example:
++
+----
+data nat := Z | S nat.
+
+rec f : nat -> nat -> nat :=
+  forall n. f Z n = S n;
+  forall m n. f (S m) n = S (f m n).
+
+rec hof : (nat -> nat) -> nat -> nat :=
+  forall f n. hof f n = f (f n).
+----
++
+(co)inductive predicates:: inductive predicates are defined as least fixpoints
+  (resp. greatest fixpoints for coinductive predicates) by a list
+  of clauses. The modifier `[wf]` should only be used for predicates that
+  are *known* by the user to be well-founded. For other predicates,
+  Nunchaku will force the well-foundedness by adding a decreasing parameter
+  in every clause.
++
+----
+data nat := zero | Suc nat.
+
+pred [wf] even : nat -> prop :=
+  even zero;
+  forall (n : nat). odd n => even (Suc n)
+and odd : nat -> prop :=
+  forall (n : nat). even n => odd (Suc n).
+----
++
+axioms:: `axiom t` where `t : prop` is a formula. This axiom will
+  be enforced in the model.
+  Note that universally quantified axioms might be impossible for
+  backend solvers to enforce. It is best to use definitions rather
+  than axioms whenever possible.
++
+----
+val i : type.
+val a : i.
+val p : i -> prop.
+val q : i -> prop.
+axiom  p i = q i.
+----
++
+spec:: TODO (like axiom, but also defines some symbols)
+
+=== Include directive
+
+It is possible to write commonly used
+definitions and axioms in a file, and include that file from
+other files:
+
+foo.nun::
++
+----
+val p : prop.
+----
++
+bar.nun::
++
+----
+include "foo.nun".
+
+goal p || ~ p. # trivial, but needs `p` to be declared!
+----
+
+
+=== Cardinality Bounds
+
+The two following problems define an uninterpreted type and put bounds
+on its cardinality. Both are unsatisfiable because of  the bound
+and additional axioms:
+
+----
+val i : type [max_card 2].
+
+val i1 : i.
+val i2 : i.
+val i3 : i.
+
+# at least three distinct elements
+axiom (i1 != i2 && i2 != i3 && i1 != i3).
+----
+
+----
+val i : type [min_card 3].
+
+val a : i.
+val b : i.
+
+# at most 2 elements, clashes with constraint on i
+axiom forall x. x = a || x = b.
 ----
 
 === Builtins

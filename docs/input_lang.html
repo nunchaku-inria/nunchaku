@@ -878,7 +878,58 @@ goal ~ (append (Cons x Nil) ys = Cons x ys).</code></pre>
 UNSAT
 {backend:cvc4, time:0.0s}</code></pre>
 </div></div>
-<div class="paragraph"><p>-</p></div>
+</li>
+<li>
+<p>
+A few datatypes, with polymorphism, recursive functions, and comments.
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>data nat :=
+  | zero
+  | succ nat.
+
+rec plus : nat -&gt; nat -&gt; nat :=
+  forall x. plus zero x = x;
+  forall x y. plus (succ x) y = succ (plus x y).
+
+# polymorphic list
+data list a :=
+  | nil
+  | cons a (list a).
+
+# rose tree (with a list of children)
+data tree :=
+  | node (list tree).
+
+rec size : tree -&gt; nat :=
+  forall l. size (node l) = succ (size_list l)
+and size_list : list tree -&gt; nat :=
+  size_list nil = zero;
+  forall t l. size_list (cons t l) = plus (size t) (size_list l).
+
+# compute the size of some tree
+goal
+  let t0 := node nil in
+  let t := node (cons t0 (cons t0 nil)) in
+  let t2 := node (cons t nil) in
+  exists n. size t2 = n.</code></pre>
+</div></div>
+<div class="paragraph"><p>Running Nunchaku gives us a model. The model might change depending
+on which solver succeeds first.
+In this particular case, the problem is solved by
+<a href="https://github.com/c-cube/smbc/">SMBC</a> (installable by <code>opam install smbc</code>).
+Note how the model defines the <em>witness</em> for the <code>exists n. size t2 = n</code>
+to the actual size of the tree, 4.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>$ nunchaku example.nun
+SAT: {
+  val _witness_of (exists (n/494:nat). size t2/493 = n/494) :=
+    succ (succ (succ (succ zero))).
+}
+{backend:smbc, time:0.0s}</code></pre>
+</div></div>
 </li>
 </ul></div>
 </div>
@@ -927,6 +978,216 @@ val iota : type.
 goal forall (p:pair1 iota).
      exists (x:iota) (y:iota).
      pair_of_pair1 p = Pair x y.</code></pre>
+</div></div>
+</div>
+<div class="sect2">
+<h3 id="_term_and_types">Term and Types</h3>
+<div class="paragraph"><p>Terms are written in a ML-like language that should be easy to read.</p></div>
+<div class="paragraph"><p>The following example demonstrates a possible way of defining functions
+with <code>match</code> and <code>fun</code>:</p></div>
+<div class="paragraph"><p>+</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>data foo := A | B | C.
+
+rec test_foo : foo -&gt; prop :=
+  forall x. test_foo x =
+    match x with
+    | A -&gt; true
+    | B -&gt; false
+    | C -&gt; true
+    end.
+
+rec swap_foo : foo -&gt; foo :=
+  swap_foo = (fun x.
+    match x with
+    | A -&gt; B
+    | B -&gt; C
+    | C -&gt; A
+    end).
+
+goal (exists x. test_foo x) &amp;&amp; (exists x. swap_foo x = C).</code></pre>
+</div></div>
+</div>
+<div class="sect2">
+<h3 id="_statements">Statements</h3>
+<div class="paragraph"><p>Common statements are the following:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+declaration
+</dt>
+<dd>
+<p>
+<code>val foo : bar</code> where <code>foo</code> is an identifier and <code>bar</code>
+  is a type or <code>type</code> (for declaring types themselves):
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>val i : type.
+val array : type -&gt; type -&gt; type.
+
+val i1 : i.
+val i2 : i.
+val some_array : array i prop.</code></pre>
+</div></div>
+</dd>
+<dt class="hdlist1">
+(co)datatypes definitions
+</dt>
+<dd>
+<div class="listingblock">
+<div class="content">
+<pre><code># tuples
+data pair a b := Pair a b.
+
+# lists
+data list a := Nil | Cons a (list a).
+
+# mutually recursive list and tree
+data tree a := Tree a (tree_list a)
+and tree_list a := T_nil | T_cons (tree a) (tree_list a).
+
+# streams
+codata stream a := S_cons a (stream a).</code></pre>
+</div></div>
+</dd>
+<dt class="hdlist1">
+(co)recursive definitions
+</dt>
+<dd>
+<p>
+introduced using <code>rec &lt;id&gt; : &lt;type&gt; := &lt;axioms&gt;</code>.
+  Mutual definitions are separated using <code>and</code>. Each definition
+  declares a new identifier with its type, followed by a non-empty list
+  of formulas (separated by <code>;</code>) that must be universally-quantified
+  equations with the <code>&lt;id&gt;</code> as left-hand-side head.
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>rec &lt;id&gt; : &lt;type&gt; :=
+  &lt;form&gt; [; &lt;form&gt;]*
+[and &lt;id&gt; : &lt;type&gt; :=
+  &lt;form&gt; [; &lt;form&gt;]*]*.</code></pre>
+</div></div>
+<div class="paragraph"><p>example:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>data nat := Z | S nat.
+
+rec f : nat -&gt; nat -&gt; nat :=
+  forall n. f Z n = S n;
+  forall m n. f (S m) n = S (f m n).
+
+rec hof : (nat -&gt; nat) -&gt; nat -&gt; nat :=
+  forall f n. hof f n = f (f n).</code></pre>
+</div></div>
+</dd>
+<dt class="hdlist1">
+(co)inductive predicates
+</dt>
+<dd>
+<p>
+inductive predicates are defined as least fixpoints
+  (resp. greatest fixpoints for coinductive predicates) by a list
+  of clauses. The modifier <code>[wf]</code> should only be used for predicates that
+  are <strong>known</strong> by the user to be well-founded. For other predicates,
+  Nunchaku will force the well-foundedness by adding a decreasing parameter
+  in every clause.
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>data nat := zero | Suc nat.
+
+pred [wf] even : nat -&gt; prop :=
+  even zero;
+  forall (n : nat). odd n =&gt; even (Suc n)
+and odd : nat -&gt; prop :=
+  forall (n : nat). even n =&gt; odd (Suc n).</code></pre>
+</div></div>
+</dd>
+<dt class="hdlist1">
+axioms
+</dt>
+<dd>
+<p>
+<code>axiom t</code> where <code>t : prop</code> is a formula. This axiom will
+  be enforced in the model.
+  Note that universally quantified axioms might be impossible for
+  backend solvers to enforce. It is best to use definitions rather
+  than axioms whenever possible.
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>val i : type.
+val a : i.
+val p : i -&gt; prop.
+val q : i -&gt; prop.
+axiom  p i = q i.</code></pre>
+</div></div>
+</dd>
+<dt class="hdlist1">
+spec
+</dt>
+<dd>
+<p>
+TODO (like axiom, but also defines some symbols)
+</p>
+</dd>
+</dl></div>
+</div>
+<div class="sect2">
+<h3 id="_include_directive">Include directive</h3>
+<div class="paragraph"><p>It is possible to write commonly used
+definitions and axioms in a file, and include that file from
+other files:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+foo.nun
+</dt>
+<dd>
+<div class="listingblock">
+<div class="content">
+<pre><code>val p : prop.</code></pre>
+</div></div>
+</dd>
+<dt class="hdlist1">
+bar.nun
+</dt>
+<dd>
+<div class="listingblock">
+<div class="content">
+<pre><code>include "foo.nun".
+
+goal p || ~ p. # trivial, but needs `p` to be declared!</code></pre>
+</div></div>
+</dd>
+</dl></div>
+</div>
+<div class="sect2">
+<h3 id="_cardinality_bounds">Cardinality Bounds</h3>
+<div class="paragraph"><p>The two following problems define an uninterpreted type and put bounds
+on its cardinality. Both are unsatisfiable because of  the bound
+and additional axioms:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>val i : type [max_card 2].
+
+val i1 : i.
+val i2 : i.
+val i3 : i.
+
+# at least three distinct elements
+axiom (i1 != i2 &amp;&amp; i2 != i3 &amp;&amp; i1 != i3).</code></pre>
+</div></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>val i : type [min_card 3].
+
+val a : i.
+val b : i.
+
+# at most 2 elements, clashes with constraint on i
+axiom forall x. x = a || x = b.</code></pre>
 </div></div>
 </div>
 <div class="sect2">
@@ -1025,7 +1286,7 @@ coinductive predicate
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-08 15:29:31 CET
+Last updated 2017-03-08 15:53:08 CET
 </div>
 </div>
 </body>
