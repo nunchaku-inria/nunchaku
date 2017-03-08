@@ -2,4 +2,11 @@
 %.html: %.adoc
 	asciidoc $< > $@
 
-all: index.html
+TARGETS=$(subst .adoc,.html,$(wildcard *.adoc))
+
+all: $(TARGETS)
+
+upload: all
+	./upload_doc.sh *.html
+
+.PHONY: all

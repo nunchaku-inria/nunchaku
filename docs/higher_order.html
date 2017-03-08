@@ -4,7 +4,7 @@
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
 <meta name="generator" content="AsciiDoc 8.6.9" />
-<title>Nunchaku</title>
+<title>Translation of Higher-Order Constructs</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
 
@@ -533,68 +533,6 @@ body.manpage div.sectionbody {
 @media print {
   body.manpage div#toc { display: none; }
 }
-.highlight .hll { background-color: #ffffcc }
-.highlight  { background: #f8f8f8; }
-.highlight .c { color: #408080; font-style: italic } /* Comment */
-.highlight .err { border: 1px solid #FF0000 } /* Error */
-.highlight .k { color: #008000; font-weight: bold } /* Keyword */
-.highlight .o { color: #666666 } /* Operator */
-.highlight .cm { color: #408080; font-style: italic } /* Comment.Multiline */
-.highlight .cp { color: #BC7A00 } /* Comment.Preproc */
-.highlight .c1 { color: #408080; font-style: italic } /* Comment.Single */
-.highlight .cs { color: #408080; font-style: italic } /* Comment.Special */
-.highlight .gd { color: #A00000 } /* Generic.Deleted */
-.highlight .ge { font-style: italic } /* Generic.Emph */
-.highlight .gr { color: #FF0000 } /* Generic.Error */
-.highlight .gh { color: #000080; font-weight: bold } /* Generic.Heading */
-.highlight .gi { color: #00A000 } /* Generic.Inserted */
-.highlight .go { color: #808080 } /* Generic.Output */
-.highlight .gp { color: #000080; font-weight: bold } /* Generic.Prompt */
-.highlight .gs { font-weight: bold } /* Generic.Strong */
-.highlight .gu { color: #800080; font-weight: bold } /* Generic.Subheading */
-.highlight .gt { color: #0040D0 } /* Generic.Traceback */
-.highlight .kc { color: #008000; font-weight: bold } /* Keyword.Constant */
-.highlight .kd { color: #008000; font-weight: bold } /* Keyword.Declaration */
-.highlight .kn { color: #008000; font-weight: bold } /* Keyword.Namespace */
-.highlight .kp { color: #008000 } /* Keyword.Pseudo */
-.highlight .kr { color: #008000; font-weight: bold } /* Keyword.Reserved */
-.highlight .kt { color: #B00040 } /* Keyword.Type */
-.highlight .m { color: #666666 } /* Literal.Number */
-.highlight .s { color: #BA2121 } /* Literal.String */
-.highlight .na { color: #7D9029 } /* Name.Attribute */
-.highlight .nb { color: #008000 } /* Name.Builtin */
-.highlight .nc { color: #0000FF; font-weight: bold } /* Name.Class */
-.highlight .no { color: #880000 } /* Name.Constant */
-.highlight .nd { color: #AA22FF } /* Name.Decorator */
-.highlight .ni { color: #999999; font-weight: bold } /* Name.Entity */
-.highlight .ne { color: #D2413A; font-weight: bold } /* Name.Exception */
-.highlight .nf { color: #0000FF } /* Name.Function */
-.highlight .nl { color: #A0A000 } /* Name.Label */
-.highlight .nn { color: #0000FF; font-weight: bold } /* Name.Namespace */
-.highlight .nt { color: #008000; font-weight: bold } /* Name.Tag */
-.highlight .nv { color: #19177C } /* Name.Variable */
-.highlight .ow { color: #AA22FF; font-weight: bold } /* Operator.Word */
-.highlight .w { color: #bbbbbb } /* Text.Whitespace */
-.highlight .mf { color: #666666 } /* Literal.Number.Float */
-.highlight .mh { color: #666666 } /* Literal.Number.Hex */
-.highlight .mi { color: #666666 } /* Literal.Number.Integer */
-.highlight .mo { color: #666666 } /* Literal.Number.Oct */
-.highlight .sb { color: #BA2121 } /* Literal.String.Backtick */
-.highlight .sc { color: #BA2121 } /* Literal.String.Char */
-.highlight .sd { color: #BA2121; font-style: italic } /* Literal.String.Doc */
-.highlight .s2 { color: #BA2121 } /* Literal.String.Double */
-.highlight .se { color: #BB6622; font-weight: bold } /* Literal.String.Escape */
-.highlight .sh { color: #BA2121 } /* Literal.String.Heredoc */
-.highlight .si { color: #BB6688; font-weight: bold } /* Literal.String.Interpol */
-.highlight .sx { color: #008000 } /* Literal.String.Other */
-.highlight .sr { color: #BB6688 } /* Literal.String.Regex */
-.highlight .s1 { color: #BA2121 } /* Literal.String.Single */
-.highlight .ss { color: #19177C } /* Literal.String.Symbol */
-.highlight .bp { color: #008000 } /* Name.Builtin.Pseudo */
-.highlight .vc { color: #19177C } /* Name.Variable.Class */
-.highlight .vg { color: #19177C } /* Name.Variable.Global */
-.highlight .vi { color: #19177C } /* Name.Variable.Instance */
-.highlight .il { color: #666666 } /* Literal.Number.Integer.Long */
 
 
 </style>
@@ -789,90 +727,391 @@ install: function(toclevels) {
 }
 
 }
-asciidoc.install(2);
+asciidoc.install();
 /*]]>*/
 </script>
 </head>
 <body class="article">
 <div id="header">
-<h1>Nunchaku</h1>
-<div id="toc">
-  <div id="toctitle">Table of Contents</div>
-  <noscript><p><b>JavaScript must be enabled in your browser to display the table of contents.</b></p></noscript>
-</div>
+<h1>Translation of Higher-Order Constructs</h1>
 </div>
 <div id="content">
 <div id="preamble">
 <div class="sectionbody">
-<div class="paragraph"><p>A counter-example finder for higher-order logic, designed to be used from
-various proof assistants. A spiritual successor to Nitpick.</p></div>
-<div class="paragraph"><p>The development repository is hosted
-<a href="https://github.com/nunchaku-inria/nunchaku">on github</a>. Nunchaku is written in
-<a href="http://ocaml.org/">OCaml</a>, funded by <a href="http://inria.fr">Inria</a>
-and released under the BSD license.</p></div>
-<div class="dlist"><dl>
-<dt class="hdlist1">
-Input formats
-</dt>
-<dd>
-<p>
-at <a href="doc/input_lang.adoc">doc/input_lang.adoc</a> (draft)
-</p>
-</dd>
-<dt class="hdlist1">
-Model format
-</dt>
-<dd>
-<p>
-at <a href="doc/model_syntax.adoc">doc/model_syntax.adoc</a> (draft)
-</p>
-</dd>
-<dt class="hdlist1">
-Pipeline of Transformations
-</dt>
-<dd>
-<p>
-at <a href="summary.adoc">summary.adoc</a>
-</p>
-</dd>
-<dt class="hdlist1">
-Internal API documentation
-</dt>
-<dd>
-<p>
-per version, at:
-</p>
+<div class="paragraph"><p>What are the higher-order constructs? I believe this is a complete list:</p></div>
+<div class="paragraph"><p>C1. Terms as formulas: x &amp;&amp; y, where x, y : prop</p></div>
+<div class="paragraph"><p>C2. Formulas within terms: p (x a = x) &#8594; p true</p></div>
+<div class="paragraph"><p>C3. Lambda-abstractions: (fun x y. y + x) = (+)</p></div>
+<div class="paragraph"><p>C4. Higher-order arguments: map f [x] = [f x]</p></div>
+<div class="paragraph"><p>C5. Partial function applications: f = g &#8594; f x = g x</p></div>
+<div class="paragraph"><p>C6. Higher-order quantification: forall x. exists f. f x = x</p></div>
+<div class="paragraph"><p>C1 and C2 are not an issue for SMT-LIB or Nunchaku already today.</p></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_lambda_abstractions">Lambda-Abstractions</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>C3 (lambda-abstractions) can be eliminated by extensionality and by a
+transformation that performs lambda-lifting (defunctionalization,
+supercombinators).</p></div>
+<div class="sect2">
+<h3 id="_extensionality">Extensionality</h3>
+<div class="paragraph"><p>Applying extensionality in this case means translating</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>lhs = rhs</code></pre>
+</div></div>
+<div class="paragraph"><p>where either lhs or rhs is a lambda-abstraction (not otherwise!) to</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>forall x. lhs x = rhs x</code></pre>
+</div></div>
+<div class="paragraph"><p>Example:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>empty = (fun x. false)</code></pre>
+</div></div>
+<div class="paragraph"><p>to</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>forall x. empty x = false</code></pre>
+</div></div>
+</div>
+<div class="sect2">
+<h3 id="_lambda_lifting">Lambda-Lifting</h3>
+<div class="paragraph"><p>Lambda-lifting introduces a new function symbol corresponding to each
+lambda-abstraction. That symbol takes all the free variables of the
+lambda-abstraction&#8217;s body as argument, before taking the lambda argument
+itself.</p></div>
+<div class="paragraph"><p>Example:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>... forall u v. P (fun x. fun y. F x y u v) ...</code></pre>
+</div></div>
+<div class="paragraph"><p>becomes</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>... forall u v. P (lifted1 u v) ...
+
+rec lifted1 :=
+  lifted1 u v = (fun x. fun y. F x y u v).</code></pre>
+</div></div>
+<div class="paragraph"><p>which by extensionality becomes</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>... forall u v. P (lifted1 u v) ...
+
+rec lifted1 :=
+  lifted1 u v x y = F x y u v.</code></pre>
+</div></div>
+<div class="paragraph"><p>A single definition ("lifted1") is sufficient for an iterated
+lambda-abstraction (here "fun x. fun y. &#8230;").</p></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_higher_order_arguments_and_partial_function_applications">Higher-Order Arguments and Partial Function Applications</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>C4 (higher-order arguments) and C5 (partial function applications) go hand
+in hand. In fact, C6 (higher-order quantification) is also a prerequisite for
+C4, but we will study it in more generality below.</p></div>
+<div class="paragraph"><p>Specialization is a neat trick that takes care of some higher-order
+quantifiers, e.g., the arguments to a "map" function. We will assume that it
+has been applied already and look at the remaining higher-order arguments.</p></div>
+<div class="paragraph"><p>Consider the following example (substitution on de Bruijn terms):</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>rec subst : (nat -&gt; term) -&gt; term -&gt; term :=
+  forall rho j. subst rho (Var j) = rho j;
+  forall rho t. subst rho (Lam t) = Lam (subst (bump 0 rho) t);
+  forall rho t u. subst rho (App t u) = App (subst rho t) (subst rho u).
+
+rec bump : nat -&gt; (nat -&gt; term) -&gt; nat -&gt; term :=
+  forall n rho. bump rho 0 = Var n;
+  forall n rho m. bump rho (Suc m) = lift (rho m).</code></pre>
+</div></div>
+<div class="sect2">
+<h3 id="_handles">Handles</h3>
+<div class="paragraph"><p>The trick here is to replace the higher-order function arrow by a new type. We
+could call it an (associative) "array" but that would be confusing because we
+are not going to use the built-in SMT theory of arrays to represent them. Let
+us call such new types <em>handle types</em>, and values of those types <em>handles</em>.</p></div>
+<div class="paragraph"><p>Each handle type "H" corresponding to the function space "T &#8594; U" is equipped
+with the following sort and operations:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>(* the actual operations *)
+val app_H : H -&gt; T -&gt; U.
+val proto_H : H -&gt; T.
+
+(* an abstraction type with two gamma projections *)
+val alpha_H : type.
+val gamma1_H : alpha_H -&gt; H.
+val gamma2_H : alpha_H -&gt; T.</code></pre>
+</div></div>
+<div class="paragraph"><p>(We&#8217;ll drop the "_H"s when the context is clear.) The intuition is as follows:</p></div>
 <div class="ulist"><ul>
 <li>
 <p>
-<a href="0.3">0.3</a>
+"app" applies a handle to an argument, producing a result value. The
+  function should only be applied to argument values for which a corresponding
+  "alpha" exists.
+</p>
+</li>
+<li>
+<p>
+If there exists no "alpha" for a specific point, we a priori do not know what
+  value the function takes at that point. However, if the handle "H" enjoys
+  the property that "(H, proto H) \in alpha", we can assume that the
+  function returns "app H (proto H)" at all such points.
 </p>
 </li>
 </ul></div>
-</dd>
-</dl></div>
+<div class="paragraph"><p>We sometimes identify "alpha" with a product type "H * T" for notational
+convenience. The "alpha" type is similar to the type of the same name in the
+first-order translation for the "app" function (SMT 2015).</p></div>
+<div class="paragraph"><p>Example 1: The function that maps 0 to 1, 1 to 2, and every other integer to 0
+can be represented semantically by the handle "h" below:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>app h 0 = 1
+app h 1 = 2
+app h 7 = 0
+proto h = 7
+
+alpha = {(h, 0), (h, 1), (h, 7)}</code></pre>
+</div></div>
+<div class="paragraph"><p>Example 2: The successor function on the integers can be approximated by</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>app h 0 = 1
+app h 1 = 2
+app h 7 = 8
+proto h = 12
+
+alpha = {(h, 0), (h, 1), (h, 7)}</code></pre>
+</div></div>
+</div>
+<div class="sect2">
+<h3 id="_handle_axioms">Handle Axioms</h3>
+<div class="paragraph"><p>If two handles are distinct, they must really correspond to distinct
+functions. This is extensionality and can be axiomatized as follows:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>axiom forall h : H, k : H.
+  h = k || (exists x : T. APP h x ~= APP k x).</code></pre>
+</div></div>
+<div class="paragraph"><p>with the following abbreviation:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>HAS_PROTO h :=
+  exists b : alpha. gamma1 b = h &amp;&amp; gamma2 b = proto h.
+
+APP h j :=
+  if exists b : alpha. gamma1 b = h &amp;&amp; gamma2 b = j then
+    app h j
+  else
+    app h (proto h)
+    asserting HAS_PROTO h.</code></pre>
+</div></div>
+</div>
+<div class="sect2">
+<h3 id="_translation">Translation</h3>
+<div class="paragraph"><p>For each function symbol in the problem, we compute the minimum number of
+arguments it ever occurs with and pass additional arguments using "app" in the
+definition. For each recursively defined functions, we require</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>~ HAS_PROTO h
+|| (forall x. exists b. gamma1 b = h &amp;&amp; gamma2 b = x)</code></pre>
+</div></div>
+<div class="paragraph"><p>but drop the second conjunct if x ranges over an infinite type.</p></div>
+<div class="paragraph"><p>Finally, any call to a function variable needs to perform a complicated lookup
+routine, with suitable guards (all hidden in the "APP" abbreviation). For our
+running example, we have</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>val H : type.
+val app : H -&gt; nat -&gt; term.
+val proto : H -&gt; term.
+
+val alpha : type.
+val gamma1 : alpha -&gt; nat.
+val gamma2 : alpha -&gt; term.
+
+rec subst : H -&gt; term -&gt; term :=
+  forall h j. subst h (Var j) = APP h j;
+  forall h t. subst h (Lam t) = Lam (subst (bump 0 h) t);
+  forall h t u. subst h (App t u) = App (subst h t) (subst h u).
+
+rec bump : nat -&gt; H -&gt; H :=
+  forall n h m.
+    app (bump n h) m = (match m with | 0 =&gt; Var n | Suc k =&gt; lift (APP h k)).</code></pre>
+</div></div>
+<div class="paragraph"><p>When bump is later translated using the first-order encoding of recursive
+functions (SMT 2015), some special handling is necessary to distinguish
+between the actual function application and the indirect one through "app":</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>rec bump : nat -&gt; H -&gt; H :=
+  forall (a : alpha_bump) (b : alpha_H).
+    gamma1_H b = bump (gamma1_bump a) (gamma2_bump a) -&gt;
+    app (bump (gamma1_bump a) (gamma2_bump a)) (gamma2_H b) =
+      (match m with
+       | 0 =&gt; Var (gamma1_bump a)
+       | Suc k =&gt; lift (APP (gamma2_bump a) k)).</code></pre>
+</div></div>
+<div class="paragraph"><p>And we need one more axiom to say that "bump" has no prototype since the
+second argument to "app" is an infinite type ("nat"):</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>axiom forall (a : alpha_bump).
+  let h = bump (gamma1_bump a) (gamma2_bump a) in
+    ~ HAS_PROTO h.</code></pre>
+</div></div>
+<div class="paragraph"><p>Had the type been finite, we could have written</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>axiom forall (a : alpha_bump).
+  let h = bump (gamma1_bump a) (gamma2_bump a) in
+    ~ HAS_PROTO h
+    || (forall x. exists b. gamma1_H b = h &amp;&amp; gamma2_H b = x)</code></pre>
+</div></div>
+<div class="paragraph"><p>thereby allowing an "alpha_H" that covers the entire domain of an "app (bump n
+h) x" call. The key thing is: We only allow trivial prototypes, i.e.,
+prototypes that talk about only one element (because all elements are covered
+by "alpha" values).</p></div>
+</div>
+<div class="sect2">
+<h3 id="_partially_applied_functions_as_arguments_to_equality">Partially Applied Functions as Arguments to Equality</h3>
+<div class="paragraph"><p>A comparison "f = g" for "f", "g" functions is problematic. After the above
+translation, "f" and "g" are handles. But the same handle can correspond to
+two distinct functions. For example,</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>rec bad :=
+  bad 0 = (S 0);
+  bad (S 0) = S (S 0);
+  bad (S (S n)) = 0.</code></pre>
+</div></div>
+<div class="paragraph"><p>and</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>rec suc :=
+  suc n = S n.</code></pre>
+</div></div>
+<div class="paragraph"><p>may both be approximated by the handle</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>app f 0 = 1
+app f 1 = 2
+proto f = 7
+
+alpha = {(f, 0), (f, 1)}</code></pre>
+</div></div>
+<div class="paragraph"><p>This means we have to be careful when comparing handles. In negative contexts,
+equalities such as "f = g" can be left as is. (Indeed, we rely implicitly on
+this for the built-in equality rules, e.g. congruence.) After all, in such
+contexts, it is OK to return "true" instead of "false". In positive contexts,
+we need a full scale comparison like this:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>f = g
+&amp;&amp;
+HAS_PROTO f</code></pre>
+</div></div>
+<div class="paragraph"><p>In unpolarized contexts, we can have</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>f = g
+asserting
+HAS_PROTO f</code></pre>
+</div></div>
+</div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_contact">Contact</h2>
+<h2 id="_higher_order_quantification">Higher-Order Quantification</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>Bugs should be reported on <a href="https://github.com/nunchaku-inria/nunchaku/issues">github</a>.</p></div>
-<div class="paragraph"><p>There is a mailing list for users and proof assistants developers,
-<a href="mailto:nunchaku-users@lists.gforge.inria.fr">nunchaku-users@lists.gforge.inria.fr</a>
-(<a href="https://lists.gforge.inria.fr/mailman/listinfo/nunchaku-users">subscription</a>).</p></div>
+<div class="paragraph"><p>If we are lucky, skolemization eliminates a higher-order quantifier before it
+causes any trouble. Or perhaps the higher-order quantifier is in a recursive
+definition, and then it becomes first-order thanks to the introduction of a
+handle.</p></div>
+<div class="paragraph"><p>If the quantification is of the form "\forall x. f x = g x" (for some terms "f
+x" and "g x" that may contain "x"), it can be rewritten into "f = g", and then
+the techniques for partially applied functions as arguments to equality apply.</p></div>
+<div class="paragraph"><p>The remaining cases are:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+<em>The quantification is over a finite domain (after the possible introduction
+  of handles, which can transform some infinite types into finite ones).</em>
+  E.g. "prop &#8594; prop". This could in principle be handled using SMT arrays,
+  but according to AJR arrays do not mix well with finite model finding. Maybe
+  we just give up, like we do for infinite quantification (with the wrong
+  polarity).
+</p>
+</li>
+<li>
+<p>
+<em>The quantification is over an infinite domain.</em> E.g. "nat &#8594; nat".
+  This is generally hopeless.
+</p>
+</li>
+</ul></div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_misc">Misc</h2>
+<h2 id="_epsilon_and_iota">Epsilon and Iota</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>More information can be found in the <a href="README.adoc">README</a>.</p></div>
+<div class="paragraph"><p>Predefine the following (or export "asserting" to users):</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>rec epsilon : pi a. (a -&gt; prop) -&gt; prop :=
+  epsilon Q = epsilon Q asserting
+       Q (epsilon Q)
+    || (Q = fun x. false)
+
+rec iota : pi a. (a -&gt; prop) -&gt; prop :=
+  iota Q = iota Q asserting
+       Q (iota Q)
+    || (Q = fun x. false)
+    || (exists x y. ~ (x = y) &amp;&amp; Q x &amp;&amp; Q y).</code></pre>
+</div></div>
+<div class="paragraph"><p>Other possible names:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>some / the
+indefinite_desc / definite_desc
+choice / ???</code></pre>
+</div></div>
+<div class="paragraph"><p>"definite_choice" is not a good name&#8201;&#8212;&#8201;the word "choice" is normally reserved
+for "epsilon".</p></div>
+<div class="paragraph"><p>"epsilon" and "iota" would be specializable (but congruence rules would be
+necessary in general).</p></div>
+<div class="paragraph"><p>It might be useful to define two other symbols, which can be used internally
+(e.g., to encode quotients) or by some frontend when it is certain that there
+exists at least one element satisfying "Q" (in place of "epsilon") or exactly
+one (in place of "iota").</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>rec epsilon! : pi a. (a -&gt; prop) -&gt; prop :=
+  epsilon! Q = epsilon! Q asserting
+       Q (epsilon! Q)
+
+rec iota! : pi a. (a -&gt; prop) -&gt; prop :=
+  iota! Q = iota! Q asserting
+       Q (iota! Q)</code></pre>
+</div></div>
+<div class="paragraph"><p>No congruence rules are needed for "iota!" when specializing; otherwise,
+"epsilon!" and "iota!" are identical.</p></div>
 </div>
 </div>
 </div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-08 15:02:15 CET
+Last updated 2016-08-02 11:55:25 CEST
 </div>
 </div>
 </body>

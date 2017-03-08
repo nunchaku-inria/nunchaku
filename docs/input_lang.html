@@ -4,7 +4,7 @@
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
 <meta name="generator" content="AsciiDoc 8.6.9" />
-<title>Nunchaku</title>
+<title>Input Language for Nunchaku</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
 
@@ -795,84 +795,237 @@ asciidoc.install(2);
 </head>
 <body class="article">
 <div id="header">
-<h1>Nunchaku</h1>
+<h1>Input Language for Nunchaku</h1>
 <div id="toc">
   <div id="toctitle">Table of Contents</div>
   <noscript><p><b>JavaScript must be enabled in your browser to display the table of contents.</b></p></noscript>
 </div>
 </div>
 <div id="content">
-<div id="preamble">
+<div class="sect1">
+<h2 id="_supported_formats">Supported Formats</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>A counter-example finder for higher-order logic, designed to be used from
-various proof assistants. A spiritual successor to Nitpick.</p></div>
-<div class="paragraph"><p>The development repository is hosted
-<a href="https://github.com/nunchaku-inria/nunchaku">on github</a>. Nunchaku is written in
-<a href="http://ocaml.org/">OCaml</a>, funded by <a href="http://inria.fr">Inria</a>
-and released under the BSD license.</p></div>
+<div class="paragraph"><p>Input files are parsed by Nunchaku based on their file extension
+or on the <code>--input {nunchaku,tip,tptp}</code> command line argument</p></div>
 <div class="dlist"><dl>
 <dt class="hdlist1">
-Input formats
+native format
 </dt>
 <dd>
 <p>
-at <a href="doc/input_lang.adoc">doc/input_lang.adoc</a> (draft)
+ML-like, reflects precisely the input logic supported by
+  Nunchaku. File extension <code>.nun</code>. See <a href="#native-format">[native-format]</a>.
 </p>
 </dd>
 <dt class="hdlist1">
-Model format
+TIP
 </dt>
 <dd>
 <p>
-at <a href="doc/model_syntax.adoc">doc/model_syntax.adoc</a> (draft)
+similar to SMT-LIB2, file extension <code>.smt2</code>
 </p>
 </dd>
 <dt class="hdlist1">
-Pipeline of Transformations
+TPTP
 </dt>
 <dd>
 <p>
-at <a href="summary.adoc">summary.adoc</a>
+minimal support, mostly for benchmarks, file extension <code>.p</code>
+</p>
+</dd>
+</dl></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="native-format">Native Format (<code>.nun</code>)</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>A few example files can be found in in <a href="examples/">examples/</a> and in
+the <a href="https://github.com/nunchaku-inria/nunchaku-problems">nunchaku-problems repository</a>.</p></div>
+<div class="sect2">
+<h3 id="_a_few_examples">A few examples</h3>
+<div class="ulist"><ul>
+<li>
+<p>
+An unsatisfiable problem about <code>append</code> and <code>cons</code> on lists.
+  We first define an uninterpreted type <code>a</code> for the list elements,
+  then the datatype of lists of <code>a</code>. <code>x</code> and <code>xs</code> are undefined symbols
+  of type <code>a</code> and <code>list</code>.
+  Then we define the <em>admissible</em> recursive function <code>append</code> (it is total
+  and terminating) that concatenates two lists, and
+  specify an (unsatisfiable) goal <code>∃ x ys. append (cons x []) y ≠ cons x y</code>.
+</p>
+<div class="listingblock">
+<div class="content">
+<pre><code>val a : type.
+
+data list :=
+  Nil
+| Cons a list.
+
+val x : a.
+val ys : list.
+
+rec append : list -&gt; list -&gt; list :=
+  forall ys. append Nil ys = ys;
+  forall x xs ys. append (Cons x xs) ys = Cons x (append xs ys).
+
+goal ~ (append (Cons x Nil) ys = Cons x ys).</code></pre>
+</div></div>
+<div class="paragraph"><p>Running Nunchaku (with the CVC4 backend) on this problem will give:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>$ nunchaku append.nun -s cvc4
+UNSAT
+{backend:cvc4, time:0.0s}</code></pre>
+</div></div>
+<div class="paragraph"><p>-</p></div>
+</li>
+</ul></div>
+</div>
+<div class="sect2">
+<h3 id="_copy_types">Copy Types</h3>
+<div class="paragraph"><p>A copy type is used to define a type from another type. It can take
+the following forms:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+type alias
+</dt>
+<dd>
+<p>
+the simplest case (below, <code>pair1</code>)
 </p>
 </dd>
 <dt class="hdlist1">
-Internal API documentation
+refinement type
 </dt>
 <dd>
 <p>
-per version, at:
+a copy of a type, only retaining values of this
+  type that satisfy a given predicate
+</p>
+</dd>
+<dt class="hdlist1">
+quotient type
+</dt>
+<dd>
+<p>
+a copy of the type, quotiented by a relation
+  that <strong>must</strong> be an equivalence relation (reflexive symetric transitive).
+</p>
+</dd>
+</dl></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>data pair a b := Pair a b.
+
+copy pair1 a := pair a a
+  abstract pair1_of_pair
+  concrete pair_of_pair1.
+
+val iota : type.
+
+goal forall (p:pair1 iota).
+     exists (x:iota) (y:iota).
+     pair_of_pair1 p = Pair x y.</code></pre>
+</div></div>
+</div>
+<div class="sect2">
+<h3 id="_builtins">Builtins</h3>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+choice operators
+</dt>
+<dd>
+<p>
+with type <code>pi a. (a -&gt; prop) -&gt; a</code>
 </p>
 <div class="ulist"><ul>
 <li>
 <p>
-<a href="0.3">0.3</a>
+<code>choice</code> picks a value that satisfies the
+    predicate if at least one such value exists
+</p>
+</li>
+<li>
+<p>
+<code>unique</code> picks the value that satisfies the predicate,
+    if exactly one such value exists.
+</p>
+</li>
+<li>
+<p>
+<code>unique_unsafe</code> is similar to <code>unique</code>, but to be used only if it is
+    guaranteed that exactly one value satisfies the predicate.
+    <strong>NOTE</strong> use only if you know what you are doing!
 </p>
 </li>
 </ul></div>
 </dd>
 </dl></div>
 </div>
+<div class="sect2">
+<h3 id="_design_goals">Design Goals</h3>
+<div class="paragraph"><p>The native language must support:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+non interpreted types
+</p>
+</li>
+<li>
+<p>
+data
+</p>
+</li>
+<li>
+<p>
+codata
+</p>
+</li>
+<li>
+<p>
+quotient type
+</p>
+</li>
+<li>
+<p>
+subtype (refinement type)
+</p>
+</li>
+<li>
+<p>
+axioms (to partially define non interpreted symbols)
+</p>
+</li>
+<li>
+<p>
+recursive fun
+</p>
+</li>
+<li>
+<p>
+corecursive fun
+</p>
+</li>
+<li>
+<p>
+inductive predicate
+</p>
+</li>
+<li>
+<p>
+coinductive predicate
+</p>
+</li>
+</ul></div>
 </div>
-<div class="sect1">
-<h2 id="_contact">Contact</h2>
-<div class="sectionbody">
-<div class="paragraph"><p>Bugs should be reported on <a href="https://github.com/nunchaku-inria/nunchaku/issues">github</a>.</p></div>
-<div class="paragraph"><p>There is a mailing list for users and proof assistants developers,
-<a href="mailto:nunchaku-users@lists.gforge.inria.fr">nunchaku-users@lists.gforge.inria.fr</a>
-(<a href="https://lists.gforge.inria.fr/mailman/listinfo/nunchaku-users">subscription</a>).</p></div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_misc">Misc</h2>
-<div class="sectionbody">
-<div class="paragraph"><p>More information can be found in the <a href="README.adoc">README</a>.</p></div>
 </div>
 </div>
 </div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-08 15:02:15 CET
+Last updated 2017-03-08 14:57:06 CET
 </div>
 </div>
 </body>

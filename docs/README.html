@@ -806,11 +806,40 @@ asciidoc.install(2);
 <div class="sectionbody">
 <div class="paragraph"><p>A counter-example finder for higher-order logic, designed to be used from
 various proof assistants. A spiritual successor to Nitpick.</p></div>
-<div class="paragraph"><p>The development repository is hosted
-<a href="https://github.com/nunchaku-inria/nunchaku">on github</a>. Nunchaku is written in
-<a href="http://ocaml.org/">OCaml</a>, funded by <a href="http://inria.fr">Inria</a>
-and released under the BSD license.</p></div>
+<div class="paragraph"><p>Nunchaku relies upon recent versions
+of <a href="http://cvc4.cs.nyu.edu/web/">the CVC4 SMT-solver</a>. Currently it is
+necessary to use unreleased versions of CVC4, that can be found
+under "development versions" on <a href="http://cvc4.cs.nyu.edu/downloads/">http://cvc4.cs.nyu.edu/downloads/</a>.</p></div>
+<div class="paragraph"><p>We have <a href="https://github.com/nunchaku-inria/nunchaku-problems">a set of problems</a>
+for tests and regressions, that can also be helpful to grasp the input syntax
+and see how to use the constructs of Nunchaku.</p></div>
+<div id="toc">
+  <div id="toctitle">Table of Contents</div>
+  <noscript><p><b>JavaScript must be enabled in your browser to display the table of contents.</b></p></noscript>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_contact">Contact</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>There is a dedicated mailing list at <a href="mailto:nunchaku-users@lists.gforge.inria.fr">nunchaku-users@lists.gforge.inria.fr</a>
+  (<a href="https://lists.gforge.inria.fr/mailman/listinfo/nunchaku-users">register</a>).
+The <a href="https://github.com/nunchaku-inria/nunchaku/issues">issue tracker</a> can be
+used for reporting bugs.</p></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_documentation">Documentation</h2>
+<div class="sectionbody">
 <div class="dlist"><dl>
+<dt class="hdlist1">
+Root
+</dt>
+<dd>
+<p>
+at <a href="doc/index.adoc">doc/index.adoc</a>
+</p>
+</dd>
 <dt class="hdlist1">
 Input formats
 </dt>
@@ -840,39 +869,138 @@ Internal API documentation
 </dt>
 <dd>
 <p>
-per version, at:
+can be found at <a href="https://nunchaku-inria.github.io/nunchaku/">https://nunchaku-inria.github.io/nunchaku/</a>.
 </p>
-<div class="ulist"><ul>
-<li>
-<p>
-<a href="0.3">0.3</a>
-</p>
-</li>
-</ul></div>
 </dd>
 </dl></div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_contact">Contact</h2>
+<h2 id="_build">Build</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>Bugs should be reported on <a href="https://github.com/nunchaku-inria/nunchaku/issues">github</a>.</p></div>
-<div class="paragraph"><p>There is a mailing list for users and proof assistants developers,
-<a href="mailto:nunchaku-users@lists.gforge.inria.fr">nunchaku-users@lists.gforge.inria.fr</a>
-(<a href="https://lists.gforge.inria.fr/mailman/listinfo/nunchaku-users">subscription</a>).</p></div>
+<div class="paragraph"><p>To build Nunchaku, there are several ways.</p></div>
+<div class="sect2">
+<h3 id="_released_versions">Released versions</h3>
+<div class="paragraph"><p>Releases can be found on <a href="https://gforge.inria.fr/projects/nunchaku">https://gforge.inria.fr/projects/nunchaku</a> .</p></div>
+</div>
+<div class="sect2">
+<h3 id="_opam">Opam</h3>
+<div class="paragraph"><p>The easiest way is to use <a href="http://opam.ocaml.org/">opam</a>, the package manager for
+OCaml. Once opam is installed (don&#8217;t forget to run <code>eval `opam config env`</code>
+when you want to use opam), the following should suffice:</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>opam pin add -k git nunchaku https://github.com/nunchaku-inria/nunchaku.git#master</code></pre>
+</div></div>
+<div class="paragraph"><p>then opam should propose to install nunchaku and its dependencies. To upgrade:</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>opam update
+opam upgrade nunchaku</code></pre>
+</div></div>
+<div class="paragraph"><p>Note that the binary is called <em>nunchaku.native</em> until is it installed.</p></div>
+</div>
+<div class="sect2">
+<h3 id="_manually">Manually</h3>
+<div class="paragraph"><p>You need to install the dependencies first, namely:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+<a href="http://projects.camlcity.org/projects/findlib.html">ocamlfind</a>
+</p>
+</li>
+<li>
+<p>
+<a href="https://github.com/c-cube/ocaml-containers/">containers</a>
+</p>
+</li>
+<li>
+<p>
+<a href="http://gallium.inria.fr/~fpottier/menhir/">menhir</a>
+</p>
+</li>
+<li>
+<p>
+<a href="https://github.com/c-cube/sequence">sequence</a>
+</p>
+</li>
+<li>
+<p>
+<a href="https://github.com/c-cube/tip-parser">tip-parser</a> (which requires menhir)
+</p>
+</li>
+<li>
+<p>
+<a href="https://github.com/ocaml/oasis/">oasis</a> (to build the development version, not releases)
+</p>
+</li>
+<li>
+<p>
+ocamlbuild (provided with OCaml ≤ 4.03)
+</p>
+</li>
+</ul></div>
+<div class="paragraph"><p>Once you have entered the source directory, type:</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>./configure
+make</code></pre>
+</div></div>
+</div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_misc">Misc</h2>
+<h2 id="_license">License</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>More information can be found in the <a href="README.adoc">README</a>.</p></div>
+<div class="paragraph"><p>Free software under the BSD license. See file <em>LICENSE</em> for more details.</p></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_input_output">Input/Output</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>Supported input formats are:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+nunchaku&#8217;s own input format, ML-like (extension <code>.nun</code>)
+</p>
+</li>
+<li>
+<p>
+TPTP (very partial support, extension <code>.p</code>)
+</p>
+</li>
+<li>
+<p>
+<a href="https://github.com/tip-org/">TIP</a> (extension <code>.smt2</code>)
+</p>
+</li>
+</ul></div>
+<div class="paragraph"><p>Supported solver backends:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+<a href="http://cvc4.cs.nyu.edu/web/">CVC4</a> (development versions, we need finite model finding)
+</p>
+</li>
+<li>
+<p>
+<a href="https://github.com/tip-org/">Paradox</a>
+</p>
+</li>
+<li>
+<p>
+<a href="https://github.com/emina/kodkod">Kodkod</a> with its "kodkodi" parser
+</p>
+</li>
+</ul></div>
 </div>
 </div>
 </div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-08 15:02:15 CET
+Last updated 2017-03-08 14:32:34 CET
 </div>
 </div>
 </body>

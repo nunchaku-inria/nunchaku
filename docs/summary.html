@@ -4,7 +4,7 @@
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
 <meta name="generator" content="AsciiDoc 8.6.9" />
-<title>Nunchaku</title>
+<title>Pipeline components</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
 
@@ -533,68 +533,6 @@ body.manpage div.sectionbody {
 @media print {
   body.manpage div#toc { display: none; }
 }
-.highlight .hll { background-color: #ffffcc }
-.highlight  { background: #f8f8f8; }
-.highlight .c { color: #408080; font-style: italic } /* Comment */
-.highlight .err { border: 1px solid #FF0000 } /* Error */
-.highlight .k { color: #008000; font-weight: bold } /* Keyword */
-.highlight .o { color: #666666 } /* Operator */
-.highlight .cm { color: #408080; font-style: italic } /* Comment.Multiline */
-.highlight .cp { color: #BC7A00 } /* Comment.Preproc */
-.highlight .c1 { color: #408080; font-style: italic } /* Comment.Single */
-.highlight .cs { color: #408080; font-style: italic } /* Comment.Special */
-.highlight .gd { color: #A00000 } /* Generic.Deleted */
-.highlight .ge { font-style: italic } /* Generic.Emph */
-.highlight .gr { color: #FF0000 } /* Generic.Error */
-.highlight .gh { color: #000080; font-weight: bold } /* Generic.Heading */
-.highlight .gi { color: #00A000 } /* Generic.Inserted */
-.highlight .go { color: #808080 } /* Generic.Output */
-.highlight .gp { color: #000080; font-weight: bold } /* Generic.Prompt */
-.highlight .gs { font-weight: bold } /* Generic.Strong */
-.highlight .gu { color: #800080; font-weight: bold } /* Generic.Subheading */
-.highlight .gt { color: #0040D0 } /* Generic.Traceback */
-.highlight .kc { color: #008000; font-weight: bold } /* Keyword.Constant */
-.highlight .kd { color: #008000; font-weight: bold } /* Keyword.Declaration */
-.highlight .kn { color: #008000; font-weight: bold } /* Keyword.Namespace */
-.highlight .kp { color: #008000 } /* Keyword.Pseudo */
-.highlight .kr { color: #008000; font-weight: bold } /* Keyword.Reserved */
-.highlight .kt { color: #B00040 } /* Keyword.Type */
-.highlight .m { color: #666666 } /* Literal.Number */
-.highlight .s { color: #BA2121 } /* Literal.String */
-.highlight .na { color: #7D9029 } /* Name.Attribute */
-.highlight .nb { color: #008000 } /* Name.Builtin */
-.highlight .nc { color: #0000FF; font-weight: bold } /* Name.Class */
-.highlight .no { color: #880000 } /* Name.Constant */
-.highlight .nd { color: #AA22FF } /* Name.Decorator */
-.highlight .ni { color: #999999; font-weight: bold } /* Name.Entity */
-.highlight .ne { color: #D2413A; font-weight: bold } /* Name.Exception */
-.highlight .nf { color: #0000FF } /* Name.Function */
-.highlight .nl { color: #A0A000 } /* Name.Label */
-.highlight .nn { color: #0000FF; font-weight: bold } /* Name.Namespace */
-.highlight .nt { color: #008000; font-weight: bold } /* Name.Tag */
-.highlight .nv { color: #19177C } /* Name.Variable */
-.highlight .ow { color: #AA22FF; font-weight: bold } /* Operator.Word */
-.highlight .w { color: #bbbbbb } /* Text.Whitespace */
-.highlight .mf { color: #666666 } /* Literal.Number.Float */
-.highlight .mh { color: #666666 } /* Literal.Number.Hex */
-.highlight .mi { color: #666666 } /* Literal.Number.Integer */
-.highlight .mo { color: #666666 } /* Literal.Number.Oct */
-.highlight .sb { color: #BA2121 } /* Literal.String.Backtick */
-.highlight .sc { color: #BA2121 } /* Literal.String.Char */
-.highlight .sd { color: #BA2121; font-style: italic } /* Literal.String.Doc */
-.highlight .s2 { color: #BA2121 } /* Literal.String.Double */
-.highlight .se { color: #BB6622; font-weight: bold } /* Literal.String.Escape */
-.highlight .sh { color: #BA2121 } /* Literal.String.Heredoc */
-.highlight .si { color: #BB6688; font-weight: bold } /* Literal.String.Interpol */
-.highlight .sx { color: #008000 } /* Literal.String.Other */
-.highlight .sr { color: #BB6688 } /* Literal.String.Regex */
-.highlight .s1 { color: #BA2121 } /* Literal.String.Single */
-.highlight .ss { color: #19177C } /* Literal.String.Symbol */
-.highlight .bp { color: #008000 } /* Name.Builtin.Pseudo */
-.highlight .vc { color: #19177C } /* Name.Variable.Class */
-.highlight .vg { color: #19177C } /* Name.Variable.Global */
-.highlight .vi { color: #19177C } /* Name.Variable.Instance */
-.highlight .il { color: #666666 } /* Literal.Number.Integer.Long */
 
 
 </style>
@@ -789,90 +727,254 @@ install: function(toclevels) {
 }
 
 }
-asciidoc.install(2);
+asciidoc.install();
 /*]]>*/
 </script>
 </head>
 <body class="article">
 <div id="header">
-<h1>Nunchaku</h1>
-<div id="toc">
-  <div id="toctitle">Table of Contents</div>
-  <noscript><p><b>JavaScript must be enabled in your browser to display the table of contents.</b></p></noscript>
-</div>
+<h1>Pipeline components</h1>
 </div>
 <div id="content">
 <div id="preamble">
 <div class="sectionbody">
-<div class="paragraph"><p>A counter-example finder for higher-order logic, designed to be used from
-various proof assistants. A spiritual successor to Nitpick.</p></div>
-<div class="paragraph"><p>The development repository is hosted
-<a href="https://github.com/nunchaku-inria/nunchaku">on github</a>. Nunchaku is written in
-<a href="http://ocaml.org/">OCaml</a>, funded by <a href="http://inria.fr">Inria</a>
-and released under the BSD license.</p></div>
 <div class="dlist"><dl>
 <dt class="hdlist1">
-Input formats
+type inference
 </dt>
 <dd>
 <p>
-at <a href="doc/input_lang.adoc">doc/input_lang.adoc</a> (draft)
+    infer implicit type parameters, and check that the problem is well-typed
 </p>
 </dd>
 <dt class="hdlist1">
-Model format
+skolemization
 </dt>
 <dd>
 <p>
-at <a href="doc/model_syntax.adoc">doc/model_syntax.adoc</a> (draft)
+    replace existential variables in the goal by fresh constant/function symbols
 </p>
 </dd>
 <dt class="hdlist1">
-Pipeline of Transformations
+monomorphization
 </dt>
 <dd>
 <p>
-at <a href="summary.adoc">summary.adoc</a>
+    specialize polymorphic functions and types, and perform dependency analysis
+    to keep only the relevant types and definitions
 </p>
 </dd>
 <dt class="hdlist1">
-Internal API documentation
+elim matching
 </dt>
 <dd>
 <p>
-per version, at:
+    encode pattern matching into <code>DataSelect</code> / <code>DataTest</code> constructs
+    that can be used by CVC4
 </p>
-<div class="ulist"><ul>
-<li>
+</dd>
+<dt class="hdlist1">
+recursion elimination
+</dt>
+<dd>
 <p>
-<a href="0.3">0.3</a>
+    <a href="#rec_elim_encoding">encoding</a> of recursive functions that are more suitable for CVC4&#8217;s finite
+    model finding.
 </p>
-</li>
-</ul></div>
+</dd>
+<dt class="hdlist1">
+conversion to FO
+</dt>
+<dd>
+<p>
+    check that the problem is now monomorphic first-order, and translate it
+    to a specialized format
+</p>
+</dd>
+<dt class="hdlist1">
+elim multiple equations
+</dt>
+<dd>
+<p>
+    (<strong>wip</strong>) convert Haskell-like definitions, with multiple definitions for
+    a single function, into a single-equation + pattern matching (à la Coq).
+</p>
+</dd>
+<dt class="hdlist1">
+specialization
+</dt>
+<dd>
+<p>
+    (<strong>todo</strong>) specialize higher-order functions (e.g., <code>map</code> or <code>fold</code>) to their
+    functional arguments, to obtain a first-order function. For instance,
+    <code>map (fun x -&gt; x+1)</code> should become <code>map_42 : list nat -&gt; list nat</code>
+    where <code>map_42 l = match l with nil -&gt; nil | cons x l -&gt; cons (x+1) (map_42 l) end</code>
+</p>
+</dd>
+<dt class="hdlist1">
+inlining/unfolding
+</dt>
+<dd>
+<p>
+    (<strong>todo</strong>) related to specialization, this replaces some non-recursive
+    functions by their definition
+</p>
+</dd>
+<dt class="hdlist1">
+encoding HO functions to arrays
+</dt>
+<dd>
+<p>
+    (<strong>todo</strong>) to have CVC4 synthesize some function <code>τ1 → τ2</code> passed as argument
+    to another function, where <code>τ1</code> is a finite type, encode the function as an
+    <code>array τ1 τ2</code>.
+</p>
+</dd>
+<dt class="hdlist1">
+encoding dependent types
+</dt>
+<dd>
+<p>
+    (<strong>todo</strong>) once we have dependent types, remove term arguments to a type
+    and instead use some predicate to enforce typing invariant. For instance,
+    <code>vec : nat -&gt; type -&gt; type</code> becomes <code>vec_ : type -&gt; type</code>,
+    and <code>forall v:(vec n τ). p[v]</code> becomes
+    <code>forall v:(vec τ). well-formed-vec n v =&gt; p[v]</code> where <code>well-formed-vec n v</code>
+    is an inductive predicate basically enforcing that <code>n = length v</code>.
+</p>
+</dd>
+</dl></div>
+<div class="paragraph"><p>Backends:</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+CVC4
+</dt>
+<dd>
+<p>
+    send the first-order problem to CVC4 in SMTlib syntax, and read a model
+    back if it indicates <code>SAT</code>.
+</p>
+</dd>
+<dt class="hdlist1">
+Narrowing
+</dt>
+<dd>
+<p>
+    (<strong>wip</strong>) given a problem where every symbol is computable (defined as a
+    function rather than uninterpreted symbol + axioms), use symbolic
+    evaluation + refinement of variables of inductive type to obtain
+    counter-example values.
+</p>
 </dd>
 </dl></div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_contact">Contact</h2>
+<h2 id="rec_elim_encoding">Recursive Functions</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>Bugs should be reported on <a href="https://github.com/nunchaku-inria/nunchaku/issues">github</a>.</p></div>
-<div class="paragraph"><p>There is a mailing list for users and proof assistants developers,
-<a href="mailto:nunchaku-users@lists.gforge.inria.fr">nunchaku-users@lists.gforge.inria.fr</a>
-(<a href="https://lists.gforge.inria.fr/mailman/listinfo/nunchaku-users">subscription</a>).</p></div>
+<div class="paragraph"><p>The recursive (well-founded) functions need to be encoded:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>val fib : nat -&gt; nat
+
+let rec fib n =
+  if n = 0 then 0
+  else if n = 1 then 1
+  else
+    fib (n-1) + fib (n-2)</code></pre>
+</div></div>
+<div class="paragraph"><p>requires quantification over <code>nat : type</code> which is infinite. Instead we
+approximate its argument by <code>gamma_nat : pseudo_nat -&gt; nat</code> (uninterpreted type to be
+dealt with by finite model finding) and it becomes:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>val fib : nat -&gt; nat
+
+forall x. gamma_nat x = 0 =&gt; fib (gamma_nat x) = 0.
+forall x. gamma_nat x = 1 =&gt; fib (gamma_nat x) = 1.
+forall x.
+  exists m1 m2.
+      gamma_nat m1 = (gamma_nat n) - 1 &amp;&amp; gamma_nat m2 = (gamma_nat n) - 2
+      =&gt;
+      fib (gamma_nat n) = fib (gamma_nat m1) + fib (gamma_nat m2))</code></pre>
+</div></div>
+<div class="paragraph"><p>See <em>Model Finding for Recursive Functions in SMT</em>. Also, model extraction
+should only translate <code>fib</code> on a domain restricted to values
+that are in the image of <code>gamma_nat</code> (other values are "junk").</p></div>
+<div class="paragraph"><p>For (co)inductive types, selectors and tester should be used since SMT
+solvers do not have pattern-matching (yet?).</p></div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_misc">Misc</h2>
+<h2 id="_inductive_predicates">Inductive Predicates</h2>
 <div class="sectionbody">
-<div class="paragraph"><p>More information can be found in the <a href="README.adoc">README</a>.</p></div>
+<div class="paragraph"><p>Syntax:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>inductive even : nat -&gt; prop :=
+  even 0 ;
+  even n =&gt; even n ;  # not well-founded!
+  even n =&gt; even (n+2).</code></pre>
+</div></div>
+<div class="paragraph"><p>Two possible approaches.</p></div>
+<div class="paragraph"><p>Reference <a href="http://www.cl.cam.ac.uk/~jrh13/papers/ind.html">http://www.cl.cam.ac.uk/~jrh13/papers/ind.html</a></p></div>
+<div class="sect2">
+<h3 id="_à_la_coq">À la Coq</h3>
+<div class="paragraph"><p>Add an argument that is used to make the recursion well-founded (or productive,
+for coinductive predicates).</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>data even_witness :=
+  | case0
+  | case_same even_witness
+  | case_plus2 even_witness.
+
+val even' : even_witness -&gt; nat -&gt; prop
+
+rec even' :=
+  even' case0 0 ;
+  even' (case_same w) n = even' w n ;
+  even' (case_plus2 w) (n+2) = even' w n.</code></pre>
+</div></div>
+<div class="paragraph"><p>Note that every case is now well-founded.</p></div>
+</div>
+<div class="sect2">
+<h3 id="_à_la_nitpick">À la Nitpick</h3>
+<div class="paragraph"><p>Approximation that depends on the polarity. Declare <code>even2 : nat -&gt; nat -&gt; prop</code>
+where the first <code>nat</code> is an index.</p></div>
+<div class="tableblock">
+<table rules="all"
+width="100%"
+frame="border"
+cellspacing="0" cellpadding="4">
+<col width="50%" />
+<col width="50%" />
+<tbody>
+<tr>
+<td align="left" valign="top"><p class="table">positive</p></td>
+<td align="left" valign="top"><p class="table">negative</p></td>
+</tr>
+<tr>
+<td align="left" valign="top"><p class="table"><code>even2 0 _ = false</code></p></td>
+<td align="left" valign="top"><p class="table"><code>even2 0 _ = true</code></p></td>
+</tr>
+<tr>
+<td align="left" valign="top"><p class="table"><code>even2 k n = even2 (k-1) 0 ∨ even2 (k-1) n ∨ even2 (k-1) (n-2)</code></p></td>
+<td align="left" valign="top"><p class="table">same</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="paragraph"><p>Then <code>even n</code> is either <code>exists k. even2 k n</code>, or we can enumerate <code>k</code>
+starting from <code>0</code> (or CVC4 could).</p></div>
+</div>
 </div>
 </div>
 </div>
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-08 15:02:15 CET
+Last updated 2015-11-30 16:37:10 CET
 </div>
 </div>
 </body>

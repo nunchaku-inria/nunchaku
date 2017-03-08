@@ -1,0 +1,111 @@
+= Input Language for Nunchaku
+:toc: macro
+:source-highlighter: pygments
+
+== Supported Formats
+
+Input files are parsed by Nunchaku based on their file extension
+or on the `--input {nunchaku,tip,tptp}` command line argument
+
+native format:: ML-like, reflects precisely the input logic supported by
+  Nunchaku. File extension `.nun`. See <<native-format>>.
+TIP:: similar to SMT-LIB2, file extension `.smt2`
+TPTP:: minimal support, mostly for benchmarks, file extension `.p`
+
+[[native-format]]
+== Native Format (`.nun`)
+
+A few example files can be found in in link:examples/[] and in
+the https://github.com/nunchaku-inria/nunchaku-problems[nunchaku-problems repository].
+
+=== A few examples
+
+- An unsatisfiable problem about `append` and `cons` on lists.
+  We first define an uninterpreted type `a` for the list elements,
+  then the datatype of lists of `a`. `x` and `xs` are undefined symbols
+  of type `a` and `list`.
+  Then we define the _admissible_ recursive function `append` (it is total
+  and terminating) that concatenates two lists, and
+  specify an (unsatisfiable) goal `∃ x ys. append (cons x []) y ≠ cons x y`.
++
+----
+val a : type.
+
+data list :=
+  Nil
+| Cons a list.
+
+val x : a.
+val ys : list.
+
+rec append : list -> list -> list :=
+  forall ys. append Nil ys = ys;
+  forall x xs ys. append (Cons x xs) ys = Cons x (append xs ys).
+
+goal ~ (append (Cons x Nil) ys = Cons x ys).
+----
++
+Running Nunchaku (with the CVC4 backend) on this problem will give:
++
+----
+$ nunchaku append.nun -s cvc4
+UNSAT
+{backend:cvc4, time:0.0s}
+----
++
+-
+
+=== Copy Types
+
+A copy type is used to define a type from another type. It can take
+the following forms:
+
+type alias:: the simplest case (below, `pair1`)
+refinement type:: a copy of a type, only retaining values of this
+  type that satisfy a given predicate
+quotient type:: a copy of the type, quotiented by a relation
+  that *must* be an equivalence relation (reflexive symetric transitive).
+
+----
+data pair a b := Pair a b.
+
+copy pair1 a := pair a a
+  abstract pair1_of_pair
+  concrete pair_of_pair1.
+
+val iota : type.
+
+goal forall (p:pair1 iota).
+     exists (x:iota) (y:iota).
+     pair_of_pair1 p = Pair x y.
+----
+
+=== Builtins
+
+choice operators:: with type `pi a. (a -> prop) -> a`
++
+- `choice` picks a value that satisfies the
+    predicate if at least one such value exists
+- `unique` picks the value that satisfies the predicate,
+    if exactly one such value exists.
+- `unique_unsafe` is similar to `unique`, but to be used only if it is
+    guaranteed that exactly one value satisfies the predicate.
+    *NOTE* use only if you know what you are doing!
+
+=== Design Goals
+
+The native language must support:
+
+- non interpreted types
+- data
+- codata
+- quotient type
+- subtype (refinement type)
+
+- axioms (to partially define non interpreted symbols)
+- recursive fun
+- corecursive fun
+- inductive predicate
+- coinductive predicate
+
+
