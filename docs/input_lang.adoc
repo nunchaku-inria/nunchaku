@@ -9,8 +9,10 @@ or on the `--input {nunchaku,tip,tptp}` command line argument
 
 native format:: ML-like, reflects precisely the input logic supported by
   Nunchaku. File extension `.nun`. See <<native-format>>.
-TIP:: similar to SMT-LIB2, file extension `.smt2`
-TPTP:: minimal support, mostly for benchmarks, file extension `.p`
+TIP:: similar to SMT-LIB2, file extension `.smt2`.
+  The format is documented at https://tip-org.github.io/.
+TPTP:: minimal support, mostly for benchmarks, file extension `.p`.
+  See http://www.cs.miami.edu/~tptp/.
 
 [[native-format]]
 == Native Format (`.nun`)
@@ -132,6 +134,75 @@ goal forall (p:pair1 iota).
 === Term and Types
 
 Terms are written in a ML-like language that should be easy to read.
+Types are polymorphic and all quantification should be prenex.
+
+Types::
++
+Basic types can be declared by `val <id>: [type ->]* type.`
+or defined as (co)datatypes (see <<datatype-def>>).
+Other types are built using basic types, `prop` (propositions),
+`a b c` (where `a : type -> type -> type` and `b, c: type`),
+`a -> b` where `a` and `b` are types (right associative: `a -> b -> c`
+is `a -> (b -> c)`) and type variables that are introduced by
+prenex quantification `pi a. <type>`.
+For example, after declaring `i:type` and `array: type -> type -> type`,
+the following are well-formed types:
++
+- `i`
+- `i->i`
+- `pi a. array a i -> a -> i -> prop`
+- `pi a. (a -> prop) -> a`
+- `pi a b c. array a b -> (array b c -> i -> prop) -> prop`
+
+Terms::
++
+Terms belong to the polymorphic higher-order logic. Formulas are just terms
+of type `prop`, and logical connectives are function symbols of type `prop -> prop`
+and `prop -> prop -> prop`.
+In addition to basic function symbols, that are declared using `val <id>: <type>.`
+or defined as recursive functions or (co)inductive predicates,
+terms can be built using the following constructs:
++
+- builtins (see <<builtins>>)
+- basic function symbols
+- (bound) variables
+- lambda-abstraction `fun x. <term>` where `x` is bound in the body.
+  The type of `x` can be explicitely specified: `fun (x:<type>). <term>`.
+  Functions with multiple arguments can be shortened as `fun x y z. <term>`.
+- quantifiers: `forall x. <term>` and `exists x. <term>` where the
+  body must be of type `prop`.
+- let-bindings `let x := <term> in <term>`, where `x` is bound in
+  the second term.
+- tests `if a b c` where `a:prop`
+- shallow pattern-matching on (co)datatypes:
+  `match <term> with <branches> end`. Each branch has the form
+  `| <constructor> [<variable>]* -> <term>` and deals with
+  the corresponding constructor case. Constructors must always be
+  fully applied (no matching on functions).
++
+example:
++
+----
+data foo := A | B | C.
+rec f : foo -> prop :=
+  forall x. f x =
+    match x with
+    | A -> true
+    | B -> false
+    | C -> true
+    end.
+----
++
+- connectives:
+  * conjunction `&&`
+  * disjunction `||`
+  * negation `~`
+  * implication `=>`
+  * equality `=` (note that equivalence is just equality on propositions)
++
+  Negation binds tightly, and `&&` takes precedence over `||` and `=>`.
++
+- parenthesing can be used to override precedences, e.g. in `if (f a) b c`.
 
 The following example demonstrates a possible way of defining functions
 with `match` and `fun`:
@@ -174,6 +245,7 @@ val i2 : i.
 val some_array : array i prop.
 ----
 +
+[[datatype-def]]
 (co)datatypes definitions::
 +
 ----
@@ -299,6 +371,7 @@ val b : i.
 axiom forall x. x = a || x = b.
 ----
 
+[[builtins]]
 === Builtins
 
 choice operators:: with type `pi a. (a -> prop) -> a`

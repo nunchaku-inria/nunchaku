@@ -822,7 +822,8 @@ TIP
 </dt>
 <dd>
 <p>
-similar to SMT-LIB2, file extension <code>.smt2</code>
+similar to SMT-LIB2, file extension <code>.smt2</code>.
+  The format is documented at <a href="https://tip-org.github.io/">https://tip-org.github.io/</a>.
 </p>
 </dd>
 <dt class="hdlist1">
@@ -830,7 +831,8 @@ TPTP
 </dt>
 <dd>
 <p>
-minimal support, mostly for benchmarks, file extension <code>.p</code>
+minimal support, mostly for benchmarks, file extension <code>.p</code>.
+  See <a href="http://www.cs.miami.edu/~tptp/">http://www.cs.miami.edu/~tptp/</a>.
 </p>
 </dd>
 </dl></div>
@@ -982,7 +984,165 @@ goal forall (p:pair1 iota).
 </div>
 <div class="sect2">
 <h3 id="_term_and_types">Term and Types</h3>
-<div class="paragraph"><p>Terms are written in a ML-like language that should be easy to read.</p></div>
+<div class="paragraph"><p>Terms are written in a ML-like language that should be easy to read.
+Types are polymorphic and all quantification should be prenex.</p></div>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+Types
+</dt>
+<dd>
+<div class="paragraph"><p>Basic types can be declared by <code>val &lt;id&gt;: [type -&gt;]* type.</code>
+or defined as (co)datatypes (see <a href="#datatype-def">[datatype-def]</a>).
+Other types are built using basic types, <code>prop</code> (propositions),
+<code>a b c</code> (where <code>a : type -&gt; type -&gt; type</code> and <code>b, c: type</code>),
+<code>a -&gt; b</code> where <code>a</code> and <code>b</code> are types (right associative: <code>a -&gt; b -&gt; c</code>
+is <code>a -&gt; (b -&gt; c)</code>) and type variables that are introduced by
+prenex quantification <code>pi a. &lt;type&gt;</code>.
+For example, after declaring <code>i:type</code> and <code>array: type -&gt; type -&gt; type</code>,
+the following are well-formed types:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+<code>i</code>
+</p>
+</li>
+<li>
+<p>
+<code>i-&gt;i</code>
+</p>
+</li>
+<li>
+<p>
+<code>pi a. array a i -&gt; a -&gt; i -&gt; prop</code>
+</p>
+</li>
+<li>
+<p>
+<code>pi a. (a -&gt; prop) -&gt; a</code>
+</p>
+</li>
+<li>
+<p>
+<code>pi a b c. array a b -&gt; (array b c -&gt; i -&gt; prop) -&gt; prop</code>
+</p>
+</li>
+</ul></div>
+</dd>
+<dt class="hdlist1">
+Terms
+</dt>
+<dd>
+<div class="paragraph"><p>Terms belong to the polymorphic higher-order logic. Formulas are just terms
+of type <code>prop</code>, and logical connectives are function symbols of type <code>prop -&gt; prop</code>
+and <code>prop -&gt; prop -&gt; prop</code>.
+In addition to basic function symbols, that are declared using <code>val &lt;id&gt;: &lt;type&gt;.</code>
+or defined as recursive functions or (co)inductive predicates,
+terms can be built using the following constructs:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+builtins (see <a href="#builtins">[builtins]</a>)
+</p>
+</li>
+<li>
+<p>
+basic function symbols
+</p>
+</li>
+<li>
+<p>
+(bound) variables
+</p>
+</li>
+<li>
+<p>
+lambda-abstraction <code>fun x. &lt;term&gt;</code> where <code>x</code> is bound in the body.
+  The type of <code>x</code> can be explicitely specified: <code>fun (x:&lt;type&gt;). &lt;term&gt;</code>.
+  Functions with multiple arguments can be shortened as <code>fun x y z. &lt;term&gt;</code>.
+</p>
+</li>
+<li>
+<p>
+quantifiers: <code>forall x. &lt;term&gt;</code> and <code>exists x. &lt;term&gt;</code> where the
+  body must be of type <code>prop</code>.
+</p>
+</li>
+<li>
+<p>
+let-bindings <code>let x := &lt;term&gt; in &lt;term&gt;</code>, where <code>x</code> is bound in
+  the second term.
+</p>
+</li>
+<li>
+<p>
+tests <code>if a b c</code> where <code>a:prop</code>
+</p>
+</li>
+<li>
+<p>
+shallow pattern-matching on (co)datatypes:
+  <code>match &lt;term&gt; with &lt;branches&gt; end</code>. Each branch has the form
+  <code>| &lt;constructor&gt; [&lt;variable&gt;]* -&gt; &lt;term&gt;</code> and deals with
+  the corresponding constructor case. Constructors must always be
+  fully applied (no matching on functions).
+</p>
+<div class="paragraph"><p>example:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>data foo := A | B | C.
+rec f : foo -&gt; prop :=
+  forall x. f x =
+    match x with
+    | A -&gt; true
+    | B -&gt; false
+    | C -&gt; true
+    end.</code></pre>
+</div></div>
+</li>
+<li>
+<p>
+connectives:
+</p>
+<div class="ulist"><ul>
+<li>
+<p>
+conjunction <code>&amp;&amp;</code>
+</p>
+</li>
+<li>
+<p>
+disjunction <code>||</code>
+</p>
+</li>
+<li>
+<p>
+negation <code>~</code>
+</p>
+</li>
+<li>
+<p>
+implication <code>=&gt;</code>
+</p>
+</li>
+<li>
+<p>
+equality <code>=</code> (note that equivalence is just equality on propositions)
+</p>
+<div class="literalblock">
+<div class="content">
+<pre><code>Negation binds tightly, and `&amp;&amp;` takes precedence over `||` and `=&gt;`.</code></pre>
+</div></div>
+</li>
+</ul></div>
+</li>
+<li>
+<p>
+parenthesing can be used to override precedences, e.g. in <code>if (f a) b c</code>.
+</p>
+</li>
+</ul></div>
+</dd>
+</dl></div>
 <div class="paragraph"><p>The following example demonstrates a possible way of defining functions
 with <code>match</code> and <code>fun</code>:</p></div>
 <div class="paragraph"><p>+</p></div>
@@ -1035,7 +1195,7 @@ val some_array : array i prop.</code></pre>
 (co)datatypes definitions
 </dt>
 <dd>
-<div class="listingblock">
+<div class="listingblock" id="datatype-def">
 <div class="content">
 <pre><code># tuples
 data pair a b := Pair a b.
@@ -1191,7 +1351,7 @@ axiom forall x. x = a || x = b.</code></pre>
 </div></div>
 </div>
 <div class="sect2">
-<h3 id="_builtins">Builtins</h3>
+<h3 id="builtins">Builtins</h3>
 <div class="dlist"><dl>
 <dt class="hdlist1">
 choice operators
@@ -1286,7 +1446,7 @@ coinductive predicate
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-08 15:53:08 CET
+Last updated 2017-03-08 16:36:29 CET
 </div>
 </div>
 </body>
