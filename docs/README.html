@@ -820,6 +820,62 @@ and see how to use the constructs of Nunchaku.</p></div>
 </div>
 </div>
 <div class="sect1">
+<h2 id="_basic_usage">Basic Usage</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>After installing nunchaku (see <a href="#install">[install]</a>) and at least one backend,
+call the tool on problem files written in one of the accepted syntaxes
+(<a href="#supported-formats">[supported-formats]</a>) as follows:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>$ nunchaku docs/examples/first_order.nun
+SAT: {
+  type term := {$term_0, $term_1}.
+  type list := {$list_0, $list_1}.
+  val nil := $list_1.
+  val a := $term_1.
+  val b := $term_0.
+  val cons :=
+    (fun (v_0/75:term) (v_1/76:list).
+       if v_0/75 = $term_0 then $list_0 else if v_1/76 = $list_0 then $list_1
+       else $list_0).}
+{backend:smbc, time:0.0s}</code></pre>
+</div></div>
+<div class="paragraph"><p>A list of options can be obtained by calling <code>nunchaku --help</code>. A few
+particularly useful options are:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+<code>--timeout &lt;n&gt;</code> (or <code>-t &lt;n&gt;</code>): maximal amount of seconds before returning "unknown"
+</p>
+</li>
+<li>
+<p>
+<code>j &lt;n&gt;</code> for controlling the number of backend solvers active at the
+  same time
+</p>
+</li>
+<li>
+<p>
+<code>--solvers s1,s2</code> (or <code>-s s1,s2</code>) for using only the listed solvers
+</p>
+</li>
+<li>
+<p>
+<code>--debug &lt;n&gt;</code> (where <code>n=1,2,…5</code>) to enable debug printing.
+  The maximal verbosity level is 5, and it is very verbose. Consider
+  using <code>nunchaku --debug 5 foo.nun | less -R</code> to not drown
+  in pages of text.
+</p>
+</li>
+<li>
+<p>
+<code>-nc</code> to disable colored output if your terminal does not support it.
+</p>
+</li>
+</ul></div>
+</div>
+</div>
+<div class="sect1">
 <h2 id="_contact">Contact</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>There is a dedicated mailing list at <a href="mailto:nunchaku-users@lists.gforge.inria.fr">nunchaku-users@lists.gforge.inria.fr</a>
@@ -836,7 +892,7 @@ and <a href="/docs/index.adoc">the documentation sources</a>.</p></div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_build">Build</h2>
+<h2 id="install">Build/Install</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>To build Nunchaku, there are several ways.</p></div>
 <div class="sect2">
@@ -916,7 +972,7 @@ make</code></pre>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_input_output">Input/Output</h2>
+<h2 id="supported-formats">Input/Output/Solvers</h2>
 <div class="sectionbody">
 <div class="paragraph"><p>Supported input formats are:</p></div>
 <div class="ulist"><ul>
@@ -953,6 +1009,11 @@ TPTP (very partial support, extension <code>.p</code>)
 <a href="https://github.com/emina/kodkod">Kodkod</a> with its "kodkodi" parser
 </p>
 </li>
+<li>
+<p>
+<a href="https://github.com/c-cube/smbc/">SMBC</a>
+</p>
+</li>
 </ul></div>
 </div>
 </div>
@@ -960,7 +1021,7 @@ TPTP (very partial support, extension <code>.p</code>)
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-08 15:21:49 CET
+Last updated 2017-03-08 16:50:57 CET
 </div>
 </div>
 </body>

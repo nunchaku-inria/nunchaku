@@ -222,7 +222,12 @@ val some_array : array i prop.
 ----
 +
 [[datatype-def]]
-(co)datatypes definitions::
+(co)datatypes definitions:: each datatype is declared using
+  `data <id> [<variable>]* := [<case>]+`, cases being separated using `|`.
+  Mutual definitions are separated by `and`.
+  Codatatypes are introduced using `codata`.
+  It is impossible to define datatypes and codatatypes that are
+  mutually recursive (all mutual definitions must be of the same "kind").
 +
 ----
 # tuples
@@ -237,7 +242,6 @@ and tree_list a := T_nil | T_cons (tree a) (tree_list a).
 
 # streams
 codata stream a := S_cons a (stream a).
-
 ----
 +
 (co)recursive definitions:: introduced using `rec <id> : <type> := <axioms>`.
@@ -272,6 +276,7 @@ rec hof : (nat -> nat) -> nat -> nat :=
   are *known* by the user to be well-founded. For other predicates,
   Nunchaku will force the well-foundedness by adding a decreasing parameter
   in every clause.
+  Copredicates are introduced using the keyword `copred`.
 +
 ----
 data nat := zero | Suc nat.
@@ -297,8 +302,33 @@ val q : i -> prop.
 axiom  p i = q i.
 ----
 +
-spec:: TODO (like axiom, but also defines some symbols)
+spec:: like a set of axioms, but also defines some symbols. The syntax
+  is `spec [<id>: <type>]+ := <axiom> [; <axiom>]*.`: a series of
+  type declarations followed by axioms that specify the newly introduced
+  symbols.
++
+The intended semantics of `spec` is that the axioms are consistent
+together and that it is safe to omit the `spec` if the symbols
+it declared are not (transitively) used in the goal.
+Therefore, a spec declaration will be kept only if at least one symbol is
+transitively used from the goal.
+In the following example, if the goal (or some definition used in goal)
+does not mention `head` nor `tail`, the spec will be dropped.
++
+----
+data list a :=
+  | nil
+  | cons a (list a).
 
+spec head : pi a. list a -> a
+and tail : pi a. list a -> list a :=
+    forall x l. head (cons x l) = x;
+    forall x l. tail (cons x l) = l.
+----
++
+copy types:: type alias, refinement types, etc. See <<copy-types>>
+
+[[copy-types]]
 === Copy Types
 
 A copy type is used to define a type from another type. It can take

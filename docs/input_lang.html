@@ -1146,6 +1146,14 @@ val some_array : array i prop.</code></pre>
 (co)datatypes definitions
 </dt>
 <dd>
+<p>
+each datatype is declared using
+  <code>data &lt;id&gt; [&lt;variable&gt;]* := [&lt;case&gt;]+</code>, cases being separated using <code>|</code>.
+  Mutual definitions are separated by <code>and</code>.
+  Codatatypes are introduced using <code>codata</code>.
+  It is impossible to define datatypes and codatatypes that are
+  mutually recursive (all mutual definitions must be of the same "kind").
+</p>
 <div class="listingblock" id="datatype-def">
 <div class="content">
 <pre><code># tuples
@@ -1204,6 +1212,7 @@ inductive predicates are defined as least fixpoints
   are <strong>known</strong> by the user to be well-founded. For other predicates,
   Nunchaku will force the well-foundedness by adding a decreasing parameter
   in every clause.
+  Copredicates are introduced using the keyword <code>copred</code>.
 </p>
 <div class="listingblock">
 <div class="content">
@@ -1241,13 +1250,42 @@ spec
 </dt>
 <dd>
 <p>
-TODO (like axiom, but also defines some symbols)
+like a set of axioms, but also defines some symbols. The syntax
+  is <code>spec [&lt;id&gt;: &lt;type&gt;]+ := &lt;axiom&gt; [; &lt;axiom&gt;]*.</code>: a series of
+  type declarations followed by axioms that specify the newly introduced
+  symbols.
+</p>
+<div class="paragraph"><p>The intended semantics of <code>spec</code> is that the axioms are consistent
+together and that it is safe to omit the <code>spec</code> if the symbols
+it declared are not (transitively) used in the goal.
+Therefore, a spec declaration will be kept only if at least one symbol is
+transitively used from the goal.
+In the following example, if the goal (or some definition used in goal)
+does not mention <code>head</code> nor <code>tail</code>, the spec will be dropped.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>data list a :=
+  | nil
+  | cons a (list a).
+
+spec head : pi a. list a -&gt; a
+and tail : pi a. list a -&gt; list a :=
+    forall x l. head (cons x l) = x;
+    forall x l. tail (cons x l) = l.</code></pre>
+</div></div>
+</dd>
+<dt class="hdlist1">
+copy types
+</dt>
+<dd>
+<p>
+type alias, refinement types, etc. See <a href="#copy-types">[copy-types]</a>
 </p>
 </dd>
 </dl></div>
 </div>
 <div class="sect2">
-<h3 id="_copy_types">Copy Types</h3>
+<h3 id="copy-types">Copy Types</h3>
 <div class="paragraph"><p>A copy type is used to define a type from another type. It can take
 the following forms:</p></div>
 <div class="dlist"><dl>
@@ -1444,7 +1482,7 @@ coinductive predicate
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-08 16:39:17 CET
+Last updated 2017-03-08 16:53:03 CET
 </div>
 </div>
 </body>

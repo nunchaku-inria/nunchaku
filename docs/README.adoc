@@ -16,6 +16,40 @@ and see how to use the constructs of Nunchaku.
 
 toc::[]
 
+== Basic Usage
+
+After installing nunchaku (see <<install>>) and at least one backend,
+call the tool on problem files written in one of the accepted syntaxes
+(<<supported-formats>>) as follows:
+
+----
+$ nunchaku docs/examples/first_order.nun
+SAT: {
+  type term := {$term_0, $term_1}.
+  type list := {$list_0, $list_1}.
+  val nil := $list_1.
+  val a := $term_1.
+  val b := $term_0.
+  val cons :=
+    (fun (v_0/75:term) (v_1/76:list).
+       if v_0/75 = $term_0 then $list_0 else if v_1/76 = $list_0 then $list_1
+       else $list_0).}
+{backend:smbc, time:0.0s}
+----
+
+A list of options can be obtained by calling `nunchaku --help`. A few
+particularly useful options are:
+
+- `--timeout <n>` (or `-t <n>`): maximal amount of seconds before returning "unknown"
+- `j <n>` for controlling the number of backend solvers active at the
+  same time
+- `--solvers s1,s2` (or `-s s1,s2`) for using only the listed solvers
+- `--debug <n>` (where `n=1,2,…5`) to enable debug printing.
+  The maximal verbosity level is 5, and it is very verbose. Consider
+  using `nunchaku --debug 5 foo.nun | less -R` to not drown
+  in pages of text.
+- `-nc` to disable colored output if your terminal does not support it.
+
 == Contact
 
 There is a dedicated mailing list at nunchaku-users@lists.gforge.inria.fr
@@ -28,7 +62,8 @@ used for reporting bugs.
 See the website https://nunchaku-inria.github.io/nunchaku/
 and link:/docs/index.adoc[the documentation sources].
 
-== Build
+[[install]]
+== Build/Install
 
 To build Nunchaku, there are several ways.
 
@@ -72,7 +107,8 @@ Once you have entered the source directory, type:
 
 Free software under the BSD license. See file 'LICENSE' for more details.
 
-== Input/Output
+[[supported-formats]]
+== Input/Output/Solvers
 
 Supported input formats are:
 
@@ -85,5 +121,6 @@ Supported solver backends:
 - http://cvc4.cs.nyu.edu/web/[CVC4] (development versions, we need finite model finding)
 - https://github.com/tip-org/[Paradox]
 - https://github.com/emina/kodkod[Kodkod] with its "kodkodi" parser
+- https://github.com/c-cube/smbc/[SMBC]
 
 
