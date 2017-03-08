@@ -12,10 +12,10 @@ https://github.com/nunchaku-inria/nunchaku[on github]. Nunchaku is written in
 http://ocaml.org/[OCaml], funded by http://inria.fr[Inria]
 and released under the BSD license.
 
-Input formats:: at link:doc/input_lang.adoc[] (draft)
-Model format:: at link:doc/model_syntax.adoc[] (draft)
-Pipeline of Transformations:: at link:summary.adoc[]
-Internal API documentation:: per version, at:
+Input formats:: at link:input_lang.adoc[] (draft)
+Model format:: at link:model_syntax.adoc[] (draft)
+Pipeline of Transformations:: at link:pipeline.adoc[]
+Internal API documentation::
 +
 - link:0.3[0.3]
 
