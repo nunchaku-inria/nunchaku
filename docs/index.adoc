@@ -3,7 +3,8 @@
 :source-highlighter: pygments
 
 A counter-example finder for higher-order logic, designed to be used from
-various proof assistants. A spiritual successor to Nitpick.
+various proof assistants, and a spiritual successor to Nitpick.
+See also the link:README.adoc[README].
 
 https://nunchaku-inria.github.io/nunchaku/
 
@@ -12,9 +13,9 @@ https://github.com/nunchaku-inria/nunchaku[on github]. Nunchaku is written in
 http://ocaml.org/[OCaml], funded by http://inria.fr[Inria]
 and released under the BSD license.
 
-Input formats:: at link:input_lang.adoc[] (draft)
-Model format:: at link:model_syntax.adoc[] (draft)
-Pipeline of Transformations:: at link:pipeline.adoc[]
+Input formats:: link:input_lang.adoc[], link:input_lang.html[]  (draft)
+Model format:: link:model_syntax.adoc[], link:model_syntax.html[]  (draft)
+Pipeline of Transformations:: link:pipeline.adoc[], link:pipeline.html[]
 Internal API documentation::
 +
 - link:0.3[0.3]
@@ -27,7 +28,4 @@ There is a mailing list for users and proof assistants developers,
 nunchaku-users@lists.gforge.inria.fr
 (https://lists.gforge.inria.fr/mailman/listinfo/nunchaku-users[subscription]).
 
-== Misc
-
-More information can be found in the link:README.adoc[README].
 
