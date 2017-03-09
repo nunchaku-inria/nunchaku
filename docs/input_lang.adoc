@@ -188,6 +188,9 @@ but we add a distinct rule for them to emphasize their role:
 <var> ::= <id>
 ----
 
+NOTE: comments are supported. A comment starts with `'#'` and continues
+  to the end of the line.
+
 === Terms and Types
 
 Terms are written in a ML-like language that should be easy to read.
@@ -507,7 +510,7 @@ includes:: file inclusion, used to factor commonly used
 A problem file is just a sequence of statements.
 
 ----
-<problem> ::= <statement*>
+<problem> ::= <statement>*
 ----
 
 [[copy-types]]
