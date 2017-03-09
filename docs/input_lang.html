@@ -426,6 +426,31 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <h1>Input Language for Nunchaku</h1>
 </div>
 <div id="content">
+<div id="preamble">
+<div class="sectionbody">
+<div id="toc" class="toc">
+<div id="toctitle" class="title">Table of Contents</div>
+<ul class="sectlevel1">
+<li><a href="#_supported_formats">Supported Formats</a></li>
+<li><a href="#native-format">Native Format (<code>.nun</code>)</a>
+<ul class="sectlevel2">
+<li><a href="#_a_few_examples">A few examples</a></li>
+<li><a href="#_bnf_syntax">BNF syntax</a></li>
+<li><a href="#_terms_and_types">Terms and Types</a></li>
+<li><a href="#_statements">Statements</a></li>
+<li><a href="#_problem">Problem</a></li>
+<li><a href="#copy-types">Copy Types</a></li>
+<li><a href="#includes">Include directive</a></li>
+<li><a href="#_cardinality_bounds">Cardinality Bounds</a></li>
+<li><a href="#builtins">Builtins</a></li>
+<li><a href="#_there_is_more_than_one_way_of_doing_it">There is More than One Way of Doing It</a></li>
+<li><a href="#_design_goals">Design Goals</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
 <div class="sect1">
 <h2 id="_supported_formats">Supported Formats</h2>
 <div class="sectionbody">
@@ -574,6 +599,68 @@ SAT: {
     succ (succ (succ (succ zero))).
 }
 {backend:smbc, time:0.0s}</pre>
+</div>
+</div>
+</li>
+<li>
+<p>a mix of inductive predicates and <code>spec</code> (which is not going to be solved
+by Nunchaku because of the quantification on lists in the <code>spec</code> statement)</p>
+<div class="listingblock">
+<div class="content">
+<pre>data nat :=
+  | z
+  | s nat.
+
+pred [wf] even : nat -&gt; prop :=
+  even z;
+  forall n. odd n =&gt; even (s n)
+and odd : nat -&gt; prop :=
+  forall n. even n =&gt; odd (s n).
+
+data list a :=
+  | nil
+  | cons a (list a).
+
+# partial funs
+spec head : pi a. list a -&gt; a
+and tail : pi a. list a -&gt; list a :=
+    forall x l. head (cons x l) = x;
+    forall x l. tail (cons x l) = l.
+
+# odd number that is &gt;= 4
+goal exists l. (odd (head l) &amp;&amp; (exists m. head l = s (s (s (s m))))).</pre>
+</div>
+</div>
+</li>
+<li>
+<p>The same, but with partial definitions instead, obtaining (with CVC4)
+a model with
+<code>l = @cons nat (s (s (s (s (s z))))) (@cons nat z (@nil nat))</code>
+and <code>m = s z</code>:</p>
+<div class="listingblock">
+<div class="content">
+<pre>data nat :=
+  | z
+  | s nat.
+
+pred [wf] even : nat -&gt; prop :=
+  even z;
+  forall n. odd n =&gt; even (s n)
+and odd : nat -&gt; prop :=
+  forall n. even n =&gt; odd (s n).
+
+data list a :=
+  | nil
+  | cons a (list a).
+
+# partial funs
+rec head : pi a. list a -&gt; a :=
+    forall x l. head (cons x l) = x
+and tail : pi a. list a -&gt; list a :=
+    forall x l. tail (cons x l) = l.
+
+# odd number that is &gt;= 4
+goal exists l. (odd (head l) &amp;&amp; (exists m. head l = s (s (s (s m))))).</pre>
 </div>
 </div>
 </li>
@@ -1281,7 +1368,7 @@ goal (exists x. test_foo x) &amp;&amp; (exists x. swap_foo x = C).</pre>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-09 13:43:05 CET
+Last updated 2017-03-09 14:07:53 CET
 </div>
 </div>
 </body>

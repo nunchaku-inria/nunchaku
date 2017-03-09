@@ -1,7 +1,3 @@
-
-# recursive spec and rec
-# EXPECT: sat
-
 data nat :=
   | z
   | s nat.
@@ -17,15 +13,10 @@ data list a :=
   | cons a (list a).
 
 # partial funs
-spec head : pi a. list a -> a
+rec head : pi a. list a -> a :=
+    forall x l. head (cons x l) = x
 and tail : pi a. list a -> list a :=
-    forall x l. head (cons x l) = x;
     forall x l. tail (cons x l) = l.
 
 # odd number that is >= 4
-goal
-  exists l.
-    l != nil &&
-    odd (head l) &&
-    (exists m. head l = s (s (s (s m)))).
-
+goal exists l. l != nil && odd (head l) && (exists m. head l = s (s (s (s m)))).

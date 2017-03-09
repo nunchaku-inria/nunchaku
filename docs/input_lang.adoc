@@ -2,6 +2,8 @@
 :toc: macro
 :source-highlighter: pygments
 
+toc::[]
+
 == Supported Formats
 
 Input files are parsed by Nunchaku based on their file extension
@@ -56,7 +58,7 @@ $ nunchaku append.nun -s cvc4
 UNSAT
 {backend:cvc4, time:0.0s}
 ----
-+
+
 - A few datatypes, with polymorphism, recursive functions, and comments.
 +
 ----
@@ -106,6 +108,64 @@ SAT: {
 }
 {backend:smbc, time:0.0s}
 
+----
+
+- a mix of inductive predicates and `spec` (which is not going to be solved
+  by Nunchaku because of the quantification on lists in the `spec` statement)
++
+----
+data nat :=
+  | z
+  | s nat.
+
+pred [wf] even : nat -> prop :=
+  even z;
+  forall n. odd n => even (s n)
+and odd : nat -> prop :=
+  forall n. even n => odd (s n).
+
+data list a :=
+  | nil
+  | cons a (list a).
+
+# partial funs
+spec head : pi a. list a -> a
+and tail : pi a. list a -> list a :=
+    forall x l. head (cons x l) = x;
+    forall x l. tail (cons x l) = l.
+
+# odd number that is >= 4
+goal exists l. (odd (head l) && (exists m. head l = s (s (s (s m))))).
+----
+
+- The same, but with partial definitions instead, obtaining (with CVC4)
+  a model with
+  `l = @cons nat (s (s (s (s (s z))))) (@cons nat z (@nil nat))`
+  and `m = s z`:
++
+----
+data nat :=
+  | z
+  | s nat.
+
+pred [wf] even : nat -> prop :=
+  even z;
+  forall n. odd n => even (s n)
+and odd : nat -> prop :=
+  forall n. even n => odd (s n).
+
+data list a :=
+  | nil
+  | cons a (list a).
+
+# partial funs
+rec head : pi a. list a -> a :=
+    forall x l. head (cons x l) = x
+and tail : pi a. list a -> list a :=
+    forall x l. tail (cons x l) = l.
+
+# odd number that is >= 4
+goal exists l. (odd (head l) && (exists m. head l = s (s (s (s m))))).
 ----
 
 === BNF syntax
