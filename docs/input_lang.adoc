@@ -117,6 +117,15 @@ verbatim text "foo", and `<foo> ::= a | b | c` states that the entry
 `a*` represents any number of consecutive `a`; `a+` represents any non-empty
 sequence of `a`.
 
+The first important definition for the grammar is _identifiers_ (the basic
+names of objects in Nunchaku's input). Variables are just identifiers,
+but we add a distinct rule for them to emphasize their role:
+
+----
+<id> ::= [a-zA-Z][a-zA-Z0-9$_]*]
+<var> ::= <id>
+----
+
 === Terms and Types
 
 Terms are written in a ML-like language that should be easy to read.
@@ -134,15 +143,15 @@ prenex quantification `pi a. <type>`.
 For example, after declaring `i:type` and `array: type -> type -> type`,
 the following are well-formed types:
 +
-- `i`
-- `i->i`
-- `pi a. array a i -> a -> i -> prop`
-- `pi a. (a -> prop) -> a`
-- `pi a b c. array a b -> (array b c -> i -> prop) -> prop`
+--
+  - `i`
+  - `i->i`
+  - `pi a. array a i -> a -> i -> prop`
+  - `pi a. (a -> prop) -> a`
+  - `pi a b c. array a b -> (array b c -> i -> prop) -> prop`
+--
 +
 ----
-<id> ::= [a-zA-Z][a-zA-Z0-9$_]*]
-<var> ::= <id>
 <typed-var> ::= <var> | '(' <var> ':' <type> ')'
 <atomic-type> ::= 'type'
                 | 'prop'
@@ -161,25 +170,26 @@ In addition to basic function symbols, that are declared using `val <id>: <type>
 or defined as recursive functions or (co)inductive predicates,
 terms can be built using the following constructs:
 +
-- builtins (see <<builtins>>)
-- basic function symbols
-- (bound) variables
-- lambda-abstraction `fun x. <term>` where `x` is bound in the body.
-  The type of `x` can be explicitely specified: `fun (x:<type>). <term>`.
-  Functions with multiple arguments can be shortened as `fun x y z. <term>`.
-- quantifiers: `forall x. <term>` and `exists x. <term>` where the
-  body must be of type `prop`.
-- let-bindings `let x := <term> in <term>`, where `x` is bound in
-  the second term.
-- tests `if a b c` where `a:prop` and `b,c` are terms that have the
-  same type (which is also the type of `if a b c`).
-- shallow pattern-matching on (co)datatypes:
-  `match <term> with <branches> end`. Each branch has the form
-  `| <constructor> [<variable>]* -> <term>` and deals with
-  the corresponding constructor case. Constructors must always be
-  fully applied (no matching on functions).
+--
+  - builtins (see <<builtins>>)
+  - basic function symbols
+  - (bound) variables
+  - lambda-abstraction `fun x. <term>` where `x` is bound in the body.
+    The type of `x` can be explicitely specified: `fun (x:<type>). <term>`.
+    Functions with multiple arguments can be shortened as `fun x y z. <term>`.
+  - quantifiers: `forall x. <term>` and `exists x. <term>` where the
+    body must be of type `prop`.
+  - let-bindings `let x := <term> in <term>`, where `x` is bound in
+    the second term.
+  - tests `if a b c` where `a:prop` and `b,c` are terms that have the
+    same type (which is also the type of `if a b c`).
+  - shallow pattern-matching on (co)datatypes:
+    `match <term> with <branches> end`. Each branch has the form
+    `| <constructor> [<variable>]* -> <term>` and deals with
+    the corresponding constructor case. Constructors must always be
+    fully applied (no matching on functions).
 +
-example:
+    example:
 +
 ----
 data foo := A | B | C.
@@ -192,16 +202,17 @@ rec f : foo -> prop :=
     end.
 ----
 +
-- connectives:
-  * conjunction `&&`
-  * disjunction `||`
-  * negation `~`
-  * implication `=>`
-  * equality `=` (note that equivalence is just equality on propositions)
+  - connectives:
+    * conjunction `&&`
+    * disjunction `||`
+    * negation `~`
+    * implication `=>`
+    * equality `=` (note that equivalence is just equality on propositions)
 +
-Negation binds tightly, and `&&` takes precedence over `||` and `=>`.
+  Negation binds tightly, and `&&` takes precedence over `||` and `=>`.
 +
-- parenthesing can be used to override precedences, e.g. in `if (f a) b c`.
+  - parenthesing can be used to override precedences, e.g. in `if (f a) b c`.
+--
 +
 ----
 <constant> ::= <id> | '@'<id>  // must be defined or declared above
@@ -220,41 +231,16 @@ Negation binds tightly, and `&&` takes precedence over `||` and `=>`.
              | <and-term> '||' <or-term>
              | <and-term> '=>' <or-term>
 <term> ::= <or-term>
-         | 'fun' <typed-var>+ '.' <term>
+         | <term-binder> <typed-var>+ '.' <term>
          | 'let' <var> ':=' <term> 'in' <term>
          | 'if' <term> 'then' <term> 'else' <term>
-         | 'forall' <typed-var>+ '.' <term>
-         | 'exists' <typed-var>+ '.' <term>
+
+<term-binder> ::= 'forall' | 'exists' | 'fun'
 
 <match-branch> ::= '|' <id> <var>* '->' <term>
 ----
 
-The following example demonstrates a possible way of defining functions
-with `match` and `fun`:
-+
-----
-data foo := A | B | C.
-
-rec test_foo : foo -> prop :=
-  forall x. test_foo x =
-    match x with
-    | A -> true
-    | B -> false
-    | C -> true
-    end.
-
-rec swap_foo : foo -> foo :=
-  swap_foo = (fun x.
-    match x with
-    | A -> B
-    | B -> C
-    | C -> A
-    end).
-
-goal (exists x. test_foo x) && (exists x. swap_foo x = C).
-----
-
-Polymorphism::
+Note on polymorphism::
   The input of Nunchaku is polymorphic, and the polymorphism is explicit:
   a polymorphic symbol will take explicit type parameters.
   For example, `rec append : pi a. list a -> list a -> list a`
@@ -315,6 +301,9 @@ codata stream a := S_cons a (stream a).
   of formulas (separated by `;`) that must be universally-quantified
   equations with the `<id>` as left-hand-side head.
 +
+Nunchaku will complain if one of the formulas is not an equation with
+`<id>` as its head.
++
 ----
 rec <id> : <type> :=
   <form> [; <form>]*
@@ -341,7 +330,19 @@ rec hof : (nat -> nat) -> nat -> nat :=
   are *known* by the user to be well-founded. For other predicates,
   Nunchaku will force the well-foundedness by adding a decreasing parameter
   in every clause.
-  Copredicates are introduced using the keyword `copred`.
++
+Copredicates are introduced using the keyword `copred`.
++
+Each clause defining a (co)predicate `p` should be of one of the following
+forms. We allow a guard (for recursive cases), but the conclusion of the
+clause must have `p` as head symbol.
++
+----
+- [forall <typed-var>+ '.']? p <term>*
+- [forall <typed-var>+ '.']? <term> '=>' p <term>*
+----
++
+Examples:
 +
 ----
 data nat := zero | Suc nat.
@@ -353,7 +354,7 @@ and odd : nat -> prop :=
   forall (n : nat). even n => odd (Suc n).
 ----
 +
-axioms:: `axiom t` where `t : prop` is a formula. This axiom will
+axioms:: `axiom t.` where `t : prop` is a formula. This axiom will
   be enforced in the model.
   Note that universally quantified axioms might be impossible for
   backend solvers to enforce. It is best to use definitions rather
@@ -366,6 +367,13 @@ val p : i -> prop.
 val q : i -> prop.
 axiom  p i = q i.
 ----
++
+goals:: `goal t.` where `t : prop` is a formula. This is functionally
+  equivalent to `axiom t.` but emphasizes the goal compared to the
+  rest of the theory.
+  The goal is where analysis of dependencies starts from; definitions
+  that are not used in any of the goals/axioms (or, transitively,
+  from any definition used by these) will be pruned.
 +
 spec:: like a set of axioms, but also defines some symbols. The syntax
   is `spec [<id>: <type>]+ := <axiom> [; <axiom>]*.`: a series of
@@ -391,7 +399,54 @@ and tail : pi a. list a -> list a :=
     forall x l. tail (cons x l) = l.
 ----
 +
-copy types:: type alias, refinement types, etc. See <<copy-types>>
+copy types:: type alias, refinement types, and quotient types.
+  See <<copy-types>> for more details.
++
+includes:: file inclusion, used to factor commonly used
+  axioms and definitions in a file that can be imported in
+  many problems. See <<includes>>.
+
+----
+<statement> ::= <st-declaration>
+              | <st-data>
+              | <st-codata>
+              | <st-rec-definition>
+              | <st-spec>
+              | <st-axiom>
+              | <st-pred>
+              | <st-copred>
+              | <st-goal>
+
+<id-decl> ::= <id> ':' <type>
+
+<st-declaration> ::= 'val' <id-decl> '.'
+
+<st-data> ::= 'data' <data-entry> ['and' <data-entry>]* '.'
+<st-codata> ::= 'codata' <data-entry> ['and' <data-entry>]* '.'
+<data-entry> ::= <id> <var>* := <cstor>+
+<cstor> ::= <id> <type>*
+
+<st-rec-definition> ::= 'rec' <def-entry> ['and' <def-entry>]* '.'
+<def-entry> ::= <id-decl> ':=' <term> [';' <term>]*
+
+<st-spec> ::= 'spec' <id-decl> ['and' <id-decl>]* ':=' <term> [';' <term>]* '.'
+
+<st-axiom> ::= 'axiom' <term> '.'
+
+<st-pred> ::= 'pred' '[wf]'? <pred-entry> ['and' <pred-entry>]* '.'
+<st-copred> ::= 'copred' '[wf]'? <pred-entry> ['and' <pred-entry>]* '.'
+<pred-entry> ::= <id-decl> ':=' <term> [';' <term>]*
+
+<st-goal> ::= 'goal' <term> '.'
+----
+
+=== Problem
+
+A problem file is just a sequence of statements.
+
+----
+<problem> ::= <statement*>
+----
 
 [[copy-types]]
 === Copy Types
@@ -404,6 +459,12 @@ refinement type:: a copy of a type, only retaining values of this
   type that satisfy a given predicate
 quotient type:: a copy of the type, quotiented by a relation
   that *must* be an equivalence relation (reflexive symetric transitive).
+
+In every case, one must declare `copy foo := bar` followed by
+the declarations of two conversion functions
+(`abstract <id>` and `concrete <id>`) that respectively
+convert from `bar` to `foo`, and from `foo` to `bar`.
+
 
 ----
 data pair a b := Pair a b.
@@ -419,6 +480,21 @@ goal forall (p:pair1 iota).
      pair_of_pair1 p = Pair x y.
 ----
 
+==== Refinement type
+
+If the `predicate <term>` entry is present, then `<term>` must be
+a term of type `bar -> prop`. Only elements of `bar` that satisfy
+this term will be in the domain of the `abstract` function (the function
+is undefined on other elements).
+
+==== Quotient Type
+
+If the `quotient <term>` entry is present, then `<term>` must have
+the type `bar -> bar -> prop` and be an equivalence relation.
+The `abstract` function will map elements of `bar` that are equivalent w.r.t
+the `quotient` relation, to the same abstract (copy) element.
+
+[[includes]]
 === Include directive
 
 It is possible to write commonly used
@@ -467,6 +543,10 @@ val b : i.
 axiom forall x. x = a || x = b.
 ----
 
+There can also be an infinite uninterpreted type, typically for encoding
+set theory or similar untyped languages.
+TODO: expand on this
+
 [[builtins]]
 === Builtins
 
@@ -479,6 +559,37 @@ choice operators:: with type `pi a. (a -> prop) -> a`
 - `unique_unsafe` is similar to `unique`, but to be used only if it is
     guaranteed that exactly one value satisfies the predicate.
     *NOTE* use only if you know what you are doing!
+
+=== There is More than One Way of Doing It
+
+recursive definitions with single equation::
+Although the basic syntax gears towards Isabelle's (and Haskell's)
+way of defining functions with multiple equations, we can
+also define functions with a single irrefutable case.
+The following example demonstrates a possible way of defining functions
+with `match` and `fun`:
+
+----
+data foo := A | B | C.
+
+rec test_foo : foo -> prop :=
+  forall x. test_foo x =
+    match x with
+    | A -> true
+    | B -> false
+    | C -> true
+    end.
+
+rec swap_foo : foo -> foo :=
+  swap_foo = (fun x.
+    match x with
+    | A -> B
+    | B -> C
+    | C -> A
+    end).
+
+goal (exists x. test_foo x) && (exists x. swap_foo x = C).
+----
 
 === Design Goals
 

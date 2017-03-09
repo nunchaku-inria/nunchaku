@@ -945,6 +945,14 @@ verbatim text "foo", and <code>&lt;foo&gt; ::= a | b | c</code> states that the 
 <code>[a b c]</code> is used for parenthesing; <code>a?</code> makes <code>a</code> optional;
 <code>a*</code> represents any number of consecutive <code>a</code>; <code>a+</code> represents any non-empty
 sequence of <code>a</code>.</p></div>
+<div class="paragraph"><p>The first important definition for the grammar is <em>identifiers</em> (the basic
+names of objects in Nunchaku&#8217;s input). Variables are just identifiers,
+but we add a distinct rule for them to emphasize their role:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>&lt;id&gt; ::= [a-zA-Z][a-zA-Z0-9$_]*]
+&lt;var&gt; ::= &lt;id&gt;</code></pre>
+</div></div>
 </div>
 <div class="sect2">
 <h3 id="_terms_and_types">Terms and Types</h3>
@@ -964,6 +972,8 @@ is <code>a -&gt; (b -&gt; c)</code>) and type variables that are introduced by
 prenex quantification <code>pi a. &lt;type&gt;</code>.
 For example, after declaring <code>i:type</code> and <code>array: type -&gt; type -&gt; type</code>,
 the following are well-formed types:</p></div>
+<div class="openblock">
+<div class="content">
 <div class="ulist"><ul>
 <li>
 <p>
@@ -989,11 +999,12 @@ the following are well-formed types:</p></div>
 <p>
 <code>pi a b c. array a b -&gt; (array b c -&gt; i -&gt; prop) -&gt; prop</code>
 </p>
+</li>
+</ul></div>
+</div></div>
 <div class="listingblock">
 <div class="content">
-<pre><code>&lt;id&gt; ::= [a-zA-Z][a-zA-Z0-9$_]*]
-&lt;var&gt; ::= &lt;id&gt;
-&lt;typed-var&gt; ::= &lt;var&gt; | '(' &lt;var&gt; ':' &lt;type&gt; ')'
+<pre><code>&lt;typed-var&gt; ::= &lt;var&gt; | '(' &lt;var&gt; ':' &lt;type&gt; ')'
 &lt;atomic-type&gt; ::= 'type'
                 | 'prop'
                 | '(' &lt;type&gt; ')'
@@ -1001,8 +1012,6 @@ the following are well-formed types:</p></div>
          | &lt;atomic-type&gt; '-&gt;' &lt;type&gt;
          | 'pi' &lt;typed-var&gt; '.' &lt;type&gt;</code></pre>
 </div></div>
-</li>
-</ul></div>
 </dd>
 <dt class="hdlist1">
 Terms
@@ -1014,6 +1023,8 @@ and <code>prop -&gt; prop -&gt; prop</code>.
 In addition to basic function symbols, that are declared using <code>val &lt;id&gt;: &lt;type&gt;.</code>
 or defined as recursive functions or (co)inductive predicates,
 terms can be built using the following constructs:</p></div>
+<div class="openblock">
+<div class="content">
 <div class="ulist"><ul>
 <li>
 <p>
@@ -1033,37 +1044,40 @@ basic function symbols
 <li>
 <p>
 lambda-abstraction <code>fun x. &lt;term&gt;</code> where <code>x</code> is bound in the body.
-  The type of <code>x</code> can be explicitely specified: <code>fun (x:&lt;type&gt;). &lt;term&gt;</code>.
-  Functions with multiple arguments can be shortened as <code>fun x y z. &lt;term&gt;</code>.
+    The type of <code>x</code> can be explicitely specified: <code>fun (x:&lt;type&gt;). &lt;term&gt;</code>.
+    Functions with multiple arguments can be shortened as <code>fun x y z. &lt;term&gt;</code>.
 </p>
 </li>
 <li>
 <p>
 quantifiers: <code>forall x. &lt;term&gt;</code> and <code>exists x. &lt;term&gt;</code> where the
-  body must be of type <code>prop</code>.
+    body must be of type <code>prop</code>.
 </p>
 </li>
 <li>
 <p>
 let-bindings <code>let x := &lt;term&gt; in &lt;term&gt;</code>, where <code>x</code> is bound in
-  the second term.
+    the second term.
 </p>
 </li>
 <li>
 <p>
 tests <code>if a b c</code> where <code>a:prop</code> and <code>b,c</code> are terms that have the
-  same type (which is also the type of <code>if a b c</code>).
+    same type (which is also the type of <code>if a b c</code>).
 </p>
 </li>
 <li>
 <p>
 shallow pattern-matching on (co)datatypes:
-  <code>match &lt;term&gt; with &lt;branches&gt; end</code>. Each branch has the form
-  <code>| &lt;constructor&gt; [&lt;variable&gt;]* -&gt; &lt;term&gt;</code> and deals with
-  the corresponding constructor case. Constructors must always be
-  fully applied (no matching on functions).
+    <code>match &lt;term&gt; with &lt;branches&gt; end</code>. Each branch has the form
+    <code>| &lt;constructor&gt; [&lt;variable&gt;]* -&gt; &lt;term&gt;</code> and deals with
+    the corresponding constructor case. Constructors must always be
+    fully applied (no matching on functions).
 </p>
-<div class="paragraph"><p>example:</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>example:</code></pre>
+</div></div>
 <div class="listingblock">
 <div class="content">
 <pre><code>data foo := A | B | C.
@@ -1105,7 +1119,10 @@ implication <code>=&gt;</code>
 <p>
 equality <code>=</code> (note that equivalence is just equality on propositions)
 </p>
-<div class="paragraph"><p>Negation binds tightly, and <code>&amp;&amp;</code> takes precedence over <code>||</code> and <code>=&gt;</code>.</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>Negation binds tightly, and `&amp;&amp;` takes precedence over `||` and `=&gt;`.</code></pre>
+</div></div>
 </li>
 </ul></div>
 </li>
@@ -1113,6 +1130,9 @@ equality <code>=</code> (note that equivalence is just equality on propositions)
 <p>
 parenthesing can be used to override precedences, e.g. in <code>if (f a) b c</code>.
 </p>
+</li>
+</ul></div>
+</div></div>
 <div class="listingblock">
 <div class="content">
 <pre><code>&lt;constant&gt; ::= &lt;id&gt; | '@'&lt;id&gt;  // must be defined or declared above
@@ -1131,46 +1151,17 @@ parenthesing can be used to override precedences, e.g. in <code>if (f a) b c</co
              | &lt;and-term&gt; '||' &lt;or-term&gt;
              | &lt;and-term&gt; '=&gt;' &lt;or-term&gt;
 &lt;term&gt; ::= &lt;or-term&gt;
-         | 'fun' &lt;typed-var&gt;+ '.' &lt;term&gt;
+         | &lt;term-binder&gt; &lt;typed-var&gt;+ '.' &lt;term&gt;
          | 'let' &lt;var&gt; ':=' &lt;term&gt; 'in' &lt;term&gt;
          | 'if' &lt;term&gt; 'then' &lt;term&gt; 'else' &lt;term&gt;
-         | 'forall' &lt;typed-var&gt;+ '.' &lt;term&gt;
-         | 'exists' &lt;typed-var&gt;+ '.' &lt;term&gt;
+
+&lt;term-binder&gt; ::= 'forall' | 'exists' | 'fun'
 
 &lt;match-branch&gt; ::= '|' &lt;id&gt; &lt;var&gt;* '-&gt;' &lt;term&gt;</code></pre>
 </div></div>
-</li>
-</ul></div>
 </dd>
-</dl></div>
-<div class="paragraph"><p>The following example demonstrates a possible way of defining functions
-with <code>match</code> and <code>fun</code>:</p></div>
-<div class="paragraph"><p>+</p></div>
-<div class="listingblock">
-<div class="content">
-<pre><code>data foo := A | B | C.
-
-rec test_foo : foo -&gt; prop :=
-  forall x. test_foo x =
-    match x with
-    | A -&gt; true
-    | B -&gt; false
-    | C -&gt; true
-    end.
-
-rec swap_foo : foo -&gt; foo :=
-  swap_foo = (fun x.
-    match x with
-    | A -&gt; B
-    | B -&gt; C
-    | C -&gt; A
-    end).
-
-goal (exists x. test_foo x) &amp;&amp; (exists x. swap_foo x = C).</code></pre>
-</div></div>
-<div class="dlist"><dl>
 <dt class="hdlist1">
-Polymorphism
+Note on polymorphism
 </dt>
 <dd>
 <p>
@@ -1252,6 +1243,8 @@ introduced using <code>rec &lt;id&gt; : &lt;type&gt; := &lt;axioms&gt;</code>.
   of formulas (separated by <code>;</code>) that must be universally-quantified
   equations with the <code>&lt;id&gt;</code> as left-hand-side head.
 </p>
+<div class="paragraph"><p>Nunchaku will complain if one of the formulas is not an equation with
+<code>&lt;id&gt;</code> as its head.</p></div>
 <div class="listingblock">
 <div class="content">
 <pre><code>rec &lt;id&gt; : &lt;type&gt; :=
@@ -1283,8 +1276,17 @@ inductive predicates are defined as least fixpoints
   are <strong>known</strong> by the user to be well-founded. For other predicates,
   Nunchaku will force the well-foundedness by adding a decreasing parameter
   in every clause.
-  Copredicates are introduced using the keyword <code>copred</code>.
 </p>
+<div class="paragraph"><p>Copredicates are introduced using the keyword <code>copred</code>.</p></div>
+<div class="paragraph"><p>Each clause defining a (co)predicate <code>p</code> should be of one of the following
+forms. We allow a guard (for recursive cases), but the conclusion of the
+clause must have <code>p</code> as head symbol.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>- [forall &lt;typed-var&gt;+ '.']? p &lt;term&gt;*
+- [forall &lt;typed-var&gt;+ '.']? &lt;term&gt; '=&gt;' p &lt;term&gt;*</code></pre>
+</div></div>
+<div class="paragraph"><p>Examples:</p></div>
 <div class="listingblock">
 <div class="content">
 <pre><code>data nat := zero | Suc nat.
@@ -1301,7 +1303,7 @@ axioms
 </dt>
 <dd>
 <p>
-<code>axiom t</code> where <code>t : prop</code> is a formula. This axiom will
+<code>axiom t.</code> where <code>t : prop</code> is a formula. This axiom will
   be enforced in the model.
   Note that universally quantified axioms might be impossible for
   backend solvers to enforce. It is best to use definitions rather
@@ -1315,6 +1317,19 @@ val p : i -&gt; prop.
 val q : i -&gt; prop.
 axiom  p i = q i.</code></pre>
 </div></div>
+</dd>
+<dt class="hdlist1">
+goals
+</dt>
+<dd>
+<p>
+<code>goal t.</code> where <code>t : prop</code> is a formula. This is functionally
+  equivalent to <code>axiom t.</code> but emphasizes the goal compared to the
+  rest of the theory.
+  The goal is where analysis of dependencies starts from; definitions
+  that are not used in any of the goals/axioms (or, transitively,
+  from any definition used by these) will be pruned.
+</p>
 </dd>
 <dt class="hdlist1">
 spec
@@ -1350,10 +1365,63 @@ copy types
 </dt>
 <dd>
 <p>
-type alias, refinement types, etc. See <a href="#copy-types">[copy-types]</a>
+type alias, refinement types, and quotient types.
+  See <a href="#copy-types">[copy-types]</a> for more details.
+</p>
+</dd>
+<dt class="hdlist1">
+includes
+</dt>
+<dd>
+<p>
+file inclusion, used to factor commonly used
+  axioms and definitions in a file that can be imported in
+  many problems. See <a href="#includes">[includes]</a>.
 </p>
 </dd>
 </dl></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>&lt;statement&gt; ::= &lt;st-declaration&gt;
+              | &lt;st-data&gt;
+              | &lt;st-codata&gt;
+              | &lt;st-rec-definition&gt;
+              | &lt;st-spec&gt;
+              | &lt;st-axiom&gt;
+              | &lt;st-pred&gt;
+              | &lt;st-copred&gt;
+              | &lt;st-goal&gt;
+
+&lt;id-decl&gt; ::= &lt;id&gt; ':' &lt;type&gt;
+
+&lt;st-declaration&gt; ::= 'val' &lt;id-decl&gt; '.'
+
+&lt;st-data&gt; ::= 'data' &lt;data-entry&gt; ['and' &lt;data-entry&gt;]* '.'
+&lt;st-codata&gt; ::= 'codata' &lt;data-entry&gt; ['and' &lt;data-entry&gt;]* '.'
+&lt;data-entry&gt; ::= &lt;id&gt; &lt;var&gt;* := &lt;cstor&gt;+
+&lt;cstor&gt; ::= &lt;id&gt; &lt;type&gt;*
+
+&lt;st-rec-definition&gt; ::= 'rec' &lt;def-entry&gt; ['and' &lt;def-entry&gt;]* '.'
+&lt;def-entry&gt; ::= &lt;id-decl&gt; ':=' &lt;term&gt; [';' &lt;term&gt;]*
+
+&lt;st-spec&gt; ::= 'spec' &lt;id-decl&gt; ['and' &lt;id-decl&gt;]* ':=' &lt;term&gt; [';' &lt;term&gt;]* '.'
+
+&lt;st-axiom&gt; ::= 'axiom' &lt;term&gt; '.'
+
+&lt;st-pred&gt; ::= 'pred' '[wf]'? &lt;pred-entry&gt; ['and' &lt;pred-entry&gt;]* '.'
+&lt;st-copred&gt; ::= 'copred' '[wf]'? &lt;pred-entry&gt; ['and' &lt;pred-entry&gt;]* '.'
+&lt;pred-entry&gt; ::= &lt;id-decl&gt; ':=' &lt;term&gt; [';' &lt;term&gt;]*
+
+&lt;st-goal&gt; ::= 'goal' &lt;term&gt; '.'</code></pre>
+</div></div>
+</div>
+<div class="sect2">
+<h3 id="_problem">Problem</h3>
+<div class="paragraph"><p>A problem file is just a sequence of statements.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>&lt;problem&gt; ::= &lt;statement*&gt;</code></pre>
+</div></div>
 </div>
 <div class="sect2">
 <h3 id="copy-types">Copy Types</h3>
@@ -1387,6 +1455,10 @@ a copy of the type, quotiented by a relation
 </p>
 </dd>
 </dl></div>
+<div class="paragraph"><p>In every case, one must declare <code>copy foo := bar</code> followed by
+the declarations of two conversion functions
+(<code>abstract &lt;id&gt;</code> and <code>concrete &lt;id&gt;</code>) that respectively
+convert from <code>bar</code> to <code>foo</code>, and from <code>foo</code> to <code>bar</code>.</p></div>
 <div class="listingblock">
 <div class="content">
 <pre><code>data pair a b := Pair a b.
@@ -1401,9 +1473,23 @@ goal forall (p:pair1 iota).
      exists (x:iota) (y:iota).
      pair_of_pair1 p = Pair x y.</code></pre>
 </div></div>
+<div class="sect3">
+<h4 id="_refinement_type">Refinement type</h4>
+<div class="paragraph"><p>If the <code>predicate &lt;term&gt;</code> entry is present, then <code>&lt;term&gt;</code> must be
+a term of type <code>bar -&gt; prop</code>. Only elements of <code>bar</code> that satisfy
+this term will be in the domain of the <code>abstract</code> function (the function
+is undefined on other elements).</p></div>
+</div>
+<div class="sect3">
+<h4 id="_quotient_type">Quotient Type</h4>
+<div class="paragraph"><p>If the <code>quotient &lt;term&gt;</code> entry is present, then <code>&lt;term&gt;</code> must have
+the type <code>bar -&gt; bar -&gt; prop</code> and be an equivalence relation.
+The <code>abstract</code> function will map elements of <code>bar</code> that are equivalent w.r.t
+the <code>quotient</code> relation, to the same abstract (copy) element.</p></div>
+</div>
 </div>
 <div class="sect2">
-<h3 id="_include_directive">Include directive</h3>
+<h3 id="includes">Include directive</h3>
 <div class="paragraph"><p>It is possible to write commonly used
 definitions and axioms in a file, and include that file from
 other files:</p></div>
@@ -1456,6 +1542,9 @@ val b : i.
 # at most 2 elements, clashes with constraint on i
 axiom forall x. x = a || x = b.</code></pre>
 </div></div>
+<div class="paragraph"><p>There can also be an infinite uninterpreted type, typically for encoding
+set theory or similar untyped languages.
+TODO: expand on this</p></div>
 </div>
 <div class="sect2">
 <h3 id="builtins">Builtins</h3>
@@ -1490,6 +1579,45 @@ with type <code>pi a. (a -&gt; prop) -&gt; a</code>
 </ul></div>
 </dd>
 </dl></div>
+</div>
+<div class="sect2">
+<h3 id="_there_is_more_than_one_way_of_doing_it">There is More than One Way of Doing It</h3>
+<div class="dlist"><dl>
+<dt class="hdlist1">
+recursive definitions with single equation
+</dt>
+<dd>
+<p>
+Although the basic syntax gears towards Isabelle&#8217;s (and Haskell&#8217;s)
+way of defining functions with multiple equations, we can
+also define functions with a single irrefutable case.
+The following example demonstrates a possible way of defining functions
+with <code>match</code> and <code>fun</code>:
+</p>
+</dd>
+</dl></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>data foo := A | B | C.
+
+rec test_foo : foo -&gt; prop :=
+  forall x. test_foo x =
+    match x with
+    | A -&gt; true
+    | B -&gt; false
+    | C -&gt; true
+    end.
+
+rec swap_foo : foo -&gt; foo :=
+  swap_foo = (fun x.
+    match x with
+    | A -&gt; B
+    | B -&gt; C
+    | C -&gt; A
+    end).
+
+goal (exists x. test_foo x) &amp;&amp; (exists x. swap_foo x = C).</code></pre>
+</div></div>
 </div>
 <div class="sect2">
 <h3 id="_design_goals">Design Goals</h3>
@@ -1553,7 +1681,7 @@ coinductive predicate
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-09 11:33:33 CET
+Last updated 2017-03-09 12:07:21 CET
 </div>
 </div>
 </body>
