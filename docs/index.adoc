@@ -4,7 +4,7 @@
 
 A counter-example finder for higher-order logic, designed to be used from
 various proof assistants, and a spiritual successor to Nitpick.
-See also the link:README.adoc[README].
+See also the README (link:README.adoc[], link:README.html[]).
 
 https://nunchaku-inria.github.io/nunchaku/
 

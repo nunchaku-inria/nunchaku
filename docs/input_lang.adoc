@@ -14,6 +14,8 @@ TIP:: similar to SMT-LIB2, file extension `.smt2`.
 TPTP:: minimal support, mostly for benchmarks, file extension `.p`.
   See http://www.cs.miami.edu/~tptp/.
 
+toc::[]
+
 [[native-format]]
 == Native Format (`.nun`)
 
