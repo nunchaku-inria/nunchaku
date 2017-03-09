@@ -106,7 +106,18 @@ SAT: {
 
 ----
 
-=== Term and Types
+=== BNF syntax
+
+We will use a BNF-like syntax to describe the grammar of this format.
+In the following, `<foo>` represents the syntactical class of foos
+(e.g. `<term>` represents the grammar of terms), `'foo'` is the
+verbatim text "foo", and `<foo> ::= a | b | c` states that the entry
+`<foo>` corresponds to the cases a, b, and c.
+`[a b c]` is used for parenthesing; `a?` makes `a` optional;
+`a*` represents any number of consecutive `a`; `a+` represents any non-empty
+sequence of `a`.
+
+=== Terms and Types
 
 Terms are written in a ML-like language that should be easy to read.
 Types are polymorphic and all type quantification should be prenex.
@@ -128,6 +139,18 @@ the following are well-formed types:
 - `pi a. array a i -> a -> i -> prop`
 - `pi a. (a -> prop) -> a`
 - `pi a b c. array a b -> (array b c -> i -> prop) -> prop`
++
+----
+<id> ::= [a-zA-Z][a-zA-Z0-9$_]*]
+<var> ::= <id>
+<typed-var> ::= <var> | '(' <var> ':' <type> ')'
+<atomic-type> ::= 'type'
+                | 'prop'
+                | '(' <type> ')'
+<type> ::= <atomic-type>
+         | <atomic-type> '->' <type>
+         | 'pi' <typed-var> '.' <type>
+----
 
 Terms::
 +
@@ -179,6 +202,32 @@ rec f : foo -> prop :=
 Negation binds tightly, and `&&` takes precedence over `||` and `=>`.
 +
 - parenthesing can be used to override precedences, e.g. in `if (f a) b c`.
++
+----
+<constant> ::= <id> | '@'<id>  // must be defined or declared above
+<atomic-term> ::= <var>
+                | <constant>
+                | '(' <term> ')'
+                | 'match' <term> 'with' <match-branch+> 'end'
+
+<apply-term> ::= <atomic-term>+ | '~' <apply-term>
+<eq-term> ::= <apply-term>
+            | <apply-term> '=' <apply-term>
+            | <apply-term> '!=' <apply-term>
+<and-term> ::= <eq-term>
+             | <eq-term> '&&' <and-term>
+<or-term> ::= <and-term>
+             | <and-term> '||' <or-term>
+             | <and-term> '=>' <or-term>
+<term> ::= <or-term>
+         | 'fun' <typed-var>+ '.' <term>
+         | 'let' <var> ':=' <term> 'in' <term>
+         | 'if' <term> 'then' <term> 'else' <term>
+         | 'forall' <typed-var>+ '.' <term>
+         | 'exists' <typed-var>+ '.' <term>
+
+<match-branch> ::= '|' <id> <var>* '->' <term>
+----
 
 The following example demonstrates a possible way of defining functions
 with `match` and `fun`:

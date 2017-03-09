@@ -936,7 +936,18 @@ SAT: {
 </ul></div>
 </div>
 <div class="sect2">
-<h3 id="_term_and_types">Term and Types</h3>
+<h3 id="_bnf_syntax">BNF syntax</h3>
+<div class="paragraph"><p>We will use a BNF-like syntax to describe the grammar of this format.
+In the following, <code>&lt;foo&gt;</code> represents the syntactical class of foos
+(e.g. <code>&lt;term&gt;</code> represents the grammar of terms), <code>'foo'</code> is the
+verbatim text "foo", and <code>&lt;foo&gt; ::= a | b | c</code> states that the entry
+<code>&lt;foo&gt;</code> corresponds to the cases a, b, and c.
+<code>[a b c]</code> is used for parenthesing; <code>a?</code> makes <code>a</code> optional;
+<code>a*</code> represents any number of consecutive <code>a</code>; <code>a+</code> represents any non-empty
+sequence of <code>a</code>.</p></div>
+</div>
+<div class="sect2">
+<h3 id="_terms_and_types">Terms and Types</h3>
 <div class="paragraph"><p>Terms are written in a ML-like language that should be easy to read.
 Types are polymorphic and all type quantification should be prenex.</p></div>
 <div class="dlist"><dl>
@@ -978,6 +989,18 @@ the following are well-formed types:</p></div>
 <p>
 <code>pi a b c. array a b -&gt; (array b c -&gt; i -&gt; prop) -&gt; prop</code>
 </p>
+<div class="listingblock">
+<div class="content">
+<pre><code>&lt;id&gt; ::= [a-zA-Z][a-zA-Z0-9$_]*]
+&lt;var&gt; ::= &lt;id&gt;
+&lt;typed-var&gt; ::= &lt;var&gt; | '(' &lt;var&gt; ':' &lt;type&gt; ')'
+&lt;atomic-type&gt; ::= 'type'
+                | 'prop'
+                | '(' &lt;type&gt; ')'
+&lt;type&gt; ::= &lt;atomic-type&gt;
+         | &lt;atomic-type&gt; '-&gt;' &lt;type&gt;
+         | 'pi' &lt;typed-var&gt; '.' &lt;type&gt;</code></pre>
+</div></div>
 </li>
 </ul></div>
 </dd>
@@ -1090,6 +1113,32 @@ equality <code>=</code> (note that equivalence is just equality on propositions)
 <p>
 parenthesing can be used to override precedences, e.g. in <code>if (f a) b c</code>.
 </p>
+<div class="listingblock">
+<div class="content">
+<pre><code>&lt;constant&gt; ::= &lt;id&gt; | '@'&lt;id&gt;  // must be defined or declared above
+&lt;atomic-term&gt; ::= &lt;var&gt;
+                | &lt;constant&gt;
+                | '(' &lt;term&gt; ')'
+                | 'match' &lt;term&gt; 'with' &lt;match-branch+&gt; 'end'
+
+&lt;apply-term&gt; ::= &lt;atomic-term&gt;+ | '~' &lt;apply-term&gt;
+&lt;eq-term&gt; ::= &lt;apply-term&gt;
+            | &lt;apply-term&gt; '=' &lt;apply-term&gt;
+            | &lt;apply-term&gt; '!=' &lt;apply-term&gt;
+&lt;and-term&gt; ::= &lt;eq-term&gt;
+             | &lt;eq-term&gt; '&amp;&amp;' &lt;and-term&gt;
+&lt;or-term&gt; ::= &lt;and-term&gt;
+             | &lt;and-term&gt; '||' &lt;or-term&gt;
+             | &lt;and-term&gt; '=&gt;' &lt;or-term&gt;
+&lt;term&gt; ::= &lt;or-term&gt;
+         | 'fun' &lt;typed-var&gt;+ '.' &lt;term&gt;
+         | 'let' &lt;var&gt; ':=' &lt;term&gt; 'in' &lt;term&gt;
+         | 'if' &lt;term&gt; 'then' &lt;term&gt; 'else' &lt;term&gt;
+         | 'forall' &lt;typed-var&gt;+ '.' &lt;term&gt;
+         | 'exists' &lt;typed-var&gt;+ '.' &lt;term&gt;
+
+&lt;match-branch&gt; ::= '|' &lt;id&gt; &lt;var&gt;* '-&gt;' &lt;term&gt;</code></pre>
+</div></div>
 </li>
 </ul></div>
 </dd>
@@ -1504,7 +1553,7 @@ coinductive predicate
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-03-08 16:58:43 CET
+Last updated 2017-03-09 11:33:33 CET
 </div>
 </div>
 </body>
