@@ -116,7 +116,7 @@ Free software under the BSD license. See file 'LICENSE' for more details.
 
 Supported input formats are:
 
-- nunchaku's own input format, ML-like (extension `.nun`)
+- nunchaku's own link:/docs/input_lang.adoc[input format], ML-like (extension `.nun`)
 - TPTP (very partial support, extension `.p`)
 - https://github.com/tip-org/[TIP] (extension `.smt2`)
 
