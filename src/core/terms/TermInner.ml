@@ -213,7 +213,7 @@ module Print(T : REPR)
 
   let rec to_sexp t : Sexp_lib.t = match T.repr t with
     | TyBuiltin b -> str (TyBuiltin.to_string b)
-    | Const id -> str (ID.to_string id)
+    | Const id -> str (ID.name id)
     | TyMeta _ -> assert false
     | Var v -> str (Var.to_string_full v)
     | Builtin b -> Builtin.to_sexp to_sexp b
