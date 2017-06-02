@@ -83,7 +83,7 @@ let pp_normal out v =
 
 let to_string_normal v =
   if needs_at v
-  then Printf.sprintf "@@%s%s" v.name (Polarity.to_string v.pol)
+  then Printf.sprintf "@%s%s" v.name (Polarity.to_string v.pol)
   else v.name ^ Polarity.to_string v.pol
 
 let to_string_slug v =
