@@ -29,6 +29,7 @@ module Features = struct
     | Fun (* lambdas *)
     | HOF (* any higher-order fun *)
     | Prop_args (* propositions as arguments to functions *)
+    | Pseudo_prop (* some type with flag "pseudo-prop" *)
     | Copy
 
   module M = CCMap.Make(struct
@@ -51,6 +52,7 @@ module Features = struct
     ; Fun, Present
     ; HOF, Present
     ; Prop_args, Present
+    ; Pseudo_prop, Absent
     ; Copy, Present
     ] |> M.of_list
 
@@ -95,6 +97,7 @@ module Features = struct
     | Fun -> "fun"
     | HOF -> "hof"
     | Prop_args -> "prop_args"
+    | Pseudo_prop -> "pseudo_prop"
     | Copy -> "copy"
 
   let pp out (m:t) =

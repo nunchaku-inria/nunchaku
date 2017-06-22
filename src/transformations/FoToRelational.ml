@@ -45,7 +45,7 @@ type fun_encoding = {
 }
 
 type state = {
-  mutable domains: domain TyTbl.t;
+  domains: domain TyTbl.t;
   (* atomic type -> domain *)
   funs: fun_encoding ID.Tbl.t;
   (* function -> relation *)
@@ -78,14 +78,38 @@ let decl_of_su su : FO_rel.decl =
     decl_high=FO_rel.ts_all su;
   }
 
-let create_state () =
-  let pprop_id = ID.make "pseudo-prop" in
-  let ptrue = ID.make "pseudo-true" in
-  let pprop_ty = FO.Ty.const pprop_id in
+let find_pprop pb : ID.t =
+  let ret =
+    CCVector.find_map
+      (fun st -> match st with
+         | FO.TyDecl (id, 0, attrs) when List.mem FO.Attr_pseudo_prop attrs ->
+           Some id
+         | _ -> None)
+      (FO.Problem.statements pb)
+  in
+  match ret with
+    | None -> errorf "cannot find `pseudo-prop` in problem"
+    | Some r -> r
+
+let find_ptrue pb : ID.t =
+  let ret =
+    CCVector.find_map
+      (fun st -> match st with
+         | FO.Decl (id, ([], _), attrs) when List.mem FO.Attr_pseudo_true attrs ->
+           Some id
+         | _ -> None)
+      (FO.Problem.statements pb)
+  in
+  match ret with
+    | None -> errorf "cannot find `pseudo-prop` in problem"
+    | Some r -> r
+
+let create_state ~pprop ~ptrue () =
+  let pprop_ty = FO.Ty.const pprop in
   let pprop_dom = {
     dom_ty=pprop_ty;
-    dom_id=pprop_id;
-    dom_su=FO_rel.su_make ~card:2 pprop_id;
+    dom_id=pprop;
+    dom_su=FO_rel.su_make ~card:2 pprop;
   } in
   let state = {
     domains=TyTbl.create 16;
@@ -137,12 +161,6 @@ let declare_ty ?card state (ty:FO.Ty.t) =
   TyTbl.add state.domains ty dom;
   ID.Tbl.add state.dom_of_id dom_id dom;
   dom
-
-(* [ty] is another pseudo-prop *)
-let add_pseudo_prop state ty : unit =
-  assert (not (TyTbl.mem state.domains ty));
-  TyTbl.add state.domains ty state.pprop_dom;
-  ()
 
 (* type -> its domain *)
 let domain_of_ty state (ty:FO.Ty.t) : domain =
@@ -295,25 +313,11 @@ let encode_statement state st : FO_rel.form list =
     |> FO_rel.ts_product
   in
   match st with
-    | FO.TyDecl (id, 0, attrs) when List.mem FO.Attr_pseudo_prop attrs ->
-      add_pseudo_prop state (FO.Ty.const id);
+    | FO.TyDecl (_, 0, attrs) when List.mem FO.Attr_pseudo_prop attrs ->
+      []
+    | FO.Decl (_, ([], _), attrs) when List.mem FO.Attr_pseudo_true attrs ->
       []
     | FO.TyDecl _ -> [] (* declared when used *)
-    | FO.Decl (id, ([], _), attrs) when List.mem FO.Attr_pseudo_true attrs ->
-      (* another pseudo-true *)
-      let fe = {
-        fun_is_pred=false;
-        fun_ty_args=[state.pprop_dom];
-        fun_encoded_args=[state.pprop_dom.dom_su];
-        fun_low=FO_rel.ts_list [];
-        fun_high=FO_rel.ts_all state.pprop_dom.dom_su;
-        fun_ty_ret=state.pprop_dom.dom_ty;
-      } in
-      declare_fun state id fe;
-      (* additional axioms: [id = true_], [one id] *)
-      let ax_eq = FO_rel.eq (FO_rel.const id) (FO_rel.const state.ptrue) in
-      let ax_some = FO_rel.one (FO_rel.const id) in
-      [ax_some; ax_eq]
     | FO.Decl (id, (ty_args, ty_ret), _) ->
       assert (not (fun_is_declared state id));
       (* encoding differs for relations and functions *)
@@ -405,7 +409,9 @@ let encode_statement state st : FO_rel.form list =
       [ax_card]
 
 let encode_pb pb =
-  let state = create_state () in
+  let pprop = find_pprop pb in
+  let ptrue = find_ptrue pb in
+  let state = create_state ~ptrue ~pprop () in
   let form =
     CCVector.flat_map_list (encode_statement state) (FO.Problem.statements pb)
     |> CCVector.to_list
@@ -706,7 +712,6 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
   in
   M.fold
     ~values:(fun m (t,dt,_) -> match t, dt with
-      | FO_rel.Const id, _ when ID.equal id state.ptrue -> m (* remove from model *)
       | FO_rel.Const id, DT.Yield (FO_rel.Tuple_set set) ->
         begin match find_fun_ state id with
           | Some fe ->
@@ -737,7 +742,7 @@ let pipe_with ?on_decoded ~decode ~print =
   let input_spec =
     Transform.Features.(of_list [
         Match, Absent; Fun, Absent; Copy, Absent; Ind_preds, Absent;
-        HOF, Absent; Prop_args, Absent])
+        HOF, Absent; Prop_args, Absent; Pseudo_prop, Present])
   in
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->

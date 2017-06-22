@@ -23,6 +23,7 @@ val transform_problem : problem -> problem * state
 val decode_model : state -> model -> model
 
 val pipe_with :
+  ?on_decoded:('b -> unit) list ->
   decode:(state -> 'a -> 'b) ->
   print:bool ->
   check:bool ->

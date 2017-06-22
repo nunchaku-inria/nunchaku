@@ -25,6 +25,8 @@ val decode : state -> model2 -> model1
 
 (** {2 Pipes} *)
 
+(** We assume there is a type with flag "pseudo-prop" somewhere *)
+
 val pipe_with :
   ?on_decoded:('b -> unit) list ->
   decode:(state -> 'a -> 'b) ->
