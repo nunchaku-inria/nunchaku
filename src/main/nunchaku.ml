@@ -34,6 +34,7 @@ let outputs_ =
   ; "sexp", O_sexp
   ]
 
+(* NOTE: also modify list_solvers_ below if you modify this *)
 type solver =
   | S_CVC4
   | S_kodkod
@@ -196,7 +197,7 @@ let options =
       ; "--no-skolems-in-model", Arg.Clear skolems_in_model_, " disable skolem constants in models"
       ; "--cvc4-schedule", Arg.Set cvc4_schedule, " enable scheduling of multiple CVC4 instances"
       ; "--cvc4-no-schedule", Arg.Clear cvc4_schedule, " enable scheduling of multiple CVC4 instances"
-      ; "--solvers", Arg.String set_solvers_, " solvers to use " ^ list_solvers_ ()
+      ; "--solvers", Arg.String set_solvers_, " solvers to use (comma-separated list) " ^ list_solvers_ ()
       ; "-s", Arg.String set_solvers_, " synonym for --solvers"
       ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
       ; "-t", Arg.Set_int timeout_, " alias to --timeout"
