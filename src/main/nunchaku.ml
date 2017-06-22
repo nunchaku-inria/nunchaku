@@ -553,6 +553,11 @@ let main_model ~output statements =
   (* run pipeline *)
   let pipe = make_model_pipeline() in
   Transform.Pipe.check pipe;
+  (* check that there is something in the pipeline *)
+  begin match pipe with
+    | Transform.Pipe.Fail -> failwith "solvers are unavailable"
+    | _ -> ()
+  end;
   assert (not !pp_pipeline_);
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   run_tasks ~j:!j ~deadline pipe statements
