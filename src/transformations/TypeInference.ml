@@ -519,7 +519,7 @@ module Convert(Term : TermTyped.S) = struct
                let vars' = List.map
                    (fun v ->
                       let name = match v with `Wildcard -> "_" | `Var s -> s in
-                      Var.make ~name:"_" ~ty:(fresh_ty_var_ ~name))
+                      Var.make ~name ~ty:(fresh_ty_var_ ~name:"_"))
                    vars
                in
                let ty' = ty_apply ty_c (List.map Var.ty vars') in
