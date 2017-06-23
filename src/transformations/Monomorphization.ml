@@ -256,7 +256,9 @@ let rec mono_term ~self ~local_state (t:term) : term =
               mono_term ~self ~local_state (U.app t l)
           end
         | _ ->
-          failf_ "@[<2>cannot monomorphize application term@ `@[%a@]`@]" pp_term t
+          U.app
+            (mono_term ~self ~local_state f)
+            (List.map (mono_term ~self ~local_state) l)
       in
       U.guard t' guard
     | TI.Bind ((Binder.Fun | Binder.Forall | Binder.Exists | Binder.Mu) as b, v, t) ->
