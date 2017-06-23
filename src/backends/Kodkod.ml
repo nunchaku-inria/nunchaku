@@ -46,8 +46,6 @@ type state = {
   (* total size of the universe *)
   decls: FO_rel.decl ID.Map.t;
   (* declarations *)
-  mutable trivially_unsat: bool;
-  (* hack: was last "unsat" actually "trivially_unsat"? *)
   timer: Utils.Time.timer;
   (* timer *)
 }
@@ -145,7 +143,6 @@ let create_state ~timer ~default_size (pb:FO_rel.problem) : state =
     univ_map;
     timer;
     decls= pb.FO_rel.pb_decls;
-    trivially_unsat=false;
   }
 
 let fpf = Format.fprintf
@@ -409,10 +406,8 @@ module Parser = struct
       let lexbuf = Lexing.from_string s' in
       outcome lexbuf;
       match L.result lexbuf with
-        | A.Unsat ->
-          Res.Unsat info, S.Shortcut
+        | A.Unsat
         | A.Trivially_unsat ->
-          state.trivially_unsat <- true; (* will stop iterating *)
           Res.Unsat info, S.Shortcut
         | A.Sat ->
           (* parse model *)
@@ -486,9 +481,6 @@ let rec call_rec ~timer ~print ~size ~deadline pb : res * Scheduling.shortcut =
   Utils.debugf ~section 2 "@[<2>kodkod result for size %d:@ %a@]"
     (fun k->k size Res.pp_head res);
   match res with
-    | Res.Unsat i when state.trivially_unsat ->
-      (* stop increasing the size *)
-      Res.Unknown [Res.U_incomplete i], S.No_shortcut
     | Res.Unsat i ->
       let now = Unix.gettimeofday () in
       if deadline -. now > 0.5
