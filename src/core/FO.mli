@@ -84,6 +84,7 @@ type 'ty mutual_types = {
 type attr =
   | Attr_pseudo_prop
   | Attr_pseudo_true
+  | Attr_card_hint of [`Max | `Min] * int (** cardinality bound hint *)
 
 (** Statement *)
 type ('t, 'ty) statement =

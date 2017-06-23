@@ -172,6 +172,8 @@ module Of_ho(T : TI.S) = struct
       (function
         | Statement.Attr_pseudo_prop -> Some FO.Attr_pseudo_prop
         | Statement.Attr_pseudo_true -> Some FO.Attr_pseudo_true
+        | Statement.Attr_card_max_hint n -> Some (FO.Attr_card_hint (`Max, n))
+        | Statement.Attr_card_min_hint n -> Some (FO.Attr_card_hint (`Min, n))
         | _ -> None)
 
   let convert_statement ~env st =

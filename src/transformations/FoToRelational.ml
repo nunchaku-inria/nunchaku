@@ -111,7 +111,7 @@ let create_state ~pprop ~ptrue () =
   let pprop_dom = {
     dom_ty=pprop_ty;
     dom_id=pprop;
-    dom_su=FO_rel.su_make ~card:2 pprop;
+    dom_su=FO_rel.su_make ~min_card:2 ~max_card:2 pprop;
   } in
   let state = {
     domains=TyTbl.create 16;
@@ -166,26 +166,29 @@ let declare_ty state (ty:FO.Ty.t) =
   ID.Tbl.add state.dom_of_id dom_id dom;
   dom
 
-let update_card state (ty:FO.Ty.t) (n:int): unit =
-  let dom = TyTbl.find state.domains ty in
-  Utils.debugf ~section 3 "@[<2>set cardinality of type %a@ to %d@]"
-    (fun k->k FO.pp_ty ty n);
-  begin match dom.dom_su.FO_rel.su_card with
-    | None ->
-      let dom = {
-        dom with dom_su={dom.dom_su with FO_rel.su_card=Some n};
-      } in
-      TyTbl.replace state.domains ty dom
-    | Some n' ->
-      if n<>n' then (
-        errorf "incompatible cardinalities for %a:@ %d and %d" FO.pp_ty ty n n'
-      )
-  end
-
 (* type -> its domain *)
 let domain_of_ty state (ty:FO.Ty.t) : domain =
   try TyTbl.find state.domains ty
   with Not_found -> declare_ty state ty
+
+let update_sub_universe state ~f ty =
+  let dom = domain_of_ty state ty in
+  let dom = { dom with dom_su = f dom.dom_su; } in
+  TyTbl.replace state.domains ty dom
+
+let update_min_card state (ty:FO.Ty.t) (n:int): unit =
+  Utils.debugf ~section 3 "@[<2>set minimum cardinality of type %a@ to %d@]"
+    (fun k->k FO.pp_ty ty n);
+  update_sub_universe state ty ~f:(fun su ->
+    {su with FO_rel.su_min_card = max n su.FO_rel.su_min_card})
+
+let update_max_card state (ty:FO.Ty.t) (n:int): unit =
+  Utils.debugf ~section 3 "@[<2>set maximum cardinality of type %a@ to %d@]"
+    (fun k->k FO.pp_ty ty n);
+  update_sub_universe state ty ~f:(fun su ->
+    {su with FO_rel.su_max_card = Some (match su.FO_rel.su_max_card with
+       | None -> n
+       | Some m -> min m n)})
 
 let su_of_ty state ty : FO_rel.sub_universe =
   (domain_of_ty state ty).dom_su
@@ -337,7 +340,17 @@ let encode_statement state st : FO_rel.form list =
       []
     | FO.Decl (_, ([], _), attrs) when List.mem FO.Attr_pseudo_true attrs ->
       []
-    | FO.TyDecl (_, _, _) -> [] (* declared when used *)
+    | FO.TyDecl (id, _, attrs) ->
+      let ty = FO.Ty.const id in
+      List.iter
+        (function
+           | FO.Attr_card_hint (`Max, n) ->
+             update_max_card state ty n
+           | FO.Attr_card_hint (`Min, n) ->
+             update_min_card state ty n
+           | _ -> ())
+        attrs;
+      [] (* declared when used *)
     | FO.Decl (id, (ty_args, ty_ret), _) ->
       assert (not (fun_is_declared state id));
       (* encoding differs for relations and functions *)
@@ -424,8 +437,12 @@ let encode_statement state st : FO_rel.form list =
       let card_expr = FO_rel.int_card (FO_rel.const dom.dom_id) in
       let n' = FO_rel.int_const n in
       begin match k with
-        | `Max -> [FO_rel.int_leq card_expr n']
-        | `Min -> [FO_rel.int_leq n' card_expr]
+        | `Max ->
+          update_max_card state ty n;
+          [FO_rel.int_leq card_expr n']
+        | `Min ->
+          update_min_card state ty n;
+          [FO_rel.int_leq n' card_expr]
       end
 
 let encode_pb pb =

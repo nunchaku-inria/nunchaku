@@ -86,6 +86,7 @@ type 'ty mutual_types = {
 type attr =
   | Attr_pseudo_prop
   | Attr_pseudo_true
+  | Attr_card_hint of [`Max | `Min] * int (** cardinality bound hint *)
 
 (** Statement *)
 type ('t, 'ty) statement =
@@ -379,6 +380,8 @@ let pp_model out m =
 let pp_attr out = function
   | Attr_pseudo_prop -> fpf out "pseudo_prop"
   | Attr_pseudo_true -> fpf out "pseudo_true"
+  | Attr_card_hint (`Max, n) -> fpf out "max_card_hint %d" n
+  | Attr_card_hint (`Min, n) -> fpf out "min_card_hint %d" n
 
 let pp_attrs out = function
   | [] -> ()
