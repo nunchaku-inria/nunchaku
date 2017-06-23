@@ -81,7 +81,9 @@ let pp_model_ = ref false
 let enable_polarize_ = ref true
 let enable_specialize_ = ref true
 let skolems_in_model_ = ref true
-let cvc4_schedule = ref true
+let cvc4_schedule_ = ref true
+let kodkod_initial_size_ = ref Backends.Kodkod.default_initial_size
+let kodkod_size_increment_ = ref Backends.Kodkod.default_size_increment
 let timeout_ = ref 30
 let version_ = ref false
 let dump_ : [`No | `Yes | `Into of string] ref = ref `No
@@ -195,9 +197,15 @@ let options =
       ; "--no-specialize", Arg.Clear enable_specialize_, " disable specialization"
       ; "--skolems-in-model", Arg.Set skolems_in_model_, " enable skolem constants in models"
       ; "--no-skolems-in-model", Arg.Clear skolems_in_model_, " disable skolem constants in models"
-      ; "--cvc4-schedule", Arg.Set cvc4_schedule, " enable scheduling of multiple CVC4 instances"
-      ; "--no-cvc4-schedule", Arg.Clear cvc4_schedule, " disable scheduling of multiple CVC4 instances"
-      ; "--solvers", Arg.String set_solvers_, " solvers to use (comma-separated list) " ^ list_solvers_ ()
+      ; "--cvc4-schedule", Arg.Set cvc4_schedule_, " enable scheduling of multiple CVC4 instances"
+      ; "--no-cvc4-schedule", Arg.Clear cvc4_schedule_,
+        " disable scheduling of multiple CVC4 instances"
+      ; "--kodkod-initial-size", Arg.Set_int kodkod_initial_size_,
+        " set initial cardinality bound for Kodkod"
+      ; "--kodkod-size-increment", Arg.Set_int kodkod_size_increment_,
+        " set cardinality bound increment for Kodkod"
+      ; "--solvers", Arg.String set_solvers_,
+        " solvers to use (comma-separated list) " ^ list_solvers_ ()
       ; "-s", Arg.String set_solvers_, " synonym for --solvers"
       ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
       ; "-t", Arg.Set_int timeout_, " alias to --timeout"
@@ -308,7 +316,7 @@ let make_cvc4 ~j () =
       ~slice:(1. *. float j)
       ~dump:(get_dump_file ())
       ~print:!pp_all_
-      ~schedule_options:!cvc4_schedule
+      ~schedule_options:!cvc4_schedule_
       ~print_smt:(!pp_all_ || !pp_smt_)
       ~print_model:(!pp_all_ || !pp_raw_model_)
       ()
@@ -331,6 +339,8 @@ let make_kodkod () =
   if List.mem S_kodkod !solvers && Backends.Kodkod.is_available ()
   then
     Backends.Kodkod.pipe
+      ~initial_size:!kodkod_initial_size_
+      ~size_increment:!kodkod_size_increment_
       ~print:!pp_all_
       ~dump:(get_dump_file ())
       ~print_model:(!pp_all_ || !pp_raw_model_)

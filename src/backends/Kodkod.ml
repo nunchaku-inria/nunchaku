@@ -32,7 +32,7 @@ type kodkod_name = string
 type offset = int
 
 type state = {
-  default_size: int;
+  current_size: int;
   (* cardinal for sub-universes in which it's unspecified *)
   name_of_id: kodkod_name ID.Map.t;
   (* map names to kodkod names *)
@@ -63,7 +63,7 @@ let max_size pb =
 
 (* compute size of universe + offsets *)
 let compute_univ_
-    ~default_size
+    ~current_size
     pb
   : int * (offset * FO_rel.atom IntMap.t) SUMap.t
   =
@@ -77,7 +77,7 @@ let compute_univ_
     List.fold_left
       (fun (n,su_to_atom_map,card_to_offset_map) su ->
          (* compute cardinal *)
-         let card = max default_size su.FO_rel.su_min_card in
+         let card = max current_size su.FO_rel.su_min_card in
          let card = match su.FO_rel.su_max_card with
            | None -> card
            | Some n -> min n card
@@ -139,10 +139,10 @@ let translate_names_ pb =
   n2id, id2n
 
 (* initialize the state for this particular problem *)
-let create_state ~timer ~default_size (pb:FO_rel.problem) : state =
-  let univ_size, univ_map = compute_univ_ ~default_size pb in
+let create_state ~timer ~current_size (pb:FO_rel.problem) : state =
+  let univ_size, univ_map = compute_univ_ ~current_size pb in
   let id_of_name, name_of_id = translate_names_ pb in
-  { default_size;
+  { current_size;
     name_of_id;
     id_of_name;
     univ_size;
@@ -345,7 +345,7 @@ let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
 
 let mk_info state: Res.info =
   Res.mk_info
-    ~message:(Printf.sprintf "dimension %d" state.default_size)
+    ~message:(Printf.sprintf "dimension %d" state.current_size)
     ~backend:"kodkod"
     ~time:(Utils.Time.get_timer state.timer) ()
 
@@ -474,13 +474,14 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         S.No_shortcut
   )
 
-let default_initial_size_ = 2 (* FUDGE *)
-let default_increment_ = 2 (* FUDGE *)
+let default_initial_size = 2 (* FUDGE *)
+let default_size_increment = 2 (* FUDGE *)
 
 (* call {!solve} with increasingly big problems, until we run out of time
    or obtain "sat" *)
-let rec call_rec ~timer ~print ~size ~max_size ~deadline pb : res * Scheduling.shortcut =
-  let state = create_state ~timer ~default_size:size pb in
+let rec call_rec ~timer ~print ~size ~size_increment ~max_size ~deadline pb
+    : res * Scheduling.shortcut =
+  let state = create_state ~timer ~current_size:size pb in
   if print
   then Format.printf "@[<v>kodkod problem:@ ```@ %a@,```@]@." (pp_pb state pb) ();
   let res, short = solve ~deadline state pb in
@@ -496,9 +497,9 @@ let rec call_rec ~timer ~print ~size ~max_size ~deadline pb : res * Scheduling.s
         Res.Unsat i, S.Shortcut
       ) else if deadline -. now > 0.5 then (
         (* unsat, and we still have some time: retry with a bigger size *)
-        let next_size = size + default_increment_ in
+        let next_size = size + size_increment in
         let next_size = match max_size with None -> next_size | Some n -> min n next_size in
-        call_rec ~timer ~print ~size:next_size ~max_size ~deadline pb
+        call_rec ~timer ~print ~size:next_size ~size_increment ~max_size ~deadline pb
       ) else (
         (* we fixed a maximal cardinal, so maybe there's an even bigger
            model, but we cannot know for sure *)
@@ -506,13 +507,13 @@ let rec call_rec ~timer ~print ~size ~max_size ~deadline pb : res * Scheduling.s
       )
     | _ -> res, short
 
-let call_real ~print_model ~prio ~print pb =
+let call_real ~initial_size ~size_increment ~print_model ~prio ~print pb =
   S.Task.make ~prio
     (fun ~deadline () ->
        let timer = Utils.Time.start_timer () in
        let max_size = max_size pb in
        let res, short =
-         call_rec ~timer ~print ~deadline ~size:default_initial_size_ ~max_size:max_size pb
+         call_rec ~timer ~print ~deadline ~size:initial_size ~size_increment ~max_size:max_size pb
        in
        begin match res with
          | Res.Sat (m,_) when print_model ->
@@ -523,9 +524,13 @@ let call_real ~print_model ~prio ~print pb =
        end;
        res, short)
 
-let call ?(print_model=false) ?(prio=10) ~print ~dump pb = match dump with
+let call ?(print_model=false) ?(prio=10) ?(initial_size=default_initial_size)
+    ?(size_increment=default_size_increment) ~print ~dump pb
+  =
+  if size_increment < 1 then errorf "kodkod: illegal size increment %d" size_increment;
+  match dump with
   | None ->
-    call_real ~print_model ~prio ~print pb
+    call_real ~initial_size ~size_increment ~print_model ~prio ~print pb
   | Some file ->
     (* TODO: emit sequence of problems for different sizes? *)
     let file = file ^ ".kodkod.kki" in
@@ -533,7 +538,9 @@ let call ?(print_model=false) ?(prio=10) ~print ~dump pb = match dump with
     CCIO.with_out file
       (fun oc ->
          let out = Format.formatter_of_out_channel oc in
-         let state = create_state ~timer:(Utils.Time.start_timer()) ~default_size:2 pb in
+         let state = create_state ~timer:(Utils.Time.start_timer())
+           ~current_size:initial_size pb
+         in
          Format.fprintf out
            "@[<v>%a@]@."
            (pp_pb state pb) ());
@@ -544,8 +551,8 @@ let is_available () =
   try Sys.command "which kodkodi > /dev/null 2> /dev/null" = 0
   with Sys_error _ -> false
 
-let pipe ?(print_model=false) ~print ~dump () =
-  let encode pb = call ~print_model ~print ~dump pb, () in
+let pipe ?(print_model=false) ?initial_size ?size_increment ~print ~dump () =
+  let encode pb = call ?initial_size ?size_increment ~print_model ~print ~dump pb, () in
   Transform.make
     ~name
     ~encode
