@@ -84,7 +84,7 @@ let copy_as_data ~info (c:(_,_) Stmt.copy): (_,_) Stmt.t list =
   (* return all new decls *)
   [decl_data; decl_concr]
 
-let approx_threshold_ = 30 (* FUDGE *)
+let approx_threshold_ = 4 (* FUDGE *)
 
 (* do we have an exact cardinal for [c.Stmt.copy_of], that is
    also small enough? *)
