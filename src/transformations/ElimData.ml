@@ -557,14 +557,19 @@ module Make(M : sig val mode : mode end) = struct
   let common_decls etys : (_,_) Stmt.t list =
     let mk_decl (id,ty) =
       Stmt.decl ~info:Stmt.info_default ~attrs:[] id ty
-    (* cardinality attribute  for this type *)
-    and attr_card ety =
-      Stmt.Attr_card_hint ety.ety_card
+    (* cardinality attribute for this type *)
+    and attrs_card ety = match ety.ety_card with
+      | Cardinality.Exact n ->
+        begin match Cardinality.Z.to_int n with
+          | None -> []
+          | Some n -> [Stmt.Attr_card_max_hint n]
+        end
+      | _ -> []
     in
     let tys =
       List.map
         (fun ety ->
-           let attrs = [attr_card ety] in
+           let attrs = attrs_card ety in
            Stmt.decl ~info:Stmt.info_default ~attrs ety.ety_id U.ty_type)
         etys
     in

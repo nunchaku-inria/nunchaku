@@ -7,9 +7,10 @@ type 'a printer = Format.formatter -> 'a -> unit
 
 (** Attribute on declarations *)
 type decl_attr =
-  | Attr_card_max of int (** maximal cardinality of type *)
-  | Attr_card_min of int (** minimal cardinality of type *)
-  | Attr_card_hint of Cardinality.t (** hint on the card of a type *)
+  | Attr_card_max of int (** maximal cardinality of type constraint *)
+  | Attr_card_min of int (** minimal cardinality of type constraint *)
+  | Attr_card_max_hint of int (** maximal cardinality of type as redundant hint *)
+  | Attr_card_min_hint of int (** minimal cardinality of type as redundant hint *)
   | Attr_incomplete (** encoding of some type with some values removed *)
   | Attr_abstract (** encoding of some type where some values are conflated *)
   | Attr_infinite (** infinite uninterpreted type *)
@@ -519,7 +520,8 @@ let pplist_prefix ~first ~pre pp out l =
 let pp_attr out = function
   | Attr_card_max i -> fpf out "max_card %d" i
   | Attr_card_min i -> fpf out "min_card %d" i
-  | Attr_card_hint c -> fpf out "card_hint %a" Cardinality.pp c
+  | Attr_card_max_hint i -> fpf out "max_card_hint %d" i
+  | Attr_card_min_hint i -> fpf out "min_card_hint %d" i
   | Attr_incomplete -> CCFormat.string out "incomplete"
   | Attr_abstract -> CCFormat.string out "abstract"
   | Attr_infinite -> CCFormat.string out "infinite"

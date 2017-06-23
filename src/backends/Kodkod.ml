@@ -476,7 +476,7 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         S.No_shortcut
   )
 
-let default_size_ = 2 (* FUDGE *)
+let default_initial_size_ = 2 (* FUDGE *)
 let default_increment_ = 2 (* FUDGE *)
 
 (* call {!solve} with increasingly big problems, until we run out of time
@@ -511,7 +511,7 @@ let call_real ~print_model ~prio ~print pb =
     (fun ~deadline () ->
        let timer = Utils.Time.start_timer () in
        let res, short =
-         call_rec ~timer ~print ~deadline ~size:default_size_ pb
+         call_rec ~timer ~print ~deadline ~size:default_initial_size_ pb
        in
        begin match res with
          | Res.Sat (m,_) when print_model ->

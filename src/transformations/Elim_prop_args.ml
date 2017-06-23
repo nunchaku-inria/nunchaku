@@ -59,7 +59,8 @@ let declare_ state : (_,_) Stmt.t list =
   let decl_ty =
     mk_decl
       ~attrs:[Stmt.Attr_pseudo_prop;
-              Stmt.Attr_card_hint (Cardinality.of_int 2)]
+              Stmt.Attr_card_min_hint 2;
+              Stmt.Attr_card_max_hint 2]
       state.pseudo_prop (U.ty_builtin `Type)
   and decl_true =
     mk_decl state.true_ ty_pprop

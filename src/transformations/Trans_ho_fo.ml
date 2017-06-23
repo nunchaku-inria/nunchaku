@@ -196,10 +196,6 @@ module Of_ho(T : TI.S) = struct
             (function
               | St.Attr_card_max n -> Some (FO.CardBound (id, `Max, n))
               | St.Attr_card_min n -> Some (FO.CardBound (id, `Min, n))
-              | St.Attr_card_hint (Cardinality.Exact n)
-                when Big_int.lt_big_int n max_card_hint ->
-                let n = Big_int.int_of_big_int n in
-                Some (FO.CardBound (id, `Eq, n))
               | St.Attr_infinite ->
                 failf "@[<2>infinite type `%a`@ should have been eliminated@]" ID.pp id
               | _ -> None)
