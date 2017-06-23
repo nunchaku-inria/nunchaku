@@ -306,11 +306,17 @@ let pp_problem out (decode, pb) =
         with Not_found ->
           errorf_ "no witness declared for cardinality bound on %a" ID.pp ty_id
       in
+      let pp_max_card out n =
+        if n < 1 then fpf out "(assert false)" (* absurd *)
+        else fpf out "(@[assert (fmf.card %a %d)@])" pp_id witness n
+      and pp_min_card out n =
+        if n<=1 then ()
+        else fpf out "(@[assert (not (fmf.card %a %d))@])" pp_id witness (n-1)
+      in
       begin match which with
-        | `Max when n < 1 -> fpf out "(assert false)" (* absurd *)
-        | `Max -> fpf out "(@[assert (fmf.card %a %d)@])" pp_id witness n
-        | `Min when n <= 1 -> ()  (* obvious *)
-        | `Min -> fpf out "(@[assert (not (fmf.card %a %d))@])" pp_id witness (n-1)
+        | `Max -> pp_max_card out n
+        | `Min -> pp_max_card out n;
+        | `Eq -> pp_min_card out n; pp_max_card out n (* both bounds *)
       end
     | FO.MutualTypes (k, l) ->
       let pp_arg out (c,i,ty) =

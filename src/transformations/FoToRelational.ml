@@ -55,6 +55,8 @@ type state = {
   (* specific domain for pseudo-prop *)
   ptrue: ID.t;
   (* pseudo-true : pseudo-prop *)
+  ty_cards: int ID.Tbl.t;
+  (* type -> exact cardinal, when available *)
 }
 
 (* declaration of this function/relation *)
@@ -117,6 +119,7 @@ let create_state ~pprop ~ptrue () =
     dom_of_id=ID.Tbl.create 16;
     pprop_dom;
     ptrue;
+    ty_cards=ID.Tbl.create 8;
   } in
   (* declare ptrue *)
   let ptrue_fe = {
@@ -149,18 +152,35 @@ let id_of_ty ty : ID.t =
       ID.make n
 
 (* ensure the type is declared *)
-let declare_ty ?card state (ty:FO.Ty.t) =
-  if TyTbl.mem state.domains ty
-  then errorf "type `@[%a@]` declared twice" FO.pp_ty ty;
-  (* TODO: handle cardinality constraints *)
+let declare_ty state (ty:FO.Ty.t) =
+  if TyTbl.mem state.domains ty then (
+    errorf "type `@[%a@]` declared twice" FO.pp_ty ty;
+  );
+  (* create domain *)
   let dom_id = id_of_ty ty in
-  let su = FO_rel.su_make ?card dom_id in
+  let su = FO_rel.su_make dom_id in
   let dom = { dom_id; dom_ty=ty; dom_su=su; } in
   Utils.debugf ~section 3 "@[<2>declare type %a@ = {@[%a@]}@]"
     (fun k->k FO.pp_ty ty FO_rel.pp_sub_universe su);
   TyTbl.add state.domains ty dom;
   ID.Tbl.add state.dom_of_id dom_id dom;
   dom
+
+let update_card state (ty:FO.Ty.t) (n:int): unit =
+  let dom = TyTbl.find state.domains ty in
+  Utils.debugf ~section 3 "@[<2>set cardinality of type %a@ to %d@]"
+    (fun k->k FO.pp_ty ty n);
+  begin match dom.dom_su.FO_rel.su_card with
+    | None ->
+      let dom = {
+        dom with dom_su={dom.dom_su with FO_rel.su_card=Some n};
+      } in
+      TyTbl.replace state.domains ty dom
+    | Some n' ->
+      if n<>n' then (
+        errorf "incompatible cardinalities for %a:@ %d and %d" FO.pp_ty ty n n'
+      )
+  end
 
 (* type -> its domain *)
 let domain_of_ty state (ty:FO.Ty.t) : domain =
@@ -317,7 +337,7 @@ let encode_statement state st : FO_rel.form list =
       []
     | FO.Decl (_, ([], _), attrs) when List.mem FO.Attr_pseudo_true attrs ->
       []
-    | FO.TyDecl _ -> [] (* declared when used *)
+    | FO.TyDecl (_, _, _) -> [] (* declared when used *)
     | FO.Decl (id, (ty_args, ty_ret), _) ->
       assert (not (fun_is_declared state id));
       (* encoding differs for relations and functions *)
@@ -399,14 +419,18 @@ let encode_statement state st : FO_rel.form list =
       errorf "unexpected (co)data@ `@[%a@]`" FO.pp_statement st
     | FO.CardBound (id, k, n) ->
       (* the relation representing this type *)
-      let dom = domain_of_ty state (FO.Ty.const id) in
+      let ty = FO.Ty.const id in
+      let dom = domain_of_ty state ty in
       let card_expr = FO_rel.int_card (FO_rel.const dom.dom_id) in
-      let n = FO_rel.int_const n in
-      let ax_card = match k with
-        | `Max -> FO_rel.int_leq card_expr n
-        | `Min -> FO_rel.int_leq n card_expr
-      in
-      [ax_card]
+      let n' = FO_rel.int_const n in
+      begin match k with
+        | `Max -> [FO_rel.int_leq card_expr n']
+        | `Min -> [FO_rel.int_leq n' card_expr]
+        | `Eq ->
+          (* update size of universe *)
+          update_card state ty n;
+          []
+      end
 
 let encode_pb pb =
   let pprop = find_pprop pb in
