@@ -90,7 +90,7 @@ type ('t, 'ty) statement =
   | TyDecl of id * int * attr list (** number of arguments *)
   | Decl of id * 'ty toplevel_ty * attr list
   | Axiom of 't
-  | CardBound of id * [`Max | `Min | `Eq] * int (** cardinality bound *)
+  | CardBound of id * [`Max | `Min] * int (** cardinality bound *)
   | MutualTypes of [`Data | `Codata] * 'ty mutual_types
   | Goal of 't
 

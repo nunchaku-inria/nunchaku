@@ -426,10 +426,6 @@ let encode_statement state st : FO_rel.form list =
       begin match k with
         | `Max -> [FO_rel.int_leq card_expr n']
         | `Min -> [FO_rel.int_leq n' card_expr]
-        | `Eq ->
-          (* update size of universe *)
-          update_card state ty n;
-          []
       end
 
 let encode_pb pb =

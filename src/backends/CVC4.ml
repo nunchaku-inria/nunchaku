@@ -315,8 +315,7 @@ let pp_problem out (decode, pb) =
       in
       begin match which with
         | `Max -> pp_max_card out n
-        | `Min -> pp_max_card out n;
-        | `Eq -> pp_min_card out n; pp_max_card out n (* both bounds *)
+        | `Min -> pp_min_card out n
       end
     | FO.MutualTypes (k, l) ->
       let pp_arg out (c,i,ty) =

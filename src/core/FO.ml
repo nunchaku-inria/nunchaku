@@ -92,7 +92,7 @@ type ('t, 'ty) statement =
   | TyDecl of id * int * attr list (** number of arguments *)
   | Decl of id * 'ty toplevel_ty * attr list
   | Axiom of 't
-  | CardBound of id * [`Max | `Min | `Eq] * int (** cardinality bound *)
+  | CardBound of id * [`Max | `Min] * int (** cardinality bound *)
   | MutualTypes of [`Data | `Codata] * 'ty mutual_types
   | Goal of 't
 
@@ -391,7 +391,7 @@ let pp_statement out s = match s with
     fpf out "@[<2>val %a@ : %a%a.@]" ID.pp v pp_toplevel_ty ty pp_attrs attrs
   | Axiom t -> fpf out "@[<2>axiom %a.@]" pp_term t
   | CardBound (ty_id, which, n) ->
-    let s = match which with `Max -> "max_card" | `Min -> "min_card" | `Eq -> "card" in
+    let s = match which with `Max -> "max_card" | `Min -> "min_card" in
     fpf out "@[<2>%s %a@ = %d.@]" s ID.pp ty_id n
   | MutualTypes (k, l) ->
     let pp_arg = pp_ty in
