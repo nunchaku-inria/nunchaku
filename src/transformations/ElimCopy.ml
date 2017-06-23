@@ -187,7 +187,8 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
   let card_concrete =
     AT.cardinality_ty ~cache:state.at_cache state.env c.Stmt.copy_of
   in
-  let incomplete = should_be_incomplete card_concrete in
+  let card_abstract_upper_bound = has_small_card card_concrete in
+  let incomplete = card_abstract_upper_bound = None in
   let id_c = c.Stmt.copy_id in
   let ty_c = U.ty_const id_c in
   ID.Tbl.add state.copy_as_uninterpreted id_c ();
@@ -200,7 +201,12 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
   (* declare the new (uninterpreted) type and functions *)
   let decl_c =
     let incomp_attr =
-      if incomplete then [Stmt.Attr_incomplete] else []
+      if incomplete then [Stmt.Attr_incomplete]
+      else match card_abstract_upper_bound with
+        | None -> assert false
+        | Some n ->
+          (* must be an exact cardinal, but for the copy it's only an upper bound *)
+          [Stmt.Attr_card_max n]
     in
     let old_attrs = attrs_of_ty state c.Stmt.copy_of in
     let attrs = Stmt.Attr_abstract :: incomp_attr @ old_attrs in
