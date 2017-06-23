@@ -44,6 +44,8 @@ type state = {
        a map from offsets to atoms of the sub-universe *)
   univ_size: int;
   (* total size of the universe *)
+  has_variable_card: bool;
+  (* if true, means at least one type has unknown card *)
   decls: FO_rel.decl ID.Map.t;
   (* declarations *)
   timer: Utils.Time.timer;
@@ -52,8 +54,12 @@ type state = {
 
 let errorf msg = Utils.failwithf msg
 
-(* compute size of universe + offsets *)
-let compute_univ_ ~default_size pb : int * (offset * FO_rel.atom IntMap.t) SUMap.t =
+(* compute size of universe + offsets + has_var_card *)
+let compute_univ_
+    ~default_size
+    pb
+  : int * (offset * FO_rel.atom IntMap.t) SUMap.t * bool
+  =
   let open Sequence.Infix in
   let univ = pb.FO_rel.pb_univ in
   let univ_prop = univ.FO_rel.univ_prop in
@@ -67,9 +73,9 @@ let compute_univ_ ~default_size pb : int * (offset * FO_rel.atom IntMap.t) SUMap
     SUMap.singleton univ_prop (0,a_to_i0)
   in
   (* add other sub-universes *)
-  let n, su_map, _ =
+  let n, su_map, _, has_var_card =
     List.fold_left
-      (fun (n,map,default_range) su ->
+      (fun (n,map,default_range,has_var_card) su ->
          (* add to [map1, map2] the fact that [su] will be represented
             by the range [offset, ..., offset+card-1] *)
          let add_range ~su ~offset ~card =
@@ -81,26 +87,27 @@ let compute_univ_ ~default_size pb : int * (offset * FO_rel.atom IntMap.t) SUMap
            in
            SUMap.add su (offset, a_to_i) map
          in
+         let has_var_card = has_var_card || (su.FO_rel.su_card = None) in
          match su.FO_rel.su_card, default_range with
            | Some c, _ ->
              let map = add_range ~su ~card:c ~offset:n in
-             n+c, map, default_range
+             n+c, map, default_range, has_var_card
            | None, None ->
              (* add domain of card [default_size], and set it as the domain
                 for other sub-universes of unknown size *)
              let card = default_size in
              let map' = add_range ~su ~card ~offset:n in
-             n + card, map', Some (n, card)
+             n + card, map', Some (n, card), has_var_card
            | None, Some (offset, card) ->
              (* there is already a domain for sub-universes of default size,
                 use it! *)
              let map' = add_range ~su ~card ~offset in
-             n, map', default_range
+             n, map', default_range, has_var_card
       )
-      (2, su_map0, None)
+      (2, su_map0, None, false)
       univ.FO_rel.univ_l
   in
-  n, su_map
+  n, su_map, has_var_card
 
 (* indices for naming constants by arity *)
 type name_map = int StrMap.t
@@ -134,12 +141,13 @@ let translate_names_ pb =
 
 (* initialize the state for this particular problem *)
 let create_state ~timer ~default_size (pb:FO_rel.problem) : state =
-  let univ_size, univ_map = compute_univ_ ~default_size pb in
+  let univ_size, univ_map, has_var_card = compute_univ_ ~default_size pb in
   let id_of_name, name_of_id = translate_names_ pb in
   { default_size;
     name_of_id;
     id_of_name;
     univ_size;
+    has_variable_card=has_var_card;
     univ_map;
     timer;
     decls= pb.FO_rel.pb_decls;
@@ -483,14 +491,19 @@ let rec call_rec ~timer ~print ~size ~deadline pb : res * Scheduling.shortcut =
   match res with
     | Res.Unsat i ->
       let now = Unix.gettimeofday () in
-      if deadline -. now > 0.5
-      then
+      if not state.has_variable_card then (
+        (* there is no variable cardinal to change, it's unsat *)
+        Utils.debug ~section 2
+          "kodkod found unsat and all domains have known cardinality";
+        Res.Unsat i, S.Shortcut
+      ) else if deadline -. now > 0.5 then (
         (* unsat, and we still have some time: retry with a bigger size *)
         call_rec ~timer ~print ~size:(size + default_increment_) ~deadline pb
-      else
+      ) else (
         (* we fixed a maximal cardinal, so maybe there's an even bigger
            model, but we cannot know for sure *)
         Res.Unknown [Res.U_incomplete i], S.No_shortcut
+      )
     | _ -> res, short
 
 let call_real ~print_model ~prio ~print pb =
