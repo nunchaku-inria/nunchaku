@@ -203,7 +203,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
       let f, l, subst, guard = Red.Full.whnf ~subst:local_state.subst f l in
       let local_state = {local_state with subst; } in
       let t' = match T.repr f with
-        | TI.Bind (Binder.Fun, _, _) -> assert false (* beta-reduction failed? *)
+        | TI.Bind (Binder.Fun, _, _) when l<>[] -> assert false (* beta-reduction failed? *)
         | TI.Builtin _ ->
           (* builtins are defined, but examine their args *)
           let f = mono_term ~self ~local_state f in
