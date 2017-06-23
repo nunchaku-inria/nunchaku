@@ -131,29 +131,42 @@ let encode_term (state:state) lenv (pol:Pol.t) (t:term) : term =
       end
     | TI.Builtin (`Eq (a,b)) ->
       let ty = ty_infer state a in
-      if must_elim_quant_on state ty then (
-        let _, ty_args, _ = U.ty_unfold ty in
-        (* create new constants [x1,...,xn] of type [ty_args], then state
-           [(a x1..xn)=(b x1..xn)] as we must be in negative polarity *)
-        let args =
-          List.mapi
-            (fun i ty ->
-               let vars = lenv.vars in
-               let skolem_id, _, _ =
-                 Sk.skolemize state.sk
-                   ~prefix:(CCFormat.sprintf "eq_arg_%d" i)
-                   ~ty_ret:ty ~vars (fun ty->ty)
-               in
-               (* now apply the new constant to [vars] and [body] *)
-               let skolem = U.app (U.const skolem_id) (List.map U.var vars) in
-               skolem)
-            ty_args
-        in
-        (* return [a] and [b], and apply them to [args] *)
-        let a = aux lenv Pol.NoPol a in
-        let b = aux lenv Pol.NoPol b in
-        U.eq (U.app a args) (U.app b args)
-      ) else (
+      if must_elim_quant_on state ty then
+        (* see whether we can keep this equality: if it's between objects
+           in an infinite type (e.g. functions) we should kill it *)
+        begin match U.approx_infinite_quant_pol `Eq pol with
+          | `Unsat_means_unknown res ->
+            state.unsat_means_unknown <- true;
+            Utils.debugf ~section 3
+              "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
+               quantifying over infinite encoded type `@[%a@]`@]"
+              (fun k->k P.pp t P.pp res Pol.pp pol P.pp ty);
+            res
+          | `Keep ->
+            (* make fresh undefined constant(s) and apply to them *)
+            let _, ty_args, _ = U.ty_unfold ty in
+            (* create new constants [x1,...,xn] of type [ty_args], then state
+               [(a x1..xn)=(b x1..xn)] as we must be in negative polarity *)
+            let args =
+              List.mapi
+                (fun i ty ->
+                   let vars = lenv.vars in
+                   let skolem_id, _, _ =
+                     Sk.skolemize state.sk
+                       ~prefix:(CCFormat.sprintf "eq_arg_%d" i)
+                       ~ty_ret:ty ~vars (fun ty->ty)
+                   in
+                   (* now apply the new constant to [vars] and [body] *)
+                   let skolem = U.app (U.const skolem_id) (List.map U.var vars) in
+                   skolem)
+                ty_args
+            in
+            (* return [a] and [b], and apply them to [args] *)
+            let a = aux lenv Pol.NoPol a in
+            let b = aux lenv Pol.NoPol b in
+            U.eq (U.app a args) (U.app b args)
+        end
+      else (
         aux_map lenv pol t
       )
     | _ ->
