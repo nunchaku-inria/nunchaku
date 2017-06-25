@@ -83,6 +83,7 @@ let enable_specialize_ = ref true
 let skolems_in_model_ = ref true
 let cvc4_schedule_ = ref true
 let kodkod_min_bound_ = ref Backends.Kodkod.default_min_size
+let kodkod_max_bound_ = ref None
 let kodkod_bound_increment_ = ref Backends.Kodkod.default_size_increment
 let timeout_ = ref 30
 let version_ = ref false
@@ -202,6 +203,8 @@ let options =
         " disable scheduling of multiple CVC4 instances"
       ; "--kodkod-min-bound", Arg.Set_int kodkod_min_bound_,
         " set lower cardinality bound for Kodkod"
+      ; "--kodkod-max-bound", Arg.Int (fun n -> kodkod_max_bound_ := Some n),
+        " set upper cardinality bound for Kodkod"
       ; "--kodkod-bound-increment", Arg.Set_int kodkod_bound_increment_,
         " set cardinality bound increment for Kodkod"
       ; "--solvers", Arg.String set_solvers_,
@@ -340,6 +343,7 @@ let make_kodkod () =
   then
     Backends.Kodkod.pipe
       ~min_size:!kodkod_min_bound_
+      ?max_size:!kodkod_max_bound_
       ~size_increment:!kodkod_bound_increment_
       ~print:!pp_all_
       ~dump:(get_dump_file ())

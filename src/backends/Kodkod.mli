@@ -14,6 +14,7 @@ val call :
   ?print_model:bool ->
   ?prio:int ->
   ?min_size:int ->
+  ?max_size:int ->
   ?size_increment:int ->
   print:bool ->
   dump:string option ->
@@ -27,6 +28,7 @@ val is_available : unit -> bool
 val pipe :
   ?print_model:bool ->
   ?min_size:int ->
+  ?max_size:int ->
   ?size_increment:int ->
   print:bool ->
   dump:string option ->

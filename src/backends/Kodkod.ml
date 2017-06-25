@@ -474,12 +474,12 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         S.No_shortcut
   )
 
-let default_min_size = 2 (* FUDGE *)
-let default_size_increment = 2 (* FUDGE *)
+let default_min_size = 4 (* FUDGE *)
+let default_size_increment = 4 (* FUDGE *)
 
 (* call {!solve} with increasingly big problems, until we run out of time
    or obtain "sat" *)
-let rec call_rec ~timer ~print ~size ~size_increment ~deduced_max_size ~deadline pb
+let rec call_rec ~timer ~print ~size ~max_size ~size_increment ~deduced_max_size ~deadline pb
     : res * Scheduling.shortcut =
   let state = create_state ~timer ~current_size:size pb in
   if print
@@ -493,29 +493,35 @@ let rec call_rec ~timer ~print ~size ~size_increment ~deduced_max_size ~deadline
       let deduced_max_size_reached =
         match deduced_max_size with None -> false | Some n -> size >= n
       in
+      let max_size_reached =
+        match max_size with None -> false | Some n -> size >= n
+      in
       if deduced_max_size_reached then (
-        Utils.debug ~section 2
-          "kodkod found unsat and all domains have bounded cardinality";
+        Utils.debug ~section 2 "kodkod found unsat and all domains have bounded cardinality";
         Res.Unsat i, S.Shortcut
+      ) else if max_size_reached then (
+        Utils.debug ~section 2 "reached specified maximal cardinality bound";
+        Res.Unknown [Res.U_incomplete i], S.No_shortcut
       ) else if deadline -. now > 0.5 then (
         (* unsat, and we still have some time: retry with a bigger size *)
         let next_size = size + size_increment in
         let next_size = match deduced_max_size with None -> next_size | Some n -> min n next_size in
-        call_rec ~timer ~print ~size:next_size ~size_increment ~deduced_max_size ~deadline pb
+        let next_size = match max_size with None -> next_size | Some n -> min n next_size in
+        call_rec ~timer ~print ~size:next_size ~max_size ~size_increment ~deduced_max_size
+          ~deadline pb
       ) else (
-        (* we fixed a maximal cardinal, so maybe there's an even bigger
-           model, but we cannot know for sure *)
+        (* maybe there's a larger model, but we have no time left *)
         Res.Unknown [Res.U_incomplete i], S.No_shortcut
       )
     | _ -> res, short
 
-let call_real ~min_size ~size_increment ~print_model ~prio ~print pb =
+let call_real ~min_size ~max_size ~size_increment ~print_model ~prio ~print pb =
   S.Task.make ~prio
     (fun ~deadline () ->
        let timer = Utils.Time.start_timer () in
        let deduced_max_size = deduced_max_size pb in
        let res, short =
-         call_rec ~timer ~print ~deadline ~size:min_size ~size_increment
+         call_rec ~timer ~print ~deadline ~size:min_size ~size_increment ~max_size
            ~deduced_max_size:deduced_max_size pb
        in
        begin match res with
@@ -527,13 +533,13 @@ let call_real ~min_size ~size_increment ~print_model ~prio ~print pb =
        end;
        res, short)
 
-let call ?(print_model=false) ?(prio=10) ?(min_size=default_min_size)
+let call ?(print_model=false) ?(prio=10) ?(min_size=default_min_size) ?max_size
     ?(size_increment=default_size_increment) ~print ~dump pb
   =
   if size_increment < 1 then errorf "kodkod: illegal size increment %d" size_increment;
   match dump with
   | None ->
-    call_real ~min_size ~size_increment ~print_model ~prio ~print pb
+    call_real ~min_size ~max_size ~size_increment ~print_model ~prio ~print pb
   | Some file ->
     (* TODO: emit sequence of problems for different sizes? *)
     let file = file ^ ".kodkod.kki" in
@@ -554,8 +560,8 @@ let is_available () =
   try Sys.command "which kodkodi > /dev/null 2> /dev/null" = 0
   with Sys_error _ -> false
 
-let pipe ?(print_model=false) ?min_size ?size_increment ~print ~dump () =
-  let encode pb = call ?min_size ?size_increment ~print_model ~print ~dump pb, () in
+let pipe ?(print_model=false) ?min_size ?max_size ?size_increment ~print ~dump () =
+  let encode pb = call ?min_size ?max_size ?size_increment ~print_model ~print ~dump pb, () in
   Transform.make
     ~name
     ~encode
