@@ -82,8 +82,8 @@ let enable_polarize_ = ref true
 let enable_specialize_ = ref true
 let skolems_in_model_ = ref true
 let cvc4_schedule_ = ref true
-let kodkod_initial_size_ = ref Backends.Kodkod.default_initial_size
-let kodkod_size_increment_ = ref Backends.Kodkod.default_size_increment
+let kodkod_min_bound_ = ref Backends.Kodkod.default_min_size
+let kodkod_bound_increment_ = ref Backends.Kodkod.default_size_increment
 let timeout_ = ref 30
 let version_ = ref false
 let dump_ : [`No | `Yes | `Into of string] ref = ref `No
@@ -200,9 +200,9 @@ let options =
       ; "--cvc4-schedule", Arg.Set cvc4_schedule_, " enable scheduling of multiple CVC4 instances"
       ; "--no-cvc4-schedule", Arg.Clear cvc4_schedule_,
         " disable scheduling of multiple CVC4 instances"
-      ; "--kodkod-initial-size", Arg.Set_int kodkod_initial_size_,
-        " set initial cardinality bound for Kodkod"
-      ; "--kodkod-size-increment", Arg.Set_int kodkod_size_increment_,
+      ; "--kodkod-min-bound", Arg.Set_int kodkod_min_bound_,
+        " set lower cardinality bound for Kodkod"
+      ; "--kodkod-bound-increment", Arg.Set_int kodkod_bound_increment_,
         " set cardinality bound increment for Kodkod"
       ; "--solvers", Arg.String set_solvers_,
         " solvers to use (comma-separated list) " ^ list_solvers_ ()
@@ -339,8 +339,8 @@ let make_kodkod () =
   if List.mem S_kodkod !solvers && Backends.Kodkod.is_available ()
   then
     Backends.Kodkod.pipe
-      ~initial_size:!kodkod_initial_size_
-      ~size_increment:!kodkod_size_increment_
+      ~min_size:!kodkod_min_bound_
+      ~size_increment:!kodkod_bound_increment_
       ~print:!pp_all_
       ~dump:(get_dump_file ())
       ~print_model:(!pp_all_ || !pp_raw_model_)
