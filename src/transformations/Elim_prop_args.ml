@@ -273,16 +273,11 @@ let transform_statement state stmt : (_,_) Stmt.t =
 let transform_problem pb =
   let env = Problem.env pb in
   let state = create_state ~env () in
-  let declared = ref false in
+  (* insert additional declarations before the first statement *)
+  let prelude = declare_ state in
   let pb' =
-    Problem.flat_map_statements pb
-      ~f:(fun st ->
-        let st' = transform_statement state st in
-        (* insert additional declarations before the first statement *)
-        let other_decls =
-          if !declared then [] else (declared := true; declare_ state)
-        in
-        other_decls @ [st'])
+    Problem.map_statements pb
+      ~prelude ~f:(transform_statement state)
   in
   pb', state
 

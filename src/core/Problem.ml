@@ -36,18 +36,21 @@ let of_list ~meta l = make ~meta (CCVector.of_list l)
 
 let iter_statements ~f pb = CCVector.iter f pb.statements
 
-let map_statements ~f pb = {
-  metadata=pb.metadata;
-  statements=CCVector.map f pb.statements;
-}
+let map_statements ?(prelude=[]) ~f pb =
+  let statements = CCVector.create() in
+  CCVector.append_list statements prelude;
+  CCVector.iter (fun st -> CCVector.push statements (f st)) pb.statements;
+  let statements = CCVector.freeze statements in
+  { metadata=pb.metadata; statements }
 
 let fold_map_statements ~f ~x pb =
   let acc, statements = Utils.vec_fold_map f x pb.statements in
   let statements = CCVector.freeze statements in
   acc, { pb with statements }
 
-let flat_map_statements ~f pb =
+let flat_map_statements ?(prelude=[]) ~f pb =
   let res = CCVector.create () in
+  CCVector.append_list res prelude;
   CCVector.iter
     (fun st ->
        let new_stmts = f st in
