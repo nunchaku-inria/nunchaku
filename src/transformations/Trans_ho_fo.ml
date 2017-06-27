@@ -174,6 +174,7 @@ module Of_ho(T : TI.S) = struct
         | Statement.Attr_pseudo_true -> Some FO.Attr_pseudo_true
         | Statement.Attr_card_max_hint n -> Some (FO.Attr_card_hint (`Max, n))
         | Statement.Attr_card_min_hint n -> Some (FO.Attr_card_hint (`Min, n))
+        | Statement.Attr_can_be_empty -> Some FO.Attr_can_be_empty
         | _ -> None)
 
   let convert_statement ~env st =
@@ -193,7 +194,6 @@ module Of_ho(T : TI.S) = struct
         in
         (* additional statements, obtained from attributes *)
         let others =
-          let max_card_hint = Big_int.big_int_of_int max_int in
           CCList.filter_map
             (function
               | St.Attr_card_max n -> Some (FO.CardBound (id, `Max, n))

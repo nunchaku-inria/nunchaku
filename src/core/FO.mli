@@ -85,6 +85,7 @@ type attr =
   | Attr_pseudo_prop
   | Attr_pseudo_true
   | Attr_card_hint of [`Max | `Min] * int (** cardinality bound hint *)
+  | Attr_can_be_empty
 
 (** Statement *)
 type ('t, 'ty) statement =

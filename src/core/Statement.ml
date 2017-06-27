@@ -14,6 +14,7 @@ type decl_attr =
   | Attr_incomplete (** encoding of some type with some values removed *)
   | Attr_abstract (** encoding of some type where some values are conflated *)
   | Attr_infinite (** infinite uninterpreted type *)
+  | Attr_can_be_empty (** empty type allowed? *)
   | Attr_finite_approx of ID.t (** finite approximation of an infinite type *)
   | Attr_infinite_upcast (** cast finite approx to infinite type *)
   | Attr_pseudo_prop (** encoding of [prop] *)
@@ -522,6 +523,7 @@ let pp_attr out = function
   | Attr_card_min i -> fpf out "min_card %d" i
   | Attr_card_max_hint i -> fpf out "max_card_hint %d" i
   | Attr_card_min_hint i -> fpf out "min_card_hint %d" i
+  | Attr_can_be_empty -> CCFormat.string out "can_be_empty"
   | Attr_incomplete -> CCFormat.string out "incomplete"
   | Attr_abstract -> CCFormat.string out "abstract"
   | Attr_infinite -> CCFormat.string out "infinite"

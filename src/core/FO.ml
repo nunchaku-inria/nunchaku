@@ -87,6 +87,7 @@ type attr =
   | Attr_pseudo_prop
   | Attr_pseudo_true
   | Attr_card_hint of [`Max | `Min] * int (** cardinality bound hint *)
+  | Attr_can_be_empty
 
 (** Statement *)
 type ('t, 'ty) statement =
@@ -382,6 +383,7 @@ let pp_attr out = function
   | Attr_pseudo_true -> fpf out "pseudo_true"
   | Attr_card_hint (`Max, n) -> fpf out "max_card_hint %d" n
   | Attr_card_hint (`Min, n) -> fpf out "min_card_hint %d" n
+  | Attr_can_be_empty -> CCFormat.string out "can_be_empty"
 
 let pp_attrs out = function
   | [] -> ()

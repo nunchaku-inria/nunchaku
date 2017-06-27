@@ -222,6 +222,10 @@ let as_pair_ (r1: encode_res) (r2: encode_res) : (_,_) encode_res_p = match r1, 
   | R_form f, R_expr e -> R_form (f, FO_rel.some e)
   | R_form f1, R_form f2 -> R_form (f1, f2)
 
+let encode_ty state ty: FO_rel.expr =
+  let dom = domain_of_ty state ty in
+  FO_rel.const dom.dom_id
+
 (* encode this term into a relation expression or formula *)
 let rec encode state (t:FO.T.t) : encode_res = match FO.T.view t with
   | FO.Ite (a,b,c) ->
@@ -323,9 +327,8 @@ let ty_axiom state (f_id:ID.t) (ty_args : FO.Ty.t list) (ty_ret:FO.Ty.t) : FO_re
          Var.makef ~ty:d.dom_su "x_%d" i)
       ty_args
   in
-  let dom_ret = domain_of_ty state ty_ret in
   let t_fun = app_fun_ f_id (List.map FO_rel.var vars) in
-  let t_ty = FO_rel.const dom_ret.dom_id in
+  let t_ty = encode_ty state ty_ret in
   FO_rel.for_all_l vars (FO_rel.in_ t_fun t_ty)
 
 let encode_statement state st : FO_rel.form list =
@@ -350,7 +353,16 @@ let encode_statement state st : FO_rel.form list =
              update_min_card state ty n
            | _ -> ())
         attrs;
-      [] (* declared when used *)
+      let can_be_empty =
+        List.exists (function FO.Attr_can_be_empty -> true | _ -> false) attrs
+      in
+      (* ensure there is at least one element… unless the type is allowed to be empty *)
+      if can_be_empty then [] (* declared when used *)
+      else (
+        (* add statement [card(ty) ≥ 1] *)
+        let ty = encode_ty state ty in
+        [ FO_rel.some ty ]
+      )
     | FO.Decl (id, (ty_args, ty_ret), _) ->
       assert (not (fun_is_declared state id));
       (* encoding differs for relations and functions *)
