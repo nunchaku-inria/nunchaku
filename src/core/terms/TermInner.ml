@@ -161,7 +161,7 @@ module Print(T : REPR)
     | Builtin (`Ite (a,b,c)) when is_if_ c ->
       (* special case to avoid deep nesting of ifs *)
       let pp_middle out (a,b) =
-        fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]@]"
+        fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]"
           (pp' P.Ite) a (pp' P.Ite) b
       in
       let middle, last = unroll_if_ c in
