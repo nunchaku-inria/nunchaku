@@ -459,9 +459,6 @@ let make_model_pipeline () =
       ~print:(!pp_skolem_ || !pp_all_) ~mode:`Sk_all ~check @@@
     Tr.ElimIndPreds.pipe ~mode:`Use_match
       ~print:(!pp_elim_preds_ || !pp_all_) ~check @@@
-    Tr.ElimQuantifiers.pipe
-      ~mode:Tr.ElimQuantifiers.([Elim_quant_data; Elim_quant_fun; Elim_eq_fun])
-      ~print:(!pp_elim_quant_ || !pp_all_) ~check @@@
     (*
     Tr.LambdaLift.pipe ~print:(!pp_lambda_lift_ || !pp_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!pp_elim_hof_ || !pp_all_) ~check @@@
