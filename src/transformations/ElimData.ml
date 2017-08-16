@@ -129,6 +129,12 @@ module Make(M : sig val mode : mode end) = struct
     (* New definitions, also used for computing types *)
     at_cache: AT.cache;
     (* used for computing type cardinalities *)
+    new_stmts: (T.t,T.t) Stmt.t CCVector.vector;
+    (* new statements, used for defining terms *)
+    cstor_funs_map: ID.t ID.Tbl.t;
+    (* constructors-as-functions, for partial applications *)
+    cstor_funs_set: unit ID.Tbl.t;
+    (* set of constructors-as-functions introduced so far*)
     mutable unsat_means_unknown: bool;
     (* completeness? *)
   }
@@ -142,6 +148,9 @@ module Make(M : sig val mode : mode end) = struct
     env;
     new_env=Env.create ();
     at_cache=AT.create_cache();
+    cstor_funs_map=ID.Tbl.create 16;
+    cstor_funs_set=ID.Tbl.create 16;
+    new_stmts=CCVector.create();
     unsat_means_unknown=false;
   }
 
@@ -160,13 +169,19 @@ module Make(M : sig val mode : mode end) = struct
     | Some res -> res
     | None -> errorf "could not find encoding of `is-%a`" ID.pp id
 
+  let ty_id ~state (id:ID.t) : T.t option =
+    let open CCOpt in
+    Env.find_ty ~env:state.env id
+    <+> Env.find_ty ~env:state.new_env id
+
   (* compute type of [t], using both envs *)
   let ty_exn ~state (t:T.t) =
     U.ty_of_signature_exn t
-      ~sigma:(fun id ->
-        let open CCOpt in
-        Env.find_ty ~env:state.env id
-        <+> Env.find_ty ~env:state.new_env id)
+      ~sigma:(ty_id ~state)
+
+  let ty_id_exn ~state (id:ID.t) = match ty_id ~state id with
+    | Some t -> t
+    | None -> errorf "cannot find type of `%a`" ID.pp id
 
   (* is [ty] a type that is being encoded? *)
   let is_encoded_ty state (ty:T.t): bool =
@@ -300,6 +315,55 @@ module Make(M : sig val mode : mode end) = struct
   let add_global_guard (share:sharing_state) (g:term): unit =
     share.ss_global_guards <- g :: share.ss_global_guards
 
+  (* get-or-define a rec-function that simulates the given constructor [id],
+     when [id] is partially applied (making it impossible to add guards
+     on its).
+     If [f] simulates [id], it means:
+     [f x1…xn = cstor x1…xn
+       asserting (is-cstor (f x1…xn)
+        ∧ ∀i. selector-cstor-i (f x1…xn) = xi)]
+  *)
+  let cstor_as_fun (state:state) (id:ID.t): ID.t =
+    try ID.Tbl.find state.cstor_funs_map id
+    with Not_found ->
+      let ty = ty_id_exn ~state id in
+      let c_id = match Tbl.get state.map (Cstor id) with
+        | None -> errorf "expected `%a` to be a constructor" ID.pp id
+        | Some i->i
+      in
+      let f_id = ID.make_f "%s-as-fun" (ID.name id) in
+      Utils.debugf ~section 3
+        "@[<2>introduce `@[%a : %a@]`@ for partial application of `%a`@]"
+        (fun k->k ID.pp f_id P.pp ty ID.pp id);
+      let f_defined = Stmt.mk_defined ~attrs:[] f_id ty in
+      (* define [f] by building a statement *)
+      let _l, ty_args, _ = U.ty_unfold ty in
+      assert (_l=[]);
+      let f_stmt =
+        let vars = List.mapi (fun i ty -> Var.makef ~ty "x_%d" i) ty_args in
+        let vars_t = List.map U.var vars in
+        (* [c_id x1…xn] *)
+        let t = U.app_const c_id vars_t in
+        (* put guards around [t] *)
+        let guards =
+          U.app_const (get_test_exn state id) [t]
+          :: List.mapi
+              (fun i arg ->
+                 U.eq arg (U.app_const (get_select_exn_ state id i) [t]))
+              vars_t
+        in
+        let rhs = U.asserting t guards in
+        Stmt.axiom_rec ~info:Stmt.info_default
+          [ { Stmt.rec_defined=f_defined; rec_ty_vars=[];
+              rec_eqns=Stmt.Eqn_single (vars, rhs); } ]
+      in
+      Utils.debugf ~section 5 "add new def `%a`" (fun k->k PStmt.pp f_stmt);
+      CCVector.push state.new_stmts f_stmt;
+      state.new_env <- Env.add_statement ~env:state.env f_stmt;
+      ID.Tbl.add state.cstor_funs_map id f_id;
+      ID.Tbl.add state.cstor_funs_set f_id ();
+      f_id
+
   (* for every let-binding [x := u] in [share] that satisfies [filter],
        or is DFS-reachable from such a cell,
        replace [t] by [let x := u in t] and remove cell from [share].
@@ -381,12 +445,19 @@ module Make(M : sig val mode : mode end) = struct
         begin match Tbl.get state.map (Cstor id) with
           | None -> t
           | Some _ ->
-            (* [c asserting is-c c].
-               We do NOT introduce a variable here, simply add the guard
-               to global guards *)
-            let guard = U.app_const (get_test_exn state id) [t] in
-            add_global_guard share guard;
-            t
+            let ty = ty_id_exn ~state id in
+            if U.ty_arity ty > 0 then (
+              (* partial application *)
+              let f_id = cstor_as_fun state id in
+              U.const f_id
+            ) else (
+              (* [c asserting is-c c].
+                 We do NOT introduce a variable here, simply add the guard
+                 to global guards *)
+              let guard = U.app_const (get_test_exn state id) [t] in
+              add_global_guard share guard;
+              t
+            )
         end
       | TI.App (_,[]) -> assert false
       | TI.App (f, l) ->
@@ -397,19 +468,26 @@ module Make(M : sig val mode : mode end) = struct
               | None ->
                 U.app_const f_id l'
               | Some f_id' ->
-                (* id is a constructor, we introduce a guard stating
-                   [is-id (id x1..xn) & And_k proj-id-k (id x1..xn) = x_k] *)
-                let cell = get_sharing_cell state share (U.app_const f_id' l') in
-                let t' = U.var cell.sc_var in
-                let guards =
-                  U.app_const (get_test_exn state f_id) [t']
-                  :: List.mapi
-                      (fun i arg ->
-                         U.eq arg (U.app_const (get_select_exn_ state f_id i) [t']))
-                      l'
-                in
-                add_guards cell guards;
-                t'
+                let ty = ty_id_exn ~state f_id in
+                if U.ty_arity ty > List.length l then (
+                  (* partial application, use cstor-as-fun *)
+                  let f_id_defined = cstor_as_fun state f_id in
+                  U.app_const f_id_defined l
+                ) else (
+                  (* id is a fully-applied constructor, we introduce a guard stating
+                     [is-id (id x1..xn) & And_k proj-id-k (id x1..xn) = x_k] *)
+                  let cell = get_sharing_cell state share (U.app_const f_id' l') in
+                  let t' = U.var cell.sc_var in
+                  let guards =
+                    U.app_const (get_test_exn state f_id) [t']
+                    :: List.mapi
+                        (fun i arg ->
+                           U.eq arg (U.app_const (get_select_exn_ state f_id i) [t']))
+                        l'
+                  in
+                  add_guards cell guards;
+                  t'
+                )
             end
           | _ -> tr_term_aux share Pol.NoPol t
         end
@@ -834,7 +912,7 @@ module Make(M : sig val mode : mode end) = struct
     in
     Stmt.mk_pred ~info ~wf kind l
 
-  let encode_stmt state stmt : (_,_) Stmt.t list= match Stmt.view stmt, mode with
+  let encode_stmt_ state stmt : (_,_) Stmt.t list = match Stmt.view stmt, mode with
     | Stmt.TyDef (`Codata, _), M_data
     | Stmt.Pred _, M_data -> assert false (* invariant broken *)
     | Stmt.TyDef (`Codata, l), M_codata ->
@@ -861,6 +939,13 @@ module Make(M : sig val mode : mode end) = struct
         Stmt.map stmt ~term:(tr_term state Pol.Pos) ~ty:(tr_ty state Pol.NoPol)
       in
       [stmt]
+
+  let encode_stmt state stmt : (_,_) Stmt.t list =
+    let l = encode_stmt_ state stmt in
+    (* add side statements *)
+    let l' = CCVector.to_list state.new_stmts in
+    CCVector.clear state.new_stmts;
+    l' @ l
 
   let transform_pb pb =
     let env = Problem.env pb in
@@ -1057,6 +1142,8 @@ module Make(M : sig val mode : mode end) = struct
       ~values:(fun (t,dt,k) -> match T.repr t with
         | TI.Const id when ID.Tbl.mem state.decode id ->
           None (* drop the domain constants *)
+        | TI.Const id when ID.Tbl.mem state.cstor_funs_set id ->
+          None (* drop functions defining cstors *)
         | _ ->
           let t = tr_term t in
           let dt = DT.map dt ~term:tr_term ~ty:tr_term in
