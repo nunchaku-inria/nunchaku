@@ -29,6 +29,7 @@ val call :
 
 val pipe :
   ?print_model:bool ->
+  ?prio:int ->
   print:bool ->
   dump:string option ->
   unit ->
