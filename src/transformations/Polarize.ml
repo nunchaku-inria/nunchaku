@@ -152,11 +152,52 @@ let is_prop ~self t =
   let ty = U.ty_exn ~env:(Trav.env self) t in
   U.ty_is_Prop ty
 
+let returns_prop ~self t =
+  let ty = U.ty_exn ~env:(Trav.env self) t in
+  U.ty_returns_Prop ty
+
 (* traverse [t], replacing some symbols by their polarized version,
    @return the term with more internal guards and polarized symbols *)
 let rec polarize_term_rec
   : self:Trav.t -> Pol.t -> subst -> T.t -> T.t
   = fun ~self pol subst t ->
+    let state = Trav.state self in
+    (* how to polarize an ID whose type is/returns prop *)
+    let maybe_polarize_const (id:ID.t) (ty:T.t) (l:T.t list) =
+      if U.ty_is_Prop ty then (
+        (* constant: degenerate case of (co)inductive pred, no need
+                     for polarization, and necessarily WF. *)
+        Utils.debugf ~section 5 "@[<2>do not polarize constant pred `%a`@]"
+          (fun k->k ID.pp_full id);
+        ID.Tbl.add state.St.polarized id None;
+        Trav.call_dep self ~depth:0 id `Keep;
+        assert (l = []);
+        U.const id
+      ) else (
+        (* polarize *)
+        Utils.debugf ~section 5 "@[<2>polarize pred `%a`@]"
+          (fun k->k ID.pp_full id);
+        polarize_def_of ~self id pol;
+        let p = find_polarized_exn ~state id in
+        app_polarized pol p l
+      )
+    and maybe_polarize_def (id:ID.t) (def:(_,_) Stmt.rec_def) (l:T.t list) =
+      (* we can polarize, or not: delegate to heuristic *)
+      if should_polarize_rec ~state def
+      then (
+        Utils.debugf ~section 5 "@[<2>polarize fun `%a`@]"
+          (fun k->k ID.pp_full id);
+        polarize_def_of ~self id pol;
+        let p = find_polarized_exn ~state id in
+        app_polarized pol p l
+      ) else (
+        Utils.debugf ~section 5 "@[<2>do not polarize fun `%a`@]"
+          (fun k->k ID.pp_full id);
+        ID.Tbl.add state.St.polarized id None;
+        Trav.call_dep self ~depth:0 id `Keep;
+        U.app_const id l
+      )
+    in
     match T.repr t with
       | TI.Builtin (`Guard (t, g)) ->
         let open Builtin in
@@ -170,11 +211,19 @@ let rec polarize_term_rec
         U.eval_renaming ~subst t
       | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
       | TI.Const id ->
-        Trav.call_dep self ~depth:0 id `Keep; (* keep it as is *)
-        t
+        let info = Env.find_exn ~env:(Trav.env self) id in
+        begin match Env.def info with
+          | Env.Fun_def (_,def,_) ->
+            maybe_polarize_def id def []
+          | Env.Pred (_,_,_,_,_) ->
+            let ty = Env.ty info in
+            maybe_polarize_const id ty []
+          | _ ->
+            Trav.call_dep self ~depth:0 id `Keep; (* keep it as is *)
+            t
+        end
       | TI.App (f,l) ->
         let l = List.map (polarize_term_rec ~self Pol.NoPol subst) l in
-        let state = Trav.state self in
         begin match T.repr f, l with
           | TI.Const id, _ when ID.Tbl.mem state.St.polarized id ->
             Utils.debugf ~section 5
@@ -205,40 +254,10 @@ let rec polarize_term_rec
                 Trav.call_dep self ~depth:0 id `Keep;
                 U.app f l
               | Env.Fun_def (_defs,def,_) ->
-                (* we can polarize, or not: delegate to heuristic *)
-                if should_polarize_rec ~state def
-                then (
-                  Utils.debugf ~section 5 "@[<2>polarize fun `%a`@]"
-                    (fun k->k ID.pp_full id);
-                  polarize_def_of ~self id pol;
-                  let p = find_polarized_exn ~state id in
-                  app_polarized pol p l
-                ) else (
-                  Utils.debugf ~section 5 "@[<2>do not polarize fun `%a`@]"
-                    (fun k->k ID.pp_full id);
-                  ID.Tbl.add state.St.polarized id None;
-                  Trav.call_dep self ~depth:0 id `Keep;
-                  U.app f l
-                )
+                maybe_polarize_def id def l
               | Env.Pred (_,_,pred,_preds,_) ->
-                let ty = pred.Stmt.pred_defined.Stmt.defined_ty in
-                if U.ty_is_Prop ty then (
-                  (* constant: degenerate case of (co)inductive pred, no need
-                     for polarization, and necessarily WF. *)
-                  Utils.debugf ~section 5 "@[<2>do not polarize pred `%a`@]"
-                    (fun k->k ID.pp_full id);
-                  ID.Tbl.add state.St.polarized id None;
-                  Trav.call_dep self ~depth:0 id `Keep;
-                  assert (l = []);
-                  f
-                ) else (
-                  (* polarize *)
-                  Utils.debugf ~section 5 "@[<2>polarize pred `%a`@]"
-                    (fun k->k ID.pp_full id);
-                  polarize_def_of ~self id pol;
-                  let p = find_polarized_exn ~state id in
-                  app_polarized pol p l
-                )
+                let d = pred.Stmt.pred_defined in
+                maybe_polarize_const d.Stmt.defined_head d.Stmt.defined_ty l
             end
           | _ ->
             polarize_term_rec' ~self pol subst t
@@ -250,6 +269,16 @@ let rec polarize_term_rec
            obtain two polarized formulas, whereas if we keep it we
            only obtain a non-polarized one. *)
         polarize_term_rec ~self pol subst (U.and_ [U.imply a b; U.imply b a])
+      | TI.Builtin (`Eq (a,b)) when returns_prop ~self a ->
+        (* [f = g] when both are predicates ==>
+           [f+ = g+ ∧ f- = g- asserting (f+=f- ∧ g+=g-)] *)
+        let a_plus = polarize_term_rec ~self Pol.Pos subst a in
+        let a_minus = polarize_term_rec ~self Pol.Neg subst a in
+        let b_plus = polarize_term_rec ~self Pol.Pos subst b in
+        let b_minus = polarize_term_rec ~self Pol.Neg subst b in
+        U.asserting
+          (U.and_ [U.eq a_plus b_plus; U.eq a_minus b_minus])
+          [U.eq a_plus a_minus; U.eq b_plus b_minus]
       | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun | Binder.Mu), _, _)
       | TI.Builtin (`Ite _ | `Eq _ | `And _ | `Or _ | `Not _  | `Imply _)
       | TI.Let _
