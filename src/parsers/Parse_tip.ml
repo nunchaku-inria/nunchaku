@@ -135,7 +135,7 @@ let convert_st (st:A.statement): UA.statement list =
     | A.Stmt_assert_not (tyvars,g) ->
       (* goal *)
       let g = UA.ty_forall_list tyvars ?loc (conv_term g) in
-      [UA.goal ?loc g]
+      [UA.goal ?loc (UA.not_ g)]
     | A.Stmt_data (tyvars, l) ->
       let l = List.map
           (fun (id, cstors) ->
