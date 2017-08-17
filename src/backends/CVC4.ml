@@ -663,9 +663,14 @@ let read_res_ ~info ~print_model ~decode s =
     | Backend_err msg ->
       Res.Unknown [Res.U_backend_error (Lazy.force info, msg)]
 
+(* the set of options given to every instance of CVC4 *)
+let basic_options =
+  "--lang smt --finite-model-find \
+   --uf-ss-fair-monotone --no-condense-function-values"
+
 let mk_info ~options (decode:decode_state): Res.info =
   let time = Utils.Time.get_timer decode.timer in
-  let message = Printf.sprintf "options: `%s`" options in
+  let message = Printf.sprintf "options: `%s %s`" basic_options options in
   Res.mk_info ~backend:"cvc4" ~time ~message ()
 
 let res t = match t.res with
@@ -772,9 +777,8 @@ let mk_cvc4_cmd_ timeout options =
   let timeout_hard = int_of_float (timeout +. 1.50001) in
   let timeout_ms = int_of_float (timeout *. 1000.) in
   Printf.sprintf
-    "ulimit -t %d; exec cvc4 --tlimit=%d --hard-limit --lang smt --finite-model-find \
-     --uf-ss-fair-monotone --no-condense-function-values %s"
-    timeout_hard timeout_ms options
+    "ulimit -t %d; exec cvc4 --tlimit=%d --hard-limit %s %s"
+    timeout_hard timeout_ms basic_options options
 
 let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
   let now = Unix.gettimeofday() in
