@@ -53,6 +53,8 @@ type state = {
   (* domain.dom_id -> domain *)
   pprop_dom: domain;
   (* specific domain for pseudo-prop *)
+  ty_decode_tbl: FO.Ty.t ID.Tbl.t;
+  (* to decode mangled types *)
   ptrue: ID.t;
   (* pseudo-true : pseudo-prop *)
   ty_cards: int ID.Tbl.t;
@@ -119,6 +121,7 @@ let create_state ~pprop ~ptrue () =
     dom_of_id=ID.Tbl.create 16;
     pprop_dom;
     ptrue;
+    ty_decode_tbl=ID.Tbl.create 8;
     ty_cards=ID.Tbl.create 8;
   } in
   (* declare ptrue *)
@@ -156,8 +159,9 @@ let declare_ty state (ty:FO.Ty.t) =
   if TyTbl.mem state.domains ty then (
     errorf "type `@[%a@]` declared twice" FO.pp_ty ty;
   );
-  (* create domain *)
+  (* create domain for the (mangled) type *)
   let dom_id = id_of_ty ty in
+  ID.Tbl.add state.ty_decode_tbl dom_id ty;
   let su = FO_rel.su_make dom_id in
   let dom = { dom_id; dom_ty=ty; dom_su=su; } in
   Utils.debugf ~section 3 "@[<2>declare type %a@ = {@[%a@]}@]"
@@ -776,7 +780,12 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
             then m (* ignore the pseudo-prop type *)
             else match ID.Map.get id ty_by_id with
               | Some ids ->
-                M.add_finite_type m (FO.Ty.const id) ids
+                (* recover the type corresponding to this id *)
+                let ty =
+                  try ID.Tbl.find state.ty_decode_tbl id
+                  with Not_found -> errorf "cannot find type for `%a`" ID.pp id
+                in
+                M.add_finite_type m ty ids
               | None ->
                 errorf "`%a` is neither a function nor a type" ID.pp id
         end
