@@ -208,6 +208,11 @@ let const_of_ty ~decode gty =
 let const_of_ty_nth ~decode gty i =
   CCFormat.sprintf "@[<h>%s_%d@]" (const_of_ty ~decode gty) i
 
+let get_ty_witness ~decode gty =
+  try GTy_map.find gty decode.witnesses
+  with Not_found ->
+    errorf_ "no witness declared for cardinality bound on %a" (pp_gty ~decode) gty
+
 (* print processed problem *)
 let pp_problem out (decode, pb) =
   (* print ID and remember its name for parsing model afterward *)
@@ -258,6 +263,10 @@ let pp_problem out (decode, pb) =
     | FO.Undefined t -> pp_term out t (* tailcall, probably *)
     | FO.Undefined_atom _ -> errorf_ "cannot print `undefined_atom` in SMTlib"
     | FO.Unparsable _ -> errorf_ "cannot print `unparsable` in SMTlib"
+    | FO.Card_at_least (_,n) when n <= 1 -> fpf out "true" (* trivial *)
+    | FO.Card_at_least (ty,n) ->
+      let witness = get_ty_witness ~decode ty in
+      fpf out "(@[(not (fmf.card %a %d))@])" pp_id witness (n-1)
     | FO.Fun (v,t) ->
       fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
         Var.pp_full v pp_ty (Var.ty v) pp_term t
@@ -303,11 +312,7 @@ let pp_problem out (decode, pb) =
     | FO.Goal t ->
       fpf out "(@[assert@ %a@])" pp_term t
     | FO.CardBound (ty_id, which, n) ->
-      let witness =
-        try GTy_map.find (gty_const ty_id) decode.witnesses
-        with Not_found ->
-          errorf_ "no witness declared for cardinality bound on %a" ID.pp ty_id
-      in
+      let witness = get_ty_witness ~decode (gty_const ty_id) in
       let pp_max_card out n =
         if n < 1 then fpf out "(assert false)" (* absurd *)
         else fpf out "(@[assert (fmf.card %a %d)@])" pp_id witness n

@@ -207,7 +207,8 @@ let rec polarize_term_rec
         let t = polarize_term_rec ~self pol subst t in
         U.guard t g
       | TI.Builtin (`True | `False | `DataTest _ | `Unparsable _
-                   | `DataSelect _ | `Undefined_self _ | `Undefined_atom _) ->
+                   | `DataSelect _ | `Undefined_self _
+                   | `Undefined_atom _ | `Card_at_least _) ->
         U.eval_renaming ~subst t
       | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
       | TI.Const id ->

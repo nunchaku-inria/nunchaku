@@ -68,6 +68,7 @@ let transform_term t =
     | FO.Builtin _
     | FO.DataTest (_,_)
     | FO.DataSelect (_,_,_)
+    | FO.Card_at_least (_,_)
     | FO.Undefined _
     | FO.Undefined_atom _
     | FO.Unparsable _

@@ -43,6 +43,7 @@ type ('t, 'ty) view =
   | Undefined of 't (** ['t] is not defined here *)
   | Undefined_atom of id * 'ty toplevel_ty * 't list (** some undefined term of given topleveltype, + args *)
   | Unparsable of 'ty (** could not parse term *)
+  | Card_at_least of 'ty * int
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Mu of 'ty var * 't   (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
@@ -140,6 +141,7 @@ module T : sig
   val undefined : t -> t
   val undefined_atom : id -> Ty.toplevel_ty -> t list -> t
   val unparsable : Ty.t -> t
+  val card_at_least : Ty.t -> int -> t
   val var : Ty.t var -> t
   val let_ : Ty.t var -> t -> t -> t
   val fun_ : Ty.t var -> t -> t

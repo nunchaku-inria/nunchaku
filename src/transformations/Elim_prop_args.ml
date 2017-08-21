@@ -202,11 +202,12 @@ let transform_term state subst t =
     | TI.Bind ((Binder.Forall | Binder.Exists) as b, v, body) ->
       let subst, v = rename_var state subst v in
       U.mk_bind b v (aux_top subst body)
-    | TI.Builtin (`Undefined_atom _|`Ite _|`DataTest _|`DataSelect _|`Unparsable _)
+    | TI.Builtin (`Undefined_atom _|`Ite _|`DataTest _
+                 |`DataSelect _|`Unparsable _|`Card_at_least _)
     | TI.Bind ((Binder.Fun|Binder.TyForall|Binder.Mu), _, _)
-    | TI. Match (_, _, _) | TI.TyBuiltin _ | TI.TyArrow (_, _)
+    | TI.Match (_, _, _) | TI.TyBuiltin _ | TI.TyArrow (_, _)
       ->
-      (* cannot be a boolean, translation can proceed *)
+      (* cannot have boolean args, translation can proceed *)
       U.map subst t
         ~bind:(rename_var state) ~f:aux_top
     | TI.TyMeta _ -> assert false

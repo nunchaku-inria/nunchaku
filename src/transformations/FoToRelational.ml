@@ -291,6 +291,10 @@ let rec encode state (t:FO.T.t) : encode_res = match FO.T.view t with
     end
   | FO.Builtin (`Int _) -> assert false (* TODO *)
   | FO.Var v -> FO_rel.var (encode_var state v) |> ret_expr
+  | FO.Card_at_least (ty, n) ->
+    (* card(ty) >= n *)
+    let ty = encode_ty state ty in
+    FO_rel.int_leq (FO_rel.int_const n) (FO_rel.int_card ty) |> ret_form
   | FO.DataTest (_,_)
   | FO.DataSelect (_,_,_) ->
     error "should have eliminated data{test/select} earlier"

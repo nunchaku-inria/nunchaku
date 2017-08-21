@@ -63,6 +63,7 @@ let pp_builtin pp_inner out : term Builtin.t -> unit = function
   | `DataSelect _
   | `Guard _
   | `Unparsable _
+  | `Card_at_least _
   | `Ite _ -> assert false (* TODO *)
 
 (* disambiguate IDs when printing them *)

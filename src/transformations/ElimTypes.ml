@@ -17,6 +17,8 @@ module M = Model
 module DT = M.DT
 module Subst = Var.Subst
 
+module Int_map = CCMap.Make(CCInt)
+
 type term = T.t
 
 let name = "elim_types"
@@ -38,6 +40,10 @@ type state = {
   (* type -> predicate for this type *)
   mutable pred_to_ty: T.t ID.Map.t;
   (* predicate -> type it encodes *)
+  mutable card_predicates: ID.t Int_map.t Ty.Map.t;
+  (* [type,int] -> predicate standing for [card(ty)>=n] *)
+  card_predicate_set: unit ID.Tbl.t;
+  (* set of predicates encoding card constraints *)
   parametrized_ty: unit ID.Tbl.t;
   (* parametrized ty *)
   env: (T.t,T.t) Env.t;
@@ -49,6 +55,8 @@ type state = {
 let create_state ~env () = {
   ty_to_pred=Ty.Map.empty;
   pred_to_ty=ID.Map.empty;
+  card_predicates=Ty.Map.empty;
+  card_predicate_set=ID.Tbl.create 6;
   parametrized_ty=ID.Tbl.create 16;
   env;
   side_axioms=CCVector.create();
@@ -61,6 +69,8 @@ let find_pred state (t:T.t): ID.t =
   try Ty.Map.find t state.ty_to_pred
   with Not_found ->
     errorf_ "could not find the predicate for type@ `@[%a@]`" P.pp t
+
+module CE = Cardinal_encode.Make(T)
 
 let encode_var subst v =
   let v' = Var.fresh_copy v |> Var.set_ty ~ty:U.ty_unitype in
@@ -90,8 +100,41 @@ let rec encode_term state subst t = match T.repr t with
     end
   | TI.Bind (Binder.Fun, _, _) -> Utils.not_implemented "elim_types for λ"
   | TI.Bind (Binder.TyForall, _, _) -> assert false
+  | TI.Builtin (`Card_at_least (ty,n)) ->
+    let p = named_pred_for_card_at_least state ty n in
+    U.const p
   | _ ->
     U.map subst t ~f:(encode_term state) ~bind:encode_var
+
+(* the type of [pred] has at least [n] elements, return list of axiom
+   [exists x1...xn. pred x_i & xi != xj] *)
+and encode_min_card_ax state ty n : T.t =
+  CE.encode_min_card ty n
+  |> encode_term state Var.Subst.empty
+
+(* get/create atomic predicate standing for [card ty >= n] *)
+and named_pred_for_card_at_least state ty n : ID.t =
+  let imap = Ty.Map.get_or ~default:Int_map.empty ty state.card_predicates in
+  let imap, c = match Int_map.get n imap with
+    | Some c -> imap, c
+    | None ->
+      (* define new constant [c <=> (card ty ≥ n)] *)
+      let c = ID.make_f "card_%s_at_least_%d" (Ty.mangle ~sep:"_" ty) n in
+      let ax_decl = Stmt.decl ~info:Stmt.info_default ~attrs:[] c U.ty_prop in
+      let ax_def =
+        Stmt.axiom1 ~info:Stmt.info_default
+          (U.imply (U.const c) (encode_min_card_ax state ty n))
+      in
+      CCVector.append_list state.side_axioms [ax_decl; ax_def];
+      ID.Tbl.add state.card_predicate_set c ();
+      Utils.debugf ~section 5 "@[<2>introduce card predicate `%a`@ :def `%a`@]"
+        (fun k->k ID.pp c PStmt.pp ax_def);
+      (* return *)
+      let imap = Int_map.add n c imap in
+      imap, c
+  in
+  state.card_predicates <- Ty.Map.add ty imap state.card_predicates;
+  c
 
 (* types are all sent to [state.dummy_ty] *)
 let rec encode_ty state ~top x t = match Ty.repr t with
@@ -174,8 +217,6 @@ let ensure_maps_to_predicate state ty =
   aux ret;
   ()
 
-module CE = Cardinal_encode.Make(T)
-
 (* type of pred [p] has at most [n] elements, return axiom
    [exists x1...xn. p x_i & forall y. p y => (y = x1 | .... | y = xn)] *)
 let encode_max_card_ state ty n =
@@ -185,13 +226,10 @@ let encode_max_card_ state ty n =
   in
   [Stmt.axiom1 ~info:Stmt.info_default ax]
 
-(* the type of [pred] has at least [n] elements, return list of axiom
+(* the type of [pred] has at least [n] elements, return axiom
    [exists x1...xn. pred x_i & xi != xj] *)
 let encode_min_card_ state ty n =
-  let ax =
-    CE.encode_min_card ty n
-    |> encode_term state Var.Subst.empty
-  in
+  let ax = encode_min_card_ax state ty n in
   [Stmt.axiom1 ~info:Stmt.info_default ax]
 
 let encode_stmt_ state st : (_,_) Stmt.t list =
@@ -468,6 +506,8 @@ let decode_model ~state m =
       ~values:(fun (t,dt,k) -> match T.repr t with
         | TI.Const p_id when ID.Map.mem p_id state.pred_to_ty ->
           None (* remove typing predicates from model *)
+        | TI.Const p_id when ID.Tbl.mem state.card_predicate_set p_id ->
+          None (* remove card predicates from model *)
         | _ ->
           Utils.debugf ~section 5
             "@[<2>decode @[%a@]@ := `@[%a@]@]"

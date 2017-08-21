@@ -670,6 +670,8 @@ module type UTIL = sig
   val asserting : t_ -> t_ list -> t_
   val guard : t_ -> t_ Builtin.guard -> t_
 
+  val card_at_least : t_ -> int -> t_
+
   val mk_bind : Binder.t -> t_ var -> t_ -> t_
   val mk_bind_l : Binder.t -> t_ var list -> t_ -> t_
 
@@ -1046,6 +1048,8 @@ module Util(T : S)
 
   let asserting t p = guard t {Builtin.asserting=p}
 
+  let card_at_least ty n = builtin (`Card_at_least (ty,n))
+
   module No_simp = struct
     let builtin b = T.build (Builtin b)
     let app_builtin b l = app (builtin b) l
@@ -1099,7 +1103,7 @@ module Util(T : S)
           decr d;
           CCHash.combine4 60
             (hash_ t)
-            CCHash.(seq (pair (list hash_var) hash_) 
+            CCHash.(seq (pair (list hash_var) hash_)
                 (ID.Map.to_seq l |> Sequence.map snd))
             (match def with
               | Default_none -> 0x10
@@ -1341,6 +1345,9 @@ module Util(T : S)
       let t = f b_acc pol t in
       let g = Builtin.map_guard (f b_acc Polarity.Pos) g in
       guard t g
+    | Builtin (`Card_at_least (ty,n)) ->
+      let ty = f b_acc pol ty in
+      card_at_least ty n
     | Builtin (`Eq (a,b)) ->
       let a = f b_acc P.NoPol a in
       let b = f b_acc P.NoPol b in
@@ -1602,6 +1609,7 @@ module Util(T : S)
               | _ ->
                 failwith "cannot infer type, wrong argument to DataSelect"
             end
+          | `Card_at_least _ -> prop
           | `Undefined_self t -> aux t
           | `Undefined_atom (_,ty) -> ty
           | `Guard (t, _) -> aux t

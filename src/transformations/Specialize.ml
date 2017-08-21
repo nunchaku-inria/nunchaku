@@ -529,8 +529,9 @@ let fun_is_deterministic ~self (f:ID.t): bool =
         |> Sequence.for_all
           (fun t -> match T.repr t with
              | TI.Const id -> not (ID.Set.mem id rec_ids)
-             | TI.Builtin (`Undefined_self _ | `Undefined_atom _ | `Unparsable _) ->
-               false (* not deterministic *)
+             | TI.Builtin (`Undefined_self _ | `Undefined_atom _
+                          | `Unparsable _ | `Card_at_least _) ->
+               false (* not always deterministic *)
              | TI.Builtin (`Ite _ | `And _ | `Or _ | `Not _ | `Eq _ |
                            `False | `True | `Imply _ | `DataTest _ |
                            `DataSelect _ | `Guard _) -> true

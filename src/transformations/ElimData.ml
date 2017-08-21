@@ -201,6 +201,25 @@ module Make(M : sig val mode : mode end) = struct
         | Cardinality.QuasiFiniteGEQ _ -> false
       end)
 
+  (* return [Some d] if [ty] is an encoded type and has (small) cardinal [d] *)
+  let ty_encoded_with_exact_small_cardinal_opt state (ty:T.t) : int option =
+    let module Z = Cardinality.Z in
+    if is_encoded_ty state ty then (
+      let card = AT.cardinality_ty ~cache:state.at_cache state.env ty in
+      begin match card with
+        | Cardinality.Unknown
+        | Cardinality.Infinite
+        | Cardinality.QuasiFiniteGEQ _ -> None
+        | Cardinality.Exact n ->
+          Z.to_int n
+      end
+    ) else None
+
+  (* threshold of [card(τ)] under which [forall x:τ. P[x]] is kept
+     as an accurate quantification. Otherwise it becomes undefined/false
+     depending on polarity *)
+  let threshold_card_quant : int = 16 (* FUDGE *)
+
   (* local state used to maximally share subterms, so as to avoid
      combinatorial explosion due to `asserting` constraints *)
   type sharing_state = {
@@ -541,7 +560,35 @@ module Make(M : sig val mode : mode end) = struct
             U.builtin (Builtin.map b ~f:(tr_term_block_lets share pol))
           | _ -> tr_term_aux share pol t
         end
-      | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun) as b, _, _) -> tr_bind share pol b t
+      | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, _)
+        when is_encoded_ty state (Var.ty v) ->
+        (* [v]'s type is encoded. We might preserve precision if
+           it has an exact, small cardinal *)
+        let ty = Var.ty v in
+        begin match ty_encoded_with_exact_small_cardinal_opt state ty with
+          | Some c when c <= threshold_card_quant ->
+            (* card of [v]'s type is exactly [c], and it's small enough:
+               [forall v:τ. P[v]] becomes [card(τ) ≥ c ∧ forall v:τ. P[v]] *)
+            U.and_
+              [ U.card_at_least ty c;
+                tr_bind share pol q t;
+              ]
+          | _ ->
+            (* similar to infinite quantifier *)
+            begin match U.approx_infinite_quant_pol_binder q pol with
+              | `Unsat_means_unknown res ->
+                state.unsat_means_unknown <- true;
+                Utils.debugf ~section 3
+                  "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
+                   quantifying over infinite encoded type `@[%a@]`@]"
+                  (fun k->k P.pp t P.pp res Pol.pp pol P.pp (Var.ty v));
+                res
+              | `Keep ->
+                tr_bind share pol q t
+            end
+        end
+      | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun) as b, _, _) ->
+        tr_bind share pol b t (* just traverse *)
       | TI.Match (t,m,def) ->
         if is_encoded_ty state (U.ty_exn ~env:state.env t)
         then errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.pp t

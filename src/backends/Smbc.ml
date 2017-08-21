@@ -132,6 +132,7 @@ let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
         let t = term_to_tip st t in
         let g = U.and_nodup g.Builtin.asserting |> term_to_tip st in
         A.app "asserting" [t; g]
+      | `Card_at_least _ -> assert false (* FIXME encode *)
       | `Unparsable _
         -> assert false (* TODO: better error: should not happen *)
     end

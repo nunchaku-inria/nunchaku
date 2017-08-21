@@ -33,7 +33,9 @@ type 'a t =
   | `True
   | `Undefined_atom of id * 'a
   | `Undefined_self of 'a
-  | `Unparsable of 'a ]
+  | `Unparsable of 'a
+  | `Card_at_least of 'a * int (* card of type >= int *)
+  ]
 
 val prec : 'a t -> Precedence.t
 
