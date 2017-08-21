@@ -347,7 +347,7 @@ let encode_statement state st : FO_rel.form list =
       []
     | FO.Decl (_, ([], _), attrs) when List.mem FO.Attr_pseudo_true attrs ->
       []
-    | FO.TyDecl (id, _, attrs) ->
+    | FO.TyDecl (id, 0, attrs) ->
       let ty = FO.Ty.const id in
       List.iter
         (function
@@ -367,6 +367,7 @@ let encode_statement state st : FO_rel.form list =
         let ty = encode_ty state ty in
         [ FO_rel.some ty ]
       )
+    | FO.TyDecl (_,_,_) -> [] (* ignore, will be mangled *)
     | FO.Decl (id, (ty_args, ty_ret), _) ->
       assert (not (fun_is_declared state id));
       (* encoding differs for relations and functions *)
