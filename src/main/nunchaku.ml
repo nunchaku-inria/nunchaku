@@ -65,7 +65,7 @@ let pp_elim_multi_eqns = ref false
 let pp_polarize_ = ref false
 let pp_unroll_ = ref false
 let pp_elim_preds_ = ref false
-let pp_elim_quant_ = ref false
+let pp_cstor_as_fun_ = ref false
 let pp_elim_data_ = ref false
 let pp_elim_codata_ = ref false
 let pp_copy_ = ref false
@@ -149,6 +149,9 @@ let options =
       , Arg.Set pp_specialize_
       , " print input after specialization"
       ; "--pp-" ^ Tr.LambdaLift.name, Arg.Set pp_lambda_lift_, " print after λ-lifting"
+      ; "--pp-" ^ Tr.Cstor_as_fun.long_name
+        , Arg.Set pp_cstor_as_fun_
+        , " print input after removal of partial applications of constructors"
       ; "--pp-" ^ Tr.Elim_HOF.name
       , Arg.Set pp_elim_hof_
       , " print input after elimination of higher-order/partial functions"
@@ -393,6 +396,7 @@ let make_model_pipeline () =
     (if !enable_specialize_
      then Tr.Specialize.pipe ~print:(!pp_specialize_ || !pp_all_) ~check
      else Transform.nop ()) @@@
+    Tr.Cstor_as_fun.pipe ~print:(!pp_cstor_as_fun_ || !pp_all_) ~check @@@
     k
   and pipe_common_paradox_kodkod k =
     Tr.ElimData.Codata.pipe ~print:(!pp_elim_codata_ || !pp_all_) ~check @@@
@@ -447,6 +451,7 @@ let make_model_pipeline () =
        *)
     Tr.ElimPatternMatch.pipe ~mode:Tr.ElimPatternMatch.Elim_codata_match
       ~print:(!pp_elim_codata_ || !pp_all_) ~check @@@
+    Tr.Cstor_as_fun.pipe ~print:(!pp_cstor_as_fun_ || !pp_all_) ~check @@@
     Tr.ElimData.Codata.pipe ~print:(!pp_elim_codata_ || !pp_all_) ~check @@@
     (if !enable_polarize_
      then Tr.Polarize.pipe ~print:(!pp_polarize_ || !pp_all_)
@@ -504,7 +509,7 @@ let make_model_pipeline () =
 let process_res_ r =
   let module Res = Problem.Res in
   (* [l] only contains unknown-like results (+timeout+out_of_scope),
-     recover accurate info *)
+     id recover accurate info *)
   let find_result_if_unknown l =
     let l =
       CCList.flat_map (function Res.Unknown l -> l | _ -> assert false) l
