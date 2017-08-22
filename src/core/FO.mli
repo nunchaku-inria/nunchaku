@@ -132,6 +132,7 @@ module T : sig
 
   val equal : t -> t -> bool
   val hash : t -> int
+  val is_var : t -> bool
 
   val builtin : Builtin.t -> t
   val const : id -> t

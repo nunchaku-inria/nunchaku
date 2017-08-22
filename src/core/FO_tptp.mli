@@ -54,6 +54,8 @@ val false_ : term
 val term_equal : term -> term -> bool
 val term_hash : term -> int
 
+val is_var : term -> bool
+
 val and_ : form list -> form
 val or_ : form list -> form
 val imply : form -> form -> form

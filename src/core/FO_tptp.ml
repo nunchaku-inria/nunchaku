@@ -64,6 +64,8 @@ let rec term_equal a b = match a, b with
   | Undefined_atom l1, Undefined_atom l2 -> CCList.equal term_equal l1 l2
   | True, _ | False, _ | Var _, _ | App _, _ | Undefined_atom _, _ -> false
 
+let is_var = function Var _ -> true | _ -> false
+
 let and_ = function
   | [] -> Atom True
   | [x] -> x

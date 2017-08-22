@@ -243,6 +243,8 @@ module T = struct
   let forall v t = make_ (Forall (v,t))
   let exists v t = make_ (Exists (v,t))
 
+  let is_var = function {view=Var _; _} -> true | _ -> false
+
   let to_seq t yield =
     let rec aux t =
       yield t;
