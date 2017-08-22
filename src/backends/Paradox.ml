@@ -149,7 +149,7 @@ let call_real ~print_model ~prio problem =
        begin match res with
          | Res.Sat (m,_) when print_model ->
            let pp_ty oc _ = CCFormat.string oc "$i" in
-           Format.printf "@[<2>raw paradox model:@ @[%a@]@]@."
+           Format.printf "@[<2>raw paradox model: {@,@[%a@]@]}@."
              (Model.pp (CCFun.const T.pp_term_tptp) pp_ty) m
          | _ -> ()
        end;
