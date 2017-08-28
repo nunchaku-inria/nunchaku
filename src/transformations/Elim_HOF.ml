@@ -367,7 +367,8 @@ let pp_fe_tower out =
 
 let pp_fun_encoding out m =
   fpf out "[@[<v>%a@]]"
-    (Utils.pp_seq ~sep:"" CCFormat.(pair ~sep:(return "@ -> ") int pp_fe_tower))
+    (Utils.pp_seq ~sep:""
+       CCFormat.(hvbox ~i:2 @@ pair ~sep:(return "@ -> ") int pp_fe_tower))
     (IntMap.to_seq m)
 
 let create_state ~env arities = {
@@ -500,8 +501,8 @@ let rec split_chunks_ prev lens l = match lens, l with
     (c,l') :: split_chunks_ len lens' l'
 
 let pp_chunks out =
-  let pp_tys out = fpf out "@[%a@]" CCFormat.(list P.pp) in
-  let pp_pair out (a,b) = fpf out "@[(%a, remaining %a)@]" pp_tys a pp_tys b in
+  let pp_tys out = fpf out "@[%a@]" CCFormat.(list @@ within "`" "`" P.pp) in
+  let pp_pair out (a,b) = fpf out "(@[%a; remaining: %a@])" pp_tys a pp_tys b in
   fpf out "[@[%a@]]" (Utils.pp_list pp_pair)
 
 (* introduce/get required app symbols for the given ID
@@ -592,7 +593,7 @@ let sc_arity_ = function
 (* apply the list of apply_fun to [l]. Arities should match. *)
 let rec apply_app_funs_ tower l =
   Utils.debugf ~section 5 "@[<2>apply_tower@ @[%a@]@ to @[%a@]@]"
-    (fun k->k pp_fe_tower tower (CCFormat.list P.pp) l);
+    (fun k->k pp_fe_tower tower CCFormat.(Dump.list @@ within "`" "`" @@ P.pp) l);
   match tower with
     | [] ->
       begin match l with
@@ -688,8 +689,8 @@ let elim_hof_term ~state subst pol t =
         | `Unsat_means_unknown res ->
           state.unsat_means_unknown <- true;
           Utils.debugf ~section 3
-            "@[<2>encode HO equality `@[%a@]`@ as `@[%a@]`@]"
-            (fun k->k P.pp t P.pp res);
+            "@[<2>encode HO equality `@[%a@]`@ :as `@[%a@]`@ :polarity %a@]"
+            (fun k->k P.pp t P.pp res Pol.pp pol);
           res
       end
     | TI.Let _

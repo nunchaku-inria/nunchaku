@@ -548,10 +548,10 @@ end
 
 module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
   let pp_defined out d =
-    fpf out "@[%a : %a%a@]"
+    fpf out "@[<2>%a@ : %a%a@]"
       ID.pp d.defined_head Pty.pp d.defined_ty pp_attrs d.defined_attrs
   and pp_typed_var out v =
-    fpf out "@[<2>%a:%a@]" Var.pp_full v (Pty.pp' Precedence.App) (Var.ty v)
+    fpf out "(@[<2>%a:%a@])" Var.pp_full v Pty.pp (Var.ty v)
 
   let pp_defined_list out =
     fpf out "@[<v>%a@]" (pplist_prefix ~first:"" ~pre:" and " pp_defined)
@@ -566,25 +566,25 @@ module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
       | Eqn_app (_, vars, lhs, rhs) ->
         if vars=[]
         then fpf out "@[<hv2>%a =@ %a@]" Pt.pp lhs Pt.pp rhs
-        else fpf out "@[<hv2>forall @[<h>%a@].@ @[%a =@ %a@]@]"
+        else fpf out "@[<hv2>forall @[<hv>%a@].@ @[%a =@ %a@]@]"
             (pplist ~sep:" " pp_typed_var) vars Pt.pp lhs Pt.pp rhs
       | Eqn_nested l ->
         pplist ~sep:";"
           (fun out  (vars,args,rhs,side) ->
              if vars=[]
-             then fpf out "@[<hv>%a@[<2>%a@ %a@] =@ %a@]"
+             then fpf out "@[<hv>%a@[<hv2>%a@ %a@]@ = %a@]"
                  pp_sides side ID.pp id
                  (pplist ~sep:" " (Pt.pp' Precedence.App)) args Pt.pp rhs
-             else fpf out "@[<hv2>forall @[<h>%a@].@ %a@[<2>%a@ %a@] =@ %a@]"
+             else fpf out "@[<hv2>forall @[<hv>%a@].@ %a@[<2>%a@ %a@]@ = %a@]"
                  (pplist ~sep:" " pp_typed_var) vars pp_sides side ID.pp id
                  (pplist ~sep:" " (Pt.pp' Precedence.App)) args Pt.pp rhs
           ) out l
       | Eqn_single (vars,rhs) ->
-        fpf out "@[<2>%a %a =@ %a@]" ID.pp id
+        fpf out "@[@[<hv2>%a@ %a@]@ = %a@]" ID.pp id
           (pplist ~sep:" " pp_typed_var) vars Pt.pp rhs
 
   let pp_rec_def out d =
-    fpf out "@[<hv2>%a :=@ %a@]"
+    fpf out "@[<hv>%a :=@ %a@]"
       pp_defined d.rec_defined
       (pp_eqns d.rec_defined.defined_head) d.rec_eqns
 
@@ -603,10 +603,10 @@ module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
       | [], Some g ->
         fpf out "@[<2>@[%a@]@ => @[%a@]@]" Pt.pp g Pt.pp c.clause_concl
       | _::_ as vars, None ->
-        fpf out "@[<2>forall %a.@ @[%a@]@]"
+        fpf out "@[<2>forall @[<hv>%a@].@ @[%a@]@]"
           (pplist ~sep:" " Var.pp_full) vars Pt.pp c.clause_concl
       | _::_ as vars, Some g ->
-        fpf out "@[<2>forall %a.@ @[%a@] =>@ @[%a@]@]"
+        fpf out "@[<2>forall @[<hv>%a@].@ @[%a@] =>@ @[%a@]@]"
           (pplist ~sep:" " Var.pp_full) vars Pt.pp g Pt.pp c.clause_concl
 
   let pp_clauses out l =
@@ -622,12 +622,12 @@ module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
   let pp_copy out c =
     let pp_wrt out = function
       | Wrt_nothing -> ()
-      | Wrt_subset p -> fpf out "@,@[<2>subset@ @[%a@]@]" Pt.pp p
-      | Wrt_quotient (`Total, r) -> fpf out "@,@[<2>quotient@ @[%a@]@]" Pt.pp r
-      | Wrt_quotient (`Partial, r) -> fpf out "@,@[<2>partial_quotient@ @[%a@]@]" Pt.pp r
+      | Wrt_subset p -> fpf out "@[<2>subset@ @[%a@]@]@," Pt.pp p
+      | Wrt_quotient (`Total, r) -> fpf out "@[<2>quotient@ @[%a@]@]@," Pt.pp r
+      | Wrt_quotient (`Partial, r) -> fpf out "@[<2>partial_quotient@ @[%a@]@]@," Pt.pp r
     in
     fpf out
-      "@[<v2>copy @[<4>%a %a :=@ @[%a@]@]@ %a\
+      "@[<v2>copy @[<4>%a %a@ := @[%a@]@]@ %a\
        @[abstract %a : @[%a@]@]@ \
        @[concrete %a : @[%a@]@]@]"
       ID.pp c.copy_id

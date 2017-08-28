@@ -265,6 +265,6 @@ let pipe ~print:must_print =
        let res' = Problem.Res.map_m ~f res in
        if must_print then (
          let module P = TI.Print(T) in
-         Format.printf "@[<v2>@{<Yellow>after model %s@}:@ %a@]@."
+         Format.printf "@[<v2>@{<Yellow>res after %s@}:@ %a@]@."
            name (Problem.Res.pp P.pp' P.pp) res');
        res')
