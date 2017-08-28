@@ -656,7 +656,14 @@ let elim_hof_term ~state subst pol t =
           when FunMap.mem (F_select (id_c,i)) state.arities ->
           let fe = fun_encoding_for ~state (F_select (id_c,i)) in
           Some (f, fe)
-        | _ -> None
+        | TI.Const _ | TI.Var _
+        | TI.Builtin (`DataSelect (_, _) | `DataTest _) ->
+          None
+        | _ ->
+          (* All other cases should not happen. If a case is missing
+             it means it might be encoded in a ill-typed way because we
+             don't know if it needs application symbols *)
+          errorf_ "unknown application term `%a`,@ cannot remove HOF" P.pp t
       in
       begin match as_hof with
         | Some (new_f, fun_encoding) ->
