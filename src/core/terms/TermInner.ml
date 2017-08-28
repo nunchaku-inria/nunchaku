@@ -898,10 +898,6 @@ module Util(T : S)
   let build = T.build
   let const id = T.build (Const id)
   let var v = T.build (Var v)
-  let app t l = match l with
-    | [] -> t
-    | _::_ -> T.build (App(t,l))
-  let app_const id l = app (const id) l
   let mk_bind b v t = T.build (Bind (b, v, t))
   let mk_bind_l b = List.fold_right (mk_bind b)
   let fun_ v t = T.build (Bind (Binder.Fun, v, t))
@@ -949,7 +945,6 @@ module Util(T : S)
       [t]
 
   let builtin_ b = T.build (Builtin b)
-  let app_builtin_ b l = app (builtin_ b) l
 
   let true_ = builtin_ `True
   let false_ = builtin_ `False
@@ -1010,12 +1005,38 @@ module Util(T : S)
 
   and app_builtin arg l = match arg, l with
     | (`Ite _ | `Eq _), [] -> builtin arg
-    | _ -> app_builtin_ arg l
+    | _ -> app (builtin_ arg) l
 
   and not_ t = builtin (`Not t)
   and and_ l = builtin (`And l)
   and or_ l = builtin (`Or l)
   and imply a b = builtin (`Imply (a,b))
+
+  and guard t g =
+    let open Builtin in
+    match T.repr t, g.asserting with
+      | _, [] -> t
+      | Builtin (`Guard (t', g')), _ ->
+        let g'' = Builtin.merge_guard g g' in
+        builtin (`Guard (t', g''))
+      | _ ->
+        builtin (`Guard (t, g))
+
+  and app t l = match T.repr t, l with
+    | _, [] -> t
+    | Builtin (`Guard (u, g)), _ ->
+      (* [f asserting g) l --->  (f l) asserting g] *)
+      guard (app u l) g
+    | Builtin (`Ite (a,b,c)), _ -> ite a (app b l) (app c l)
+    | Match (u, m, def), _ ->
+      let m = ID.Map.map (fun (vars,rhs) -> vars, app rhs l) m in
+      let def = map_default_case (fun u -> app u l) def in
+      match_with u m ~def
+    | _, _::_ -> T.build (App(t,l))
+
+  and ite a b c = app_builtin (`Ite (a,b,c)) []
+
+  let app_const id l = app (const id) l
 
   let imply_l l ret = match l with
     | [] -> ret
@@ -1024,7 +1045,6 @@ module Util(T : S)
 
   let eq a b = builtin (`Eq (a,b))
   let neq a b = not_ (eq a b)
-  let ite a b c = app_builtin (`Ite (a,b,c)) []
 
   let undefined_self t = builtin (`Undefined_self t)
 
@@ -1035,16 +1055,6 @@ module Util(T : S)
   let data_test c t = app_builtin (`DataTest c) [t]
   let data_select c i t = app_builtin (`DataSelect (c,i)) [t]
   let unparsable ~ty = builtin (`Unparsable ty)
-
-  let guard t g =
-    let open Builtin in
-    match T.repr t, g.asserting with
-      | _, [] -> t
-      | Builtin (`Guard (t', g')), _ ->
-        let g'' = Builtin.merge_guard g g' in
-        builtin (`Guard (t', g''))
-      | _ ->
-        builtin (`Guard (t, g))
 
   let asserting t p = guard t {Builtin.asserting=p}
 
