@@ -52,7 +52,7 @@ type local_state = {
 
 type ('a, 'b, 'ty) decision_node =
   | DN_match of ('a, 'b, 'ty) decision_node_match
-  | DN_if of 'b list * 'b list  (* true/false *)
+  | DN_if of 'b list * 'b list * 'b list (* true/false/wildcard *)
   | DN_bind of 'b list (* only accepts variables *)
 
 and ('a, 'b, 'ty) decision_node_match = {
@@ -81,13 +81,13 @@ let dnode_of_tydef (tydef: _ Stmt.data_type): (_,_,_) decision_node =
   }
 
 let dnode_add_wildcard d x = match d with
-  | DN_if (l,r) -> DN_if (x::l, x::r)
+  | DN_if (l,r,w) -> DN_if (l, r,x::w)
   | DN_match d -> DN_match { d with dn_wildcard=x :: d.dn_wildcard }
   | DN_bind d -> DN_bind (x::d)
 
 let dnode_add_bool (d:(_,_,_) decision_node) b x = match d, b with
-  | DN_if (l,r), `True -> DN_if (x::l,r)
-  | DN_if (l,r), `False -> DN_if (l,x::r)
+  | DN_if (l,r,w), `True -> DN_if (x::l,r,w)
+  | DN_if (l,r,w), `False -> DN_if (l,x::r,w)
   | DN_bind _, _
   | DN_match _, _ ->
     errorf_ "@[<2>expected boolean decision node@]"
@@ -131,7 +131,7 @@ let pp_eqn out (e:equation): unit =
 
 let dnode_of_ty ~env (ty:ty): (_,_,ty) decision_node =
   if U.ty_is_Prop ty
-  then DN_if ([], []) (* [v] is a prop, we use a if/then/else *)
+  then DN_if ([], [], []) (* [v] is a prop, we use a if/then/else *)
   else begin match U.head_sym ty with
     | Some ty_id ->
       (* what does the type of [v] look like? *)
@@ -259,9 +259,12 @@ and yield_list lst (l:equation list): term = match l with
    the default cases;
    then compile the subtrees *)
 and compile_dnode lst v next_vars dn : term = match dn with
-  | DN_if (l,r) ->
-    let l = compile_equations (add_path lst v (P_term U.true_)) next_vars l in
-    let r = compile_equations (add_path lst v (P_term U.false_)) next_vars r in
+  | DN_if ([],[],w) ->
+    (* no test, look at next variables *)
+    compile_equations (add_path lst v P_any) next_vars w
+  | DN_if (l,r,w) ->
+    let l = compile_equations (add_path lst v (P_term U.true_)) next_vars (l@w) in
+    let r = compile_equations (add_path lst v (P_term U.false_)) next_vars (r@w) in
     U.ite (U.var v) l r
   | DN_bind l -> compile_equations lst next_vars l
   | DN_match dn when ID.Map.is_empty dn.dn_by_cstor ->
