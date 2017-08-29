@@ -1,0 +1,517 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Transform.html">
+<link rel="next" href="Model.html">
+<link rel="Up" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="ID" rel="Chapter" href="ID.html">
+<link title="Var" rel="Chapter" href="Var.html">
+<link title="MetaVar" rel="Chapter" href="MetaVar.html">
+<link title="Location" rel="Chapter" href="Location.html">
+<link title="Intf" rel="Chapter" href="Intf.html">
+<link title="Utils" rel="Chapter" href="Utils.html">
+<link title="Transform" rel="Chapter" href="Transform.html">
+<link title="UntypedAST" rel="Chapter" href="UntypedAST.html">
+<link title="Model" rel="Chapter" href="Model.html">
+<link title="TypeUnify" rel="Chapter" href="TypeUnify.html">
+<link title="Problem" rel="Chapter" href="Problem.html">
+<link title="FO" rel="Chapter" href="FO.html">
+<link title="Reduce" rel="Chapter" href="Reduce.html">
+<link title="Env" rel="Chapter" href="Env.html">
+<link title="Statement" rel="Chapter" href="Statement.html">
+<link title="FO_tptp" rel="Chapter" href="FO_tptp.html">
+<link title="FO_rel" rel="Chapter" href="FO_rel.html">
+<link title="Cardinality" rel="Chapter" href="Cardinality.html">
+<link title="Scheduling" rel="Chapter" href="Scheduling.html">
+<link title="Polarity" rel="Chapter" href="Polarity.html">
+<link title="Traversal" rel="Chapter" href="Traversal.html">
+<link title="ProblemMetadata" rel="Chapter" href="ProblemMetadata.html">
+<link title="AnalyzeType" rel="Chapter" href="AnalyzeType.html">
+<link title="Prelude" rel="Chapter" href="Prelude.html">
+<link title="TypeCheck" rel="Chapter" href="TypeCheck.html">
+<link title="Lazy_list" rel="Chapter" href="Lazy_list.html">
+<link title="Bit_set" rel="Chapter" href="Bit_set.html">
+<link title="Sexp_lib" rel="Chapter" href="Sexp_lib.html">
+<link title="Sexp_lex" rel="Chapter" href="Sexp_lex.html">
+<link title="Precedence" rel="Chapter" href="Precedence.html">
+<link title="Binder" rel="Chapter" href="Binder.html">
+<link title="Builtin" rel="Chapter" href="Builtin.html">
+<link title="Cardinal_encode" rel="Chapter" href="Cardinal_encode.html">
+<link title="TermInner" rel="Chapter" href="TermInner.html">
+<link title="TermTyped" rel="Chapter" href="TermTyped.html">
+<link title="Pattern" rel="Chapter" href="Pattern.html">
+<link title="TypePoly" rel="Chapter" href="TypePoly.html">
+<link title="TypeMono" rel="Chapter" href="TypeMono.html">
+<link title="Parsing_utils" rel="Chapter" href="Parsing_utils.html">
+<link title="Lexer" rel="Chapter" href="Lexer.html">
+<link title="Parser" rel="Chapter" href="Parser.html">
+<link title="TPTP_print" rel="Chapter" href="TPTP_print.html">
+<link title="TPTP_lexer" rel="Chapter" href="TPTP_lexer.html">
+<link title="TPTP_parser" rel="Chapter" href="TPTP_parser.html">
+<link title="TPTP_preprocess" rel="Chapter" href="TPTP_preprocess.html">
+<link title="TPTP_model_ast" rel="Chapter" href="TPTP_model_ast.html">
+<link title="TPTP_model_lexer" rel="Chapter" href="TPTP_model_lexer.html">
+<link title="TPTP_model_parser" rel="Chapter" href="TPTP_model_parser.html">
+<link title="Ast_kodkod" rel="Chapter" href="Ast_kodkod.html">
+<link title="Lex_kodkod" rel="Chapter" href="Lex_kodkod.html">
+<link title="Parse_kodkod" rel="Chapter" href="Parse_kodkod.html">
+<link title="Tip_ast" rel="Chapter" href="Tip_ast.html">
+<link title="Tip_parser" rel="Chapter" href="Tip_parser.html">
+<link title="Tip_lexer" rel="Chapter" href="Tip_lexer.html">
+<link title="Parse_tip" rel="Chapter" href="Parse_tip.html">
+<link title="Skolem" rel="Chapter" href="Skolem.html">
+<link title="TypeInference" rel="Chapter" href="TypeInference.html">
+<link title="ElimPatternMatch" rel="Chapter" href="ElimPatternMatch.html">
+<link title="Monomorphization" rel="Chapter" href="Monomorphization.html">
+<link title="Specialize" rel="Chapter" href="Specialize.html">
+<link title="LambdaLift" rel="Chapter" href="LambdaLift.html">
+<link title="Elim_HOF" rel="Chapter" href="Elim_HOF.html">
+<link title="ElimRecursion" rel="Chapter" href="ElimRecursion.html">
+<link title="ElimMultipleEqns" rel="Chapter" href="ElimMultipleEqns.html">
+<link title="ElimIndPreds" rel="Chapter" href="ElimIndPreds.html">
+<link title="ElimCopy" rel="Chapter" href="ElimCopy.html">
+<link title="Polarize" rel="Chapter" href="Polarize.html">
+<link title="Unroll" rel="Chapter" href="Unroll.html">
+<link title="IntroGuards" rel="Chapter" href="IntroGuards.html">
+<link title="Model_clean" rel="Chapter" href="Model_clean.html">
+<link title="ElimData" rel="Chapter" href="ElimData.html">
+<link title="ElimTypes" rel="Chapter" href="ElimTypes.html">
+<link title="Elim_prop_args" rel="Chapter" href="Elim_prop_args.html">
+<link title="Elim_ite" rel="Chapter" href="Elim_ite.html">
+<link title="Elim_infinite" rel="Chapter" href="Elim_infinite.html">
+<link title="Trans_ho_fo" rel="Chapter" href="Trans_ho_fo.html">
+<link title="Trans_fo_tptp" rel="Chapter" href="Trans_fo_tptp.html">
+<link title="Lift_undefined" rel="Chapter" href="Lift_undefined.html">
+<link title="FoToRelational" rel="Chapter" href="FoToRelational.html">
+<link title="Cstor_as_fun" rel="Chapter" href="Cstor_as_fun.html"><title>Nunchaku documentation : UntypedAST</title>
+</head>
+<body>
+<div class="navbar"><a class="pre" href="Transform.html" title="Transform">Previous</a>
+&nbsp;<a class="up" href="index.html" title="Index">Up</a>
+&nbsp;<a class="post" href="Model.html" title="Model">Next</a>
+</div>
+<h1>Module <a href="type_UntypedAST.html">UntypedAST</a></h1>
+
+<pre><span class="keyword">module</span> UntypedAST: <code class="code"><span class="keyword">sig</span></code> <a href="UntypedAST.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info module top">
+<h1 id="1_InputAST">Input AST</h1><br>
+</div>
+<hr width="100%">
+
+<pre><span class="keyword">module</span> <a href="UntypedAST.Loc.html">Loc</a>: <code class="type"><a href="Location.html">Location</a></code></pre>
+<pre><span id="EXCEPTIONParseError"><span class="keyword">exception</span> ParseError</span> <span class="keyword">of</span> <code class="type">Loc.t</code></pre>
+
+<pre><span id="EXCEPTIONSyntaxError"><span class="keyword">exception</span> SyntaxError</span> <span class="keyword">of</span> <code class="type">string * Loc.t option</code></pre>
+
+<pre><span id="TYPEvar"><span class="keyword">type</span> <code class="type"></code>var</span> = <code class="type">string</code> </pre>
+
+
+<pre><span id="TYPEvar_or_wildcard"><span class="keyword">type</span> <code class="type"></code>var_or_wildcard</span> = <code class="type">[ `Var of string | `Wildcard ]</code> </pre>
+
+
+<pre><span id="TYPEterm"><span class="keyword">type</span> <code class="type"></code>term</span> = <code class="type"><a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code> </pre>
+
+
+<pre><code><span id="TYPEterm_node"><span class="keyword">type</span> <code class="type"></code>term_node</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.Builtin"><span class="constructor">Builtin</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEbuiltin">builtin</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.Var"><span class="constructor">Var</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEvar_or_wildcard">var_or_wildcard</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.AtVar"><span class="constructor">AtVar</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEvar">var</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.MetaVar"><span class="constructor">MetaVar</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEvar">var</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.App"><span class="constructor">App</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEterm">term</a> * <a href="UntypedAST.html#TYPEterm">term</a> list</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.Fun"><span class="constructor">Fun</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEtyped_var">typed_var</a> * <a href="UntypedAST.html#TYPEterm">term</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.Let"><span class="constructor">Let</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEvar">var</a> * <a href="UntypedAST.html#TYPEterm">term</a> * <a href="UntypedAST.html#TYPEterm">term</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.Match"><span class="constructor">Match</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEterm">term</a><br>        * (<a href="UntypedAST.html#TYPEvar">var</a> * <a href="UntypedAST.html#TYPEvar_or_wildcard">var_or_wildcard</a> list * <a href="UntypedAST.html#TYPEterm">term</a>)<br>          list * <a href="UntypedAST.html#TYPEterm">term</a> option</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.Ite"><span class="constructor">Ite</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEterm">term</a> * <a href="UntypedAST.html#TYPEterm">term</a> * <a href="UntypedAST.html#TYPEterm">term</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.Forall"><span class="constructor">Forall</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEtyped_var">typed_var</a> * <a href="UntypedAST.html#TYPEterm">term</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.Exists"><span class="constructor">Exists</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEtyped_var">typed_var</a> * <a href="UntypedAST.html#TYPEterm">term</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.Mu"><span class="constructor">Mu</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEtyped_var">typed_var</a> * <a href="UntypedAST.html#TYPEterm">term</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.TyArrow"><span class="constructor">TyArrow</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEty">ty</a> * <a href="UntypedAST.html#TYPEty">ty</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.TyForall"><span class="constructor">TyForall</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEvar">var</a> * <a href="UntypedAST.html#TYPEty">ty</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTterm_node.Asserting"><span class="constructor">Asserting</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEterm">term</a> * <a href="UntypedAST.html#TYPEterm">term</a> list</code></code></td>
+
+</tr></table>
+
+
+
+<pre><span id="TYPEbuiltin"><span class="keyword">type</span> <code class="type"></code>builtin</span> = <code class="type">[ `And<br>       | `Eq<br>       | `Equiv<br>       | `False<br>       | `Imply<br>       | `Not<br>       | `Or<br>       | `Prop<br>       | `True<br>       | `Type<br>       | `Undefined_atom of <a href="UntypedAST.html#TYPEterm">term</a><br>       | `Unitype ]</code> </pre>
+
+
+<pre><span id="TYPEty"><span class="keyword">type</span> <code class="type"></code>ty</span> = <code class="type"><a href="UntypedAST.html#TYPEterm">term</a></code> </pre>
+
+
+<pre><span id="TYPEtyped_var"><span class="keyword">type</span> <code class="type"></code>typed_var</span> = <code class="type"><a href="UntypedAST.html#TYPEvar">var</a> * <a href="UntypedAST.html#TYPEty">ty</a> option</code> </pre>
+<div class="info ">
+A variable with, possibly, its type<br>
+</div>
+
+
+<pre><span class="keyword">module</span> <a href="UntypedAST.Builtin.html">Builtin</a>: <code class="code"><span class="keyword">sig</span></code> <a href="UntypedAST.Builtin.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+<pre><span id="VALview"><span class="keyword">val</span> view</span> : <code class="type">'a Loc.with_loc -> 'a</code></pre>
+<pre><span id="TYPErec_defs"><span class="keyword">type</span> <code class="type"></code>rec_defs</span> = <code class="type">(string * <a href="UntypedAST.html#TYPEterm">term</a> * <a href="UntypedAST.html#TYPEterm">term</a> list) list</code> </pre>
+
+
+<pre><span id="TYPEspec_defs"><span class="keyword">type</span> <code class="type"></code>spec_defs</span> = <code class="type">(string * <a href="UntypedAST.html#TYPEterm">term</a>) list * <a href="UntypedAST.html#TYPEterm">term</a> list</code> </pre>
+
+
+<pre><span id="TYPEmutual_types"><span class="keyword">type</span> <code class="type"></code>mutual_types</span> = <code class="type">(<a href="UntypedAST.html#TYPEvar">var</a> * <a href="UntypedAST.html#TYPEvar">var</a> list *<br>        (<a href="UntypedAST.html#TYPEvar">var</a> * <a href="UntypedAST.html#TYPEty">ty</a> list) list)<br>       list</code> </pre>
+
+
+<pre><span id="TYPEmutual_preds"><span class="keyword">type</span> <code class="type"></code>mutual_preds</span> = <code class="type">(<a href="UntypedAST.html#TYPEvar">var</a> * <a href="UntypedAST.html#TYPEty">ty</a> * <a href="UntypedAST.html#TYPEterm">term</a> list) list</code> </pre>
+
+
+<pre><code><span id="TYPEcopy_wrt"><span class="keyword">type</span> <code class="type"></code>copy_wrt</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy_wrt.Wrt_nothing"><span class="constructor">Wrt_nothing</span></span></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy_wrt.Wrt_subset"><span class="constructor">Wrt_subset</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEterm">term</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy_wrt.Wrt_quotient"><span class="constructor">Wrt_quotient</span></span> <span class="keyword">of</span> <code class="type">[ `Partial | `Total ] * <a href="UntypedAST.html#TYPEterm">term</a></code></code></td>
+
+</tr></table>
+
+
+
+<pre><code><span id="TYPEcopy"><span class="keyword">type</span> <code class="type"></code>copy</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.id">id</span>&nbsp;: <code class="type"><a href="UntypedAST.html#TYPEvar">var</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.copy_vars">copy_vars</span>&nbsp;: <code class="type"><a href="UntypedAST.html#TYPEvar">var</a> list</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.of_">of_</span>&nbsp;: <code class="type"><a href="UntypedAST.html#TYPEterm">term</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.wrt">wrt</span>&nbsp;: <code class="type"><a href="UntypedAST.html#TYPEcopy_wrt">copy_wrt</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.abstract">abstract</span>&nbsp;: <code class="type"><a href="UntypedAST.html#TYPEvar">var</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.concrete">concrete</span>&nbsp;: <code class="type"><a href="UntypedAST.html#TYPEvar">var</a></code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><span id="TYPEattribute"><span class="keyword">type</span> <code class="type"></code>attribute</span> = <code class="type">string list</code> </pre>
+<div class="info ">
+one attribute = list of strings separated by spaces<br>
+</div>
+
+
+<pre><code><span id="TYPEstatement_node"><span class="keyword">type</span> <code class="type"></code>statement_node</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement_node.Include"><span class="constructor">Include</span></span> <span class="keyword">of</span> <code class="type">string * string list option</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement_node.Decl"><span class="constructor">Decl</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEvar">var</a> * <a href="UntypedAST.html#TYPEty">ty</a> * <a href="UntypedAST.html#TYPEattribute">attribute</a> list</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement_node.Axiom"><span class="constructor">Axiom</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEterm">term</a> list</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement_node.Spec"><span class="constructor">Spec</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEspec_defs">spec_defs</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement_node.Rec"><span class="constructor">Rec</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPErec_defs">rec_defs</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement_node.Data"><span class="constructor">Data</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEmutual_types">mutual_types</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement_node.Codata"><span class="constructor">Codata</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEmutual_types">mutual_types</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement_node.Def"><span class="constructor">Def</span></span> <span class="keyword">of</span> <code class="type">string * <a href="UntypedAST.html#TYPEterm">term</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement_node.Pred"><span class="constructor">Pred</span></span> <span class="keyword">of</span> <code class="type">[ `Not_wf | `Wf ] * <a href="UntypedAST.html#TYPEmutual_preds">mutual_preds</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement_node.Copred"><span class="constructor">Copred</span></span> <span class="keyword">of</span> <code class="type">[ `Not_wf | `Wf ] * <a href="UntypedAST.html#TYPEmutual_preds">mutual_preds</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement_node.Copy"><span class="constructor">Copy</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEcopy">copy</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement_node.Goal"><span class="constructor">Goal</span></span> <span class="keyword">of</span> <code class="type"><a href="UntypedAST.html#TYPEterm">term</a></code></code></td>
+
+</tr></table>
+
+
+
+<pre><code><span id="TYPEstatement"><span class="keyword">type</span> <code class="type"></code>statement</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement.stmt_loc">stmt_loc</span>&nbsp;: <code class="type">Loc.t option</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement.stmt_name">stmt_name</span>&nbsp;: <code class="type">string option</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement.stmt_value">stmt_value</span>&nbsp;: <code class="type"><a href="UntypedAST.html#TYPEstatement_node">statement_node</a></code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><span id="VALwildcard"><span class="keyword">val</span> wildcard</span> : <code class="type">?loc:Loc.t -> unit -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALbuiltin"><span class="keyword">val</span> builtin</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEbuiltin">builtin</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALvar"><span class="keyword">val</span> var</span> : <code class="type">?loc:Loc.t -> string -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALat_var"><span class="keyword">val</span> at_var</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEvar">var</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALmeta_var"><span class="keyword">val</span> meta_var</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEvar">var</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALapp"><span class="keyword">val</span> app</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc -><br>       <a href="UntypedAST.html#TYPEterm">term</a> list -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALfun_"><span class="keyword">val</span> fun_</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEtyped_var">typed_var</a> -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALlet_"><span class="keyword">val</span> let_</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEvar">var</a> -><br>       <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALmatch_with"><span class="keyword">val</span> match_with</span> : <code class="type">?loc:Loc.t -><br>       ?default:<a href="UntypedAST.html#TYPEterm">term</a> -><br>       <a href="UntypedAST.html#TYPEterm">term</a> -><br>       (<a href="UntypedAST.html#TYPEvar">var</a> * <a href="UntypedAST.html#TYPEvar_or_wildcard">var_or_wildcard</a> list * <a href="UntypedAST.html#TYPEterm">term</a>) list -><br>       <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALite"><span class="keyword">val</span> ite</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEterm">term</a> -><br>       <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALty_prop"><span class="keyword">val</span> ty_prop</span> : <code class="type"><a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALty_type"><span class="keyword">val</span> ty_type</span> : <code class="type"><a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALtrue_"><span class="keyword">val</span> true_</span> : <code class="type"><a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALfalse_"><span class="keyword">val</span> false_</span> : <code class="type"><a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALnot_"><span class="keyword">val</span> not_</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALapp_infix_l"><span class="keyword">val</span> app_infix_l</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc -> <a href="UntypedAST.html#TYPEterm">term</a> list -> <a href="UntypedAST.html#TYPEterm">term</a></code></pre>
+<pre><span id="VALand_"><span class="keyword">val</span> and_</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEterm">term</a> list -> <a href="UntypedAST.html#TYPEterm">term</a></code></pre>
+<pre><span id="VALor_"><span class="keyword">val</span> or_</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEterm">term</a> list -> <a href="UntypedAST.html#TYPEterm">term</a></code></pre>
+<pre><span id="VALimply"><span class="keyword">val</span> imply</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALequiv"><span class="keyword">val</span> equiv</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALeq"><span class="keyword">val</span> eq</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALneq"><span class="keyword">val</span> neq</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALforall"><span class="keyword">val</span> forall</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEtyped_var">typed_var</a> -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALexists"><span class="keyword">val</span> exists</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEtyped_var">typed_var</a> -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALmu"><span class="keyword">val</span> mu</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEtyped_var">typed_var</a> -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALasserting"><span class="keyword">val</span> asserting</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm">term</a> list -> <a href="UntypedAST.html#TYPEterm">term</a></code></pre>
+<pre><span id="VALundefined"><span class="keyword">val</span> undefined</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALty_arrow"><span class="keyword">val</span> ty_arrow</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEty">ty</a> -> <a href="UntypedAST.html#TYPEty">ty</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALty_forall"><span class="keyword">val</span> ty_forall</span> : <code class="type">?loc:Loc.t -><br>       <a href="UntypedAST.html#TYPEvar">var</a> -> <a href="UntypedAST.html#TYPEty">ty</a> -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALty_forall_list"><span class="keyword">val</span> ty_forall_list</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEvar">var</a> list -> <a href="UntypedAST.html#TYPEty">ty</a> -> <a href="UntypedAST.html#TYPEty">ty</a></code></pre>
+<pre><span id="VALty_arrow_list"><span class="keyword">val</span> ty_arrow_list</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEty">ty</a> list -> <a href="UntypedAST.html#TYPEty">ty</a> -> <a href="UntypedAST.html#TYPEty">ty</a></code></pre>
+<pre><span id="VALforall_list"><span class="keyword">val</span> forall_list</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEtyped_var">typed_var</a> list -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm">term</a></code></pre>
+<pre><span id="VALexists_list"><span class="keyword">val</span> exists_list</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEtyped_var">typed_var</a> list -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm">term</a></code></pre>
+<pre><span id="VALfun_list"><span class="keyword">val</span> fun_list</span> : <code class="type">?loc:Loc.t -> <a href="UntypedAST.html#TYPEtyped_var">typed_var</a> list -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEterm">term</a></code></pre>
+<pre><span id="VALforall_term"><span class="keyword">val</span> forall_term</span> : <code class="type"><a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALexists_term"><span class="keyword">val</span> exists_term</span> : <code class="type"><a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALmk_stmt_"><span class="keyword">val</span> mk_stmt_</span> : <code class="type">?loc:Loc.t -><br>       ?name:string -> <a href="UntypedAST.html#TYPEstatement_node">statement_node</a> -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALinclude_"><span class="keyword">val</span> include_</span> : <code class="type">?name:string -><br>       ?loc:Loc.t -> ?which:string list -> string -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALdecl"><span class="keyword">val</span> decl</span> : <code class="type">?name:string -><br>       ?loc:Loc.t -><br>       attrs:<a href="UntypedAST.html#TYPEattribute">attribute</a> list -><br>       <a href="UntypedAST.html#TYPEvar">var</a> -> <a href="UntypedAST.html#TYPEty">ty</a> -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALaxiom"><span class="keyword">val</span> axiom</span> : <code class="type">?name:string -> ?loc:Loc.t -> <a href="UntypedAST.html#TYPEterm">term</a> list -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALspec"><span class="keyword">val</span> spec</span> : <code class="type">?name:string -> ?loc:Loc.t -> <a href="UntypedAST.html#TYPEspec_defs">spec_defs</a> -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALrec_"><span class="keyword">val</span> rec_</span> : <code class="type">?name:string -> ?loc:Loc.t -> <a href="UntypedAST.html#TYPErec_defs">rec_defs</a> -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALdef"><span class="keyword">val</span> def</span> : <code class="type">?name:string -><br>       ?loc:Loc.t -> string -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALdata"><span class="keyword">val</span> data</span> : <code class="type">?name:string -> ?loc:Loc.t -> <a href="UntypedAST.html#TYPEmutual_types">mutual_types</a> -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALcodata"><span class="keyword">val</span> codata</span> : <code class="type">?name:string -> ?loc:Loc.t -> <a href="UntypedAST.html#TYPEmutual_types">mutual_types</a> -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALpred"><span class="keyword">val</span> pred</span> : <code class="type">?name:string -><br>       ?loc:Loc.t -><br>       wf:[ `Not_wf | `Wf ] -> <a href="UntypedAST.html#TYPEmutual_preds">mutual_preds</a> -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALcopred"><span class="keyword">val</span> copred</span> : <code class="type">?name:string -><br>       ?loc:Loc.t -><br>       wf:[ `Not_wf | `Wf ] -> <a href="UntypedAST.html#TYPEmutual_preds">mutual_preds</a> -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALcopy"><span class="keyword">val</span> copy</span> : <code class="type">?name:string -><br>       ?loc:Loc.t -><br>       of_:<a href="UntypedAST.html#TYPEterm">term</a> -><br>       wrt:<a href="UntypedAST.html#TYPEcopy_wrt">copy_wrt</a> -><br>       abstract:<a href="UntypedAST.html#TYPEvar">var</a> -><br>       concrete:<a href="UntypedAST.html#TYPEvar">var</a> -><br>       <a href="UntypedAST.html#TYPEvar">var</a> -> <a href="UntypedAST.html#TYPEvar">var</a> list -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALgoal"><span class="keyword">val</span> goal</span> : <code class="type">?name:string -> ?loc:Loc.t -> <a href="UntypedAST.html#TYPEterm">term</a> -> <a href="UntypedAST.html#TYPEstatement">statement</a></code></pre>
+<pre><span id="VALhead"><span class="keyword">val</span> head</span> : <code class="type"><a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc -> <a href="UntypedAST.html#TYPEvar">var</a></code></pre>
+<pre><span id="VALfpf"><span class="keyword">val</span> fpf</span> : <code class="type">Format.formatter -> ('a, Format.formatter, unit) Pervasives.format -> 'a</code></pre>
+<pre><span id="VALpp_var_or_wildcard"><span class="keyword">val</span> pp_var_or_wildcard</span> : <code class="type">CCFormat.t -> [< `Var of string | `Wildcard ] -> unit</code></pre>
+<pre><span id="VALunroll_if_"><span class="keyword">val</span> unroll_if_</span> : <code class="type"><a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc -><br>       (<a href="UntypedAST.html#TYPEterm">term</a> * <a href="UntypedAST.html#TYPEterm">term</a>) list * <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc</code></pre>
+<pre><span id="VALpp_list_"><span class="keyword">val</span> pp_list_</span> : <code class="type">sep:string -> 'a CCFormat.printer -> 'a list CCFormat.printer</code></pre>
+<pre><span id="VALpp_term"><span class="keyword">val</span> pp_term</span> : <code class="type">CCFormat.t -> <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc -> unit</code></pre>
+<pre><span id="VALpp_term_inner"><span class="keyword">val</span> pp_term_inner</span> : <code class="type"><a href="UntypedAST.html#TYPEterm">term</a> CCFormat.printer</code></pre>
+<pre><span id="VALpp_term_in_arrow"><span class="keyword">val</span> pp_term_in_arrow</span> : <code class="type">CCFormat.t -> <a href="UntypedAST.html#TYPEty">ty</a> -> unit</code></pre>
+<pre><span id="VALpp_typed_var"><span class="keyword">val</span> pp_typed_var</span> : <code class="type">CCFormat.t -> <a href="UntypedAST.html#TYPEtyped_var">typed_var</a> -> unit</code></pre>
+<pre><span id="VALpp_rec_defs"><span class="keyword">val</span> pp_rec_defs</span> : <code class="type">Format.formatter -><br>       (string * <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc *<br>        <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc list)<br>       list -> unit</code></pre>
+<pre><span id="VALpp_spec_defs"><span class="keyword">val</span> pp_spec_defs</span> : <code class="type">Format.formatter -><br>       (string * <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc) list *<br>       <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc list -> unit</code></pre>
+<pre><span id="VALpp_ty_defs"><span class="keyword">val</span> pp_ty_defs</span> : <code class="type">Format.formatter -><br>       (string * string list *<br>        (string * <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc list) list)<br>       list -> unit</code></pre>
+<pre><span id="VALpp_wf"><span class="keyword">val</span> pp_wf</span> : <code class="type">Format.formatter -> [< `Not_wf | `Wf ] -> unit</code></pre>
+<pre><span id="VALpp_mutual_preds"><span class="keyword">val</span> pp_mutual_preds</span> : <code class="type">CCFormat.t -><br>       (string * <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc *<br>        <a href="UntypedAST.html#TYPEterm_node">term_node</a> Loc.with_loc list)<br>       list -> unit</code></pre>
+<pre><span id="VALpp_attr"><span class="keyword">val</span> pp_attr</span> : <code class="type">Format.formatter -> string list -> unit</code></pre>
+<pre><span id="VALpp_attrs"><span class="keyword">val</span> pp_attrs</span> : <code class="type">Format.formatter -> string list list -> unit</code></pre>
+<pre><span id="VALpp_statement"><span class="keyword">val</span> pp_statement</span> : <code class="type">Format.formatter -> <a href="UntypedAST.html#TYPEstatement">statement</a> -> unit</code></pre>
+<pre><span id="VALpp_statement_list"><span class="keyword">val</span> pp_statement_list</span> : <code class="type">Format.formatter -> <a href="UntypedAST.html#TYPEstatement">statement</a> list -> unit</code></pre>
+<pre><span class="keyword">module</span> <a href="UntypedAST.TPTP.html">TPTP</a>: <code class="code"><span class="keyword">sig</span></code> <a href="UntypedAST.TPTP.html">..</a> <code class="code"><span class="keyword">end</span></code></pre></body></html>
