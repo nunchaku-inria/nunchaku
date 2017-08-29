@@ -45,6 +45,7 @@ type ('t, 'ty) view =
   | Undefined of 't (** ['t] is not defined here *)
   | Undefined_atom of id * 'ty toplevel_ty * 't list (** some undefined term of given type, + args *)
   | Unparsable of 'ty (** could not parse term *)
+  | Card_at_least of 'ty * int
   | Fun of 'ty var * 't  (** caution, not supported everywhere *)
   | Mu of 'ty var * 't   (** caution, not supported everywhere *)
   | Let of 'ty var * 't * 't
@@ -86,6 +87,8 @@ type 'ty mutual_types = {
 type attr =
   | Attr_pseudo_prop
   | Attr_pseudo_true
+  | Attr_card_hint of [`Max | `Min] * int (** cardinality bound hint *)
+  | Attr_can_be_empty
 
 (** Statement *)
 type ('t, 'ty) statement =
@@ -190,11 +193,14 @@ module T = struct
     | Not a, Not b -> equal a b
     | Imply (a1,b1), Imply (a2,b2)
     | Equiv (a1,b1), Equiv (a2,b2) -> equal a1 a2 && equal b1 b2
+    | Card_at_least (ty1,n1), Card_at_least (ty2,n2) -> Ty.equal ty1 ty2 && n1=n2
     | True, _ | False, _ | App _, _ | Var _, _ | Undefined _, _
     | Undefined_atom _, _ | DataSelect _, _ | DataTest _, _
     | Forall _, _ | Exists _, _ | Mu _, _ | Fun _, _
     | Let _, _ | Ite _, _ | And _, _ | Or _, _ | Not _, _
-    | Imply _, _ | Equiv _, _ | Eq _, _ | Builtin _, _ | Unparsable _, _ -> false
+    | Imply _, _ | Equiv _, _ | Eq _, _ | Builtin _, _
+    | Unparsable _, _ | Card_at_least _, _
+      -> false
 
   let builtin b = make_ (Builtin b)
   let app id l = make_ (App(id,l))
@@ -205,6 +211,7 @@ module T = struct
   let undefined t = make_ (Undefined t)
   let undefined_atom c ty l = make_ (Undefined_atom (c,ty,l))
   let unparsable ty = make_ (Unparsable ty)
+  let card_at_least ty n = make_ (Card_at_least (ty,n))
   let let_ v t u = make_ (Let(v,t,u))
   let fun_ v t = make_ (Fun (v,t))
   let mu v t = make_ (Mu (v,t))
@@ -236,11 +243,14 @@ module T = struct
   let forall v t = make_ (Forall (v,t))
   let exists v t = make_ (Exists (v,t))
 
+  let is_var = function {view=Var _; _} -> true | _ -> false
+
   let to_seq t yield =
     let rec aux t =
       yield t;
       begin match t.view with
-        | True | False | Var _ | Builtin (`Int _) | Unparsable _
+        | True | False | Var _ | Builtin (`Int _)
+        | Unparsable _ | Card_at_least _
           -> ()
         | And l | Or l | Undefined_atom (_,_,l) | App (_,l)
           -> List.iter aux l
@@ -350,6 +360,8 @@ let rec pp_term out t = match T.view t with
       ID.pp c pp_toplevel_ty ty (pp_list_ pp_term) l
   | Unparsable ty ->
     fpf out "(@[<2>unparsable ty:%a@])" pp_ty ty
+  | Card_at_least (ty,n) ->
+    fpf out "(@[card(%a) ≥ %d@])" pp_ty ty n
   | Let (v,t,u) ->
     fpf out "(@[<2>let@ %a =@ %a in@ %a@])"
       Var.pp_full v pp_term t pp_term u
@@ -379,6 +391,9 @@ let pp_model out m =
 let pp_attr out = function
   | Attr_pseudo_prop -> fpf out "pseudo_prop"
   | Attr_pseudo_true -> fpf out "pseudo_true"
+  | Attr_card_hint (`Max, n) -> fpf out "max_card_hint %d" n
+  | Attr_card_hint (`Min, n) -> fpf out "min_card_hint %d" n
+  | Attr_can_be_empty -> CCFormat.string out "can_be_empty"
 
 let pp_attrs out = function
   | [] -> ()
@@ -550,7 +565,7 @@ module Util = struct
         | DataSelect (_,_,_)
         | Undefined _
         | Undefined_atom _
-        | Unparsable _
+        | Unparsable _ | Card_at_least _
         | Mu (_,_)
         | True
         | False

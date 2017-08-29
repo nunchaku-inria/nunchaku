@@ -115,6 +115,7 @@ type t = {
   ic : in_channel;
   decode: decode_state;
   print_model: bool;
+  options: string;
   mutable sexp : DSexp.t;
   mutable closed : bool;
   mutable res : (T.t, Ty.t) Problem.Res.t option;
@@ -135,12 +136,13 @@ let close s =
     with _ -> ()
   )
 
-let create_ ~print_model ~decode (ic,oc) =
+let create_ ~options ~print_model ~decode (ic,oc) =
   (* the [t] instance *)
   let s = {
     oc;
     fmt=Format.formatter_of_out_channel oc;
     ic;
+    options;
     print_model;
     decode;
     closed=false;
@@ -206,6 +208,11 @@ let const_of_ty ~decode gty =
 let const_of_ty_nth ~decode gty i =
   CCFormat.sprintf "@[<h>%s_%d@]" (const_of_ty ~decode gty) i
 
+let get_ty_witness ~decode gty =
+  try GTy_map.find gty decode.witnesses
+  with Not_found ->
+    errorf_ "no witness declared for cardinality bound on %a" (pp_gty ~decode) gty
+
 (* print processed problem *)
 let pp_problem out (decode, pb) =
   (* print ID and remember its name for parsing model afterward *)
@@ -256,6 +263,10 @@ let pp_problem out (decode, pb) =
     | FO.Undefined t -> pp_term out t (* tailcall, probably *)
     | FO.Undefined_atom _ -> errorf_ "cannot print `undefined_atom` in SMTlib"
     | FO.Unparsable _ -> errorf_ "cannot print `unparsable` in SMTlib"
+    | FO.Card_at_least (_,n) when n <= 1 -> fpf out "true" (* trivial *)
+    | FO.Card_at_least (ty,n) ->
+      let witness = get_ty_witness ~decode ty in
+      fpf out "(@[(not (fmf.card %a %d))@])" pp_id witness (n-1)
     | FO.Fun (v,t) ->
       fpf out "@[<3>(LAMBDA@ ((%a %a))@ %a)@]"
         Var.pp_full v pp_ty (Var.ty v) pp_term t
@@ -301,16 +312,17 @@ let pp_problem out (decode, pb) =
     | FO.Goal t ->
       fpf out "(@[assert@ %a@])" pp_term t
     | FO.CardBound (ty_id, which, n) ->
-      let witness =
-        try GTy_map.find (gty_const ty_id) decode.witnesses
-        with Not_found ->
-          errorf_ "no witness declared for cardinality bound on %a" ID.pp ty_id
+      let witness = get_ty_witness ~decode (gty_const ty_id) in
+      let pp_max_card out n =
+        if n < 1 then fpf out "(assert false)" (* absurd *)
+        else fpf out "(@[assert (fmf.card %a %d)@])" pp_id witness n
+      and pp_min_card out n =
+        if n<=1 then ()
+        else fpf out "(@[assert (not (fmf.card %a %d))@])" pp_id witness (n-1)
       in
       begin match which with
-        | `Max when n < 1 -> fpf out "(assert false)" (* absurd *)
-        | `Max -> fpf out "(@[assert (fmf.card %a %d)@])" pp_id witness n
-        | `Min when n <= 1 -> ()  (* obvious *)
-        | `Min -> fpf out "(@[assert (not (fmf.card %a %d))@])" pp_id witness (n-1)
+        | `Max -> pp_max_card out n
+        | `Min -> pp_min_card out n
       end
     | FO.MutualTypes (k, l) ->
       let pp_arg out (c,i,ty) =
@@ -656,18 +668,24 @@ let read_res_ ~info ~print_model ~decode s =
     | Backend_err msg ->
       Res.Unknown [Res.U_backend_error (Lazy.force info, msg)]
 
-let mk_info (decode:decode_state): Res.info =
+(* the set of options given to every instance of CVC4 *)
+let basic_options =
+  "--lang smt --finite-model-find \
+   --uf-ss-fair-monotone --no-condense-function-values"
+
+let mk_info ~options (decode:decode_state): Res.info =
   let time = Utils.Time.get_timer decode.timer in
-  Res.mk_info ~backend:"cvc4" ~time ()
+  let message = Printf.sprintf "options: `%s %s`" basic_options options in
+  Res.mk_info ~backend:"cvc4" ~time ~message ()
 
 let res t = match t.res with
   | Some r -> r
   | None when t.closed ->
-    let r = Res.Unknown [Res.U_timeout (mk_info t.decode)] in
+    let r = Res.Unknown [Res.U_timeout (mk_info ~options:t.options t.decode)] in
     t.res <- Some r;
     r
   | None ->
-    let info = lazy (mk_info t.decode) in
+    let info = lazy (mk_info ~options:t.options t.decode) in
     let r =
       try read_res_ ~info ~print_model:t.print_model ~decode:t.decode t
       with e -> Res.Error (e, Lazy.force info)
@@ -764,30 +782,30 @@ let mk_cvc4_cmd_ timeout options =
   let timeout_hard = int_of_float (timeout +. 1.50001) in
   let timeout_ms = int_of_float (timeout *. 1000.) in
   Printf.sprintf
-    "ulimit -t %d; exec cvc4 --tlimit=%d --hard-limit --lang smt --finite-model-find \
-     --uf-ss-fair-monotone --no-condense-function-values %s"
-    timeout_hard timeout_ms options
+    "ulimit -t %d; exec cvc4 --tlimit=%d --hard-limit %s %s"
+    timeout_hard timeout_ms basic_options options
 
 let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
   let now = Unix.gettimeofday() in
   let deadline = match deadline with Some s -> s | None -> now +. 30. in
   (* preprocess first *)
   let decode, problem' = preprocess pb in
-  if print
-  then Format.printf "@[<v2>SMT problem:@ %a@]@." pp_problem (decode, problem');
+  if print then (
+    Format.printf "@[<v2>SMT problem:@ %a@]@." pp_problem (decode, problem');
+  );
   (* enough time remaining? *)
-  if now +. 0.1 > deadline
-  then
-    let info = Res.mk_info ~backend:"cvc4" ~time:0. () in
+  if now +. 0.1 > deadline then (
+    let message = Printf.sprintf "options: `%s`" options in
+    let info = Res.mk_info ~backend:"cvc4" ~time:0. ~message () in
     S.Fut.return (Res.Unknown [Res.U_timeout info], S.No_shortcut)
-  else (
+  ) else (
     Utils.debug ~section 1 "calling cvc4";
     let timeout = deadline -. now in
     assert (timeout > 0.);
     let cmd = mk_cvc4_cmd_ timeout options in
     S.popen cmd
       ~f:(fun (oc,ic) ->
-        let s = create_ ~print_model ~decode (ic,oc) in
+        let s = create_ ~options ~print_model ~decode (ic,oc) in
         send_ s problem';
         let r = res s in
         Utils.debugf ~lock:true ~section 3 "@[<2>result: %a@]"
@@ -811,7 +829,7 @@ let solve ?(options="") ?deadline ?(print=false) ?(print_model=false) pb =
       (function
         | E.Ok x -> fst x
         | E.Error e ->
-          let info = mk_info decode in
+          let info = mk_info ~options decode in
           Res.Error (e,info), S.Shortcut)
   )
 
@@ -857,7 +875,7 @@ let call
              Format.fprintf out
                "@[<v>; generated by Nunchaku@ %a@]@."
                pp_problem (decode, problem');
-             mk_info decode)
+             mk_info ~options decode)
       in
       S.Task.return (Res.Unknown [Res.U_other (info, "--dump")]) S.No_shortcut
   end

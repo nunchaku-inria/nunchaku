@@ -213,7 +213,7 @@ true: use_menhir, safe_string, color(always)
 <src/parsers/nunTPTPParser.*>: warn(-20)
 
 # more warnings
-<src/**/*.ml>: warn(+a-4-44-48-50-29-58@8)
+<src/**/*.ml>: warn(+a-4-44-48-50-29-58-60@8)
 
 <src/core/Utils.cm*>: inline(15)
 

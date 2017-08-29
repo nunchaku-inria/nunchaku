@@ -84,16 +84,19 @@ let copy_as_data ~info (c:(_,_) Stmt.copy): (_,_) Stmt.t list =
   (* return all new decls *)
   [decl_data; decl_concr]
 
-let approx_threshold_ = 30 (* FUDGE *)
+let approx_threshold_ = 4 (* FUDGE *)
 
-(* should we do an approximation of [c.Stmt.copy_of]? *)
-let should_be_incomplete card_concrete = match card_concrete with
+(* do we have an exact cardinal for [c.Stmt.copy_of], that is
+   also small enough? *)
+let has_small_exact_card card_concrete = match card_concrete with
   | Cardinality.Infinite
-  | Cardinality.Unknown -> true
-  | Cardinality.Exact n
-  | Cardinality.QuasiFiniteGEQ n ->
+  | Cardinality.Unknown
+  | Cardinality.QuasiFiniteGEQ _ -> None
+  | Cardinality.Exact n ->
     (* if [n >= threshold] we approximate *)
-    Cardinality.Z.(compare (of_int approx_threshold_) n <= 0)
+    if Cardinality.Z.(compare n (of_int approx_threshold_) <= 0)
+    then Some (Cardinality.Z.to_int n |> CCOpt.get_exn)
+    else None
 
 let attrs_of_ty state (ty:ty): Stmt.decl_attr list =
   (if AT.is_abstract state.env ty
@@ -109,7 +112,8 @@ let copy_subset_as_uninterpreted_ty state ~info ~(pred:term) c : (_, _) Stmt.t l
   let card_concrete =
     AT.cardinality_ty ~cache:state.at_cache state.env c.Stmt.copy_of
   in
-  let incomplete = should_be_incomplete card_concrete in
+  let card_abstract_upper_bound = has_small_exact_card card_concrete in
+  let incomplete = card_abstract_upper_bound = None in
   let id_c = c.Stmt.copy_id in
   let ty_c = U.ty_const id_c in
   ID.Tbl.add state.copy_as_uninterpreted id_c ();
@@ -122,7 +126,13 @@ let copy_subset_as_uninterpreted_ty state ~info ~(pred:term) c : (_, _) Stmt.t l
   (* declare the new (uninterpreted) type and functions *)
   let decl_c =
     let new_attr =
-      if incomplete then Stmt.Attr_incomplete else Stmt.Attr_card_hint card_concrete
+      if incomplete then Stmt.Attr_incomplete
+      else match card_abstract_upper_bound with
+        | None -> assert false
+        | Some n ->
+          (* must be an exact cardinal, but for the subtype it's only
+             an upper bound *)
+          Stmt.Attr_card_max_hint n
     in
     let old_attrs = attrs_of_ty state c.Stmt.copy_of in
     let attrs = new_attr :: old_attrs in
@@ -177,7 +187,8 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
   let card_concrete =
     AT.cardinality_ty ~cache:state.at_cache state.env c.Stmt.copy_of
   in
-  let incomplete = should_be_incomplete card_concrete in
+  let card_abstract_upper_bound = has_small_exact_card card_concrete in
+  let incomplete = card_abstract_upper_bound = None in
   let id_c = c.Stmt.copy_id in
   let ty_c = U.ty_const id_c in
   ID.Tbl.add state.copy_as_uninterpreted id_c ();
@@ -190,7 +201,12 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
   (* declare the new (uninterpreted) type and functions *)
   let decl_c =
     let incomp_attr =
-      if incomplete then [Stmt.Attr_incomplete] else []
+      if incomplete then [Stmt.Attr_incomplete]
+      else match card_abstract_upper_bound with
+        | None -> assert false
+        | Some n ->
+          (* must be an exact cardinal, but for the copy it's only an upper bound *)
+          [Stmt.Attr_card_max_hint n]
     in
     let old_attrs = attrs_of_ty state c.Stmt.copy_of in
     let attrs = Stmt.Attr_abstract :: incomp_attr @ old_attrs in

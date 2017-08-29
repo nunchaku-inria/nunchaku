@@ -30,8 +30,6 @@ type state = {
   pseudo_prop: ID.t;
   env: (term,ty) Env.t;
   new_sig : ty ID.Tbl.t; (* types after translation *)
-  mutable declared: bool; (* did we declare prop_? *)
-  mutable needed: bool; (* do we need prop_? *)
 }
 
 let create_state ~env () =
@@ -39,8 +37,6 @@ let create_state ~env () =
     true_ = ID.make "true_";
     false_ = ID.make "false_";
     pseudo_prop = ID.make "prop_";
-    declared = false;
-    needed = false;
     env;
     new_sig=ID.Tbl.create 25;
   } in
@@ -54,8 +50,6 @@ let create_state ~env () =
 
 (* statements that declare the pseudo-prop type *)
 let declare_ state : (_,_) Stmt.t list =
-  assert (not state.declared);
-  state.declared <- true;
   let ty_pprop = U.ty_const state.pseudo_prop in
   let ptrue = U.const state.true_ in
   let pfalse = U.const state.false_ in
@@ -65,7 +59,8 @@ let declare_ state : (_,_) Stmt.t list =
   let decl_ty =
     mk_decl
       ~attrs:[Stmt.Attr_pseudo_prop;
-              Stmt.Attr_card_hint (Cardinality.of_int 2)]
+              Stmt.Attr_card_min_hint 2;
+              Stmt.Attr_card_max_hint 2]
       state.pseudo_prop (U.ty_builtin `Type)
   and decl_true =
     mk_decl state.true_ ty_pprop
@@ -91,10 +86,7 @@ let transform_ty state ~top ty =
   let rec aux top ty = match Ty.repr ty with
     | TyI.Builtin `Prop ->
       if top then ty
-      else (
-        state.needed <- true;
-        U.const state.pseudo_prop
-      )
+      else U.const state.pseudo_prop
     | TyI.Builtin _
     | TyI.Const _ -> ty
     | TyI.Arrow (a,b) ->
@@ -126,8 +118,8 @@ let has_ty_prop_ state t : bool =
   let ty = find_ty state t in
   U.ty_is_Prop ty
 
-let get_true_ state : T.t = state.needed <- true; U.const state.true_
-let get_false_ state : T.t = state.needed <- true; U.const state.false_
+let get_true_ state : T.t = U.const state.true_
+let get_false_ state : T.t = U.const state.false_
 
 (* TODO: rewrite this as a type-driven pass:
    - carry around old_env, new_env
@@ -210,11 +202,12 @@ let transform_term state subst t =
     | TI.Bind ((Binder.Forall | Binder.Exists) as b, v, body) ->
       let subst, v = rename_var state subst v in
       U.mk_bind b v (aux_top subst body)
-    | TI.Builtin (`Undefined_atom _|`Ite _|`DataTest _|`DataSelect _|`Unparsable _)
+    | TI.Builtin (`Undefined_atom _|`Ite _|`DataTest _
+                 |`DataSelect _|`Unparsable _|`Card_at_least _)
     | TI.Bind ((Binder.Fun|Binder.TyForall|Binder.Mu), _, _)
-    | TI. Match (_, _, _) | TI.TyBuiltin _ | TI.TyArrow (_, _)
+    | TI.Match (_, _, _) | TI.TyBuiltin _ | TI.TyArrow (_, _)
       ->
-      (* cannot be a boolean, translation can proceed *)
+      (* cannot have boolean args, translation can proceed *)
       U.map subst t
         ~bind:(rename_var state) ~f:aux_top
     | TI.TyMeta _ -> assert false
@@ -222,7 +215,6 @@ let transform_term state subst t =
   (* we expect a term of type [prop'] after translation *)
   and aux_expect_prop' subst t = match T.repr t with
     | TI.Var v ->
-      assert state.needed;
       let v' = Var.Subst.find_exn ~subst v in
       assert (ty_is_pseudo_prop state (Var.ty v'));
       U.var v' (* no casting needed *)
@@ -282,17 +274,11 @@ let transform_statement state stmt : (_,_) Stmt.t =
 let transform_problem pb =
   let env = Problem.env pb in
   let state = create_state ~env () in
+  (* insert additional declarations before the first statement *)
+  let prelude = declare_ state in
   let pb' =
-    Problem.flat_map_statements pb
-      ~f:(fun st ->
-        let st' = transform_statement state st in
-        (* insert additional declarations, the first time [pseudo-prop]
-           is used *)
-        let other_decls =
-          if state.needed && not state.declared
-          then declare_ state else []
-        in
-        other_decls @ [st'])
+    Problem.map_statements pb
+      ~prelude ~f:(transform_statement state)
   in
   pb', state
 
@@ -341,10 +327,13 @@ let decode_term state rw t =
     | TI.Const id, _ when ID.equal id state.pseudo_prop -> U.ty_prop
     | TI.Const id, Some rw when ID.equal id rw.rw_true -> U.true_
     | TI.Const id, Some rw when ID.equal id rw.rw_false -> U.false_
+    | TI.Var v, _ -> U.var (aux_var v)
     | _ ->
       U.map () t
-        ~bind:(fun () v -> (), v)
+        ~bind:(fun () v -> (), aux_var v)
         ~f:(fun () -> aux)
+  and aux_var v =
+    Var.update_ty ~f:aux v
   in
   aux t
 
@@ -366,7 +355,7 @@ let decode_model state m =
 
 (** {2 Pipes} *)
 
-let pipe_with ~decode ~print ~check =
+let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module PPb = Problem.Print(P)(P) in
@@ -381,14 +370,21 @@ let pipe_with ~decode ~print ~check =
     ~name
     ~input_spec:Transform.Features.(of_list
           [Ind_preds, Absent; Ty, Mono; Eqn, Absent;
-           Copy, Absent;
+           Copy, Absent; Pseudo_prop, Absent;
            If_then_else, Present; HOF, Absent])
-    ~map_spec:Transform.Features.(update Prop_args Absent)
+    ~map_spec:Transform.Features.(update_l [Prop_args, Absent; Pseudo_prop, Present])
     ~on_encoded
+    ?on_decoded
     ~encode:transform_problem
     ~decode
     ()
 
 let pipe ~print ~check =
+  let on_decoded = if print
+    then
+      [Format.printf "@[<2>@{<Yellow>res after %s@}:@ %a@]@."
+         name (Problem.Res.pp P.pp' P.pp)]
+    else []
+  in
   let decode state = Problem.Res.map_m ~f:(decode_model state) in
-  pipe_with ~decode ~print ~check
+  pipe_with ~on_decoded ~decode ~print ~check

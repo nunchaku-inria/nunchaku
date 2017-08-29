@@ -73,7 +73,8 @@ let compare_fun f1 f2 =
       CCOrd.( ID.compare id1 id2 <?> (int, i1, i2))
     | F_id _, _
     | F_var _, _
-    | F_select _, _ -> CCOrd.int (to_int_ f1) (to_int_ f2)
+    | F_select _, _
+      -> CCOrd.int (to_int_ f1) (to_int_ f2)
 
 module FunMap = CCMap.Make(struct type t = fun_ let compare = compare_fun end)
 
@@ -100,8 +101,17 @@ let add_arity_ m (f:fun_) n ty_args ty_ret : arity_set FunMap.t =
   let set = {set with as_set=IntSet.add n set.as_set;} in
   FunMap.add f set m
 
+type fun_ty = {
+  args: ty list;
+  ret: ty;
+}
+
+type fun_view =
+  | FV_fun of fun_ty (* proper function *)
+  | FV_none
+
 (* is [id] a function symbol? If yes, return its type arguments and return type *)
-let as_fun_ ~env id =
+let as_fun_ ~env id : fun_view =
   let info = Env.find_exn ~env id in
   match info.Env.def with
     | Env.Fun_def _
@@ -111,10 +121,10 @@ let as_fun_ ~env id =
     | Env.NoDef ->
       let tyvars, args, ret = U.ty_unfold info.Env.ty in
       assert (tyvars=[]); (* mono, see {!inv} *)
-      Some (args, ret)
-    | Env.Data (_,_,_)
+      FV_fun {args; ret}
     | Env.Cstor (_,_,_,_) (* always fully applied *)
-    | Env.Copy_ty _ -> None
+    | Env.Data (_,_,_)
+    | Env.Copy_ty _ -> FV_none
     | Env.Pred (_,_,_,_,_) -> assert false (* see {!inv} *)
 
 let ty_is_ho_ ty =
@@ -143,11 +153,11 @@ let compute_arities_term ~env m t =
   let rec aux t = match T.repr t with
     | TI.Const id ->
       begin match as_fun_ ~env id with
-        | Some ([], _)
-        | None -> ()  (* constant, just ignore *)
-        | Some (ty_args, ty_ret) ->
+        | FV_fun {args=[];_}
+        | FV_none -> ()  (* constant, just ignore *)
+        | FV_fun {args; ret} ->
           (* function that is applied to 0 arguments (e.g. as a parameter) *)
-          m := add_arity_ !m (F_id id) 0 ty_args ty_ret
+          m := add_arity_ !m (F_id id) 0 args ret
       end
     | TI.Var v when var_is_ho_ v ->
       (* higher order variable *)
@@ -161,11 +171,11 @@ let compute_arities_term ~env m t =
         | TI.App _ -> assert false
         | TI.Const id ->
           begin match as_fun_ ~env id with
-            | Some ([],_) -> assert false
-            | None -> ()   (* not a function *)
-            | Some (ty_args, ty_ret) ->
-              assert (List.length ty_args >= List.length l);
-              m := add_arity_ !m (F_id id) (List.length l) ty_args ty_ret
+            | FV_fun {args=[];_}
+            | FV_none -> ()   (* not a function *)
+            | FV_fun {args;ret} ->
+              assert (List.length args >= List.length l);
+              m := add_arity_ !m (F_id id) (List.length l) args ret
           end;
           (* explore subterms *)
           List.iter aux l
@@ -331,7 +341,7 @@ type decode_state = {
 }
 
 type state = {
-  env: (term, ty) Env.t;
+  mutable env: (term, ty) Env.t;
   (* environment (to get signatures, etc.) *)
   arities: arity_set FunMap.t;
   (* set of arities for partially applied symbols/variables *)
@@ -357,7 +367,8 @@ let pp_fe_tower out =
 
 let pp_fun_encoding out m =
   fpf out "[@[<v>%a@]]"
-    (Utils.pp_seq ~sep:"" CCFormat.(pair ~sep:(return "@ -> ") int pp_fe_tower))
+    (Utils.pp_seq ~sep:""
+       CCFormat.(hvbox ~i:2 @@ pair ~sep:(return "@ -> ") int pp_fe_tower))
     (IntMap.to_seq m)
 
 let create_state ~env arities = {
@@ -490,8 +501,8 @@ let rec split_chunks_ prev lens l = match lens, l with
     (c,l') :: split_chunks_ len lens' l'
 
 let pp_chunks out =
-  let pp_tys out = fpf out "@[%a@]" CCFormat.(list P.pp) in
-  let pp_pair out (a,b) = fpf out "@[(%a, remaining %a)@]" pp_tys a pp_tys b in
+  let pp_tys out = fpf out "@[%a@]" CCFormat.(list @@ within "`" "`" P.pp) in
+  let pp_pair out (a,b) = fpf out "(@[%a; remaining: %a@])" pp_tys a pp_tys b in
   fpf out "[@[%a@]]" (Utils.pp_list pp_pair)
 
 (* introduce/get required app symbols for the given ID
@@ -500,7 +511,8 @@ let pp_chunks out =
 let introduce_apply_syms ~state f : fun_encoding =
   let handle_id = get_or_create_handle_id ~state in
   let {as_set=set; as_ty_args=ty_args; as_ty_ret=ty_ret; _} =
-    FunMap.find f state.arities
+    try FunMap.find f state.arities
+    with Not_found -> errorf_ "cannot find arities for `%a`" pp_fun f
   in
   let l = IntSet.to_list set in
   let n = List.length ty_args in
@@ -581,7 +593,7 @@ let sc_arity_ = function
 (* apply the list of apply_fun to [l]. Arities should match. *)
 let rec apply_app_funs_ tower l =
   Utils.debugf ~section 5 "@[<2>apply_tower@ @[%a@]@ to @[%a@]@]"
-    (fun k->k pp_fe_tower tower (CCFormat.list P.pp) l);
+    (fun k->k pp_fe_tower tower CCFormat.(Dump.list @@ within "`" "`" @@ P.pp) l);
   match tower with
     | [] ->
       begin match l with
@@ -644,7 +656,14 @@ let elim_hof_term ~state subst pol t =
           when FunMap.mem (F_select (id_c,i)) state.arities ->
           let fe = fun_encoding_for ~state (F_select (id_c,i)) in
           Some (f, fe)
-        | _ -> None
+        | TI.Const _ | TI.Var _
+        | TI.Builtin (`DataSelect (_, _) | `DataTest _) ->
+          None
+        | _ ->
+          (* All other cases should not happen. If a case is missing
+             it means it might be encoded in a ill-typed way because we
+             don't know if it needs application symbols *)
+          errorf_ "unknown application term `%a`,@ cannot remove HOF" P.pp t
       in
       begin match as_hof with
         | Some (new_f, fun_encoding) ->
@@ -677,8 +696,8 @@ let elim_hof_term ~state subst pol t =
         | `Unsat_means_unknown res ->
           state.unsat_means_unknown <- true;
           Utils.debugf ~section 3
-            "@[<2>encode HO equality `@[%a@]`@ as `@[%a@]`@]"
-            (fun k->k P.pp t P.pp res);
+            "@[<2>encode HO equality `@[%a@]`@ :as `@[%a@]`@ :polarity %a@]"
+            (fun k->k P.pp t P.pp res Pol.pp pol);
           res
       end
     | TI.Let _
@@ -1184,7 +1203,8 @@ let pipe_with ?on_decoded ~decode ~print ~check =
     ?on_decoded
     ~on_encoded
     ~input_spec:Transform.Features.(of_list
-          [Ty, Mono; Ind_preds, Absent; Eqn, Eqn_single])
+          [Ty, Mono; Ind_preds, Absent; Eqn, Eqn_single;
+           Partial_app_cstor, Absent])
     ~map_spec:Transform.Features.(update_l [Eqn, Eqn_app; HOF, Absent])
     ~name
     ~encode:(fun p ->

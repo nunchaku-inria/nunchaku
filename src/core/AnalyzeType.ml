@@ -170,10 +170,10 @@ module Make(T : TI.S) = struct
         in
         CCList.find_map
           (function
-            | Stmt.Attr_card_min n ->
+            | Stmt.Attr_card_min n
+            | Stmt.Attr_card_min_hint n ->
               Some (Card.QuasiFiniteGEQ (Z.of_int n))
             | Stmt.Attr_infinite -> Some Card.infinite
-            | Stmt.Attr_card_hint c -> Some c
             | _ -> None)
           attrs
         |> CCOpt.get_or ~default

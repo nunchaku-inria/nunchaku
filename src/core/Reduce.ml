@@ -93,7 +93,8 @@ module Make(T : TI.S) = struct
       match b with
         | `True -> U.true_
         | `False -> U.false_
-        | `Unparsable _ | `Undefined_self _ | `Undefined_atom _ | `Guard _ ->
+        | `Unparsable _ | `Card_at_least _ | `Undefined_self _
+        | `Undefined_atom _ | `Guard _ ->
           U.builtin b (* undefined term doesn't evaluate *)
         | `Ite (_,_,_) | `DataSelect _ | `DataTest _ ->
           invalid_arg "not boolean operators"
@@ -179,6 +180,7 @@ module Make(T : TI.S) = struct
         | `Unparsable _
         | `Undefined_self _
         | `Undefined_atom _
+        | `Card_at_least _
         | `Guard _ ->
           (* no evaluation *)
           State.make ~guard ~subst (U.builtin b) args
@@ -381,11 +383,17 @@ end
 
 (* idempotence of WHNF *)
 (*$QR
-  (Q.map_keep_input ~print:P.to_string Red.whnf Term_random.arbitrary)
-    (fun (t, t') -> U.equal t' (Red.whnf t'))
+  Term_random.arbitrary
+    (fun t ->
+      let t = Red.whnf t in
+      let t' = Red.whnf t in
+      if U.equal t t' then true
+      else (
+        Q.Test.fail_reportf "term `%a`,@ whnf: `%a`" P.pp t P.pp t';
+      ))
 *)
 
-(* WHNF/SNF type is identity *)
+(* WHNF/SNF on types is identity *)
 (*$Q
   Term_random.arbitrary_ty (fun ty -> U.equal ty (Red.whnf ty))
   Term_random.arbitrary_ty (fun ty -> U.equal ty (Red.snf ty))
@@ -394,9 +402,14 @@ end
 
 (* idempotence of SNF *)
 (*$QR
-  (Q.map_keep_input ~print:P.to_string Red.snf Term_random.arbitrary)
-    (fun (t, t_norm) ->
-      U.equal t_norm (Red.snf t_norm))
+  Term_random.arbitrary
+    (fun t ->
+      let t_norm = Red.snf t in
+      let t_norm2 = Red.snf t_norm in
+      if U.equal t_norm t_norm2 then true
+      else (
+        Q.Test.fail_reportf "snf=`%a`@ snf2=`%a`" P.pp t_norm P.pp t_norm2
+      ))
 *)
 
 

@@ -203,7 +203,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
       let f, l, subst, guard = Red.Full.whnf ~subst:local_state.subst f l in
       let local_state = {local_state with subst; } in
       let t' = match T.repr f with
-        | TI.Bind (Binder.Fun, _, _) -> assert false (* beta-reduction failed? *)
+        | TI.Bind (Binder.Fun, _, _) when l<>[] -> assert false (* beta-reduction failed? *)
         | TI.Builtin _ ->
           (* builtins are defined, but examine their args *)
           let f = mono_term ~self ~local_state f in
@@ -256,7 +256,9 @@ let rec mono_term ~self ~local_state (t:term) : term =
               mono_term ~self ~local_state (U.app t l)
           end
         | _ ->
-          failf_ "@[<2>cannot monomorphize application term@ `@[%a@]`@]" pp_term t
+          U.app
+            (mono_term ~self ~local_state f)
+            (List.map (mono_term ~self ~local_state) l)
       in
       U.guard t' guard
     | TI.Bind ((Binder.Fun | Binder.Forall | Binder.Exists | Binder.Mu) as b, v, t) ->

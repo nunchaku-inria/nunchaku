@@ -75,7 +75,6 @@ Library nunchaku_transformations
                     ElimRecursion,
                     ElimMultipleEqns,
                     ElimIndPreds,
-                    ElimQuantifiers,
                     ElimCopy,
                     Polarize,
                     Unroll,
@@ -89,7 +88,8 @@ Library nunchaku_transformations
                     Trans_ho_fo,
                     Trans_fo_tptp,
                     Lift_undefined,
-                    FoToRelational
+                    FoToRelational,
+                    Cstor_as_fun
   Install:          true
   FindlibName:      transformations
   FindlibParent:    nunchaku_core

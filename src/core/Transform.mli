@@ -34,7 +34,9 @@ module Features : sig
     | Fun (* lambdas *)
     | HOF (* any higher-order fun *)
     | Prop_args (* propositions as arguments to functions *)
+    | Pseudo_prop (* some type with flag "pseudo-prop" *)
     | Copy
+    | Partial_app_cstor (* partially applied cstors *)
 
   val empty : t
   (** For writing specifications *)

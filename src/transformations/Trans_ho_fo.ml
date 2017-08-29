@@ -117,6 +117,8 @@ module Of_ho(T : TI.S) = struct
       FO.T.forall (conv_var v) (conv_term ~env f)
     | TI.Bind (Binder.Exists, v,f) ->
       FO.T.exists (conv_var v) (conv_term ~env f)
+    | TI.Builtin (`Card_at_least (ty,n)) ->
+      FO.T.card_at_least (conv_ty ty) n
     | TI.Match _ -> fail_ t "no case in FO terms"
     | TI.Builtin (`Guard _) -> fail_ t "no guards (assert/assume) in FO"
     | TI.Builtin (`DataSelect _ | `DataTest _) ->
@@ -172,6 +174,9 @@ module Of_ho(T : TI.S) = struct
       (function
         | Statement.Attr_pseudo_prop -> Some FO.Attr_pseudo_prop
         | Statement.Attr_pseudo_true -> Some FO.Attr_pseudo_true
+        | Statement.Attr_card_max_hint n -> Some (FO.Attr_card_hint (`Max, n))
+        | Statement.Attr_card_min_hint n -> Some (FO.Attr_card_hint (`Min, n))
+        | Statement.Attr_can_be_empty -> Some FO.Attr_can_be_empty
         | _ -> None)
 
   let convert_statement ~env st =
@@ -328,6 +333,8 @@ module To_ho(T : TI.S) = struct
           l
       | FO.Unparsable ty ->
         U.unparsable ~ty:(convert_ty ty)
+      | FO.Card_at_least (ty,n) ->
+        U.card_at_least (convert_ty ty) n
       | FO.App (f,l) ->
         let l = List.map convert_term l in
         U.app (U.const f) l

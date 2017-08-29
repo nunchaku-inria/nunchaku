@@ -29,6 +29,7 @@ depends: [
     "sequence"
     "base-unix"
     "base-threads"
+    "num"
     "ocamlbuild" {build}
 ]
 depopts: [

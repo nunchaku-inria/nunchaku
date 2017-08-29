@@ -74,7 +74,7 @@ rule token = parse
   *)
   | lower_word { LOWER_WORD(Lexing.lexeme lexbuf) }
   | upper_word { UPPER_WORD(Lexing.lexeme lexbuf) }
-  | dollar_word { DOLLAR_WORD(Lexing.lexeme lexbuf) }
+  (*| dollar_word { DOLLAR_WORD(Lexing.lexeme lexbuf) }*)
   | single_quoted { SINGLE_QUOTED(Lexing.lexeme lexbuf) }
   | distinct_object { DISTINCT_OBJECT(Lexing.lexeme lexbuf) }
   | integer { INTEGER(Lexing.lexeme lexbuf) }

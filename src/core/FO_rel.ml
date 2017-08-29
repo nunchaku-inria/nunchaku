@@ -9,13 +9,14 @@ type atom_name = ID.t
 (* the portion of the universe concerned with this atom name *)
 type sub_universe = {
   su_name: atom_name;
-  su_card: int option; (* might not be fixed yet *)
+  su_min_card: int;
+  su_max_card: int option;
 }
 
 (* an indexed atom. It lives in the sub-universe of the same name *)
 type atom = {
   a_sub_universe: sub_universe;
-  a_index: int; (* invariant: a_index < a_sub_universe.su_card *)
+  a_index: int; (* invariant: a_index < a_sub_universe.su_max_card *)
 }
 
 type tuple = atom list
@@ -110,18 +111,19 @@ let unop o a = Unop (o,a)
 let binop o a b = Binop (o,a,b)
 let mult m a = Mult (m,a)
 
-let su_make ?card:su_card su_name =
-  begin match su_card with
+let su_make ?(min_card=0) ?max_card:su_max_card su_name =
+  begin match su_max_card with
     | Some n when n <= 0 -> invalid_arg "su_make"
     | _ -> ()
   end;
-  { su_name; su_card }
+  { su_name; su_min_card = min_card; su_max_card }
 
 let su_hash s = ID.hash s.su_name
 let su_compare s1 s2 =
   CCOrd.(
     ID.compare s1.su_name s2.su_name
-    <?> (option int, s1.su_card, s2.su_card)
+    <?> (int, s1.su_min_card, s2.su_min_card)
+    <?> (option int, s1.su_max_card, s2.su_max_card)
   )
 let su_equal s1 s2 = su_compare s1 s2 = 0
 
@@ -210,10 +212,10 @@ let pp_atom out a =
 
 let pp_sub_universe out s =
   let pp_card out = function
-    | Some n -> Format.fprintf out "{0..%d}" (n-1)
-    | None -> CCFormat.string out "<no card>"
+    | (m, None) -> Format.fprintf out "%d.." m
+    | (m, Some n) -> Format.fprintf out "%d..%d" m n
   in
-  fpf out "%a_%a" ID.pp_name s.su_name pp_card s.su_card
+  fpf out "%a_%a" ID.pp_name s.su_name pp_card (s.su_min_card, s.su_max_card)
 
 let pp_tuple out (t:tuple) =
   fpf out "(@[%a@])" (pp_list ~sep:"," pp_atom) t

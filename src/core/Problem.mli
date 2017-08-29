@@ -45,6 +45,7 @@ val iter_statements:
   unit
 
 val map_statements :
+  ?prelude:('t2,'ty2) Statement.t list ->
   f:(('t, 'ty) Statement.t -> ('t2,'ty2) Statement.t) ->
   ('t,'ty) t ->
   ('t2,'ty2) t
@@ -56,11 +57,13 @@ val fold_map_statements :
   'acc * ('t2,'ty2) t
 
 val flat_map_statements :
+  ?prelude:('t2,'ty2) Statement.t list ->
   f:(('t, 'ty) Statement.t -> ('t2,'ty2) Statement.t list) ->
   ('t,'ty) t ->
   ('t2,'ty2) t
 (** Map each statement to a list of statements, and flatten the result into
-    a new problem *)
+    a new problem.
+    @param prelude if provided, this is added at the beginning of the result *)
 
 val map :
   term:('a -> 'b) ->

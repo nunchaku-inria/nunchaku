@@ -5,6 +5,7 @@
 
 open Nunchaku_core
 
+module Fmt = CCFormat
 module T = FO_tptp
 
 type name = string
@@ -29,11 +30,28 @@ type statement =
   | Fi_functors of name * id * var list * (var list * term list * term) list
   | Fi_predicates of name * id * var list * (var list * term list * term) list
 
+let rec pp out = function
+  | Var v -> Fmt.string out v
+  | App (c,[]) -> Fmt.string out c
+  | App (c,l) ->
+    Fmt.fprintf out "(@[<2>%a@ %a@])" Fmt.string c (Utils.pp_list ~sep:" " pp) l
+  | True -> Fmt.string out "true"
+  | False -> Fmt.string out "false"
+  | Not t -> Fmt.fprintf out "(@[not@ %a@])" pp t
+  | And (t,u) -> Fmt.fprintf out "(@[and@ %a@ %a@])" pp t pp u
+  | Or (t,u) -> Fmt.fprintf out "(@[or@ %a@ %a@])" pp t pp u
+  | Eq (t,u) -> Fmt.fprintf out "(@[= %a %a@])" pp t pp u
+  | Equiv (t,u) -> Fmt.fprintf out "(@[<=>@ %a@ %a@])" pp t pp u
+  | Forall (v,t) ->
+    Fmt.fprintf out "(@[forall %a@ %a@])" Fmt.string v pp t
+  | Atom t -> pp out t
+
 let var v = Var v
 let app id l = App (id,l)
 let const id = app id []
 
 let forall v f = Forall (v,f)
+let forall_l = List.fold_right forall
 let or_ a b = Or(a,b)
 let and_ a b = And(a,b)
 let not_ = function
@@ -46,41 +64,46 @@ let atom t = Atom t
 let true_ = True
 let false_ = False
 
-module Conv = struct
-  let failf m = Parsing_utils.parse_error_ m
+let rec open_forall = function
+  | Forall (v,f) ->
+    let vars, f' = open_forall f in
+    v :: vars, f'
+  | t -> [], t
 
+let failf ?loc m = Parsing_utils.parse_error_ ?loc m
+
+let rec as_or_ ?loc = function
+  | Or (a,b) -> List.rev_append (as_or_ ?loc a) (as_or_ ?loc b)
+  | (Atom _ | Eq _ | Equiv (_,_) | Forall (_,_) | Not _) as f -> [f]
+  | t -> failf ?loc "expected disjunction,@ got `%a`" pp t
+
+let rec as_and_ ?loc = function
+  | And (a,b) -> List.rev_append (as_and_ ?loc a) (as_and_ ?loc b)
+  | (Atom _ | Eq _ | Equiv (_,_) | Forall (_,_) | Not _) as f -> [f]
+  | t -> failf ?loc "expected conjunction,@ got `%a`" pp t
+
+module Conv = struct
   let as_forall_ = function
     | Forall (v,f) -> v, f
     | _ -> failf "expected forall"
 
-  let rec open_forall = function
-    | Forall (v,f) ->
-      let vars, f' = open_forall f in
-      v :: vars, f'
-    | t -> [], t
-
-  let rec as_or_ = function
-    | Or (a,b) -> List.rev_append (as_or_ a) (as_or_ b)
-    | (Atom _ | Eq _ ) as f -> [f]
-    | _ -> failf "expected conjunction"
-
   let as_id_eqn_of_ v = function
     | Eq (Var v', App (rhs, _)) when v=v' -> rhs
-    | _ -> failf "expected equation with LHS=%s" v
+    | t -> failf "expected equation with LHS=%s,@ got `%a`" v pp t
 
   let as_ground_term_ = function
     | App (id, args) -> id, args
-    | _ -> failf "expected ground term"
+    | t -> failf "expected ground term,@ got `%a`" pp t
 
-  let as_eqn_ t =
+  let as_eqn_ ?loc t =
     let vars, t = open_forall t in
     match t with
       | Eq (lhs,rhs) ->
         let id, args = as_ground_term_ lhs in
         id, (vars, args, rhs)
-      | _ -> failf "expected equation"
+      | _ -> failf ?loc "expected equation,@ got `%a`" pp t
 
-  let as_atom_ t =
+  let as_atom_ ?loc t =
     let vars, t = open_forall t in
     let rec aux = function
       | Not f ->
@@ -91,26 +114,26 @@ module Conv = struct
       | Equiv (lhs, rhs) ->
         let id, args = as_ground_term_ lhs in
         id, (vars, args, rhs)
-      | _ -> failf "expected signed atom"
+      | t -> failf ?loc "expected signed atom,@ got `%a`" pp t
     in
     aux t
 end
 
-let mk_fi_domain name (f:term) : statement =
+let mk_fi_domain ?loc name (f:term) : statement =
   let v, l = Conv.as_forall_ f in
-  let l = List.map (Conv.as_id_eqn_of_ v) (Conv.as_or_ l) in
+  let l = List.map (Conv.as_id_eqn_of_ v) (as_or_ ?loc l) in
   Fi_domain (name, v, l)
 
-let mk_fi_functors name vars (l:term list) : statement =
-  let l = List.map Conv.as_eqn_ l in
+let mk_fi_functors ?loc name vars (l:term list) : statement =
+  let l = List.map (Conv.as_eqn_ ?loc) l in
   let id = match l with
     | [] -> assert false
     | (id, _) :: _ -> id
   in
   Fi_functors (name, id, vars, List.map snd l)
 
-let mk_fi_predicates name vars (l:term list) : statement =
-  let l = List.map Conv.as_atom_ l in
+let mk_fi_predicates ?loc name vars (l:term list) : statement =
+  let l = List.map (Conv.as_atom_ ?loc) l in
   let id = match l with
     | [] -> assert false
     | (id, _) :: _ -> id
@@ -181,12 +204,11 @@ let to_model (l:statement list) : (T.term, T.ty) Model.t =
   (* convert a term back *)
   let rec term_to_tptp subst (t:term) : T.term = match t with
     | App (id, l) ->
-      let subst _ = Conv.failf "no variable allowed in sub-term under %s" id in
       T.app (get_or_create_id id) (List.map (term_to_tptp subst) l)
     | Var v -> subst v
     | True -> T.true_
     | False -> T.false_
-    | _ -> Conv.failf "cannot convert `@[%a@]` to term" pp_term t
+    | _ -> failf "cannot convert `@[%a@]` to term" pp_term t
   in
   (* convert a list of cases into a Model.DT *)
   let cases_to_dt input_vars l =
@@ -200,7 +222,7 @@ let to_model (l:statement list) : (T.term, T.ty) Model.t =
     if vars=[]
     then match l with
       | [_, [], rhs] ->
-        let subst v = Conv.failf "variable %s not in scope" v in
+        let subst v = failf "variable %s not in scope" v in
         M.DT.yield (term_to_tptp subst rhs)
       | _ -> assert false
     else (
@@ -219,7 +241,7 @@ let to_model (l:statement list) : (T.term, T.ty) Model.t =
                  vars_seen := (v, v') :: !vars_seen;
                  v'
                )
-               else Conv.failf "variable %s not in scope" v
+               else failf "variable %s not in scope" v
              in
              let args = List.mapi (fun i -> term_to_tptp (subst i)) args in
              let rhs = term_to_tptp (subst ~-1) rhs in

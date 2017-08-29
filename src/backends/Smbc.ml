@@ -132,6 +132,11 @@ let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
         let t = term_to_tip st t in
         let g = U.and_nodup g.Builtin.asserting |> term_to_tip st in
         A.app "asserting" [t; g]
+      | `Card_at_least (ty,n) ->
+        (* encode on the fly *)
+        let module CE = Cardinal_encode.Make(T) in
+        let ax = CE.encode_min_card ty n in
+        term_to_tip st ax
       | `Unparsable _
         -> assert false (* TODO: better error: should not happen *)
     end
@@ -855,7 +860,7 @@ let call ?(print_model=false) ?prio ~print ~dump problem =
       S.Task.return (Res.Unknown [Res.U_other (i, "--dump")]) S.No_shortcut
   end
 
-let pipe ?(print_model=false) ~print ~dump () =
+let pipe ?(print_model=false) ?(prio=20) ~print ~dump () =
   let input_spec =
     Transform.Features.(of_list [
         Ty, Mono; If_then_else, Present;
@@ -863,10 +868,7 @@ let pipe ?(print_model=false) ~print ~dump () =
         Copy, Absent; Ind_preds, Absent; Prop_args, Present;
       ])
   in
-  let encode pb =
-    let prio = 25 in
-    call ~print_model ~prio ~print ~dump pb, ()
-  in
+  let encode pb = call ~print_model ~prio ~print ~dump pb, () in
   Transform.make
     ~input_spec
     ~name ~encode ~decode:(fun _ x -> x) ()

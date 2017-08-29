@@ -956,7 +956,7 @@ let git_describe () =
     Printf.sprintf "let id = \"(commit %s)\"" id
   with _ -> "let id = \"\""
 
-let doc_intro = "doc/intro.txt";;
+let doc_intro = "docs/intro.txt";;
 
 let qtest_preamble = "open Nunchaku_core;; "
 

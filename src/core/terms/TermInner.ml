@@ -161,7 +161,7 @@ module Print(T : REPR)
     | Builtin (`Ite (a,b,c)) when is_if_ c ->
       (* special case to avoid deep nesting of ifs *)
       let pp_middle out (a,b) =
-        fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]@]"
+        fpf out "@[<2>else if@ @[%a@]@]@ @[<2>then@ @[%a@]@]"
           (pp' P.Ite) a (pp' P.Ite) b
       in
       let middle, last = unroll_if_ c in
@@ -213,7 +213,7 @@ module Print(T : REPR)
 
   let rec to_sexp t : Sexp_lib.t = match T.repr t with
     | TyBuiltin b -> str (TyBuiltin.to_string b)
-    | Const id -> str (ID.to_string id)
+    | Const id -> str (ID.name id)
     | TyMeta _ -> assert false
     | Var v -> str (Var.to_string_full v)
     | Builtin b -> Builtin.to_sexp to_sexp b
@@ -670,6 +670,8 @@ module type UTIL = sig
   val asserting : t_ -> t_ list -> t_
   val guard : t_ -> t_ Builtin.guard -> t_
 
+  val card_at_least : t_ -> int -> t_
+
   val mk_bind : Binder.t -> t_ var -> t_ -> t_
   val mk_bind_l : Binder.t -> t_ var list -> t_ -> t_
 
@@ -896,10 +898,6 @@ module Util(T : S)
   let build = T.build
   let const id = T.build (Const id)
   let var v = T.build (Var v)
-  let app t l = match l with
-    | [] -> t
-    | _::_ -> T.build (App(t,l))
-  let app_const id l = app (const id) l
   let mk_bind b v t = T.build (Bind (b, v, t))
   let mk_bind_l b = List.fold_right (mk_bind b)
   let fun_ v t = T.build (Bind (Binder.Fun, v, t))
@@ -947,7 +945,6 @@ module Util(T : S)
       [t]
 
   let builtin_ b = T.build (Builtin b)
-  let app_builtin_ b l = app (builtin_ b) l
 
   let true_ = builtin_ `True
   let false_ = builtin_ `False
@@ -1008,12 +1005,38 @@ module Util(T : S)
 
   and app_builtin arg l = match arg, l with
     | (`Ite _ | `Eq _), [] -> builtin arg
-    | _ -> app_builtin_ arg l
+    | _ -> app (builtin_ arg) l
 
   and not_ t = builtin (`Not t)
   and and_ l = builtin (`And l)
   and or_ l = builtin (`Or l)
   and imply a b = builtin (`Imply (a,b))
+
+  and guard t g =
+    let open Builtin in
+    match T.repr t, g.asserting with
+      | _, [] -> t
+      | Builtin (`Guard (t', g')), _ ->
+        let g'' = Builtin.merge_guard g g' in
+        builtin (`Guard (t', g''))
+      | _ ->
+        builtin (`Guard (t, g))
+
+  and app t l = match T.repr t, l with
+    | _, [] -> t
+    | Builtin (`Guard (u, g)), _ ->
+      (* [f asserting g) l --->  (f l) asserting g] *)
+      guard (app u l) g
+    | Builtin (`Ite (a,b,c)), _ -> ite a (app b l) (app c l)
+    | Match (u, m, def), _ ->
+      let m = ID.Map.map (fun (vars,rhs) -> vars, app rhs l) m in
+      let def = map_default_case (fun u -> app u l) def in
+      match_with u m ~def
+    | _, _::_ -> T.build (App(t,l))
+
+  and ite a b c = app_builtin (`Ite (a,b,c)) []
+
+  let app_const id l = app (const id) l
 
   let imply_l l ret = match l with
     | [] -> ret
@@ -1022,7 +1045,6 @@ module Util(T : S)
 
   let eq a b = builtin (`Eq (a,b))
   let neq a b = not_ (eq a b)
-  let ite a b c = app_builtin (`Ite (a,b,c)) []
 
   let undefined_self t = builtin (`Undefined_self t)
 
@@ -1034,17 +1056,9 @@ module Util(T : S)
   let data_select c i t = app_builtin (`DataSelect (c,i)) [t]
   let unparsable ~ty = builtin (`Unparsable ty)
 
-  let guard t g =
-    let open Builtin in
-    match T.repr t, g.asserting with
-      | _, [] -> t
-      | Builtin (`Guard (t', g')), _ ->
-        let g'' = Builtin.merge_guard g g' in
-        builtin (`Guard (t', g''))
-      | _ ->
-        builtin (`Guard (t, g))
-
   let asserting t p = guard t {Builtin.asserting=p}
+
+  let card_at_least ty n = builtin (`Card_at_least (ty,n))
 
   module No_simp = struct
     let builtin b = T.build (Builtin b)
@@ -1099,7 +1113,7 @@ module Util(T : S)
           decr d;
           CCHash.combine4 60
             (hash_ t)
-            CCHash.(seq (pair (list hash_var) hash_) 
+            CCHash.(seq (pair (list hash_var) hash_)
                 (ID.Map.to_seq l |> Sequence.map snd))
             (match def with
               | Default_none -> 0x10
@@ -1341,6 +1355,9 @@ module Util(T : S)
       let t = f b_acc pol t in
       let g = Builtin.map_guard (f b_acc Polarity.Pos) g in
       guard t g
+    | Builtin (`Card_at_least (ty,n)) ->
+      let ty = f b_acc pol ty in
+      card_at_least ty n
     | Builtin (`Eq (a,b)) ->
       let a = f b_acc P.NoPol a in
       let b = f b_acc P.NoPol b in
@@ -1602,6 +1619,7 @@ module Util(T : S)
               | _ ->
                 failwith "cannot infer type, wrong argument to DataSelect"
             end
+          | `Card_at_least _ -> prop
           | `Undefined_self t -> aux t
           | `Undefined_atom (_,ty) -> ty
           | `Guard (t, _) -> aux t

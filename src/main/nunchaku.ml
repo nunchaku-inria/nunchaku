@@ -34,6 +34,7 @@ let outputs_ =
   ; "sexp", O_sexp
   ]
 
+(* NOTE: also modify list_solvers_ below if you modify this *)
 type solver =
   | S_CVC4
   | S_kodkod
@@ -64,7 +65,7 @@ let pp_elim_multi_eqns = ref false
 let pp_polarize_ = ref false
 let pp_unroll_ = ref false
 let pp_elim_preds_ = ref false
-let pp_elim_quant_ = ref false
+let pp_cstor_as_fun_ = ref false
 let pp_elim_data_ = ref false
 let pp_elim_codata_ = ref false
 let pp_copy_ = ref false
@@ -80,7 +81,10 @@ let pp_model_ = ref false
 let enable_polarize_ = ref true
 let enable_specialize_ = ref true
 let skolems_in_model_ = ref true
-let cvc4_schedule = ref true
+let cvc4_schedule_ = ref true
+let kodkod_min_bound_ = ref Backends.Kodkod.default_min_size
+let kodkod_max_bound_ = ref None
+let kodkod_bound_increment_ = ref Backends.Kodkod.default_size_increment
 let timeout_ = ref 30
 let version_ = ref false
 let dump_ : [`No | `Yes | `Into of string] ref = ref `No
@@ -145,6 +149,9 @@ let options =
       , Arg.Set pp_specialize_
       , " print input after specialization"
       ; "--pp-" ^ Tr.LambdaLift.name, Arg.Set pp_lambda_lift_, " print after λ-lifting"
+      ; "--pp-" ^ Tr.Cstor_as_fun.long_name
+        , Arg.Set pp_cstor_as_fun_
+        , " print input after removal of partial applications of constructors"
       ; "--pp-" ^ Tr.Elim_HOF.name
       , Arg.Set pp_elim_hof_
       , " print input after elimination of higher-order/partial functions"
@@ -194,9 +201,17 @@ let options =
       ; "--no-specialize", Arg.Clear enable_specialize_, " disable specialization"
       ; "--skolems-in-model", Arg.Set skolems_in_model_, " enable skolem constants in models"
       ; "--no-skolems-in-model", Arg.Clear skolems_in_model_, " disable skolem constants in models"
-      ; "--cvc4-schedule", Arg.Set cvc4_schedule, " enable scheduling of multiple CVC4 instances"
-      ; "--cvc4-no-schedule", Arg.Clear cvc4_schedule, " enable scheduling of multiple CVC4 instances"
-      ; "--solvers", Arg.String set_solvers_, " solvers to use " ^ list_solvers_ ()
+      ; "--cvc4-schedule", Arg.Set cvc4_schedule_, " enable scheduling of multiple CVC4 instances"
+      ; "--no-cvc4-schedule", Arg.Clear cvc4_schedule_,
+        " disable scheduling of multiple CVC4 instances"
+      ; "--kodkod-min-bound", Arg.Set_int kodkod_min_bound_,
+        " set lower cardinality bound for Kodkod"
+      ; "--kodkod-max-bound", Arg.Int (fun n -> kodkod_max_bound_ := Some n),
+        " set upper cardinality bound for Kodkod"
+      ; "--kodkod-bound-increment", Arg.Set_int kodkod_bound_increment_,
+        " set cardinality bound increment for Kodkod"
+      ; "--solvers", Arg.String set_solvers_,
+        " solvers to use (comma-separated list) " ^ list_solvers_ ()
       ; "-s", Arg.String set_solvers_, " synonym for --solvers"
       ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
       ; "-t", Arg.Set_int timeout_, " alias to --timeout"
@@ -307,7 +322,7 @@ let make_cvc4 ~j () =
       ~slice:(1. *. float j)
       ~dump:(get_dump_file ())
       ~print:!pp_all_
-      ~schedule_options:!cvc4_schedule
+      ~schedule_options:!cvc4_schedule_
       ~print_smt:(!pp_all_ || !pp_smt_)
       ~print_model:(!pp_all_ || !pp_raw_model_)
       ()
@@ -330,6 +345,9 @@ let make_kodkod () =
   if List.mem S_kodkod !solvers && Backends.Kodkod.is_available ()
   then
     Backends.Kodkod.pipe
+      ~min_size:!kodkod_min_bound_
+      ?max_size:!kodkod_max_bound_
+      ~size_increment:!kodkod_bound_increment_
       ~print:!pp_all_
       ~dump:(get_dump_file ())
       ~print_model:(!pp_all_ || !pp_raw_model_)
@@ -378,6 +396,7 @@ let make_model_pipeline () =
     (if !enable_specialize_
      then Tr.Specialize.pipe ~print:(!pp_specialize_ || !pp_all_) ~check
      else Transform.nop ()) @@@
+    Tr.Cstor_as_fun.pipe ~print:(!pp_cstor_as_fun_ || !pp_all_) ~check @@@
     k
   and pipe_common_paradox_kodkod k =
     Tr.ElimData.Codata.pipe ~print:(!pp_elim_codata_ || !pp_all_) ~check @@@
@@ -432,6 +451,7 @@ let make_model_pipeline () =
        *)
     Tr.ElimPatternMatch.pipe ~mode:Tr.ElimPatternMatch.Elim_codata_match
       ~print:(!pp_elim_codata_ || !pp_all_) ~check @@@
+    Tr.Cstor_as_fun.pipe ~print:(!pp_cstor_as_fun_ || !pp_all_) ~check @@@
     Tr.ElimData.Codata.pipe ~print:(!pp_elim_codata_ || !pp_all_) ~check @@@
     (if !enable_polarize_
      then Tr.Polarize.pipe ~print:(!pp_polarize_ || !pp_all_)
@@ -444,9 +464,6 @@ let make_model_pipeline () =
       ~print:(!pp_skolem_ || !pp_all_) ~mode:`Sk_all ~check @@@
     Tr.ElimIndPreds.pipe ~mode:`Use_match
       ~print:(!pp_elim_preds_ || !pp_all_) ~check @@@
-    Tr.ElimQuantifiers.pipe
-      ~mode:Tr.ElimQuantifiers.([Elim_quant_data; Elim_quant_fun; Elim_eq_fun])
-      ~print:(!pp_elim_quant_ || !pp_all_) ~check @@@
     (*
     Tr.LambdaLift.pipe ~print:(!pp_lambda_lift_ || !pp_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!pp_elim_hof_ || !pp_all_) ~check @@@
@@ -492,7 +509,7 @@ let make_model_pipeline () =
 let process_res_ r =
   let module Res = Problem.Res in
   (* [l] only contains unknown-like results (+timeout+out_of_scope),
-     recover accurate info *)
+     id recover accurate info *)
   let find_result_if_unknown l =
     let l =
       CCList.flat_map (function Res.Unknown l -> l | _ -> assert false) l
@@ -552,6 +569,11 @@ let main_model ~output statements =
   (* run pipeline *)
   let pipe = make_model_pipeline() in
   Transform.Pipe.check pipe;
+  (* check that there is something in the pipeline *)
+  begin match pipe with
+    | Transform.Pipe.Fail -> failwith "solvers are unavailable"
+    | _ -> ()
+  end;
   assert (not !pp_pipeline_);
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   run_tasks ~j:!j ~deadline pipe statements

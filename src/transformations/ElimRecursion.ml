@@ -244,7 +244,8 @@ let rec tr_term_rec_ ~guards ~state subst t =
       end
     | TI.Builtin (`True | `False | `DataSelect _ | `DataTest _) ->
       t (* partially applied, or constant *)
-    | TI.Builtin ((`Undefined_self _ | `Undefined_atom _ | `Unparsable _) as b) ->
+    | TI.Builtin ((`Undefined_self _ | `Undefined_atom _
+                  | `Unparsable _ | `Card_at_least _) as b) ->
       U.builtin (Builtin.map b ~f:(tr_term_rec_ ~guards ~state subst))
     | TI.Builtin (`Guard (t, g)) ->
       let t = tr_term_rec_ ~guards ~state subst t in

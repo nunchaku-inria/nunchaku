@@ -7,9 +7,15 @@ open Nunchaku_core
 type problem = FO_rel.problem
 type res = (FO_rel.expr, FO_rel.sub_universe) Problem.Res.t
 
+val default_min_size : int
+val default_size_increment : int
+
 val call :
   ?print_model:bool ->
   ?prio:int ->
+  ?min_size:int ->
+  ?max_size:int ->
+  ?size_increment:int ->
   print:bool ->
   dump:string option ->
   problem ->
@@ -21,6 +27,9 @@ val is_available : unit -> bool
 
 val pipe :
   ?print_model:bool ->
+  ?min_size:int ->
+  ?max_size:int ->
+  ?size_increment:int ->
   print:bool ->
   dump:string option ->
   unit ->

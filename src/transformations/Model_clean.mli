@@ -19,6 +19,13 @@ val rename : model -> model
       Assumes the types that have finite domains are ground types.
       @raise Invalid_argument if some assumption is invalidated *)
 
+val ground_vars : model -> model
+(** remove variables in decision tree, if their type is an uninterpreted
+    type with a finite domain.
+    [case v1 of 1-> dt1 | x -> dt2[x]] becomes
+    [case v1 of 1-> dt1 + dt2[1] | 2 -> dt2[2]] if [dom(type(v1)) = {1,2}]
+*)
+
 val remove_recursion : model -> model
 (** [remove_recursion m] transforms definitions such as
       [f x = if x=0 then 0 else if x=1 then f 0 else ...]

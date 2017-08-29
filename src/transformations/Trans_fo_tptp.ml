@@ -48,7 +48,9 @@ module To_tptp = struct
     | DataTest (_,_)
     | DataSelect (_,_,_)
     | Undefined_atom _
-    | Unparsable _ ->
+    | Unparsable _
+    | Card_at_least (_,_)
+      ->
       errorf_ "cannot convert `@[%a@]` to TPTP" pp_term t
     | Fun (_,_) -> errorf_ "cannot convert function `@[%a@]` to TPTP" pp_term t
     | Let (v,t,u) ->

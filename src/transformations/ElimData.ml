@@ -129,6 +129,10 @@ module Make(M : sig val mode : mode end) = struct
     (* New definitions, also used for computing types *)
     at_cache: AT.cache;
     (* used for computing type cardinalities *)
+    new_stmts: (T.t,T.t) Stmt.t CCVector.vector;
+    (* new statements, used for defining terms *)
+    cstor_funs_st: Cstor_as_fun.state;
+    (* used for defining recursive functions for partially applied constructors *)
     mutable unsat_means_unknown: bool;
     (* completeness? *)
   }
@@ -142,6 +146,8 @@ module Make(M : sig val mode : mode end) = struct
     env;
     new_env=Env.create ();
     at_cache=AT.create_cache();
+    cstor_funs_st=Cstor_as_fun.create();
+    new_stmts=CCVector.create();
     unsat_means_unknown=false;
   }
 
@@ -160,13 +166,19 @@ module Make(M : sig val mode : mode end) = struct
     | Some res -> res
     | None -> errorf "could not find encoding of `is-%a`" ID.pp id
 
+  let ty_id ~state (id:ID.t) : T.t option =
+    let open CCOpt in
+    Env.find_ty ~env:state.env id
+    <+> Env.find_ty ~env:state.new_env id
+
   (* compute type of [t], using both envs *)
   let ty_exn ~state (t:T.t) =
     U.ty_of_signature_exn t
-      ~sigma:(fun id ->
-        let open CCOpt in
-        Env.find_ty ~env:state.env id
-        <+> Env.find_ty ~env:state.new_env id)
+      ~sigma:(ty_id ~state)
+
+  let ty_id_exn ~state (id:ID.t) = match ty_id ~state id with
+    | Some t -> t
+    | None -> errorf "cannot find type of `%a`" ID.pp id
 
   (* is [ty] a type that is being encoded? *)
   let is_encoded_ty state (ty:T.t): bool =
@@ -185,6 +197,25 @@ module Make(M : sig val mode : mode end) = struct
         | Cardinality.Exact _
         | Cardinality.QuasiFiniteGEQ _ -> false
       end)
+
+  (* return [Some d] if [ty] is an encoded type and has (small) cardinal [d] *)
+  let ty_encoded_with_exact_small_cardinal_opt state (ty:T.t) : int option =
+    let module Z = Cardinality.Z in
+    if is_encoded_ty state ty then (
+      let card = AT.cardinality_ty ~cache:state.at_cache state.env ty in
+      begin match card with
+        | Cardinality.Unknown
+        | Cardinality.Infinite
+        | Cardinality.QuasiFiniteGEQ _ -> None
+        | Cardinality.Exact n ->
+          Z.to_int n
+      end
+    ) else None
+
+  (* threshold of [card(τ)] under which [forall x:τ. P[x]] is kept
+     as an accurate quantification. Otherwise it becomes undefined/false
+     depending on polarity *)
+  let threshold_card_quant : int = 16 (* FUDGE *)
 
   (* local state used to maximally share subterms, so as to avoid
      combinatorial explosion due to `asserting` constraints *)
@@ -374,13 +405,18 @@ module Make(M : sig val mode : mode end) = struct
       (fun k->k P.pp t P.pp new_t);
     new_t
 
-  let tr_term state (pol:Pol.t) (t:T.t) : T.t =
+  let rec tr_term state (pol:Pol.t) (t:T.t) : T.t =
     let rec tr_term_rec share (pol:Pol.t) t : T.t = match T.repr t with
       | TI.Const id ->
         (* constant constructor, or unrelated ID *)
         begin match Tbl.get state.map (Cstor id) with
           | None -> t
           | Some _ ->
+            let ty = ty_id_exn ~state id in
+            if U.ty_arity ty > 0 then (
+              (* should have removed partial applications *)
+              errorf "cstor `%a` is partially applied" ID.pp id
+            );
             (* [c asserting is-c c].
                We do NOT introduce a variable here, simply add the guard
                to global guards *)
@@ -397,7 +433,12 @@ module Make(M : sig val mode : mode end) = struct
               | None ->
                 U.app_const f_id l'
               | Some f_id' ->
-                (* id is a constructor, we introduce a guard stating
+                let ty = ty_id_exn ~state f_id in
+                if U.ty_arity ty > List.length l then (
+                  (* should have removed partial applications *)
+                  errorf "cstor `%a` is partially applied" ID.pp f_id
+                );
+                (* id is a fully-applied constructor, we introduce a guard stating
                    [is-id (id x1..xn) & And_k proj-id-k (id x1..xn) = x_k] *)
                 let cell = get_sharing_cell state share (U.app_const f_id' l') in
                 let t' = U.var cell.sc_var in
@@ -463,7 +504,35 @@ module Make(M : sig val mode : mode end) = struct
             U.builtin (Builtin.map b ~f:(tr_term_block_lets share pol))
           | _ -> tr_term_aux share pol t
         end
-      | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun) as b, _, _) -> tr_bind share pol b t
+      | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, _)
+        when is_encoded_ty state (Var.ty v) ->
+        (* [v]'s type is encoded. We might preserve precision if
+           it has an exact, small cardinal *)
+        let ty = Var.ty v in
+        begin match ty_encoded_with_exact_small_cardinal_opt state ty with
+          | Some c when c <= threshold_card_quant ->
+            (* card of [v]'s type is exactly [c], and it's small enough:
+               [forall v:τ. P[v]] becomes [card(τ) ≥ c ∧ forall v:τ. P[v]] *)
+            U.and_
+              [ U.card_at_least ty c;
+                tr_bind share pol q t;
+              ]
+          | _ ->
+            (* similar to infinite quantifier *)
+            begin match U.approx_infinite_quant_pol_binder q pol with
+              | `Unsat_means_unknown res ->
+                state.unsat_means_unknown <- true;
+                Utils.debugf ~section 3
+                  "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
+                   quantifying over infinite encoded type `@[%a@]`@]"
+                  (fun k->k P.pp t P.pp res Pol.pp pol P.pp (Var.ty v));
+                res
+              | `Keep ->
+                tr_bind share pol q t
+            end
+        end
+      | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun) as b, _, _) ->
+        tr_bind share pol b t (* just traverse *)
       | TI.Match (t,m,def) ->
         if is_encoded_ty state (U.ty_exn ~env:state.env t)
         then errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.pp t
@@ -557,14 +626,19 @@ module Make(M : sig val mode : mode end) = struct
   let common_decls etys : (_,_) Stmt.t list =
     let mk_decl (id,ty) =
       Stmt.decl ~info:Stmt.info_default ~attrs:[] id ty
-    (* cardinality attribute  for this type *)
-    and attr_card ety =
-      Stmt.Attr_card_hint ety.ety_card
+    (* cardinality attribute for this type *)
+    and attrs_card ety = match ety.ety_card with
+      | Cardinality.Exact n ->
+        begin match Cardinality.Z.to_int n with
+          | None -> []
+          | Some n -> [Stmt.Attr_card_max_hint n]
+        end
+      | _ -> []
     in
     let tys =
       List.map
         (fun ety ->
-           let attrs = [attr_card ety] in
+           let attrs = attrs_card ety in
            Stmt.decl ~info:Stmt.info_default ~attrs ety.ety_id U.ty_type)
         etys
     in
@@ -829,7 +903,7 @@ module Make(M : sig val mode : mode end) = struct
     in
     Stmt.mk_pred ~info ~wf kind l
 
-  let encode_stmt state stmt : (_,_) Stmt.t list= match Stmt.view stmt, mode with
+  let encode_stmt_ state stmt : (_,_) Stmt.t list = match Stmt.view stmt, mode with
     | Stmt.TyDef (`Codata, _), M_data
     | Stmt.Pred _, M_data -> assert false (* invariant broken *)
     | Stmt.TyDef (`Codata, l), M_codata ->
@@ -856,6 +930,13 @@ module Make(M : sig val mode : mode end) = struct
         Stmt.map stmt ~term:(tr_term state Pol.Pos) ~ty:(tr_ty state Pol.NoPol)
       in
       [stmt]
+
+  let encode_stmt state stmt : (_,_) Stmt.t list =
+    let l = encode_stmt_ state stmt in
+    (* add side statements *)
+    let l' = CCVector.to_list state.new_stmts in
+    CCVector.clear state.new_stmts;
+    l' @ l
 
   let transform_pb pb =
     let env = Problem.env pb in
@@ -1052,6 +1133,8 @@ module Make(M : sig val mode : mode end) = struct
       ~values:(fun (t,dt,k) -> match T.repr t with
         | TI.Const id when ID.Tbl.mem state.decode id ->
           None (* drop the domain constants *)
+        | TI.Const id when Cstor_as_fun.is_defined_fun state.cstor_funs_st id ->
+          None (* drop functions defining cstors *)
         | _ ->
           let t = tr_term t in
           let dt = DT.map dt ~term:tr_term ~ty:tr_term in
@@ -1065,10 +1148,11 @@ module Make(M : sig val mode : mode end) = struct
   let input_spec : F.t = match mode with
     | M_data ->
       F.(of_list
-          [Ty, Mono; Match, Absent; Data, Present;
+          [Ty, Mono; Match, Absent; Data, Present; Partial_app_cstor, Absent;
            Eqn, Eqn_single; Codata, Absent; Ind_preds, Absent])
     | M_codata ->
-      F.(of_list [Ty, Mono; Match, Absent; Codata, Present; Eqn, Eqn_single])
+      F.(of_list [Ty, Mono; Match, Absent; Codata, Present;
+                  Eqn, Eqn_single; Partial_app_cstor, Absent])
 
   let map_spec : F.t -> F.t = match mode with
     | M_data -> F.(update Data Absent)

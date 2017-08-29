@@ -120,6 +120,8 @@ module Make(T : TI.S) = struct
           | `Unparsable ty
           | `Undefined_atom (_,ty) ->
             ignore (check_is_ty ~env bound ty); ty
+          | `Card_at_least (ty,_) ->
+            ignore (check_is_ty ~env bound ty); prop
           | `Undefined_self t -> check ~env bound t
           | `Guard (t, g) ->
             List.iter (check_is_prop ~env bound) g.Builtin.asserting;

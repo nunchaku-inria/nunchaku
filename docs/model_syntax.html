@@ -5,7 +5,7 @@
 <!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge"><![endif]-->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="generator" content="Asciidoctor 1.5.5">
-<title>Nunchaku</title>
+<title>Syntax of Generated Models</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
 <style>
 /* Asciidoctor default stylesheet | MIT License | http://asciidoctor.org */
@@ -417,79 +417,518 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 .hide-for-print{display:none!important}
 .show-for-print{display:inherit!important}}
 </style>
-<style>
-/* Pygments styles disabled. Pygments is not available. */
-</style>
 </head>
 <body class="article">
 <div id="header">
-<h1>Nunchaku</h1>
+<h1>Syntax of Generated Models</h1>
 </div>
 <div id="content">
 <div id="preamble">
 <div class="sectionbody">
 <div class="paragraph">
-<p>A counter-example finder for higher-order logic, designed to be used from
-various proof assistants, and a spiritual successor to Nitpick.
-See also the README (<a href="README.adoc" class="bare">README.adoc</a>, <a href="README.html" class="bare">README.html</a>).</p>
+<p>The syntax for models is, by default, the <a href="#native-syntax">Native Syntax (<code>-o nunchaku</code>)</a>. Alternative
+syntaxes can be picked with the <code>--output {nunchaku,tptp,sexp}</code>
+(or, for short, <code>-o</code>) command line option.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="native-syntax">Native Syntax (<code>-o nunchaku</code>)</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>A syntax that is nice on the eyes, and mostly mirrors the input format.
+For example, this is a model with one type and two constants:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>SAT: {
+  type a := {$a_0, $a_1}.
+  val xs := Cons $a_0 Nil.
+  val ys := Cons $a_1 Nil.
+}</pre>
+</div>
 </div>
 <div class="paragraph">
-<p><a href="https://nunchaku-inria.github.io/nunchaku/" class="bare">https://nunchaku-inria.github.io/nunchaku/</a></p>
+<p>The output follows the following rules. <code>UNSAT</code>, <code>UNKNOWN</code>, or <code>ERROR</code> is
+printed if no model is found.
+If a model is found, it will look like:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>SAT: {
+  &lt;decl&gt;*
+}</pre>
+</div>
 </div>
 <div class="paragraph">
-<p>The development repository is hosted
-<a href="https://github.com/nunchaku-inria/nunchaku">on github</a>. Nunchaku is written in
-<a href="http://ocaml.org/">OCaml</a>, funded by <a href="http://inria.fr">Inria</a>
-and released under the BSD license.</p>
+<p>where each <code>&lt;decl&gt;</code> is either:</p>
 </div>
 <div class="dlist">
 <dl>
-<dt class="hdlist1">Input formats</dt>
+<dt class="hdlist1">type declaration</dt>
 <dd>
-<p><a href="input_lang.adoc" class="bare">input_lang.adoc</a>, <a href="input_lang.html" class="bare">input_lang.html</a>  (draft)</p>
+<p>of the form <code>type &lt;id&gt; = {&lt;dom_elt&gt;*}.</code>,
+a finite type containing special constants called <em>domain elements</em>
+that are all distinct. Every term of this type is mapped, in the
+model, to one of these domain elements. Domain elements are
+identifiers starting with <code>$</code>.</p>
 </dd>
-<dt class="hdlist1">Model format</dt>
+<dt class="hdlist1">value definition</dt>
 <dd>
-<p><a href="model_syntax.adoc" class="bare">model_syntax.adoc</a>, <a href="model_syntax.html" class="bare">model_syntax.html</a>  (draft)</p>
-</dd>
-<dt class="hdlist1">Pipeline of Transformations</dt>
-<dd>
-<p><a href="pipeline.adoc" class="bare">pipeline.adoc</a>, <a href="pipeline.html" class="bare">pipeline.html</a></p>
-</dd>
-<dt class="hdlist1">Internal API documentation</dt>
-<dd>
-<div class="ulist">
-<ul>
-<li>
-<p><a href="0.4">0.4</a></p>
-</li>
-<li>
-<p><a href="0.3">0.3</a></p>
-</li>
-</ul>
-</div>
+<p>of the form <code>val term := term.</code>, defines the
+left-hand side term to be equal to the right-hand side term.</p>
 </dd>
 </dl>
 </div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_contact">Contact</h2>
+<h2 id="_s_expression_based_syntax_code_o_sexp_code">S-expression based Syntax (<code>-o sexp</code>)</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Bugs should be reported on <a href="https://github.com/nunchaku-inria/nunchaku/issues">github</a>.</p>
+<p>A simple S-expression based syntax for easy parsing by a tool.
+A model looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>(SAT
+ ((type a ($a_0 $a_1))
+  (val ys (Cons $a_1 Nil))
+  (val xs (Cons $a_0 Nil))))</pre>
+</div>
 </div>
 <div class="paragraph">
-<p>There is a mailing list for users and proof assistants developers,
-<a href="mailto:nunchaku-users@lists.gforge.inria.fr">nunchaku-users@lists.gforge.inria.fr</a>
-(<a href="https://lists.gforge.inria.fr/mailman/listinfo/nunchaku-users">subscription</a>).</p>
+<p>So it is isomorphic to the native syntax but uses S-expressions everywhere.
+The exact formatting of terms in S-expressions should look roughly like TIP
+but is not yet documented.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_tptp_syntax_code_o_tptp_code">TPTP syntax (<code>-o tptp</code>)</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Loosely based on <a href="http://www.cs.miami.edu/~tptp/TPTP/QuickGuide/FiniteInterpretations.html" class="bare">http://www.cs.miami.edu/~tptp/TPTP/QuickGuide/FiniteInterpretations.html</a>
+but not thoroughly tested.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_design_issues">Design Issues</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_syntax">Syntax</h3>
+<div class="paragraph">
+<p>The current output looks like an S-expression. For CVC4, such an output format
+makes a lot of sense, because SMT-LIB input is also a list of S-expressions
+(or something very similar). But for Nunchaku, this feels outlandish.
+Something like</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>val elem := {@elem_1, @elem_2}.</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>for uninterpreted types and</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>val append := fun ($xs : list). fun ($ys : list). blah_blah.</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>for terms would feel more natural (and wouldn&#8217;t be harded to parse). You could
+even go further and really use the input syntax, e.g.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>datatype elem = @elem_1 | @elem_2.
+rec append : list -&gt; list -&gt; list :=
+  append $xs $ys = blah_blah.</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>(even if "elem" is an uninterpreted type, i.e., "val elem : type" in the input
+problem, and "append" is specified by something else than "rec"). The
+advantage of this scheme is that the output syntax is a subset of the input
+syntax. And one could in principle take the input file, replace the
+declaration of "elem" and the definition of "append" with the model output,
+rerun Nunchaku, and get SAT again (modulo little syntactic issues like "?__",
+but even there I have some ideas [*]).</p>
+</div>
+<div class="paragraph">
+<p>Oh, and the types should definitely come before the terms.</p>
+</div>
+<div class="paragraph">
+<p>[*] In essence, ?<em> could be a special "fail" function, for which a guard
+ensures that it is never called. (You can think of it as being a function
+whose alpha type is constrained to be always empty.) This would be useful in
+other contexts in the input language. I wanted to bring this up at some point.
+No hurry, but it would be a nice feature. Other possible names for "?</em>" (in
+the input language) would be "fail" or "abort" or "avoid" or "block" or
+"bottom".</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_presentation_of_functions">Presentation of Functions</h3>
+<div class="paragraph">
+<p>Irrespective of the above syntactic decision, a good question is how to
+present functions. There&#8217;s the "if then else" scheme, with equals and
+conjunctions:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>append = fun $xs : list. fun $ys : list.
+  if $xs = Cons @uc_a_1 Nil &amp;&amp; $ys = Cons @uc_a_0 Nil then
+    Cons @uc_a_1 (Cons @uc_a_0 Nil)
+  else if $xs = Cons @uc_a_0 Nil &amp;&amp; $ys = Cons @uc_a_1 Nil then
+    Cons @uc_a_0 (Cons @uc_a_1 Nil)
+  else if $xs = Nil &amp;&amp; $ys = Cons @uc_a_0 Nil then
+    Cons @uc_a_0 Nil
+  else if $xs = Nil &amp;&amp; $ys = Cons @uc_a_1 Nil then
+    Cons @uc_a_1 Nil
+  else
+    ?__ $xs $ys</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then there&#8217;s the ML-style tabular syntax, which has the definite advantage of
+compactness and readability. Also notice how the unspecified case does not
+have to be specified explicitly.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>append (Cons @uc_a_1 Nil) (Cons @uc_a_0 Nil) = Cons @uc_a_1 (Cons @uc_a_0 Nil)
+append (Cons @uc_a_0 Nil) (Cons @uc_a_1 Nil) = Cons @uc_a_0 (Cons @uc_a_1 Nil)
+append Nil (Cons @uc_a_0 Nil) = Cons @uc_a_0 Nil
+append Nil (Cons @uc_a_1 Nil) = Cons @uc_a_1 Nil</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The main disadvantages are:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>It does not really scale up to higher-order logic. I.e. at some point,
+we&#8217;ll need to write out functions "(fun $xs. fun $ys. if &#8230;&#8203;)" anyway.</p>
+</li>
+<li>
+<p>It is less uniform and requires more interfacing for each frontend.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>So the "if then else" scheme is probably the best one. Also, users will rarely
+inspect the model of functions (e.g. nobody would look at the model of
+"append" in practice, unless they suspect a bug), except when these functions
+are free variables in the goal (for higher-order problems).</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_self_contained_or_not">Self-Contained or Not?</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Should the output be self-contained&#8201;&#8212;&#8201;i.e., should it repeat declarations
+from the input, e.g. "data"? Repeating is what TSTP and CVC4 do. This can be
+interesting because then the output is potentially itself an input file, which
+is useful for testing (checking that the model is indeed a model by rerunning
+Nunchaku on the output) and connecting tools together. But it also means more
+clutter.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_generated_names">Generated Names</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>We need to do something about the names of atoms and the names of bound
+variables. For atoms, there should be a clear naming convention enforced by
+Nunchaku, irrespective of what CVC4 does. For example, if an uninterpreted
+type is called "elem", the atoms might be called "@elem_1", "@elem_2", &#8230;&#8203;,
+"@elem_N" or "elem@0", "elem@1", &#8230;&#8203;, "elem@N-1". Right now, CVC4 sometimes
+uses the name of some constant, and sometimes it generates some identifiers.</p>
+</div>
+<div class="paragraph">
+<p>For bound variables, aggressive renaming is also the way to go. Perhaps the
+same convention as for atoms can be used, but with, say, "$" instead of "@".</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_current_situation">Current Situation</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The current output is broken in some cases. Take "bugs/rec_model.nun":</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>val a : type.
+
+data list :=
+  Nil
+| Cons a list.
+
+rec append : list -&gt; list -&gt; list :=
+  forall (zs : list). append Nil zs = zs;
+  forall (x : a) (ws : list) (zs : list). append (Cons x ws) zs = Cons x (append ws zs).
+
+val xs : list.
+val ys : list.
+
+goal ~ (append xs ys = append ys xs).</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Nunchaku&#8217;s output is currently</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>SAT:
+  (model
+     (terms
+        ((ys Cons @uc_a_1 Nil)
+         (xs Cons @uc_a_0 Nil)
+         (append
+            fun ($x1:list).
+              fun ($x2:list).
+                if
+                  (($x1
+                    =
+                    (if (@uc_G_append_3 = $x1)
+                     then Nil
+                     else
+                       if (@uc_G_append_2 = $x1)
+                       then Nil
+                       else
+                         if (@uc_G_append_1 = $x1)
+                         then Cons @uc_a_1 Nil
+                         else Cons @uc_a_0 Nil))
+                   &amp;&amp;
+                   ($x2
+                    =
+                    (if (@uc_G_append_1 = $x1)
+                     then Cons @uc_a_0 Nil
+                     else
+                       if (@uc_G_append_3 = $x1)
+                       then Cons @uc_a_0 Nil
+                       else Cons @uc_a_1 Nil)))
+                then Cons @uc_a_1 (Cons @uc_a_0 Nil)
+                else
+                  if
+                    (($x1
+                      =
+                      (if (@uc_G_append_3 = $x1)
+                       then Nil
+                       else
+                         if (@uc_G_append_2 = $x1)
+                         then Nil
+                         else
+                           if (@uc_G_append_1 = $x1)
+                           then Cons @uc_a_1 Nil
+                           else Cons @uc_a_0 Nil))
+                     &amp;&amp;
+                     ($x2
+                      =
+                      (if (@uc_G_append_1 = $x1)
+                       then Cons @uc_a_0 Nil
+                       else
+                         if (@uc_G_append_3 = $x1)
+                         then Cons @uc_a_0 Nil
+                         else Cons @uc_a_1 Nil)))
+                  then Cons @uc_a_1 (Cons @uc_a_0 Nil)
+                  else
+                    if
+                      (($x1
+                        =
+                        (if (@uc_G_append_3 = $x1)
+                         then Nil
+                         else
+                           if (@uc_G_append_2 = $x1)
+                           then Nil
+                           else
+                             if (@uc_G_append_1 = $x1)
+                             then Cons @uc_a_1 Nil
+                             else Cons @uc_a_0 Nil))
+                       &amp;&amp;
+                       ($x2
+                        =
+                        (if (@uc_G_append_1 = $x1)
+                         then Cons @uc_a_0 Nil
+                         else
+                           if (@uc_G_append_3 = $x1)
+                           then Cons @uc_a_0 Nil
+                           else Cons @uc_a_1 Nil)))
+                    then Cons @uc_a_1 (Cons @uc_a_0 Nil)
+                    else
+                      if
+                        (($x1
+                          =
+                          (if (@uc_G_append_3 = $x1)
+                           then Nil
+                           else
+                             if (@uc_G_append_2 = $x1)
+                             then Nil
+                             else
+                               if (@uc_G_append_1 = $x1)
+                               then Cons @uc_a_1 Nil
+                               else Cons @uc_a_0 Nil))
+                         &amp;&amp;
+                         ($x2
+                          =
+                          (if (@uc_G_append_1 = $x1)
+                           then Cons @uc_a_0 Nil
+                           else
+                             if (@uc_G_append_3 = $x1)
+                             then Cons @uc_a_0 Nil
+                             else Cons @uc_a_1 Nil)))
+                      then Cons @uc_a_1 (Cons @uc_a_0 Nil)
+                      else ?__))
+     (types ((a {@uc_a_1, @uc_a_0})))
+  ))</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The symbols @uc_G_append_3 etc. have no business in there.</p>
+</div>
+<div class="paragraph">
+<p>The model given by CVC4 looks like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>(define-fun __nun_card_witness_1 () G_append @uc_G_append_0)
+(define-fun append (($x1 list) ($x2 list)) list (ite (and (= $x1 (Cons @uc_a_1 (Cons @uc_a_0 (Cons @uc_a_0 Nil)))) (= $x2 (Cons @uc_a_1 Nil))) (Cons @uc_a_0 (Cons @uc_a_0 (Cons @uc_a_0 Nil))) (ite (and (= $x1 (Cons @uc_a_1 (Cons @uc_a_0 (Cons @uc_a_0 Nil)))) (= $x2 (Cons @uc_a_0 Nil))) (Cons @uc_a_2 (Cons @uc_a_0 Nil)) (ite (and (= $x1 (Cons @uc_a_1 Nil)) (= $x2 (Cons @uc_a_0 Nil))) (Cons @uc_a_1 (Cons @uc_a_0 Nil)) (ite (and (= $x1 Nil) (= $x2 (Cons @uc_a_1 Nil))) (Cons @uc_a_1 Nil) (ite (and (= $x1 Nil) (= $x2 (Cons @uc_a_0 Nil))) (Cons @uc_a_0 Nil) (Cons @uc_a_0 (Cons @uc_a_1 Nil))))))))
+(define-fun proj_G_append_0 (($x1 G_append)) list (ite (= @uc_G_append_3 $x1) Nil (ite (= @uc_G_append_2 $x1) Nil (ite (= @uc_G_append_1 $x1) (Cons @uc_a_0 Nil) (Cons @uc_a_1 Nil)))))
+(define-fun proj_G_append_1 (($x1 G_append)) list (ite (= @uc_G_append_1 $x1) (Cons @uc_a_1 Nil) (ite (= @uc_G_append_3 $x1) (Cons @uc_a_1 Nil) (Cons @uc_a_0 Nil))))
+(define-fun ys () list (Cons @uc_a_0 Nil))
+(define-fun xs () list (Cons @uc_a_1 Nil))
+)</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Once we filter out "proj_G_append_*", this is almost already a good model for
+Nunchaku, except that we need to massage the "append" model so that it states
+clearly for all legal arguments what the value is and "?<em>_" otherwise. Looking
+at "proj_G_append</em>*", we see the different legal tuples of arguments:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>@uc_G_append_0 = (Cons @uc_a_1 Nil, Cons @uc_a_0 Nil)
+@uc_G_append_1 = (Cons @uc_a_0 Nil, Cons @uc_a_1 Nil)
+@uc_G_append_2 = (Nil, Cons @uc_a_0 Nil)
+@uc_G_append_3 = (Nil, Cons @uc_a_1 Nil)</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So we already know that the "append" model is going to be of the form</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>append = fun $xs : list. fun $ys : list.
+  if $xs = X1 &amp;&amp; $ys = Y1 then
+    Z1
+  else if $xs = X2 &amp;&amp; $ys = Y2 then
+    Z2
+  else if $xs = X3 &amp;&amp; $ys = Y3 then
+    Z3
+  else if $xs = X4 &amp;&amp; $ys = Y4 then
+    Z4
+  else
+    ?__ $xs $ys</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Notice the arguments to "?__": They indicate the dependency of the unspecified
+value on its arguments. (One of my regrets with Nitpick is that I used the
+"&#8230;&#8203;" notation for lots of things, resulting in an unclear notion of partial
+model.)</p>
+</div>
+<div class="paragraph">
+<p>Now we plug in the values from the "@uc_G_append_*" tuples given above for the
+"Xs" and "Ys":</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>append = fun $xs : list. fun $ys : list.
+  if $xs = Cons @uc_a_1 Nil &amp;&amp; $ys = Cons @uc_a_0 Nil then
+    Z1
+  else if $xs = Cons @uc_a_0 Nil &amp;&amp; $ys = Cons @uc_a_1 Nil then
+    Z2
+  else if $xs = Nil &amp;&amp; $ys = Cons @uc_a_0 Nil then
+    Z3
+  else if $xs = Nil &amp;&amp; $ys = Cons @uc_a_1 Nil then
+    Z4
+  else
+    ?__ $xs $ys</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now we perform a lookup in the model of "append" generated by CVC4. The model
+looks like this (with better indentation than above):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>append = fun $x1 : list. fun $x2 : list.
+  ite (and (= $x1 (Cons @uc_a_1 (Cons @uc_a_0 (Cons @uc_a_0 Nil)))) (= $x2 (Cons @uc_a_1 Nil)))
+    (Cons @uc_a_0 (Cons @uc_a_0 (Cons @uc_a_0 Nil)))
+    (ite (and (= $x1 (Cons @uc_a_1 (Cons @uc_a_0 (Cons @uc_a_0 Nil)))) (= $x2 (Cons @uc_a_0 Nil)))
+      (Cons @uc_a_2 (Cons @uc_a_0 Nil))
+      (ite (and (= $x1 (Cons @uc_a_1 Nil)) (= $x2 (Cons @uc_a_0 Nil)))
+        (Cons @uc_a_1 (Cons @uc_a_0 Nil))
+        (ite (and (= $x1 Nil) (= $x2 (Cons @uc_a_1 Nil)))
+          (Cons @uc_a_1 Nil)
+          (ite (and (= $x1 Nil) (= $x2 (Cons @uc_a_0 Nil)))
+            (Cons @uc_a_0 Nil)
+            (Cons @uc_a_0 (Cons @uc_a_1 Nil))))))))</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Notice that the first two branches are completely superfluous&#8201;&#8212;&#8201;they&#8217;re pure
+junk. We never look these up, so that&#8217;s OK. Filling in the values, we get:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>append = fun $xs : list. fun $ys : list.
+  if $xs = Cons @uc_a_1 Nil &amp;&amp; $ys = Cons @uc_a_0 Nil then
+    Cons @uc_a_1 (Cons @uc_a_0 Nil)   (* 3rd case above *)
+  else if $xs = Cons @uc_a_0 Nil &amp;&amp; $ys = Cons @uc_a_1 Nil then
+    Cons @uc_a_0 (Cons @uc_a_1 Nil)   (* 6th case above)
+  else if $xs = Nil &amp;&amp; $ys = Cons @uc_a_0 Nil then
+    Cons @uc_a_0 Nil   (* 5th case above *)
+  else if $xs = Nil &amp;&amp; $ys = Cons @uc_a_1 Nil then
+    Cons @uc_a_1 Nil   (* 4th case above *)
+  else
+    ?__ $xs $ys</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If cases are identical (whether or not they are consecutive), they should be
+merged into one condition. E.g.:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>append = fun $xs : list. fun $ys : list.
+  if $xs = Nil &amp;&amp; $ys = Cons @uc_a_0 Nil ||
+     $xs = Cons @uc_a_0 Nil &amp;&amp; $ys = Nil then
+    Cons @uc_a_1 (Cons @uc_a_0 Nil)
+  else
+    ...</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In the above, I have indented "if then else" chains in a flat fashion, which
+is my favorite style. But I don&#8217;t mind too much if Nunchaku&#8217;s output indents
+differently (since few users will be exposed directly to it).</p>
 </div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-08-29 14:09:15 CEST
+Last updated 2017-03-08 14:46:49 CET
 </div>
 </div>
 </body>

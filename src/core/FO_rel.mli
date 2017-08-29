@@ -11,13 +11,14 @@ type atom_name = ID.t
 (* the portion of the universe concerned with this atom name *)
 type sub_universe = {
   su_name: atom_name;
-  su_card: int option; (* might not be fixed yet *)
+  su_min_card: int;
+  su_max_card: int option;
 }
 
 (* an indexed atom. It lives in the sub-universe of the same name *)
 type atom = {
   a_sub_universe: sub_universe;
-  a_index: int; (* invariant: a_index < a_sub_universe.su_card *)
+  a_index: int; (* invariant: a_index < a_sub_universe.su_max_card *)
 }
 
 type tuple = atom list
@@ -114,7 +115,7 @@ val unop : unop -> expr -> expr
 val binop : binop -> expr -> expr -> expr
 val mult : mult -> expr -> form
 
-val su_make : ?card:int -> ID.t -> sub_universe
+val su_make : ?min_card:int -> ?max_card:int -> ID.t -> sub_universe
 val su_equal : sub_universe -> sub_universe -> bool
 val su_hash : sub_universe -> int
 val su_compare : sub_universe -> sub_universe -> int

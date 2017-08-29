@@ -114,7 +114,8 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
         (`True | `False | `DataSelect _ | `DataTest _) ->
       (* partially applied, or constant *)
       t, empty_guard
-    | TI.Builtin ((`Unparsable _ | `Undefined_self _ | `Undefined_atom _) as b) ->
+    | TI.Builtin ((`Unparsable _ | `Undefined_self _
+                  | `Undefined_atom _ | `Card_at_least _) as b) ->
       let t' =
         U.builtin (Builtin.map b ~f:(fun t-> fst(tr_term ~state ~pol t)))
       in

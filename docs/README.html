@@ -430,46 +430,96 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <div class="sectionbody">
 <div class="paragraph">
 <p>A counter-example finder for higher-order logic, designed to be used from
-various proof assistants, and a spiritual successor to Nitpick.
-See also the README (<a href="README.adoc" class="bare">README.adoc</a>, <a href="README.html" class="bare">README.html</a>).</p>
+various proof assistants. A spiritual successor to Nitpick.
+Documentation at <a href="https://nunchaku-inria.github.io/nunchaku/" class="bare">https://nunchaku-inria.github.io/nunchaku/</a>.</p>
 </div>
 <div class="paragraph">
-<p><a href="https://nunchaku-inria.github.io/nunchaku/" class="bare">https://nunchaku-inria.github.io/nunchaku/</a></p>
+<p>Nunchaku relies upon recent versions
+of <a href="http://cvc4.cs.nyu.edu/web/">the CVC4 SMT-solver</a>. Currently it is
+necessary to use unreleased versions of CVC4, that can be found
+under "development versions" on <a href="http://cvc4.cs.nyu.edu/downloads/" class="bare">http://cvc4.cs.nyu.edu/downloads/</a>.</p>
 </div>
 <div class="paragraph">
-<p>The development repository is hosted
-<a href="https://github.com/nunchaku-inria/nunchaku">on github</a>. Nunchaku is written in
-<a href="http://ocaml.org/">OCaml</a>, funded by <a href="http://inria.fr">Inria</a>
-and released under the BSD license.</p>
+<p>We have <a href="https://github.com/nunchaku-inria/nunchaku-problems">a set of problems</a>
+for tests and regressions, that can also be helpful to grasp the input syntax
+and see how to use the constructs of Nunchaku.</p>
 </div>
-<div class="dlist">
-<dl>
-<dt class="hdlist1">Input formats</dt>
-<dd>
-<p><a href="input_lang.adoc" class="bare">input_lang.adoc</a>, <a href="input_lang.html" class="bare">input_lang.html</a>  (draft)</p>
-</dd>
-<dt class="hdlist1">Model format</dt>
-<dd>
-<p><a href="model_syntax.adoc" class="bare">model_syntax.adoc</a>, <a href="model_syntax.html" class="bare">model_syntax.html</a>  (draft)</p>
-</dd>
-<dt class="hdlist1">Pipeline of Transformations</dt>
-<dd>
-<p><a href="pipeline.adoc" class="bare">pipeline.adoc</a>, <a href="pipeline.html" class="bare">pipeline.html</a></p>
-</dd>
-<dt class="hdlist1">Internal API documentation</dt>
-<dd>
+<div id="toc" class="toc">
+<div id="toctitle" class="title">Table of Contents</div>
+<ul class="sectlevel1">
+<li><a href="#_basic_usage">Basic Usage</a></li>
+<li><a href="#_contact">Contact</a></li>
+<li><a href="#_documentation">Documentation</a></li>
+<li><a href="#install">Build/Install</a>
+<ul class="sectlevel2">
+<li><a href="#_released_versions">Released versions</a></li>
+<li><a href="#_opam">Opam</a></li>
+<li><a href="#_manually">Manually</a></li>
+</ul>
+</li>
+<li><a href="#_license">License</a></li>
+<li><a href="#supported-formats">Input/Output/Solvers</a></li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_basic_usage">Basic Usage</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>After installing nunchaku (see <a href="#install">Build/Install</a>) and at least one backend,
+call the tool on problem files written in one of the accepted syntaxes
+(<a href="#supported-formats">Input/Output/Solvers</a>) as follows:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ nunchaku docs/examples/first_order.nun
+SAT: {
+  type term := {$term_0, $term_1}.
+  type list := {$list_0, $list_1}.
+  val nil := $list_1.
+  val a := $term_1.
+  val b := $term_0.
+  val cons :=
+    (fun (v_0/75:term) (v_1/76:list).
+       if v_0/75 = $term_0 then $list_0 else if v_1/76 = $list_0 then $list_1
+       else $list_0).}
+{backend:smbc, time:0.0s}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A list of options can be obtained by calling <code>nunchaku --help</code>. A few
+particularly useful options are:</p>
+</div>
 <div class="ulist">
 <ul>
 <li>
-<p><a href="0.4">0.4</a></p>
+<p><code>--help</code> for listing options.</p>
 </li>
 <li>
-<p><a href="0.3">0.3</a></p>
+<p><code>--timeout &lt;n&gt;</code> (or <code>-t &lt;n&gt;</code>): maximal amount of seconds before returning "unknown"</p>
+</li>
+<li>
+<p><code>j &lt;n&gt;</code> for controlling the number of backend solvers active at the
+same time.</p>
+</li>
+<li>
+<p><code>--solvers s1,s2</code> (or <code>-s s1,s2</code>) for using only the listed solvers.</p>
+</li>
+<li>
+<p><code>--debug &lt;n&gt;</code> (where <code>n=1,2,…5</code>) to enable debug printing.
+The maximal verbosity level is 5, and it is very verbose. Consider
+using <code>nunchaku --debug 5 foo.nun | less -R</code> to not drown
+in pages of text.</p>
+</li>
+<li>
+<p><code>--pp-all</code> (and each <code>--pp-&lt;pass&gt;</code>) for printing the problem
+after each transformation.</p>
+</li>
+<li>
+<p><code>-nc</code> to disable colored output if your terminal does not support it..</p>
 </li>
 </ul>
-</div>
-</dd>
-</dl>
 </div>
 </div>
 </div>
@@ -477,19 +527,154 @@ and released under the BSD license.</p>
 <h2 id="_contact">Contact</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Bugs should be reported on <a href="https://github.com/nunchaku-inria/nunchaku/issues">github</a>.</p>
+<p>There is a dedicated mailing list at <a href="mailto:nunchaku-users@lists.gforge.inria.fr">nunchaku-users@lists.gforge.inria.fr</a>
+  (<a href="https://lists.gforge.inria.fr/mailman/listinfo/nunchaku-users">register</a>).
+The <a href="https://github.com/nunchaku-inria/nunchaku/issues">issue tracker</a> can be
+used for reporting bugs.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_documentation">Documentation</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>See the website <a href="https://nunchaku-inria.github.io/nunchaku/" class="bare">https://nunchaku-inria.github.io/nunchaku/</a>
+and <a href="/docs/index.adoc">the documentation sources</a>.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="install">Build/Install</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>To build Nunchaku, there are several ways.</p>
+</div>
+<div class="sect2">
+<h3 id="_released_versions">Released versions</h3>
+<div class="paragraph">
+<p>Releases can be found on <a href="https://gforge.inria.fr/projects/nunchaku" class="bare">https://gforge.inria.fr/projects/nunchaku</a> .</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_opam">Opam</h3>
+<div class="paragraph">
+<p>The easiest way is to use <a href="http://opam.ocaml.org/">opam</a>, the package manager for
+OCaml. Once opam is installed (don&#8217;t forget to run <code>eval `opam config env`</code>
+when you want to use opam), the following should suffice:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>opam pin add -k git nunchaku https://github.com/nunchaku-inria/nunchaku.git#master</pre>
+</div>
 </div>
 <div class="paragraph">
-<p>There is a mailing list for users and proof assistants developers,
-<a href="mailto:nunchaku-users@lists.gforge.inria.fr">nunchaku-users@lists.gforge.inria.fr</a>
-(<a href="https://lists.gforge.inria.fr/mailman/listinfo/nunchaku-users">subscription</a>).</p>
+<p>then opam should propose to install nunchaku and its dependencies. To upgrade:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>opam update
+opam upgrade nunchaku</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that the binary is called 'nunchaku.native' until is it installed.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_manually">Manually</h3>
+<div class="paragraph">
+<p>You need to install the dependencies first, namely:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="http://projects.camlcity.org/projects/findlib.html">ocamlfind</a></p>
+</li>
+<li>
+<p><a href="https://github.com/c-cube/ocaml-containers/">containers</a></p>
+</li>
+<li>
+<p><a href="http://gallium.inria.fr/~fpottier/menhir/">menhir</a></p>
+</li>
+<li>
+<p><a href="https://github.com/c-cube/sequence">sequence</a></p>
+</li>
+<li>
+<p><a href="https://github.com/c-cube/tip-parser">tip-parser</a> (which requires menhir)</p>
+</li>
+<li>
+<p><a href="https://github.com/ocaml/oasis/">oasis</a> (to build the development version, not releases)</p>
+</li>
+<li>
+<p>ocamlbuild (provided with OCaml ≤ 4.03)</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Once you have entered the source directory, type:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>./configure
+make</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_license">License</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Free software under the BSD license. See file 'LICENSE' for more details.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="supported-formats">Input/Output/Solvers</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Supported input formats are:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>nunchaku&#8217;s own input format, ML-like (extension <code>.nun</code>)</p>
+</li>
+<li>
+<p>TPTP (very partial support, extension <code>.p</code>)</p>
+</li>
+<li>
+<p><a href="https://github.com/tip-org/">TIP</a> (extension <code>.smt2</code>)</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Supported solver backends:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="http://cvc4.cs.nyu.edu/web/">CVC4</a> (development versions, we need finite model finding)</p>
+</li>
+<li>
+<p>Paradox (<a href="https://github.com/c-cube/paradox/">github clone (easy to install)</a>;
+<a href="http://vlsicad.eecs.umich.edu/BK/Slots/cache/www.cs.chalmers.se/~koen/paradox/">official page</a>)</p>
+</li>
+<li>
+<p><a href="https://github.com/emina/kodkod">Kodkod</a> with its "kodkodi" parser</p>
+</li>
+<li>
+<p><a href="https://github.com/c-cube/smbc/">SMBC</a></p>
+</li>
+</ul>
 </div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2017-08-29 14:09:15 CEST
+Last updated 2017-03-09 13:46:59 CET
 </div>
 </div>
 </body>

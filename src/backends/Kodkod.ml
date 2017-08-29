@@ -32,7 +32,7 @@ type kodkod_name = string
 type offset = int
 
 type state = {
-  default_size: int;
+  current_size: int;
   (* cardinal for sub-universes in which it's unspecified *)
   name_of_id: kodkod_name ID.Map.t;
   (* map names to kodkod names *)
@@ -46,63 +46,67 @@ type state = {
   (* total size of the universe *)
   decls: FO_rel.decl ID.Map.t;
   (* declarations *)
-  mutable trivially_unsat: bool;
-  (* hack: was last "unsat" actually "trivially_unsat"? *)
   timer: Utils.Time.timer;
   (* timer *)
 }
 
 let errorf msg = Utils.failwithf msg
 
+let deduced_max_size pb =
+  List.fold_left
+    (fun m su -> match m, su.FO_rel.su_max_card with
+       | None, _
+       | _, None -> None
+       | Some m, Some n -> Some (max m n))
+    (Some 0)
+    pb.FO_rel.pb_univ.FO_rel.univ_l
+
 (* compute size of universe + offsets *)
-let compute_univ_ ~default_size pb : int * (offset * FO_rel.atom IntMap.t) SUMap.t =
+let compute_univ_
+    ~current_size
+    pb
+  : int * (offset * FO_rel.atom IntMap.t) SUMap.t
+  =
   let open Sequence.Infix in
   let univ = pb.FO_rel.pb_univ in
   let univ_prop = univ.FO_rel.univ_prop in
   (* sub-universe for prop *)
-  assert (univ_prop.FO_rel.su_card = Some 2);
-  let su_map0 =
-    let a_to_i0 =
-      IntMap.of_list
-        [0, FO_rel.atom univ_prop 0; 1, FO_rel.atom univ_prop 1]
-    in
-    SUMap.singleton univ_prop (0,a_to_i0)
-  in
+  assert (univ_prop.FO_rel.su_max_card = Some 2 && univ_prop.FO_rel.su_min_card = 2);
   (* add other sub-universes *)
-  let n, su_map, _ =
+  let n, su_to_atom_map, _ =
     List.fold_left
-      (fun (n,map,default_range) su ->
-         (* add to [map1, map2] the fact that [su] will be represented
-            by the range [offset, ..., offset+card-1] *)
-         let add_range ~su ~offset ~card =
-           (* map [n+i -> atom(su,i) for i=0...card-1] *)
-           let a_to_i =
-             0 -- (card-1)
-             |> Sequence.map (fun i -> offset+i, FO_rel.atom su i)
-             |> IntMap.of_seq
-           in
-           SUMap.add su (offset, a_to_i) map
+      (fun (n,su_to_atom_map,card_to_offset_map) su ->
+         (* compute cardinal *)
+         let card = max current_size su.FO_rel.su_min_card in
+         let card = match su.FO_rel.su_max_card with
+           | None -> card
+           | Some n -> min n card
          in
-         match su.FO_rel.su_card, default_range with
-           | Some c, _ ->
-             let map = add_range ~su ~card:c ~offset:n in
-             n+c, map, default_range
-           | None, None ->
-             (* add domain of card [default_size], and set it as the domain
-                for other sub-universes of unknown size *)
-             let card = default_size in
-             let map' = add_range ~su ~card ~offset:n in
-             n + card, map', Some (n, card)
-           | None, Some (offset, card) ->
-             (* there is already a domain for sub-universes of default size,
-                use it! *)
-             let map' = add_range ~su ~card ~offset in
-             n, map', default_range
-      )
-      (2, su_map0, None)
-      univ.FO_rel.univ_l
+         (* map [n+i -> atom(su,i) for i=0...card-1] *)
+         let a_to_i offset =
+           0 -- (card-1)
+           |> Sequence.map (fun i -> offset+i, FO_rel.atom su i)
+           |> IntMap.of_seq
+         in
+         begin match IntMap.get card card_to_offset_map with
+           | None ->
+             (* update [su_to_atom_map] and [card_to_offset_map] to reflect
+                the fact that [su] will be represented by the range
+                [n, ..., n + card - 1] *)
+             n + card,
+             SUMap.add su (n, a_to_i n) su_to_atom_map,
+             IntMap.add card n card_to_offset_map
+           | Some offset ->
+             (* there is already a domain for sub-universes of size [card],
+                use it *)
+             n,
+             SUMap.add su (offset, a_to_i offset) su_to_atom_map,
+             card_to_offset_map
+         end)
+      (0, SUMap.empty, IntMap.empty)
+      (univ_prop :: univ.FO_rel.univ_l)
   in
-  n, su_map
+  n, su_to_atom_map
 
 (* indices for naming constants by arity *)
 type name_map = int StrMap.t
@@ -135,17 +139,16 @@ let translate_names_ pb =
   n2id, id2n
 
 (* initialize the state for this particular problem *)
-let create_state ~timer ~default_size (pb:FO_rel.problem) : state =
-  let univ_size, univ_map = compute_univ_ ~default_size pb in
+let create_state ~timer ~current_size (pb:FO_rel.problem) : state =
+  let univ_size, univ_map = compute_univ_ ~current_size pb in
   let id_of_name, name_of_id = translate_names_ pb in
-  { default_size;
+  { current_size;
     name_of_id;
     id_of_name;
     univ_size;
     univ_map;
     timer;
     decls= pb.FO_rel.pb_decls;
-    trivially_unsat=false;
   }
 
 let fpf = Format.fprintf
@@ -163,14 +166,14 @@ let pp_pb state pb out () : unit =
     try ID.Map.find id state.name_of_id
     with Not_found -> errorf "kodkod: no name for `%a`" ID.pp id
   and su2offset su =
-    try SUMap.find su state.univ_map |> fst
+    try SUMap.find su state.univ_map
     with Not_found ->
       errorf "kodkod: no offset for `%a`" FO_rel.pp_sub_universe su
   in
   (* print a sub-universe as a range *)
   let rec pp_su_range out (su:FO_rel.sub_universe): unit =
-    let offset = su2offset su in
-    let card = CCOpt.get_or ~default:state.default_size su.FO_rel.su_card in
+    let offset, atoms = su2offset su in
+    let card = IntMap.cardinal atoms in
     if offset=0
     then fpf out "u%d" card
     else fpf out "u%d@@%d" card offset
@@ -178,7 +181,7 @@ let pp_pb state pb out () : unit =
   and pp_su_name out su: unit =
     fpf out "%s" (id2name su.FO_rel.su_name)
   and pp_atom out (a:FO_rel.atom): unit =
-    let offset = su2offset a.FO_rel.a_sub_universe in
+    let offset, _ = su2offset a.FO_rel.a_sub_universe in
     fpf out "A%d" (offset + a.FO_rel.a_index)
   and pp_tuple out (tuple:FO_rel.tuple) =
     fpf out "[@[%a@]]" (pp_list ~sep:", " pp_atom) tuple
@@ -342,7 +345,7 @@ let convert_model state (m:A.model): (FO_rel.expr,FO_rel.sub_universe) Model.t =
 
 let mk_info state: Res.info =
   Res.mk_info
-    ~message:(Printf.sprintf "dimension %d" state.default_size)
+    ~message:(Printf.sprintf "dimension %d" state.current_size)
     ~backend:"kodkod"
     ~time:(Utils.Time.get_timer state.timer) ()
 
@@ -409,10 +412,8 @@ module Parser = struct
       let lexbuf = Lexing.from_string s' in
       outcome lexbuf;
       match L.result lexbuf with
-        | A.Unsat ->
-          Res.Unsat info, S.Shortcut
+        | A.Unsat
         | A.Trivially_unsat ->
-          state.trivially_unsat <- true; (* will stop iterating *)
           Res.Unsat info, S.Shortcut
         | A.Sat ->
           (* parse model *)
@@ -473,40 +474,55 @@ let solve ~deadline state pb : res * Scheduling.shortcut =
         S.No_shortcut
   )
 
-let default_size_ = 2 (* FUDGE *)
-let default_increment_ = 2 (* FUDGE *)
+let default_min_size = 4 (* FUDGE *)
+let default_size_increment = 4 (* FUDGE *)
 
 (* call {!solve} with increasingly big problems, until we run out of time
    or obtain "sat" *)
-let rec call_rec ~timer ~print ~size ~deadline pb : res * Scheduling.shortcut =
-  let state = create_state ~timer ~default_size:size pb in
+let rec call_rec ~timer ~print ~size ~max_size ~size_increment ~deduced_max_size ~deadline pb
+    : res * Scheduling.shortcut =
+  let state = create_state ~timer ~current_size:size pb in
   if print
   then Format.printf "@[<v>kodkod problem:@ ```@ %a@,```@]@." (pp_pb state pb) ();
   let res, short = solve ~deadline state pb in
   Utils.debugf ~section 2 "@[<2>kodkod result for size %d:@ %a@]"
     (fun k->k size Res.pp_head res);
   match res with
-    | Res.Unsat i when state.trivially_unsat ->
-      (* stop increasing the size *)
-      Res.Unknown [Res.U_incomplete i], S.No_shortcut
     | Res.Unsat i ->
       let now = Unix.gettimeofday () in
-      if deadline -. now > 0.5
-      then
-        (* unsat, and we still have some time: retry with a bigger size *)
-        call_rec ~timer ~print ~size:(size + default_increment_) ~deadline pb
-      else
-        (* we fixed a maximal cardinal, so maybe there's an even bigger
-           model, but we cannot know for sure *)
+      let deduced_max_size_reached =
+        match deduced_max_size with None -> false | Some n -> size >= n
+      in
+      let max_size_reached =
+        match max_size with None -> false | Some n -> size >= n
+      in
+      if deduced_max_size_reached then (
+        Utils.debug ~section 2 "kodkod found unsat and all domains have bounded cardinality";
+        Res.Unsat i, S.Shortcut
+      ) else if max_size_reached then (
+        Utils.debug ~section 2 "reached specified maximal cardinality bound";
         Res.Unknown [Res.U_incomplete i], S.No_shortcut
+      ) else if deadline -. now > 0.5 then (
+        (* unsat, and we still have some time: retry with a bigger size *)
+        let next_size = size + size_increment in
+        let next_size = match deduced_max_size with None -> next_size | Some n -> min n next_size in
+        let next_size = match max_size with None -> next_size | Some n -> min n next_size in
+        call_rec ~timer ~print ~size:next_size ~max_size ~size_increment ~deduced_max_size
+          ~deadline pb
+      ) else (
+        (* maybe there's a larger model, but we have no time left *)
+        Res.Unknown [Res.U_incomplete i], S.No_shortcut
+      )
     | _ -> res, short
 
-let call_real ~print_model ~prio ~print pb =
+let call_real ~min_size ~max_size ~size_increment ~print_model ~prio ~print pb =
   S.Task.make ~prio
     (fun ~deadline () ->
        let timer = Utils.Time.start_timer () in
+       let deduced_max_size = deduced_max_size pb in
        let res, short =
-         call_rec ~timer ~print ~deadline ~size:default_size_ pb
+         call_rec ~timer ~print ~deadline ~size:min_size ~size_increment ~max_size
+           ~deduced_max_size:deduced_max_size pb
        in
        begin match res with
          | Res.Sat (m,_) when print_model ->
@@ -517,9 +533,13 @@ let call_real ~print_model ~prio ~print pb =
        end;
        res, short)
 
-let call ?(print_model=false) ?(prio=10) ~print ~dump pb = match dump with
+let call ?(print_model=false) ?(prio=10) ?(min_size=default_min_size) ?max_size
+    ?(size_increment=default_size_increment) ~print ~dump pb
+  =
+  if size_increment < 1 then errorf "kodkod: illegal size increment %d" size_increment;
+  match dump with
   | None ->
-    call_real ~print_model ~prio ~print pb
+    call_real ~min_size ~max_size ~size_increment ~print_model ~prio ~print pb
   | Some file ->
     (* TODO: emit sequence of problems for different sizes? *)
     let file = file ^ ".kodkod.kki" in
@@ -527,7 +547,9 @@ let call ?(print_model=false) ?(prio=10) ~print ~dump pb = match dump with
     CCIO.with_out file
       (fun oc ->
          let out = Format.formatter_of_out_channel oc in
-         let state = create_state ~timer:(Utils.Time.start_timer()) ~default_size:2 pb in
+         let state = create_state ~timer:(Utils.Time.start_timer())
+           ~current_size:min_size pb
+         in
          Format.fprintf out
            "@[<v>%a@]@."
            (pp_pb state pb) ());
@@ -538,8 +560,8 @@ let is_available () =
   try Sys.command "which kodkodi > /dev/null 2> /dev/null" = 0
   with Sys_error _ -> false
 
-let pipe ?(print_model=false) ~print ~dump () =
-  let encode pb = call ~print_model ~print ~dump pb, () in
+let pipe ?(print_model=false) ?min_size ?max_size ?size_increment ~print ~dump () =
+  let encode pb = call ?min_size ?max_size ?size_increment ~print_model ~print ~dump pb, () in
   Transform.make
     ~name
     ~encode

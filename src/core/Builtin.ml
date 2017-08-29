@@ -46,6 +46,7 @@ type 'a t =
   | `Undefined_atom of id * 'a (** Undefined term (name+type) *)
   | `Unparsable of 'a (** could not parse model properly. Param=ty *)
   | `Guard of 'a * 'a guard (** term + some boolean conditions *)
+  | `Card_at_least of 'a * int (* card of type >= int *)
   ]
 
 let prec : _ t -> Precedence.t = function
@@ -93,6 +94,7 @@ let pp pterm out : _ t -> unit = function
   | `Guard (t, o) ->
     assert (o.asserting<>[]);
     fpf out "@[<hv>%a%a@]" pterm t (pp_guard pterm) o
+  | `Card_at_least (ty,n) -> fpf out "(@[card(%a) ≥ %d@])" pterm ty n
 
 let equal
   : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
@@ -115,10 +117,11 @@ let equal
       List.length g1.asserting = List.length g2.asserting
       && eqterm t1 t2
       && List.for_all2 eqterm g1.asserting g2.asserting
+    | `Card_at_least (ty1,n1), `Card_at_least (ty2,n2) -> eqterm ty1 ty2 && n1=n2
     | `Guard _, _
     | `True, _ | `False, _ | `Ite _, _ | `Not _, _ | `Unparsable _, _
     | `Eq _, _ | `Or _, _ | `And _, _ | `Imply _, _
-    | `DataSelect _, _ | `DataTest _, _
+    | `DataSelect _, _ | `DataTest _, _ | `Card_at_least (_,_), _
     | `Undefined_self _, _ | `Undefined_atom _, _ -> false
 
 let map : f:('a -> 'b) -> 'a t -> 'b t
@@ -139,6 +142,7 @@ let map : f:('a -> 'b) -> 'a t -> 'b t
     | `Guard (t, g) ->
       let g' = map_guard f g in
       `Guard (f t, g')
+    | `Card_at_least (ty,n) -> `Card_at_least (f ty, n)
 
 let fold : f:('acc -> 'a -> 'acc) -> x:'acc -> 'a t -> 'acc
   = fun ~f ~x:acc b -> match b with
@@ -158,6 +162,7 @@ let fold : f:('acc -> 'a -> 'acc) -> x:'acc -> 'a t -> 'acc
     | `Guard (t, g) ->
       let acc = f acc t in
       List.fold_left f acc g.asserting
+    | `Card_at_least (ty,_) -> f acc ty
 
 let fold2_l ~f ~fail ~x l1 l2 =
   if List.length l1=List.length l2
@@ -191,10 +196,12 @@ let fold2 :
       when List.length g1.asserting=List.length g2.asserting ->
       let acc = f acc t1 t2 in
       List.fold_left2 f acc g1.asserting g2.asserting
+    | `Card_at_least (ty1,n1), `Card_at_least (ty2,n2) when n1=n2 ->
+      f acc ty1 ty2
     | `Guard _, _
     | `True, _ | `False, _ | `Ite _, _ | `Not _, _ | `Unparsable _, _
     | `Eq _, _ | `Or _, _ | `And _, _ | `Imply _, _
-    | `DataSelect _, _ | `DataTest _, _
+    | `DataSelect _, _ | `DataTest _, _ | `Card_at_least _, _
     | `Undefined_self _, _ | `Undefined_atom _, _ -> fail()
 
 let iter : ('a -> unit) -> 'a t -> unit
@@ -216,6 +223,7 @@ let iter : ('a -> unit) -> 'a t -> unit
       f t;
       List.iter f g.asserting;
       ()
+    | `Card_at_least (ty,_) -> f ty
 
 let to_seq b f = iter f b
 
@@ -240,4 +248,5 @@ let to_sexp
       | `Undefined_atom _ -> str "?__"
       | `Unparsable ty ->
         lst [str "?__unparsable"; cterm ty]
+      | `Card_at_least _
       | `Guard _ -> assert false (* TODO *)

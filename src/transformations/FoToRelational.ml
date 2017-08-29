@@ -45,7 +45,7 @@ type fun_encoding = {
 }
 
 type state = {
-  mutable domains: domain TyTbl.t;
+  domains: domain TyTbl.t;
   (* atomic type -> domain *)
   funs: fun_encoding ID.Tbl.t;
   (* function -> relation *)
@@ -53,8 +53,12 @@ type state = {
   (* domain.dom_id -> domain *)
   pprop_dom: domain;
   (* specific domain for pseudo-prop *)
+  ty_decode_tbl: FO.Ty.t ID.Tbl.t;
+  (* to decode mangled types *)
   ptrue: ID.t;
   (* pseudo-true : pseudo-prop *)
+  ty_cards: int ID.Tbl.t;
+  (* type -> exact cardinal, when available *)
 }
 
 (* declaration of this function/relation *)
@@ -78,14 +82,38 @@ let decl_of_su su : FO_rel.decl =
     decl_high=FO_rel.ts_all su;
   }
 
-let create_state () =
-  let pprop_id = ID.make "pseudo-prop" in
-  let ptrue = ID.make "pseudo-true" in
-  let pprop_ty = FO.Ty.const pprop_id in
+let find_pprop pb : ID.t =
+  let ret =
+    CCVector.find_map
+      (fun st -> match st with
+         | FO.TyDecl (id, 0, attrs) when List.mem FO.Attr_pseudo_prop attrs ->
+           Some id
+         | _ -> None)
+      (FO.Problem.statements pb)
+  in
+  match ret with
+    | None -> errorf "cannot find `pseudo-prop` in problem"
+    | Some r -> r
+
+let find_ptrue pb : ID.t =
+  let ret =
+    CCVector.find_map
+      (fun st -> match st with
+         | FO.Decl (id, ([], _), attrs) when List.mem FO.Attr_pseudo_true attrs ->
+           Some id
+         | _ -> None)
+      (FO.Problem.statements pb)
+  in
+  match ret with
+    | None -> errorf "cannot find `pseudo-prop` in problem"
+    | Some r -> r
+
+let create_state ~pprop ~ptrue () =
+  let pprop_ty = FO.Ty.const pprop in
   let pprop_dom = {
     dom_ty=pprop_ty;
-    dom_id=pprop_id;
-    dom_su=FO_rel.su_make ~card:2 pprop_id;
+    dom_id=pprop;
+    dom_su=FO_rel.su_make ~min_card:2 ~max_card:2 pprop;
   } in
   let state = {
     domains=TyTbl.create 16;
@@ -93,6 +121,8 @@ let create_state () =
     dom_of_id=ID.Tbl.create 16;
     pprop_dom;
     ptrue;
+    ty_decode_tbl=ID.Tbl.create 8;
+    ty_cards=ID.Tbl.create 8;
   } in
   (* declare ptrue *)
   let ptrue_fe = {
@@ -125,12 +155,14 @@ let id_of_ty ty : ID.t =
       ID.make n
 
 (* ensure the type is declared *)
-let declare_ty ?card state (ty:FO.Ty.t) =
-  if TyTbl.mem state.domains ty
-  then errorf "type `@[%a@]` declared twice" FO.pp_ty ty;
-  (* TODO: handle cardinality constraints *)
+let declare_ty state (ty:FO.Ty.t) =
+  if TyTbl.mem state.domains ty then (
+    errorf "type `@[%a@]` declared twice" FO.pp_ty ty;
+  );
+  (* create domain for the (mangled) type *)
   let dom_id = id_of_ty ty in
-  let su = FO_rel.su_make ?card dom_id in
+  ID.Tbl.add state.ty_decode_tbl dom_id ty;
+  let su = FO_rel.su_make dom_id in
   let dom = { dom_id; dom_ty=ty; dom_su=su; } in
   Utils.debugf ~section 3 "@[<2>declare type %a@ = {@[%a@]}@]"
     (fun k->k FO.pp_ty ty FO_rel.pp_sub_universe su);
@@ -138,16 +170,29 @@ let declare_ty ?card state (ty:FO.Ty.t) =
   ID.Tbl.add state.dom_of_id dom_id dom;
   dom
 
-(* [ty] is another pseudo-prop *)
-let add_pseudo_prop state ty : unit =
-  assert (not (TyTbl.mem state.domains ty));
-  TyTbl.add state.domains ty state.pprop_dom;
-  ()
-
 (* type -> its domain *)
 let domain_of_ty state (ty:FO.Ty.t) : domain =
   try TyTbl.find state.domains ty
   with Not_found -> declare_ty state ty
+
+let update_sub_universe state ~f ty =
+  let dom = domain_of_ty state ty in
+  let dom = { dom with dom_su = f dom.dom_su; } in
+  TyTbl.replace state.domains ty dom
+
+let update_min_card state (ty:FO.Ty.t) (n:int): unit =
+  Utils.debugf ~section 3 "@[<2>set minimum cardinality of type %a@ to %d@]"
+    (fun k->k FO.pp_ty ty n);
+  update_sub_universe state ty ~f:(fun su ->
+    {su with FO_rel.su_min_card = max n su.FO_rel.su_min_card})
+
+let update_max_card state (ty:FO.Ty.t) (n:int): unit =
+  Utils.debugf ~section 3 "@[<2>set maximum cardinality of type %a@ to %d@]"
+    (fun k->k FO.pp_ty ty n);
+  update_sub_universe state ty ~f:(fun su ->
+    {su with FO_rel.su_max_card = Some (match su.FO_rel.su_max_card with
+       | None -> n
+       | Some m -> min m n)})
 
 let su_of_ty state ty : FO_rel.sub_universe =
   (domain_of_ty state ty).dom_su
@@ -180,6 +225,10 @@ let as_pair_ (r1: encode_res) (r2: encode_res) : (_,_) encode_res_p = match r1, 
   | R_expr e, R_form f -> R_form (FO_rel.some e, f)
   | R_form f, R_expr e -> R_form (f, FO_rel.some e)
   | R_form f1, R_form f2 -> R_form (f1, f2)
+
+let encode_ty state ty: FO_rel.expr =
+  let dom = domain_of_ty state ty in
+  FO_rel.const dom.dom_id
 
 (* encode this term into a relation expression or formula *)
 let rec encode state (t:FO.T.t) : encode_res = match FO.T.view t with
@@ -246,6 +295,10 @@ let rec encode state (t:FO.T.t) : encode_res = match FO.T.view t with
     end
   | FO.Builtin (`Int _) -> assert false (* TODO *)
   | FO.Var v -> FO_rel.var (encode_var state v) |> ret_expr
+  | FO.Card_at_least (ty, n) ->
+    (* card(ty) >= n *)
+    let ty = encode_ty state ty in
+    FO_rel.int_leq (FO_rel.int_const n) (FO_rel.int_card ty) |> ret_form
   | FO.DataTest (_,_)
   | FO.DataSelect (_,_,_) ->
     error "should have eliminated data{test/select} earlier"
@@ -282,9 +335,8 @@ let ty_axiom state (f_id:ID.t) (ty_args : FO.Ty.t list) (ty_ret:FO.Ty.t) : FO_re
          Var.makef ~ty:d.dom_su "x_%d" i)
       ty_args
   in
-  let dom_ret = domain_of_ty state ty_ret in
   let t_fun = app_fun_ f_id (List.map FO_rel.var vars) in
-  let t_ty = FO_rel.const dom_ret.dom_id in
+  let t_ty = encode_ty state ty_ret in
   FO_rel.for_all_l vars (FO_rel.in_ t_fun t_ty)
 
 let encode_statement state st : FO_rel.form list =
@@ -295,25 +347,31 @@ let encode_statement state st : FO_rel.form list =
     |> FO_rel.ts_product
   in
   match st with
-    | FO.TyDecl (id, 0, attrs) when List.mem FO.Attr_pseudo_prop attrs ->
-      add_pseudo_prop state (FO.Ty.const id);
+    | FO.TyDecl (_, 0, attrs) when List.mem FO.Attr_pseudo_prop attrs ->
       []
-    | FO.TyDecl _ -> [] (* declared when used *)
-    | FO.Decl (id, ([], _), attrs) when List.mem FO.Attr_pseudo_true attrs ->
-      (* another pseudo-true *)
-      let fe = {
-        fun_is_pred=false;
-        fun_ty_args=[state.pprop_dom];
-        fun_encoded_args=[state.pprop_dom.dom_su];
-        fun_low=FO_rel.ts_list [];
-        fun_high=FO_rel.ts_all state.pprop_dom.dom_su;
-        fun_ty_ret=state.pprop_dom.dom_ty;
-      } in
-      declare_fun state id fe;
-      (* additional axioms: [id = true_], [one id] *)
-      let ax_eq = FO_rel.eq (FO_rel.const id) (FO_rel.const state.ptrue) in
-      let ax_some = FO_rel.one (FO_rel.const id) in
-      [ax_some; ax_eq]
+    | FO.Decl (_, ([], _), attrs) when List.mem FO.Attr_pseudo_true attrs ->
+      []
+    | FO.TyDecl (id, 0, attrs) ->
+      let ty = FO.Ty.const id in
+      List.iter
+        (function
+           | FO.Attr_card_hint (`Max, n) ->
+             update_max_card state ty n
+           | FO.Attr_card_hint (`Min, n) ->
+             update_min_card state ty n
+           | _ -> ())
+        attrs;
+      let can_be_empty =
+        List.exists (function FO.Attr_can_be_empty -> true | _ -> false) attrs
+      in
+      (* ensure there is at least one element… unless the type is allowed to be empty *)
+      if can_be_empty then [] (* declared when used *)
+      else (
+        (* add statement [card(ty) ≥ 1] *)
+        let ty = encode_ty state ty in
+        [ FO_rel.some ty ]
+      )
+    | FO.TyDecl (_,_,_) -> [] (* ignore, will be mangled *)
     | FO.Decl (id, (ty_args, ty_ret), _) ->
       assert (not (fun_is_declared state id));
       (* encoding differs for relations and functions *)
@@ -395,17 +453,23 @@ let encode_statement state st : FO_rel.form list =
       errorf "unexpected (co)data@ `@[%a@]`" FO.pp_statement st
     | FO.CardBound (id, k, n) ->
       (* the relation representing this type *)
-      let dom = domain_of_ty state (FO.Ty.const id) in
+      let ty = FO.Ty.const id in
+      let dom = domain_of_ty state ty in
       let card_expr = FO_rel.int_card (FO_rel.const dom.dom_id) in
-      let n = FO_rel.int_const n in
-      let ax_card = match k with
-        | `Max -> FO_rel.int_leq card_expr n
-        | `Min -> FO_rel.int_leq n card_expr
-      in
-      [ax_card]
+      let n' = FO_rel.int_const n in
+      begin match k with
+        | `Max ->
+          update_max_card state ty n;
+          [FO_rel.int_leq card_expr n']
+        | `Min ->
+          update_min_card state ty n;
+          [FO_rel.int_leq n' card_expr]
+      end
 
 let encode_pb pb =
-  let state = create_state () in
+  let pprop = find_pprop pb in
+  let ptrue = find_ptrue pb in
+  let state = create_state ~ptrue ~pprop () in
   let form =
     CCVector.flat_map_list (encode_statement state) (FO.Problem.statements pb)
     |> CCVector.to_list
@@ -706,7 +770,6 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
   in
   M.fold
     ~values:(fun m (t,dt,_) -> match t, dt with
-      | FO_rel.Const id, _ when ID.equal id state.ptrue -> m (* remove from model *)
       | FO_rel.Const id, DT.Yield (FO_rel.Tuple_set set) ->
         begin match find_fun_ state id with
           | Some fe ->
@@ -717,7 +780,12 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
             then m (* ignore the pseudo-prop type *)
             else match ID.Map.get id ty_by_id with
               | Some ids ->
-                M.add_finite_type m (FO.Ty.const id) ids
+                (* recover the type corresponding to this id *)
+                let ty =
+                  try ID.Tbl.find state.ty_decode_tbl id
+                  with Not_found -> errorf "cannot find type for `%a`" ID.pp id
+                in
+                M.add_finite_type m ty ids
               | None ->
                 errorf "`%a` is neither a function nor a type" ID.pp id
         end
@@ -737,7 +805,7 @@ let pipe_with ?on_decoded ~decode ~print =
   let input_spec =
     Transform.Features.(of_list [
         Match, Absent; Fun, Absent; Copy, Absent; Ind_preds, Absent;
-        HOF, Absent; Prop_args, Absent])
+        HOF, Absent; Prop_args, Absent; Pseudo_prop, Present])
   in
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
