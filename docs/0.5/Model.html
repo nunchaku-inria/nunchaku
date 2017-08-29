@@ -1,0 +1,247 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="Start" href="index.html">
+<link rel="previous" href="UntypedAST.html">
+<link rel="next" href="TypeUnify.html">
+<link rel="Up" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="ID" rel="Chapter" href="ID.html">
+<link title="Var" rel="Chapter" href="Var.html">
+<link title="MetaVar" rel="Chapter" href="MetaVar.html">
+<link title="Location" rel="Chapter" href="Location.html">
+<link title="Intf" rel="Chapter" href="Intf.html">
+<link title="Utils" rel="Chapter" href="Utils.html">
+<link title="Transform" rel="Chapter" href="Transform.html">
+<link title="UntypedAST" rel="Chapter" href="UntypedAST.html">
+<link title="Model" rel="Chapter" href="Model.html">
+<link title="TypeUnify" rel="Chapter" href="TypeUnify.html">
+<link title="Problem" rel="Chapter" href="Problem.html">
+<link title="FO" rel="Chapter" href="FO.html">
+<link title="Reduce" rel="Chapter" href="Reduce.html">
+<link title="Env" rel="Chapter" href="Env.html">
+<link title="Statement" rel="Chapter" href="Statement.html">
+<link title="FO_tptp" rel="Chapter" href="FO_tptp.html">
+<link title="FO_rel" rel="Chapter" href="FO_rel.html">
+<link title="Cardinality" rel="Chapter" href="Cardinality.html">
+<link title="Scheduling" rel="Chapter" href="Scheduling.html">
+<link title="Polarity" rel="Chapter" href="Polarity.html">
+<link title="Traversal" rel="Chapter" href="Traversal.html">
+<link title="ProblemMetadata" rel="Chapter" href="ProblemMetadata.html">
+<link title="AnalyzeType" rel="Chapter" href="AnalyzeType.html">
+<link title="Prelude" rel="Chapter" href="Prelude.html">
+<link title="TypeCheck" rel="Chapter" href="TypeCheck.html">
+<link title="Lazy_list" rel="Chapter" href="Lazy_list.html">
+<link title="Bit_set" rel="Chapter" href="Bit_set.html">
+<link title="Sexp_lib" rel="Chapter" href="Sexp_lib.html">
+<link title="Sexp_lex" rel="Chapter" href="Sexp_lex.html">
+<link title="Precedence" rel="Chapter" href="Precedence.html">
+<link title="Binder" rel="Chapter" href="Binder.html">
+<link title="Builtin" rel="Chapter" href="Builtin.html">
+<link title="Cardinal_encode" rel="Chapter" href="Cardinal_encode.html">
+<link title="TermInner" rel="Chapter" href="TermInner.html">
+<link title="TermTyped" rel="Chapter" href="TermTyped.html">
+<link title="Pattern" rel="Chapter" href="Pattern.html">
+<link title="TypePoly" rel="Chapter" href="TypePoly.html">
+<link title="TypeMono" rel="Chapter" href="TypeMono.html">
+<link title="Parsing_utils" rel="Chapter" href="Parsing_utils.html">
+<link title="Lexer" rel="Chapter" href="Lexer.html">
+<link title="Parser" rel="Chapter" href="Parser.html">
+<link title="TPTP_print" rel="Chapter" href="TPTP_print.html">
+<link title="TPTP_lexer" rel="Chapter" href="TPTP_lexer.html">
+<link title="TPTP_parser" rel="Chapter" href="TPTP_parser.html">
+<link title="TPTP_preprocess" rel="Chapter" href="TPTP_preprocess.html">
+<link title="TPTP_model_ast" rel="Chapter" href="TPTP_model_ast.html">
+<link title="TPTP_model_lexer" rel="Chapter" href="TPTP_model_lexer.html">
+<link title="TPTP_model_parser" rel="Chapter" href="TPTP_model_parser.html">
+<link title="Ast_kodkod" rel="Chapter" href="Ast_kodkod.html">
+<link title="Lex_kodkod" rel="Chapter" href="Lex_kodkod.html">
+<link title="Parse_kodkod" rel="Chapter" href="Parse_kodkod.html">
+<link title="Tip_ast" rel="Chapter" href="Tip_ast.html">
+<link title="Tip_parser" rel="Chapter" href="Tip_parser.html">
+<link title="Tip_lexer" rel="Chapter" href="Tip_lexer.html">
+<link title="Parse_tip" rel="Chapter" href="Parse_tip.html">
+<link title="Skolem" rel="Chapter" href="Skolem.html">
+<link title="TypeInference" rel="Chapter" href="TypeInference.html">
+<link title="ElimPatternMatch" rel="Chapter" href="ElimPatternMatch.html">
+<link title="Monomorphization" rel="Chapter" href="Monomorphization.html">
+<link title="Specialize" rel="Chapter" href="Specialize.html">
+<link title="LambdaLift" rel="Chapter" href="LambdaLift.html">
+<link title="Elim_HOF" rel="Chapter" href="Elim_HOF.html">
+<link title="ElimRecursion" rel="Chapter" href="ElimRecursion.html">
+<link title="ElimMultipleEqns" rel="Chapter" href="ElimMultipleEqns.html">
+<link title="ElimIndPreds" rel="Chapter" href="ElimIndPreds.html">
+<link title="ElimCopy" rel="Chapter" href="ElimCopy.html">
+<link title="Polarize" rel="Chapter" href="Polarize.html">
+<link title="Unroll" rel="Chapter" href="Unroll.html">
+<link title="IntroGuards" rel="Chapter" href="IntroGuards.html">
+<link title="Model_clean" rel="Chapter" href="Model_clean.html">
+<link title="ElimData" rel="Chapter" href="ElimData.html">
+<link title="ElimTypes" rel="Chapter" href="ElimTypes.html">
+<link title="Elim_prop_args" rel="Chapter" href="Elim_prop_args.html">
+<link title="Elim_ite" rel="Chapter" href="Elim_ite.html">
+<link title="Elim_infinite" rel="Chapter" href="Elim_infinite.html">
+<link title="Trans_ho_fo" rel="Chapter" href="Trans_ho_fo.html">
+<link title="Trans_fo_tptp" rel="Chapter" href="Trans_fo_tptp.html">
+<link title="Lift_undefined" rel="Chapter" href="Lift_undefined.html">
+<link title="FoToRelational" rel="Chapter" href="FoToRelational.html">
+<link title="Cstor_as_fun" rel="Chapter" href="Cstor_as_fun.html"><link title="Decision Trees" rel="Section" href="#2_DecisionTrees">
+<link title="Helpers for Decision Trees" rel="Section" href="#2_HelpersforDecisionTrees">
+<link title="Models" rel="Section" href="#2_Models">
+<title>Nunchaku documentation : Model</title>
+</head>
+<body>
+<div class="navbar"><a class="pre" href="UntypedAST.html" title="UntypedAST">Previous</a>
+&nbsp;<a class="up" href="index.html" title="Index">Up</a>
+&nbsp;<a class="post" href="TypeUnify.html" title="TypeUnify">Next</a>
+</div>
+<h1>Module <a href="type_Model.html">Model</a></h1>
+
+<pre><span class="keyword">module</span> Model: <code class="code"><span class="keyword">sig</span></code> <a href="Model.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info module top">
+<h1 id="1_Model">Model</h1><br>
+</div>
+<hr width="100%">
+
+<pre><span id="TYPEprinter"><span class="keyword">type</span> <code class="type">'a</code> printer</span> = <code class="type">Format.formatter -> 'a -> unit</code> </pre>
+
+
+<pre><span id="TYPEprec_printer"><span class="keyword">type</span> <code class="type">'a</code> prec_printer</span> = <code class="type"><a href="Precedence.html#TYPEt">Precedence.t</a> -> 'a <a href="Model.html#TYPEprinter">printer</a></code> </pre>
+
+
+<pre><span id="TYPEto_sexp"><span class="keyword">type</span> <code class="type">'a</code> to_sexp</span> = <code class="type">'a -> <a href="Sexp_lib.html#TYPEt">Sexp_lib.t</a></code> </pre>
+
+<br>
+<h2 id="2_DecisionTrees">Decision Trees</h2>
+<p>
+
+    A decision tree is a nested if/then/else used to describe functions
+    over finite domains.<br>
+
+<pre><span class="keyword">module</span> <a href="Model.DT.html">DT</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Model.DT.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><br>
+<h2 id="2_HelpersforDecisionTrees">Helpers for Decision Trees</h2><br>
+
+<pre><span class="keyword">module</span> <a href="Model.DT_util.html">DT_util</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Model.DT_util.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><br>
+<h2 id="2_Models">Models</h2><br>
+
+<pre><code><span id="TYPEsymbol_kind"><span class="keyword">type</span> <code class="type"></code>symbol_kind</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTsymbol_kind.Symbol_prop"><span class="constructor">Symbol_prop</span></span></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTsymbol_kind.Symbol_fun"><span class="constructor">Symbol_fun</span></span></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTsymbol_kind.Symbol_utype"><span class="constructor">Symbol_utype</span></span></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTsymbol_kind.Symbol_data"><span class="constructor">Symbol_data</span></span></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTsymbol_kind.Symbol_codata"><span class="constructor">Symbol_codata</span></span></code></td>
+
+</tr></table>
+
+
+
+<pre><span id="TYPEvalue_def"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> value_def</span> = <code class="type">'t * ('t, 'ty) <a href="Model.DT.html#TYPEt">DT.t</a> * <a href="Model.html#TYPEsymbol_kind">symbol_kind</a></code> </pre>
+
+
+<pre><code><span id="TYPEt"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> t</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTt.values">values</span>&nbsp;: <code class="type">('t, 'ty) <a href="Model.html#TYPEvalue_def">value_def</a> list</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTt.finite_types">finite_types</span>&nbsp;: <code class="type">('ty * <a href="ID.html#TYPEt">ID.t</a> list) list</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTt.potentially_spurious">potentially_spurious</span>&nbsp;: <code class="type">bool</code>;</code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+the model might be spurious, i.e. some approximation made the
+        translation unsound<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr></table>
+}
+
+<div class="info ">
+A model<br>
+</div>
+
+
+<pre><span id="TYPEmodel"><span class="keyword">type</span> <code class="type">('a, 'b)</code> model</span> = <code class="type">('a, 'b) <a href="Model.html#TYPEt">t</a></code> </pre>
+
+
+<pre><span id="VALempty"><span class="keyword">val</span> empty</span> : <code class="type">('a, 'b) <a href="Model.html#TYPEt">t</a></code></pre><div class="info ">
+Empty model<br>
+</div>
+
+<pre><span id="VALempty_copy"><span class="keyword">val</span> empty_copy</span> : <code class="type">('t, 'ty) <a href="Model.html#TYPEt">t</a> -> ('t, 'ty) <a href="Model.html#TYPEt">t</a></code></pre><div class="info ">
+<code class="code">empty_copy&nbsp;m</code> is a empty model that has the same additional information
+    (such as <code class="code">potentially_spurious</code>) as <code class="code">m</code><br>
+</div>
+
+<pre><span id="VALadd_const"><span class="keyword">val</span> add_const</span> : <code class="type">('t, 'ty) <a href="Model.html#TYPEt">t</a> -> 't * 't * <a href="Model.html#TYPEsymbol_kind">symbol_kind</a> -> ('t, 'ty) <a href="Model.html#TYPEt">t</a></code></pre><div class="info ">
+Add a constant term interpretation<br>
+</div>
+
+<pre><span id="VALadd_value"><span class="keyword">val</span> add_value</span> : <code class="type">('t, 'ty) <a href="Model.html#TYPEt">t</a> -><br>       't * ('t, 'ty) <a href="Model.DT.html#TYPEt">DT.t</a> * <a href="Model.html#TYPEsymbol_kind">symbol_kind</a> -> ('t, 'ty) <a href="Model.html#TYPEt">t</a></code></pre><div class="info ">
+Add a value interpretation<br>
+</div>
+
+<pre><span id="VALadd_finite_type"><span class="keyword">val</span> add_finite_type</span> : <code class="type">('t, 'ty) <a href="Model.html#TYPEt">t</a> -> 'ty -> <a href="ID.html#TYPEt">ID.t</a> list -> ('t, 'ty) <a href="Model.html#TYPEt">t</a></code></pre><div class="info ">
+Map the type to its finite domain.<br>
+</div>
+
+<pre><span id="VALvalues"><span class="keyword">val</span> values</span> : <code class="type">('t, 'ty) <a href="Model.html#TYPEt">t</a> -><br>       ('t * ('t, 'ty) <a href="Model.DT.html#TYPEt">DT.t</a> * <a href="Model.html#TYPEsymbol_kind">symbol_kind</a>) Sequence.t</code></pre>
+<pre><span id="VALfinite_types"><span class="keyword">val</span> finite_types</span> : <code class="type">('a, 'ty) <a href="Model.html#TYPEt">t</a> -> ('ty * <a href="ID.html#TYPEt">ID.t</a> list) Sequence.t</code></pre>
+<pre><span id="VALfold"><span class="keyword">val</span> fold</span> : <code class="type">?values:('acc -> 'a * ('a, 'b) <a href="Model.DT.html#TYPEt">DT.t</a> * <a href="Model.html#TYPEsymbol_kind">symbol_kind</a> -> 'acc) -><br>       ?finite_types:('acc -> 'b * <a href="ID.html#TYPEt">ID.t</a> list -> 'acc) -><br>       'acc -> ('a, 'b) <a href="Model.html#TYPEt">t</a> -> 'acc</code></pre>
+<pre><span id="VALiter"><span class="keyword">val</span> iter</span> : <code class="type">?values:('a * ('a, 'b) <a href="Model.DT.html#TYPEt">DT.t</a> * <a href="Model.html#TYPEsymbol_kind">symbol_kind</a> -> unit) -><br>       ?finite_types:('b * <a href="ID.html#TYPEt">ID.t</a> list -> unit) -> ('a, 'b) <a href="Model.html#TYPEt">t</a> -> unit</code></pre>
+<pre><span id="VALfilter_map"><span class="keyword">val</span> filter_map</span> : <code class="type">values:('t1 * ('t1, 'ty1) <a href="Model.DT.html#TYPEt">DT.t</a> * <a href="Model.html#TYPEsymbol_kind">symbol_kind</a> -><br>               ('t2 * ('t2, 'ty2) <a href="Model.DT.html#TYPEt">DT.t</a> * <a href="Model.html#TYPEsymbol_kind">symbol_kind</a>) option) -><br>       finite_types:('ty1 * <a href="ID.html#TYPEt">ID.t</a> list -> ('ty2 * <a href="ID.html#TYPEt">ID.t</a> list) option) -><br>       ('t1, 'ty1) <a href="Model.html#TYPEt">t</a> -> ('t2, 'ty2) <a href="Model.html#TYPEt">t</a></code></pre>
+<pre><span id="VALmap"><span class="keyword">val</span> map</span> : <code class="type">term:('t1 -> 't2) -><br>       ty:('ty1 -> 'ty2) -> ('t1, 'ty1) <a href="Model.html#TYPEt">t</a> -> ('t2, 'ty2) <a href="Model.html#TYPEt">t</a></code></pre>
+<pre><span id="VALfilter"><span class="keyword">val</span> filter</span> : <code class="type">?values:('t * ('t, 'ty) <a href="Model.DT.html#TYPEt">DT.t</a> * <a href="Model.html#TYPEsymbol_kind">symbol_kind</a> -> bool) -><br>       ?finite_types:('ty * <a href="ID.html#TYPEt">ID.t</a> list -> bool) -><br>       ('t, 'ty) <a href="Model.html#TYPEt">t</a> -> ('t, 'ty) <a href="Model.html#TYPEt">t</a></code></pre>
+<pre><span id="VALpp"><span class="keyword">val</span> pp</span> : <code class="type">'t <a href="Model.html#TYPEprec_printer">prec_printer</a> -> 'ty <a href="Model.html#TYPEprinter">printer</a> -> ('t, 'ty) <a href="Model.html#TYPEt">t</a> <a href="Model.html#TYPEprinter">printer</a></code></pre><div class="info ">
+Debug printing<br>
+</div>
+
+<pre><span id="VALto_sexp"><span class="keyword">val</span> to_sexp</span> : <code class="type">'t <a href="Model.html#TYPEto_sexp">to_sexp</a> -> 'ty <a href="Model.html#TYPEto_sexp">to_sexp</a> -> ('t, 'ty) <a href="Model.html#TYPEt">t</a> <a href="Model.html#TYPEto_sexp">to_sexp</a></code></pre><div class="info ">
+S-expr output suitable for parsing from the caller<br>
+</div>
+
+<pre><span class="keyword">module</span> <a href="Model.Default.html">Default</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Model.Default.html">..</a> <code class="code"><span class="keyword">end</span></code></pre></body></html>

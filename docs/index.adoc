@@ -18,6 +18,8 @@ Model format:: link:model_syntax.adoc[], link:model_syntax.html[]  (draft)
 Pipeline of Transformations:: link:pipeline.adoc[], link:pipeline.html[]
 Internal API documentation::
 +
+- link:0.5[0.5]
+- link:0.4[0.4]
 - link:0.3[0.3]
 
 == Contact

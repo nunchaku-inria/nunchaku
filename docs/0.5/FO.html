@@ -1,0 +1,515 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Problem.html">
+<link rel="next" href="Reduce.html">
+<link rel="Up" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="ID" rel="Chapter" href="ID.html">
+<link title="Var" rel="Chapter" href="Var.html">
+<link title="MetaVar" rel="Chapter" href="MetaVar.html">
+<link title="Location" rel="Chapter" href="Location.html">
+<link title="Intf" rel="Chapter" href="Intf.html">
+<link title="Utils" rel="Chapter" href="Utils.html">
+<link title="Transform" rel="Chapter" href="Transform.html">
+<link title="UntypedAST" rel="Chapter" href="UntypedAST.html">
+<link title="Model" rel="Chapter" href="Model.html">
+<link title="TypeUnify" rel="Chapter" href="TypeUnify.html">
+<link title="Problem" rel="Chapter" href="Problem.html">
+<link title="FO" rel="Chapter" href="FO.html">
+<link title="Reduce" rel="Chapter" href="Reduce.html">
+<link title="Env" rel="Chapter" href="Env.html">
+<link title="Statement" rel="Chapter" href="Statement.html">
+<link title="FO_tptp" rel="Chapter" href="FO_tptp.html">
+<link title="FO_rel" rel="Chapter" href="FO_rel.html">
+<link title="Cardinality" rel="Chapter" href="Cardinality.html">
+<link title="Scheduling" rel="Chapter" href="Scheduling.html">
+<link title="Polarity" rel="Chapter" href="Polarity.html">
+<link title="Traversal" rel="Chapter" href="Traversal.html">
+<link title="ProblemMetadata" rel="Chapter" href="ProblemMetadata.html">
+<link title="AnalyzeType" rel="Chapter" href="AnalyzeType.html">
+<link title="Prelude" rel="Chapter" href="Prelude.html">
+<link title="TypeCheck" rel="Chapter" href="TypeCheck.html">
+<link title="Lazy_list" rel="Chapter" href="Lazy_list.html">
+<link title="Bit_set" rel="Chapter" href="Bit_set.html">
+<link title="Sexp_lib" rel="Chapter" href="Sexp_lib.html">
+<link title="Sexp_lex" rel="Chapter" href="Sexp_lex.html">
+<link title="Precedence" rel="Chapter" href="Precedence.html">
+<link title="Binder" rel="Chapter" href="Binder.html">
+<link title="Builtin" rel="Chapter" href="Builtin.html">
+<link title="Cardinal_encode" rel="Chapter" href="Cardinal_encode.html">
+<link title="TermInner" rel="Chapter" href="TermInner.html">
+<link title="TermTyped" rel="Chapter" href="TermTyped.html">
+<link title="Pattern" rel="Chapter" href="Pattern.html">
+<link title="TypePoly" rel="Chapter" href="TypePoly.html">
+<link title="TypeMono" rel="Chapter" href="TypeMono.html">
+<link title="Parsing_utils" rel="Chapter" href="Parsing_utils.html">
+<link title="Lexer" rel="Chapter" href="Lexer.html">
+<link title="Parser" rel="Chapter" href="Parser.html">
+<link title="TPTP_print" rel="Chapter" href="TPTP_print.html">
+<link title="TPTP_lexer" rel="Chapter" href="TPTP_lexer.html">
+<link title="TPTP_parser" rel="Chapter" href="TPTP_parser.html">
+<link title="TPTP_preprocess" rel="Chapter" href="TPTP_preprocess.html">
+<link title="TPTP_model_ast" rel="Chapter" href="TPTP_model_ast.html">
+<link title="TPTP_model_lexer" rel="Chapter" href="TPTP_model_lexer.html">
+<link title="TPTP_model_parser" rel="Chapter" href="TPTP_model_parser.html">
+<link title="Ast_kodkod" rel="Chapter" href="Ast_kodkod.html">
+<link title="Lex_kodkod" rel="Chapter" href="Lex_kodkod.html">
+<link title="Parse_kodkod" rel="Chapter" href="Parse_kodkod.html">
+<link title="Tip_ast" rel="Chapter" href="Tip_ast.html">
+<link title="Tip_parser" rel="Chapter" href="Tip_parser.html">
+<link title="Tip_lexer" rel="Chapter" href="Tip_lexer.html">
+<link title="Parse_tip" rel="Chapter" href="Parse_tip.html">
+<link title="Skolem" rel="Chapter" href="Skolem.html">
+<link title="TypeInference" rel="Chapter" href="TypeInference.html">
+<link title="ElimPatternMatch" rel="Chapter" href="ElimPatternMatch.html">
+<link title="Monomorphization" rel="Chapter" href="Monomorphization.html">
+<link title="Specialize" rel="Chapter" href="Specialize.html">
+<link title="LambdaLift" rel="Chapter" href="LambdaLift.html">
+<link title="Elim_HOF" rel="Chapter" href="Elim_HOF.html">
+<link title="ElimRecursion" rel="Chapter" href="ElimRecursion.html">
+<link title="ElimMultipleEqns" rel="Chapter" href="ElimMultipleEqns.html">
+<link title="ElimIndPreds" rel="Chapter" href="ElimIndPreds.html">
+<link title="ElimCopy" rel="Chapter" href="ElimCopy.html">
+<link title="Polarize" rel="Chapter" href="Polarize.html">
+<link title="Unroll" rel="Chapter" href="Unroll.html">
+<link title="IntroGuards" rel="Chapter" href="IntroGuards.html">
+<link title="Model_clean" rel="Chapter" href="Model_clean.html">
+<link title="ElimData" rel="Chapter" href="ElimData.html">
+<link title="ElimTypes" rel="Chapter" href="ElimTypes.html">
+<link title="Elim_prop_args" rel="Chapter" href="Elim_prop_args.html">
+<link title="Elim_ite" rel="Chapter" href="Elim_ite.html">
+<link title="Elim_infinite" rel="Chapter" href="Elim_infinite.html">
+<link title="Trans_ho_fo" rel="Chapter" href="Trans_ho_fo.html">
+<link title="Trans_fo_tptp" rel="Chapter" href="Trans_fo_tptp.html">
+<link title="Lift_undefined" rel="Chapter" href="Lift_undefined.html">
+<link title="FoToRelational" rel="Chapter" href="FoToRelational.html">
+<link title="Cstor_as_fun" rel="Chapter" href="Cstor_as_fun.html"><link title="View and Build Formulas, Terms, Types" rel="Section" href="#2_ViewandBuildFormulasTermsTypes">
+<link title="IO" rel="Section" href="#2_IO">
+<title>Nunchaku documentation : FO</title>
+</head>
+<body>
+<div class="navbar"><a class="pre" href="Problem.html" title="Problem">Previous</a>
+&nbsp;<a class="up" href="index.html" title="Index">Up</a>
+&nbsp;<a class="post" href="Reduce.html" title="Reduce">Next</a>
+</div>
+<h1>Module <a href="type_FO.html">FO</a></h1>
+
+<pre><span class="keyword">module</span> FO: <code class="code"><span class="keyword">sig</span></code> <a href="FO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info module top">
+<h1 id="1_FirstOrderMonomorphicTermsandFormulas">First-Order Monomorphic Terms and Formulas</h1>
+<p>
+
+    This is the end of the chain, where formulas and terms are ready to be
+    sent to some SMT solver. Types are monomorphic, formulas are first-order<br>
+</div>
+<hr width="100%">
+
+<pre><span id="TYPEid"><span class="keyword">type</span> <code class="type"></code>id</span> = <code class="type"><a href="ID.html#TYPEt">ID.t</a></code> </pre>
+
+
+<pre><span id="TYPEvar"><span class="keyword">type</span> <code class="type">'a</code> var</span> = <code class="type">'a <a href="Var.html#TYPEt">Var.t</a></code> </pre>
+
+
+<pre><span id="TYPEprinter"><span class="keyword">type</span> <code class="type">'a</code> printer</span> = <code class="type">Format.formatter -> 'a -> unit</code> </pre>
+
+
+<pre><span id="TYPEor_error"><span class="keyword">type</span> <code class="type">'a</code> or_error</span> = <code class="type">('a, string) CCResult.t</code> </pre>
+
+
+<pre><span id="TYPEmetadata"><span class="keyword">type</span> <code class="type"></code>metadata</span> = <code class="type"><a href="ProblemMetadata.html#TYPEt">ProblemMetadata.t</a></code> </pre>
+
+
+<pre><span id="TYPEres"><span class="keyword">type</span> <code class="type">('a, 'b)</code> res</span> = <code class="type">('a, 'b) <a href="Problem.Res.html#TYPEt">Problem.Res.t</a></code> </pre>
+
+
+<pre><span class="keyword">module</span> <a href="FO.TyBuiltin.html">TyBuiltin</a>: <code class="code"><span class="keyword">sig</span></code> <a href="FO.TyBuiltin.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+<pre><span class="keyword">module</span> <a href="FO.Builtin.html">Builtin</a>: <code class="code"><span class="keyword">sig</span></code> <a href="FO.Builtin.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+<pre><code><span id="TYPEview"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> view</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Builtin"><span class="constructor">Builtin</span></span> <span class="keyword">of</span> <code class="type"><a href="FO.Builtin.html#TYPEt">Builtin.t</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Var"><span class="constructor">Var</span></span> <span class="keyword">of</span> <code class="type">'ty <a href="FO.html#TYPEvar">var</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.App"><span class="constructor">App</span></span> <span class="keyword">of</span> <code class="type"><a href="FO.html#TYPEid">id</a> * 't list</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.DataTest"><span class="constructor">DataTest</span></span> <span class="keyword">of</span> <code class="type"><a href="FO.html#TYPEid">id</a> * 't</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.DataSelect"><span class="constructor">DataSelect</span></span> <span class="keyword">of</span> <code class="type"><a href="FO.html#TYPEid">id</a> * int * 't</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Undefined"><span class="constructor">Undefined</span></span> <span class="keyword">of</span> <code class="type">'t</code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+<code class="code"><span class="keywordsign">'</span>t</code> is not defined here<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Undefined_atom"><span class="constructor">Undefined_atom</span></span> <span class="keyword">of</span> <code class="type"><a href="FO.html#TYPEid">id</a> * 'ty <a href="FO.html#TYPEtoplevel_ty">toplevel_ty</a> * 't list</code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+some undefined term of given topleveltype, + args<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Unparsable"><span class="constructor">Unparsable</span></span> <span class="keyword">of</span> <code class="type">'ty</code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+could not parse term<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Card_at_least"><span class="constructor">Card_at_least</span></span> <span class="keyword">of</span> <code class="type">'ty * int</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Fun"><span class="constructor">Fun</span></span> <span class="keyword">of</span> <code class="type">'ty <a href="FO.html#TYPEvar">var</a> * 't</code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+caution, not supported everywhere<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Mu"><span class="constructor">Mu</span></span> <span class="keyword">of</span> <code class="type">'ty <a href="FO.html#TYPEvar">var</a> * 't</code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+caution, not supported everywhere<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Let"><span class="constructor">Let</span></span> <span class="keyword">of</span> <code class="type">'ty <a href="FO.html#TYPEvar">var</a> * 't * 't</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Ite"><span class="constructor">Ite</span></span> <span class="keyword">of</span> <code class="type">'t * 't * 't</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.True"><span class="constructor">True</span></span></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.False"><span class="constructor">False</span></span></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Eq"><span class="constructor">Eq</span></span> <span class="keyword">of</span> <code class="type">'t * 't</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.And"><span class="constructor">And</span></span> <span class="keyword">of</span> <code class="type">'t list</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Or"><span class="constructor">Or</span></span> <span class="keyword">of</span> <code class="type">'t list</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Not"><span class="constructor">Not</span></span> <span class="keyword">of</span> <code class="type">'t</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Imply"><span class="constructor">Imply</span></span> <span class="keyword">of</span> <code class="type">'t * 't</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Equiv"><span class="constructor">Equiv</span></span> <span class="keyword">of</span> <code class="type">'t * 't</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Forall"><span class="constructor">Forall</span></span> <span class="keyword">of</span> <code class="type">'ty <a href="FO.html#TYPEvar">var</a> * 't</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Exists"><span class="constructor">Exists</span></span> <span class="keyword">of</span> <code class="type">'ty <a href="FO.html#TYPEvar">var</a> * 't</code></code></td>
+
+</tr></table>
+
+<div class="info ">
+Term<br>
+</div>
+
+
+<pre><span id="TYPEtoplevel_ty"><span class="keyword">type</span> <code class="type">'ty</code> toplevel_ty</span> = <code class="type">'ty list * 'ty</code> </pre>
+<div class="info ">
+Toplevel type: an arrow of atomic types<br>
+</div>
+
+
+<pre><code><span id="TYPEty_view"><span class="keyword">type</span> <code class="type">'ty</code> ty_view</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTty_view.TyBuiltin"><span class="constructor">TyBuiltin</span></span> <span class="keyword">of</span> <code class="type"><a href="FO.TyBuiltin.html#TYPEt">TyBuiltin.t</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTty_view.TyApp"><span class="constructor">TyApp</span></span> <span class="keyword">of</span> <code class="type"><a href="FO.html#TYPEid">id</a> * 'ty list</code></code></td>
+
+</tr></table>
+
+<div class="info ">
+Type<br>
+</div>
+
+
+<pre><code><span id="TYPEconstructor"><span class="keyword">type</span> <code class="type">'ty</code> constructor</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTconstructor.cstor_name">cstor_name</span>&nbsp;: <code class="type"><a href="FO.html#TYPEid">id</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTconstructor.cstor_args">cstor_args</span>&nbsp;: <code class="type">'ty list</code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><code><span id="TYPEtydef"><span class="keyword">type</span> <code class="type">'ty</code> tydef</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTtydef.ty_name">ty_name</span>&nbsp;: <code class="type"><a href="FO.html#TYPEid">id</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTtydef.ty_cstors">ty_cstors</span>&nbsp;: <code class="type">'ty <a href="FO.html#TYPEconstructor">constructor</a> ID.Map.t</code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><code><span id="TYPEmutual_types"><span class="keyword">type</span> <code class="type">'ty</code> mutual_types</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTmutual_types.tys_vars">tys_vars</span>&nbsp;: <code class="type"><a href="FO.html#TYPEid">id</a> list</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTmutual_types.tys_defs">tys_defs</span>&nbsp;: <code class="type">'ty <a href="FO.html#TYPEtydef">tydef</a> list</code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><code><span id="TYPEattr"><span class="keyword">type</span> <code class="type"></code>attr</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTattr.Attr_pseudo_prop"><span class="constructor">Attr_pseudo_prop</span></span></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTattr.Attr_pseudo_true"><span class="constructor">Attr_pseudo_true</span></span></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTattr.Attr_card_hint"><span class="constructor">Attr_card_hint</span></span> <span class="keyword">of</span> <code class="type">[ `Max | `Min ] * int</code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+cardinality bound hint<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTattr.Attr_can_be_empty"><span class="constructor">Attr_can_be_empty</span></span></code></td>
+
+</tr></table>
+
+
+
+<pre><code><span id="TYPEstatement"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> statement</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement.TyDecl"><span class="constructor">TyDecl</span></span> <span class="keyword">of</span> <code class="type"><a href="FO.html#TYPEid">id</a> * int * <a href="FO.html#TYPEattr">attr</a> list</code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+number of arguments<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement.Decl"><span class="constructor">Decl</span></span> <span class="keyword">of</span> <code class="type"><a href="FO.html#TYPEid">id</a> * 'ty <a href="FO.html#TYPEtoplevel_ty">toplevel_ty</a> * <a href="FO.html#TYPEattr">attr</a> list</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement.Axiom"><span class="constructor">Axiom</span></span> <span class="keyword">of</span> <code class="type">'t</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement.CardBound"><span class="constructor">CardBound</span></span> <span class="keyword">of</span> <code class="type"><a href="FO.html#TYPEid">id</a> * [ `Max | `Min ] * int</code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+cardinality bound<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement.MutualTypes"><span class="constructor">MutualTypes</span></span> <span class="keyword">of</span> <code class="type">[ `Codata | `Data ] * 'ty <a href="FO.html#TYPEmutual_types">mutual_types</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTstatement.Goal"><span class="constructor">Goal</span></span> <span class="keyword">of</span> <code class="type">'t</code></code></td>
+
+</tr></table>
+
+<div class="info ">
+Statement<br>
+</div>
+
+<br>
+<h2 id="2_ViewandBuildFormulasTermsTypes">View and Build Formulas, Terms, Types</h2><br>
+
+<pre><span class="keyword">module</span> <a href="FO.Ty.html">Ty</a>: <code class="code"><span class="keyword">sig</span></code> <a href="FO.Ty.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+<pre><span class="keyword">module</span> <a href="FO.T.html">T</a>: <code class="code"><span class="keyword">sig</span></code> <a href="FO.T.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+<pre><span class="keyword">module</span> <a href="FO.Problem.html">Problem</a>: <code class="code"><span class="keyword">sig</span></code> <a href="FO.Problem.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Problem
+</div>
+
+<pre><span class="keyword">module</span> <a href="FO.Util.html">Util</a>: <code class="code"><span class="keyword">sig</span></code> <a href="FO.Util.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Utils
+</div>
+
+<pre><span id="VALtys_of_toplevel_ty"><span class="keyword">val</span> tys_of_toplevel_ty</span> : <code class="type">'ty <a href="FO.html#TYPEtoplevel_ty">toplevel_ty</a> -> 'ty Sequence.t</code></pre>
+<pre><span id="VALterms_of_statement"><span class="keyword">val</span> terms_of_statement</span> : <code class="type">('t, 'a) <a href="FO.html#TYPEstatement">statement</a> -> 't Sequence.t</code></pre>
+<pre><span id="VALtys_of_statement"><span class="keyword">val</span> tys_of_statement</span> : <code class="type">('a, 'ty) <a href="FO.html#TYPEstatement">statement</a> -> 'ty Sequence.t</code></pre><br>
+<h2 id="2_IO">IO</h2><br>
+
+<pre><span id="VALpp_ty"><span class="keyword">val</span> pp_ty</span> : <code class="type"><a href="FO.Ty.html#TYPEt">Ty.t</a> <a href="FO.html#TYPEprinter">printer</a></code></pre>
+<pre><span id="VALpp_toplevel_ty"><span class="keyword">val</span> pp_toplevel_ty</span> : <code class="type"><a href="FO.Ty.html#TYPEtoplevel_ty">Ty.toplevel_ty</a> <a href="FO.html#TYPEprinter">printer</a></code></pre>
+<pre><span id="VALpp_term"><span class="keyword">val</span> pp_term</span> : <code class="type"><a href="FO.T.html#TYPEt">T.t</a> <a href="FO.html#TYPEprinter">printer</a></code></pre>
+<pre><span id="VALpp_term'"><span class="keyword">val</span> pp_term'</span> : <code class="type">'a -> <a href="FO.T.html#TYPEt">T.t</a> <a href="FO.html#TYPEprinter">printer</a></code></pre>
+<pre><span id="VALpp_statement"><span class="keyword">val</span> pp_statement</span> : <code class="type">(<a href="FO.T.html#TYPEt">T.t</a>, <a href="FO.Ty.html#TYPEt">Ty.t</a>) <a href="FO.html#TYPEstatement">statement</a> <a href="FO.html#TYPEprinter">printer</a></code></pre>
+<pre><span id="VALpp_model"><span class="keyword">val</span> pp_model</span> : <code class="type">(<a href="FO.T.html#TYPEt">T.t</a> * <a href="FO.T.html#TYPEt">T.t</a>) list <a href="FO.html#TYPEprinter">printer</a></code></pre>
+<pre><span id="VALpp_problem"><span class="keyword">val</span> pp_problem</span> : <code class="type">(<a href="FO.T.html#TYPEt">T.t</a>, <a href="FO.Ty.html#TYPEt">Ty.t</a>) <a href="FO.Problem.html#TYPEt">Problem.t</a> <a href="FO.html#TYPEprinter">printer</a></code></pre></body></html>
