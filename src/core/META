@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: e8d59f7fbf2ae8a0b8ed4fb0a37066ea)
-version = "0.4"
+# DO NOT EDIT (digest: d9f8b235ef397c689921d975e8bf516c)
+version = "0.5"
 description = "A model finder for higher-order logic"
 requires = "containers containers.data sequence num unix threads"
 archive(byte) = "nunchaku_core.cma"
@@ -9,7 +9,7 @@ archive(native) = "nunchaku_core.cmxa"
 archive(native, plugin) = "nunchaku_core.cmxs"
 exists_if = "nunchaku_core.cma"
 package "transformations" (
- version = "0.4"
+ version = "0.5"
  description = "A model finder for higher-order logic"
  requires = "containers nunchaku"
  archive(byte) = "nunchaku_transformations.cma"
@@ -20,7 +20,7 @@ package "transformations" (
 )
 
 package "random" (
- version = "0.4"
+ version = "0.5"
  description = "A model finder for higher-order logic"
  requires = "nunchaku qcheck"
  archive(byte) = "nunchaku_random.cma"
@@ -31,7 +31,7 @@ package "random" (
 )
 
 package "parsers" (
- version = "0.4"
+ version = "0.5"
  description = "A model finder for higher-order logic"
  requires = "nunchaku"
  archive(byte) = "nunchaku_parsers.cma"
@@ -42,7 +42,7 @@ package "parsers" (
 )
 
 package "backends" (
- version = "0.4"
+ version = "0.5"
  description = "A model finder for higher-order logic"
  requires = "nunchaku nunchaku.parsers"
  archive(byte) = "nunchaku_backends.cma"

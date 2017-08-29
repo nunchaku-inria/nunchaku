@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 898f771f499cb533fcbf69bd9f225472)
+# DO NOT EDIT (digest: a506cdc7acb83453da21f4f37f555653)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -124,7 +124,6 @@ true: annot, bin_annot
 "src/transformations/ElimRecursion.cmx": for-pack(Nunchaku_transformations)
 "src/transformations/ElimMultipleEqns.cmx": for-pack(Nunchaku_transformations)
 "src/transformations/ElimIndPreds.cmx": for-pack(Nunchaku_transformations)
-"src/transformations/ElimQuantifiers.cmx": for-pack(Nunchaku_transformations)
 "src/transformations/ElimCopy.cmx": for-pack(Nunchaku_transformations)
 "src/transformations/Polarize.cmx": for-pack(Nunchaku_transformations)
 "src/transformations/Unroll.cmx": for-pack(Nunchaku_transformations)
@@ -139,6 +138,7 @@ true: annot, bin_annot
 "src/transformations/Trans_fo_tptp.cmx": for-pack(Nunchaku_transformations)
 "src/transformations/Lift_undefined.cmx": for-pack(Nunchaku_transformations)
 "src/transformations/FoToRelational.cmx": for-pack(Nunchaku_transformations)
+"src/transformations/Cstor_as_fun.cmx": for-pack(Nunchaku_transformations)
 <src/transformations/*.ml{,i,y}>: package(containers)
 <src/transformations/*.ml{,i,y}>: package(containers.data)
 <src/transformations/*.ml{,i,y}>: package(num)

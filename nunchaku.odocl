@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 683de1371c8e3d66b66604d410c7f651)
+# DO NOT EDIT (digest: c54e14f032d42f188cc4c974936c7a39)
 src/core/ID
 src/core/Var
 src/core/MetaVar
@@ -65,7 +65,6 @@ src/transformations/Elim_HOF
 src/transformations/ElimRecursion
 src/transformations/ElimMultipleEqns
 src/transformations/ElimIndPreds
-src/transformations/ElimQuantifiers
 src/transformations/ElimCopy
 src/transformations/Polarize
 src/transformations/Unroll
@@ -80,4 +79,5 @@ src/transformations/Trans_ho_fo
 src/transformations/Trans_fo_tptp
 src/transformations/Lift_undefined
 src/transformations/FoToRelational
+src/transformations/Cstor_as_fun
 # OASIS_STOP

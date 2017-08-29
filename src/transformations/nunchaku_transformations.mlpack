@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: a4536b9a77b456a1511c7fc22b98e322)
+# DO NOT EDIT (digest: 3f45ebcf993eb7cab6bb75a4964d3cfb)
 Skolem
 TypeInference
 ElimPatternMatch
@@ -10,7 +10,6 @@ Elim_HOF
 ElimRecursion
 ElimMultipleEqns
 ElimIndPreds
-ElimQuantifiers
 ElimCopy
 Polarize
 Unroll
@@ -25,4 +24,5 @@ Trans_ho_fo
 Trans_fo_tptp
 Lift_undefined
 FoToRelational
+Cstor_as_fun
 # OASIS_STOP
