@@ -1032,6 +1032,8 @@ module Util(T : S)
       let m = ID.Map.map (fun (vars,rhs) -> vars, app rhs l) m in
       let def = map_default_case (fun u -> app u l) def in
       match_with u m ~def
+    | Let (t, u, v), _ ->
+      let_ t u (app v l)
     | _, _::_ -> T.build (App(t,l))
 
   and ite a b c = app_builtin (`Ite (a,b,c)) []
