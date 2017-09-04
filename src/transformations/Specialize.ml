@@ -894,6 +894,8 @@ let dispatch = {
                  rec_defined;
                  rec_eqns=eqns;
                } in
+    Utils.debugf ~section 5 "@[<2>... gives `@[%a@]`@]"
+      (fun k->k PStmt.pp_rec_def def');
     def'
   );
 
@@ -1111,13 +1113,14 @@ let mk_self_congruence (v:InstanceGraph.vertex): term option =
            U.eq
              (U.eval_renaming ~subst:subst1 arg)
              (U.eval_renaming ~subst:subst2 arg))
-        v.IG.v_all_args
+        (List.map snd v.IG.v_spec_args)
     and conclusion =
       U.eq
         (U.eval_renaming ~subst:subst1 spec_term)
         (U.eval_renaming ~subst:subst2 spec_term)
     in
-    U.forall_l (vars1@vars2) (U.imply_l conds conclusion)
+    let t = U.imply_l conds conclusion in
+    U.forall_l (U.free_vars t |> VarSet.to_list) t
     |> CCOpt.return
   )
 
