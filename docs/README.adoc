@@ -122,10 +122,10 @@ Supported input formats are:
 
 Supported solver backends:
 
-- http://cvc4.cs.nyu.edu/web/[CVC4] (development versions, we need finite model finding)
+- http://cvc4.cs.nyu.edu/web/[CVC4] (at least 1.5, or development versions: we need finite model finding)
 - Paradox (https://github.com/c-cube/paradox/[github clone (easy to install)];
   http://vlsicad.eecs.umich.edu/BK/Slots/cache/www.cs.chalmers.se/~koen/paradox/[official page])
 - https://github.com/emina/kodkod[Kodkod] with its "kodkodi" parser
-- https://github.com/c-cube/smbc/[SMBC]
+- https://github.com/c-cube/smbc/[SMBC] (`opam install smbc`)
 
 
