@@ -598,7 +598,7 @@ let unmangle_term ~(state:unmangle_state) (t:term):term =
     | TI.TyBuiltin b -> U.ty_builtin b
     | TI.TyArrow (a,b) -> U.ty_arrow (aux a) (aux b)
     | TI.Bind (Binder.TyForall, _,_) | TI.TyMeta _ -> assert false
-  and aux_var = Var.update_ty ~f:aux in
+  and aux_var v = Var.update_ty ~f:aux v in
   aux t
 
 (* rewrite mangled constants to their definition *)
