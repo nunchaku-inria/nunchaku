@@ -127,8 +127,8 @@ let parse_string s : t or_error =
     | (`Ok _ | `Error _) as res -> res
 
 (*$T
-  CCError.to_opt (parse_string "(abc d/e/f \"hello \\\" () world\" )") <> None
-  CCError.to_opt (parse_string "(abc ( d e ffff   ) \"hello/world\")") <> None
+  match parse_string "(abc d/e/f \"hello \\\" () world\" )" with `Error _ -> false | `Ok _ -> true
+  match parse_string "(abc ( d e ffff   ) \"hello/world\")" with `Error _ -> false | `Ok _ -> true
 *)
 
 (*$inject
