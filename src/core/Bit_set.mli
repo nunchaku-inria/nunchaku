@@ -46,3 +46,7 @@ end
 
 (** Create a new bitfield type *)
 module Make(X : sig end) : S
+
+(**/**)
+val all_bits_ : int -> int -> int
+(**/**)

@@ -1,0 +1,33 @@
+
+(rule
+  ((targets (Const.ml))
+   (deps ())
+   (action
+     (with-stdout-to ${@}
+       (progn
+         (echo "let version = \"${version:nunchaku}\"\n")
+        )
+       ))))
+
+
+(rule
+  ((targets (GitVersion.ml))
+   (deps ())
+   (action
+     (with-stdout-to ${@}
+       (progn
+         (echo "let id_ = \"")
+         (bash "git rev-parse HEAD || echo -n unknown")
+         (echo "\"  let id = String.trim id_")
+        )))))
+
+; main binary
+(executable
+  ((name nunchaku)
+   (package nunchaku)
+   (public_name nunchaku)
+   (libraries (nunchaku nunchaku.parsers nunchaku.backends nunchaku.transformations))
+   (flags (:standard -w +a-4-42-44-48-50-58-32-60@8 (:include ../common.flags)))
+   (ocamlopt_flags (:standard -bin-annot (:include ../opt.flags)))
+  ))
+

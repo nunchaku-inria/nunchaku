@@ -1,0 +1,9 @@
+
+(rule
+  ((targets (opt.flags common.flags))
+   (deps ((file mkflags.ml)))
+   (fallback)
+   (action
+     (run ocaml ./mkflags.ml))
+  ))
+

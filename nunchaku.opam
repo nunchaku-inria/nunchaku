@@ -2,41 +2,28 @@ opam-version: "1.2"
 name: "nunchaku"
 version: "dev"
 authors: ["Simon Cruanes" "Jasmin Blanchette"]
-maintainer: "simon.cruanes@inria.fr"
+maintainer: "simon.cruanes.2007@m4x.org"
 build: [
-    ["./configure"
-        "--prefix" prefix
-        "--disable-random"
-        # "--%{qtest:enable}%-random"
-        "--disable-tests"
-        "--enable-docs"
-    ]
-    [make "build"]
+    ["jbuilder" "build" "-p" name "-j" jobs]
     ["strip" "nunchaku.native"]
 ]
-install: [
-    [make "install"]
-]
 build-doc: [ make "doc" ]
-build-test: [ make "test" ]
-remove: [
-    ["ocamlfind" "remove" "nunchaku"]
-]
+build-test: [ "jbuilder" "runtest" "-j" jobs ]
 depends: [
     "ocamlfind" {build}
-    "containers" { >= "1.0" }
+    "jbuilder" {build}
+    "containers" { >= "1.0" < "2.0" }
     "menhir" {build}
     "sequence"
     "base-unix"
     "base-threads"
     "num"
-    "oasis" {build}
-    "ocamlbuild" {build}
-]
-depopts: [
     "qtest" {test}
+    "qcheck" {test}
+    "oUnit" {test}
+    "odoc" {doc}
 ]
 homepage: "https://github.com/nunchaku-inria/nunchaku/"
-available: [ocaml-version >= "4.01.0"]
+available: [ocaml-version >= "4.02.0"]
 dev-repo: "https://github.com/nunchaku-inria/nunchaku.git"
 bug-reports: "https://github.com/nunchaku-inria/nunchaku/issues"

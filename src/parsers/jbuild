@@ -1,0 +1,16 @@
+
+(library
+  ((name nunchaku_parsers)
+   (public_name nunchaku.parsers)
+   (synopsis "parsers for nunchaku")
+   (libraries (containers nunchaku))
+   (flags (:standard -w +a-4-42-44-48-50-58-32-60@8 (:include ../common.flags)))
+   (ocamlopt_flags (:standard -bin-annot (:include ../opt.flags)))
+  ))
+
+(menhir
+  (;(flags (--infer))
+   (modules (Tip_parser TPTP_parser TPTP_model_parser Parser Parse_kodkod))))
+
+(ocamllex
+  (TPTP_lexer Tip_lexer Lexer Lex_kodkod TPTP_model_lexer))

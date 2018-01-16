@@ -1,54 +1,23 @@
-# OASIS_START
-# DO NOT EDIT (digest: 9a60866e2fa295c5e33a3fe33b8f3a32)
 
-SETUP = ./setup.exe
+J?=3
 
-build: setup.data $(SETUP)
-	$(SETUP) -build $(BUILDFLAGS)
+all: build test
 
-doc: setup.data $(SETUP) build
-	$(SETUP) -doc $(DOCFLAGS)
+build:
+	jbuilder build @install -j $J
 
-test: setup.data $(SETUP) build
-	$(SETUP) -test $(TESTFLAGS)
+clean:
+	jbuilder clean
 
-all: $(SETUP)
-	$(SETUP) -all $(ALLFLAGS)
+doc:
+	jbuilder build @doc
 
-install: setup.data $(SETUP)
-	$(SETUP) -install $(INSTALLFLAGS)
+test: build
+	jbuilder runtest --no-buffer -j $J
+	# ./tests/quick/all.sh # FIXME?
 
-uninstall: setup.data $(SETUP)
-	$(SETUP) -uninstall $(UNINSTALLFLAGS)
-
-reinstall: setup.data $(SETUP)
-	$(SETUP) -reinstall $(REINSTALLFLAGS)
-
-clean: $(SETUP)
-	$(SETUP) -clean $(CLEANFLAGS)
-
-distclean: $(SETUP)
-	$(SETUP) -distclean $(DISTCLEANFLAGS)
-	$(RM) $(SETUP)
-
-setup.data: $(SETUP)
-	$(SETUP) -configure $(CONFIGUREFLAGS)
-
-configure: $(SETUP)
-	$(SETUP) -configure $(CONFIGUREFLAGS)
-
-setup.exe: setup.ml
-	ocamlfind ocamlopt -o $@ -linkpkg -package oasis.dynrun $< || ocamlfind ocamlc -o $@ -linkpkg -package oasis.dynrun $< || true
-	$(RM) setup.cmi setup.cmo setup.cmx setup.o
-
-.PHONY: build doc test all install uninstall reinstall clean distclean configure
-
-# OASIS_STOP
-
-qtest-clean:
-	@rm -rf qtest/
-
-QTEST_PREAMBLE='open Nunchaku_core;; '
+open_doc: doc
+	xdg-open _build/default/_doc/index.html
 
 watch:
 	while find src/ -print0 | xargs -0 inotifywait -e delete_self -e modify ; do \
