@@ -12,7 +12,7 @@ build-test: [ "jbuilder" "runtest" "-j" jobs ]
 depends: [
     "ocamlfind" {build}
     "jbuilder" {build}
-    "containers" { >= "1.0" < "2.0" }
+    "containers" { >= "1.0" }
     "menhir" {build}
     "sequence"
     "base-unix"
