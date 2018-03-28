@@ -284,7 +284,6 @@ end
 
 module To_ho(T : TI.S) = struct
   module U = TI.Util(T)
-  type t = T.t
 
   let rec convert_ty t = match FO.Ty.view t with
     | FO.TyBuiltin b ->

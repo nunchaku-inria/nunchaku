@@ -63,7 +63,7 @@ parse_statement_list: l=list(statement) EOI { l }
 
 statement:
   | FOF LEFT_PAREN name=name COMMA ROLE_FI_DOMAIN COMMA f=form RIGHT_PAREN DOT
-    { let loc = L.mk_pos $startpos $endpos in A.mk_fi_domain name f }
+    { A.mk_fi_domain name f }
   | FOF LEFT_PAREN name=name COMMA ROLE_FI_FUNCTORS
     COMMA f=form RIGHT_PAREN DOT
     { let loc = L.mk_pos $startpos $endpos in

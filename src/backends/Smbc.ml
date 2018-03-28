@@ -32,14 +32,12 @@ let is_available () =
     res
   with Sys_error _ -> false
 
-exception Error of string
 exception Out_of_scope of string
 exception Conversion_error of T.t
 exception Parse_result_error of string
 
 let () = Printexc.register_printer
     (function
-      | Error msg -> Some (Utils.err_sprintf "[SMBC backend] %s" msg)
       | Out_of_scope msg -> Some (Printf.sprintf "problem is out of scope for SMBC: %s" msg)
       | Conversion_error t ->
         Some (Utils.err_sprintf "problem could not be converted to TIP: %a" P.pp t)

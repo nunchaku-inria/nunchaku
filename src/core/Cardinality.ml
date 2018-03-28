@@ -55,10 +55,11 @@ let is_finite = function Exact _ | QuasiFiniteGEQ _ -> true | Infinite | Unknown
 let ( * ) a b = match a, b with
   | Unknown, _
   | _, Unknown -> Unknown
-  | Exact x, _
   | _, Exact x when Z.sign x = 0 -> zero (* absorption by 0 *)
-  | (QuasiFiniteGEQ z, _ | _, QuasiFiniteGEQ z) when Z.sign z = 0 ->
+  | Exact x, _ when Z.sign x = 0 -> zero
+  | _, QuasiFiniteGEQ z when Z.sign z = 0 ->
     quasi_finite_zero (* [0,∞] *)
+  | QuasiFiniteGEQ z, _ when Z.sign z = 0 -> quasi_finite_zero
   | Infinite, _
   | _, Infinite ->
     (* we know the other param is not 0 and does not contain 0 *)

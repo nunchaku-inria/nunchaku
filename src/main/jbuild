@@ -17,7 +17,7 @@
      (with-stdout-to ${@}
        (progn
          (echo "let id_ = \"")
-         (bash "git rev-parse HEAD || echo -n unknown")
+         (bash "(git rev-parse HEAD | tr -d '\n') || echo -n unknown")
          (echo "\"  let id = String.trim id_")
         )))))
 

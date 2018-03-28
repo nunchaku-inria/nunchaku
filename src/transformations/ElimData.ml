@@ -405,7 +405,7 @@ module Make(M : sig val mode : mode end) = struct
       (fun k->k P.pp t P.pp new_t);
     new_t
 
-  let rec tr_term state (pol:Pol.t) (t:T.t) : T.t =
+  let tr_term state (pol:Pol.t) (t:T.t) : T.t =
     let rec tr_term_rec share (pol:Pol.t) t : T.t = match T.repr t with
       | TI.Const id ->
         (* constant constructor, or unrelated ID *)
