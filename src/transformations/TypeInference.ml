@@ -318,9 +318,9 @@ module Convert(Term : TermTyped.S) = struct
           U.ty_forall ?loc v' (eval ~subst t)
   end
 
-  let ty_apply t l =
+  let ty_apply ?(stack=[]) t l =
     let apply_error t =
-      type_errorf ~stack:[]
+      type_errorf ~stack
         "cannot apply type `@[%a@]` to anything" P.pp t
     in
     let rec app_ ~subst t l = match TyPoly.repr t, l with
@@ -338,10 +338,10 @@ module Convert(Term : TermTyped.S) = struct
         end
       | TyI.Meta _,_ -> assert false
       | TyI.Arrow (a, t'), b :: l' ->
-        unify_in_ctx_ ~stack:[] a b;
+        unify_in_ctx_ ~stack (Subst.eval ~subst a) (Subst.eval ~subst b);
         app_ ~subst t' l'
       | TyI.Forall (v,t'), b :: l' ->
-        let subst = Subst.add ~subst v b in
+        let subst = Subst.add ~subst v (Subst.eval ~subst b) in
         app_ ~subst t' l'
     in
     app_ ~subst:Subst.empty t l
@@ -381,6 +381,10 @@ module Convert(Term : TermTyped.S) = struct
   let check_prop_ ~stack t =
     unify_in_ctx_ ~stack (U.ty_exn t) U.ty_prop;
     t
+
+  let pp_ty_opt out = function
+    | None->()
+    | Some ty -> Format.fprintf out " : %a" A.pp_term ty
 
   (* convert a parsed term into a typed/scoped term *)
   let rec convert_term_ ~stack ~env t =
@@ -470,23 +474,26 @@ module Convert(Term : TermTyped.S) = struct
         convert_quantifier ?loc ~stack ~env ~which:`Forall v ty_opt t
       | A.Exists ((v,ty_opt),t) ->
         convert_quantifier ?loc ~stack ~env ~which:`Exists v ty_opt t
-      | A.Fun ((v,ty_opt),t) ->
+      | A.Fun ((v,ty_opt),body) ->
         (* fresh variable *)
         let ty_var = fresh_ty_var_ ~name:v in
+        Utils.debugf ~section 3 "@[<2>new variable %a@ for @[%s%a@]@ within `@[%a@]`@]"
+          (fun k-> k P.pp ty_var v pp_ty_opt ty_opt A.pp_term t);
         let var = Var.make ~ty:ty_var ~name:v in
         (* unify with expected type *)
         CCOpt.iter
-          (fun ty ->
-             unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty)
-          ) ty_opt;
+          (fun ty -> unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty))
+          ty_opt;
         let env = TyEnv.add_var ~env v ~var in
-        let t = convert_term_ ~stack ~env t in
+        let body = convert_term_ ~stack ~env body in
         (* NOTE: for dependent types, need to check whether [var] occurs in [type t]
            so that a forall is issued here instead of a mere arrow *)
-        let ty = U.ty_arrow ?loc ty_var (U.ty_exn t) in
-        U.fun_ ?loc var ~ty t
+        let ty = U.ty_arrow ?loc ty_var (U.ty_exn body) in
+        U.fun_ ?loc var ~ty body
       | A.Mu ((v,ty_opt),t) ->
         let ty_var = fresh_ty_var_ ~name:v in
+        Utils.debugf ~section 3 "@[<2>new variable %a@ for @[%s%a@]@ within `@[%a@]`@]"
+          (fun k-> k P.pp ty_var v pp_ty_opt ty_opt A.pp_term t);
         (* unify with expected type *)
         CCOpt.iter
           (fun ty -> unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty))
@@ -511,10 +518,11 @@ module Convert(Term : TermTyped.S) = struct
             (fun m (c,vars,rhs) ->
                (* find the constructor and the (co)inductive type *)
                let c, ty_c = TyEnv.find_cstor ~env c in
-               if ID.Map.mem c m
-               then ill_formedf ?loc ~kind:"match"
+               if ID.Map.mem c m then (
+                 ill_formedf ?loc ~kind:"match"
                    "constructor %a occurs twice in the list of cases"
                    ID.pp c;
+               );
                (* make scoped variables and infer their type from [t] *)
                let vars' = List.map
                    (fun v ->
@@ -522,8 +530,14 @@ module Convert(Term : TermTyped.S) = struct
                       Var.make ~name ~ty:(fresh_ty_var_ ~name:"_"))
                    vars
                in
-               let ty' = ty_apply ty_c (List.map Var.ty vars') in
-               unify_in_ctx_ ~stack:[] ty_t ty';
+               let ty' =
+                 let n_params_c = num_implicit_ ty_c in
+                 let ty_params = CCList.init n_params_c
+                     (fun i->fresh_ty_var_ ~name:(Printf.sprintf "_param_%d" i))
+                 in
+                 ty_apply ~stack ty_c (ty_params @ List.map Var.ty vars')
+               in
+               unify_in_ctx_ ~stack ty_t ty';
                (* now infer the type of [rhs] *)
                let env = TyEnv.add_vars ~env vars vars' in
                let rhs = convert_term_ ~stack ~env rhs in
@@ -637,8 +651,8 @@ module Convert(Term : TermTyped.S) = struct
   and convert_quantifier ?loc ~stack ~env ~which v ty_opt t =
     (* fresh variable *)
     let ty_var = fresh_ty_var_ ~name:v in
-    Utils.debugf ~section 3 "@[<2>new variable %a@ for %s@ within `@[%a@]`"
-      (fun k-> k P.pp ty_var v A.pp_term t);
+    Utils.debugf ~section 3 "@[<2>new variable %a@ for @[%s%a@]@ within `@[%a@]`@]"
+      (fun k-> k P.pp ty_var v pp_ty_opt ty_opt A.pp_term t );
     (* unify with expected type *)
     CCOpt.iter
       (fun ty -> unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty))
