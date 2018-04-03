@@ -124,7 +124,7 @@ type equation = {
 (* print function for debugging *)
 let pp_eqn out (e:equation): unit =
   Format.fprintf out
-    "{case @[<hv>[@[@[%a@]] -> `@[%a@]`@]@ when: [@[%a@]]@ with: @[%a@]@]}"
+    "{case @[<hv>[@[@[%a@]] ->@ `@[%a@]`@]@ when: [@[%a@]]@ with: @[%a@]@]}"
     (CCFormat.list pp_pat) e.eqn_pats
     P.pp e.eqn_rhs (CCFormat.list P.pp) e.eqn_side_conds
     (Subst.pp Var.pp_full) e.eqn_subst
@@ -216,7 +216,7 @@ let rec compile_equations lst vars (l:equation list) : term =
       let dnode =
         Utils.debugf ~section 5
           "@[<2>build decision node for `@[%a : %a@]`,@ @[tail: [@[%a@]]@]@ \
-           with: @[<1>%a@]@ @[at: %a@]@]"
+           with: @[<hv>%a@]@ @[at: %a@]@]"
           (fun k->k Var.pp_full v P.pp (Var.ty v)
               (CCFormat.list Var.pp_full) vars_tail
               (CCFormat.list pp_eqn) l pp_path lst.path);
@@ -368,6 +368,9 @@ let uniq_eqns
       } in
       (* compile equations into flat pattern matches *)
       let new_rhs = compile_equations lst vars cases in
+      Utils.debugf ~section 5
+        "@[compiled into@ @[@[%a %a@] ->@ %a@]@]"
+        (fun k->k ID.pp id (Utils.pp_list Var.pp_full) vars P.pp new_rhs);
       Stmt.Eqn_single (vars,new_rhs)
 
 let uniq_eqn_st env st =
