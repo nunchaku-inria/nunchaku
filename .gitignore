@@ -15,3 +15,4 @@ done.txt
 todo.txt
 *.automaton
 .merlin
+*.install
