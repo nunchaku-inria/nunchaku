@@ -15,6 +15,9 @@ We have https://github.com/nunchaku-inria/nunchaku-problems[a set of problems]
 for tests and regressions, that can also be helpful to grasp the input syntax
 and see how to use the constructs of Nunchaku.
 
+image::https://api.travis-ci.org/nunchaku-inria/nunchaku.svg?branch=master[link="https://travis-ci.org/nunchaku-inria/nunchaku", alt="Build status on travis"]
+https://travis-ci.org/nunchaku-inria/nunchaku[Travis build]
+
 toc::[]
 
 == Basic Usage
