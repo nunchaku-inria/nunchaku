@@ -530,26 +530,26 @@ module Convert(Term : TermTyped.S) = struct
                       Var.make ~name ~ty:(fresh_ty_var_ ~name:"_"))
                    vars
                in
+               let n_params_c = num_implicit_ ty_c in
+               let ty_params = CCList.init n_params_c
+                   (fun i->fresh_ty_var_ ~name:(Printf.sprintf "_param_%d" i))
+               in
                let ty' =
-                 let n_params_c = num_implicit_ ty_c in
-                 let ty_params = CCList.init n_params_c
-                     (fun i->fresh_ty_var_ ~name:(Printf.sprintf "_param_%d" i))
-                 in
                  ty_apply ~stack ty_c (ty_params @ List.map Var.ty vars')
                in
                unify_in_ctx_ ~stack ty_t ty';
                (* now infer the type of [rhs] *)
                let env = TyEnv.add_vars ~env vars vars' in
                let rhs = convert_term_ ~stack ~env rhs in
-               ID.Map.add c (vars', rhs) m)
+               ID.Map.add c (ty_params, vars', rhs) m)
             ID.Map.empty l
         in
         (* force all right-hand sides to have the same type *)
         let ty = try
-            let (id,(_,rhs)) = ID.Map.choose m in
+            let (id,(_,_,rhs)) = ID.Map.choose m in
             let ty = U.ty_exn rhs in
             ID.Map.iter
-              (fun id' (_,rhs') ->
+              (fun id' (_,_,rhs') ->
                  if not (ID.equal id id')
                  then unify_in_ctx_ ~stack:[] ty (U.ty_exn rhs'))
               m;
@@ -712,7 +712,10 @@ module Convert(Term : TermTyped.S) = struct
           | TI.Default_some (rhs,_) -> is_mono_ rhs
         end &&
         ID.Map.for_all
-          (fun _ (vars,rhs) -> List.for_all is_mono_var_ vars && is_mono_ rhs)
+          (fun _ (tys,vars,rhs) ->
+             List.for_all is_mono_ tys &&
+             List.for_all is_mono_var_ vars &&
+             is_mono_ rhs)
           l
       | TI.Bind (Binder.TyForall, _, _) -> false
       | TI.Bind (_,v,t) -> is_mono_var_ v && is_mono_ t

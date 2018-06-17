@@ -30,7 +30,7 @@ module DT : sig
   and ('t, 'ty) tests_or_match =
     | Tests of ('t, 'ty) case list
     | Match of
-        ('ty Var.t list * ('t, 'ty) t) ID.Map.t (* branches *)
+        ('ty list * 'ty Var.t list * ('t, 'ty) t) ID.Map.t (* branches *)
         * int ID.Map.t (* missing cases *)
 
   and ('t, 'ty) case = 't * ('t, 'ty) t
@@ -46,7 +46,7 @@ module DT : sig
 
   val match_ :
     missing:int ID.Map.t ->
-    ('ty Var.t list * ('t, 'ty) t) ID.Map.t ->
+    ('ty list * 'ty Var.t list * ('t, 'ty) t) ID.Map.t ->
     ('t,'ty) tests_or_match
 
   val mk_cases :
@@ -65,7 +65,7 @@ module DT : sig
 
   val mk_match :
     'ty Var.t ->
-    by_cstor:('ty Var.t list * ('t, 'ty) t) ID.Map.t ->
+    by_cstor:('ty list * 'ty Var.t list * ('t, 'ty) t) ID.Map.t ->
     missing:int ID.Map.t ->
     default:('t, 'ty) t option ->
     ('t, 'ty) t

@@ -272,11 +272,20 @@ let rec mono_term ~self ~local_state (t:term) : term =
     | TI.Match (t,l,def) ->
       let t = mono_term ~self ~local_state t in
       let def = TI.map_default_case (mono_term ~self ~local_state) def in
-      let l = ID.Map.map
-          (fun (vars,rhs) ->
-             let vars = List.map (mono_var ~self ~local_state) vars in
-             vars, mono_term ~self ~local_state rhs)
-          l
+      let l =
+        ID.Map.to_seq l
+        |> Sequence.map
+          (fun (c, (tys, vars,rhs)) ->
+            let mangled_tys = List.map (mono_type ~self ~local_state) tys in
+            let c' =
+              if St.always_mangle (Trav.state self)
+              || should_be_mangled_ ~env:(Trav.env self) c
+              then fst @@ mangle_ ~state:(Trav.state self) c mangled_tys
+              else c
+            in
+            let vars = List.map (mono_var ~self ~local_state) vars in
+            c', ([], vars, mono_term ~self ~local_state rhs))
+        |> ID.Map.of_seq
       in
       U.match_with t l ~def
     | TI.TyBuiltin b -> U.ty_builtin b
@@ -593,7 +602,20 @@ let unmangle_term ~(state:unmangle_state) (t:term):term =
     | TI.Match (t,l,def) ->
       let t = aux t in
       let def = TI.map_default_case aux def in
-      let l = ID.Map.map (fun (vars,rhs) -> List.map aux_var vars, aux rhs) l in
+      let l =
+        ID.Map.to_seq l
+        |> Sequence.map
+          (fun (c,(tys,vars,rhs)) ->
+            assert (tys=[]);
+            let vars = List.map aux_var vars in
+            let rhs = aux rhs in
+            begin try
+                let c', tys = ID.Tbl.find state c in
+                c', (tys,vars,rhs)
+              with Not_found -> c, ([],vars,rhs)
+            end)
+        |> ID.Map.of_seq
+      in
       U.match_with t l ~def
     | TI.TyBuiltin b -> U.ty_builtin b
     | TI.TyArrow (a,b) -> U.ty_arrow (aux a) (aux b)

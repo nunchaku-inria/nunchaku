@@ -562,13 +562,13 @@ let filter_dt_ ~polarized ~default:d dt : (_,_) DT.t =
     | DT.Cases {DT.var; tests=DT.Match (m,missing); default} ->
       let new_m, new_missing =
         ID.Map.fold
-          (fun id (vars,rhs) (new_m,new_missing) ->
+          (fun id (tys, vars,rhs) (new_m,new_missing) ->
              match aux rhs with
                | None ->
                  (* remove! *)
                  new_m, ID.Map.add id (List.length vars) new_missing
                | Some rhs ->
-                 ID.Map.add id (vars,rhs) new_m, new_missing)
+                 ID.Map.add id (tys,vars,rhs) new_m, new_missing)
           m
           (ID.Map.empty, missing)
       and default =

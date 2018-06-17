@@ -105,15 +105,15 @@ let encode_term state ?(subst=Var.Subst.empty) t =
       let def = TI.map_default_case (aux subst) def in
       let m =
         ID.Map.mapi
-          (fun c_id (vars,rhs) -> match T.repr u with
+          (fun c_id (tys,vars,rhs) -> match T.repr u with
              | TI.Var v ->
                (* so we match [v] against the pattern [c_id vars],
                   therefore in [rhs] we can replace [v] by [c_id vars]. *)
                let subst =
                  Var.Subst.add ~subst v (U.app_const c_id (List.map U.var vars))
                in
-               vars, aux subst rhs
-             | _ -> vars, aux subst rhs)
+               tys, vars, aux subst rhs
+             | _ -> tys, vars, aux subst rhs)
           m
       in
       U.match_with u m ~def

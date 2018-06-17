@@ -153,7 +153,7 @@ let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
     let cases =
       ID.Map.to_list map
       |> List.map
-        (fun (c, (vars,rhs)) ->
+        (fun (c, (_tys,vars,rhs)) ->
            A.Match_case
              (id_to_string c, List.map conv_var vars, term_to_tip st rhs))
     and def = match def with
@@ -429,7 +429,7 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
                CCList.fold_map add_typed_var penv (List.combine vars c_ty_args)
              in
              let rhs = term_of_tip ~env penv rhs in
-             ID.Map.add c_id (vars,rhs) m, def
+             ID.Map.add c_id ([],vars,rhs) m, def
            | A.Match_default _, Some _ ->
              error_parse_modelf
                "two distinct \"default\" clauses in `@[%a@]`"
@@ -537,12 +537,12 @@ let extract_to_outer_function (t:term): term =
     | TI.Builtin (`Ite (_, a, b)) -> merge_ty_lists (extract_ty_args a) (extract_ty_args b)
     | TI.Match (_, m, def) ->
       assert (not (ID.Map.is_empty m));
-      let id, (_, rhs) = ID.Map.min_binding m in
+      let id, (_, _, rhs) = ID.Map.min_binding m in
       let args0 = extract_ty_args rhs in
       let m = ID.Map.remove id m in
       let args =
         ID.Map.fold
-          (fun _ (_, rhs) m -> merge_ty_lists m (extract_ty_args rhs))
+          (fun _ (_, _, rhs) m -> merge_ty_lists m (extract_ty_args rhs))
           m args0
       in
       begin match def with
@@ -573,11 +573,11 @@ let extract_to_outer_function (t:term): term =
       U.match_with
         (U.eval_renaming ~subst u)
         (ID.Map.map
-           (fun (vars, rhs) ->
+           (fun (tys, vars, rhs) ->
               let subst, vars =
                 CCList.fold_map Var.Subst.rename_var subst vars
               in
-              vars, transform fun_vars subst rhs)
+              tys, vars, transform fun_vars subst rhs)
            m)
         ~def:(TI.map_default_case (transform fun_vars subst) def)
     | _ ->
@@ -660,8 +660,9 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
           | TI.Var v' when Var.equal v v' ->
             let m =
               ID.Map.map
-                (fun (local_vars, rhs) ->
-                   local_vars, conv_body ~vars:(local_vars @ vars_tail) rhs)
+                (fun (tys, local_vars, rhs) ->
+                   assert (tys = []);
+                   tys, local_vars, conv_body ~vars:(local_vars @ vars_tail) rhs)
                 m
             and def, missing = match def with
               | TI.Default_none -> None, ID.Map.empty

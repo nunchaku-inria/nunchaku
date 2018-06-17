@@ -540,10 +540,10 @@ module Make(M : sig val mode : mode end) = struct
           let t = tr_term_rec share pol t in
           let m =
             ID.Map.map
-              (fun (vars,rhs) ->
+              (fun (tys, vars,rhs) ->
                  let rhs = tr_term_rec share pol rhs in
                  let rhs = introduce_lets share rhs ~start:(`Vars vars) in
-                 vars, rhs)
+                 tys, vars, rhs)
               m
           and def = TI.map_default_case
               (fun rhs -> tr_term_rec share pol rhs)

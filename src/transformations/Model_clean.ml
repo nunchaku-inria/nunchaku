@@ -119,7 +119,7 @@ let ground_dt doms (dt:(_,_) M.DT.t): (_,_) M.DT.t =
     | D.Cases c ->
       let tests, changed = match c.D.tests with
         | D.Match (map,missing) ->
-          let map = ID.Map.map (fun (vars,dt) -> vars, ground_dt subst dt) map in
+          let map = ID.Map.map (fun (tys,vars,dt) -> tys, vars, ground_dt subst dt) map in
           D.match_ ~missing map, false
         | D.Tests l when List.for_all (fun (t,_) -> not (U.is_var t)) l ->
           (* simple case where there are no variables *)
@@ -243,7 +243,7 @@ let remove_trivial_tests m : (_,_) Model.t =
       DT.mk_tests var ~tests ~default
     | DT.Cases {DT.var; tests=DT.Match (m,missing); default=d} ->
       let default = CCOpt.map aux d in
-      let m = ID.Map.map (fun (vars,rhs) -> vars, aux rhs) m in
+      let m = ID.Map.map (fun (tys, vars,rhs) -> tys, vars, aux rhs) m in
       DT.mk_match var ~by_cstor:m ~missing ~default
   in
   Model.filter_map m

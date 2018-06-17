@@ -77,7 +77,7 @@ let elim_match ~mode ~env t =
           l, elim_match_ ~subst rhs
         | TermInner.Default_none ->
           (* remove first binding to make it the default case *)
-          let c1, (vars1,rhs1) = ID.Map.choose l in
+          let c1, (_, vars1,rhs1) = ID.Map.choose l in
           let subst0 = CCList.foldi
               (fun subst i vi -> Subst.add ~subst vi (mk_select_ c1 i t'))
               subst vars1
@@ -88,7 +88,7 @@ let elim_match ~mode ~env t =
       in
       (* series of ite with selectors on the other cases *)
       ID.Map.fold
-        (fun c (vars,rhs) acc ->
+        (fun c (_, vars,rhs) acc ->
            let subst' = CCList.foldi
                (fun subst i vi -> Subst.add ~subst vi (mk_select_ c i t'))
                subst vars
@@ -102,9 +102,9 @@ let elim_match ~mode ~env t =
       let def = TermInner.map_default_case (elim_match_ ~subst) def in
       let l =
         ID.Map.map
-          (fun (vars,rhs) ->
+          (fun (tys, vars,rhs) ->
              let subst, vars = CCList.fold_map U.rename_var subst vars in
-             vars, elim_match_ ~subst rhs)
+             tys, vars, elim_match_ ~subst rhs)
           l
       in
       U.match_with t l ~def

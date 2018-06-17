@@ -160,13 +160,13 @@ module Make(T : TI.S) = struct
         check ~env bound' u
       | TI.Match (_,m,def) ->
         (* TODO: check that each constructor is present, and only once *)
-        let id, (vars, rhs) = ID.Map.choose m in
+        let id, (_, vars, rhs) = ID.Map.choose m in
         let bound' = List.fold_left (check_var ~env) bound vars in
         (* reference type *)
         let ty = check ~env bound' rhs in
         (* check other branches *)
         ID.Map.iter
-          (fun id' (vars, rhs') ->
+          (fun id' (_, vars, rhs') ->
              if not (ID.equal id id')
              then (
                let bound' = List.fold_left (check_var ~env) bound vars in

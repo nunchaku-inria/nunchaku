@@ -206,7 +206,7 @@ let mk_match_tree ~env ~subst vars args ~k : term =
           and default =
             match_default_except ~env c_id U.false_
           in
-          U.match_with (U.var v) (ID.Map.singleton c_id ([], ok_case)) ~def:default
+          U.match_with (U.var v) (ID.Map.singleton c_id ([], [], ok_case)) ~def:default
         | TI.App (f, l) ->
           begin match T.repr f with
             | TI.Const c_id ->
@@ -230,7 +230,7 @@ let mk_match_tree ~env ~subst vars args ~k : term =
                     match_default_except ~env c_id U.false_
                   in
                   U.match_with (U.var v)
-                    (ID.Map.singleton c_id (new_vars,ok_case))
+                    (ID.Map.singleton c_id (ty_args, new_vars,ok_case))
                     ~def:default
                 | _ -> default()
               end

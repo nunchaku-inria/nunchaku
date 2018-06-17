@@ -201,9 +201,9 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
           | Pol.NoPol -> assert false
         in
         let cases = ID.Map.map
-            (fun (vars,rhs) ->
+            (fun (tys,vars,rhs) ->
                let rhs, g_rhs = tr_term ~state ~pol rhs in
-               vars, combine_polarized ~is_pos rhs g_rhs)
+               tys, vars, combine_polarized ~is_pos rhs g_rhs)
             cases
         and def =
           TI.map_default_case
@@ -218,10 +218,10 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
         let asserting = ref ID.Map.empty in
         let asserting_def = ref ([],ID.Map.empty) in
         let cases = ID.Map.mapi
-            (fun c (vars,rhs) ->
+            (fun c (tys,vars,rhs) ->
                let rhs, g_rhs = tr_term ~state ~pol rhs in
-               asserting := ID.Map.add c (vars, g_rhs.asserting) !asserting;
-               vars,rhs)
+               asserting := ID.Map.add c (tys, vars, g_rhs.asserting) !asserting;
+               tys,vars,rhs)
             cases
         and def = TI.map_default_case'
             (fun rhs ids ->
@@ -233,9 +233,9 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
         (* convert the map from constructors to guards, into one single
            guard that uses pattern matching *)
         let map_to_guard m def =
-          if ID.Map.exists (fun _ (_,l) -> l<>[]) m || fst def <> []
-          then
-            let m = ID.Map.map (fun (vars,l) -> vars, U.and_ l) m in
+          if ID.Map.exists (fun _ (_,_,l) -> l<>[]) m || fst def <> []
+          then (
+            let m = ID.Map.map (fun (tys,vars,l) -> tys, vars, U.and_ l) m in
             let def = match def with
               | [], _ -> TI.Default_none
               | l, ids ->
@@ -243,7 +243,7 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
                 TI.Default_some (U.and_ l, ids)
             in
             [U.match_with lhs m ~def]
-          else []
+          ) else []
         in
         let g_cases = {
           asserting = map_to_guard !asserting !asserting_def;

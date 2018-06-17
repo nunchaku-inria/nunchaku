@@ -321,7 +321,7 @@ and compile_dnode lst v next_vars dn : term = match dn with
            let rhs' =
              compile_equations lst (local_vars @ next_vars) (cases @ wildcard_cases)
            in
-           local_vars, rhs')
+           [], local_vars, rhs')
     in
     U.match_with (U.var v) l ~def
 

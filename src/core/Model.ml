@@ -33,7 +33,7 @@ module DT = struct
   and ('t, 'ty) tests_or_match =
     | Tests of ('t, 'ty) case list
     | Match of
-        ('ty Var.t list * ('t, 'ty) t) ID.Map.t (* branches *)
+        ('ty list * 'ty Var.t list * ('t, 'ty) t) ID.Map.t (* branches *)
         * int ID.Map.t (* missing cases *)
 
   and ('t, 'ty) case = 't * ('t, 'ty) t
@@ -66,7 +66,7 @@ module DT = struct
     | Match (m,missing) ->
       m
       |> ID.Map.map
-        (fun (vars,rhs) -> List.map (Var.update_ty ~f:ty) vars, f rhs)
+        (fun (tys,vars,rhs) -> List.map ty tys, List.map (Var.update_ty ~f:ty) vars, f rhs)
       |> match_ ~missing
 
   let rec map ~term ~ty t = match t with
@@ -86,7 +86,7 @@ module DT = struct
         | Match (m,missing) ->
           (* pass through *)
           ID.Map.map
-            (fun (vars,rhs) -> vars, filter_map ~test:ft ~yield:fy rhs) m
+            (fun (tys,vars,rhs) -> tys, vars, filter_map ~test:ft ~yield:fy rhs) m
           |> match_ ~missing
         | Tests l ->
           CCList.filter_map
@@ -124,10 +124,12 @@ module DT = struct
           Var.pp_full cases.var pty (Var.ty cases.var)
           pp_tests l pp_default cases.default
       | Cases ({tests=Match (m,_); _} as cases) ->
-        let pp_branch out (id,(vars,rhs)) =
-          fpf out "{@[<2>@[%a %a@] ->@ %a@]}"
+        let pp_branch out (id,(tys,vars,rhs)) =
+          fpf out "{@[<2>@[%a%a %a@] ->@ %a@]}"
             ID.pp id
-            (Utils.pp_list ~sep:" " Var.pp_full) vars (pp pt pty) rhs
+            (Utils.pp_list ~sep:" " pty) tys
+            (Utils.pp_list ~sep:" " Var.pp_full) vars
+            (pp pt pty) rhs
         in
         let pp_m out m = Utils.pp_seq ~sep:"; " pp_branch out (ID.Map.to_seq m) in
         fpf out "@[<hv1>cases (@[%a:%a@])@ {@[<v>%a%a@]@,}@]"
@@ -142,7 +144,7 @@ module DT = struct
     | Cases {var; default=Some d; _} -> var :: vars d
     | Cases {tests=Match (m,_); default=None; _} when ID.Map.is_empty m -> assert false
     | Cases {var; tests=Match (m,_); _} ->
-      let _, (_,rhs) = ID.Map.choose m in
+      let _, (_,_,rhs) = ID.Map.choose m in
       var :: vars rhs
 
   let ty_args dt = vars dt |> List.map Var.ty
@@ -241,7 +243,7 @@ module DT = struct
         if not (Var.equal v var) then fail_vars v var dt;
         begin match tests with
           | Tests l -> List.iter (fun (_,rhs) -> check_vars vars' rhs) l
-          | Match (m,_) -> ID.Map.iter (fun _ (_,rhs) -> check_vars vars' rhs) m
+          | Match (m,_) -> ID.Map.iter (fun _ (_,_,rhs) -> check_vars vars' rhs) m
         end;
         CCOpt.iter (check_vars vars') default;
     in
@@ -394,9 +396,10 @@ module DT_util = struct
         | DT.Match (m,missing) ->
           m
           |> ID.Map.map
-            (fun (vars, rhs) ->
+            (fun (tys,vars, rhs) ->
+               let tys = List.map (U.eval ~subst) tys in
                let subst, vars = CCList.fold_map U.rename_var subst vars in
-               vars, eval_subst ~subst rhs)
+               tys, vars, eval_subst ~subst rhs)
           |> DT.match_ ~missing
       in
       let default = CCOpt.map (eval_subst ~subst) default in
@@ -415,9 +418,10 @@ module DT_util = struct
         | DT.Match (m,missing) ->
           m
           |> ID.Map.map
-            (fun (vars,rhs) ->
+            (fun (tys,vars,rhs) ->
+               let tys = List.map (U.eval_renaming ~subst) tys in
                let subst, vars = CCList.fold_map Subst.rename_var subst vars in
-               vars, map_vars ~subst rhs)
+               tys,vars, map_vars ~subst rhs)
           |> DT.match_ ~missing
       in
       let default = CCOpt.map (map_vars ~subst) default in
@@ -452,7 +456,7 @@ module DT_util = struct
       | Some (id, args) ->
         begin match ID.Map.get id m with
           | None -> None
-          | Some (vars, rhs) ->
+          | Some (_, vars, rhs) ->
             (* found the appropriate branch, bind [vars] and recurse in [rhs] *)
             assert (List.length vars = List.length args);
             let subst = Subst.add ~subst var t in
@@ -577,11 +581,11 @@ module DT_util = struct
   and merge_match_ l : (_,_)DT.t = match l with
     | (DT.Cases {DT.var; tests=DT.Match (m,missing0); _}, subst) :: tail ->
       (* add one case to the map *)
-      let merge_into_map subst id (vars,rhs) m =
+      let merge_into_map subst id (tys,vars,rhs) m =
         let id_l = ID.Map.get_or id m ~default:[] in
-        ID.Map.add id ((vars,rhs,subst)::id_l) m
+        ID.Map.add id ((tys,vars,rhs,subst)::id_l) m
       in
-      let m0 = ID.Map.map (fun (vars,rhs) -> [vars,rhs,subst]) m in
+      let m0 = ID.Map.map (fun (tys,vars,rhs) -> [tys,vars,rhs,subst]) m in
       (* now merge [tail] into [tbl] *)
       let new_m, new_missing =
         List.fold_left
@@ -599,21 +603,23 @@ module DT_util = struct
         ID.Map.map
           (fun subs -> match subs with
              | [] -> assert false
-             | (vars,rhs,subst) :: tail ->
+             | (tys,vars,rhs,subst) :: tail ->
                assert (List.for_all (fun v->not (Subst.mem ~subst v)) vars);
                (* rename variables in [tail] into [vars], all of
                   them are going to live under the same case [cstor vars -> …] *)
                let tail' =
                  let tvars = List.map U.var vars in
                  List.map
-                   (fun (vars',rhs',subst') ->
+                   (fun (tys',vars',rhs',subst') ->
+                      (* FIXME: do not merge if types are different? *)
+                      assert (List.length tys = List.length tys');
                       assert (List.length vars = List.length vars');
                       let subst' = Subst.add_list ~subst:subst' vars' tvars in
                       rhs',subst')
                    tail
                in
                let new_rhs = merge_rec_l ((rhs,subst)::tail') in
-               vars, new_rhs)
+               tys, vars, new_rhs)
           new_m
       and default =
         merge_default l
@@ -717,7 +723,7 @@ module DT_util = struct
       | DT.Cases {DT.tests=DT.Match (m,missing); default; var} ->
         let m =
           ID.Map.map
-            (fun (vars,rhs) -> vars, aux rhs)
+            (fun (tys, vars,rhs) -> tys, vars, aux rhs)
             m
         and default = match default with
           | None -> TI.Default_none
