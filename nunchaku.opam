@@ -5,7 +5,7 @@ authors: ["Simon Cruanes" "Jasmin Blanchette"]
 maintainer: "simon.cruanes.2007@m4x.org"
 build: [
     ["jbuilder" "build" "-p" name "-j" jobs]
-    ["strip" "nunchaku.native"]
+    ["strip" "./nunchaku"]
 ]
 build-doc: [ make "doc" ]
 build-test: [ "jbuilder" "runtest" "-j" jobs ]
