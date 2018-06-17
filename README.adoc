@@ -6,10 +6,12 @@ A counter-example finder for higher-order logic, designed to be used from
 various proof assistants. A spiritual successor to Nitpick.
 Documentation at https://nunchaku-inria.github.io/nunchaku/.
 
-Nunchaku relies upon recent versions
-of http://cvc4.cs.nyu.edu/web/[the CVC4 SMT-solver]. Currently it is
-necessary to use unreleased versions of CVC4, that can be found
-under "development versions" on http://cvc4.cs.nyu.edu/downloads/.
+Nunchaku requires http://cvc4.cs.nyu.edu/web/[CVC4] 1.5 or later.
+Alternatively, it can use other backends:
+
+- https://github.com/c-cube/smbc[smbc], a solver written in OCaml, for computational logic
+- kodkod with its https://github.com/nunchaku-inria/kodkodi-pkg[kodkodi frontend]
+- Paradox (https://github.com/c-cube/paradox[snapshot here])
 
 We have https://github.com/nunchaku-inria/nunchaku-problems[a set of problems]
 for tests and regressions, that can also be helpful to grasp the input syntax
@@ -102,12 +104,10 @@ You need to install the dependencies first, namely:
 - http://gallium.inria.fr/~fpottier/menhir/[menhir]
 - https://github.com/c-cube/sequence[sequence]
 - https://github.com/c-cube/tip-parser[tip-parser] (which requires menhir)
-- https://github.com/ocaml/oasis/[oasis] (to build the development version, not releases)
-- ocamlbuild (provided with OCaml ≤ 4.03)
+- https://github.com/ocaml/dune/[jbuilder] (build system)
 
 Once you have entered the source directory, type:
 
-    ./configure
     make
 
 == License
