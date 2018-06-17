@@ -222,6 +222,7 @@ let options =
       ; "--prelude", Arg.String add_prelude, " parse given prelude file"
       ; "--backtrace", Arg.Unit (fun () -> Printexc.record_backtrace true), " enable stack traces"
       ; "--version", Arg.Set version_, " print version and exit"
+      ; "-d", Arg.Int Utils.set_debug, " alias to --debug"
       ]
   )
 
