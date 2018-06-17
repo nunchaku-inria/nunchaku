@@ -93,8 +93,6 @@ end
 module Convert(T1 : TermInner.REPR)(T2 : TermInner.BUILD) = struct
   module C = TermInner.Convert(T1)(T2)
 
-  type ('a, 'b, 'c) inv = <eqn:'a; ind_preds:'b; ty: 'c>
-
   let convert pb = map ~term:C.convert ~ty:C.convert pb
 
   let pipe () =

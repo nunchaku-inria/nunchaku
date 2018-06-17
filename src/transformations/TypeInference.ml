@@ -1417,9 +1417,8 @@ module Convert(Term : TermTyped.S) = struct
     with e -> E.of_exn e
 end
 
-module Make(T1 : TermTyped.S)(T2 : TermInner.S) = struct
+module Make(T1 : TermTyped.S) = struct
   type term1 = T1.t
-  type term2 = T2.t
 
   let pipe_with ~decode ~print =
     (* type inference *)

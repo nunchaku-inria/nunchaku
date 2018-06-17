@@ -89,8 +89,6 @@ end
 
 (** {2 Convert the term representations} *)
 module Convert(T1 : TermInner.REPR)(T2 : TermInner.BUILD) : sig
-  type ('a, 'b, 'c) inv = <eqn:'a; ind_preds:'b; ty: 'c>
-
   val convert :
     (T1.t, T1.t) t ->
     (T2.t, T2.t) t

@@ -287,7 +287,7 @@ module Pipes = struct
   module HO = TI.Default
   module Typed = TermTyped.Default
   (* type inference *)
-  module Step_tyinfer = Tr.TypeInference.Make(Typed)(HO)
+  module Step_tyinfer = Tr.TypeInference.Make(Typed)
   module Step_conv_ty = Problem.Convert(Typed)(HO)
   (* conversion to FO *)
   module Step_tofo = Tr.Trans_ho_fo.Make(HO)

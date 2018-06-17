@@ -89,9 +89,8 @@ module Convert(T : TermTyped.S) : sig
     problem * env
 end
 
-module Make(T1 : TermTyped.S)(T2 : TermInner.S) : sig
+module Make(T1 : TermTyped.S) : sig
   type term1 = T1.t
-  type term2 = T2.t
 
   val pipe :
     print:bool ->
