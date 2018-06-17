@@ -28,6 +28,7 @@
    (public_name nunchaku)
    (libraries (nunchaku nunchaku.parsers nunchaku.backends nunchaku.transformations))
    (flags (:standard -w +a-4-42-44-48-50-58-32-60@8 (:include ../common.flags)))
+   (modes (native))
    (ocamlopt_flags (:standard -bin-annot (:include ../opt.flags)))
   ))
 
