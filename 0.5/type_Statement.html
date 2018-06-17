@@ -1,0 +1,420 @@
+<html><head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="Start" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="ID" rel="Chapter" href="ID.html">
+<link title="Var" rel="Chapter" href="Var.html">
+<link title="MetaVar" rel="Chapter" href="MetaVar.html">
+<link title="Location" rel="Chapter" href="Location.html">
+<link title="Intf" rel="Chapter" href="Intf.html">
+<link title="Utils" rel="Chapter" href="Utils.html">
+<link title="Transform" rel="Chapter" href="Transform.html">
+<link title="UntypedAST" rel="Chapter" href="UntypedAST.html">
+<link title="Model" rel="Chapter" href="Model.html">
+<link title="TypeUnify" rel="Chapter" href="TypeUnify.html">
+<link title="Problem" rel="Chapter" href="Problem.html">
+<link title="FO" rel="Chapter" href="FO.html">
+<link title="Reduce" rel="Chapter" href="Reduce.html">
+<link title="Env" rel="Chapter" href="Env.html">
+<link title="Statement" rel="Chapter" href="Statement.html">
+<link title="FO_tptp" rel="Chapter" href="FO_tptp.html">
+<link title="FO_rel" rel="Chapter" href="FO_rel.html">
+<link title="Cardinality" rel="Chapter" href="Cardinality.html">
+<link title="Scheduling" rel="Chapter" href="Scheduling.html">
+<link title="Polarity" rel="Chapter" href="Polarity.html">
+<link title="Traversal" rel="Chapter" href="Traversal.html">
+<link title="ProblemMetadata" rel="Chapter" href="ProblemMetadata.html">
+<link title="AnalyzeType" rel="Chapter" href="AnalyzeType.html">
+<link title="Prelude" rel="Chapter" href="Prelude.html">
+<link title="TypeCheck" rel="Chapter" href="TypeCheck.html">
+<link title="Lazy_list" rel="Chapter" href="Lazy_list.html">
+<link title="Bit_set" rel="Chapter" href="Bit_set.html">
+<link title="Sexp_lib" rel="Chapter" href="Sexp_lib.html">
+<link title="Sexp_lex" rel="Chapter" href="Sexp_lex.html">
+<link title="Precedence" rel="Chapter" href="Precedence.html">
+<link title="Binder" rel="Chapter" href="Binder.html">
+<link title="Builtin" rel="Chapter" href="Builtin.html">
+<link title="Cardinal_encode" rel="Chapter" href="Cardinal_encode.html">
+<link title="TermInner" rel="Chapter" href="TermInner.html">
+<link title="TermTyped" rel="Chapter" href="TermTyped.html">
+<link title="Pattern" rel="Chapter" href="Pattern.html">
+<link title="TypePoly" rel="Chapter" href="TypePoly.html">
+<link title="TypeMono" rel="Chapter" href="TypeMono.html">
+<link title="Parsing_utils" rel="Chapter" href="Parsing_utils.html">
+<link title="Lexer" rel="Chapter" href="Lexer.html">
+<link title="Parser" rel="Chapter" href="Parser.html">
+<link title="TPTP_print" rel="Chapter" href="TPTP_print.html">
+<link title="TPTP_lexer" rel="Chapter" href="TPTP_lexer.html">
+<link title="TPTP_parser" rel="Chapter" href="TPTP_parser.html">
+<link title="TPTP_preprocess" rel="Chapter" href="TPTP_preprocess.html">
+<link title="TPTP_model_ast" rel="Chapter" href="TPTP_model_ast.html">
+<link title="TPTP_model_lexer" rel="Chapter" href="TPTP_model_lexer.html">
+<link title="TPTP_model_parser" rel="Chapter" href="TPTP_model_parser.html">
+<link title="Ast_kodkod" rel="Chapter" href="Ast_kodkod.html">
+<link title="Lex_kodkod" rel="Chapter" href="Lex_kodkod.html">
+<link title="Parse_kodkod" rel="Chapter" href="Parse_kodkod.html">
+<link title="Tip_ast" rel="Chapter" href="Tip_ast.html">
+<link title="Tip_parser" rel="Chapter" href="Tip_parser.html">
+<link title="Tip_lexer" rel="Chapter" href="Tip_lexer.html">
+<link title="Parse_tip" rel="Chapter" href="Parse_tip.html">
+<link title="Skolem" rel="Chapter" href="Skolem.html">
+<link title="TypeInference" rel="Chapter" href="TypeInference.html">
+<link title="ElimPatternMatch" rel="Chapter" href="ElimPatternMatch.html">
+<link title="Monomorphization" rel="Chapter" href="Monomorphization.html">
+<link title="Specialize" rel="Chapter" href="Specialize.html">
+<link title="LambdaLift" rel="Chapter" href="LambdaLift.html">
+<link title="Elim_HOF" rel="Chapter" href="Elim_HOF.html">
+<link title="ElimRecursion" rel="Chapter" href="ElimRecursion.html">
+<link title="ElimMultipleEqns" rel="Chapter" href="ElimMultipleEqns.html">
+<link title="ElimIndPreds" rel="Chapter" href="ElimIndPreds.html">
+<link title="ElimCopy" rel="Chapter" href="ElimCopy.html">
+<link title="Polarize" rel="Chapter" href="Polarize.html">
+<link title="Unroll" rel="Chapter" href="Unroll.html">
+<link title="IntroGuards" rel="Chapter" href="IntroGuards.html">
+<link title="Model_clean" rel="Chapter" href="Model_clean.html">
+<link title="ElimData" rel="Chapter" href="ElimData.html">
+<link title="ElimTypes" rel="Chapter" href="ElimTypes.html">
+<link title="Elim_prop_args" rel="Chapter" href="Elim_prop_args.html">
+<link title="Elim_ite" rel="Chapter" href="Elim_ite.html">
+<link title="Elim_infinite" rel="Chapter" href="Elim_infinite.html">
+<link title="Trans_ho_fo" rel="Chapter" href="Trans_ho_fo.html">
+<link title="Trans_fo_tptp" rel="Chapter" href="Trans_fo_tptp.html">
+<link title="Lift_undefined" rel="Chapter" href="Lift_undefined.html">
+<link title="FoToRelational" rel="Chapter" href="FoToRelational.html">
+<link title="Cstor_as_fun" rel="Chapter" href="Cstor_as_fun.html"><title>Nunchaku documentation : Statement</title>
+</head>
+<body>
+<code class="code"><span class="keyword">sig</span><br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;id&nbsp;=&nbsp;<span class="constructor">ID</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;loc&nbsp;=&nbsp;<span class="constructor">Location</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;var&nbsp;=&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="constructor">Var</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;printer&nbsp;=&nbsp;<span class="constructor">Format</span>.formatter&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;decl_attr&nbsp;=<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Attr_card_max</span>&nbsp;<span class="keyword">of</span>&nbsp;int<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_card_min</span>&nbsp;<span class="keyword">of</span>&nbsp;int<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_card_max_hint</span>&nbsp;<span class="keyword">of</span>&nbsp;int<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_card_min_hint</span>&nbsp;<span class="keyword">of</span>&nbsp;int<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_incomplete</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_abstract</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_infinite</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_can_be_empty</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_finite_approx</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">ID</span>.t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_infinite_upcast</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_pseudo_prop</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_pseudo_true</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_is_handle_cstor</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_app_val</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_proto_val</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">ID</span>.t&nbsp;*&nbsp;int<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Attr_never_box</span><br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;defined&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;defined_head&nbsp;:&nbsp;<span class="constructor">Statement</span>.id;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;defined_ty&nbsp;:&nbsp;<span class="keywordsign">'</span>ty;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;defined_attrs&nbsp;:&nbsp;<span class="constructor">Statement</span>.decl_attr&nbsp;list;<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;equations&nbsp;=<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Eqn_nested</span>&nbsp;<span class="keyword">of</span>&nbsp;(<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.var&nbsp;list&nbsp;*&nbsp;<span class="keywordsign">'</span>t&nbsp;list&nbsp;*&nbsp;<span class="keywordsign">'</span>t&nbsp;*&nbsp;<span class="keywordsign">'</span>t&nbsp;list)&nbsp;list<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Eqn_single</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.var&nbsp;list&nbsp;*&nbsp;<span class="keywordsign">'</span>t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Eqn_app</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">ID</span>.t&nbsp;list&nbsp;*&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.var&nbsp;list&nbsp;*&nbsp;<span class="keywordsign">'</span>t&nbsp;*&nbsp;<span class="keywordsign">'</span>t<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;rec_def&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rec_defined&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rec_ty_vars&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.var&nbsp;list;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rec_eqns&nbsp;:&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.equations;<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;rec_defs&nbsp;=&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.rec_def&nbsp;list<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;spec_defs&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;spec_ty_vars&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.var&nbsp;list;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;spec_defined&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined&nbsp;list;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;spec_axioms&nbsp;:&nbsp;<span class="keywordsign">'</span>t&nbsp;list;<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;ty_constructor&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cstor_name&nbsp;:&nbsp;<span class="constructor">Statement</span>.id;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cstor_args&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;list;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cstor_type&nbsp;:&nbsp;<span class="keywordsign">'</span>ty;<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;data_type&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty_id&nbsp;:&nbsp;<span class="constructor">Statement</span>.id;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty_vars&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;list;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty_type&nbsp;:&nbsp;<span class="keywordsign">'</span>ty;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty_cstors&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.ty_constructor&nbsp;<span class="constructor">ID</span>.<span class="constructor">Map</span>.t;<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;data_types&nbsp;=&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_type&nbsp;list<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;axiom&nbsp;=<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Axiom_std</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="keywordsign">'</span>t&nbsp;list<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Axiom_spec</span>&nbsp;<span class="keyword">of</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.spec_defs<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Axiom_rec</span>&nbsp;<span class="keyword">of</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.rec_defs<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;pred_clause&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;clause_vars&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.var&nbsp;list;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;clause_guard&nbsp;:&nbsp;<span class="keywordsign">'</span>t&nbsp;option;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;clause_concl&nbsp;:&nbsp;<span class="keywordsign">'</span>t;<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;pred_def&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;pred_defined&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;pred_tyvars&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.var&nbsp;list;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;pred_clauses&nbsp;:&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.pred_clause&nbsp;list;<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;<span class="keywordsign">'</span>t&nbsp;copy_wrt&nbsp;=<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Wrt_nothing</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Wrt_subset</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="keywordsign">'</span>t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Wrt_quotient</span>&nbsp;<span class="keyword">of</span>&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Partial</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Total</span>&nbsp;]&nbsp;*&nbsp;<span class="keywordsign">'</span>t<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;copy&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;copy_id&nbsp;:&nbsp;<span class="constructor">ID</span>.t;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;copy_vars&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;list;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;copy_ty&nbsp;:&nbsp;<span class="keywordsign">'</span>ty;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;copy_of&nbsp;:&nbsp;<span class="keywordsign">'</span>ty;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;copy_to&nbsp;:&nbsp;<span class="keywordsign">'</span>ty;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;copy_wrt&nbsp;:&nbsp;<span class="keywordsign">'</span>t&nbsp;<span class="constructor">Statement</span>.copy_wrt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;copy_abstract&nbsp;:&nbsp;<span class="constructor">ID</span>.t;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;copy_abstract_ty&nbsp;:&nbsp;<span class="keywordsign">'</span>ty;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;copy_concrete&nbsp;:&nbsp;<span class="constructor">ID</span>.t;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;copy_concrete_ty&nbsp;:&nbsp;<span class="keywordsign">'</span>ty;<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;(<span class="keywordsign">'</span>term,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;view&nbsp;=<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Decl</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Axiom</span>&nbsp;<span class="keyword">of</span>&nbsp;(<span class="keywordsign">'</span>term,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.axiom<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">TyDef</span>&nbsp;<span class="keyword">of</span>&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Codata</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Data</span>&nbsp;]&nbsp;*&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_types<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Pred</span>&nbsp;<span class="keyword">of</span>&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Not_wf</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Wf</span>&nbsp;]&nbsp;*&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Copred</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Pred</span>&nbsp;]&nbsp;*<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>term,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;list<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Copy</span>&nbsp;<span class="keyword">of</span>&nbsp;(<span class="keywordsign">'</span>term,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.copy<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Goal</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="keywordsign">'</span>term<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;info&nbsp;=&nbsp;{&nbsp;loc&nbsp;:&nbsp;<span class="constructor">Statement</span>.loc&nbsp;option;&nbsp;name&nbsp;:&nbsp;string&nbsp;option;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;(+<span class="keywordsign">'</span>term,&nbsp;+<span class="keywordsign">'</span>ty)&nbsp;t&nbsp;=&nbsp;<span class="keyword">private</span>&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;view&nbsp;:&nbsp;(<span class="keywordsign">'</span>term,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.view;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info&nbsp;:&nbsp;<span class="constructor">Statement</span>.info;<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;statement&nbsp;=&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;mk_defined&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;attrs:<span class="constructor">Statement</span>.decl_attr&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">ID</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;data_vars&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_type&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;list<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;data_id&nbsp;:&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="constructor">Statement</span>.data_type&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Statement</span>.id<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;data_type&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_type&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;data_cstors&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_type&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.ty_constructor&nbsp;<span class="constructor">ID</span>.<span class="constructor">Map</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;info_default&nbsp;:&nbsp;<span class="constructor">Statement</span>.info<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;info_of_loc&nbsp;:&nbsp;<span class="constructor">Location</span>.t&nbsp;option&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Statement</span>.info<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;view&nbsp;:&nbsp;(<span class="keywordsign">'</span>term,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>term,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.view<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;loc&nbsp;:&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Statement</span>.loc&nbsp;option<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;name&nbsp;:&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;option<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;info&nbsp;:&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Statement</span>.info<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;mk_axiom&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.axiom&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;mk_ty_def&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Codata</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Data</span>&nbsp;]&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_types&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;decl&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;attrs:<span class="constructor">Statement</span>.decl_attr&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Statement</span>.id&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>b,&nbsp;<span class="keywordsign">'</span>a)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;decl_of_defined&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;axiom&nbsp;:&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;axiom1&nbsp;:&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;axiom_spec&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.spec_defs&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;axiom_rec&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.rec_defs&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;data&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_types&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;codata&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_types&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pred&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;wf:[&nbsp;<span class="keywordsign">`</span><span class="constructor">Not_wf</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Wf</span>&nbsp;]&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;copred&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;wf:[&nbsp;<span class="keywordsign">`</span><span class="constructor">Not_wf</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Wf</span>&nbsp;]&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;mk_pred&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;wf:[&nbsp;<span class="keywordsign">`</span><span class="constructor">Not_wf</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Wf</span>&nbsp;]&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Copred</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Pred</span>&nbsp;]&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;copy&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.copy&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;goal&nbsp;:&nbsp;info:<span class="constructor">Statement</span>.info&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;mk_data_type&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">ID</span>.t&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty_vars:<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;cstors:(<span class="constructor">ID</span>.t&nbsp;*&nbsp;<span class="keywordsign">'</span>ty&nbsp;list&nbsp;*&nbsp;<span class="keywordsign">'</span>ty)&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;ty:<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_type<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;mk_copy&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;wrt:<span class="keywordsign">'</span>t&nbsp;<span class="constructor">Statement</span>.copy_wrt&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;of_:<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;to_:<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;abstract:<span class="constructor">ID</span>.t&nbsp;*&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;concrete:<span class="constructor">ID</span>.t&nbsp;*&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;vars:<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">ID</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.copy<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;find_rec_def&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;defs:(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.rec_def&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">ID</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.rec_def&nbsp;option<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;find_data_type&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;defs:<span class="keywordsign">'</span>a&nbsp;<span class="constructor">Statement</span>.data_types&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">ID</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="constructor">Statement</span>.data_type&nbsp;option<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;find_pred&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;defs:(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">ID</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;option<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_defined&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;f:(<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2&nbsp;<span class="constructor">Statement</span>.defined<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_eqns&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.equations&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t2,&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="constructor">Statement</span>.equations<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_eqns_bind&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;bind:(<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>acc&nbsp;*&nbsp;<span class="keywordsign">'</span>ty1&nbsp;<span class="constructor">Var</span>.t)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Polarity</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>term&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>term1)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Polarity</span>.t&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>term,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.equations&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>term1,&nbsp;<span class="keywordsign">'</span>ty1)&nbsp;<span class="constructor">Statement</span>.equations<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_clause&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.pred_clause&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t2,&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="constructor">Statement</span>.pred_clause<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_clause_bind&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;bind:(<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>acc&nbsp;*&nbsp;<span class="keywordsign">'</span>ty1&nbsp;<span class="constructor">Var</span>.t)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Polarity</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>term&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>term1)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>term,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.pred_clause&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>term1,&nbsp;<span class="keywordsign">'</span>ty1)&nbsp;<span class="constructor">Statement</span>.pred_clause<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_rec_def&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.rec_def&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t2,&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="constructor">Statement</span>.rec_def<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_rec_def_bind&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;bind:(<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>b&nbsp;<span class="constructor">Var</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;*&nbsp;<span class="keywordsign">'</span>c&nbsp;<span class="constructor">Var</span>.t)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Polarity</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>d&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>e)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>b&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>c)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>d,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.rec_def&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>e,&nbsp;<span class="keywordsign">'</span>c)&nbsp;<span class="constructor">Statement</span>.rec_def<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_rec_defs&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.rec_defs&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t2,&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="constructor">Statement</span>.rec_defs<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_rec_defs_bind&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;bind:(<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>b_acc&nbsp;*&nbsp;<span class="keywordsign">'</span>ty2&nbsp;<span class="constructor">Var</span>.t)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Polarity</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.rec_defs&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t2,&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="constructor">Statement</span>.rec_defs<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_data_type&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_type&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2&nbsp;<span class="constructor">Statement</span>.data_type<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_data_types&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_types&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2&nbsp;<span class="constructor">Statement</span>.data_types<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_spec_defs&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.spec_defs&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t2,&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="constructor">Statement</span>.spec_defs<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_spec_defs_bind&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;bind:(<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>b_acc&nbsp;*&nbsp;<span class="keywordsign">'</span>ty2&nbsp;<span class="constructor">Var</span>.t)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Polarity</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.spec_defs&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t2,&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="constructor">Statement</span>.spec_defs<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_pred&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a1)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>b&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>b1)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a1,&nbsp;<span class="keywordsign">'</span>b1)&nbsp;<span class="constructor">Statement</span>.pred_def<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_pred_bind&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;bind:(<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>acc&nbsp;*&nbsp;<span class="keywordsign">'</span>ty2&nbsp;<span class="constructor">Var</span>.t)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Polarity</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>term&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>term2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>term,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>term2,&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="constructor">Statement</span>.pred_def<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_preds&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a1)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>b&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>b1)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>a1,&nbsp;<span class="keywordsign">'</span>b1)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;list<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_preds_bind&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;bind:(<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>acc&nbsp;*&nbsp;<span class="keywordsign">'</span>ty2&nbsp;<span class="constructor">Var</span>.t)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Polarity</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>term&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>term2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>acc&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>term,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>term2,&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;list<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_copy_wrt&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="constructor">Statement</span>.copy_wrt&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>b&nbsp;<span class="constructor">Statement</span>.copy_wrt<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_copy_bind&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;bind:(<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>b&nbsp;<span class="constructor">Statement</span>.var&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;*&nbsp;<span class="keywordsign">'</span>c&nbsp;<span class="constructor">Statement</span>.var)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Polarity</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>d&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>e)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>b&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>c)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>d,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.copy&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>e,&nbsp;<span class="keywordsign">'</span>c)&nbsp;<span class="constructor">Statement</span>.copy<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_copy&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>t1&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>ty1&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>t1,&nbsp;<span class="keywordsign">'</span>ty1)&nbsp;<span class="constructor">Statement</span>.copy&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t2,&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="constructor">Statement</span>.copy<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t2,&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;map_bind&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;bind:(<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>b_acc&nbsp;*&nbsp;<span class="keywordsign">'</span>ty2&nbsp;<span class="constructor">Var</span>.t)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Polarity</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t2,&nbsp;<span class="keywordsign">'</span>ty2)&nbsp;<span class="constructor">Statement</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;fold_bind&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;bind:(<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Var</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>b_acc)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Polarity</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>b_acc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;fold&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ty:(<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;iter&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;term:(<span class="keywordsign">'</span>t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;ty:(<span class="keywordsign">'</span>ty&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="keywordsign">'</span>t,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;id_of_defined&nbsp;:&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">ID</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;ty_of_defined&nbsp;:&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;attrs_of_defined&nbsp;:&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Statement</span>.decl_attr&nbsp;list<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;defined_of_rec&nbsp;:&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.rec_def&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;defined_of_recs&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.rec_defs&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="constructor">Sequence</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;defined_of_spec&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.spec_defs&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="constructor">Sequence</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;defined_of_pred&nbsp;:&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;defined_of_preds&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="constructor">Sequence</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;defined_of_cstor&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.ty_constructor&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;defined_of_data&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_type&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="constructor">Sequence</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;defined_of_datas&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.data_types&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="constructor">Sequence</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;defined_of_copy&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.copy&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="constructor">Sequence</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;defined_seq&nbsp;:&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>ty)&nbsp;<span class="constructor">Statement</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>ty&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="constructor">Sequence</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;ids_of_copy&nbsp;:&nbsp;(<span class="keywordsign">'</span>a,&nbsp;<span class="keywordsign">'</span>b)&nbsp;<span class="constructor">Statement</span>.copy&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">ID</span>.t&nbsp;<span class="constructor">Sequence</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_attr&nbsp;:&nbsp;<span class="constructor">Statement</span>.decl_attr&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_attrs&nbsp;:&nbsp;<span class="constructor">Statement</span>.decl_attr&nbsp;list&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;<span class="keyword">module</span>&nbsp;<span class="keyword">type</span>&nbsp;<span class="constructor">PRINT_TERM</span>&nbsp;=<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">sig</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp&nbsp;:&nbsp;<span class="constructor">Statement</span>.<span class="constructor">PRINT_TERM</span>.t&nbsp;<span class="constructor">CCFormat</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp'&nbsp;:&nbsp;<span class="constructor">Precedence</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Statement</span>.<span class="constructor">PRINT_TERM</span>.t&nbsp;<span class="constructor">CCFormat</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">end</span><br>
+&nbsp;&nbsp;<span class="keyword">module</span>&nbsp;<span class="constructor">Print</span>&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">functor</span>&nbsp;(<span class="constructor">Pt</span>&nbsp;:&nbsp;<span class="constructor">PRINT_TERM</span>)&nbsp;(<span class="constructor">Pty</span>&nbsp;:&nbsp;<span class="constructor">PRINT_TERM</span>)&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">sig</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_defined&nbsp;:&nbsp;<span class="constructor">Pty</span>.t&nbsp;<span class="constructor">Statement</span>.defined&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_spec_defs&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(<span class="constructor">Pt</span>.t,&nbsp;<span class="constructor">Pty</span>.t)&nbsp;<span class="constructor">Statement</span>.spec_defs&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_clause&nbsp;:&nbsp;(<span class="constructor">Pt</span>.t,&nbsp;<span class="constructor">Pty</span>.t)&nbsp;<span class="constructor">Statement</span>.pred_clause&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_clauses&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(<span class="constructor">Pt</span>.t,&nbsp;<span class="constructor">Pty</span>.t)&nbsp;<span class="constructor">Statement</span>.pred_clause&nbsp;list&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_pred_def&nbsp;:&nbsp;(<span class="constructor">Pt</span>.t,&nbsp;<span class="constructor">Pty</span>.t)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_pred_defs&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(<span class="constructor">Pt</span>.t,&nbsp;<span class="constructor">Pty</span>.t)&nbsp;<span class="constructor">Statement</span>.pred_def&nbsp;list&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_eqns&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">ID</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="constructor">Pt</span>.t,&nbsp;<span class="constructor">Pty</span>.t)&nbsp;<span class="constructor">Statement</span>.equations&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_rec_def&nbsp;:&nbsp;(<span class="constructor">Pt</span>.t,&nbsp;<span class="constructor">Pty</span>.t)&nbsp;<span class="constructor">Statement</span>.rec_def&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_rec_defs&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(<span class="constructor">Pt</span>.t,&nbsp;<span class="constructor">Pty</span>.t)&nbsp;<span class="constructor">Statement</span>.rec_def&nbsp;list&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_data_type&nbsp;:&nbsp;<span class="constructor">Pty</span>.t&nbsp;<span class="constructor">Statement</span>.data_type&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_data_types&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;([&nbsp;<span class="keywordsign">`</span><span class="constructor">Codata</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Data</span>&nbsp;]&nbsp;*&nbsp;<span class="constructor">Pty</span>.t&nbsp;<span class="constructor">Statement</span>.data_types)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_copy&nbsp;:&nbsp;(<span class="constructor">Pt</span>.t,&nbsp;<span class="constructor">Pty</span>.t)&nbsp;<span class="constructor">Statement</span>.copy&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp&nbsp;:&nbsp;(<span class="constructor">Pt</span>.t,&nbsp;<span class="constructor">Pty</span>.t)&nbsp;<span class="constructor">Statement</span>.t&nbsp;<span class="constructor">Statement</span>.printer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">end</span><br>
+<span class="keyword">end</span></code></body></html>

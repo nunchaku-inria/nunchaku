@@ -1,0 +1,385 @@
+= Translation of Higher-Order Constructs
+
+What are the higher-order constructs? I believe this is a complete list:
+
+C1. Terms as formulas: x && y, where x, y : prop
+
+C2. Formulas within terms: p (x a = x) -> p true
+
+C3. Lambda-abstractions: (fun x y. y + x) = (+)
+
+C4. Higher-order arguments: map f [x] = [f x]
+
+C5. Partial function applications: f = g -> f x = g x
+
+C6. Higher-order quantification: forall x. exists f. f x = x
+
+C1 and C2 are not an issue for SMT-LIB or Nunchaku already today.
+
+== Lambda-Abstractions
+
+C3 (lambda-abstractions) can be eliminated by extensionality and by a
+transformation that performs lambda-lifting (defunctionalization,
+supercombinators).
+
+=== Extensionality
+
+Applying extensionality in this case means translating
+
+----
+lhs = rhs
+----
+
+where either lhs or rhs is a lambda-abstraction (not otherwise!) to
+
+----
+forall x. lhs x = rhs x
+----
+
+Example:
+
+----
+empty = (fun x. false)
+----
+
+to
+
+----
+forall x. empty x = false
+----
+
+=== Lambda-Lifting
+
+Lambda-lifting introduces a new function symbol corresponding to each
+lambda-abstraction. That symbol takes all the free variables of the
+lambda-abstraction's body as argument, before taking the lambda argument
+itself.
+
+Example:
+
+----
+... forall u v. P (fun x. fun y. F x y u v) ...
+----
+
+becomes
+
+----
+... forall u v. P (lifted1 u v) ...
+
+rec lifted1 :=
+  lifted1 u v = (fun x. fun y. F x y u v).
+----
+
+which by extensionality becomes
+
+----
+... forall u v. P (lifted1 u v) ...
+
+rec lifted1 :=
+  lifted1 u v x y = F x y u v.
+----
+
+A single definition ("lifted1") is sufficient for an iterated
+lambda-abstraction (here "fun x. fun y. ...").
+
+== Higher-Order Arguments and Partial Function Applications
+
+C4 (higher-order arguments) and C5 (partial function applications) go hand
+in hand. In fact, C6 (higher-order quantification) is also a prerequisite for
+C4, but we will study it in more generality below.
+
+Specialization is a neat trick that takes care of some higher-order
+quantifiers, e.g., the arguments to a "map" function. We will assume that it
+has been applied already and look at the remaining higher-order arguments.
+
+Consider the following example (substitution on de Bruijn terms):
+
+----
+rec subst : (nat -> term) -> term -> term :=
+  forall rho j. subst rho (Var j) = rho j;
+  forall rho t. subst rho (Lam t) = Lam (subst (bump 0 rho) t);
+  forall rho t u. subst rho (App t u) = App (subst rho t) (subst rho u).
+
+rec bump : nat -> (nat -> term) -> nat -> term :=
+  forall n rho. bump rho 0 = Var n;
+  forall n rho m. bump rho (Suc m) = lift (rho m).
+----
+
+=== Handles
+
+The trick here is to replace the higher-order function arrow by a new type. We
+could call it an (associative) "array" but that would be confusing because we
+are not going to use the built-in SMT theory of arrays to represent them. Let
+us call such new types _handle types_, and values of those types _handles_.
+
+Each handle type "H" corresponding to the function space "T -> U" is equipped
+with the following sort and operations:
+
+----
+(* the actual operations *)
+val app_H : H -> T -> U.
+val proto_H : H -> T.
+
+(* an abstraction type with two gamma projections *)
+val alpha_H : type.
+val gamma1_H : alpha_H -> H.
+val gamma2_H : alpha_H -> T.
+----
+
+(We'll drop the "_H"s when the context is clear.) The intuition is as follows:
+
+* "app" applies a handle to an argument, producing a result value. The
+  function should only be applied to argument values for which a corresponding
+  "alpha" exists.
+
+* If there exists no "alpha" for a specific point, we a priori do not know what
+  value the function takes at that point. However, if the handle "H" enjoys
+  the property that "(H, proto H) \in alpha", we can assume that the
+  function returns "app H (proto H)" at all such points.
+
+We sometimes identify "alpha" with a product type "H * T" for notational
+convenience. The "alpha" type is similar to the type of the same name in the
+first-order translation for the "app" function (SMT 2015).
+
+Example 1: The function that maps 0 to 1, 1 to 2, and every other integer to 0
+can be represented semantically by the handle "h" below:
+
+----
+app h 0 = 1
+app h 1 = 2
+app h 7 = 0
+proto h = 7
+
+alpha = {(h, 0), (h, 1), (h, 7)}
+----
+
+Example 2: The successor function on the integers can be approximated by
+
+----
+app h 0 = 1
+app h 1 = 2
+app h 7 = 8
+proto h = 12
+
+alpha = {(h, 0), (h, 1), (h, 7)}
+----
+
+=== Handle Axioms
+
+If two handles are distinct, they must really correspond to distinct
+functions. This is extensionality and can be axiomatized as follows:
+
+----
+axiom forall h : H, k : H.
+  h = k || (exists x : T. APP h x ~= APP k x).
+----
+
+with the following abbreviation:
+
+----
+HAS_PROTO h :=
+  exists b : alpha. gamma1 b = h && gamma2 b = proto h.
+
+APP h j :=
+  if exists b : alpha. gamma1 b = h && gamma2 b = j then
+    app h j
+  else
+    app h (proto h)
+    asserting HAS_PROTO h.
+
+----
+
+=== Translation
+
+For each function symbol in the problem, we compute the minimum number of
+arguments it ever occurs with and pass additional arguments using "app" in the
+definition. For each recursively defined functions, we require
+
+----
+~ HAS_PROTO h
+|| (forall x. exists b. gamma1 b = h && gamma2 b = x)
+----
+
+but drop the second conjunct if x ranges over an infinite type.
+
+Finally, any call to a function variable needs to perform a complicated lookup
+routine, with suitable guards (all hidden in the "APP" abbreviation). For our
+running example, we have
+
+----
+val H : type.
+val app : H -> nat -> term.
+val proto : H -> term.
+
+val alpha : type.
+val gamma1 : alpha -> nat.
+val gamma2 : alpha -> term.
+
+rec subst : H -> term -> term :=
+  forall h j. subst h (Var j) = APP h j;
+  forall h t. subst h (Lam t) = Lam (subst (bump 0 h) t);
+  forall h t u. subst h (App t u) = App (subst h t) (subst h u).
+
+rec bump : nat -> H -> H :=
+  forall n h m.
+    app (bump n h) m = (match m with | 0 => Var n | Suc k => lift (APP h k)).
+----
+
+When bump is later translated using the first-order encoding of recursive
+functions (SMT 2015), some special handling is necessary to distinguish
+between the actual function application and the indirect one through "app":
+
+----
+rec bump : nat -> H -> H :=
+  forall (a : alpha_bump) (b : alpha_H).
+    gamma1_H b = bump (gamma1_bump a) (gamma2_bump a) ->
+    app (bump (gamma1_bump a) (gamma2_bump a)) (gamma2_H b) =
+      (match m with
+       | 0 => Var (gamma1_bump a)
+       | Suc k => lift (APP (gamma2_bump a) k)).
+----
+
+And we need one more axiom to say that "bump" has no prototype since the
+second argument to "app" is an infinite type ("nat"):
+
+----
+axiom forall (a : alpha_bump).
+  let h = bump (gamma1_bump a) (gamma2_bump a) in
+    ~ HAS_PROTO h.
+----
+
+Had the type been finite, we could have written
+
+----
+axiom forall (a : alpha_bump).
+  let h = bump (gamma1_bump a) (gamma2_bump a) in
+    ~ HAS_PROTO h
+    || (forall x. exists b. gamma1_H b = h && gamma2_H b = x)
+----
+
+thereby allowing an "alpha_H" that covers the entire domain of an "app (bump n
+h) x" call. The key thing is: We only allow trivial prototypes, i.e.,
+prototypes that talk about only one element (because all elements are covered
+by "alpha" values).
+
+=== Partially Applied Functions as Arguments to Equality
+
+A comparison "f = g" for "f", "g" functions is problematic. After the above
+translation, "f" and "g" are handles. But the same handle can correspond to
+two distinct functions. For example,
+
+----
+rec bad :=
+  bad 0 = (S 0);
+  bad (S 0) = S (S 0);
+  bad (S (S n)) = 0.
+----
+
+and
+
+----
+rec suc :=
+  suc n = S n.
+----
+
+may both be approximated by the handle
+
+----
+app f 0 = 1
+app f 1 = 2
+proto f = 7
+
+alpha = {(f, 0), (f, 1)}
+----
+
+This means we have to be careful when comparing handles. In negative contexts,
+equalities such as "f = g" can be left as is. (Indeed, we rely implicitly on
+this for the built-in equality rules, e.g. congruence.) After all, in such
+contexts, it is OK to return "true" instead of "false". In positive contexts,
+we need a full scale comparison like this:
+
+----
+f = g
+&&
+HAS_PROTO f
+----
+
+In unpolarized contexts, we can have
+
+----
+f = g
+asserting
+HAS_PROTO f
+----
+
+== Higher-Order Quantification
+
+If we are lucky, skolemization eliminates a higher-order quantifier before it
+causes any trouble. Or perhaps the higher-order quantifier is in a recursive
+definition, and then it becomes first-order thanks to the introduction of a
+handle.
+
+If the quantification is of the form "\forall x. f x = g x" (for some terms "f
+x" and "g x" that may contain "x"), it can be rewritten into "f = g", and then
+the techniques for partially applied functions as arguments to equality apply.
+
+The remaining cases are:
+
+* _The quantification is over a finite domain (after the possible introduction
+  of handles, which can transform some infinite types into finite ones)._
+  E.g. "prop -> prop". This could in principle be handled using SMT arrays,
+  but according to AJR arrays do not mix well with finite model finding. Maybe
+  we just give up, like we do for infinite quantification (with the wrong
+  polarity).
+
+* _The quantification is over an infinite domain._ E.g. "nat -> nat".
+  This is generally hopeless.
+
+== Epsilon and Iota
+
+Predefine the following (or export "asserting" to users):
+
+----
+rec epsilon : pi a. (a -> prop) -> prop :=
+  epsilon Q = epsilon Q asserting
+       Q (epsilon Q)
+    || (Q = fun x. false)
+
+rec iota : pi a. (a -> prop) -> prop :=
+  iota Q = iota Q asserting
+       Q (iota Q)
+    || (Q = fun x. false)
+    || (exists x y. ~ (x = y) && Q x && Q y).
+----
+
+Other possible names:
+
+----
+some / the
+indefinite_desc / definite_desc
+choice / ???
+----
+
+"definite_choice" is not a good name -- the word "choice" is normally reserved
+for "epsilon".
+
+"epsilon" and "iota" would be specializable (but congruence rules would be
+necessary in general).
+
+It might be useful to define two other symbols, which can be used internally
+(e.g., to encode quotients) or by some frontend when it is certain that there
+exists at least one element satisfying "Q" (in place of "epsilon") or exactly
+one (in place of "iota").
+
+----
+rec epsilon! : pi a. (a -> prop) -> prop :=
+  epsilon! Q = epsilon! Q asserting
+       Q (epsilon! Q)
+
+rec iota! : pi a. (a -> prop) -> prop :=
+  iota! Q = iota! Q asserting
+       Q (iota! Q)
+----
+
+No congruence rules are needed for "iota!" when specializing; otherwise,
+"epsilon!" and "iota!" are identical.

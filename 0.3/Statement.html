@@ -1,0 +1,790 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Signature.html">
+<link rel="next" href="FO_tptp.html">
+<link rel="Up" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="ID" rel="Chapter" href="ID.html">
+<link title="Var" rel="Chapter" href="Var.html">
+<link title="MetaVar" rel="Chapter" href="MetaVar.html">
+<link title="Location" rel="Chapter" href="Location.html">
+<link title="Intf" rel="Chapter" href="Intf.html">
+<link title="Utils" rel="Chapter" href="Utils.html">
+<link title="Transform" rel="Chapter" href="Transform.html">
+<link title="UntypedAST" rel="Chapter" href="UntypedAST.html">
+<link title="Model" rel="Chapter" href="Model.html">
+<link title="TypeUnify" rel="Chapter" href="TypeUnify.html">
+<link title="Problem" rel="Chapter" href="Problem.html">
+<link title="FO" rel="Chapter" href="FO.html">
+<link title="Reduce" rel="Chapter" href="Reduce.html">
+<link title="Env" rel="Chapter" href="Env.html">
+<link title="Signature" rel="Chapter" href="Signature.html">
+<link title="Statement" rel="Chapter" href="Statement.html">
+<link title="FO_tptp" rel="Chapter" href="FO_tptp.html">
+<link title="FO_rel" rel="Chapter" href="FO_rel.html">
+<link title="Cardinality" rel="Chapter" href="Cardinality.html">
+<link title="Scheduling" rel="Chapter" href="Scheduling.html">
+<link title="Polarity" rel="Chapter" href="Polarity.html">
+<link title="Traversal" rel="Chapter" href="Traversal.html">
+<link title="ProblemMetadata" rel="Chapter" href="ProblemMetadata.html">
+<link title="AnalyzeType" rel="Chapter" href="AnalyzeType.html">
+<link title="Prelude" rel="Chapter" href="Prelude.html">
+<link title="TypeCheck" rel="Chapter" href="TypeCheck.html">
+<link title="Lazy_list" rel="Chapter" href="Lazy_list.html">
+<link title="Sexp_lib" rel="Chapter" href="Sexp_lib.html">
+<link title="Sexp_lex" rel="Chapter" href="Sexp_lex.html">
+<link title="TermInner" rel="Chapter" href="TermInner.html">
+<link title="TermTyped" rel="Chapter" href="TermTyped.html">
+<link title="TermMono" rel="Chapter" href="TermMono.html">
+<link title="Pattern" rel="Chapter" href="Pattern.html">
+<link title="TypePoly" rel="Chapter" href="TypePoly.html">
+<link title="TypeMono" rel="Chapter" href="TypeMono.html">
+<link title="Parsing_utils" rel="Chapter" href="Parsing_utils.html">
+<link title="Lexer" rel="Chapter" href="Lexer.html">
+<link title="Parser" rel="Chapter" href="Parser.html">
+<link title="TPTP_print" rel="Chapter" href="TPTP_print.html">
+<link title="TPTP_lexer" rel="Chapter" href="TPTP_lexer.html">
+<link title="TPTP_parser" rel="Chapter" href="TPTP_parser.html">
+<link title="TPTP_preprocess" rel="Chapter" href="TPTP_preprocess.html">
+<link title="TPTP_model_ast" rel="Chapter" href="TPTP_model_ast.html">
+<link title="TPTP_model_lexer" rel="Chapter" href="TPTP_model_lexer.html">
+<link title="TPTP_model_parser" rel="Chapter" href="TPTP_model_parser.html">
+<link title="Ast_kodkod" rel="Chapter" href="Ast_kodkod.html">
+<link title="Lex_kodkod" rel="Chapter" href="Lex_kodkod.html">
+<link title="Parse_kodkod" rel="Chapter" href="Parse_kodkod.html">
+<link title="Tip_ast" rel="Chapter" href="Tip_ast.html">
+<link title="Tip_parser" rel="Chapter" href="Tip_parser.html">
+<link title="Tip_lexer" rel="Chapter" href="Tip_lexer.html">
+<link title="Parse_tip" rel="Chapter" href="Parse_tip.html">
+<link title="Skolem" rel="Chapter" href="Skolem.html">
+<link title="TypeInference" rel="Chapter" href="TypeInference.html">
+<link title="ElimPatternMatch" rel="Chapter" href="ElimPatternMatch.html">
+<link title="Monomorphization" rel="Chapter" href="Monomorphization.html">
+<link title="Specialize" rel="Chapter" href="Specialize.html">
+<link title="LambdaLift" rel="Chapter" href="LambdaLift.html">
+<link title="Elim_HOF" rel="Chapter" href="Elim_HOF.html">
+<link title="ElimRecursion" rel="Chapter" href="ElimRecursion.html">
+<link title="ElimMultipleEqns" rel="Chapter" href="ElimMultipleEqns.html">
+<link title="ElimIndPreds" rel="Chapter" href="ElimIndPreds.html">
+<link title="ElimCopy" rel="Chapter" href="ElimCopy.html">
+<link title="Polarize" rel="Chapter" href="Polarize.html">
+<link title="Unroll" rel="Chapter" href="Unroll.html">
+<link title="IntroGuards" rel="Chapter" href="IntroGuards.html">
+<link title="Model_clean" rel="Chapter" href="Model_clean.html">
+<link title="ElimData" rel="Chapter" href="ElimData.html">
+<link title="ElimTypes" rel="Chapter" href="ElimTypes.html">
+<link title="Elim_prop_args" rel="Chapter" href="Elim_prop_args.html">
+<link title="Elim_ite" rel="Chapter" href="Elim_ite.html">
+<link title="Elim_infinite" rel="Chapter" href="Elim_infinite.html">
+<link title="FoToRelational" rel="Chapter" href="FoToRelational.html"><link title="Print" rel="Section" href="#2_Print">
+<title>Nunchaku documentation : Statement</title>
+</head>
+<body>
+<div class="navbar"><a class="pre" href="Signature.html" title="Signature">Previous</a>
+&nbsp;<a class="up" href="index.html" title="Index">Up</a>
+&nbsp;<a class="post" href="FO_tptp.html" title="FO_tptp">Next</a>
+</div>
+<h1>Module <a href="type_Statement.html">Statement</a></h1>
+
+<pre><span class="keyword">module</span> Statement: <code class="code"><span class="keyword">sig</span></code> <a href="Statement.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info module top">
+<h1 id="1_Toplevelstatement">Top-level statement</h1><br>
+</div>
+<hr width="100%">
+
+<pre><span id="TYPEid"><span class="keyword">type</span> <code class="type"></code>id</span> = <code class="type"><a href="ID.html#TYPEt">ID.t</a></code> </pre>
+
+
+<pre><span id="TYPEloc"><span class="keyword">type</span> <code class="type"></code>loc</span> = <code class="type"><a href="Location.html#TYPEt">Location.t</a></code> </pre>
+
+
+<pre><span id="TYPEvar"><span class="keyword">type</span> <code class="type">'a</code> var</span> = <code class="type">'a <a href="Var.html#TYPEt">Var.t</a></code> </pre>
+
+
+<pre><span id="TYPEprinter"><span class="keyword">type</span> <code class="type">'a</code> printer</span> = <code class="type">Format.formatter -> 'a -> unit</code> </pre>
+
+
+<pre><code><span id="TYPEdefined"><span class="keyword">type</span> <code class="type">'ty</code> defined</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdefined.defined_head">defined_head</span>&nbsp;: <code class="type"><a href="Statement.html#TYPEid">id</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdefined.defined_ty">defined_ty</span>&nbsp;: <code class="type">'ty</code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><code><span id="TYPEequations"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> equations</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTequations.Eqn_nested"><span class="constructor">Eqn_nested</span></span> <span class="keyword">of</span> <code class="type">('ty <a href="Statement.html#TYPEvar">var</a> list * 't list * 't * 't list) list</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTequations.Eqn_single"><span class="constructor">Eqn_single</span></span> <span class="keyword">of</span> <code class="type">'ty <a href="Statement.html#TYPEvar">var</a> list * 't</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTequations.Eqn_app"><span class="constructor">Eqn_app</span></span> <span class="keyword">of</span> <code class="type"><a href="ID.html#TYPEt">ID.t</a> list * 'ty <a href="Statement.html#TYPEvar">var</a> list * 't * 't</code></code></td>
+
+</tr></table>
+
+
+
+<pre><code><span id="TYPErec_def"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> rec_def</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTrec_def.rec_defined">rec_defined</span>&nbsp;: <code class="type">'ty <a href="Statement.html#TYPEdefined">defined</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTrec_def.rec_ty_vars">rec_ty_vars</span>&nbsp;: <code class="type">'ty <a href="Statement.html#TYPEvar">var</a> list</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTrec_def.rec_eqns">rec_eqns</span>&nbsp;: <code class="type">('t, 'ty) <a href="Statement.html#TYPEequations">equations</a></code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><span id="TYPErec_defs"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> rec_defs</span> = <code class="type">('t, 'ty) <a href="Statement.html#TYPErec_def">rec_def</a> list</code> </pre>
+
+
+<pre><code><span id="TYPEspec_defs"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> spec_defs</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTspec_defs.spec_ty_vars">spec_ty_vars</span>&nbsp;: <code class="type">'ty <a href="Statement.html#TYPEvar">var</a> list</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTspec_defs.spec_defined">spec_defined</span>&nbsp;: <code class="type">'ty <a href="Statement.html#TYPEdefined">defined</a> list</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTspec_defs.spec_axioms">spec_axioms</span>&nbsp;: <code class="type">'t list</code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><code><span id="TYPEty_constructor"><span class="keyword">type</span> <code class="type">'ty</code> ty_constructor</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTty_constructor.cstor_name">cstor_name</span>&nbsp;: <code class="type"><a href="Statement.html#TYPEid">id</a></code>;</code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+Name<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTty_constructor.cstor_args">cstor_args</span>&nbsp;: <code class="type">'ty list</code>;</code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+type arguments<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTty_constructor.cstor_type">cstor_type</span>&nbsp;: <code class="type">'ty</code>;</code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+type of the constructor (shortcut)<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr></table>
+}
+
+<div class="info ">
+A type constructor: name + type of arguments<br>
+</div>
+
+
+<pre><code><span id="TYPEtydef"><span class="keyword">type</span> <code class="type">'ty</code> tydef</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTtydef.ty_id">ty_id</span>&nbsp;: <code class="type"><a href="Statement.html#TYPEid">id</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTtydef.ty_vars">ty_vars</span>&nbsp;: <code class="type">'ty <a href="Var.html#TYPEt">Var.t</a> list</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTtydef.ty_type">ty_type</span>&nbsp;: <code class="type">'ty</code>;</code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+shortcut for <code class="code"><span class="keyword">type</span> <span class="keywordsign">-&gt;</span> <span class="keyword">type</span> <span class="keywordsign">-&gt;</span> ... <span class="keywordsign">-&gt;</span> <span class="keyword">type</span></code><br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTtydef.ty_cstors">ty_cstors</span>&nbsp;: <code class="type">'ty <a href="Statement.html#TYPEty_constructor">ty_constructor</a> ID.Map.t</code>;</code></td>
+
+</tr></table>
+}
+
+<div class="info ">
+A (co)inductive type. The type variables <code class="code">ty_vars</code> occur freely in
+    the constructors' types.<br>
+</div>
+
+
+<pre><span id="TYPEmutual_types"><span class="keyword">type</span> <code class="type">'ty</code> mutual_types</span> = <code class="type">'ty <a href="Statement.html#TYPEtydef">tydef</a> list</code> </pre>
+<div class="info ">
+Mutual definitions of several types<br>
+</div>
+
+
+<pre><code><span id="TYPEaxiom"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> axiom</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTaxiom.Axiom_std"><span class="constructor">Axiom_std</span></span> <span class="keyword">of</span> <code class="type">'t list</code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+Axiom list that can influence consistency (no assumptions)<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTaxiom.Axiom_spec"><span class="constructor">Axiom_spec</span></span> <span class="keyword">of</span> <code class="type">('t, 'ty) <a href="Statement.html#TYPEspec_defs">spec_defs</a></code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+Axioms can be safely ignored, they are consistent<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTaxiom.Axiom_rec"><span class="constructor">Axiom_rec</span></span> <span class="keyword">of</span> <code class="type">('t, 'ty) <a href="Statement.html#TYPErec_defs">rec_defs</a></code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+Axioms are part of an admissible (partial) definition<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr></table>
+
+<div class="info ">
+Flavour of axiom<br>
+</div>
+
+
+<pre><code><span id="TYPEpred_clause"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> pred_clause</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTpred_clause.clause_vars">clause_vars</span>&nbsp;: <code class="type">'ty <a href="Statement.html#TYPEvar">var</a> list</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTpred_clause.clause_guard">clause_guard</span>&nbsp;: <code class="type">'t option</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTpred_clause.clause_concl">clause_concl</span>&nbsp;: <code class="type">'t</code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><code><span id="TYPEpred_def"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> pred_def</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTpred_def.pred_defined">pred_defined</span>&nbsp;: <code class="type">'ty <a href="Statement.html#TYPEdefined">defined</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTpred_def.pred_tyvars">pred_tyvars</span>&nbsp;: <code class="type">'ty <a href="Statement.html#TYPEvar">var</a> list</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTpred_def.pred_clauses">pred_clauses</span>&nbsp;: <code class="type">('t, 'ty) <a href="Statement.html#TYPEpred_clause">pred_clause</a> list</code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><code><span id="TYPEcopy_wrt"><span class="keyword">type</span> <code class="type">'t</code> copy_wrt</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy_wrt.Wrt_nothing"><span class="constructor">Wrt_nothing</span></span></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy_wrt.Wrt_subset"><span class="constructor">Wrt_subset</span></span> <span class="keyword">of</span> <code class="type">'t</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy_wrt.Wrt_quotient"><span class="constructor">Wrt_quotient</span></span> <span class="keyword">of</span> <code class="type">[ `Partial | `Total ] * 't</code></code></td>
+
+</tr></table>
+
+
+
+<pre><code><span id="TYPEcopy"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> copy</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.copy_id">copy_id</span>&nbsp;: <code class="type"><a href="ID.html#TYPEt">ID.t</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.copy_vars">copy_vars</span>&nbsp;: <code class="type">'ty <a href="Var.html#TYPEt">Var.t</a> list</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.copy_ty">copy_ty</span>&nbsp;: <code class="type">'ty</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.copy_of">copy_of</span>&nbsp;: <code class="type">'ty</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.copy_to">copy_to</span>&nbsp;: <code class="type">'ty</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.copy_wrt">copy_wrt</span>&nbsp;: <code class="type">'t <a href="Statement.html#TYPEcopy_wrt">copy_wrt</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.copy_abstract">copy_abstract</span>&nbsp;: <code class="type"><a href="ID.html#TYPEt">ID.t</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.copy_abstract_ty">copy_abstract_ty</span>&nbsp;: <code class="type">'ty</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.copy_concrete">copy_concrete</span>&nbsp;: <code class="type"><a href="ID.html#TYPEt">ID.t</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.copy_concrete_ty">copy_concrete_ty</span>&nbsp;: <code class="type">'ty</code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><code><span id="TYPEdecl_attr"><span class="keyword">type</span> <code class="type"></code>decl_attr</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdecl_attr.Attr_card_max"><span class="constructor">Attr_card_max</span></span> <span class="keyword">of</span> <code class="type">int</code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+maximal cardinality of type<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdecl_attr.Attr_card_min"><span class="constructor">Attr_card_min</span></span> <span class="keyword">of</span> <code class="type">int</code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+minimal cardinality of type<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdecl_attr.Attr_card_hint"><span class="constructor">Attr_card_hint</span></span> <span class="keyword">of</span> <code class="type"><a href="Cardinality.html#TYPEt">Cardinality.t</a></code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+hint on the card of a type<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdecl_attr.Attr_incomplete"><span class="constructor">Attr_incomplete</span></span></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+encoding of some type with some values removed<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdecl_attr.Attr_abstract"><span class="constructor">Attr_abstract</span></span></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+encoding of some type where some values are conflated<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdecl_attr.Attr_infinite"><span class="constructor">Attr_infinite</span></span></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+infinite uninterpreted type<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdecl_attr.Attr_finite_approx"><span class="constructor">Attr_finite_approx</span></span> <span class="keyword">of</span> <code class="type"><a href="ID.html#TYPEt">ID.t</a></code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+finite approximation of an infinite type<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdecl_attr.Attr_infinite_upcast"><span class="constructor">Attr_infinite_upcast</span></span></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+cast finite approx to infinite type<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdecl_attr.Attr_pseudo_prop"><span class="constructor">Attr_pseudo_prop</span></span></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+encoding of <code class="code">prop</code><br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdecl_attr.Attr_pseudo_true"><span class="constructor">Attr_pseudo_true</span></span></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+encoding of <code class="code">true_ : pseudo_prop</code><br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdecl_attr.Attr_exn"><span class="constructor">Attr_exn</span></span> <span class="keyword">of</span> <code class="type">exn</code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+open case<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr></table>
+
+<div class="info ">
+Attribute on declarations<br>
+</div>
+
+
+<pre><code><span id="TYPEview"><span class="keyword">type</span> <code class="type">('term, 'ty)</code> view</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Decl"><span class="constructor">Decl</span></span> <span class="keyword">of</span> <code class="type"><a href="Statement.html#TYPEid">id</a> * 'ty * <a href="Statement.html#TYPEdecl_attr">decl_attr</a> list</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Axiom"><span class="constructor">Axiom</span></span> <span class="keyword">of</span> <code class="type">('term, 'ty) <a href="Statement.html#TYPEaxiom">axiom</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.TyDef"><span class="constructor">TyDef</span></span> <span class="keyword">of</span> <code class="type">[ `Codata | `Data ] * 'ty <a href="Statement.html#TYPEmutual_types">mutual_types</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Pred"><span class="constructor">Pred</span></span> <span class="keyword">of</span> <code class="type">[ `Not_wf | `Wf ] * [ `Copred | `Pred ]<br>        * ('term, 'ty) <a href="Statement.html#TYPEpred_def">pred_def</a> list</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Copy"><span class="constructor">Copy</span></span> <span class="keyword">of</span> <code class="type">('term, 'ty) <a href="Statement.html#TYPEcopy">copy</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTview.Goal"><span class="constructor">Goal</span></span> <span class="keyword">of</span> <code class="type">'term</code></code></td>
+
+</tr></table>
+
+
+
+<pre><code><span id="TYPEinfo"><span class="keyword">type</span> <code class="type"></code>info</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTinfo.loc">loc</span>&nbsp;: <code class="type"><a href="Statement.html#TYPEloc">loc</a> option</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTinfo.name">name</span>&nbsp;: <code class="type">string option</code>;</code></td>
+
+</tr></table>
+}
+
+<div class="info ">
+Additional informations on the statement<br>
+</div>
+
+
+<pre><code><span id="TYPEt"><span class="keyword">type</span> <code class="type">('term, 'ty)</code> t</span> = private {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTt.view">view</span>&nbsp;: <code class="type">('term, 'ty) <a href="Statement.html#TYPEview">view</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTt.info">info</span>&nbsp;: <code class="type"><a href="Statement.html#TYPEinfo">info</a></code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><span id="TYPEstatement"><span class="keyword">type</span> <code class="type">('t, 'ty)</code> statement</span> = <code class="type">('t, 'ty) <a href="Statement.html#TYPEt">t</a></code> </pre>
+
+
+<pre><span id="VALmk_defined"><span class="keyword">val</span> mk_defined</span> : <code class="type"><a href="ID.html#TYPEt">ID.t</a> -> 'ty -> 'ty <a href="Statement.html#TYPEdefined">defined</a></code></pre>
+<pre><span id="VALtydef_vars"><span class="keyword">val</span> tydef_vars</span> : <code class="type">'ty <a href="Statement.html#TYPEtydef">tydef</a> -> 'ty <a href="Var.html#TYPEt">Var.t</a> list</code></pre>
+<pre><span id="VALtydef_id"><span class="keyword">val</span> tydef_id</span> : <code class="type">'a <a href="Statement.html#TYPEtydef">tydef</a> -> <a href="Statement.html#TYPEid">id</a></code></pre>
+<pre><span id="VALtydef_type"><span class="keyword">val</span> tydef_type</span> : <code class="type">'ty <a href="Statement.html#TYPEtydef">tydef</a> -> 'ty</code></pre>
+<pre><span id="VALtydef_cstors"><span class="keyword">val</span> tydef_cstors</span> : <code class="type">'ty <a href="Statement.html#TYPEtydef">tydef</a> -> 'ty <a href="Statement.html#TYPEty_constructor">ty_constructor</a> ID.Map.t</code></pre>
+<pre><span id="VALinfo_default"><span class="keyword">val</span> info_default</span> : <code class="type"><a href="Statement.html#TYPEinfo">info</a></code></pre>
+<pre><span id="VALinfo_of_loc"><span class="keyword">val</span> info_of_loc</span> : <code class="type"><a href="Location.html#TYPEt">Location.t</a> option -> <a href="Statement.html#TYPEinfo">info</a></code></pre>
+<pre><span id="VALview"><span class="keyword">val</span> view</span> : <code class="type">('term, 'ty) <a href="Statement.html#TYPEt">t</a> -> ('term, 'ty) <a href="Statement.html#TYPEview">view</a></code></pre>
+<pre><span id="VALloc"><span class="keyword">val</span> loc</span> : <code class="type">('a, 'b) <a href="Statement.html#TYPEt">t</a> -> <a href="Statement.html#TYPEloc">loc</a> option</code></pre>
+<pre><span id="VALname"><span class="keyword">val</span> name</span> : <code class="type">('a, 'b) <a href="Statement.html#TYPEt">t</a> -> string option</code></pre>
+<pre><span id="VALinfo"><span class="keyword">val</span> info</span> : <code class="type">('a, 'b) <a href="Statement.html#TYPEt">t</a> -> <a href="Statement.html#TYPEinfo">info</a></code></pre>
+<pre><span id="VALmk_axiom"><span class="keyword">val</span> mk_axiom</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -> ('a, 'ty) <a href="Statement.html#TYPEaxiom">axiom</a> -> ('a, 'ty) <a href="Statement.html#TYPEt">t</a></code></pre>
+<pre><span id="VALmk_ty_def"><span class="keyword">val</span> mk_ty_def</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -><br>       [ `Codata | `Data ] -> 'ty <a href="Statement.html#TYPEmutual_types">mutual_types</a> -> ('a, 'ty) <a href="Statement.html#TYPEt">t</a></code></pre>
+<pre><span id="VALdecl"><span class="keyword">val</span> decl</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -><br>       attrs:<a href="Statement.html#TYPEdecl_attr">decl_attr</a> list -> <a href="Statement.html#TYPEid">id</a> -> 'a -> ('b, 'a) <a href="Statement.html#TYPEt">t</a></code></pre><div class="info ">
+declare a type/function/predicate<br>
+</div>
+
+<pre><span id="VALaxiom"><span class="keyword">val</span> axiom</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -> 'a list -> ('a, 'b) <a href="Statement.html#TYPEt">t</a></code></pre><div class="info ">
+Axioms without additional assumptions<br>
+</div>
+
+<pre><span id="VALaxiom1"><span class="keyword">val</span> axiom1</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -> 'a -> ('a, 'b) <a href="Statement.html#TYPEt">t</a></code></pre>
+<pre><span id="VALaxiom_spec"><span class="keyword">val</span> axiom_spec</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -> ('a, 'ty) <a href="Statement.html#TYPEspec_defs">spec_defs</a> -> ('a, 'ty) <a href="Statement.html#TYPEt">t</a></code></pre><div class="info ">
+Axiom that can be ignored if not explicitely depended upon by the goal<br>
+</div>
+
+<pre><span id="VALaxiom_rec"><span class="keyword">val</span> axiom_rec</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -> ('a, 'ty) <a href="Statement.html#TYPErec_defs">rec_defs</a> -> ('a, 'ty) <a href="Statement.html#TYPEt">t</a></code></pre><div class="info ">
+Axiom that is part of an admissible (mutual, partial) definition.<br>
+</div>
+
+<pre><span id="VALdata"><span class="keyword">val</span> data</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -> 'ty <a href="Statement.html#TYPEmutual_types">mutual_types</a> -> ('a, 'ty) <a href="Statement.html#TYPEt">t</a></code></pre>
+<pre><span id="VALcodata"><span class="keyword">val</span> codata</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -> 'ty <a href="Statement.html#TYPEmutual_types">mutual_types</a> -> ('a, 'ty) <a href="Statement.html#TYPEt">t</a></code></pre>
+<pre><span id="VALpred"><span class="keyword">val</span> pred</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -><br>       wf:[ `Not_wf | `Wf ] -><br>       ('t, 'ty) <a href="Statement.html#TYPEpred_def">pred_def</a> list -> ('t, 'ty) <a href="Statement.html#TYPEt">t</a></code></pre>
+<pre><span id="VALcopred"><span class="keyword">val</span> copred</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -><br>       wf:[ `Not_wf | `Wf ] -><br>       ('t, 'ty) <a href="Statement.html#TYPEpred_def">pred_def</a> list -> ('t, 'ty) <a href="Statement.html#TYPEt">t</a></code></pre>
+<pre><span id="VALmk_pred"><span class="keyword">val</span> mk_pred</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -><br>       wf:[ `Not_wf | `Wf ] -><br>       [ `Copred | `Pred ] -><br>       ('t, 'ty) <a href="Statement.html#TYPEpred_def">pred_def</a> list -> ('t, 'ty) <a href="Statement.html#TYPEt">t</a></code></pre>
+<pre><span id="VALcopy"><span class="keyword">val</span> copy</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -> ('t, 'ty) <a href="Statement.html#TYPEcopy">copy</a> -> ('t, 'ty) <a href="Statement.html#TYPEt">t</a></code></pre>
+<pre><span id="VALgoal"><span class="keyword">val</span> goal</span> : <code class="type">info:<a href="Statement.html#TYPEinfo">info</a> -> 'a -> ('a, 'b) <a href="Statement.html#TYPEt">t</a></code></pre><div class="info ">
+The goal of the problem<br>
+</div>
+
+<pre><span id="VALmk_mutual_ty"><span class="keyword">val</span> mk_mutual_ty</span> : <code class="type"><a href="ID.html#TYPEt">ID.t</a> -><br>       ty_vars:'ty <a href="Var.html#TYPEt">Var.t</a> list -><br>       cstors:(<a href="ID.html#TYPEt">ID.t</a> * 'ty list * 'ty) list -> ty:'ty -> 'ty <a href="Statement.html#TYPEtydef">tydef</a></code></pre><div class="info ">
+Constructor for <a href="Statement.html#TYPEtydef"><code class="code"><span class="constructor">Statement</span>.tydef</code></a><br>
+</div>
+
+<pre><span id="VALmk_copy"><span class="keyword">val</span> mk_copy</span> : <code class="type">wrt:'t <a href="Statement.html#TYPEcopy_wrt">copy_wrt</a> -><br>       of_:'ty -><br>       to_:'ty -><br>       ty:'ty -><br>       abstract:<a href="ID.html#TYPEt">ID.t</a> * 'ty -><br>       concrete:<a href="ID.html#TYPEt">ID.t</a> * 'ty -><br>       vars:'ty <a href="Var.html#TYPEt">Var.t</a> list -> <a href="ID.html#TYPEt">ID.t</a> -> ('t, 'ty) <a href="Statement.html#TYPEcopy">copy</a></code></pre><div class="info ">
+Invariants:
+    <code class="code">to_ = app id vars</code>
+    <code class="code">snd abstract = of_ <span class="keywordsign">-&gt;</span> to_</code>
+    <code class="code">snd concrete = to_ <span class="keywordsign">-&gt;</span> of_</code><br>
+</div>
+
+<pre><span id="VALfind_rec_def"><span class="keyword">val</span> find_rec_def</span> : <code class="type">defs:('a, 'b) <a href="Statement.html#TYPErec_def">rec_def</a> list -><br>       <a href="ID.html#TYPEt">ID.t</a> -> ('a, 'b) <a href="Statement.html#TYPErec_def">rec_def</a> option</code></pre>
+<pre><span id="VALfind_tydef"><span class="keyword">val</span> find_tydef</span> : <code class="type">defs:'a <a href="Statement.html#TYPEtydef">tydef</a> list -> <a href="ID.html#TYPEt">ID.t</a> -> 'a <a href="Statement.html#TYPEtydef">tydef</a> option</code></pre>
+<pre><span id="VALfind_pred"><span class="keyword">val</span> find_pred</span> : <code class="type">defs:('a, 'b) <a href="Statement.html#TYPEpred_def">pred_def</a> list -><br>       <a href="ID.html#TYPEt">ID.t</a> -> ('a, 'b) <a href="Statement.html#TYPEpred_def">pred_def</a> option</code></pre>
+<pre><span id="VALmap_defined"><span class="keyword">val</span> map_defined</span> : <code class="type">f:('ty -> 'ty2) -> 'ty <a href="Statement.html#TYPEdefined">defined</a> -> 'ty2 <a href="Statement.html#TYPEdefined">defined</a></code></pre>
+<pre><span id="VALmap_eqns"><span class="keyword">val</span> map_eqns</span> : <code class="type">term:('t -> 't2) -><br>       ty:('ty -> 'ty2) -><br>       ('t, 'ty) <a href="Statement.html#TYPEequations">equations</a> -> ('t2, 'ty2) <a href="Statement.html#TYPEequations">equations</a></code></pre>
+<pre><span id="VALmap_eqns_bind"><span class="keyword">val</span> map_eqns_bind</span> : <code class="type">bind:('acc -> 'ty <a href="Var.html#TYPEt">Var.t</a> -> 'acc * 'ty1 <a href="Var.html#TYPEt">Var.t</a>) -><br>       term:('acc -> 'term -> 'term1) -><br>       'acc -><br>       ('term, 'ty) <a href="Statement.html#TYPEequations">equations</a> -> ('term1, 'ty1) <a href="Statement.html#TYPEequations">equations</a></code></pre>
+<pre><span id="VALmap_clause"><span class="keyword">val</span> map_clause</span> : <code class="type">term:('t -> 't2) -><br>       ty:('ty -> 'ty2) -><br>       ('t, 'ty) <a href="Statement.html#TYPEpred_clause">pred_clause</a> -> ('t2, 'ty2) <a href="Statement.html#TYPEpred_clause">pred_clause</a></code></pre>
+<pre><span id="VALmap_clause_bind"><span class="keyword">val</span> map_clause_bind</span> : <code class="type">bind:('acc -> 'ty <a href="Var.html#TYPEt">Var.t</a> -> 'acc * 'ty1 <a href="Var.html#TYPEt">Var.t</a>) -><br>       term:('acc -> 'term -> 'term1) -><br>       'acc -><br>       ('term, 'ty) <a href="Statement.html#TYPEpred_clause">pred_clause</a> -> ('term1, 'ty1) <a href="Statement.html#TYPEpred_clause">pred_clause</a></code></pre>
+<pre><span id="VALmap_rec_def"><span class="keyword">val</span> map_rec_def</span> : <code class="type">term:('t -> 't2) -><br>       ty:('ty -> 'ty2) -><br>       ('t, 'ty) <a href="Statement.html#TYPErec_def">rec_def</a> -> ('t2, 'ty2) <a href="Statement.html#TYPErec_def">rec_def</a></code></pre>
+<pre><span id="VALmap_rec_def_bind"><span class="keyword">val</span> map_rec_def_bind</span> : <code class="type">bind:('a -> 'b <a href="Var.html#TYPEt">Var.t</a> -> 'a * 'c <a href="Var.html#TYPEt">Var.t</a>) -><br>       term:('a -> 'd -> 'e) -><br>       ty:('a -> 'b -> 'c) -><br>       'a -> ('d, 'b) <a href="Statement.html#TYPErec_def">rec_def</a> -> ('e, 'c) <a href="Statement.html#TYPErec_def">rec_def</a></code></pre>
+<pre><span id="VALmap_rec_defs"><span class="keyword">val</span> map_rec_defs</span> : <code class="type">term:('t -> 't2) -><br>       ty:('ty -> 'ty2) -><br>       ('t, 'ty) <a href="Statement.html#TYPErec_defs">rec_defs</a> -> ('t2, 'ty2) <a href="Statement.html#TYPErec_defs">rec_defs</a></code></pre>
+<pre><span id="VALmap_ty_def"><span class="keyword">val</span> map_ty_def</span> : <code class="type">ty:('ty -> 'ty2) -> 'ty <a href="Statement.html#TYPEtydef">tydef</a> -> 'ty2 <a href="Statement.html#TYPEtydef">tydef</a></code></pre>
+<pre><span id="VALmap_ty_defs"><span class="keyword">val</span> map_ty_defs</span> : <code class="type">ty:('ty -> 'ty2) -> 'ty <a href="Statement.html#TYPEmutual_types">mutual_types</a> -> 'ty2 <a href="Statement.html#TYPEmutual_types">mutual_types</a></code></pre>
+<pre><span id="VALmap_spec_defs"><span class="keyword">val</span> map_spec_defs</span> : <code class="type">term:('t -> 't2) -><br>       ty:('ty -> 'ty2) -><br>       ('t, 'ty) <a href="Statement.html#TYPEspec_defs">spec_defs</a> -> ('t2, 'ty2) <a href="Statement.html#TYPEspec_defs">spec_defs</a></code></pre>
+<pre><span id="VALmap_spec_defs_bind"><span class="keyword">val</span> map_spec_defs_bind</span> : <code class="type">bind:('b_acc -> 'ty <a href="Var.html#TYPEt">Var.t</a> -> 'b_acc * 'ty2 <a href="Var.html#TYPEt">Var.t</a>) -><br>       term:('b_acc -> 't -> 't2) -><br>       ty:('b_acc -> 'ty -> 'ty2) -><br>       'b_acc -> ('t, 'ty) <a href="Statement.html#TYPEspec_defs">spec_defs</a> -> ('t2, 'ty2) <a href="Statement.html#TYPEspec_defs">spec_defs</a></code></pre>
+<pre><span id="VALmap_pred"><span class="keyword">val</span> map_pred</span> : <code class="type">term:('a -> 'a1) -><br>       ty:('b -> 'b1) -><br>       ('a, 'b) <a href="Statement.html#TYPEpred_def">pred_def</a> -> ('a1, 'b1) <a href="Statement.html#TYPEpred_def">pred_def</a></code></pre>
+<pre><span id="VALmap_pred_bind"><span class="keyword">val</span> map_pred_bind</span> : <code class="type">bind:('acc -> 'ty <a href="Var.html#TYPEt">Var.t</a> -> 'acc * 'ty2 <a href="Var.html#TYPEt">Var.t</a>) -><br>       term:('acc -> 'term -> 'term2) -><br>       ty:('acc -> 'ty -> 'ty2) -><br>       'acc -> ('term, 'ty) <a href="Statement.html#TYPEpred_def">pred_def</a> -> ('term2, 'ty2) <a href="Statement.html#TYPEpred_def">pred_def</a></code></pre>
+<pre><span id="VALmap_preds"><span class="keyword">val</span> map_preds</span> : <code class="type">term:('a -> 'a1) -><br>       ty:('b -> 'b1) -><br>       ('a, 'b) <a href="Statement.html#TYPEpred_def">pred_def</a> list -> ('a1, 'b1) <a href="Statement.html#TYPEpred_def">pred_def</a> list</code></pre>
+<pre><span id="VALmap_copy_wrt"><span class="keyword">val</span> map_copy_wrt</span> : <code class="type">('a -> 'b) -> 'a <a href="Statement.html#TYPEcopy_wrt">copy_wrt</a> -> 'b <a href="Statement.html#TYPEcopy_wrt">copy_wrt</a></code></pre>
+<pre><span id="VALmap_copy_bind"><span class="keyword">val</span> map_copy_bind</span> : <code class="type">bind:('a -> 'b <a href="Statement.html#TYPEvar">var</a> -> 'a * 'c <a href="Statement.html#TYPEvar">var</a>) -><br>       term:('a -> 'd -> 'e) -><br>       ty:('a -> 'b -> 'c) -><br>       'a -> ('d, 'b) <a href="Statement.html#TYPEcopy">copy</a> -> ('e, 'c) <a href="Statement.html#TYPEcopy">copy</a></code></pre>
+<pre><span id="VALmap_copy"><span class="keyword">val</span> map_copy</span> : <code class="type">term:('t1 -> 't2) -><br>       ty:('ty1 -> 'ty2) -> ('t1, 'ty1) <a href="Statement.html#TYPEcopy">copy</a> -> ('t2, 'ty2) <a href="Statement.html#TYPEcopy">copy</a></code></pre>
+<pre><span id="VALmap"><span class="keyword">val</span> map</span> : <code class="type">term:('t -> 't2) -><br>       ty:('ty -> 'ty2) -> ('t, 'ty) <a href="Statement.html#TYPEt">t</a> -> ('t2, 'ty2) <a href="Statement.html#TYPEt">t</a></code></pre>
+<pre><span id="VALmap_bind"><span class="keyword">val</span> map_bind</span> : <code class="type">bind:('b_acc -> 'ty <a href="Var.html#TYPEt">Var.t</a> -> 'b_acc * 'ty2 <a href="Var.html#TYPEt">Var.t</a>) -><br>       term:('b_acc -> 't -> 't2) -><br>       ty:('b_acc -> 'ty -> 'ty2) -><br>       'b_acc -> ('t, 'ty) <a href="Statement.html#TYPEt">t</a> -> ('t2, 'ty2) <a href="Statement.html#TYPEt">t</a></code></pre><div class="info ">
+Similar to <a href="Statement.html#VALmap"><code class="code"><span class="constructor">Statement</span>.map</code></a>, but accumulating some value of type <code class="code">b_acc</code> when
+    entering binders<br>
+</div>
+
+<pre><span id="VALfold_bind"><span class="keyword">val</span> fold_bind</span> : <code class="type">bind:('b_acc -> 'ty <a href="Var.html#TYPEt">Var.t</a> -> 'b_acc) -><br>       term:('b_acc -> 'a -> 't -> 'a) -><br>       ty:('b_acc -> 'a -> 'ty -> 'a) -> 'b_acc -> 'a -> ('t, 'ty) <a href="Statement.html#TYPEt">t</a> -> 'a</code></pre>
+<pre><span id="VALfold"><span class="keyword">val</span> fold</span> : <code class="type">term:('a -> 't -> 'a) -><br>       ty:('a -> 'ty -> 'a) -> 'a -> ('t, 'ty) <a href="Statement.html#TYPEt">t</a> -> 'a</code></pre>
+<pre><span id="VALiter"><span class="keyword">val</span> iter</span> : <code class="type">term:('t -> unit) -> ty:('ty -> unit) -> ('t, 'ty) <a href="Statement.html#TYPEt">t</a> -> unit</code></pre>
+<pre><span id="VALid_of_defined"><span class="keyword">val</span> id_of_defined</span> : <code class="type">'a <a href="Statement.html#TYPEdefined">defined</a> -> <a href="ID.html#TYPEt">ID.t</a></code></pre>
+<pre><span id="VALty_of_defined"><span class="keyword">val</span> ty_of_defined</span> : <code class="type">'ty <a href="Statement.html#TYPEdefined">defined</a> -> 'ty</code></pre>
+<pre><span id="VALdefined_of_rec"><span class="keyword">val</span> defined_of_rec</span> : <code class="type">('a, 'ty) <a href="Statement.html#TYPErec_def">rec_def</a> -> 'ty <a href="Statement.html#TYPEdefined">defined</a></code></pre>
+<pre><span id="VALdefined_of_recs"><span class="keyword">val</span> defined_of_recs</span> : <code class="type">('a, 'ty) <a href="Statement.html#TYPErec_defs">rec_defs</a> -> 'ty <a href="Statement.html#TYPEdefined">defined</a> Sequence.t</code></pre>
+<pre><span id="VALdefined_of_spec"><span class="keyword">val</span> defined_of_spec</span> : <code class="type">('a, 'ty) <a href="Statement.html#TYPEspec_defs">spec_defs</a> -> 'ty <a href="Statement.html#TYPEdefined">defined</a> Sequence.t</code></pre>
+<pre><span id="VALdefined_of_pred"><span class="keyword">val</span> defined_of_pred</span> : <code class="type">('a, 'ty) <a href="Statement.html#TYPEpred_def">pred_def</a> -> 'ty <a href="Statement.html#TYPEdefined">defined</a></code></pre>
+<pre><span id="VALdefined_of_preds"><span class="keyword">val</span> defined_of_preds</span> : <code class="type">('a, 'ty) <a href="Statement.html#TYPEpred_def">pred_def</a> list -> 'ty <a href="Statement.html#TYPEdefined">defined</a> Sequence.t</code></pre>
+<pre><span id="VALdefined_of_cstor"><span class="keyword">val</span> defined_of_cstor</span> : <code class="type">'ty <a href="Statement.html#TYPEty_constructor">ty_constructor</a> -> 'ty <a href="Statement.html#TYPEdefined">defined</a></code></pre>
+<pre><span id="VALdefined_of_data"><span class="keyword">val</span> defined_of_data</span> : <code class="type">'ty <a href="Statement.html#TYPEtydef">tydef</a> -> 'ty <a href="Statement.html#TYPEdefined">defined</a> Sequence.t</code></pre>
+<pre><span id="VALdefined_of_datas"><span class="keyword">val</span> defined_of_datas</span> : <code class="type">'ty <a href="Statement.html#TYPEmutual_types">mutual_types</a> -> 'ty <a href="Statement.html#TYPEdefined">defined</a> Sequence.t</code></pre>
+<pre><span id="VALdefined_of_copy"><span class="keyword">val</span> defined_of_copy</span> : <code class="type">('a, 'ty) <a href="Statement.html#TYPEcopy">copy</a> -> 'ty <a href="Statement.html#TYPEdefined">defined</a> Sequence.t</code></pre>
+<pre><span id="VALids_of_copy"><span class="keyword">val</span> ids_of_copy</span> : <code class="type">('a, 'b) <a href="Statement.html#TYPEcopy">copy</a> -> <a href="ID.html#TYPEt">ID.t</a> Sequence.t</code></pre><br>
+<h2 id="2_Print">Print</h2><br>
+
+<pre><span id="VALprint_attr"><span class="keyword">val</span> print_attr</span> : <code class="type"><a href="Statement.html#TYPEdecl_attr">decl_attr</a> <a href="Statement.html#TYPEprinter">printer</a></code></pre>
+<pre><span id="VALprint_attrs"><span class="keyword">val</span> print_attrs</span> : <code class="type"><a href="Statement.html#TYPEdecl_attr">decl_attr</a> list <a href="Statement.html#TYPEprinter">printer</a></code></pre>
+<pre><span class="keyword">module</span> <a href="Statement.Print.html">Print</a> <code class="code">(</code><code class="code"><span class="constructor">Pt</span></code><code class="code"> : </code><code class="type"><a href="TermInner.PRINT.html">TermInner.PRINT</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">Pty</span></code><code class="code"> : </code><code class="type"><a href="TermInner.PRINT.html">TermInner.PRINT</a></code><code class="code">) </code>: <code class="code"><span class="keyword">sig</span></code> <a href="Statement.Print.html">..</a> <code class="code"><span class="keyword">end</span></code></pre></body></html>
