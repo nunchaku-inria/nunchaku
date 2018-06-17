@@ -13,7 +13,7 @@ doc:
 	jbuilder build @doc
 
 test: build
-	jbuilder runtest --no-buffer -j $J
+	jbuilder runtest --no-buffer --force -j $J
 	# ./tests/quick/all.sh # FIXME?
 
 open_doc: doc

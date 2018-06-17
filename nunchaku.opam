@@ -20,7 +20,7 @@ depends: [
     "num"
     "qtest" {test}
     "qcheck" {test}
-    "oUnit" {test}
+    "ounit" {test}
     "odoc" {doc}
 ]
 homepage: "https://github.com/nunchaku-inria/nunchaku/"
