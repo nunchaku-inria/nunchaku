@@ -177,8 +177,9 @@ let skolemize_ ~state ?(in_goal=false) pol t =
           let env = env_bind ~env v skolem in
           aux env pol t'
         | _ ->
-          let env = env_add_var ~env v in
-          U.mk_bind b v (aux env pol t')
+          let v' = aux_var env v in
+          let env = env_add_var ~env v' in
+          U.mk_bind b v' (aux env pol t')
       end
     | TI.Let (v, t, u) ->
       (* rename [v], but do not parametrize skolems with it *)
