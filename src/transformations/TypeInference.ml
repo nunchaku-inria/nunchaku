@@ -256,7 +256,9 @@ module Convert(Term : TermTyped.S) = struct
       | A.Forall (_,_)
       | A.Exists (_,_) -> ill_formed ?loc "no quantifiers in types"
 
-  let convert_ty_exn ~env ty = convert_ty_ ~stack:[] ~env ty
+  let convert_ty_exn ~env ty =
+    Utils.debugf ~section 5 "@[convert_ty `%a`@]" (fun k->k A.pp_term ty);
+    convert_ty_ ~stack:[] ~env ty
 
   let convert_ty ~env ty =
     try E.return (convert_ty_exn ~env ty)
@@ -651,14 +653,16 @@ module Convert(Term : TermTyped.S) = struct
   and convert_quantifier ?loc ~stack ~env ~which v ty_opt t =
     (* fresh variable *)
     let ty_var = fresh_ty_var_ ~name:v in
-    Utils.debugf ~section 3 "@[<2>new variable %a@ for @[%s%a@]@ within `@[%a@]`@]"
+    Utils.debugf ~section 3 "@[<2>new type variable %a@ for @[%s%a@]@ within `@[%a@]`@]"
       (fun k-> k P.pp ty_var v pp_ty_opt ty_opt A.pp_term t );
     (* unify with expected type *)
     CCOpt.iter
       (fun ty -> unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty))
       ty_opt;
     let var = Var.make ~name:v ~ty:ty_var in
-    let env = TyEnv.add_var ~env v ~var  in
+    Utils.debugf ~section 5 "@[<2>scope %S as @[%a : %a@]@]"
+      (fun k-> k v Var.pp_full var P.pp (Var.ty var));
+    let env = TyEnv.add_var ~env v ~var in
     let t = convert_term_ ~stack ~env t in
     unify_in_ctx_ ~stack (U.ty_exn t) prop;
     (* which quantifier to build? *)
@@ -1019,8 +1023,8 @@ module Convert(Term : TermTyped.S) = struct
          let n  = num_implicit_ ty in
          let vars = CCList.init n
              (fun i -> Var.make ~ty:U.ty_type ~name:(CCFormat.sprintf "a_%d" i)) in
-         Utils.debugf ~section 4 "@[<2>locally define %s as `@[%a@]`@]"
-           (fun k -> k v P.pp v_as_t);
+         Utils.debugf ~section 4 "@[<2>locally define %s@ as `@[%a@ : %a@]`@]"
+           (fun k -> k v P.pp v_as_t P.pp ty);
          (* declare [v] in the scope of equations *)
          let env' = TyEnv.add_def ~env:env' v ~as_:v_as_t in
          env', (id,ty,vars,l))

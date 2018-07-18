@@ -53,13 +53,14 @@ module Make(T : TI.REPR)
     | TI.TyBuiltin `Type -> true
     | _ -> false
 
-  let repr t = match T.repr t with
+  let rec repr t = match T.repr t with
     | TI.TyBuiltin b -> Builtin b
     | TI.Const id -> Const id
     | TI.App (f,l) -> App (f, l)
     | TI.TyArrow (a, b) -> Arrow (a, b)
     | TI.Var v -> Var v
     | TI.Bind (Binder.TyForall, v, t) -> Forall (v, t)
+    | TI.TyMeta {MetaVar.deref=Some u;_} -> repr u (* follow *)
     | TI.TyMeta v -> Meta v
     | TI.Builtin _
     | TI.Match _

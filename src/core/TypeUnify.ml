@@ -101,19 +101,23 @@ module Make(T : TI.REPR) = struct
               fail ~stack "incompatible variables"
           end
         | TyI.Meta v1, TyI.Meta v2 when MetaVar.equal v1 v2 -> ()
-        | TyI.Meta var, _ when MetaVar.can_bind var ->
+        | TyI.Meta var, _ ->
+          assert (MetaVar.can_bind var);
           (* TODO: check that ty2 is closed! not bound vars allowed *)
-          if occur_check_ ~var ty2
-          then
+          if occur_check_ ~var ty2 then (
             failf ~stack
               "cycle detected (variable %a occurs in type)" MetaVar.pp var
-          else MetaVar.bind ~var ty2
-        | _, TyI.Meta var when MetaVar.can_bind var ->
-          if occur_check_ ~var ty1
-          then
+          ) else (
+            MetaVar.bind ~var ty2
+          )
+        | _, TyI.Meta var ->
+          assert (MetaVar.can_bind var);
+          if occur_check_ ~var ty1 then (
             failf ~stack
               "cycle detected (variable %a occurs in type)" MetaVar.pp var
-          else MetaVar.bind ~var ty1
+          ) else (
+            MetaVar.bind ~var ty1
+          )
         | TyI.App (f1,l1), TyI.App (f2,l2) ->
           (* NOTE: if partial application in types is allowed,
              we must allow [length l1 <> length l2]. In that case, unification

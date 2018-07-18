@@ -201,15 +201,11 @@ module Default = struct
   (* dereference the term, if it is a variable, until it is not bound;
      also does some simplifications *)
   let rec deref_rec_ t = match t.view with
-    | TI.TyMeta var ->
-      begin match MetaVar.deref var with
-        | None -> t
-        | Some t' ->
-          let root = deref_rec_ t' in
-          (* path compression *)
-          if t' != root then MetaVar.rebind ~var root;
-          root
-      end
+    | TI.TyMeta ({MetaVar.deref=Some t';_} as var) ->
+      let root = deref_rec_ t' in
+      (* path compression *)
+      if t' != root then MetaVar.rebind ~var root;
+      root
     | _ -> t
 
   let repr t = (deref_rec_ t).view
