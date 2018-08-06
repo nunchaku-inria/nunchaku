@@ -894,13 +894,14 @@ module Convert(Term : TermTyped.S) = struct
                    "term `@[%a@]`@ contains non-generalized variables @[%a@]"
                    P.pp t (CCFormat.list MetaVar.pp) vars'
              end;
-             match check_vars ~vars:(VarSet.of_list spec_ty_vars) ~rel:`Subset t with
+             begin match check_vars ~vars:(VarSet.of_list spec_ty_vars) ~rel:`Subset t with
                | `Ok -> ()
                | `Bad bad_vars ->
                  ill_formedf ?loc ~kind:"spec"
                    "axiom contains type variables @[`%a`@]@ \
                     that do not occur in defined term@ @[`%a`@]"
                    (CCFormat.list Var.pp) bad_vars P.pp t
+             end;
            in
            convert_prop_ ~before_generalize ~env:env' ax)
         ax_l
@@ -975,25 +976,25 @@ module Convert(Term : TermTyped.S) = struct
      partially applied, in which case we create new variables [vars']
      and return them (along with the new atomic type) *)
   let complete_args_ args ty =
-    let rec aux subst args ty = match args, Term.repr ty with
+    let rec aux i subst args ty = match args, Term.repr ty with
       | [], TI.Bind (Binder.TyForall, v, ty') ->
         (* NOTE: can we really complete a quantified equation like that? *)
         assert (IU.ty_returns_Type (Var.ty v));
         let v' = Var.make ~name:"v" ~ty:(Subst.eval ~subst @@ Var.ty v) in
-        let l, ty = aux (Subst.add ~subst v (U.var v')) [] ty' in
+        let l, ty = aux (i+1) (Subst.add ~subst v (U.var v')) [] ty' in
         v' :: l, ty
       | [], TI.TyArrow (ty_arg, ty') ->
         (* introduce [v] as an explicit param of type [ty_arg] *)
-        let v = Var.make ~name:"v" ~ty:(Subst.eval ~subst ty_arg) in
-        let l, ty = aux subst [] ty' in
+        let v = Var.makef "v_%d" i ~ty:(Subst.eval ~subst ty_arg) in
+        let l, ty = aux (i+1) subst [] ty' in
         v :: l, ty
       | a::args', TI.Bind (Binder.TyForall, v', ty') ->
         (* bind [v' = a] *)
-        aux (Subst.add ~subst v' a) args' ty'
-      | _::args', TI.TyArrow (_, ty') -> aux subst args' ty'
+        aux i (Subst.add ~subst v' a) args' ty'
+      | _::args', TI.TyArrow (_, ty') -> aux i subst args' ty'
       | _ -> [], Subst.eval ~subst ty
     in
-    aux Subst.empty args ty
+    aux 0 Subst.empty args ty
 
   (* check that [t], the converted version of [ax], contains only
      the type variables among [ty_vars]. [id] is the symbol being defined. *)
@@ -1055,7 +1056,7 @@ module Convert(Term : TermTyped.S) = struct
                   (* sanity check: equation must not contain other type variables,
                      and all type variables must be bound *)
                   let before_generalize t =
-                    check_contains_only_ ?loc ~kind:"rec" ~ty_vars:ty_vars id untyped_ax t
+                    check_contains_only_ ?loc ~kind:"rec" ~ty_vars:ty_vars id untyped_ax t;
                   in
                   let ax = convert_prop_ ~before_generalize ~env:env'' untyped_ax in
                   (* decompose into a proper equation *)
@@ -1068,6 +1069,10 @@ module Convert(Term : TermTyped.S) = struct
                       List.iter (check_prenex_types_ ?loc) args;
                       (* make sure that functions are totally applied *)
                       let vars', ty' = complete_args_ args ty in
+                      if vars' <> [] then (
+                        Utils.debugf ~section 5 "@[complete_eqn@ :eqn %a@ :add-vars %a@])"
+                          (fun k->k P.pp ax (CCFormat.Dump.list P.pp_var) vars');
+                      );
                       let vars'_as_t = List.map (U.var ?loc:None) vars' in
                       vars @ vars',
                       args @ vars'_as_t,
@@ -1106,7 +1111,7 @@ module Convert(Term : TermTyped.S) = struct
                   (* sanity check: equation must not contain other type variables,
                      and all type variables must be bound *)
                   let before_generalize t =
-                    check_contains_only_ ?loc ~kind:"pred" ~ty_vars:ty_vars id untyped_ax t
+                    check_contains_only_ ?loc ~kind:"pred" ~ty_vars:ty_vars id untyped_ax t;
                   in
                   let ax = convert_prop_ ~before_generalize ~env:env'' untyped_ax in
                   (* decompose into a proper clause *)

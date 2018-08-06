@@ -101,6 +101,7 @@ module type PRINT = sig
   type t
   val pp : t printer
   val pp' : Precedence.t -> t printer
+  val pp_var : t Var.t printer
   val pp_in_app : t printer
   val pp_in_binder : t printer
   val to_string : t -> string
@@ -206,6 +207,8 @@ module Print(T : REPR)
   and pp_in_app out t = pp' P.App out t
   and pp_in_binder out t = pp' P.Bind out t
   and pp out t = pp' P.Top out t
+
+  let pp_var out v = fpf out "(@[%a@ : %a@])" Var.pp v pp (Var.ty v)
 
   let to_string = CCFormat.to_string pp
 
