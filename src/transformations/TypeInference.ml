@@ -977,15 +977,18 @@ module Convert(Term : TermTyped.S) = struct
   let complete_args_ args ty =
     let rec aux subst args ty = match args, Term.repr ty with
       | [], TI.Bind (Binder.TyForall, v, ty') ->
+        (* NOTE: can we really complete a quantified equation like that? *)
         assert (IU.ty_returns_Type (Var.ty v));
-        let v' = Var.make ~name:"v" ~ty:(Var.ty v) in
+        let v' = Var.make ~name:"v" ~ty:(Subst.eval ~subst @@ Var.ty v) in
         let l, ty = aux (Subst.add ~subst v (U.var v')) [] ty' in
         v' :: l, ty
       | [], TI.TyArrow (ty_arg, ty') ->
-        let v = Var.make ~name:"v" ~ty:ty_arg in
+        (* introduce [v] as an explicit param of type [ty_arg] *)
+        let v = Var.make ~name:"v" ~ty:(Subst.eval ~subst ty_arg) in
         let l, ty = aux subst [] ty' in
         v :: l, ty
       | a::args', TI.Bind (Binder.TyForall, v', ty') ->
+        (* bind [v' = a] *)
         aux (Subst.add ~subst v' a) args' ty'
       | _::args', TI.TyArrow (_, ty') -> aux subst args' ty'
       | _ -> [], Subst.eval ~subst ty
