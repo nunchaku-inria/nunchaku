@@ -147,7 +147,6 @@ module Make(T : TI.REPR) = struct
           fail ~stack "incompatible types"
         | TyI.Var _, _ -> fail ~stack "incompatible types"
         | TyI.Forall (_,_),_ -> fail ~stack "incompatible types"
-        | TyI.Meta _, _ -> fail ~stack "incompatible types"
     in
     unify_ ~stack:[] ty1 ty2
 

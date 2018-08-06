@@ -67,6 +67,8 @@ module Util(T : S)
     val true_ : t
     val false_ : t
 
+    val forall_l : ?loc:loc -> t var list -> t -> t
+
     val mk_bind :
       ?loc:loc ->
       ty:t ->
@@ -151,6 +153,8 @@ module Util(T : S)
 
   let eq ?loc a b =
     builtin ?loc ~ty:ty_prop (`Eq (a,b))
+
+  let forall_l ?loc vars t = List.fold_right (forall ?loc) vars t
 
   let asserting ?loc t l = match l with
     | [] -> t
