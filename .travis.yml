@@ -13,3 +13,4 @@ env:
   - PACKAGE="nunchaku" OCAML_VERSION="4.04.2" DEPOPTS="smbc qcheck qtest odoc"
   - PACKAGE="nunchaku" OCAML_VERSION="4.05.0" DEPOPTS="smbc qcheck qtest odoc"
   - PACKAGE="nunchaku" OCAML_VERSION="4.06.0" DEPOPTS="smbc qcheck qtest odoc"
+  - PACKAGE="nunchaku" OCAML_VERSION="4.07.0" DEPOPTS="smbc qcheck qtest odoc"
