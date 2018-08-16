@@ -546,7 +546,27 @@ module type PRINT_TERM = sig
   val pp' : Precedence.t -> t CCFormat.printer
 end
 
+module type PRINT = sig
+  type term
+  type ty
+  val pp_defined : ty defined printer
+  val pp_spec_defs : (term, ty) spec_defs printer
+  val pp_clause : (term, ty) pred_clause printer
+  val pp_clauses : (term, ty) pred_clause list printer
+  val pp_pred_def : (term, ty) pred_def printer
+  val pp_pred_defs : (term, ty) pred_def list printer
+  val pp_eqns : ID.t -> (term, ty) equations printer
+  val pp_rec_def : (term, ty) rec_def printer
+  val pp_rec_defs : (term, ty) rec_def list printer
+  val pp_data_type : ty data_type printer
+  val pp_data_types : ([`Data | `Codata] * ty data_types) printer
+  val pp_copy : (term, ty) copy printer
+  val pp : (term, ty) t printer
+end
+
 module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
+  type term = Pt.t
+  type ty = Pty.t
   let pp_defined out d =
     fpf out "@[<2>%a@ : %a%a@]"
       ID.pp d.defined_head Pty.pp d.defined_ty pp_attrs d.defined_attrs

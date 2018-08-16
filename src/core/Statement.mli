@@ -422,18 +422,23 @@ module type PRINT_TERM = sig
   val pp' : Precedence.t -> t CCFormat.printer
 end
 
-module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) : sig
-  val pp_defined : Pty.t defined printer
-  val pp_spec_defs : (Pt.t, Pty.t) spec_defs printer
-  val pp_clause : (Pt.t, Pty.t) pred_clause printer
-  val pp_clauses : (Pt.t, Pty.t) pred_clause list printer
-  val pp_pred_def : (Pt.t, Pty.t) pred_def printer
-  val pp_pred_defs : (Pt.t, Pty.t) pred_def list printer
-  val pp_eqns : ID.t -> (Pt.t, Pty.t) equations printer
-  val pp_rec_def : (Pt.t, Pty.t) rec_def printer
-  val pp_rec_defs : (Pt.t, Pty.t) rec_def list printer
-  val pp_data_type : Pty.t data_type printer
-  val pp_data_types : ([`Data | `Codata] * Pty.t data_types) printer
-  val pp_copy : (Pt.t, Pty.t) copy printer
-  val pp : (Pt.t, Pty.t) t printer
+module type PRINT = sig
+  type term
+  type ty
+  val pp_defined : ty defined printer
+  val pp_spec_defs : (term, ty) spec_defs printer
+  val pp_clause : (term, ty) pred_clause printer
+  val pp_clauses : (term, ty) pred_clause list printer
+  val pp_pred_def : (term, ty) pred_def printer
+  val pp_pred_defs : (term, ty) pred_def list printer
+  val pp_eqns : ID.t -> (term, ty) equations printer
+  val pp_rec_def : (term, ty) rec_def printer
+  val pp_rec_defs : (term, ty) rec_def list printer
+  val pp_data_type : ty data_type printer
+  val pp_data_types : ([`Data | `Codata] * ty data_types) printer
+  val pp_copy : (term, ty) copy printer
+  val pp : (term, ty) t printer
 end
+
+module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM)
+    : PRINT with type ty = Pty.t and type term = Pt.t

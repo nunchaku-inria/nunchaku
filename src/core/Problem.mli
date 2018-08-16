@@ -87,6 +87,8 @@ module Print(P1 : TermInner.PRINT)(P2:TermInner.PRINT) : sig
   val pp : (P1.t, P2.t) t printer
 end
 
+module P : module type of Print(Term)(Term)
+
 (** {2 Convert the term representations} *)
 module Convert(T1 : TermInner.REPR)(T2 : TermInner.BUILD) : sig
   val convert :

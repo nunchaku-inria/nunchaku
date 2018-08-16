@@ -8,7 +8,7 @@ type 'a printer = Format.formatter -> 'a -> unit
 
 exception Error of string
 
-type term = TermInner.Default.t
+type term = Term.t
 type form = term
 type ty = term
 type model = (term, ty) Model.t

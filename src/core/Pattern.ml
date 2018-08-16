@@ -24,19 +24,15 @@ type 'a view =
   | Var of 'a var
 
 module type S = sig
-  module T : TI.REPR
-  type t = T.t
+  type term
 
-  val repr : T.t -> T.t view
+  val repr : term -> term view
   (** View that fails on meta variables *)
 end
 
 module Make(T : TI.REPR)
-  : S with module T = T
+  : S with type term := T.t
 = struct
-  module T = T
-  type t = T.t
-
   let repr t = match T.repr t with
     | TI.Const id -> App (id, [])
     | TI.Var v -> Var v

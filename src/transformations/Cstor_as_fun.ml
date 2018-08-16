@@ -8,17 +8,15 @@ open Nunchaku_core
 
 module Stmt = Statement
 module TI = TermInner
-module T = TermInner.Default
-module P = T.P
-module U = T.U
-module PStmt = Stmt.Print(P)(P)
+module T = Term
+module PStmt = Stmt.Print(T)(T)
 
 let name = "cstor_as_fun"
 let long_name = "removal of partially applied constructors"
 let section = Utils.Section.make name
 
-type ty = TermInner.Default.t
-type term = TermInner.Default.t
+type ty = Term.t
+type term = Term.t
 type var = ty Var.t
 type env = (term,term) Env.t
 
@@ -53,15 +51,15 @@ let cstor_as_fun (state:state) (id:ID.t) ~ty : ID.t * def option =
     let f_id = ID.make_f "%s-as-fun" (ID.name id) in
     Utils.debugf ~section 3
       "@[<2>introduce `@[%a : %a@]`@ for partial application of `%a`@]"
-      (fun k->k ID.pp f_id P.pp ty ID.pp id);
+      (fun k->k ID.pp f_id T.pp ty ID.pp id);
     let f_defined = Stmt.mk_defined ~attrs:[] f_id ty in
     (* define [f] by building a statement *)
-    let _l, ty_args, _ = U.ty_unfold ty in
+    let _l, ty_args, _ = T.ty_unfold ty in
     assert (_l=[]);
     let vars = List.mapi (fun i ty -> Var.makef ~ty "x_%d" i) ty_args in
-    let vars_t = List.map U.var vars in
+    let vars_t = List.map T.var vars in
     (* [id x1…xn] *)
-    let t = U.app_const id vars_t in
+    let t = T.app_const id vars_t in
     Utils.debugf ~section 5 "add new def `%a`"
       (fun k->
          let st =
@@ -102,25 +100,25 @@ let encode_term (gst:glob_state) (t:term) : term =
   let rec aux t = match T.repr t with
     | TI.Const id ->
       let info = Env.find_exn ~env:gst.env id in
-      if Env.is_cstor info && U.ty_arity info.Env.ty > 0 then (
+      if Env.is_cstor info && T.ty_arity info.Env.ty > 0 then (
         let f_id = get_cstor_as_fun gst id info.Env.ty in
-        U.const f_id
+        T.const f_id
       ) else t
     | TI.App (f, l) ->
       let l = List.map aux l in
       begin match T.repr f with
         | TI.Const id ->
           let info = Env.find_exn ~env:gst.env id in
-          if Env.is_cstor info && U.ty_arity info.Env.ty > List.length l then (
+          if Env.is_cstor info && T.ty_arity info.Env.ty > List.length l then (
             (* partially applied cstor *)
             let f_id = get_cstor_as_fun gst id info.Env.ty in
-            U.app_const f_id l
-          ) else U.app f l
+            T.app_const f_id l
+          ) else T.app f l
         | _ ->
           let f = aux f in
-          U.app f l
+          T.app f l
       end
-    | _ -> U.map ~bind:(fun () v -> (), v) ~f:(fun () -> aux) () t
+    | _ -> T.map ~bind:(fun () v -> (), v) ~f:(fun () -> aux) () t
   in
   aux t
 
@@ -156,7 +154,7 @@ let decode_model state m : (_,_) Model.t =
 let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
-      let module PPb = Problem.Print(P)(P) in
+      let module PPb = Problem.P in
       Format.printf
         "@[<v2>@{<Yellow>after %s@}: %a@]@." long_name PPb.pp)
     @
@@ -179,7 +177,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res %s@}:@ %a@]@."
-         long_name (Problem.Res.pp P.pp' P.pp)]
+         long_name (Problem.Res.pp T.pp' T.pp)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model state) in

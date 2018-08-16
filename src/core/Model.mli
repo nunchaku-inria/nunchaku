@@ -153,7 +153,7 @@ end
 (** {2 Helpers for Decision Trees} *)
 
 module DT_util : sig
-  type term = TermInner.Default.t
+  type term = Term.t
 
   type dt = (term, term) DT.t
   type subst = (term, term) Var.Subst.t
@@ -308,7 +308,7 @@ val to_sexp : 't to_sexp -> 'ty to_sexp -> ('t,'ty) t to_sexp
 (** S-expr output suitable for parsing from the caller *)
 
 module Default : sig
-  type term = TermInner.Default.t
+  type term = Term.t
 
   type t = (term, term) model
 

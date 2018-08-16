@@ -9,11 +9,9 @@ module TI = TermInner
 module Subst = Var.Subst
 module Stmt = Statement
 module Pol = Polarity
-module T = TI.Default
-module P = T.P
-module U = T.U
+module T = Term
 
-type term = TermInner.Default.t
+type term = Term.t
 
 let name = "elim_infinite"
 let section = Utils.Section.make name
@@ -51,13 +49,13 @@ let as_approx_attr_ =
 (* find the universal types, build a map "infinite type -> approx" *)
 let find_types_st (map,set) st = match Stmt.view st with
   | Stmt.Decl {Stmt.defined_attrs=attrs;defined_ty=ty; defined_head=id}
-    when U.ty_is_Type ty && has_infinite_attr_ attrs ->
+    when T.ty_is_Type ty && has_infinite_attr_ attrs ->
     ID.Map.add id None map, set
   | Stmt.Decl {Stmt.defined_head=id; defined_attrs=attrs; _}
     when has_upcast_attr_ attrs ->
     map, ID.Set.add id set
   | Stmt.Decl {Stmt.defined_attrs=attrs;defined_ty=ty; defined_head=id}
-    when U.ty_is_Type ty ->
+    when T.ty_is_Type ty ->
     begin match as_approx_attr_ attrs with
       | None -> map, set
       | Some id' ->
@@ -93,20 +91,20 @@ let is_upcast_ st t = match T.repr t with
 let rec encode_term st subst pol t = match T.repr t with
   | TI.Var v ->
     begin match Subst.find ~subst v with
-      | Some v' -> U.var v'
+      | Some v' -> T.var v'
       | None -> failf "scoping error for `%a`" Var.pp_full v
     end
   | TI.Const id ->
     begin match ID.Map.get id st.to_approx with
       | None -> t
-      | Some id' -> U.const id'
+      | Some id' -> T.const id'
     end
   | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, body)
     when ty_is_infinite_ st (Var.ty v) ->
-    begin match U.approx_infinite_quant_pol_binder q pol with
+    begin match T.approx_infinite_quant_pol_binder q pol with
       | `Keep ->
         let subst, v = bind_var st subst v in
-        U.mk_bind q v (encode_term st subst pol body)
+        T.mk_bind q v (encode_term st subst pol body)
       | `Unsat_means_unknown res ->
         (* quantification on infinite type: false *)
         st.unsat_means_unknown <- true;
@@ -116,7 +114,7 @@ let rec encode_term st subst pol t = match T.repr t with
     (* erase the "upcast" operator, because it becomes id *)
     encode_term st subst pol x
   | _ ->
-    U.map_pol subst pol t
+    T.map_pol subst pol t
       ~bind:(bind_var st)
       ~f:(encode_term st)
 
@@ -131,7 +129,7 @@ and bind_var st subst v =
 let encode_statement map st = match Stmt.view st with
   | Stmt.Decl {Stmt.defined_ty=ty; defined_attrs=attrs; _}
     when has_infinite_attr_ attrs ->
-    assert (U.ty_is_Type ty);
+    assert (T.ty_is_Type ty);
     [] (* remove infinite type *)
   | Stmt.Decl {Stmt.defined_attrs=attrs; _} when has_upcast_attr_ attrs ->
     [] (* remove upcast functions *)
@@ -159,7 +157,7 @@ let encode_pb pb =
              (* declare new approx *)
              let id' = ID.make_f "alpha_%a" ID.pp_name id in
              let d =
-               Stmt.decl id' U.ty_type
+               Stmt.decl id' T.ty_type
                  ~info:Stmt.info_default ~attrs:[Stmt.Attr_finite_approx id]
              in
              d :: decls, ID.Map.add id id' approx
@@ -186,7 +184,7 @@ let pipe_with ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print ()
       ~f:(fun () ->
-        let module PPb = Problem.Print(P)(P) in
+        let module PPb = Problem.P in
         Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name PPb.pp)
     @
       Utils.singleton_if check ()

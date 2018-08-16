@@ -7,9 +7,7 @@ open Nunchaku_core
 
 module TI = TermInner
 module Stmt = Statement
-module T = TermInner.Default
-module U = T.U
-module P = T.P
+module T = Term
 module TyMo = TypeMono.Make(T)
 
 let name = "lift_undefined"
@@ -31,7 +29,7 @@ type decode_state = {
 type state = {
   new_decls: (ID.t * ty) CCVector.vector;
   (* new declarations *)
-  tbl: ID.t U.Tbl.t;
+  tbl: ID.t T.Tbl.t;
   (* [unknown_(term) -> toplevel-id] *)
   env: (term, ty) Env.t;
   (* environment *)
@@ -41,7 +39,7 @@ type state = {
 
 let create_state ~env () : state = {
   env;
-  tbl=U.Tbl.create 16;
+  tbl=T.Tbl.create 16;
   new_decls=CCVector.create();
   decode={unknowns=ID.Tbl.create 16};
 }
@@ -59,10 +57,10 @@ let pop_decls state =
 let decl_new state (t:term) ty : ID.t =
   let id = ID.make (TyMo.mangle ~sep:"_" ty) in
   Utils.debugf ~section 5 "(@[declare_new %a:@ `@[%a@]`@])"
-    (fun k->k ID.pp id P.pp ty);
+    (fun k->k ID.pp id T.pp ty);
   CCVector.push state.new_decls (id, ty);
-  assert (not (U.Tbl.mem state.tbl t));
-  U.Tbl.add state.tbl t id;
+  assert (not (T.Tbl.mem state.tbl t));
+  T.Tbl.add state.tbl t id;
   ID.Tbl.add state.decode.unknowns id ();
   id
 
@@ -71,7 +69,7 @@ let find_args (t:term): term list = match T.repr t with
   | TI.Const _ -> []
   | TI.App (_, l) -> l
   | _ ->
-    errorf_ "cannot find type arguments for `undefined_self @[%a@]`" P.pp t
+    errorf_ "cannot find type arguments for `undefined_self @[%a@]`" T.pp t
 
 (* recursive traversal of terms, lifting unknowns.
    We carry a substitution around so that the unknowns' arguments are
@@ -84,22 +82,22 @@ let encode_term state ?(subst=Var.Subst.empty) t =
   let rec aux subst t = match T.repr t with
     | TI.Builtin (`Undefined_self t) ->
       (* find free variables of [t] *)
-      let t = U.eval ~subst t in
+      let t = T.eval ~subst t in
       let args =
         find_args t
-        |> U.free_vars_list
-        |> U.VarSet.to_list
+        |> T.free_vars_list
+        |> T.VarSet.to_list
       in
       (* find or declare toplevel constant for this particular unknown *)
-      let new_id = match U.Tbl.get state.tbl t with
+      let new_id = match T.Tbl.get state.tbl t with
         | Some new_id -> new_id
         | None ->
           (* declare new id *)
           let ty_args = List.map Var.ty args in
-          let ty = U.ty_arrow_l ty_args (U.ty_exn ~env:state.env t) in
+          let ty = T.ty_arrow_l ty_args (T.ty_exn ~env:state.env t) in
           decl_new state t ty
       in
-      U.app_const new_id (List.map U.var args)
+      T.app_const new_id (List.map T.var args)
     | TI.Match (u, m, def) ->
       let u = aux subst u in
       let def = TI.map_default_case (aux subst) def in
@@ -110,15 +108,15 @@ let encode_term state ?(subst=Var.Subst.empty) t =
                (* so we match [v] against the pattern [c_id vars],
                   therefore in [rhs] we can replace [v] by [c_id vars]. *)
                let subst =
-                 Var.Subst.add ~subst v (U.app_const c_id (List.map U.var vars))
+                 Var.Subst.add ~subst v (T.app_const c_id (List.map T.var vars))
                in
                tys, vars, aux subst rhs
              | _ -> tys, vars, aux subst rhs)
           m
       in
-      U.match_with u m ~def
+      T.match_with u m ~def
     | _ ->
-      U.map () t ~bind:(fun () v->(),v) ~f:(fun () -> aux subst)
+      T.map () t ~bind:(fun () v->(),v) ~f:(fun () -> aux subst)
   in
   aux subst t
 
@@ -151,7 +149,7 @@ let decode_model (state:decode_state) m =
 let pipe ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
-      let module Ppb = Problem.Print(P)(P) in
+      let module Ppb = Problem.P in
       Format.printf "@[<v2>@{<Yellow>after %s@}:@ %a@]@." name Ppb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->

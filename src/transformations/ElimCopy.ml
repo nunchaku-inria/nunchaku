@@ -7,13 +7,10 @@ open Nunchaku_core
 
 module TI = TermInner
 module Stmt = Statement
-module T = TermInner.Default
-module U = T.U
-module P = T.P
+module T = Term
 module Pol = Polarity
 module AT = AnalyzeType.Make(T)
-module Red = Reduce.Make(T)
-module TyTbl = U.Tbl
+module TyTbl = T.Tbl
 
 let name = "elim_copy"
 let section = Utils.Section.make name
@@ -53,14 +50,14 @@ let copy_as_data ~info (c:(_,_) Stmt.copy): (_,_) Stmt.t list =
     { Stmt.
       cstor_name = c.Stmt.copy_abstract;
       cstor_args = [c.Stmt.copy_of];
-      cstor_type = U.ty_arrow c.Stmt.copy_of c.Stmt.copy_to
+      cstor_type = T.ty_arrow c.Stmt.copy_of c.Stmt.copy_to
     }
   in
   let data_ =
     { Stmt.
       ty_id = c.Stmt.copy_id;
       ty_vars = [];
-      ty_type = U.ty_type;
+      ty_type = T.ty_type;
       ty_cstors = ID.Map.singleton c.Stmt.copy_abstract cstor
     }
   in
@@ -69,8 +66,8 @@ let copy_as_data ~info (c:(_,_) Stmt.copy): (_,_) Stmt.t list =
      [forall x:concrete. concr (abs x) = x] *)
   let decl_concr =
     let x = Var.make ~ty:c.Stmt.copy_of ~name:"x" in
-    let lhs = U.app_const c.Stmt.copy_abstract [U.var x] in
-    let rhs = U.var x in
+    let lhs = T.app_const c.Stmt.copy_abstract [T.var x] in
+    let rhs = T.var x in
     let def =
       { Stmt.
         rec_defined =
@@ -115,7 +112,7 @@ let copy_subset_as_uninterpreted_ty state ~info ~(pred:term) c : (_, _) Stmt.t l
   let card_abstract_upper_bound = has_small_exact_card card_concrete in
   let incomplete = card_abstract_upper_bound = None in
   let id_c = c.Stmt.copy_id in
-  let ty_c = U.ty_const id_c in
+  let ty_c = T.ty_const id_c in
   ID.Tbl.add state.copy_as_uninterpreted id_c ();
   Utils.debugf ~section 3 "@[copy type %a:@ should_be_incomplete=%B@]"
     (fun k -> k ID.pp id_c incomplete);
@@ -145,18 +142,18 @@ let copy_subset_as_uninterpreted_ty state ~info ~(pred:term) c : (_, _) Stmt.t l
   (* axiom [forall a:abs. abstract (concrete a) = a] *)
   let ax_abs_conc =
     let a = Var.make ~ty:ty_c ~name:"a" in
-    U.forall a
-      (U.eq
-         (U.var a)
-         (U.app_const c.Stmt.copy_abstract
-            [U.app_const c.Stmt.copy_concrete [U.var a]]))
+    T.forall a
+      (T.eq
+         (T.var a)
+         (T.app_const c.Stmt.copy_abstract
+            [T.app_const c.Stmt.copy_concrete [T.var a]]))
     |> Stmt.axiom1 ~info
   (* axiom [forall a: abs. pred (concrete a)] *)
   and ax_pred_conc =
     let a = Var.make ~ty:ty_c ~name:"a" in
-    U.forall a
-      (Red.app_whnf pred
-         [U.app_const c.Stmt.copy_concrete [U.var a]])
+    T.forall a
+      (T.Red.app_whnf pred
+         [T.app_const c.Stmt.copy_concrete [T.var a]])
     |> Stmt.axiom1 ~info
   (* if complete (concrete type is finite and small enough),
      axiom [forall c:conc. pred c => c = concrete (abstract c)] *)
@@ -165,13 +162,13 @@ let copy_subset_as_uninterpreted_ty state ~info ~(pred:term) c : (_, _) Stmt.t l
     else (
       let co = Var.make ~ty:c.Stmt.copy_of ~name:"c" in
       let ax =
-        U.forall co
-          (U.imply
-             (Red.app_whnf pred [U.var co])
-             (U.eq
-                (U.var co)
-                (U.app_const c.Stmt.copy_concrete
-                   [U.app_const c.Stmt.copy_abstract [U.var co]])))
+        T.forall co
+          (T.imply
+             (T.Red.app_whnf pred [T.var co])
+             (T.eq
+                (T.var co)
+                (T.app_const c.Stmt.copy_concrete
+                   [T.app_const c.Stmt.copy_abstract [T.var co]])))
         |> Stmt.axiom1 ~info
       in
       [ax]
@@ -190,7 +187,7 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
   let card_abstract_upper_bound = has_small_exact_card card_concrete in
   let incomplete = card_abstract_upper_bound = None in
   let id_c = c.Stmt.copy_id in
-  let ty_c = U.ty_const id_c in
+  let ty_c = T.ty_const id_c in
   ID.Tbl.add state.copy_as_uninterpreted id_c ();
   Utils.debugf ~section 3 "@[copy type %a:@ should_be_incomplete=%B@]"
     (fun k -> k ID.pp id_c incomplete);
@@ -219,28 +216,28 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
   (* axiom [forall a:abs. abstract (concrete a) = a] *)
   let ax_abs_conc =
     let a = Var.make ~ty:ty_c ~name:"a" in
-    U.forall a
-      (U.eq
-         (U.var a)
-         (U.app_const c.Stmt.copy_abstract
-            [U.app_const c.Stmt.copy_concrete [U.var a]]))
+    T.forall a
+      (T.eq
+         (T.var a)
+         (T.app_const c.Stmt.copy_abstract
+            [T.app_const c.Stmt.copy_concrete [T.var a]]))
     |> Stmt.axiom1 ~info
   (* axiom [forall a: abs. rel (concrete a) (concrete a)] *)
   and ax_rel_conc =
     let a = Var.make ~ty:ty_c ~name:"a" in
-    let conc_a = U.app_const c.Stmt.copy_concrete [U.var a] in
-    U.forall a (Red.app_whnf rel [conc_a; conc_a])
+    let conc_a = T.app_const c.Stmt.copy_concrete [T.var a] in
+    T.forall a (T.Red.app_whnf rel [conc_a; conc_a])
     |> Stmt.axiom1 ~info
   (* axiom [forall a b: abs. rel (concrete a) (concrete b) => a = b] *)
   and ax_partition =
     let a = Var.make ~ty:ty_c ~name:"a" in
     let b = Var.make ~ty:ty_c ~name:"b" in
-    let conc_a = U.app_const c.Stmt.copy_concrete [U.var a] in
-    let conc_b = U.app_const c.Stmt.copy_concrete [U.var b] in
-    U.forall_l [a; b]
-      (U.imply
-         (Red.app_whnf rel [conc_a; conc_b])
-         (U.eq (U.var a) (U.var b)))
+    let conc_a = T.app_const c.Stmt.copy_concrete [T.var a] in
+    let conc_b = T.app_const c.Stmt.copy_concrete [T.var b] in
+    T.forall_l [a; b]
+      (T.imply
+         (T.Red.app_whnf rel [conc_a; conc_b])
+         (T.eq (T.var a) (T.var b)))
     |> Stmt.axiom1 ~info
   (* if complete (concrete type is finite and small enough),
      axiom [forall c:conc. (rel c c =>)? rel c (concrete (abstract c))] *)
@@ -249,16 +246,16 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
     else (
       let co = Var.make ~ty:c.Stmt.copy_of ~name:"c" in
       let add_guard t = match tty with
-        | `Partial -> U.imply (Red.app_whnf rel [U.var co; U.var co]) t
+        | `Partial -> T.imply (T.Red.app_whnf rel [T.var co; T.var co]) t
         | `Total -> t
       in
       let ax =
-        U.forall co
+        T.forall co
           (add_guard
-             (Red.app_whnf rel
-                [U.var co;
-                 U.app_const c.Stmt.copy_concrete
-                   [U.app_const c.Stmt.copy_abstract [U.var co]]]))
+             (T.Red.app_whnf rel
+                [T.var co;
+                 T.app_const c.Stmt.copy_concrete
+                   [T.app_const c.Stmt.copy_abstract [T.var co]]]))
         |> Stmt.axiom1 ~info
       in
       [ax]
@@ -276,7 +273,7 @@ let encode_term state pol t =
     | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, _)
       when is_incomplete_type_ state (Var.ty v) ->
       (* might approximate this quantifier *)
-      begin match U.approx_infinite_quant_pol_binder q pol with
+      begin match T.approx_infinite_quant_pol_binder q pol with
         | `Keep -> aux' pol t
         | `Unsat_means_unknown res ->
           (* drop quantifier *)
@@ -286,7 +283,7 @@ let encode_term state pol t =
     | _ ->
       aux' pol t
   and aux' pol t =
-    U.map_pol () pol t
+    T.map_pol () pol t
       ~bind:(fun () v -> (), v)
       ~f:(fun () -> aux)
   in
@@ -358,8 +355,8 @@ let decode_concrete_ st m : term ID.Map.t =
         in
         List.fold_left
           (fun map dom_id ->
-             let r = DT_util.apply dt (U.const dom_id) |> DT_util.to_term in
-             let a = U.app_const c.Stmt.copy_abstract [r] in
+             let r = DT_util.apply dt (T.const dom_id) |> DT_util.to_term in
+             let a = T.app_const c.Stmt.copy_abstract [r] in
              ID.Map.add dom_id a map)
           map dom
       | _ -> map
@@ -376,10 +373,10 @@ let decode_term (map:term ID.Map.t) (t:term): term =
     | TI.App (f, l) ->
       let f = aux f in
       let l = List.map aux l in
-      Red.app_whnf f l
+      T.Red.app_whnf f l
     | _ -> aux' t
   and aux' t =
-    U.map () t ~f:(fun () -> aux) ~bind:(fun () v->(), v)
+    T.map () t ~f:(fun () -> aux) ~bind:(fun () v->(), v)
   in
   aux t
 
@@ -388,7 +385,7 @@ let decode_model (st:decode_state) m : (_,_) Model.t =
   let map = decode_concrete_ st m in
   Utils.debugf ~section 3
     "@[<2>decode model with map@ @[<hv>%a@]@]"
-    (fun k->k (Utils.pp_seq CCFormat.(pair ~sep:(return "@ -> ") ID.pp P.pp))
+    (fun k->k (Utils.pp_seq CCFormat.(pair ~sep:(return "@ -> ") ID.pp T.pp))
         (ID.Map.to_seq map));
   let tr_term = decode_term map in
   Model.filter_map m
@@ -417,7 +414,7 @@ let decode_model (st:decode_state) m : (_,_) Model.t =
 let pipe ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
-      let module Ppb = Problem.Print(P)(P) in
+      let module Ppb = Problem.P in
       Format.printf "@[<v2>@{<Yellow>after %s@}:@ %a@]@." name Ppb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->

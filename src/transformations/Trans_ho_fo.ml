@@ -7,10 +7,8 @@ open Nunchaku_core
 
 module TI = TermInner
 
-module Of_ho(T : TI.S) = struct
+module Of_ho(T : TI.FULL) = struct
   module Subst = Var.Subst
-  module P = TI.Print(T)
-  module U = TI.Util(T)
 
   exception NotInFO of string
 
@@ -27,7 +25,7 @@ module Of_ho(T : TI.S) = struct
   let fail_ t msg =
     failf
       "@[<2>term `@[%a@]` is not in the first-order fragment:@ %s@]"
-      P.pp t msg
+      T.pp t msg
 
   let rec conv_ty t = match T.repr t with
     | TI.Var _ -> fail_ t "variable in type"
@@ -83,7 +81,7 @@ module Of_ho(T : TI.S) = struct
     | TI.Builtin `False -> FO.T.false_
     | TI.Builtin (`Eq (a,b)) ->
       (* forbid equality between functions *)
-      let ty = U.ty_exn ~env a in
+      let ty = T.ty_exn ~env a in
       begin match T.repr ty with
         | TI.TyArrow _
         | TI.Bind (Binder.TyForall, _, _) -> fail_ t "equality between functions";
@@ -130,7 +128,7 @@ module Of_ho(T : TI.S) = struct
 
   let conv_form ~env f =
     Utils.debugf 3 ~section
-      "@[<2>convert to FO the formula@ `@[%a@]`@]" (fun k -> k P.pp f);
+      "@[<2>convert to FO the formula@ `@[%a@]`@]" (fun k -> k T.pp f);
     conv_term ~env f
 
   let convert_eqns
@@ -141,7 +139,7 @@ module Of_ho(T : TI.S) = struct
         let vars = List.map conv_var vars in
         let lhs = FO.T.app head args in
         let f =
-          if U.ty_returns_Prop (Env.find_ty_exn ~env head)
+          if T.ty_returns_Prop (Env.find_ty_exn ~env head)
           then FO.T.equiv lhs (conv_term ~env rhs)
           else FO.T.eq lhs (conv_term ~env rhs)
         in
@@ -183,12 +181,12 @@ module Of_ho(T : TI.S) = struct
     let module St = Statement in
     match St.view st with
       | St.Decl {St.defined_ty=ty; defined_attrs=attrs;defined_head=id} ->
-        let _, _, ret = U.ty_unfold ty in
+        let _, _, ret = T.ty_unfold ty in
         let attrs' = conv_attrs attrs in
         let st' =
-          if U.ty_is_Type ret
+          if T.ty_is_Type ret
           then
-            let n = U.ty_num_param ty in
+            let n = T.ty_num_param ty in
             FO.TyDecl (id, n, attrs')
           else
             let ty = conv_top_ty ty in
@@ -282,23 +280,21 @@ module Of_ho(T : TI.S) = struct
     FO.Problem.make ~meta res
 end
 
-module To_ho(T : TI.S) = struct
-  module U = TI.Util(T)
-
+module To_ho(T : TI.FULL) = struct
   let rec convert_ty t = match FO.Ty.view t with
     | FO.TyBuiltin b ->
       let b = match b with
         | `Prop -> `Prop
         | `Unitype -> `Unitype
-      in U.ty_builtin b
+      in T.ty_builtin b
     | FO.TyApp (f,l) ->
       let l = List.map convert_ty l in
-      U.ty_app (U.ty_const f) l
+      T.ty_app (T.ty_const f) l
 
   let convert_top_ty (l,ret): T.t =
     let args = List.map convert_ty l in
     let ret = convert_ty ret in
-    U.ty_arrow_l args ret
+    T.ty_arrow_l args ret
 
   let rec convert_term t =
     match FO.T.view t with
@@ -306,57 +302,57 @@ module To_ho(T : TI.S) = struct
         let b = match b with
           | `Int _ -> Utils.not_implemented "conversion from int"
         in
-        U.builtin b
-      | FO.True -> U.true_
-      | FO.False -> U.false_
-      | FO.Eq (a,b) -> U.eq (convert_term a) (convert_term b)
-      | FO.And l -> U.and_ (List.map convert_term l)
-      | FO.Or l -> U.or_ (List.map convert_term l)
-      | FO.Not f -> U.not_ (convert_term f)
-      | FO.Imply (a,b) -> U.imply (convert_term a) (convert_term b)
-      | FO.Equiv (a,b) -> U.eq (convert_term a) (convert_term b)
+        T.builtin b
+      | FO.True -> T.true_
+      | FO.False -> T.false_
+      | FO.Eq (a,b) -> T.eq (convert_term a) (convert_term b)
+      | FO.And l -> T.and_ (List.map convert_term l)
+      | FO.Or l -> T.or_ (List.map convert_term l)
+      | FO.Not f -> T.not_ (convert_term f)
+      | FO.Imply (a,b) -> T.imply (convert_term a) (convert_term b)
+      | FO.Equiv (a,b) -> T.eq (convert_term a) (convert_term b)
       | FO.Forall (v,t) ->
         let v = Var.update_ty v ~f:convert_ty in
-        U.forall v (convert_term t)
+        T.forall v (convert_term t)
       | FO.Exists (v,t) ->
         let v = Var.update_ty v ~f:convert_ty in
-        U.exists v (convert_term t)
+        T.exists v (convert_term t)
       | FO.Var v ->
-        U.var (Var.update_ty v ~f:(convert_ty))
+        T.var (Var.update_ty v ~f:(convert_ty))
       | FO.Undefined t ->
-        U.builtin (`Undefined_self (convert_term t))
+        T.builtin (`Undefined_self (convert_term t))
       | FO.Undefined_atom (c,ty,l) ->
         let l = List.map convert_term l in
-        U.app
-          (U.builtin (`Undefined_atom (c,convert_top_ty ty)))
+        T.app
+          (T.builtin (`Undefined_atom (c,convert_top_ty ty)))
           l
       | FO.Unparsable ty ->
-        U.unparsable ~ty:(convert_ty ty)
+        T.unparsable ~ty:(convert_ty ty)
       | FO.Card_at_least (ty,n) ->
-        U.card_at_least (convert_ty ty) n
+        T.card_at_least (convert_ty ty) n
       | FO.App (f,l) ->
         let l = List.map convert_term l in
-        U.app (U.const f) l
+        T.app (T.const f) l
       | FO.Mu (v,t) ->
         let v = Var.update_ty v ~f:(convert_ty) in
-        U.mu v (convert_term t)
+        T.mu v (convert_term t)
       | FO.Fun (v,t) ->
         let v = Var.update_ty v ~f:(convert_ty) in
-        U.fun_ v (convert_term t)
+        T.fun_ v (convert_term t)
       | FO.DataTest (c,t) ->
-        U.app_builtin (`DataTest c) [convert_term t]
+        T.app_builtin (`DataTest c) [convert_term t]
       | FO.DataSelect (c,n,t) ->
-        U.app_builtin (`DataSelect (c,n)) [convert_term t]
+        T.app_builtin (`DataSelect (c,n)) [convert_term t]
       | FO.Let (v,t,u) ->
         let v = Var.update_ty v ~f:(convert_ty) in
-        U.let_ v (convert_term t) (convert_term u)
+        T.let_ v (convert_term t) (convert_term u)
       | FO.Ite (a,b,c) ->
-        U.ite (convert_term a) (convert_term b) (convert_term c)
+        T.ite (convert_term a) (convert_term b) (convert_term c)
 
   let convert_model m = Model.map m ~term:convert_term ~ty:convert_ty
 end
 
-module Make(T1 : TermInner.S) = struct
+module Make(T1 : TermInner.FULL) = struct
   module Conv = Of_ho(T1)
   module ConvBack = To_ho(T1)
 

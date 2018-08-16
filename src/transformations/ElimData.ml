@@ -8,14 +8,11 @@ open Nunchaku_core
 module TI = TermInner
 module Subst = Var.Subst
 module Stmt = Statement
-module T = TermInner.Default
-module U = T.U
-module P = T.P
-module PStmt = Stmt.Print(P)(P)
+module T = Term
+module PStmt = Stmt.Print(T)(T)
 module AT = AnalyzeType.Make(T)
 module Pol = Polarity
-module Red = Reduce.Make(T)
-module TyMo = (val TypeMono.default)
+module TyMo = TypeMono.Default
 
 type term = T.t
 
@@ -173,7 +170,7 @@ module Make(M : sig val mode : mode end) = struct
 
   (* compute type of [t], using both envs *)
   let ty_exn ~state (t:T.t) =
-    U.ty_of_signature_exn t
+    T.ty_of_signature_exn t
       ~sigma:(ty_id ~state)
 
   let ty_id_exn ~state (id:ID.t) = match ty_id ~state id with
@@ -182,7 +179,7 @@ module Make(M : sig val mode : mode end) = struct
 
   (* is [ty] a type that is being encoded? *)
   let is_encoded_ty state (ty:T.t): bool =
-    match U.info_of_ty ~env:state.env ty, mode with
+    match T.info_of_ty ~env:state.env ty, mode with
       | Result.Ok {Env.def=Env.Data (`Data, _, _); _}, M_data
       | Result.Ok {Env.def=Env.Data (`Codata, _, _); _}, M_codata -> true
       | _ -> false
@@ -212,7 +209,7 @@ module Make(M : sig val mode : mode end) = struct
       end
     ) else None
 
-  (* threshold of [card(τ)] under which [forall x:τ. P[x]] is kept
+  (* threshold of [card(τ)] under which [forall x:τ. T[x]] is kept
      as an accurate quantification. Otherwise it becomes undefined/false
      depending on polarity *)
   let threshold_card_quant : int = 16 (* FUDGE *)
@@ -221,13 +218,13 @@ module Make(M : sig val mode : mode end) = struct
      combinatorial explosion due to `asserting` constraints *)
   type sharing_state = {
     ss_globals: sharing_global_state;
-    mutable ss_tbl: sharing_cell U.Map.t;
+    mutable ss_tbl: sharing_cell T.Map.t;
     (* term -> unique variable for it *)
     mutable ss_var_to_cell: (ty, sharing_cell) Var.Subst.t;
     (* var -> the cell it defines *)
     mutable ss_terms_depending_on: (ty, sharing_cell list) Var.Subst.t;
     (* var -> list of cells depending on it *)
-    mutable ss_visited: U.VarSet.t;
+    mutable ss_visited: T.VarSet.t;
     (* variables already introduced. Each cell is `let`-bound exactly once. *)
     mutable ss_global_guards: term list;
     (* the guards attached to constants (which are not let-defined). *)
@@ -255,10 +252,10 @@ module Make(M : sig val mode : mode end) = struct
 
   let share_of_globals (g:sharing_global_state): sharing_state =
     { ss_globals = g;
-      ss_tbl = U.Map.empty;
+      ss_tbl = T.Map.empty;
       ss_var_to_cell = Var.Subst.empty;
       ss_terms_depending_on = Var.Subst.empty;
-      ss_visited = U.VarSet.empty;
+      ss_visited = T.VarSet.empty;
       ss_global_guards = [];
     }
 
@@ -276,18 +273,18 @@ module Make(M : sig val mode : mode end) = struct
     (* find which variables are used in [t], and add [cell] to the
        list of reverse dependencies of those variables *)
     let add_to_deps cell =
-      let fv = U.free_vars cell.sc_term in
-      U.VarSet.to_seq fv
+      let fv = T.free_vars cell.sc_term in
+      T.VarSet.to_seq fv
       |> Sequence.iter
         (fun v ->
            let l = Var.Subst.find_or ~subst:share.ss_terms_depending_on v ~default:[] in
            Utils.debugf ~section 5 "@[<2>deps(%a) +=@ %a (:= `@[%a@]`)@]"
              (fun k->k Var.pp_full v Var.pp_full
-                 cell.sc_var P.pp cell.sc_term);
+                 cell.sc_var T.pp cell.sc_term);
            share.ss_terms_depending_on <-
              Var.Subst.add ~subst:share.ss_terms_depending_on v (cell :: l))
     in
-    try U.Map.find t share.ss_tbl
+    try T.Map.find t share.ss_tbl
     with Not_found ->
       (* make fresh variable *)
       let ty = ty_exn ~state t in
@@ -296,21 +293,21 @@ module Make(M : sig val mode : mode end) = struct
       in
       share.ss_globals.ss_num <- share.ss_globals.ss_num + 1;
       let sc_depends_on =
-        U.free_vars t
-        |> U.VarSet.to_seq
+        T.free_vars t
+        |> T.VarSet.to_seq
         |> Sequence.filter_map (cell_of_var share)
         |> Sequence.to_rev_list
       in
       Utils.debugf ~section 5
         "@[<2>introduce def %a@ := `@[%a@]`@ depends on: (@[%a@])@]"
-        (fun k->k Var.pp v P.pp t (Utils.pp_list pp_cell) sc_depends_on);
+        (fun k->k Var.pp v T.pp t (Utils.pp_list pp_cell) sc_depends_on);
       let cell = {
         sc_var=v;
         sc_term=t;
         sc_depends_on;
         sc_guards=[];
       } in
-      share.ss_tbl <- U.Map.add t cell share.ss_tbl;
+      share.ss_tbl <- T.Map.add t cell share.ss_tbl;
       share.ss_var_to_cell <- Var.Subst.add ~subst:share.ss_var_to_cell v cell;
       add_to_deps cell;
       cell
@@ -319,7 +316,7 @@ module Make(M : sig val mode : mode end) = struct
     let v = cell.sc_var in
     share.ss_terms_depending_on <-
       Var.Subst.remove ~subst:share.ss_terms_depending_on v;
-    share.ss_tbl <- U.Map.remove cell.sc_term share.ss_tbl;
+    share.ss_tbl <- T.Map.remove cell.sc_term share.ss_tbl;
     share.ss_var_to_cell <- Var.Subst.remove ~subst:share.ss_var_to_cell cell.sc_var;
     ()
 
@@ -367,7 +364,7 @@ module Make(M : sig val mode : mode end) = struct
     in
     (* collect all *)
     begin match start with
-      | `All -> U.Map.values share.ss_tbl |> Sequence.iter add_cell_to_process
+      | `All -> T.Map.values share.ss_tbl |> Sequence.iter add_cell_to_process
       | `Vars l -> List.iter visit_terms_depending_on l
     end;
     (* now, topological sort of [to_process] so that cells are
@@ -377,8 +374,8 @@ module Make(M : sig val mode : mode end) = struct
       let v = cell.sc_var in
       let u = cell.sc_term in
       if Var.Subst.mem v ~subst:!to_process &&
-         not (U.VarSet.mem v share.ss_visited) then (
-        share.ss_visited <- U.VarSet.add v share.ss_visited;
+         not (T.VarSet.mem v share.ss_visited) then (
+        share.ss_visited <- T.VarSet.add v share.ss_visited;
         remove_cell share cell;
         (* visit other cells that this one depends on *)
         List.iter visit_cell cell.sc_depends_on;
@@ -398,11 +395,11 @@ module Make(M : sig val mode : mode end) = struct
           share.ss_global_guards <- [];
           l
       in
-      let guards = U.remove_dup (List.rev_append global_guards !all_guards) in
-      U.let_l (List.rev !all_lets) (U.asserting t guards)
+      let guards = T.remove_dup (List.rev_append global_guards !all_guards) in
+      T.let_l (List.rev !all_lets) (T.asserting t guards)
     in
     Utils.debugf ~section 5 "@[<2>`@[%a@]`@ becomes@ `@[%a@]`@]"
-      (fun k->k P.pp t P.pp new_t);
+      (fun k->k T.pp t T.pp new_t);
     new_t
 
   let tr_term state (pol:Pol.t) (t:T.t) : T.t =
@@ -413,14 +410,14 @@ module Make(M : sig val mode : mode end) = struct
           | None -> t
           | Some _ ->
             let ty = ty_id_exn ~state id in
-            if U.ty_arity ty > 0 then (
+            if T.ty_arity ty > 0 then (
               (* should have removed partial applications *)
               errorf "cstor `%a` is partially applied" ID.pp id
             );
             (* [c asserting is-c c].
                We do NOT introduce a variable here, simply add the guard
                to global guards *)
-            let guard = U.app_const (get_test_exn state id) [t] in
+            let guard = T.app_const (get_test_exn state id) [t] in
             add_global_guard share guard;
             t
         end
@@ -431,22 +428,22 @@ module Make(M : sig val mode : mode end) = struct
             let l' = List.map (tr_term_rec share Pol.NoPol) l in
             begin match Tbl.get state.map (Cstor f_id) with
               | None ->
-                U.app_const f_id l'
+                T.app_const f_id l'
               | Some f_id' ->
                 let ty = ty_id_exn ~state f_id in
-                if U.ty_arity ty > List.length l then (
+                if T.ty_arity ty > List.length l then (
                   (* should have removed partial applications *)
                   errorf "cstor `%a` is partially applied" ID.pp f_id
                 );
                 (* id is a fully-applied constructor, we introduce a guard stating
                    [is-id (id x1..xn) & And_k proj-id-k (id x1..xn) = x_k] *)
-                let cell = get_sharing_cell state share (U.app_const f_id' l') in
-                let t' = U.var cell.sc_var in
+                let cell = get_sharing_cell state share (T.app_const f_id' l') in
+                let t' = T.var cell.sc_var in
                 let guards =
-                  U.app_const (get_test_exn state f_id) [t']
+                  T.app_const (get_test_exn state f_id) [t']
                   :: List.mapi
                       (fun i arg ->
-                         U.eq arg (U.app_const (get_select_exn_ state f_id i) [t']))
+                         T.eq arg (T.app_const (get_select_exn_ state f_id i) [t']))
                       l'
                 in
                 add_guards cell guards;
@@ -456,7 +453,7 @@ module Make(M : sig val mode : mode end) = struct
         end
       | TI.Builtin (`DataSelect (id,i)) ->
         begin match get_select_ state id i with
-          | Some id' -> U.const id'
+          | Some id' -> T.const id'
           | None ->
             if mode = M_data
             then errorf "could not find encoding of `select-%a-%d`" ID.pp id i
@@ -464,7 +461,7 @@ module Make(M : sig val mode : mode end) = struct
         end
       | TI.Builtin (`DataTest id) ->
         begin match get_test_ state id with
-          | Some id' -> U.const id'
+          | Some id' -> T.const id'
           | None ->
             if mode = M_data
             then errorf "could not find encoding of `is-%a`" ID.pp id
@@ -477,31 +474,31 @@ module Make(M : sig val mode : mode end) = struct
         let u' = introduce_lets share u' ~start:(`Vars [v]) in
         (* process [t] and re-build let *)
         let t' = tr_term_rec share Pol.NoPol t in
-        U.let_ v t' u'
+        T.let_ v t' u'
       | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, _)
         when is_infinite_and_encoded_ty state (Var.ty v) ->
         (* quantifier over an infinite (co)data, must approximate
            depending on the polarity *)
-        begin match U.approx_infinite_quant_pol_binder q pol with
+        begin match T.approx_infinite_quant_pol_binder q pol with
           | `Unsat_means_unknown res ->
             state.unsat_means_unknown <- true;
             Utils.debugf ~section 3
               "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
                quantifying over infinite encoded type `@[%a@]`@]"
-              (fun k->k P.pp t P.pp res Pol.pp pol P.pp (Var.ty v));
+              (fun k->k T.pp t T.pp res Pol.pp pol T.pp (Var.ty v));
             res
           | `Keep ->
             tr_bind share pol q t
         end
       | TI.Builtin b ->
         begin match b with
-          | `Eq (t1,_) when not (U.ty_is_Prop (ty_exn ~state t1)) ->
+          | `Eq (t1,_) when not (T.ty_is_Prop (ty_exn ~state t1)) ->
             tr_term_aux share pol t
           (* equality is ok *)
           | `Imply _ | `And _ | `Or _ | `Eq _ | `Ite _ ->
             (* boolean connectives: do not let sharing pass through for now, to
                play safe with polarities. *)
-            U.builtin (Builtin.map b ~f:(tr_term_block_lets share pol))
+            T.builtin (Builtin.map b ~f:(tr_term_block_lets share pol))
           | _ -> tr_term_aux share pol t
         end
       | TI.Bind ((Binder.Forall | Binder.Exists) as q, v, _)
@@ -512,20 +509,20 @@ module Make(M : sig val mode : mode end) = struct
         begin match ty_encoded_with_exact_small_cardinal_opt state ty with
           | Some c when c <= threshold_card_quant ->
             (* card of [v]'s type is exactly [c], and it's small enough:
-               [forall v:τ. P[v]] becomes [card(τ) ≥ c ∧ forall v:τ. P[v]] *)
-            U.and_
-              [ U.card_at_least ty c;
+               [forall v:τ. T[v]] becomes [card(τ) ≥ c ∧ forall v:τ. T[v]] *)
+            T.and_
+              [ T.card_at_least ty c;
                 tr_bind share pol q t;
               ]
           | _ ->
             (* similar to infinite quantifier *)
-            begin match U.approx_infinite_quant_pol_binder q pol with
+            begin match T.approx_infinite_quant_pol_binder q pol with
               | `Unsat_means_unknown res ->
                 state.unsat_means_unknown <- true;
                 Utils.debugf ~section 3
                   "@[<2>encode `@[%a@]`@ as `%a` in pol %a,@ \
                    quantifying over infinite encoded type `@[%a@]`@]"
-                  (fun k->k P.pp t P.pp res Pol.pp pol P.pp (Var.ty v));
+                  (fun k->k T.pp t T.pp res Pol.pp pol T.pp (Var.ty v));
                 res
               | `Keep ->
                 tr_bind share pol q t
@@ -534,8 +531,8 @@ module Make(M : sig val mode : mode end) = struct
       | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun) as b, _, _) ->
         tr_bind share pol b t (* just traverse *)
       | TI.Match (t,m,def) ->
-        if is_encoded_ty state (U.ty_exn ~env:state.env t)
-        then errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" P.pp t
+        if is_encoded_ty state (T.ty_exn ~env:state.env t)
+        then errorf "expected pattern-matching to be encoded,@ got `@[%a@]`" T.pp t
         else (
           let t = tr_term_rec share pol t in
           let m =
@@ -549,7 +546,7 @@ module Make(M : sig val mode : mode end) = struct
               (fun rhs -> tr_term_rec share pol rhs)
               def
           in
-          U.match_with t m ~def
+          T.match_with t m ~def
         )
       | _ -> tr_term_aux share pol t
     (* properly encode [t], which starts with [binder]. We have to
@@ -557,13 +554,13 @@ module Make(M : sig val mode : mode end) = struct
        the binder, not outside.
        The other let-definitions can percolate through the binder though *)
     and tr_bind share pol (binder:Binder.t) t =
-      let vars, body = U.bind_unfold binder t in
+      let vars, body = T.bind_unfold binder t in
       let body' = tr_term_rec share pol body in
       let body' = introduce_lets share body' ~start:(`Vars vars) in
-      U.mk_bind_l binder vars body'
+      T.mk_bind_l binder vars body'
     (* map *)
     and tr_term_aux share pol t =
-      U.map_pol () pol t
+      T.map_pol () pol t
         ~bind:(fun () v -> (), v)
         ~f:(fun () -> tr_term_rec share)
     (* translate [t] in a new [sharing_state], to avoid sharing definitions
@@ -590,7 +587,7 @@ module Make(M : sig val mode : mode end) = struct
      and return a [encoded_ty] *)
   let ety_of_dataty state ty : encoded_ty =
     let open Stmt in
-    assert (ty.ty_vars=[] && U.ty_is_Type ty.ty_type);
+    assert (ty.ty_vars=[] && T.ty_is_Type ty.ty_type);
     (* add destructors, testers, constructors *)
     let ety_cstors =
       ID.Map.fold
@@ -598,13 +595,13 @@ module Make(M : sig val mode : mode end) = struct
            let c_id = cstor.cstor_name in
            add_ state (Cstor c_id) c_id;
            let test = ID.make_f "is_%a" ID.pp_name c_id in
-           let ty_test = U.ty_arrow (U.const ty.ty_id) U.ty_prop in
+           let ty_test = T.ty_arrow (T.const ty.ty_id) T.ty_prop in
            add_ state (Test c_id) test;
            let selectors =
              List.mapi
                (fun i ty_arg ->
                   let s = ID.make_f "select_%a_%d" ID.pp_name c_id i in
-                  let ty_s = U.ty_arrow (U.const ty.ty_id) ty_arg in
+                  let ty_s = T.ty_arrow (T.const ty.ty_id) ty_arg in
                   add_ state (Select (c_id, i)) s;
                   s, ty_s)
                cstor.cstor_args
@@ -619,7 +616,7 @@ module Make(M : sig val mode : mode end) = struct
     ID.Tbl.replace state.tys ty.ty_id res;
     res
 
-  let app_id id l = U.app (U.const id) l
+  let app_id id l = T.app (T.const id) l
   let app_id_fst (id,_) l = app_id id l
 
   (* declare the new constants *)
@@ -639,7 +636,7 @@ module Make(M : sig val mode : mode end) = struct
       List.map
         (fun ety ->
            let attrs = attrs_card ety in
-           Stmt.decl ~info:Stmt.info_default ~attrs ety.ety_id U.ty_type)
+           Stmt.decl ~info:Stmt.info_default ~attrs ety.ety_id T.ty_type)
         etys
     in
     let others =
@@ -660,19 +657,19 @@ module Make(M : sig val mode : mode end) = struct
     (* axiomatize new constants *)
     CCList.flat_map
       (fun ety ->
-         let data_ty = U.const ety.ety_id in
+         let data_ty = T.const ety.ety_id in
          (* [forall x, not (is_c1 x & is_c2 x)] *)
          let ax_disjointness =
            let x = Var.makef ~ty:data_ty "v_%a" ID.pp_name ety.ety_id in
-           U.forall x
-             (U.and_
+           T.forall x
+             (T.and_
                 (CCList.diagonal ety.ety_cstors
                  |> List.map
                    (fun (c1,c2) ->
-                      U.not_
-                        (U.and_
-                           [ app_id_fst c1.ecstor_test [U.var x]
-                           ; app_id_fst c2.ecstor_test [U.var x]]))))
+                      T.not_
+                        (T.and_
+                           [ app_id_fst c1.ecstor_test [T.var x]
+                           ; app_id_fst c2.ecstor_test [T.var x]]))))
            |> mk_ax
          (* axiom
             [forall x y,
@@ -682,28 +679,28 @@ module Make(M : sig val mode : mode end) = struct
              (fun ec ->
                 let x = Var.make ~name:"x" ~ty:data_ty in
                 let y = Var.make ~name:"y" ~ty:data_ty in
-                U.forall_l [x;y]
-                  (U.imply
-                     (U.and_
-                        ( app_id_fst ec.ecstor_test [U.var x]
-                          :: app_id_fst ec.ecstor_test [U.var y]
+                T.forall_l [x;y]
+                  (T.imply
+                     (T.and_
+                        ( app_id_fst ec.ecstor_test [T.var x]
+                          :: app_id_fst ec.ecstor_test [T.var y]
                           :: List.map
                               (fun (proj,_) ->
-                                 U.eq
-                                   (U.app_const proj [U.var x])
-                                   (U.app_const proj [U.var y]))
+                                 T.eq
+                                   (T.app_const proj [T.var x])
+                                   (T.app_const proj [T.var y]))
                               ec.ecstor_proj))
-                     (U.eq (U.var x) (U.var y)))
+                     (T.eq (T.var x) (T.var y)))
                 |> mk_ax
              )
              ety.ety_cstors
          (* [forall x, Or_c is_c x] *)
          and ax_exhaustiveness =
            let x = Var.makef ~ty:data_ty "v_%a" ID.pp_name ety.ety_id in
-           U.forall x
-             (U.or_
+           T.forall x
+             (T.or_
                 (List.map
-                   (fun ec -> app_id_fst ec.ecstor_test [U.var x])
+                   (fun ec -> app_id_fst ec.ecstor_test [T.var x])
                    ety.ety_cstors))
            |> mk_ax
          in
@@ -725,7 +722,7 @@ module Make(M : sig val mode : mode end) = struct
     in
     (* [id_c : id -> id -> prop], with negative polarity *)
     let id_c = ID.make_f "occurs_in_%a" ID.pp_name id in
-    let ty_c = U.ty_arrow_l [U.const id; U.const id] U.ty_prop in
+    let ty_c = T.ty_arrow_l [T.const id; T.const id] T.ty_prop in
     let def_c = Stmt.mk_defined ~attrs:[Stmt.Attr_never_box] id_c ty_c in
     ID.Tbl.add state.decode id_c Axiom_rec;
     (* definition:
@@ -733,33 +730,33 @@ module Make(M : sig val mode : mode end) = struct
          exists cstor.
          (y = cstor a1...an && (Or_k (x=a_k || occurs_in x a_k)))]
     *)
-    let x = Var.make ~ty:(U.const id) ~name:"x" in
-    let y = Var.make ~ty:(U.const id) ~name:"y" in
+    let x = Var.make ~ty:(T.const id) ~name:"x" in
+    let y = Var.make ~ty:(T.const id) ~name:"y" in
     let vars = [x;y] in
     let ax_c =
       List.map
         (fun cstor ->
            (* guard: [is_cstor y] *)
-           let test = U.app_const (fst cstor.ecstor_test) [U.var y] in
+           let test = T.app_const (fst cstor.ecstor_test) [T.var y] in
            let subcases =
              CCList.flat_map
                (fun (proj,proj_ty) ->
-                  if is_same_ty (U.ty_returns proj_ty)
+                  if is_same_ty (T.ty_returns proj_ty)
                   then
                     (* this is a recursive argument, hence a possible case *)
-                    [ U.eq (U.var x) (U.app_const proj [U.var y]);
-                      U.app_const id_c [U.var x; U.app_const proj [U.var y]];
+                    [ T.eq (T.var x) (T.app_const proj [T.var y]);
+                      T.app_const id_c [T.var x; T.app_const proj [T.var y]];
                     ]
                   else [])
                cstor.ecstor_proj
            in
-           U.and_ [test; U.or_ subcases])
+           T.and_ [test; T.or_ subcases])
         ety.ety_cstors
-      |> U.or_
+      |> T.or_
     in
     let ax_c =
-      U.imply ax_c (U.app_const id_c (List.map U.var vars))
-      |> U.forall_l vars
+      T.imply ax_c (T.app_const id_c (List.map T.var vars))
+      |> T.forall_l vars
     in
     let def_c =
       Stmt.axiom_spec ~info:Stmt.info_default
@@ -770,9 +767,9 @@ module Make(M : sig val mode : mode end) = struct
     in
     (* also assert [forall x y. not (occurs_in x x)] *)
     let ax_no_cycle =
-      let a = Var.make ~ty:(U.const id) ~name:"a" in
-      U.forall a
-        (U.not_ (U.app_const id_c [U.var a; U.var a]))
+      let a = Var.make ~ty:(T.const id) ~name:"a" in
+      T.forall a
+        (T.not_ (T.app_const id_c [T.var a; T.var a]))
     in
     [ def_c
     ; Stmt.axiom1 ~info:Stmt.info_default ax_no_cycle
@@ -816,33 +813,33 @@ module Make(M : sig val mode : mode end) = struct
       l
       |> List.map
         (fun (id_ty, id_c, ety) ->
-           let ty_c = U.ty_arrow_l [U.const id_ty; U.const id_ty] U.ty_prop in
+           let ty_c = T.ty_arrow_l [T.const id_ty; T.const id_ty] T.ty_prop in
            let def_c = Stmt.mk_defined ~attrs:[Stmt.Attr_never_box] id_c ty_c in
-           let x = Var.make ~ty:(U.const id_ty) ~name:"x" in
-           let y = Var.make ~ty:(U.const id_ty) ~name:"y" in
+           let x = Var.make ~ty:(T.const id_ty) ~name:"x" in
+           let y = Var.make ~ty:(T.const id_ty) ~name:"y" in
            let vars = [x;y] in
            let clauses =
              ety.ety_cstors
              |> List.map
                (fun cstor ->
                   (* guards: [is_cstor {x,y}] *)
-                  let test_x = U.app_const (fst cstor.ecstor_test) [U.var x] in
-                  let test_y = U.app_const (fst cstor.ecstor_test) [U.var y] in
+                  let test_x = T.app_const (fst cstor.ecstor_test) [T.var x] in
+                  let test_y = T.app_const (fst cstor.ecstor_test) [T.var y] in
                   let subcases =
                     List.map
                       (fun (proj,proj_ty) ->
                          (* how do we decide whether the arguments are equal? *)
-                         let mk_eq = match U.ty_unfold proj_ty with
+                         let mk_eq = match T.ty_unfold proj_ty with
                            | _, [_], ret when is_same_ty id_ty ret ->
-                             (fun a b -> U.app_const id_c [a; b])
-                           | _ -> U.eq
+                             (fun a b -> T.app_const id_c [a; b])
+                           | _ -> T.eq
                          in
-                         mk_eq (U.app_const proj [U.var x]) (U.app_const proj [U.var y])
+                         mk_eq (T.app_const proj [T.var x]) (T.app_const proj [T.var y])
                       )
                       cstor.ecstor_proj
                   in
-                  let guard = U.and_ (test_x :: test_y :: subcases) in
-                  let concl = U.app_const id_c [U.var x; U.var y] in
+                  let guard = T.and_ (test_x :: test_y :: subcases) in
+                  let concl = T.app_const id_c [T.var x; T.var y] in
                   {Stmt.
                     clause_vars=vars;
                     clause_concl=concl;
@@ -860,12 +857,12 @@ module Make(M : sig val mode : mode end) = struct
     let ax_eq =
       List.map
         (fun (id_ty,id_c,_) ->
-           let x = Var.make ~ty:(U.const id_ty) ~name:"x" in
-           let y = Var.make ~ty:(U.const id_ty) ~name:"y" in
-           U.forall_l [x;y]
-             (U.imply
-                (U.app_const id_c [U.var x; U.var y])
-                (U.eq (U.var x) (U.var y)))
+           let x = Var.make ~ty:(T.const id_ty) ~name:"x" in
+           let y = Var.make ~ty:(T.const id_ty) ~name:"y" in
+           T.forall_l [x;y]
+             (T.imply
+                (T.app_const id_c [T.var x; T.var y])
+                (T.eq (T.var x) (T.var y)))
            |> Stmt.axiom1 ~info:Stmt.info_default
         )
         l
@@ -893,7 +890,7 @@ module Make(M : sig val mode : mode end) = struct
                   let g = CCOpt.map (tr_term state Pol.Neg) g in
                   (* only process under the predicate itself *)
                   let t =
-                    U.map () t ~bind:(fun _ _ -> assert false)
+                    T.map () t ~bind:(fun _ _ -> assert false)
                       ~f:(fun () t -> tr_term state Pol.NoPol t)
                   in
                   {Stmt.clause_vars; clause_guard=g; clause_concl=t})
@@ -1011,7 +1008,7 @@ module Make(M : sig val mode : mode end) = struct
   let eval_fundef (f:fun_def) (args:T.t list) : T.t =
     let dt, _ = f in
     assert (DT.num_vars dt >= List.length args);
-    DTU.apply_l dt args |> DTU.to_term |> Red.whnf
+    DTU.apply_l dt args |> DTU.to_term |> T.Red.whnf
 
   (* evaluate a boolean function def *)
   let eval_bool_fundef (f:fun_def) (args:T.t list) : (bool, T.t) Result.result =
@@ -1064,7 +1061,7 @@ module Make(M : sig val mode : mode end) = struct
             (* we are already decoding [id] deeper in the stack, use the
                appropriate variable and signal that we are using it *)
             msc.msc_used <- true;
-            U.var msc.msc_var
+            T.var msc.msc_var
           | None, Some ety ->
             (* [t] is something like [list_5], and we need to find which
                    constructor it actually is *)
@@ -1082,18 +1079,18 @@ module Make(M : sig val mode : mode end) = struct
                          errorf "cannot evaluate whether `%a`@ \
                                  starts with constructor `%a`;@ \
                                  check yields `@[%a@]`, not a boolean"
-                           P.pp t ID.pp (fst ecstor.ecstor_cstor) P.pp res
+                           T.pp t ID.pp (fst ecstor.ecstor_cstor) T.pp res
                        | Result.Ok b -> b)
                   ety.ety_cstors
               with Not_found ->
-                errorf "no constructor corresponds to `%a`" P.pp t
+                errorf "no constructor corresponds to `%a`" T.pp t
             in
             (* var in case we need to bind *)
             let msc = {
               msc_cstor=id;
               msc_var=
                 Var.makef "self_%d" (List.length stack)
-                  ~ty:(U.ty_const ety.ety_id);
+                  ~ty:(T.ty_const ety.ety_id);
               msc_used=false;
             } in
             (* evaluate the arguments to this constructor *)
@@ -1106,15 +1103,15 @@ module Make(M : sig val mode : mode end) = struct
                    aux (msc::stack) arg)
                 ecstor.ecstor_proj
             in
-            let t' = U.app_const cstor args in
+            let t' = T.app_const cstor args in
             (* add mu-binder if needed *)
-            let t' = if msc.msc_used then U.mu msc.msc_var t' else t' in
+            let t' = if msc.msc_used then T.mu msc.msc_var t' else t' in
             Utils.debugf ~section 5 "@[<2>term `@[%a@]`@ is decoded into `@[%a@]`@]"
-              (fun k->k P.pp t P.pp t');
+              (fun k->k T.pp t T.pp t');
             t'
         end
       | _ ->
-        U.map () t
+        T.map () t
           ~bind:(fun () v -> (), v)
           ~f:(fun () t -> aux stack t)
     in
@@ -1168,7 +1165,7 @@ module Make(M : sig val mode : mode end) = struct
       @
         Utils.singleton_if print ()
           ~f:(fun () ->
-            let module Ppb = Problem.Print(P)(P) in
+            let module Ppb = Problem.P in
             Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name Ppb.pp)
     in
     Transform.make
@@ -1185,7 +1182,7 @@ module Make(M : sig val mode : mode end) = struct
     let on_decoded = if print
       then
         [Format.printf "@[<2>@{<Yellow>res after %s@}:@ %a@]@."
-           name (Problem.Res.pp P.pp' P.pp)]
+           name (Problem.Res.pp T.pp' T.pp)]
       else []
     in
     let decode state = Problem.Res.map_m ~f:(decode_model state) in

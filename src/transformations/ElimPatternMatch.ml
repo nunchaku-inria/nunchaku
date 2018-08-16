@@ -8,9 +8,7 @@ open Nunchaku_core
 module Stmt = Statement
 module TI = TermInner
 module Subst = Var.Subst
-module T = TermInner.Default
-module U = T.U
-module P = T.P
+module T = Term
 
 let name = "elim_match"
 
@@ -26,8 +24,8 @@ let pp_mode out = function
   | Elim_codata_match -> CCFormat.string out "elim_codata_match"
   | Elim_both -> CCFormat.string out "elim_both"
 
-let mk_select_ = U.data_select
-let mk_test_ = U.data_test
+let mk_select_ = T.data_select
+let mk_test_ = T.data_test
 
 (* apply substitution [ctx.subst] in [t], and also replace pattern matching
    with [`DataSelect] and [`DataTest] *)
@@ -35,8 +33,8 @@ let elim_match ~mode ~env t =
   let open Binder in
   (* should we encode a match on this term? Depends on [mode] and its type *)
   let should_encode t =
-    let ty = U.ty_exn ~env t in
-    let info = U.info_of_ty_exn ~env ty in
+    let ty = T.ty_exn ~env t in
+    let info = T.info_of_ty_exn ~env ty in
     match mode, Env.def info with
       | Elim_both, _ -> true
       | Elim_data_match, Env.Data (`Data,_,_)
@@ -48,22 +46,22 @@ let elim_match ~mode ~env t =
     | TI.Var v ->
       CCOpt.get_or ~default:t (Subst.find ~subst v)
     | TI.Const _ -> t
-    | TI.App (f,l) -> U.app (elim_match_ ~subst f) (elim_match_l_ ~subst l)
-    | TI.Builtin b -> U.builtin (Builtin.map b ~f:(elim_match_ ~subst))
+    | TI.App (f,l) -> T.app (elim_match_ ~subst f) (elim_match_l_ ~subst l)
+    | TI.Builtin b -> T.builtin (Builtin.map b ~f:(elim_match_ ~subst))
     | TI.Bind ((Forall | Exists | Fun | Mu) as b,v,t) ->
       let v' = Var.fresh_copy v in
-      let subst = Subst.add ~subst v (U.var v') in
+      let subst = Subst.add ~subst v (T.var v') in
       let t' = elim_match_ ~subst t in
-      U.mk_bind b v' t'
+      T.mk_bind b v' t'
     | TI.Bind (TyForall, _, _) | TI.TyMeta _ -> assert false (* by precond *)
     | TI.Let (v,t,u) ->
       let t' = elim_match_ ~subst t in
       let v' = Var.fresh_copy v in
-      let subst = Subst.add ~subst v (U.var v') in
-      U.let_ v' t' (elim_match_ ~subst u)
+      let subst = Subst.add ~subst v (T.var v') in
+      T.let_ v' t' (elim_match_ ~subst u)
     | TI.TyBuiltin _ -> t
     | TI.TyArrow (a,b) ->
-      U.ty_arrow (elim_match_ ~subst a)(elim_match_ ~subst b)
+      T.ty_arrow (elim_match_ ~subst a)(elim_match_ ~subst b)
     | TI.Match (t,l,def) when should_encode t ->
       (* change t into t';
          then a decision tree is built where
@@ -73,9 +71,9 @@ let elim_match ~mode ~env t =
       let t' = elim_match_ ~subst t in
       (* get a default case (last leaf of the decision tree) *)
       let l, default_case = match def with
-        | TermInner.Default_some (rhs,_) ->
+        | Some (rhs,_) ->
           l, elim_match_ ~subst rhs
-        | TermInner.Default_none ->
+        | None ->
           (* remove first binding to make it the default case *)
           let c1, (_, vars1,rhs1) = ID.Map.choose l in
           let subst0 = CCList.foldi
@@ -94,7 +92,7 @@ let elim_match ~mode ~env t =
                subst vars
            in
            let rhs' = elim_match_ ~subst:subst' rhs in
-           U.ite (mk_test_ c t') rhs' acc)
+           T.ite (mk_test_ c t') rhs' acc)
         l
         default_case
     | TI.Match (t, l, def) ->
@@ -103,11 +101,11 @@ let elim_match ~mode ~env t =
       let l =
         ID.Map.map
           (fun (tys, vars,rhs) ->
-             let subst, vars = CCList.fold_map U.rename_var subst vars in
+             let subst, vars = CCList.fold_map T.rename_var subst vars in
              tys, vars, elim_match_ ~subst rhs)
           l
       in
-      U.match_with t l ~def
+      T.match_with t l ~def
 
   and elim_match_l_ ~subst l =
     List.map (elim_match_ ~subst) l
@@ -124,7 +122,7 @@ let pipe ~mode ~print ~check =
   let open Transform in
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
-      let module PPb = Problem.Print(P)(P) in
+      let module PPb = Problem.P in
       Format.printf "@[<v2>@{<Yellow>after elimination of pattern-match@}: %a@]@." PPb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->

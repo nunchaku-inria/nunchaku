@@ -7,10 +7,8 @@ open Nunchaku_core
 
 module TI = TermInner
 module Stmt = Statement
-module T = TermInner.Default
-module U = T.U
-module P = T.P
-module PStmt = Stmt.Print(P)(P)
+module T = Term
+module PStmt = Stmt.Print(T)(T)
 
 let name = "elim_ind_pred"
 
@@ -64,11 +62,11 @@ let as_cstor_guards ~env ~subst ~root t : (subst * term list) option =
         | Some select' ->
           (* [v = select] and [v = select'], so we better make sure
              that [select = select'] to eliminate [v] *)
-          conds := U.eq select select' :: !conds
+          conds := T.eq select select' :: !conds
       end
     | TI.Const id when Env.is_cstor (Env.find_exn ~env id) ->
       (* nullary constructor, easy *)
-      conds := U.eq select t :: !conds;
+      conds := T.eq select t :: !conds;
     | TI.App (f, l) ->
       begin match T.repr f with
         | TI.Const id ->
@@ -78,9 +76,9 @@ let as_cstor_guards ~env ~subst ~root t : (subst * term list) option =
               (* yay, a constructor!
                  - ensure that [select] has this constructor as head
                  - transform each subterm in [l] *)
-              conds := U.data_test id select :: !conds;
+              conds := T.data_test id select :: !conds;
               List.iteri
-                (fun i t' -> aux (U.data_select id i select) t')
+                (fun i t' -> aux (T.data_select id i select) t')
                 l
             | _ -> raise ExitAsCstors
           end
@@ -106,31 +104,31 @@ let encode_clause_selectors ~env vars args ~c_vars ~c_guard =
          match T.repr arg with
            | TI.Var v' ->
              (* [arg_i = v'], so making [arg_i = v] is as simple as [v' := v] *)
-             Var.Subst.add ~subst v' (U.var v), conds
+             Var.Subst.add ~subst v' (T.var v), conds
            | _ ->
              (* extend [subst, conds] so that [conds => subst(v)=arg] *)
-             begin match as_cstor_guards ~env ~subst arg ~root:(U.var v) with
+             begin match as_cstor_guards ~env ~subst arg ~root:(T.var v) with
                | Some (subst', conds') ->
                  subst', conds' @ conds
                | None ->
                  (* default: just add constraint [arg_i = v] *)
-                 subst, U.eq (U.var v) arg :: conds
+                 subst, T.eq (T.var v) arg :: conds
              end)
       (Var.Subst.empty, [])
       vars args
   in
-  let conds = List.rev_map (U.eval ~rec_:false ~subst) conds in
+  let conds = List.rev_map (T.eval ~rec_:false ~subst) conds in
   (* add guard, if any *)
   let all_conds = match c_guard with
-    | None -> U.and_ conds
-    | Some g -> U.and_ (U.eval ~subst g :: conds)
+    | None -> T.and_ conds
+    | Some g -> T.and_ (T.eval ~subst g :: conds)
   in
   (* quantify over the clause's variables that are not eliminated *)
   let cvars =
     List.filter
       (fun v -> not (Var.Subst.mem ~subst v))
       c_vars in
-  U.exists_l cvars all_conds
+  T.exists_l cvars all_conds
 
 (* build a [TermInner.default_case] that returns [t] and
    covers every constructor of [typeof c_id] but [c_id] *)
@@ -144,11 +142,11 @@ let match_default_except ~env c_id t : _ TI.default_case =
           (fun cstor -> not (ID.equal cstor.Stmt.cstor_name c_id))
         |> Sequence.map
           (fun cstor ->
-             let arity = U.ty_num_param cstor.Stmt.cstor_type in
+             let arity = T.ty_num_param cstor.Stmt.cstor_type in
              cstor.Stmt.cstor_name, arity)
         |> ID.Map.of_seq
       in
-      TI.Default_some (t, map)
+      Some (t, map)
     | _ -> errorf_ "`%a` should be a constructor" ID.pp c_id
   end
 
@@ -183,7 +181,7 @@ let mk_match_tree ~env ~subst vars args ~k : term =
       (* we need to express that [v = arg] *)
       (* default case: [if (v=arg) then (recurse) else false] *)
       let default() =
-        let cond = U.eq (U.var v) arg in
+        let cond = T.eq (T.var v) arg in
         aux subst (cond::conds) vars_tail args_tail
       in
       (* try to use pattern matching, which is more accurate and efficient *)
@@ -192,11 +190,11 @@ let mk_match_tree ~env ~subst vars args ~k : term =
           begin match Var.Subst.find ~subst v_a with
             | None ->
               (* bind [v_a] to [v] *)
-              let subst = Var.Subst.add ~subst v_a (U.var v) in
+              let subst = Var.Subst.add ~subst v_a (T.var v) in
               aux subst conds vars_tail args_tail
             | Some t ->
               (* [v_a = v] and [v_a = t], so we better make sure that [v = t] *)
-              let conds = U.eq (U.var v) t :: conds in
+              let conds = T.eq (T.var v) t :: conds in
               aux subst conds vars_tail args_tail
           end
         | TI.Const c_id when Env.is_cstor (Env.find_exn ~env c_id) ->
@@ -204,15 +202,15 @@ let mk_match_tree ~env ~subst vars args ~k : term =
           let ok_case =
             aux subst conds vars_tail args_tail
           and default =
-            match_default_except ~env c_id U.false_
+            match_default_except ~env c_id T.false_
           in
-          U.match_with (U.var v) (ID.Map.singleton c_id ([], [], ok_case)) ~def:default
+          T.match_with (T.var v) (ID.Map.singleton c_id ([], [], ok_case)) ~def:default
         | TI.App (f, l) ->
           begin match T.repr f with
             | TI.Const c_id ->
               let info = Env.find_exn ~env c_id in
               let ty_id = Env.ty info in
-              let _, ty_args, _ = U.ty_unfold ty_id in
+              let _, ty_args, _ = T.ty_unfold ty_id in
               begin match Env.def info with
                 | Env.Cstor _ ->
                   (* A constructor [c_id l]. We pattern-match [v]
@@ -227,9 +225,9 @@ let mk_match_tree ~env ~subst vars args ~k : term =
                   let ok_case =
                     aux subst conds (vars_tail @ new_vars) (args_tail @ l)
                   and default =
-                    match_default_except ~env c_id U.false_
+                    match_default_except ~env c_id T.false_
                   in
-                  U.match_with (U.var v)
+                  T.match_with (T.var v)
                     (ID.Map.singleton c_id (ty_args, new_vars,ok_case))
                     ~def:default
                 | _ -> default()
@@ -258,12 +256,12 @@ let encode_clause_match ~env vars args ~c_vars ~c_guard =
         (* all variables of [args] should be bound *)
         let all_conds =
           CCList.cons_maybe c_guard conds
-          |> U.and_
+          |> T.and_
         in
         begin match T.repr all_conds with
-          | TI.Builtin `True -> U.true_
+          | TI.Builtin `True -> T.true_
           | _ ->
-            U.exists_l ex_vars (U.eval ~subst all_conds)
+            T.exists_l ex_vars (T.eval ~subst all_conds)
         end)
   in
   res
@@ -278,7 +276,7 @@ let encode_clause ~mode ~env (id:ID.t) vars (c:(_,_) Stmt.pred_clause): term =
       errorf_
         "@[<2>expect conclusion of clause to be of the \
          form@ `%a <arg_1...arg_%d>`,@ but got `@[%a@]`@]"
-        ID.pp id arity P.pp c.Stmt.clause_concl
+        ID.pp id arity T.pp c.Stmt.clause_concl
     in
     match T.repr c.Stmt.clause_concl with
       | TI.App (f, l) ->
@@ -322,8 +320,8 @@ let pred_to_def
     assert (pred.Stmt.pred_tyvars = []); (* mono *)
     let d = pred.Stmt.pred_defined in
     let id = d.Stmt.defined_head in
-    let ty_vars, ty_args, ty_ret = U.ty_unfold d.Stmt.defined_ty in
-    assert (U.ty_is_Prop ty_ret);
+    let ty_vars, ty_args, ty_ret = T.ty_unfold d.Stmt.defined_ty in
+    assert (T.ty_is_Prop ty_ret);
     assert (ty_vars = []); (* mono *)
     (* create new variables *)
     let vars =
@@ -340,7 +338,7 @@ let pred_to_def
         (fun c -> encode_clause ~mode ~env id vars c)
         pred.Stmt.pred_clauses
     in
-    let rhs = U.or_ cases in
+    let rhs = T.or_ cases in
     {Stmt.
       rec_defined=d;
       rec_ty_vars=[];
@@ -381,7 +379,7 @@ let decode_model ~state:_ m = m
 let pipe_with ~decode ~print ~check ~mode =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
-      let module Ppb = Problem.Print(P)(P) in
+      let module Ppb = Problem.P in
       Format.printf "@[<v2>@{<Yellow>after elimination of inductive predicates@}:@ %a@]@." Ppb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->

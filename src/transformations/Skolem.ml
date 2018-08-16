@@ -9,12 +9,10 @@ module TI = TermInner
 module Pol = Polarity
 module Subst = Var.Subst
 module Stmt = Statement
-module T = TI.Default
-module U = T.U
-module P = T.P
+module T = Term
 
-type ty = TermInner.Default.t
-type term = TermInner.Default.t
+type ty = Term.t
+type term = Term.t
 
 let name = "skolem"
 let section = Utils.Section.make name
@@ -86,7 +84,7 @@ module Make(Assoc : sig type t end)
   let skolemize ?prefix state ~vars ~ty_ret mk_assoc =
     (* type of Skolem function *)
     let ty_args = List.map Var.ty vars in
-    let ty = List.fold_right U.ty_arrow ty_args ty_ret in
+    let ty = List.fold_right T.ty_arrow ty_args ty_ret in
     (* create new skolem function *)
     let skolem_id = fresh_id_ ?prefix state in
     let assoc = mk_assoc ty in
@@ -94,7 +92,7 @@ module Make(Assoc : sig type t end)
     state.new_sym <- (skolem_id, assoc):: state.new_sym;
     Utils.debugf ~section 2
       "@[<2>new Skolem symbol `%a :@ @[%a@]`@]"
-      (fun k-> k ID.pp skolem_id P.pp ty);
+      (fun k-> k ID.pp skolem_id T.pp ty);
     skolem_id, ty, assoc
 
   let pop_new_decls state =
@@ -155,10 +153,10 @@ let should_skolemize_ ~state v =
 let skolemize_ ~state ?(in_goal=false) pol t =
   (* recursive traversal *)
   let rec aux env pol t = match T.repr t with
-    | TI.Const id -> U.const id
+    | TI.Const id -> T.const id
     | TI.Var v ->
       begin match Subst.find ~subst:env.subst v with
-        | None -> U.var (aux_var env v)
+        | None -> T.var (aux_var env v)
         | Some t -> t
       end
     | TI.Bind ((Binder.Exists | Binder.Forall) as b, v, t') ->
@@ -172,33 +170,33 @@ let skolemize_ ~state ?(in_goal=false) pol t =
               ~ty_ret ~vars:env.vars ~prefix:(Var.name v)
               (fun ty -> { sym_defines=t; sym_decode=in_goal; sym_ty=ty })
           in
-          let skolem = U.app (U.const skolem_id) (List.map U.var env.vars) in
+          let skolem = T.app (T.const skolem_id) (List.map T.var env.vars) in
           (* convert [t] and replace [v] with [skolem] in it *)
           let env = env_bind ~env v skolem in
           aux env pol t'
         | _ ->
           let v' = aux_var env v in
           let env = env_add_var ~env v' in
-          U.mk_bind b v' (aux env pol t')
+          T.mk_bind b v' (aux env pol t')
       end
     | TI.Let (v, t, u) ->
       (* rename [v], but do not parametrize skolems with it *)
       let t' = aux env pol t in
       let v' = aux_var env v in
-      let env' = env_bind ~env v (U.var v') in
+      let env' = env_bind ~env v (T.var v') in
       let u' = aux env' pol u in
-      U.let_ v' t' u'
+      T.let_ v' t' u'
     | TI.App _
     | TI.Builtin _
     | TI.Bind _
     | TI.Match _
     | TI.TyArrow _ ->
       aux' env pol t
-    | TI.TyBuiltin b -> U.ty_builtin b
+    | TI.TyBuiltin b -> T.ty_builtin b
     | TI.TyMeta _ -> assert false
 
   and aux' env pol t =
-    U.map_pol env pol t
+    T.map_pol env pol t
       ~f:aux
       ~bind:(fun env v ->
         let v' = aux_var env v in
@@ -265,7 +263,7 @@ let fpf = Format.fprintf
 let pp_state out st =
   let pp_sym out (id,s) =
     fpf out "@[<2>%a: %a@ standing for `@[%a@]`@]"
-      ID.pp id P.pp s.sym_ty P.pp s.sym_defines
+      ID.pp id T.pp s.sym_ty T.pp s.sym_defines
   in
   fpf out "@[<2>skolem table {@,%a@]@,}"
     (CCFormat.seq pp_sym) (Sk.all_skolems st.sk)
@@ -283,7 +281,7 @@ let decode_model ~skolems_in_model ~state m =
             | Some sym ->
               if sym.sym_decode && skolems_in_model
               then
-                let t' = U.app_const epsilon [sym.sym_defines] in
+                let t' = T.app_const epsilon [sym.sym_defines] in
                 Some (t',dt,k)
               else None (* ignore  this symbol *)
           end
@@ -293,7 +291,7 @@ let pipe_with ~mode ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print ()
       ~f:(fun () ->
-        let module Ppb = Problem.Print(P)(P) in
+        let module Ppb = Problem.P in
         Format.printf "@[<v2>@{<Yellow>after Skolemization@}: %a@]@." Ppb.pp)
     @
       Utils.singleton_if check ()

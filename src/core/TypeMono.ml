@@ -3,9 +3,6 @@
 
 (** {1 Monomorphic Types} *)
 
-module ID = ID
-module Var = Var
-module MetaVar = MetaVar
 module TI = TermInner
 module Subst = Var.Subst
 
@@ -24,6 +21,12 @@ type 'a view =
 (** A polymorphic type is a term that respects {!is_ty} *)
 module type S = sig
   module T : TI.REPR
+
+  type nonrec 'a view = 'a view =
+    | Builtin of Builtin.t (** Builtin type *)
+    | Const of id
+    | App of 'a * 'a list
+    | Arrow of 'a * 'a
 
   val is_ty : T.t -> bool
 
@@ -52,6 +55,13 @@ module Make(T : TI.REPR)
   : S with module T = T
 = struct
   module T = T
+
+  type nonrec 'a view = 'a view =
+    | Builtin of Builtin.t (** Builtin type *)
+    | Const of id
+    | App of 'a * 'a list
+    | Arrow of 'a * 'a
+
 
   let rec is_ty t = match T.repr t with
     | TI.TyBuiltin _
@@ -129,6 +139,4 @@ module Make(T : TI.REPR)
     end)
 end
 
-let default =
-  let module M = Make(TI.Default) in
-  (module M : S with type T.t = TI.Default.t)
+module Default = Make(Term)

@@ -8,12 +8,9 @@ open Nunchaku_core
 module TI = TermInner
 module Stmt = Statement
 module Subst = Var.Subst
-module T = TI.Default
-module P = T.P
-module U = T.U
-module PStmt = Stmt.Print(P)(P)
-module Red = Reduce.Make(T)
-module VarSet = U.VarSet
+module T = Term
+module PStmt = Stmt.Print(T)(T)
+module VarSet = T.VarSet
 module AT = AnalyzeType.Make(T)
 
 type term = T.t
@@ -153,7 +150,7 @@ end = struct
     let vars =
       Sequence.of_list l
       |> Sequence.map snd
-      |> U.free_vars_seq ?bound:None
+      |> T.free_vars_seq ?bound:None
       |> VarSet.to_list
     in
     {terms; vars}
@@ -166,16 +163,16 @@ end = struct
     | [], [] -> true
     | [], _ | _, [] -> false
     | (i1,t1) :: l1', (i2,t2) :: l2' ->
-      i1 = i2 && U.equal t1 t2 && equal_l l1' l2'
+      i1 = i2 && T.equal t1 t2 && equal_l l1' l2'
 
   (* NOTE: since equality is up to variable renaming, we use
-     the {!U.hash_fun_alpha_eq} hash function which is compatible with alpha-renaming *)
+     the {!T.hash_fun_alpha_eq} hash function which is compatible with alpha-renaming *)
 
   let equal a b = equal_l a.terms b.terms
 
-  let hash a = CCHash.(list (pair int U.hash_alpha_eq)) a.terms
+  let hash a = CCHash.(list (pair int T.hash_alpha_eq)) a.terms
 
-  let pp_iterm out (i,t) = fpf out "@[%d -> %a@]" i P.pp t
+  let pp_iterm out (i,t) = fpf out "@[%d -> %a@]" i T.pp t
   let pp_iterms out =
     fpf out "[@[<hv>%a@]]" (Utils.pp_list pp_iterm)
   let pp out a = pp_iterms out a.terms
@@ -268,7 +265,7 @@ let rec record_calls_term cga f_id args t = match T.repr t with
   | _ -> record_calls_term' cga f_id args t
 (* generic traversal *)
 and record_calls_term' cga id args t =
-  U.iter () t ~bind:(fun () _ -> ())
+  T.iter () t ~bind:(fun () _ -> ())
     ~f:(fun () t -> record_calls_term cga id args t)
 
 (* [f f_args] calls itself as [f args2] in its body. *)
@@ -285,7 +282,7 @@ and record_self_call cga f_id f_args args2 =
                XXX the "depends" is currently too difficult to track,
                 because of local bindings (let, match), so we play it
                 safe and ask for [a2] to be closed. *)
-           if not (U.is_closed a2)
+           if not (T.is_closed a2)
            then CallGraph.add_nonidentical cga.cga_graph f_id i)
     args2
 
@@ -360,7 +357,7 @@ and record_calls_clause cga id (c:(_,_) Stmt.pred_clause) =
                  | _ ->
                    (* recursion impossible, not a variable *)
                    CallGraph.add_nonidentical cga.cga_graph id i;
-                   let ty = U.ty_exn ~env:cga.cga_env t in
+                   let ty = T.ty_exn ~env:cga.cga_env t in
                    fresh_var_cg ty)
           in
           (* if present, also check the clause guard *)
@@ -375,7 +372,7 @@ and record_calls_pred cga id pred =
     (record_calls_clause cga id)
     pred.Stmt.pred_clauses;
   let _, ty_args, _ =
-    pred |> Stmt.defined_of_pred |> Stmt.ty_of_defined |> U.ty_unfold in
+    pred |> Stmt.defined_of_pred |> Stmt.ty_of_defined |> T.ty_unfold in
   List.length ty_args
 
 let mk_cga_state ~env ids : _ call_graph_analyze_state = {
@@ -414,7 +411,7 @@ let compute_specializable_args_def ~self (defs : (_,_) Stmt.rec_defs) =
        Utils.debugf ~section 3 "@[<2>can specialize `@[%a : %a@]` on:@ @[%a@]@]"
          (fun k->
             let ty = def.Stmt.rec_defined.Stmt.defined_ty in
-            k ID.pp_full id P.pp ty CCFormat.(array bool) bv);
+            k ID.pp_full id T.pp ty CCFormat.(array bool) bv);
     )
     defs;
   Utils.debugf ~section 5 "@[<2>call graph: @[%a@]@]"
@@ -442,7 +439,7 @@ let compute_specializable_args_pred ~self (preds : (_,_) Stmt.pred_def list) =
        Utils.debugf ~section 3 "@[<2>can specialize `@[%a : %a@]` on:@ @[%a@]@]"
          (fun k->
             let ty = pred.Stmt.pred_defined.Stmt.defined_ty in
-            k ID.pp_full id P.pp ty CCFormat.(array bool) bv);
+            k ID.pp_full id T.pp ty CCFormat.(array bool) bv);
     )
     preds;
   Utils.debugf ~section 5 "@[<2>call graph: @[%a@]@]"
@@ -475,7 +472,7 @@ let analyze_cg_st ~self stmt =
 let heuristic_should_specialize_arg a ty =
   (* is [ty] a function type? *)
   let is_fun_ty ty =
-    let _, ty_args, _ = U.ty_unfold ty in
+    let _, ty_args, _ = T.ty_unfold ty in
     List.length ty_args > 0
   and is_bool_const_ t = match T.repr t with
     | TI.Builtin `True
@@ -525,7 +522,7 @@ let fun_is_deterministic ~self (f:ID.t): bool =
       (* check if any subterm of [t] is an unknown, or one of the
          mutually recursive functions *)
       let check_def_deterministic (t:term): bool =
-        U.to_seq t
+        T.to_seq t
         |> Sequence.for_all
           (fun t -> match T.repr t with
              | TI.Const id -> not (ID.Set.mem id rec_ids)
@@ -573,7 +570,7 @@ let closure_variable_has_small_ty ~self (v:ty Var.t): bool =
 (* check whether all free variables of [t]
    satisfy {!closure_variable_has_small_ty} *)
 let arg_has_small_ty_closure_vars ~self t: bool =
-  VarSet.for_all (closure_variable_has_small_ty ~self) (U.free_vars t)
+  VarSet.for_all (closure_variable_has_small_ty ~self) (T.free_vars t)
 
 (* shall we specialize the application of [f : ty] to [l], and on which
     subset of [l]? *)
@@ -584,7 +581,7 @@ let decide_if_specialize ~self f ty l : specialization_decision =
   match Env.def info with
     | Env.Fun_def _ ->
       (* only inline defined functions, not constructors or axiomatized symbols *)
-      let _, ty_args_l, ty_ret = U.ty_unfold ty in
+      let _, ty_args_l, ty_ret = T.ty_unfold ty in
       let ty_args = Array.of_list ty_args_l in
       (* find the subset of arguments on which to specialize *)
       let spec_args, other_args =
@@ -595,7 +592,7 @@ let decide_if_specialize ~self f ty l : specialization_decision =
              let ty = ty_args.(i) in
              (* can we specialize on [arg], and is it interesting? *)
              if can_specialize_ ~state:(Trav.state self) f i
-             && not (U.is_var arg)
+             && not (T.is_var arg)
              && heuristic_should_specialize_arg arg ty
              (* will we have to pay specialization with evil congruence axioms? *)
              && (Lazy.force is_deterministic || arg_has_small_ty_closure_vars ~self arg)
@@ -614,7 +611,7 @@ let decide_if_specialize ~self f ty l : specialization_decision =
           Utils.filteri (fun i _ -> not (Arg.mem i spec_args)) ty_args_l
         (* new arguments: types of free variables of [spec_args] *)
         and ty_new_args = Arg.vars spec_args |> List.map Var.ty in
-        let new_ty = U.ty_arrow_l (ty_new_args @ ty_remaining_args) ty_ret in
+        let new_ty = T.ty_arrow_l (ty_new_args @ ty_remaining_args) ty_ret in
         Do_specialize {
           spec_args;
           other_args;
@@ -687,7 +684,7 @@ let rec specialize_term ~self ~depth subst t =
             | Do_not_specialize ->
               (* still require [f]'s definition *)
               require_without_specializing ~self ~depth f_id;
-              U.app f l'
+              T.app f l'
             | Do_specialize {spec_args; other_args; new_ty} ->
               (* [spec_args] is a subset of [l'] on which we are going to
                    specialize [f].
@@ -695,20 +692,20 @@ let rec specialize_term ~self ~depth subst t =
                  [new_ty] is the type of the specialized version of [f] *)
               Utils.debugf ~section 5
                 "@[<2>@{<Cyan>specialize@} `@[%a@]`@ on @[%a@]@ with new type `@[%a@]`@]"
-                (fun k->k P.pp t Arg.pp spec_args P.pp new_ty);
+                (fun k->k T.pp t Arg.pp spec_args T.pp new_ty);
               let nf = get_new_fun ~self ~depth f_id ~old_ty:ty ~new_ty spec_args in
               (* ensure that [nf] is defined *)
               Trav.call_dep self ~depth f_id spec_args;
               (* apply newly specialized function to both the captured
                  variables [closure_args] and the non-specialized arguments. *)
-              let closure_args = List.map U.var (Arg.vars spec_args) in
-              U.app_const nf.nf_id (closure_args @ other_args)
+              let closure_args = List.map T.var (Arg.vars spec_args) in
+              T.app_const nf.nf_id (closure_args @ other_args)
           else (
             Trav.call_dep self ~depth f_id Arg.empty;
-            U.app f l'
+            T.app f l'
           )
         | _ ->
-          U.app (specialize_term ~self ~depth subst f) l'
+          T.app (specialize_term ~self ~depth subst f) l'
       end
     | TI.TyBuiltin _
     | TI.Bind _
@@ -720,7 +717,7 @@ let rec specialize_term ~self ~depth subst t =
 and specialize_term_l ~self ~depth subst l =
   List.map (specialize_term ~self ~depth subst) l
 and specialize_term' ~self ~depth subst t =
-  U.map subst t ~bind:U.rename_var ~f:(specialize_term ~self ~depth)
+  T.map subst t ~bind:T.rename_var ~f:(specialize_term ~self ~depth)
 
 (* find or create a new function for [f args]
     @param new_ty the type of the new function *)
@@ -772,7 +769,7 @@ let specialize_eqns
       | Stmt.Eqn_single (vars, rhs) ->
         if Arg.is_empty args then (
           (* still need to traverse [rhs] *)
-          let subst, vars = Utils.fold_map U.rename_var Subst.empty vars in
+          let subst, vars = Utils.fold_map T.rename_var Subst.empty vars in
           let rhs = specialize_term ~self ~depth:(depth+1) subst rhs in
           Stmt.Eqn_single (vars, rhs)
         ) else (
@@ -793,17 +790,17 @@ let specialize_eqns
                    replace it with the corresponding term [t], after
                    renaming of its free variables *)
                 try
-                  let t = Arg.get i args |> U.eval ~rec_:false ~subst in
+                  let t = Arg.get i args |> T.eval ~rec_:false ~subst in
                   Subst.add ~subst v t, None
                 with Not_found ->
                   let v' = Var.fresh_copy v in
-                  Subst.add ~subst v (U.var v'), Some v')
+                  Subst.add ~subst v (T.var v'), Some v')
           in
           let new_vars = CCList.filter_map CCFun.id new_vars in
           (* specialize the body, using the given substitution;
              then reduce newly introduced β-redexes, etc. *)
           let rhs' = specialize_term ~self ~depth:(depth+1) subst rhs in
-          let new_rhs = Red.snf rhs' in
+          let new_rhs = T.Red.snf rhs' in
           Stmt.Eqn_single (closure_vars @ new_vars, new_rhs)
         )
       | Stmt.Eqn_app _
@@ -818,7 +815,7 @@ let specialize_clause
     let state = Trav.state self in
     if Arg.is_empty args then (
       (* still need to traverse the clause *)
-      let subst, vars = Utils.fold_map U.rename_var Subst.empty c.Stmt.clause_vars in
+      let subst, vars = Utils.fold_map T.rename_var Subst.empty c.Stmt.clause_vars in
       let spec_term = specialize_term ~self ~depth:(depth+1) subst in
       let clause_guard = CCOpt.map spec_term c.Stmt.clause_guard in
       let clause_concl = spec_term c.Stmt.clause_concl in
@@ -851,7 +848,7 @@ let specialize_clause
                   subst, Some arg_i)
           in
           let l' = CCList.filter_map CCFun.id l' in
-          subst, U.app f (List.map U.var closure_vars @ l')
+          subst, T.app f (List.map T.var closure_vars @ l')
         | _ -> assert false
       in
       (* if there is a guard, specialize it and β-reduce *)
@@ -859,13 +856,13 @@ let specialize_clause
         CCOpt.map
           (fun t ->
              let t' = specialize_term ~self ~depth:(depth+1) subst t in
-             Red.snf t')
+             T.Red.snf t')
           c.Stmt.clause_guard
       in
       (* compute new set of free variables *)
       let new_vars =
-        let v1 = U.free_vars clause_concl in
-        CCOpt.map_or ~default:v1 (fun t -> VarSet.union (U.free_vars t) v1) clause_guard
+        let v1 = T.free_vars clause_concl in
+        CCOpt.map_or ~default:v1 (fun t -> VarSet.union (T.free_vars t) v1) clause_guard
         |> VarSet.to_list
       in
       {Stmt.clause_guard; clause_concl; clause_vars=new_vars}
@@ -977,12 +974,12 @@ module InstanceGraph = struct
   (* the specialized term this vertex represents *)
   let specialized_term_of_vertex (v:vertex): term =
     let t =
-      U.app_const v.v_spec_id (List.map U.var v.v_closure_vars @ v.v_other_args)
+      T.app_const v.v_spec_id (List.map T.var v.v_closure_vars @ v.v_other_args)
     in
-    Red.snf t
+    T.Red.snf t
 
   (* [subsumes_ v1 v2] returns [Some sigma] if [sigma v1.term = v2.term], None otherwise *)
-  let subsumes_ v1 v2 = U.match_ v1.v_pattern v2.v_pattern
+  let subsumes_ v1 v2 = T.match_ v1.v_pattern v2.v_pattern
 
   (* add edges to some parent for every non-root vertex in [l] *)
   let find_parents l =
@@ -996,16 +993,16 @@ module InstanceGraph = struct
     List.map (fun v -> v, find_parent v) l
 
   let fresh_var = Var.make_gen ~names:"v_ig_%d"
-  let fresh_var_t ty = U.var (fresh_var ty)
+  let fresh_var_t ty = T.var (fresh_var ty)
 
   (* rename variables in [t] *)
   let rename_vars l =
     let vars =
-      U.free_vars_list ?bound:None l
+      T.free_vars_list ?bound:None l
       |> VarSet.to_list in
     let vars' = List.map Var.fresh_copy vars in
     let subst = Subst.add_list ~subst:Subst.empty vars vars' in
-    List.map (U.eval_renaming ~subst) l
+    List.map (T.eval_renaming ~subst) l
 
   (* build graph from a [state.new_funs] entry corresponding to [id:ty_args -> _] *)
   let make id ty_args l =
@@ -1016,7 +1013,7 @@ module InstanceGraph = struct
         (function
           | `Same ->
             let v_all_args = List.map fresh_var_t ty_args in
-            let v_pattern = U.app_const id v_all_args in
+            let v_pattern = T.app_const id v_all_args in
             let v_spec_args=[] in
             let v_other_args=v_all_args in
             {v_spec_id=id; v_non_spec_id=id; v_spec_args; v_closure_vars=[];
@@ -1036,9 +1033,9 @@ module InstanceGraph = struct
             in
             let v_other_args = List.map snd v_other_args in
             let v_closure_vars =
-              U.free_vars_list (List.map snd v_spec_args) |> VarSet.to_list
+              T.free_vars_list (List.map snd v_spec_args) |> VarSet.to_list
             in
-            let v_pattern = U.app_const id v_all_args in
+            let v_pattern = T.app_const id v_all_args in
             {v_spec_id=nf.nf_id; v_non_spec_id=id; v_spec_args;
              v_closure_vars; v_other_args; v_all_args; v_pattern}
         )
@@ -1068,7 +1065,7 @@ module InstanceGraph = struct
     let pp_edge out = function
       | None -> ()
       | Some (sigma,v') ->
-        fpf out " --> @[%a@] with @[%a@]" pp_vertex v' (Subst.pp P.pp) sigma
+        fpf out " --> @[%a@] with @[%a@]" pp_vertex v' (Subst.pp T.pp) sigma
     in
     let pp_item out (v,e) = fpf out "@[<2>%a@,%a@]" pp_vertex v pp_edge e in
     fpf out "@[<2>instance graph for %a:@ @[<v>%a@]@]" ID.pp g.id
@@ -1078,12 +1075,12 @@ end
 let mk_congruence_axiom v1 v2 =
   let module IG = InstanceGraph in
   assert (List.length v1.IG.v_all_args = List.length v2.IG.v_all_args);
-  let eqns = List.map2 U.eq v1.IG.v_all_args v2.IG.v_all_args in
+  let eqns = List.map2 T.eq v1.IG.v_all_args v2.IG.v_all_args in
   let concl =
-    U.eq (IG.specialized_term_of_vertex v1) (IG.specialized_term_of_vertex v2)
+    T.eq (IG.specialized_term_of_vertex v1) (IG.specialized_term_of_vertex v2)
   in
-  let ax = U.imply_l eqns concl in
-  U.close_forall ax
+  let ax = T.imply_l eqns concl in
+  T.close_forall ax
 
 (* add self-congruence axioms, if needed.
    Those axioms are relevant when a non-deterministic function is
@@ -1110,17 +1107,17 @@ let mk_self_congruence (v:InstanceGraph.vertex): term option =
     let conds =
       List.map
         (fun arg ->
-           U.eq
-             (U.eval_renaming ~subst:subst1 arg)
-             (U.eval_renaming ~subst:subst2 arg))
+           T.eq
+             (T.eval_renaming ~subst:subst1 arg)
+             (T.eval_renaming ~subst:subst2 arg))
         (List.map snd v.IG.v_spec_args)
     and conclusion =
-      U.eq
-        (U.eval_renaming ~subst:subst1 spec_term)
-        (U.eval_renaming ~subst:subst2 spec_term)
+      T.eq
+        (T.eval_renaming ~subst:subst1 spec_term)
+        (T.eval_renaming ~subst:subst2 spec_term)
     in
-    let t = U.imply_l conds conclusion in
-    U.forall_l (U.free_vars t |> VarSet.to_list) t
+    let t = T.imply_l conds conclusion in
+    T.forall_l (T.free_vars t |> VarSet.to_list) t
     |> CCOpt.return
   )
 
@@ -1147,10 +1144,10 @@ let add_congruence_axioms push_stmt g =
     (fun (v1,(sigma,v2)) ->
        (* [v2.term\sigma = v1.term], push the corresponding axiom *)
        let ax =
-         U.eq
+         T.eq
            (IG.specialized_term_of_vertex v1)
-           (U.eval ~subst:sigma (IG.specialized_term_of_vertex v2))
-         |> U.close_forall
+           (T.eval ~subst:sigma (IG.specialized_term_of_vertex v2))
+         |> T.close_forall
        in
        push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax));
   (* self-congruence axioms *)
@@ -1185,7 +1182,7 @@ let specialize_problem pb =
     (fun id nfs ->
        if nfs.nfs_needs_congruence then (
          let ty = Env.find_ty_exn ~env:(Trav.env trav) id in
-         let _, ty_args, _ = U.ty_unfold ty in
+         let _, ty_args, _ = T.ty_unfold ty in
          let g = InstanceGraph.make id ty_args nfs.nfs_instances in
          Utils.debugf ~section 2 "%a" (fun k->k InstanceGraph.pp g);
          add_congruence_axioms (CCVector.push res) g;
@@ -1239,7 +1236,7 @@ let pp_dsf out dsf =
 (* convert a specialized function into a λ-term that evaluates to the
    non-specialized function when fully applied *)
 let dsf_to_fun (dsf:decode_state_fun) : T.t =
-  let _, ty_args, _ = U.ty_unfold dsf.dsf_ty_of in
+  let _, ty_args, _ = T.ty_unfold dsf.dsf_ty_of in
   let arg = dsf.dsf_arg in
   (* arguments the unspecialized function will be applied to *)
   let unspec_args =
@@ -1258,15 +1255,15 @@ let dsf_to_fun (dsf:decode_state_fun) : T.t =
       CCList.filter_map (function `Spec _ -> None | `Var v -> Some v) unspec_args
   in
   let body =
-    U.app
-      (U.const dsf.dsf_spec_of)
-      (List.map (function `Spec t -> t | `Var v -> U.var v) unspec_args)
+    T.app
+      (T.const dsf.dsf_spec_of)
+      (List.map (function `Spec t -> t | `Var v -> T.var v) unspec_args)
   in
-  let res = U.fun_l vars body in
+  let res = T.fun_l vars body in
   Utils.debugf ~section 5
     "@[<2>dsf_to_fun `@[%a@]`@ --> `@[%a@]`@]"
-    (fun k->k pp_dsf dsf P.pp res);
-  assert (U.is_closed res);
+    (fun k->k pp_dsf dsf T.pp res);
+  assert (T.is_closed res);
   res
 
 (* traverse the term and use reverse table to replace specialized
@@ -1275,35 +1272,35 @@ let rec decode_term_rec (state:decode_state) subst t =
   match T.repr t with
     | TI.Var v ->
       (* variable might not be bound, e.g. in skolem [_witness_of ...] *)
-      Subst.find_or ~default:t ~subst v |> U.eval ~rec_:false ~subst
+      Subst.find_or ~default:t ~subst v |> T.eval ~rec_:false ~subst
     | TI.Const f_id when is_spec_fun state f_id ->
       let dsf = find_spec state f_id in
       Utils.debugf ~section 5 "@[<2>decode `@[%a@]`@ from %a@]"
-        (fun k->k P.pp t pp_dsf dsf);
+        (fun k->k T.pp t pp_dsf dsf);
       dsf_to_fun dsf
     | TI.App (f, l) ->
       begin match T.repr f with
         | TI.Const f_id when is_spec_fun state f_id ->
           let dsf = find_spec state f_id in
           Utils.debugf ~section 5 "@[<2>decode `@[%a@]`@ from %a@]"
-            (fun k->k P.pp t pp_dsf dsf);
+            (fun k->k T.pp t pp_dsf dsf);
           (* decode arguments, and decode specialized function *)
           let l' = List.map (decode_term_rec state subst) l in
           let f' =
             dsf_to_fun dsf
             |> decode_term_rec state subst in
-          Red.app_whnf ~subst f' l' |> Red.eta_reduce
+          T.Red.app_whnf ~subst f' l' |> T.Red.eta_reduce
         | _ -> decode_term_rec' state subst t
       end
     | _ -> decode_term_rec' state subst t
 
 and decode_term_rec' state subst t =
-  U.map subst t ~bind:U.rename_var ~f:(decode_term_rec state)
+  T.map subst t ~bind:T.rename_var ~f:(decode_term_rec state)
 
 let decode_term state t : T.t =
   let t' = decode_term_rec state Subst.empty t in
   Utils.debugf ~section 5
-    "@[<2>decode_term `@[%a@]`@ into `@[%a@]`@]" (fun k->k P.pp t P.pp t');
+    "@[<2>decode_term `@[%a@]`@ into `@[%a@]`@]" (fun k->k T.pp t T.pp t');
   t'
 
 type aggregate_model = {
@@ -1382,7 +1379,7 @@ let dt_of_spec_dt state ~vars (dt,dsf) : (_,_) DT.t =
 (* convert a set of specialized models, into a model of the
    non-specialized function *)
 let dt_of_am state (am:aggregate_model) : (_,_) DT.t =
-  let _, ty_args, _ = U.ty_unfold am.am_ty in
+  let _, ty_args, _ = T.ty_unfold am.am_ty in
   let vars = List.mapi (fun i ty -> Var.makef ~ty "x_%d" i) ty_args in
   (* convert each specialized DT into a partial DT ranging over [vars] *)
   let dt_l =
@@ -1393,7 +1390,7 @@ let dt_of_am state (am:aggregate_model) : (_,_) DT.t =
   let dt = DTU.merge_l dt_l in
   (* specialization is incomplete, so we might need a default case *)
   let default =
-    U.app (U.undefined_atom ~ty:am.am_ty) (List.map U.var vars)
+    T.app (T.undefined_atom ~ty:am.am_ty) (List.map T.var vars)
   in
   DT.add_default default dt
 
@@ -1427,7 +1424,7 @@ let decode_model state m =
      partial models *)
   ID.Map.fold
     (fun f_id am m ->
-       let t = U.const f_id in
+       let t = T.const f_id in
        let dt = dt_of_am state am in
        Utils.debugf ~section 3
          "@[<2>decoded DT for %a:@ %a@]"
@@ -1441,8 +1438,7 @@ let decode_model state m =
 let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
-      let module P = Problem.Print(P)(P) in
-      Format.printf "@[<v2>@{<Yellow>after specialization@}: %a@]@." P.pp)
+      Format.printf "@[<v2>@{<Yellow>after specialization@}: %a@]@." Problem.P.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
         let module C = TypeCheck.Make(T) in
@@ -1462,7 +1458,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after specialize@}:@ %a@]@."
-         (Problem.Res.pp P.pp' P.pp)]
+         (Problem.Res.pp T.pp' T.pp)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model state) in

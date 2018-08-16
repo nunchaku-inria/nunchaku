@@ -5,8 +5,8 @@
 
 open Nunchaku_core
 
-type ty = TermInner.Default.t
-type term = TermInner.Default.t
+type ty = Term.t
+type term = Term.t
 type var = ty Var.t
 type env = (term,term) Env.t
 

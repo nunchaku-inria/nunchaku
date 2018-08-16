@@ -32,7 +32,7 @@ val name : string
 
 exception Error of string
 
-type term = TermInner.Default.t
+type term = Term.t
 type ty = term
 
 type decode_state

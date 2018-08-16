@@ -8,7 +8,7 @@
 
 open Nunchaku_core
 
-type term = TermInner.Default.t
+type term = Term.t
 type ty = term
 type problem = (term, ty) Problem.t
 type model = (term,ty) Model.t

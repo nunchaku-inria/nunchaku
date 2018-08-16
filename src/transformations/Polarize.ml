@@ -9,11 +9,8 @@ module TI = TermInner
 module Stmt = Statement
 module Pol = Polarity
 module Subst = Var.Subst
-module T = TI.Default
-module U = T.U
-module P = T.P
-module PStmt = Stmt.Print(P)(P)
-module Red = Reduce.Make(T)
+module T = Term
+module PStmt = Stmt.Print(T)(T)
 
 let name = "polarize"
 let section = Utils.Section.make name
@@ -39,7 +36,7 @@ type decode_state = (ID.t * bool * T.t * polarized_id) ID.Tbl.t
 (* polarized_id -> (original_id, polarity, type, polarized_id) *)
 
 let term_contains_undefined t =
-  U.to_seq t
+  T.to_seq t
   |> Sequence.exists
     (fun t' -> match T.repr t' with
        | TI.Builtin (`Undefined_self _) -> true
@@ -102,8 +99,8 @@ module Trav = Traversal.Make(T)(struct
 let should_polarize_rec ~state def =
   state.St.polarize_rec (* option enabled? *)
   &&
-  let _, ty_args, ty_ret = U.ty_unfold def.Stmt.rec_defined.Stmt.defined_ty in
-  U.ty_is_Prop ty_ret
+  let _, ty_args, ty_ret = T.ty_unfold def.Stmt.rec_defined.Stmt.defined_ty in
+  T.ty_is_Prop ty_ret
   &&
   List.length ty_args > 0 (* function, not constant *)
   &&
@@ -112,14 +109,14 @@ let should_polarize_rec ~state def =
 (* depending on polarity [pol], apply the proper id of [p] to
    arguments [l], along with guards [conds] *)
 let app_polarized pol p l = match pol with
-  | Pol.Pos -> U.app (U.const p.pos) l
-  | Pol.Neg -> U.app (U.const p.neg) l
+  | Pol.Pos -> T.app (T.const p.pos) l
+  | Pol.Neg -> T.app (T.const p.neg) l
   | Pol.NoPol ->
     (* choose positive, but make both equal *)
-    let p_pos = U.const p.pos and p_neg = U.const p.neg in
-    let t = U.app p_pos l in
+    let p_pos = T.const p.pos and p_neg = T.const p.neg in
+    let t = T.app p_pos l in
     (* force p_pos = p_neg here *)
-    U.asserting t [ U.eq (U.app p_pos l) (U.app p_neg l) ]
+    T.asserting t [ T.eq (T.app p_pos l) (T.app p_neg l) ]
 
 (* return the pair of polarized IDs for [id], with caching *)
 let polarize_id ~state ~ty id =
@@ -149,12 +146,12 @@ let polarize_def_of ~self id pol = match pol with
 type subst = (T.t, T.t Var.t) Var.Subst.t
 
 let is_prop ~self t =
-  let ty = U.ty_exn ~env:(Trav.env self) t in
-  U.ty_is_Prop ty
+  let ty = T.ty_exn ~env:(Trav.env self) t in
+  T.ty_is_Prop ty
 
 let returns_prop ~self t =
-  let ty = U.ty_exn ~env:(Trav.env self) t in
-  U.ty_returns_Prop ty
+  let ty = T.ty_exn ~env:(Trav.env self) t in
+  T.ty_returns_Prop ty
 
 (* traverse [t], replacing some symbols by their polarized version,
    @return the term with more internal guards and polarized symbols *)
@@ -164,7 +161,7 @@ let rec polarize_term_rec
     let state = Trav.state self in
     (* how to polarize an ID whose type is/returns prop *)
     let maybe_polarize_const (id:ID.t) (ty:T.t) (l:T.t list) =
-      if U.ty_is_Prop ty then (
+      if T.ty_is_Prop ty then (
         (* constant: degenerate case of (co)inductive pred, no need
                      for polarization, and necessarily WF. *)
         Utils.debugf ~section 5 "@[<2>do not polarize constant pred `%a`@]"
@@ -172,7 +169,7 @@ let rec polarize_term_rec
         ID.Tbl.add state.St.polarized id None;
         Trav.call_dep self ~depth:0 id `Keep;
         assert (l = []);
-        U.const id
+        T.const id
       ) else (
         (* polarize *)
         Utils.debugf ~section 5 "@[<2>polarize pred `%a`@]"
@@ -195,7 +192,7 @@ let rec polarize_term_rec
           (fun k->k ID.pp_full id);
         ID.Tbl.add state.St.polarized id None;
         Trav.call_dep self ~depth:0 id `Keep;
-        U.app_const id l
+        T.app_const id l
       )
     in
     match T.repr t with
@@ -205,12 +202,12 @@ let rec polarize_term_rec
           asserting = List.map (polarize_term_rec ~self Pol.Pos subst) g.asserting;
         } in
         let t = polarize_term_rec ~self pol subst t in
-        U.guard t g
+        T.guard t g
       | TI.Builtin (`True | `False | `DataTest _ | `Unparsable _
                    | `DataSelect _ | `Undefined_self _
                    | `Undefined_atom _ | `Card_at_least _) ->
-        U.eval_renaming ~subst t
-      | TI.Var v -> U.var (Var.Subst.find_exn ~subst v)
+        T.eval_renaming ~subst t
+      | TI.Var v -> T.var (Var.Subst.find_exn ~subst v)
       | TI.Const id ->
         let info = Env.find_exn ~env:(Trav.env self) id in
         begin match Env.def info with
@@ -234,7 +231,7 @@ let rec polarize_term_rec
             begin match ID.Tbl.find state.St.polarized id with
               | None ->
                 Trav.call_dep self ~depth:0 id `Keep;
-                U.app f l
+                T.app f l
               | Some p ->
                 polarize_def_of ~self id pol;
                 app_polarized pol p l
@@ -253,7 +250,7 @@ let rec polarize_term_rec
                 (* do not polarize *)
                 ID.Tbl.add state.St.polarized id None;
                 Trav.call_dep self ~depth:0 id `Keep;
-                U.app f l
+                T.app f l
               | Env.Fun_def (_defs,def,_) ->
                 maybe_polarize_def id def l
               | Env.Pred (_,_,pred,_preds,_) ->
@@ -264,12 +261,12 @@ let rec polarize_term_rec
             polarize_term_rec' ~self pol subst t
         end
       | TI.Bind (Binder.TyForall, _, _) ->
-        U.eval_renaming ~subst t (* we do not polarize in types *)
+        T.eval_renaming ~subst t (* we do not polarize in types *)
       | TI.Builtin (`Eq (a,b)) when pol <> Pol.NoPol && is_prop ~self a ->
         (* we can gain precision here, because if we expand the <=> we
            obtain two polarized formulas, whereas if we keep it we
            only obtain a non-polarized one. *)
-        polarize_term_rec ~self pol subst (U.and_ [U.imply a b; U.imply b a])
+        polarize_term_rec ~self pol subst (T.and_ [T.imply a b; T.imply b a])
       | TI.Builtin (`Eq (a,b)) when returns_prop ~self a ->
         (* [f = g] when both are predicates ==>
            [f+ = g+ ∧ f- = g- asserting (f+=f- ∧ g+=g-)] *)
@@ -277,9 +274,9 @@ let rec polarize_term_rec
         let a_minus = polarize_term_rec ~self Pol.Neg subst a in
         let b_plus = polarize_term_rec ~self Pol.Pos subst b in
         let b_minus = polarize_term_rec ~self Pol.Neg subst b in
-        U.asserting
-          (U.and_ [U.eq a_plus b_plus; U.eq a_minus b_minus])
-          [U.eq a_plus a_minus; U.eq b_plus b_minus]
+        T.asserting
+          (T.and_ [T.eq a_plus b_plus; T.eq a_minus b_minus])
+          [T.eq a_plus a_minus; T.eq b_plus b_minus]
       | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun | Binder.Mu), _, _)
       | TI.Builtin (`Ite _ | `Eq _ | `And _ | `Or _ | `Not _  | `Imply _)
       | TI.Let _
@@ -287,14 +284,14 @@ let rec polarize_term_rec
         (* generic treatment *)
         polarize_term_rec' ~self pol subst t
       | TI.TyBuiltin _
-      | TI.TyArrow (_,_) -> U.eval_renaming ~subst t
+      | TI.TyArrow (_,_) -> T.eval_renaming ~subst t
       | TI.TyMeta _ -> assert false
 
 (* generic recursive step *)
 and polarize_term_rec'
   : self:Trav.t -> Pol.t -> subst -> T.t -> T.t
   = fun ~self pol subst t ->
-    U.map_pol subst pol t
+    T.map_pol subst pol t
       ~f:(fun subst pol -> polarize_term_rec ~self pol subst)
       ~bind:Subst.rename_var
 
@@ -468,11 +465,11 @@ type rw_sys = ID.t ID.Map.t
 *)
 let rec rewrite ~subst (sys:rw_sys) t =
   match T.repr t with
-    | TI.Var v -> U.var (Subst.deref_rec ~subst v)
+    | TI.Var v -> T.var (Subst.deref_rec ~subst v)
     | TI.Const id ->
       begin try
           let id' = ID.Map.find id sys in
-          U.const id'
+          T.const id'
         with Not_found -> t
       end
     | TI.App (f, l) ->
@@ -481,7 +478,7 @@ let rec rewrite ~subst (sys:rw_sys) t =
           begin try
               let id' = ID.Map.find id sys in
               let l = List.map (rewrite ~subst sys) l in
-              U.app (U.const id') l
+              T.app (T.const id') l
             with Not_found ->
               rewrite' ~subst sys t
           end
@@ -489,7 +486,7 @@ let rec rewrite ~subst (sys:rw_sys) t =
       end
     | _ -> t
 and rewrite' ~subst sys t =
-  U.map subst t
+  T.map subst t
     ~f:(fun subst t -> rewrite ~subst sys t)
     ~bind:(fun s v -> s, v)
 
@@ -528,11 +525,11 @@ let filter_dt_ ~polarized ~default:d dt : (_,_) DT.t =
   let is_pos = ID.is_pos polarized in
   Utils.debugf ~section 5
     "@[<v>retain branches that yield %B for `%a`@ from `@[%a@]`@]"
-    (fun k->k is_pos ID.pp polarized (Model.DT.pp P.pp' P.pp) dt);
+    (fun k->k is_pos ID.pp polarized (Model.DT.pp T.pp' T.pp) dt);
   let rec aux dt : _ option = match dt with
     | DT.Yield t ->
       (* evaluate as fully as possible, hoping for [true] or [false] *)
-      let t = Red.whnf t in
+      let t = T.Red.whnf t in
       begin match T.repr t, is_pos with
         | TI.Builtin `True, true
         | TI.Builtin `False, false -> Some (DT.yield t)
@@ -544,7 +541,7 @@ let filter_dt_ ~polarized ~default:d dt : (_,_) DT.t =
           errorf_
             "@[<2>expected decision tree for %a@ to yield only true/false@ \
              but branch `@[%a@]`@ yields `@[%a@]`@]"
-            ID.pp polarized DTU.pp dt P.pp t
+            ID.pp polarized DTU.pp dt T.pp t
       end
     | DT.Cases {DT.var; tests=DT.Tests l; default} ->
       let l =
@@ -609,7 +606,7 @@ let decode_model ~state m =
             let vars = DT.vars dt in
             let subst = Subst.of_list vars vars' in
             let dt = DTU.map_vars ~subst dt in
-            let default = U.app (U.undefined_atom ~ty) (List.map U.var vars') in
+            let default = T.app (T.undefined_atom ~ty) (List.map T.var vars') in
             (* only keep branches that return true/false (depending on pol) *)
             let dt =
               filter_dt_ ~polarized:id ~default dt
@@ -623,7 +620,7 @@ let decode_model ~state m =
             (* add default case *)
             let new_dt = DT.add_default default new_dt in
             (* emit model for [id'] *)
-            Some (U.const id_non_pol, new_dt, k)
+            Some (T.const id_non_pol, new_dt, k)
           | None ->
             if ID.Map.mem opp_id sys
             then (
@@ -637,7 +634,7 @@ let decode_model ~state m =
                  model, we can emit this function now *)
               let default =
                 let vars = DT.vars dt in
-                U.app (U.undefined_atom ~ty) (List.map U.var vars)
+                T.app (T.undefined_atom ~ty) (List.map T.var vars)
               in
               let new_dt =
                 filter_dt_ ~polarized:id ~default dt
@@ -645,7 +642,7 @@ let decode_model ~state m =
               in
               (* add default case *)
               let new_dt = DT.add_default default new_dt in
-              Some (U.const id_non_pol, new_dt, k)
+              Some (T.const id_non_pol, new_dt, k)
             )
         end
       | _ ->
@@ -659,7 +656,7 @@ let decode_model ~state m =
 let pipe_with ?on_decoded ~decode ~polarize_rec ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
-      let module Ppb = Problem.Print(P)(P) in
+      let module Ppb = Problem.P in
       Format.printf "@[<v2>@{<Yellow>after polarization@}:@ %a@]@." Ppb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
@@ -678,7 +675,7 @@ let pipe ~polarize_rec ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after polarize@}:@ %a@]@."
-         (Problem.Res.pp P.pp' P.pp)]
+         (Problem.Res.pp T.pp' T.pp)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model ~state) in

@@ -8,13 +8,9 @@ open Nunchaku_core
 module TI = TermInner
 module Stmt = Statement
 module Subst = Var.Subst
-module T = TI.Default
-module U = T.U
-module P = T.P
-module PStmt = Statement.Print(P)(P)
-module Pat = Pattern.Make(T)
-module Red = Reduce.Make(T)
-module TyMo = TypeMono.Make(T)
+module T = Term
+module PStmt = Statement.Print(T)(T)
+module TyMo = TypeMono.Default
 
 type ty = T.t
 type term = T.t
@@ -63,7 +59,7 @@ and ('a, 'b, 'ty) decision_node_match = {
 
 let pp_pat out = function
   | P_any -> Format.fprintf out "_"
-  | P_term t -> P.pp out t
+  | P_term t -> T.pp out t
 
 let pp_path_cell out c : unit =
   Format.fprintf out "{@[%a =?= %a@]}"
@@ -126,13 +122,13 @@ let pp_eqn out (e:equation): unit =
   Format.fprintf out
     "{case @[<hv>[@[@[%a@]] ->@ `@[%a@]`@]@ when: [@[%a@]]@ with: @[%a@]@]}"
     (CCFormat.list pp_pat) e.eqn_pats
-    P.pp e.eqn_rhs (CCFormat.list P.pp) e.eqn_side_conds
+    T.pp e.eqn_rhs (CCFormat.list T.pp) e.eqn_side_conds
     (Subst.pp Var.pp_full) e.eqn_subst
 
 let dnode_of_ty ~env (ty:ty): (_,_,ty) decision_node =
-  if U.ty_is_Prop ty
+  if T.ty_is_Prop ty
   then DN_if ([], [], []) (* [v] is a prop, we use a if/then/else *)
-  else begin match U.head_sym ty with
+  else begin match T.head_sym ty with
     | Some ty_id ->
       (* what does the type of [v] look like? *)
       begin match Env.def (Env.find_exn ~env ty_id) with
@@ -169,7 +165,7 @@ let dnode_add_eqn
   begin match pat with
     | P_any -> dnode_add_wildcard dnode {e with eqn_pats=pats_tail}
     | P_term t ->
-      begin match Pat.repr t with
+      begin match T.Pat.repr t with
         | Pattern.Builtin ((`True | `False) as b) ->
           (* follow the [true] or [false] branch *)
           dnode_add_bool dnode b {e with eqn_pats=pats_tail}
@@ -199,13 +195,13 @@ let add_path (lst:local_state) (v:ty Var.t) (p:pattern): local_state =
 *)
 let rec compile_equations lst vars (l:equation list) : term =
   begin match vars, l with
-    | _, [] -> U.undefined_self lst.root (* undefined case *)
+    | _, [] -> T.undefined_self lst.root (* undefined case *)
     | [], [{eqn_pats=[]; eqn_rhs; eqn_side_conds=[]; eqn_subst=subst}] ->
       (* simple case: no side conditions, one RHS *)
       Utils.debugf ~section 5
         "@[<2>compile by evaluating@ term: `@[%a@]`@ in: `@[%a@]`@]"
-        (fun k->k P.pp eqn_rhs (Subst.pp Var.pp_full) subst);
-      U.eval_renaming ~subst eqn_rhs
+        (fun k->k T.pp eqn_rhs (Subst.pp Var.pp_full) subst);
+      T.eval_renaming ~subst eqn_rhs
     | [], l ->
       (* reverse list, because the first clauses in pattern-match are the
          ones at the end of the list *)
@@ -217,7 +213,7 @@ let rec compile_equations lst vars (l:equation list) : term =
         Utils.debugf ~section 5
           "@[<2>build decision node for `@[%a : %a@]`,@ @[tail: [@[%a@]]@]@ \
            with: @[<hv>%a@]@ @[at: %a@]@]"
-          (fun k->k Var.pp_full v P.pp (Var.ty v)
+          (fun k->k Var.pp_full v T.pp (Var.ty v)
               (CCFormat.list Var.pp_full) vars_tail
               (CCFormat.list pp_eqn) l pp_path lst.path);
         let ty = Var.ty v in
@@ -237,21 +233,21 @@ and yield_list lst (l:equation list): term = match l with
   | [] -> assert false
   | [{eqn_side_conds=[]; _} as e] ->
     (* final case *)
-    U.eval_renaming ~subst:e.eqn_subst e.eqn_rhs
+    T.eval_renaming ~subst:e.eqn_subst e.eqn_rhs
   | [{eqn_side_conds=_::_; eqn_subst=subst; _} as e] ->
     (* final case, but might fail *)
-    let else_ = U.undefined_self lst.root in
-    let sides = List.map (U.eval_renaming ~subst) e.eqn_side_conds in
-    U.ite (U.and_ sides) (U.eval_renaming ~subst e.eqn_rhs) else_
+    let else_ = T.undefined_self lst.root in
+    let sides = List.map (T.eval_renaming ~subst) e.eqn_side_conds in
+    T.ite (T.and_ sides) (T.eval_renaming ~subst e.eqn_rhs) else_
   | {eqn_rhs=t; eqn_side_conds=[]; eqn_subst=subst; _} :: _ :: _ ->
     Utils.warningf Utils.Warn_overlapping_match
-      "@[ignore terms following `@[%a@]`, for it has no side condition@]" P.pp t;
-    U.eval_renaming ~subst t
+      "@[ignore terms following `@[%a@]`, for it has no side condition@]" T.pp t;
+    T.eval_renaming ~subst t
   | {eqn_side_conds=_::_; eqn_subst=subst; _} as e :: tail ->
     (* try [sides], yielding [t], otherwise fall back on [l'] *)
-    let sides = List.map (U.eval_renaming ~subst) e.eqn_side_conds in
-    U.ite (U.and_ sides)
-      (U.eval_renaming ~subst e.eqn_rhs)
+    let sides = List.map (T.eval_renaming ~subst) e.eqn_side_conds in
+    T.ite (T.and_ sides)
+      (T.eval_renaming ~subst e.eqn_rhs)
       (yield_list lst tail)
 
 (* add missing constructors (not explicitely matched upon) to the set
@@ -263,9 +259,9 @@ and compile_dnode lst v next_vars dn : term = match dn with
     (* no test, look at next variables *)
     compile_equations (add_path lst v P_any) next_vars w
   | DN_if (l,r,w) ->
-    let l = compile_equations (add_path lst v (P_term U.true_)) next_vars (l@w) in
-    let r = compile_equations (add_path lst v (P_term U.false_)) next_vars (r@w) in
-    U.ite (U.var v) l r
+    let l = compile_equations (add_path lst v (P_term T.true_)) next_vars (l@w) in
+    let r = compile_equations (add_path lst v (P_term T.false_)) next_vars (r@w) in
+    T.ite (T.var v) l r
   | DN_bind l -> compile_equations lst next_vars l
   | DN_match dn when ID.Map.is_empty dn.dn_by_cstor ->
     (* no need to match, use next variables *)
@@ -282,14 +278,14 @@ and compile_dnode lst v next_vars dn : term = match dn with
         |> ID.Map.filter (fun id _ -> not (ID.Map.mem id dn.dn_by_cstor))
         |> ID.Map.map (fun c -> List.length c.Stmt.cstor_args)
       in
-      if ID.Map.is_empty map_missing
-      then TI.Default_none (* exhaustive *)
-      else (
+      if ID.Map.is_empty map_missing then (
+        None (* exhaustive *)
+      ) else (
         (* the default case is made of all equations that used "wildcard" *)
         let rhs =
           compile_equations (add_path lst v P_any) next_vars dn.dn_wildcard
         in
-        TI.Default_some (rhs, map_missing)
+        Some (rhs, map_missing)
       )
     (* per-constructor branches *)
     and l =
@@ -316,14 +312,14 @@ and compile_dnode lst v next_vars dn : term = match dn with
            in
            let lst = {lst with offset=lst.offset + List.length local_vars} in
            let lst =
-             add_path lst v (P_term (U.app_const id (List.map U.var local_vars)))
+             add_path lst v (P_term (T.app_const id (List.map T.var local_vars)))
            in
            let rhs' =
              compile_equations lst (local_vars @ next_vars) (cases @ wildcard_cases)
            in
            [], local_vars, rhs')
     in
-    U.match_with (U.var v) l ~def
+    T.match_with (T.var v) l ~def
 
 (* @param env the environment for types and constructors
    @param id the symbol being defined
@@ -339,7 +335,7 @@ let uniq_eqns
     | Stmt.Eqn_app _ -> assert false
     | Stmt.Eqn_nested l ->
       (* create fresh vars *)
-      let _, ty_args, _ = U.ty_unfold ty in
+      let _, ty_args, _ = T.ty_unfold ty in
       let vars =
         List.mapi
           (fun i ty -> Var.makef ~ty "%s_%d" (TyMo.mangle ~sep:"_" ty) i)
@@ -352,25 +348,25 @@ let uniq_eqns
              let eta_expand_args =
                vars
                |> CCList.drop (List.length args)
-               |> List.map (fun v -> Var.fresh_copy v |> U.var)
+               |> List.map (fun v -> Var.fresh_copy v |> T.var)
              in
              let pats = List.map (fun t -> P_term t) (args @ eta_expand_args) in
              assert (List.length pats = List.length ty_args);
              { eqn_pats=pats;
-               eqn_rhs=Red.app_whnf rhs eta_expand_args;
+               eqn_rhs=T.Red.app_whnf rhs eta_expand_args;
                eqn_side_conds=side;
                eqn_subst=Subst.empty;
              })
           l
       and lst = {
-        root=U.app_const id (List.map U.var vars); (* defined term *)
+        root=T.app_const id (List.map T.var vars); (* defined term *)
         path=[]; offset=0; env;
       } in
       (* compile equations into flat pattern matches *)
       let new_rhs = compile_equations lst vars cases in
       Utils.debugf ~section 5
         "@[compiled into@ @[@[%a %a@] ->@ %a@]@]"
-        (fun k->k ID.pp id (Utils.pp_list Var.pp_full) vars P.pp new_rhs);
+        (fun k->k ID.pp id (Utils.pp_list Var.pp_full) vars T.pp new_rhs);
       Stmt.Eqn_single (vars,new_rhs)
 
 let uniq_eqn_st env st =
@@ -421,7 +417,7 @@ let uniq_eqns_pb pb =
 let pipe ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
-      let module PPb = Problem.Print(P)(P) in
+      let module PPb = Problem.P in
       Format.printf "@[<v2>@{<Yellow>after uniq equations@}: %a@]@." PPb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->

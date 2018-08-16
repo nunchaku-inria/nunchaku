@@ -8,7 +8,7 @@ open Nunchaku_core
 type rstate = Random.State.t
 type 'a rgen = rstate -> 'a
 
-module T = TermInner.Default
+module T = Term
 
 type term = T.t
 type ty = T.t

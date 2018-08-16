@@ -9,7 +9,7 @@
 
 open Nunchaku_core
 
-type term = TermInner.Default.t
+type term = Term.t
 type decode_state
 
 val name : string

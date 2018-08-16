@@ -9,15 +9,13 @@ module TI = TermInner
 type rstate = Random.State.t
 type 'a rgen = rstate -> 'a
 
-module T = TermInner.Default
-module U = TI.Util(T)
-module P = TI.Print(T)
+module T = Term
 module Subst = Var.Subst
 
 type term = T.t
 type ty = T.t
 
-let pp_term = P.pp
+let pp_term = T.pp
 
 module S = struct
   let a = ID.make "a"
@@ -56,51 +54,51 @@ module S = struct
   let nil = ID.make_full ~needs_at:true "nil"
 end
 
-let app_const_ id l = U.app (U.const id) l
+let app_const_ id l = T.app (T.const id) l
 
 (* XXX invariant:
    every symbol must return a type of the shape [id var*] *)
 let base_sig =
-  let alpha = Var.make ~ty:U.ty_type ~name:"alpha" in
-  let beta = Var.make ~ty:U.ty_type ~name:"beta" in
+  let alpha = Var.make ~ty:T.ty_type ~name:"alpha" in
+  let beta = Var.make ~ty:T.ty_type ~name:"beta" in
   let open S in
   ID.Map.of_list
-    [ a, U.ty_type
-    ; b, U.ty_type
-    ; list, U.(ty_arrow ty_type ty_type)
-    ; pair, U.(ty_arrow_l [ty_type; ty_type] ty_type)
-    ; a0, U.ty_const a
-    ; a1, U.ty_const a
-    ; a2, U.ty_const a
-    ; f_a, U.(ty_arrow_l [U.ty_const a; U.ty_const b] (U.ty_const a))
-    ; g_a, U.(ty_arrow_l [U.ty_const a] (U.ty_const a))
-    ; h_a, U.(ty_arrow_l [app_const_ list [U.ty_const a]] (U.ty_const a))
-    ; b0, U.ty_const b
-    ; b1, U.ty_const b
-    ; b2, U.ty_const b
-    ; f_b, U.(ty_arrow_l [U.ty_const b; U.ty_const a] (U.ty_const b))
-    ; g_b, U.(ty_arrow_l [U.ty_const b] (U.ty_const b))
-    ; h_b, U.(ty_arrow_l [app_const_ list [U.ty_const b]] (U.ty_const b))
-    ; c0, U.ty_const c
-    ; c1, U.ty_const c
-    ; c2, U.ty_const c
-    ; p0, U.ty_prop
-    ; p1, U.ty_prop
-    ; p2, U.ty_prop
-    ; f_p, U.(ty_arrow_l [U.ty_const b; U.ty_prop] U.ty_prop)
-    ; g_p, U.(ty_arrow_l [U.ty_const a] U.ty_prop)
-    ; h_p, U.(ty_arrow_l [app_const_ pair [U.ty_const a; U.ty_prop]] (U.ty_const b))
-    ; mk_pair, U.(
+    [ a, T.ty_type
+    ; b, T.ty_type
+    ; list, T.(ty_arrow ty_type ty_type)
+    ; pair, T.(ty_arrow_l [ty_type; ty_type] ty_type)
+    ; a0, T.ty_const a
+    ; a1, T.ty_const a
+    ; a2, T.ty_const a
+    ; f_a, T.(ty_arrow_l [T.ty_const a; T.ty_const b] (T.ty_const a))
+    ; g_a, T.(ty_arrow_l [T.ty_const a] (T.ty_const a))
+    ; h_a, T.(ty_arrow_l [app_const_ list [T.ty_const a]] (T.ty_const a))
+    ; b0, T.ty_const b
+    ; b1, T.ty_const b
+    ; b2, T.ty_const b
+    ; f_b, T.(ty_arrow_l [T.ty_const b; T.ty_const a] (T.ty_const b))
+    ; g_b, T.(ty_arrow_l [T.ty_const b] (T.ty_const b))
+    ; h_b, T.(ty_arrow_l [app_const_ list [T.ty_const b]] (T.ty_const b))
+    ; c0, T.ty_const c
+    ; c1, T.ty_const c
+    ; c2, T.ty_const c
+    ; p0, T.ty_prop
+    ; p1, T.ty_prop
+    ; p2, T.ty_prop
+    ; f_p, T.(ty_arrow_l [T.ty_const b; T.ty_prop] T.ty_prop)
+    ; g_p, T.(ty_arrow_l [T.ty_const a] T.ty_prop)
+    ; h_p, T.(ty_arrow_l [app_const_ pair [T.ty_const a; T.ty_prop]] (T.ty_const b))
+    ; mk_pair, T.(
         ty_forall_l [alpha; beta]
           (ty_arrow_l
-             [U.var alpha; U.var beta]
-             (ty_app (U.const pair) [U.var alpha; U.var beta])))
+             [T.var alpha; T.var beta]
+             (ty_app (T.const pair) [T.var alpha; T.var beta])))
     ; cons,
-      U.(
-        let list_a = app_const_ list [U.var alpha] in
-        ty_forall alpha (ty_arrow_l [U.var alpha; list_a] list_a))
+      T.(
+        let list_a = app_const_ list [T.var alpha] in
+        ty_forall alpha (ty_arrow_l [T.var alpha; list_a] list_a))
     ; nil,
-      U.(ty_forall alpha (app_const_ list [U.var alpha]))
+      T.(ty_forall alpha (app_const_ list [T.var alpha]))
     ]
 
 type build_rule =
@@ -125,36 +123,36 @@ let pp_build_rule out = function
 
 let pp_rule out r =
   Format.fprintf out "(@[<2>%a :-@ {@[<hv>%a@]}@ using %a, vars @[%a@]@])"
-    P.pp r.target (Utils.pp_list P.pp) r.goals
+    T.pp r.target (Utils.pp_list T.pp) r.goals
     pp_build_rule r.build (CCFormat.list Var.pp_full) r.vars
 
 type backward_rules = backward_rule list
 
 (* is the rule proper? *)
 let check_rule r =
-  let vars_t = U.free_vars r.target in
+  let vars_t = T.free_vars r.target in
   let vars_g =
     Sequence.of_list r.goals
-    |> Sequence.flat_map (U.to_seq_free_vars ?bound:None)
-    |> U.VarSet.of_seq
+    |> Sequence.flat_map (T.to_seq_free_vars ?bound:None)
+    |> T.VarSet.of_seq
   in
-  U.VarSet.equal vars_t (U.VarSet.of_list r.vars) &&
-  U.VarSet.subset vars_g vars_t
+  T.VarSet.equal vars_t (T.VarSet.of_list r.vars) &&
+  T.VarSet.subset vars_g vars_t
 
-let mk_imply = function [a;b] -> U.imply a b | _ -> assert false
-let mk_equiv = function [a;b] -> U.eq a b | _ -> assert false
-let mk_not = function [a] -> U.not_ a | _ -> assert false
+let mk_imply = function [a;b] -> T.imply a b | _ -> assert false
+let mk_equiv = function [a;b] -> T.eq a b | _ -> assert false
+let mk_not = function [a] -> T.not_ a | _ -> assert false
 
 (* XXX: we do not have a rule for [=], because the rule would not be
    well-formed (type a -> a -> prop) *)
 let builtin_rules =
-  [ {target=U.ty_prop; goals=[U.ty_prop; U.ty_prop]; vars=[]; build=AppBuiltin mk_imply}
-  ; {target=U.ty_prop; goals=[U.ty_prop; U.ty_prop]; vars=[]; build=AppBuiltin mk_equiv}
-  ; {target=U.ty_prop; goals=[U.ty_prop]; vars=[]; build=AppBuiltin mk_not}
-  ; {target=U.ty_prop; goals=[U.ty_prop; U.ty_prop]; vars=[]; build=AppBuiltin U.and_}
-  ; {target=U.ty_prop; goals=[U.ty_prop; U.ty_prop]; vars=[]; build=AppBuiltin U.or_}
-  ; {target=U.ty_prop; goals=[]; vars=[]; build=AppBuiltin (fun _ -> U.true_)}
-  ; {target=U.ty_prop; goals=[]; vars=[]; build=AppBuiltin (fun _ -> U.false_)}
+  [ {target=T.ty_prop; goals=[T.ty_prop; T.ty_prop]; vars=[]; build=AppBuiltin mk_imply}
+  ; {target=T.ty_prop; goals=[T.ty_prop; T.ty_prop]; vars=[]; build=AppBuiltin mk_equiv}
+  ; {target=T.ty_prop; goals=[T.ty_prop]; vars=[]; build=AppBuiltin mk_not}
+  ; {target=T.ty_prop; goals=[T.ty_prop; T.ty_prop]; vars=[]; build=AppBuiltin T.and_}
+  ; {target=T.ty_prop; goals=[T.ty_prop; T.ty_prop]; vars=[]; build=AppBuiltin T.or_}
+  ; {target=T.ty_prop; goals=[]; vars=[]; build=AppBuiltin (fun _ -> T.true_)}
+  ; {target=T.ty_prop; goals=[]; vars=[]; build=AppBuiltin (fun _ -> T.false_)}
   ]
 
 (* rename a rule with fresh variables *)
@@ -162,17 +160,17 @@ let rename_rule r =
   let subst, vars = Utils.fold_map Subst.rename_var Subst.empty r.vars in
   { r with
       vars;
-      target=U.eval_renaming ~subst r.target;
-      goals=List.map (U.eval_renaming ~subst) r.goals;
+      target=T.eval_renaming ~subst r.target;
+      goals=List.map (T.eval_renaming ~subst) r.goals;
   }
 
 (* from a signature, build backward rules *)
 let mk_rules sigma : backward_rules =
   ID.Map.fold
     (fun id ty acc ->
-       assert (U.is_closed ty);
-       let vars, args, ret = U.ty_unfold ty in
-       assert (List.for_all (fun a -> U.ty_is_Type (Var.ty a)) vars);
+       assert (T.is_closed ty);
+       let vars, args, ret = T.ty_unfold ty in
+       assert (List.for_all (fun a -> T.ty_is_Type (Var.ty a)) vars);
        let r = { build=AppID id; vars; target=ret; goals=args} in
        if not (check_rule r)
        then failwith (Utils.err_sprintf "@[invalid rule@ %a@]" pp_rule r);
@@ -193,11 +191,11 @@ let sized' g = G.(3 -- 50 >>= g)
 (* TODO: polymorphism? *)
 
 let ty =
-  let base = G.oneofl [U.const S.a; U.const S.b; U.ty_prop] in
+  let base = G.oneofl [T.const S.a; T.const S.b; T.ty_prop] in
   let pair' a b = app_const_ S.pair [a;b] in
   let list' a = app_const_ S.list [a] in
-  let fun1 = U.ty_arrow in
-  let fun2 a b c = U.ty_arrow_l [a;b] c in
+  let fun1 = T.ty_arrow in
+  let fun2 a b c = T.ty_arrow_l [a;b] c in
   let open G in
   fix
     (fun self n ->
@@ -219,7 +217,7 @@ let ty =
 let mk_fresh_var_ = Var.make_gen ~names:"v_%d"
 
 let rule_of_var v =
-  let ty_vars, args, ret = U.ty_unfold (Var.ty v) in
+  let ty_vars, args, ret = T.ty_unfold (Var.ty v) in
   assert (ty_vars=[]);
   {build=AppVar v; target=ret; goals=args; vars=[]}
 
@@ -227,19 +225,19 @@ let rule_of_var v =
    @param subst substitution so far
    @param vars set of bound variables on the path *)
 let rec gen_ rules ty subst vars size =
-  let ty = U.eval ~subst ty in
-  let _, args, ret = U.ty_unfold ty in
+  let ty = T.eval ~subst ty in
+  let _, args, ret = T.ty_unfold ty in
   if args=[] then gen_atom_ rules ty subst vars size
   else (
     let (>|=) = G.(>|=) in
     (* generate fresh variables for the arguments*)
     let vars' = List.map mk_fresh_var_ args in
-    let vars = U.VarSet.add_list vars vars' in
+    let vars = T.VarSet.add_list vars vars' in
     (* also add the variables to the set of rules *)
     let rules = List.map rule_of_var vars' @ rules in
     (* now generate the body and build a function *)
     gen_atom_ rules ret subst vars size >|= fun body ->
-    U.fun_l vars' body
+    T.fun_l vars' body
   )
 
 and gen_atom_ rules ty subst vars size =
@@ -249,9 +247,9 @@ and gen_atom_ rules ty subst vars size =
          (* avoid variable collision... except when the
             rule is a (bound) variable *)
          let r =
-           if U.is_var r.target then r else rename_rule r
+           if T.is_var r.target then r else rename_rule r
          in
-         match U.match_ ~subst2:subst r.target ty with
+         match T.match_ ~subst2:subst r.target ty with
            | Some subst' ->
              let subst = Subst.concat subst' ~into:subst in
              let freq = match r.goals with
@@ -265,7 +263,7 @@ and gen_atom_ rules ty subst vars size =
       rules
   in
   if possible_rules=[] then (
-    Format.printf "no rule applies for @[%a@]@." P.pp ty;
+    Format.printf "no rule applies for @[%a@]@." T.pp ty;
     assert false;
   );
   let open G in
@@ -275,12 +273,12 @@ and gen_atom_ rules ty subst vars size =
   let size' = size - 2 * List.length r.goals in
   gen_l_ rules r.goals subst vars size' >|= fun l ->
   (* also apply to bound variables *)
-  let l = List.map (fun v -> U.eval ~subst (U.var v)) r.vars @ l in
+  let l = List.map (fun v -> T.eval ~subst (T.var v)) r.vars @ l in
   (* apply [r.id] to the terms *)
   match r.build with
     | AppID id -> app_const_ id l
     | AppBuiltin f -> f l
-    | AppVar v -> U.app (U.var v) l
+    | AppVar v -> T.app (T.var v) l
 
 (* generate a list of terms of types [ty_l] *)
 and gen_l_ rules ty_l subst vars size = match ty_l with
@@ -291,16 +289,16 @@ and gen_l_ rules ty_l subst vars size = match ty_l with
     gen_l_ rules ty_tail subst vars size >|= fun tail ->
     t :: tail
 
-let of_ty ty = sized' (gen_ rules ty Subst.empty U.VarSet.empty)
+let of_ty ty = sized' (gen_ rules ty Subst.empty T.VarSet.empty)
 
-let prop = of_ty U.ty_prop
+let prop = of_ty T.ty_prop
 
 let random = G.(ty >>= of_ty)
 
 let rec shrink t = match T.repr t with
   | TI.Bind (b, v, t') ->
     (* need to keep the term closed, if it was *)
-    Sequence.map (U.mk_bind b v) (shrink t')
+    Sequence.map (T.mk_bind b v) (shrink t')
   | TI.App (f, l) ->
     Sequence.cons f (Sequence.of_list l)
   | TI.Builtin (`Not f) -> Sequence.singleton f
@@ -313,7 +311,7 @@ let mk_arbitrary_ g =
   QCheck.make
     ~print:(CCFormat.sprintf "@[<4>%a@]" pp_term)
     ~shrink
-    ~small:U.size
+    ~small:T.size
     g
 
 let arbitrary = mk_arbitrary_ random
@@ -333,14 +331,10 @@ let pp_rules() =
 
 (* test the random generator itself *)
 
-(*$inject
-  module U = TermInner.Util(T)
-*)
-
 (*$QR & ~count:300
   arbitrary_prop
-    (fun t -> match U.ty_of_signature t ~sigma:(fun id -> ID.Map.get id base_sig) with
-      | CCResult.Ok ty -> U.ty_is_Prop ty
+    (fun t -> match T.ty_of_signature t ~sigma:(fun id -> ID.Map.get id base_sig) with
+      | CCResult.Ok ty -> T.ty_is_Prop ty
       | CCResult.Error _ -> false)
 *)
 
@@ -348,7 +342,7 @@ let pp_rules() =
   arbitrary
     (fun t ->
         (* just  see if it typechecks *)
-      match U.ty_of_signature t ~sigma:(fun id -> ID.Map.get id base_sig) with
+      match T.ty_of_signature t ~sigma:(fun id -> ID.Map.get id base_sig) with
       | CCResult.Ok _ ->  true
       | CCResult.Error _ -> false)
 *)

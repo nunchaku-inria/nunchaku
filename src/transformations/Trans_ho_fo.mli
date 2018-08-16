@@ -5,7 +5,7 @@
 
 open Nunchaku_core
 
-module Of_ho(T_ho : TermInner.S) : sig
+module Of_ho(T_ho : TermInner.FULL) : sig
   exception NotInFO of string
 
   val convert_problem :
@@ -15,7 +15,7 @@ module Of_ho(T_ho : TermInner.S) : sig
         @raise NotInFO if some constructs are not translatable *)
 end
 
-module To_ho(T_ho : TermInner.S) : sig
+module To_ho(T_ho : TermInner.FULL) : sig
   val convert_ty : FO.Ty.t -> T_ho.t
 
   val convert_term : FO.T.t -> T_ho.t
@@ -23,7 +23,7 @@ module To_ho(T_ho : TermInner.S) : sig
   val convert_model : (FO.T.t, FO.Ty.t) Model.t -> (T_ho.t,T_ho.t) Model.t
 end
 
-module Make(T1 : TermInner.S) : sig
+module Make(T1 : TermInner.FULL) : sig
   val pipe_with :
     print:bool ->
     decode:(unit -> 'a -> 'b) ->

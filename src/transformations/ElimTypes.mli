@@ -5,7 +5,7 @@
 
 open Nunchaku_core
 
-type term = TermInner.Default.t
+type term = Term.t
 type state
 
 val name : string

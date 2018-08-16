@@ -8,11 +8,7 @@ open Nunchaku_core
 module TI = TermInner
 module M = Model
 module DT = Model.DT
-module T = TermInner.Default
-module U = T.U
-module P = T.P
-module Ty = TypeMono.Make(T)
-module Red = Reduce.Make(T)
+module T = Term
 
 type term = T.t
 type model = (T.t, T.t) Model.t
@@ -66,21 +62,21 @@ let rename_copy_ subst v =
 let rec rewrite_term_ (rules:rules) subst t : T.t = match T.repr t with
   | TI.Const id ->
     begin match ID.Map.get id rules with
-      | Some id' -> U.const id'
+      | Some id' -> T.const id'
       | None -> t
     end
   | TI.Var v ->
-    begin try U.var (Var.Subst.find_exn ~subst v)
+    begin try T.var (Var.Subst.find_exn ~subst v)
       with Not_found -> t
     end
   | _ ->
     let t =
-      U.map subst t
+      T.map subst t
         ~f:(rewrite_term_ rules)
         ~bind:rename_copy_
     in
     (* reduce the term *)
-    Red.whnf t
+    T.Red.whnf t
 
 let rename m : (_,_) Model.t =
   let rules = renaming_rules_of_model_ m in
@@ -114,14 +110,14 @@ let rename m : (_,_) Model.t =
 
 let ground_dt doms (dt:(_,_) M.DT.t): (_,_) M.DT.t =
   let module D = M.DT in
-  let rec ground_dt (subst:U.subst) dt = match dt with
-    | D.Yield rhs -> D.yield (U.eval ~subst rhs)
+  let rec ground_dt (subst:T.subst) dt = match dt with
+    | D.Yield rhs -> D.yield (T.eval ~subst rhs)
     | D.Cases c ->
       let tests, changed = match c.D.tests with
         | D.Match (map,missing) ->
           let map = ID.Map.map (fun (tys,vars,dt) -> tys, vars, ground_dt subst dt) map in
           D.match_ ~missing map, false
-        | D.Tests l when List.for_all (fun (t,_) -> not (U.is_var t)) l ->
+        | D.Tests l when List.for_all (fun (t,_) -> not (T.is_var t)) l ->
           (* simple case where there are no variables *)
           let c =
             List.map (fun (t,dt) -> t, ground_dt subst dt) l
@@ -131,15 +127,15 @@ let ground_dt doms (dt:(_,_) M.DT.t): (_,_) M.DT.t =
         | D.Tests l ->
           (* there is at least one variable. We need to ground the variables
              and group sub-decision trees by corresponding LHS value *)
-          let tbl = U.Tbl.create 16 in
+          let tbl = T.Tbl.create 16 in
           List.iter
             (fun c ->
                let l = ground_case subst c in
-               List.iter (fun (t,dt) -> U.Tbl.add_list tbl t dt) l)
+               List.iter (fun (t,dt) -> T.Tbl.add_list tbl t dt) l)
             l;
           (* now group again *)
           let l =
-            U.Tbl.to_list tbl
+            T.Tbl.to_list tbl
             |> List.map
               (fun (t,dt_l) -> t, List.rev dt_l |> M.DT_util.merge_l)
           in
@@ -150,7 +146,7 @@ let ground_dt doms (dt:(_,_) M.DT.t): (_,_) M.DT.t =
       if changed then (
         Utils.debugf ~section 5
           "(@[<hv2>ground_vars@ :dt %a@ :subst %a@ :into %a@])"
-          (fun k->k M.DT_util.pp dt (Var.Subst.pp P.pp) subst M.DT_util.pp dt');
+          (fun k->k M.DT_util.pp dt (Var.Subst.pp T.pp) subst M.DT_util.pp dt');
       );
       dt'
 
@@ -158,12 +154,12 @@ let ground_dt doms (dt:(_,_) M.DT.t): (_,_) M.DT.t =
   and ground_case subst ((t,dt):(_,_) D.case) : (_,_) D.case list =
     match T.repr t with
       | TI.Var v ->
-        begin match U.Tbl.get doms (Var.ty v) with
+        begin match T.Tbl.get doms (Var.ty v) with
           | Some dom ->
             (* testing on a variable ranging over domain of [Var.ty v] *)
             List.map
               (fun dom_id ->
-                 let t' = U.const dom_id in
+                 let t' = T.const dom_id in
                  let subst = Var.Subst.add ~subst v t' in
                  t', ground_dt subst dt)
               dom
@@ -176,9 +172,9 @@ let ground_dt doms (dt:(_,_) M.DT.t): (_,_) M.DT.t =
 (* remove free variables whose types are finite domains *)
 let ground_vars m : (_,_) Model.t =
   (* collect finite domains *)
-  let doms_tbl = U.Tbl.create 16 in
+  let doms_tbl = T.Tbl.create 16 in
   M.iter m
-    ~finite_types:(fun (ty,dom) -> U.Tbl.add doms_tbl ty dom);
+    ~finite_types:(fun (ty,dom) -> T.Tbl.add doms_tbl ty dom);
   (* now ground decision trees that contain free variables *)
   Model.filter_map m
     ~finite_types:CCOpt.return
@@ -204,16 +200,16 @@ let remove_recursion m : (_,_) Model.t =
               m.Model.values
           in
           begin match res with
-            | None -> U.app f l
+            | None -> T.app f l
             | Some dt ->
               let dt' = M.DT_util.apply_l dt l in
               Utils.debugf ~section 5 "@[<2>eval `@[%a@]`@ into `@[%a@]`@]"
-                (fun k->k P.pp t M.DT_util.pp dt');
+                (fun k->k T.pp t M.DT_util.pp dt');
               (* if there remain arguments, consider the [dt] as a function
                  anyway *)
               eval_t (M.DT_util.to_term dt')
           end
-        | _ -> U.app f l
+        | _ -> T.app f l
       end
     | _ -> t
   in
@@ -264,7 +260,7 @@ let pipe ~print:must_print =
        in
        let res' = Problem.Res.map_m ~f res in
        if must_print then (
-         let module P = TI.Print(T) in
+         let module T = TI.Print(T) in
          Format.printf "@[<v2>@{<Yellow>res after %s@}:@ %a@]@."
-           name (Problem.Res.pp P.pp' P.pp) res');
+           name (Problem.Res.pp T.pp' T.pp) res');
        res')

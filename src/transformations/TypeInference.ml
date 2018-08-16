@@ -573,8 +573,8 @@ module Convert(Term : TermTyped.S) = struct
             "ill-formed pattern match (non linear pattern)"
         );
         let def = match check_cases_exhaustive_ ~env ~ty:ty_t m def with
-          | `Ok -> TI.Default_none
-          | `Completed (def,map) -> TI.Default_some (def,map)
+          | `Ok -> None
+          | `Completed (def,map) -> Some (def,map)
           | `Missing l ->
             ill_formedf ?loc ~kind:"match"
               "pattern match is not exhaustive (missing [@[%a@]])"
@@ -711,8 +711,8 @@ module Convert(Term : TermTyped.S) = struct
       | TI.Match (t,l,d) ->
         is_mono_ t &&
         begin match d with
-          | TI.Default_none -> true
-          | TI.Default_some (rhs,_) -> is_mono_ rhs
+          | None -> true
+          | Some (rhs,_) -> is_mono_ rhs
         end &&
         ID.Map.for_all
           (fun _ (tys,vars,rhs) ->
@@ -1449,9 +1449,7 @@ module Make(T1 : TermTyped.S) = struct
       ~name
       ~input_spec:Transform.Features.full
       ~encode:(fun l ->
-        let problem, _ = l
-                         |> Conv.convert_problem_exn ~env:Conv.empty_env
-        in
+        let problem, _ = Conv.convert_problem_exn ~env:Conv.empty_env l in
         problem, ())
       ~decode:(fun () x -> decode x)
       ()

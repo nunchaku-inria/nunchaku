@@ -9,16 +9,10 @@ module TI = TermInner
 module Stmt = Statement
 module Callback = Utils.Callback
 module Subst = Var.Subst
-module T = TI.Default
-module U = T.U
-module P = T.P
-module PStmt = Statement.Print(P)(P)
+module T = Term
+module PStmt = Statement.Print(T)(T)
 module TyP = TypePoly
-module TyM = TypeMono.Make(T)
-module TyMI = TypeMono
-
-(* evaluation *)
-module Red = Reduce.Make(T)
+module TyM = TypeMono.Default
 
 let name = "mono"
 let section = Utils.Section.make name
@@ -39,8 +33,8 @@ let () = Printexc.register_printer
 let fail_ msg = raise (InvalidProblem msg)
 let failf_ msg = Utils.exn_ksprintf msg ~f:fail_
 
-let pp_ty = P.pp
-let pp_term = P.pp
+let pp_ty = T.pp
+let pp_term = T.pp
 
 (* A tuple of arguments that a given function symbol should be
    instantiated with *)
@@ -60,25 +54,25 @@ module ArgTuple = struct
 
   (* equality for ground atomic types T.t *)
   let rec ty_ground_eq_ t1 t2 = match TyM.repr t1, TyM.repr t2 with
-    | TyMI.Builtin b1, TyMI.Builtin b2 -> TI.TyBuiltin.equal b1 b2
-    | TyMI.Const id1, TyMI.Const id2 -> ID.equal id1 id2
-    | TyMI.App (f1,l1), TyMI.App (f2,l2) ->
+    | TyM.Builtin b1, TyM.Builtin b2 -> TI.TyBuiltin.equal b1 b2
+    | TyM.Const id1, TyM.Const id2 -> ID.equal id1 id2
+    | TyM.App (f1,l1), TyM.App (f2,l2) ->
       ty_ground_eq_ f1 f2 && CCList.equal ty_ground_eq_ l1 l2
-    | TyMI.Arrow (a1,b1), TyMI.Arrow (a2,b2) ->
+    | TyM.Arrow (a1,b1), TyM.Arrow (a2,b2) ->
       ty_ground_eq_ a1 a2 && ty_ground_eq_ b1 b2
-    | TyMI.Const _, _
-    | TyMI.App _, _
-    | TyMI.Builtin _, _
-    | TyMI.Arrow _, _ -> false
+    | TyM.Const _, _
+    | TyM.App _, _
+    | TyM.Builtin _, _
+    | TyM.Arrow _, _ -> false
 
   let equal tup1 tup2 =
     CCList.equal ty_ground_eq_ tup1.args tup2.args
 
   (* [app_poly_ty ty arg] applies polymorphic type [ty] to type parameters [arg] *)
   let app_poly_ty ty arg =
-    let tys = List.map (fun _ -> U.ty_type) arg.m_args in
-    let ty, subst = U.ty_apply_full ty ~terms:arg.m_args ~tys in
-    U.eval ~subst ty, subst
+    let tys = List.map (fun _ -> T.ty_type) arg.m_args in
+    let ty, subst = T.ty_apply_full ty ~terms:arg.m_args ~tys in
+    T.eval ~subst ty, subst
 
   let pp out tup =
     let pp_mangled out = function
@@ -118,7 +112,7 @@ module St = struct
       let mangled' = ID.make mangled in
       Utils.debugf ~section 5
         "@[<2>save_mangled %a@ for %a (@[%a@])@]"
-        (fun k->k ID.pp mangled' ID.pp id (CCFormat.list P.pp) tup);
+        (fun k->k ID.pp mangled' ID.pp id (CCFormat.list T.pp) tup);
       Hashtbl.add state.mangle mangled mangled';
       ID.Tbl.replace state.unmangle mangled' (id, tup);
       mangled'
@@ -142,7 +136,7 @@ let mangle_ ~state id (args:term list) =
   match args with
     | [] -> id, None
     | _::_ ->
-      let name = TyM.mangle ~sep:"_" (U.app_const id args) in
+      let name = TyM.mangle ~sep:"_" (T.app_const id args) in
       let mangled = St.save_mangled ~state id args ~mangled:name in
       mangled, Some mangled
 
@@ -155,7 +149,7 @@ let should_be_mangled_ ~env id =
                 Env.Copy_abstract _ | Env.Copy_concrete _ |
                 Env.Copy_ty _); _} ->
       true (* defined objects: mangle *)
-    | {Env.def=Env.NoDef; ty; _} when U.ty_returns_Type ty ->
+    | {Env.def=Env.NoDef; ty; _} when T.ty_returns_Type ty ->
       false (* uninterpreted poly types: do not mangle *)
     | {Env.def=Env.NoDef; _} ->
       true (* functions and prop: mangle *)
@@ -183,24 +177,24 @@ type local_state = {
 
 (* monomorphize term *)
 let rec mono_term ~self ~local_state (t:term) : term =
-  Utils.debugf ~section 5 "@[<2>mono term@ `@[%a@]`@]" (fun k->k P.pp t);
+  Utils.debugf ~section 5 "@[<2>mono term@ `@[%a@]`@]" (fun k->k T.pp t);
   match T.repr t with
     | TI.Builtin b ->
-      U.builtin (Builtin.map b ~f:(mono_term ~self ~local_state))
+      T.builtin (Builtin.map b ~f:(mono_term ~self ~local_state))
     | TI.Const c ->
       (* no args, but we require [c, ()] in the output *)
       let depth = local_state.depth+1 in
       Trav.call_dep self ~depth c ArgTuple.empty;
-      U.const c
+      T.const c
     | TI.Var v ->
       begin match Subst.find ~subst:local_state.subst v with
         | Some t' -> mono_term ~self ~local_state t'
         | None ->
-          U.var (mono_var ~self ~local_state v)
+          T.var (mono_var ~self ~local_state v)
       end
     | TI.App (f,l) ->
       (* first, beta-reduce locally; can possibly enrich [subst] *)
-      let f, l, subst, guard = Red.Full.whnf ~subst:local_state.subst f l in
+      let f, l, subst, guard = T.Red.Full.whnf ~subst:local_state.subst f l in
       let local_state = {local_state with subst; } in
       let t' = match T.repr f with
         | TI.Bind (Binder.Fun, _, _) when l<>[] -> assert false (* beta-reduction failed? *)
@@ -208,12 +202,12 @@ let rec mono_term ~self ~local_state (t:term) : term =
           (* builtins are defined, but examine their args *)
           let f = mono_term ~self ~local_state f in
           let l = List.map (mono_term ~self ~local_state) l in
-          U.guard (U.app f l) guard
+          T.guard (T.app f l) guard
         | TI.Const id ->
           (* find type arguments *)
           let info = Env.find_exn ~env:(Trav.env self) id in
           let ty = info.Env.ty in
-          if U.ty_returns_Type ty
+          if T.ty_returns_Type ty
           && Env.is_not_def info
           && not (St.always_mangle (Trav.state self))
           then (
@@ -221,9 +215,9 @@ let rec mono_term ~self ~local_state (t:term) : term =
                keep them parametric; do not mangle (unless [always_mangle=true])! *)
             Trav.call_dep self ~depth:local_state.depth id ArgTuple.empty;
             let l' = List.map (mono_type ~self ~local_state) l in
-            U.app_const id l'
+            T.app_const id l'
           ) else (
-            let n = U.ty_num_param ty in
+            let n = T.ty_num_param ty in
             (* tuple of arguments for [id], not encoded yet *)
             let unmangled_tup = take_n_ground_atomic_types_ ~self ~local_state n l in
             let mangled_tup = List.map (mono_type ~self ~local_state) unmangled_tup in
@@ -243,7 +237,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
                Drop type arguments iff they are mangled with ID *)
             let l = if mangled=None then l else CCList.drop n l in
             let l = List.map (mono_term ~self ~local_state) l in
-            U.app_const new_id l
+            T.app_const new_id l
           )
         | TI.Var v ->
           (* allow variables in head (in spec/rec and in functions) *)
@@ -251,22 +245,22 @@ let rec mono_term ~self ~local_state (t:term) : term =
             | None ->
               let v = mono_var ~self ~local_state v in
               let l = List.map (mono_term ~self ~local_state) l in
-              U.app (U.var v) l
+              T.app (T.var v) l
             | Some t ->
-              mono_term ~self ~local_state (U.app t l)
+              mono_term ~self ~local_state (T.app t l)
           end
         | _ ->
-          U.app
+          T.app
             (mono_term ~self ~local_state f)
             (List.map (mono_term ~self ~local_state) l)
       in
-      U.guard t' guard
+      T.guard t' guard
     | TI.Bind ((Binder.Fun | Binder.Forall | Binder.Exists | Binder.Mu) as b, v, t) ->
-      U.mk_bind b
+      T.mk_bind b
         (mono_var ~self ~local_state v)
         (mono_term ~self ~local_state t)
     | TI.Let (v,t,u) ->
-      U.let_ (mono_var ~self ~local_state v)
+      T.let_ (mono_var ~self ~local_state v)
         (mono_term ~self ~local_state t)
         (mono_term ~self ~local_state u)
     | TI.Match (t,l,def) ->
@@ -287,10 +281,10 @@ let rec mono_term ~self ~local_state (t:term) : term =
             c', ([], vars, mono_term ~self ~local_state rhs))
         |> ID.Map.of_seq
       in
-      U.match_with t l ~def
-    | TI.TyBuiltin b -> U.ty_builtin b
+      T.match_with t l ~def
+    | TI.TyBuiltin b -> T.ty_builtin b
     | TI.TyArrow (a,b) ->
-      U.ty_arrow
+      T.ty_arrow
         (mono_term ~self ~local_state a)
         (mono_term ~self ~local_state b)
     | TI.TyMeta _ -> assert false
@@ -308,13 +302,13 @@ and take_n_ground_atomic_types_ ~self ~local_state n = function
   | _ when n=0 -> []
   | [] -> failf_ "not enough arguments (%d missing)" n
   | t :: l' ->
-    U.eval ~subst:local_state.subst t
+    T.eval ~subst:local_state.subst t
     :: take_n_ground_atomic_types_ ~self ~local_state (n-1) l'
 
 (* some type variable? *)
 let term_has_ty_vars t =
-  U.to_seq_vars t
-  |> Sequence.exists (fun v -> U.ty_is_Type (Var.ty v))
+  T.to_seq_vars t
+  |> Sequence.exists (fun v -> T.ty_is_Type (Var.ty v))
 
 let mono_defined ~self ~local_state d tup =
   let ty, _ = ArgTuple.app_poly_ty d.Stmt.defined_ty tup in
@@ -450,7 +444,7 @@ let dispatch = {
       let tup = {tup with ArgTuple.mangled; } in
       Utils.debugf ~section 5 "monomorphize data %a on %a"
         (fun k->k ID.pp tydef.Stmt.ty_id ArgTuple.pp tup);
-      let ty = U.ty_type in
+      let ty = T.ty_type in
       (* specialize each constructor *)
       let cstors = ID.Map.fold
           (fun _ c acc ->
@@ -460,7 +454,7 @@ let dispatch = {
              (* apply, then convert type. Arity should match. *)
              let ty', subst = ArgTuple.app_poly_ty c.Stmt.cstor_type tup' in
              Utils.debugf ~section 5 "@[<hv2>monomorphize cstor `@[%a@ : %a@]`@ with @[%a@]@]"
-               (fun k->k ID.pp id' P.pp ty' (Subst.pp P.pp) subst);
+               (fun k->k ID.pp id' T.pp ty' (Subst.pp T.pp) subst);
              (* convert type and substitute in it *)
              let local_state = mk_local_state ~subst (depth+1) in
              let ty' = mono_term ~self ~local_state ty' in
@@ -508,9 +502,9 @@ let dispatch = {
         mangle_ ~state:st c.Stmt.copy_abstract (ArgTuple.m_args tup) in
       let concrete', _ =
         mangle_ ~state:st c.Stmt.copy_concrete (ArgTuple.m_args tup) in
-      let ty_abstract' = U.ty_arrow of_' to_' in
-      let ty_concrete' = U.ty_arrow to_' of_' in
-      let ty' = U.ty_type in
+      let ty_abstract' = T.ty_arrow of_' to_' in
+      let ty_concrete' = T.ty_arrow to_' of_' in
+      let ty' = T.ty_type in
       (* create new copy type *)
       let c' =
         Stmt.mk_copy
@@ -552,7 +546,7 @@ let mono_statement t st =
   begin match Stmt.view st with
     | Stmt.Goal t ->
       if term_has_ty_vars t
-      then failf_ "goal `@[%a@]` contains type variables" P.pp t
+      then failf_ "goal `@[%a@]` contains type variables" T.pp t
     | _ -> ()
   end;
   Trav.traverse_stmt t st
@@ -587,18 +581,18 @@ let monomorphize ?(depth_limit=256) ?(always_mangle=false) pb =
 
 let unmangle_term ~(state:unmangle_state) (t:term):term =
   let rec aux t = match T.repr t with
-    | TI.Var v -> U.var (aux_var v)
+    | TI.Var v -> T.var (aux_var v)
     | TI.Const id ->
       begin try
           let id', args = ID.Tbl.find state id in
-          U.app (U.const id') (List.map aux args)
-        with Not_found -> U.const id
+          T.app (T.const id') (List.map aux args)
+        with Not_found -> T.const id
       end
-    | TI.App (f,l) -> U.app (aux f) (List.map aux l)
-    | TI.Builtin b -> U.builtin (Builtin.map b ~f:aux)
+    | TI.App (f,l) -> T.app (aux f) (List.map aux l)
+    | TI.Builtin b -> T.builtin (Builtin.map b ~f:aux)
     | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun | Binder.Mu) as b,v,t) ->
-      U.mk_bind b (aux_var v) (aux t)
-    | TI.Let (v,t,u) -> U.let_ (aux_var v) (aux t) (aux u)
+      T.mk_bind b (aux_var v) (aux t)
+    | TI.Let (v,t,u) -> T.let_ (aux_var v) (aux t) (aux u)
     | TI.Match (t,l,def) ->
       let t = aux t in
       let def = TI.map_default_case aux def in
@@ -616,9 +610,9 @@ let unmangle_term ~(state:unmangle_state) (t:term):term =
             end)
         |> ID.Map.of_seq
       in
-      U.match_with t l ~def
-    | TI.TyBuiltin b -> U.ty_builtin b
-    | TI.TyArrow (a,b) -> U.ty_arrow (aux a) (aux b)
+      T.match_with t l ~def
+    | TI.TyBuiltin b -> T.ty_builtin b
+    | TI.TyArrow (a,b) -> T.ty_arrow (aux a) (aux b)
     | TI.Bind (Binder.TyForall, _,_) | TI.TyMeta _ -> assert false
   and aux_var v = Var.update_ty ~f:aux v in
   aux t
@@ -631,7 +625,7 @@ let pipe_with ~decode ~always_mangle ~print ~check =
   let on_encoded =
     Utils.singleton_if print ()
       ~f:(fun () ->
-        let module PPb = Problem.Print(P)(P) in
+        let module PPb = Problem.P in
         Format.printf "@[<v2>@{<Yellow>after mono@}: %a@]@." PPb.pp)
     @
       Utils.singleton_if check ()

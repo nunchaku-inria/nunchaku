@@ -33,9 +33,7 @@ type 'a case = 'a list * 'a var list * 'a
 (** A list of cases (indexed by constructor) *)
 type 'a cases = 'a case ID.Map.t
 
-type 'a default_case =
-  | Default_none
-  | Default_some of 'a * int ID.Map.t
+type 'a default_case = ('a * int ID.Map.t) option
   (* default term, + set of cstors covered this way along with their arity *)
 
 let cases_to_list = ID.Map.to_list
@@ -187,8 +185,8 @@ module Print(T : REPR)
           ID.pp id (Utils.pp_list ~sep:" " pp) tys
           (Utils.pp_list ~sep:" " Var.pp_full) vars pp t
       and pp_def out = function
-        | Default_none -> ()
-        | Default_some (d,_) -> fpf out "@ @[<hv2>| default ->@ %a@]" pp d
+        | None -> ()
+        | Some (d,_) -> fpf out "@ @[<hv2>| default ->@ %a@]" pp d
       in
       fpf out "@[<hv>@[<hv2>match @[%a@] with@ %a%a@]@ end@]"
         pp t (Utils.pp_list ~sep:"" pp_case) (ID.Map.to_list l)
@@ -226,8 +224,8 @@ module Print(T : REPR)
       lst [str "let"; lst [lst [var_to_sexp v; to_sexp t]]; to_sexp u]
     | Match (t,l,d) ->
       let last = match d with
-        | Default_none -> []
-        | Default_some (d,_) -> [lst [str "default"; to_sexp d]]
+        | None -> []
+        | Some (d,_) -> [lst [str "default"; to_sexp d]]
       in
       lst
         (str "match" ::
@@ -252,63 +250,63 @@ type 'a print = (module PRINT with type t = 'a)
 (** {2 Utils} *)
 
 module type UTIL_REPR = sig
-  type t_
+  type t
 
-  val head_sym : t_ -> id option
+  val head_sym : t -> id option
   (** Search for a head symbol, if any *)
 
-  exception No_head of t_
+  exception No_head of t
 
-  val head_sym_exn : t_ -> id
+  val head_sym_exn : t -> id
   (** Search for a head symbol
       @raise No_head if not an application/const *)
 
-  val to_seq : t_ -> t_ Sequence.t
+  val to_seq : t -> t Sequence.t
   (** Iterate on sub-terms *)
 
-  val to_seq_vars : t_ -> t_ Var.t Sequence.t
+  val to_seq_vars : t -> t Var.t Sequence.t
   (** Iterate on variables *)
 
-  val to_seq_consts : t_ -> ID.t Sequence.t
+  val to_seq_consts : t -> ID.t Sequence.t
   (** IDs occurring as {!Const} *)
 
-  module VarSet : CCSet.S with type elt = t_ Var.t
+  module VarSet : CCSet.S with type elt = t Var.t
 
-  val to_seq_free_vars : ?bound:VarSet.t -> t_ -> t_ Var.t Sequence.t
+  val to_seq_free_vars : ?bound:VarSet.t -> t -> t Var.t Sequence.t
   (** Iterate on free variables. *)
 
-  val free_vars : ?bound:VarSet.t -> t_ -> VarSet.t
+  val free_vars : ?bound:VarSet.t -> t -> VarSet.t
   (** [free_vars t] computes the set of free variables of [t].
       @param bound variables bound on the path *)
 
-  val free_vars_seq : ?bound:VarSet.t -> t_ Sequence.t -> VarSet.t
+  val free_vars_seq : ?bound:VarSet.t -> t Sequence.t -> VarSet.t
   (** Similar to {!free_vars} but for a sequence of terms *)
 
-  val free_vars_list : ?bound:VarSet.t -> t_ list -> VarSet.t
+  val free_vars_list : ?bound:VarSet.t -> t list -> VarSet.t
 
-  val is_var : t_ -> bool
-  val is_const : t_ -> bool
+  val is_var : t -> bool
+  val is_const : t -> bool
 
-  val is_closed : t_ -> bool
+  val is_closed : t -> bool
   (** [is_closed t] means [to_seq_free_vars t = empty] *)
 
-  val is_undefined : t_ -> bool
+  val is_undefined : t -> bool
 
-  val free_meta_vars : ?init:t_ MetaVar.t ID.Map.t -> t_ -> t_ MetaVar.t ID.Map.t
+  val free_meta_vars : ?init:t MetaVar.t ID.Map.t -> t -> t MetaVar.t ID.Map.t
   (** The free type meta-variables in [t] *)
 
-  val bind_unfold : Binder.t -> t_ -> t_ Var.t list * t_
+  val bind_unfold : Binder.t -> t -> t Var.t list * t
   (** [bind_unfold binder (bind binder x1...xn. t)] returns [x1...xn, t] *)
 
-  val fun_unfold : t_ -> t_ Var.t list * t_
+  val fun_unfold : t -> t Var.t list * t
   (** [fun_unfold (fun x y z. t) = [x;y;z], t].
       Special case of {!bind_unfold} *)
 
-  val get_ty_arg : t_ -> int -> t_ option
+  val get_ty_arg : t -> int -> t option
   (** [get_ty_arg ty n] gets the [n]-th argument of [ty], if [ty] is a
       function type with at least [n] arguments. *)
 
-  val ty_unfold : t_ -> t_ Var.t list * t_ list * t_
+  val ty_unfold : t -> t Var.t list * t list * t
   (** [ty_unfold ty] decomposes [ty] into a list of quantified type variables,
       a list of parameters, and a return type (which is not an arrow).
 
@@ -316,41 +314,41 @@ module type UTIL_REPR = sig
       [([a;b], [a;b;c], d)]
   *)
 
-  val app_const_unfold : t_ -> (ID.t * t_ list) option
+  val app_const_unfold : t -> (ID.t * t list) option
   (** [app_const_unfold (app_const id l)] returns [Some (id,l)];
       [app_const_unfold (const id)] returns [Some (id, [])];
       otherwise it returns [None] *)
 
-  val ite_unfold : t_ -> (t_ * t_) list * t_
+  val ite_unfold : t -> (t * t) list * t
   (** [ite_unfold (if a b (if a' b' … e))] returns [[(a,b);(a',b')…],e],
       i.e. a series of "if/then" and a final "else" *)
 
-  val ty_is_Type : t_ -> bool
+  val ty_is_Type : t -> bool
   (** t == Type? *)
 
-  val ty_returns_Type : t_ -> bool
+  val ty_returns_Type : t -> bool
   (** t == forall ... -> ... -> ... -> Type? *)
 
-  val ty_returns_Prop : t_ -> bool
+  val ty_returns_Prop : t -> bool
 
-  val ty_returns : t_ -> t_
+  val ty_returns : t -> t
   (** follow forall/arrows to get return type.  *)
 
-  val ty_is_Kind : t_ -> bool
+  val ty_is_Kind : t -> bool
   (** type == Kind? *)
 
-  val ty_is_Prop : t_ -> bool
+  val ty_is_Prop : t -> bool
   (** t == Prop? *)
 
-  val ty_is_unitype : t_ -> bool
+  val ty_is_unitype : t -> bool
 
-  val ty_arity : t_ -> int
+  val ty_arity : t -> int
   (** If type is a function [forall v1...vk. a1 -> ... -> an -> ret],
       returns [k+n]. Returns [0] otherwise.
       In other words, this returns the maximal number of arguments
       anything with this type can be applied to. *)
 
-  val ty_num_param : t_ -> int
+  val ty_num_param : t -> int
   (** Number of type arguments that any value of this type accepts.
 
       NOTE: this is not simply [ty_unfold], because some nameless parameters
@@ -362,26 +360,26 @@ module type UTIL_REPR = sig
 end
 
 let iter_default_case f = function
-  | Default_none ->  ()
-  | Default_some (t, _) -> f t
+  | None ->  ()
+  | Some (t, _) -> f t
 
 let map_default_case f = function
-  | Default_none -> Default_none
-  | Default_some (t, ids) -> Default_some (f t, ids)
+  | None -> None
+  | Some (t, ids) -> Some (f t, ids)
 
 let map_default_case' f = function
-  | Default_none -> Default_none
-  | Default_some (t, ids) ->
+  | None -> None
+  | Some (t, ids) ->
     let t, ids = f t ids in
-    Default_some (t, ids)
+    Some (t, ids)
 
 (** Utils that only require a {!REPR} *)
 module UtilRepr(T : REPR)
-  : UTIL_REPR with type t_ = T.t
+  : UTIL_REPR with type t := T.t
 = struct
-  type t_ = T.t
+  type t = T.t
 
-  exception No_head of t_
+  exception No_head of t
 
   let () = Printexc.register_printer
       (function
@@ -624,134 +622,133 @@ let () = Printexc.register_printer
 
 module type UTIL = sig
   include UTIL_REPR
+  val build : t view -> t
+  val const : id -> t
+  val builtin : t Builtin.t -> t
+  val app_builtin : t Builtin.t -> t list -> t
+  val var : t var -> t
+  val app : t -> t list -> t
+  val app_const : ID.t -> t list -> t
+  val fun_ : t var -> t -> t
+  val mu : t var -> t -> t
+  val let_ : t var -> t -> t -> t
+  val match_with : t -> t cases -> def:t default_case -> t
+  val ite : t -> t -> t -> t
+  val forall : t var -> t -> t
+  val exists : t var -> t -> t
 
-  val build : t_ view -> t_
-  val const : id -> t_
-  val builtin : t_ Builtin.t -> t_
-  val app_builtin : t_ Builtin.t -> t_ list -> t_
-  val var : t_ var -> t_
-  val app : t_ -> t_ list -> t_
-  val app_const : ID.t -> t_ list -> t_
-  val fun_ : t_ var -> t_ -> t_
-  val mu : t_ var -> t_ -> t_
-  val let_ : t_ var -> t_ -> t_ -> t_
-  val match_with : t_ -> t_ cases -> def:t_ default_case -> t_
-  val ite : t_ -> t_ -> t_ -> t_
-  val forall : t_ var -> t_ -> t_
-  val exists : t_ var -> t_ -> t_
-
-  val eq : t_ -> t_ -> t_
-  val neq : t_ -> t_ -> t_
-  val imply : t_ -> t_ -> t_
-  val imply_l : t_ list -> t_ -> t_
-  val true_ : t_
-  val false_ : t_
-  val and_ : t_ list -> t_
-  val or_ : t_ list -> t_
-  val not_ : t_ -> t_
-  val undefined_self : t_ -> t_ (** fresh undefined term *)
-  val undefined_atom : ty:t_ -> t_ (** fresh undefined constant *)
-  val data_test : ID.t -> t_ -> t_
-  val data_select : ID.t -> int -> t_ -> t_
-  val unparsable : ty:t_ -> t_
+  val eq : t -> t -> t
+  val neq : t -> t -> t
+  val imply : t -> t -> t
+  val imply_l : t list -> t -> t
+  val true_ : t
+  val false_ : t
+  val and_ : t list -> t
+  val or_ : t list -> t
+  val not_ : t -> t
+  val undefined_self : t -> t (** fresh undefined term *)
+  val undefined_atom : ty:t -> t (** fresh undefined constant *)
+  val data_test : ID.t -> t -> t
+  val data_select : ID.t -> int -> t -> t
+  val unparsable : ty:t -> t
 
   (** No simplifications *)
   module No_simp : sig
-    val builtin : t_ Builtin.t -> t_
-    val app_builtin : t_ Builtin.t -> t_ list -> t_
+    val builtin : t Builtin.t -> t
+    val app_builtin : t Builtin.t -> t list -> t
 
-    val eq : t_ -> t_ -> t_
-    val neq : t_ -> t_ -> t_
-    val imply : t_ -> t_ -> t_
-    val imply_l : t_ list -> t_ -> t_
-    val and_ : t_ list -> t_
-    val or_ : t_ list -> t_
-    val not_ : t_ -> t_
-    val ite : t_ -> t_ -> t_ -> t_
+    val eq : t -> t -> t
+    val neq : t -> t -> t
+    val imply : t -> t -> t
+    val imply_l : t list -> t -> t
+    val and_ : t list -> t
+    val or_ : t list -> t
+    val not_ : t -> t
+    val ite : t -> t -> t -> t
   end
 
-  val and_nodup : t_ list -> t_
+  val and_nodup : t list -> t
 
-  val asserting : t_ -> t_ list -> t_
-  val guard : t_ -> t_ Builtin.guard -> t_
+  val asserting : t -> t list -> t
+  val guard : t -> t Builtin.guard -> t
 
-  val card_at_least : t_ -> int -> t_
+  val card_at_least : t -> int -> t
 
-  val mk_bind : Binder.t -> t_ var -> t_ -> t_
-  val mk_bind_l : Binder.t -> t_ var list -> t_ -> t_
+  val mk_bind : Binder.t -> t var -> t -> t
+  val mk_bind_l : Binder.t -> t var list -> t -> t
 
-  val ty_type : t_ (** Type of types *)
-  val ty_kind : t_ (** Type of ty_type *)
-  val ty_prop : t_ (** Propositions *)
-  val ty_unitype : t_
+  val ty_type : t (** Type of types *)
+  val ty_kind : t (** Type of ty_type *)
+  val ty_prop : t (** Propositions *)
+  val ty_unitype : t
 
-  val ty_builtin : TyBuiltin.t -> t_
-  val ty_const : id -> t_
-  val ty_app : t_ -> t_ list -> t_
-  val ty_arrow : t_ -> t_ -> t_
-  val ty_arrow_l : t_ list -> t_ -> t_
-  val ty_var : t_ var -> t_
-  val ty_meta : t_ MetaVar.t -> t_
-  val ty_forall : t_ var -> t_ -> t_
+  val ty_builtin : TyBuiltin.t -> t
+  val ty_const : id -> t
+  val ty_app : t -> t list -> t
+  val ty_arrow : t -> t -> t
+  val ty_arrow_l : t list -> t -> t
+  val ty_var : t var -> t
+  val ty_meta : t MetaVar.t -> t
+  val ty_forall : t var -> t -> t
 
-  val fun_l : t_ var list -> t_ -> t_
-  val forall_l : t_ var list -> t_ -> t_
-  val exists_l : t_ var list -> t_ -> t_
-  val ty_forall_l : t_ var list -> t_ -> t_
-  val let_l : (t_ var * t_) list -> t_ -> t_
+  val fun_l : t var list -> t -> t
+  val forall_l : t var list -> t -> t
+  val exists_l : t var list -> t -> t
+  val ty_forall_l : t var list -> t -> t
+  val let_l : (t var * t) list -> t -> t
 
-  val close_forall : t_ -> t_
+  val close_forall : t -> t
   (** [close_forall t] universally quantifies over free variables of [t] *)
 
-  val hash : t_ -> int
+  val hash : t -> int
   (** Hash into a positive integer *)
 
-  val hash_alpha_eq : t_ -> int
+  val hash_alpha_eq : t -> int
   (** Hash function that is not sensitive to alpha-renaming *)
 
-  val equal : t_ -> t_ -> bool
+  val equal : t -> t -> bool
   (** Syntactic equality *)
 
   (** {2 Misc} *)
 
-  module Tbl : CCHashtbl.S with type key = t_
+  module Tbl : CCHashtbl.S with type key = t
   (** Hashtbl with terms as key. The hash function is modulo α-equiv *)
 
-  module Map : CCMap.S with type key = t_
+  module Map : CCMap.S with type key = t
   (** Map with terms as key. The hash function is modulo α-equiv *)
 
-  val remove_dup : t_ list -> t_ list
+  val remove_dup : t list -> t list
   (** Use a hashset to remove duplicates from the list. Order is
       not preserved. *)
 
   (** {6 Traversal} *)
 
   val fold :
-    f:('acc -> 'b_acc -> t_ -> 'acc) ->
-    bind:('b_acc -> t_ Var.t -> 'b_acc) ->
+    f:('acc -> 'b_acc -> t -> 'acc) ->
+    bind:('b_acc -> t Var.t -> 'b_acc) ->
     'acc ->
     'b_acc ->
-    t_ ->
+    t ->
     'acc
   (** Non recursive fold.
       @param bind updates the binding accumulator with the bound variable
       @param f used to update the regular accumulator (that is returned) *)
 
   val iter :
-    f:('b_acc -> t_ -> unit) ->
-    bind:('b_acc -> t_ Var.t -> 'b_acc) ->
+    f:('b_acc -> t -> unit) ->
+    bind:('b_acc -> t Var.t -> 'b_acc) ->
     'b_acc ->
-    t_ ->
+    t ->
     unit
   (** Non recursive iter.
       @param bind updates the binding accumulator with the bound variable
       @param f called on immediate subterms and on the regular accumulator *)
 
   val map_generic :
-    f:('b_acc -> t_ -> 'a) ->
-    bind:('b_acc -> t_ Var.t -> 'b_acc * 'a Var.t) ->
+    f:('b_acc -> t -> 'a) ->
+    bind:('b_acc -> t Var.t -> 'b_acc * 'a Var.t) ->
     'b_acc ->
-    t_ ->
+    t ->
     'a view
   (** Non recursive polymorphic map, returning a new view. Combine with
         {!T.build} in the special case of terms.
@@ -759,24 +756,24 @@ module type UTIL = sig
       @param bind updates the binding accumulator and returns a new variable *)
 
   val map :
-    f:('b_acc -> t_ -> t_) ->
-    bind:('b_acc -> t_ Var.t -> 'b_acc * t_ Var.t) ->
-    'b_acc -> t_ -> t_
+    f:('b_acc -> t -> t) ->
+    bind:('b_acc -> t Var.t -> 'b_acc * t Var.t) ->
+    'b_acc -> t -> t
   (** Special version of {!map_generic} for terms *)
 
   val map_pol :
-    f:('b_acc -> Polarity.t -> t_ -> t_) ->
-    bind:('b_acc -> t_ Var.t -> 'b_acc * t_ Var.t) ->
+    f:('b_acc -> Polarity.t -> t -> t) ->
+    bind:('b_acc -> t Var.t -> 'b_acc * t Var.t) ->
     'b_acc ->
     Polarity.t ->
-    t_ ->
-    t_
+    t ->
+    t
   (** Similar to {!map} but also keeping the subterm polarity *)
 
   val approx_infinite_quant_pol :
     [`Forall|`Exists|`Eq] ->
     Polarity.t ->
-    [`Unsat_means_unknown of t_ | `Keep]
+    [`Unsat_means_unknown of t | `Keep]
   (** Approximation of [q] under the polarity [pol]: either
 
       - [`Unsat_means_unknown replacement] means that we lost completeness,
@@ -786,95 +783,95 @@ module type UTIL = sig
   val approx_infinite_quant_pol_binder :
     Binder.t ->
     Polarity.t ->
-    [`Unsat_means_unknown of t_ | `Keep]
+    [`Unsat_means_unknown of t | `Keep]
   (** Version of {!approx_infinite_quant_pol} that takes a binder.
       @raise Assert_failure on everything but Forall and Exists *)
 
-  val size : t_ -> int
+  val size : t -> int
   (** Number of AST nodes *)
 
   (** {6 Substitution Utils} *)
 
-  type subst = (t_, t_) Var.Subst.t
-  type renaming = (t_, t_ Var.t) Var.Subst.t
+  type subst = (t, t) Var.Subst.t
+  type renaming = (t, t Var.t) Var.Subst.t
 
-  val equal_with : subst:subst -> t_ -> t_ -> bool
+  val equal_with : subst:subst -> t -> t -> bool
   (** Equality modulo substitution *)
 
-  val deref : subst:subst -> t_ -> t_
+  val deref : subst:subst -> t -> t
   (** [deref ~subst t] dereferences [t] as long as it is a variable
       bound in [subst]. *)
 
-  val rename_var : subst -> t_ Var.t -> subst * t_ Var.t
+  val rename_var : subst -> t Var.t -> subst * t Var.t
   (** Same as {!Subst.rename_var} but wraps the renamed var in a term *)
 
   type apply_error = {
     ae_msg: string;
-    ae_term: t_ option;
-    ae_ty: t_;
-    ae_args: t_ list;
-    ae_args_ty: t_ list; (* same length as ae_args *)
+    ae_term: t option;
+    ae_ty: t;
+    ae_args: t list;
+    ae_args_ty: t list; (* same length as ae_args *)
     ae_subst: subst;
   }
 
   exception ApplyError of apply_error
   (** Raised when a type application fails *)
 
-  val eval : ?rec_:bool -> subst:subst -> t_ -> t_
+  val eval : ?rec_:bool -> subst:subst -> t -> t
   (** Applying a substitution
       @param rec_ if true, when replacing [v] with [t]
         because [(v -> t) in subst], we call [eval subst t] instead of
         assuming [t] is preserved by subst (default false) *)
 
-  val eval_renaming : subst:renaming -> t_ -> t_
+  val eval_renaming : subst:renaming -> t -> t
   (** Applying a variable renaming *)
 
   val renaming_to_subst : renaming -> subst
 
-  val ty_apply : t_ -> terms:t_ list -> tys:t_ list -> t_
+  val ty_apply : t -> terms:t list -> tys:t list -> t
   (** [apply t ~terms ~tys] computes the type of [f terms] for some
       function [f], where [f : t] and [terms : ty].
       @raise ApplyError if the arguments do not match *)
 
-  val ty_apply_full : t_ -> terms:t_ list -> tys:t_ list -> t_ * subst
+  val ty_apply_full : t -> terms:t list -> tys:t list -> t * subst
   (** [ty_apply_full ty l] is like [apply t l], but it returns a pair
       [ty' , subst] such that [subst ty' = apply t l].
       @raise ApplyError if the arguments do not match *)
 
-  val ty_apply_mono : t_ -> tys:t_ list -> t_
+  val ty_apply_mono : t -> tys:t list -> t
   (** [apply t ~tys] computes the type of [f terms] for some
       function [f], where [f : t] and [terms : ty].
       @raise Invalid_argument if [t] is not monomorphic (i.e. not TyForall)
       @raise ApplyError if the arguments do not match *)
 
-  type signature = id -> t_ option
+  type signature = id -> t option
   (** A signature is a way to obtain the type of a variable *)
 
-  val ty_of_signature : sigma:signature -> t_ -> t_ or_error
+  val ty_of_signature : sigma:signature -> t -> t or_error
   (** Compute the type of the given term in the given signature. *)
 
-  val ty_of_signature_exn : sigma:signature -> t_ -> t_
+  val ty_of_signature_exn : sigma:signature -> t -> t
 
-  val ty : env:(t_,t_) Env.t -> t_ -> t_ or_error
+  val ty : env:(t,t) Env.t -> t -> t or_error
   (** Compute type of this term in this environment *)
 
-  val ty_exn : env:(t_,t_) Env.t -> t_ -> t_
+  val ty_exn : env:(t,t) Env.t -> t -> t
   (** Same as {!ty} but unsafe.
       @raise Failure in case of error at an application
       @raise Env.Undefined in case some symbol is not defined *)
 
-  val info_of_ty : env:(t_,t_) Env.t -> t_ -> (t_, t_) Env.info or_error
+  val info_of_ty : env:(t,t) Env.t -> t -> (t, t) Env.info or_error
   (** [info_of_ty ~env ty] finds the information related to the given
       type in the given environment. *)
 
-  val info_of_ty_exn : env:(t_,t_) Env.t -> t_ -> (t_, t_) Env.info
+  val info_of_ty_exn : env:(t,t) Env.t -> t -> (t, t) Env.info
   (** Unsafe version of {!info_of_ty}
       @raise No_head if the type is not an (applied) constant *)
 
-  exception UnifError of string * t_ * t_
+  exception UnifError of string * t * t
   (** Raised for unification or matching errors *)
 
-  val match_exn : ?subst2:subst -> t_ -> t_ -> subst
+  val match_exn : ?subst2:subst -> t -> t -> subst
   (** [match_exn ~subst2 t1 t2] matches the pattern [t1] against [subst2 t2].
       Variables in [subst2 t2] are not bound.
       We assume [t1] and [subst2 t2] do not share variables, and we assume
@@ -883,7 +880,7 @@ module type UTIL = sig
       @raise UnifError if they dont_ match
       @raise Invalid_argument if [t1] is not a valid pattern *)
 
-  val match_ : ?subst2:subst -> t_ -> t_ -> subst option
+  val match_ : ?subst2:subst -> t -> t -> subst option
   (** Safe version of {!match_exn}
       @raise Invalid_argument if [t1] is not a valid pattern *)
 
@@ -891,7 +888,7 @@ module type UTIL = sig
 end
 
 module Util(T : S)
-  : UTIL with type t_ = T.t
+  : UTIL with type t := T.t
 = struct
   include UtilRepr(T)
 
@@ -915,9 +912,9 @@ module Util(T : S)
 
   let match_with t m ~def =
     begin match def with
-      | Default_none when ID.Map.is_empty m ->
+      | None when ID.Map.is_empty m ->
         invalid_arg "Term.case: empty list of cases";
-      | Default_some (d,_) when ID.Map.is_empty m -> d
+      | Some (d,_) when ID.Map.is_empty m -> d
       | _ ->
         T.build (Match (t,m,def))
     end
@@ -1123,8 +1120,8 @@ module Util(T : S)
             CCHash.(seq (triple (list hash_) (list hash_var) hash_)
                 (ID.Map.to_seq l |> Sequence.map snd))
             (match def with
-              | Default_none -> 0x10
-              | Default_some (t,_) -> hash_ t)
+              | None -> 0x10
+              | Some (t,_) -> hash_ t)
         | TyArrow (a,b) -> decr d; CCHash.combine3 70 (hash_ a) (hash_ b)
         | TyBuiltin _
         | TyMeta _ -> 80
@@ -1142,7 +1139,7 @@ module Util(T : S)
   module Subst = Var.Subst
 
   type subst = (T.t, T.t) Subst.t
-  type renaming = (t_, t_ Var.t) Var.Subst.t
+  type renaming = (T.t, T.t Var.t) Var.Subst.t
 
   let rename_var subst v =
     let v' = Var.fresh_copy v in
@@ -1197,9 +1194,9 @@ module Util(T : S)
           (cases_to_list l2)
         &&
         begin match d1, d2 with
-          | Default_none, Default_none -> true
-          | Default_some (t1,_), Default_some (t2,_) -> equal_with ~subst t1 t2
-          | Default_none, _ | Default_some _, _ -> false
+          | None, None -> true
+          | Some (t1,_), Some (t2,_) -> equal_with ~subst t1 t2
+          | None, _ | Some _, _ -> false
         end
       | Var _, _
       | Match _, _
@@ -1215,7 +1212,7 @@ module Util(T : S)
   let equal a b = equal_with ~subst:Subst.empty a b
 
   module As_key = struct
-    type t = t_
+    type t = T.t
     let compare = compare
     let equal = equal
     let hash = hash_alpha_eq
@@ -1225,7 +1222,7 @@ module Util(T : S)
   module Map = CCMap.Make(As_key)
 
   (* remove duplicates in [l] *)
-  let remove_dup l : t_ list =
+  let remove_dup l : T.t list =
     match l with
       | []
       | [_] -> l
@@ -1266,8 +1263,8 @@ module Util(T : S)
       | Match (t,cases,def) ->
         let acc = f acc b_acc t in
         let acc = match def with
-          | Default_none -> acc
-          | Default_some (t, _) -> f acc b_acc t
+          | None -> acc
+          | Some (t, _) -> f acc b_acc t
         in
         ID.Map.fold
           (fun _ (tys,vars,rhs) acc ->
@@ -1409,7 +1406,7 @@ module Util(T : S)
   let approx_infinite_quant_pol
       (q:[`Forall|`Exists|`Eq])
       (pol:Polarity.t)
-    : [>`Unsat_means_unknown of t_ | `Keep] =
+    : [>`Unsat_means_unknown of T.t | `Keep] =
     match q, pol with
       | `Forall, P.Neg
       | `Eq, P.Neg
@@ -1485,10 +1482,10 @@ module Util(T : S)
 
   type apply_error = {
     ae_msg: string;
-    ae_term: t_ option;
-    ae_ty: t_;
-    ae_args: t_ list;
-    ae_args_ty: t_ list; (* same length as ae_args *)
+    ae_term: T.t option;
+    ae_ty: T.t;
+    ae_args: T.t list;
+    ae_args_ty: T.t list; (* same length as ae_args *)
     ae_subst: subst;
   }
 
@@ -1596,7 +1593,7 @@ module Util(T : S)
 
   let prop = ty_prop
 
-  type signature = id -> t_ option
+  type signature = id -> T.t option
 
   let find_ty_ ~sigma id = match sigma id with
     | Some ty -> ty
@@ -1752,40 +1749,12 @@ module Util(T : S)
   (* TODO write test *)
 end
 
-(** {2 Default Implementation} *)
-
-module Default : sig
+module type FULL = sig
   include S
 
-  module U : UTIL with type t_ = t
-  module P : PRINT with type t = t
-end = struct
-  type t = {
-    view: t view;
-  }
-  type t_ = t
-
-  let rec repr t = match t.view with
-    | TyMeta {MetaVar.deref=Some t'; _} -> repr t'
-    | v -> v
-
-  let make_raw_ view = {view}
-
-  let build view = match view with
-    | App (t, []) -> t
-    | App ({view=App (f, l1); _}, l2) ->
-      make_raw_ (App (f, l1 @ l2))
-    | _ -> make_raw_ view
-
-  module U = Util(struct
-      type t = t_
-      let repr = repr
-      let build = build
-    end)
-  module P = Print(struct type t = t_ let repr = repr end)
+  include UTIL with type t := t
+  include PRINT with type t := t
 end
-
-let default = (module Default : S)
 
 (** {2 Conversion between two representations} *)
 

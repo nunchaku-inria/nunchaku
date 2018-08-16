@@ -90,6 +90,8 @@ module Print(P1 : TermInner.PRINT)(P2 : TermInner.PRINT) = struct
       (CCVector.to_seq pb.statements)
 end
 
+module P = Print(Term)(Term)
+
 module Convert(T1 : TermInner.REPR)(T2 : TermInner.BUILD) = struct
   module C = TermInner.Convert(T1)(T2)
 

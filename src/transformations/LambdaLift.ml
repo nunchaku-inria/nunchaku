@@ -7,9 +7,7 @@ open Nunchaku_core
 
 module TI = TermInner
 module Stmt = Statement
-module T = TermInner.Default
-module U = T.U
-module P = T.P
+module T = Term
 
 let name = "lambda_lift"
 let section = Utils.Section.make name
@@ -20,8 +18,8 @@ type ty = T.t
 (* term -> 'a, modulo alpha equivalence *)
 module TermTbl = CCHashtbl.Make(struct
     type t = T.t
-    let equal = U.equal
-    let hash = U.hash_alpha_eq
+    let equal = T.equal
+    let hash = T.hash_alpha_eq
   end)
 
 type state = {
@@ -68,7 +66,7 @@ type local_state = {
 
 (* does [t] contain any ID of [set]? *)
 let contains_some_id ~of_:set t =
-  U.to_seq t
+  T.to_seq t
   |> Sequence.exists
     (fun t' -> match T.repr t' with
        | TI.Const id -> ID.Set.mem id set
@@ -85,7 +83,7 @@ let mk_new_rec f ty vars body =
   }
 
 let mk_axiom f vars body =
-  U.forall_l vars (U.eq (U.app (U.const f) (List.map U.var vars)) body)
+  T.forall_l vars (T.eq (T.app (T.const f) (List.map T.var vars)) body)
 
 let declare_new_rec f ty vars body =
   let def = mk_new_rec f ty vars body in
@@ -94,7 +92,7 @@ let declare_new_rec f ty vars body =
 (* TODO: expand `let` if its parameter is HO, and
    compute WHNF in case [var args] (new β redexes) *)
 
-let find_ty_ ~state t = U.ty_exn ~env:state.env t
+let find_ty_ ~state t = T.ty_exn ~env:state.env t
 
 let decl_fun_ ~state ~attrs id ty =
   state.env <- Env.declare ~attrs ~env:state.env id ty
@@ -115,12 +113,12 @@ let complete_vars ~subst l1 l2 =
     | [], v::tail ->
       let v' = Var.fresh_copy v in
       let subst = Var.Subst.add ~subst v v' in
-      let args1 = U.var v'::args1 in
+      let args1 = T.var v'::args1 in
       aux (v'::vars) args1 args2 subst [] tail
     | v::tail, [] ->
       let v' = Var.fresh_copy v in
       let subst = Var.Subst.add ~subst v v' in
-      let args2 = U.var v' :: args2 in
+      let args2 = T.var v' :: args2 in
       aux (v'::vars) args1 args2 subst tail []
     | v1::tail1, v2::tail2 ->
       let v' = Var.fresh_copy v1 in
@@ -132,41 +130,41 @@ let complete_vars ~subst l1 l2 =
 
 (* traverse [t] recursively, replacing lambda terms by new named functions *)
 let rec tr_term ~state local_state subst t = match T.repr t with
-  | TI.Var v -> U.var (Var.Subst.find_or ~default:v ~subst v)
+  | TI.Var v -> T.var (Var.Subst.find_or ~default:v ~subst v)
   | TI.Bind (Binder.Fun, _, _) when TermTbl.mem state.funs t ->
     (* will only work if [t] is alpha-equivalent to [t']; in particular
        that implies that [t] and [t'] capture exactly the same terms,
        which makes this safe *)
     let t' = TermTbl.find state.funs t in
     Utils.debugf ~section 5 "@[<2>re-use `@[%a@]`@ for `@[%a@]`@]"
-      (fun k->k P.pp t' P.pp t);
+      (fun k->k T.pp t' T.pp t);
     t'
   | TI.Bind (Binder.Fun, v, body) ->
     (* first, λ-lift in the body *)
     let body = tr_term ~state local_state subst body in
     (* captured variables *)
     let captured_vars =
-      U.free_vars ~bound:(U.VarSet.singleton v) body
-      |> U.VarSet.to_list
+      T.free_vars ~bound:(T.VarSet.singleton v) body
+      |> T.VarSet.to_list
     in
     (* compute type of new function *)
-    let _, body_ty_args, ty_ret = find_ty_ ~state body |> U.ty_unfold in
+    let _, body_ty_args, ty_ret = find_ty_ ~state body |> T.ty_unfold in
     let ty =
-      U.ty_arrow_l
+      T.ty_arrow_l
         (List.map Var.ty captured_vars @ Var.ty v :: body_ty_args)
         ty_ret in
     (* fully apply body *)
     let body_vars =
       List.mapi (fun i ty -> Var.makef ~ty "eta_%d" i) body_ty_args
     in
-    let body = U.app body (List.map U.var body_vars) in
+    let body = T.app body (List.map T.var body_vars) in
     (* declare new toplevel function *)
     let new_fun = fresh_fun_ ~state in
     let new_vars = captured_vars @ v :: body_vars in
     (* declare new function *)
     decl_fun_ ~state ~attrs:[] new_fun ty;
     Utils.debugf ~section 5 "@[<2>declare `@[%a : %a@]`@ for `@[%a@]`@]"
-      (fun k->k ID.pp new_fun P.pp ty P.pp t);
+      (fun k->k ID.pp new_fun T.pp ty T.pp t);
     (* how we define [new_fun] depends on whether it is mutually recursive
        with the surrounding rec/spec *)
     begin match local_state.in_scope with
@@ -186,21 +184,21 @@ let rec tr_term ~state local_state subst t = match T.repr t with
         CCVector.push local_state.new_decls decl;
     end;
     (* replace [fun v. body] by [new_fun vars] *)
-    let t' = U.app_const new_fun (List.map U.var captured_vars) in
+    let t' = T.app_const new_fun (List.map T.var captured_vars) in
     TermTbl.add state.funs t t'; (* save it *)
     ID.Tbl.add state.new_ids new_fun ();
     t'
   | TI.Builtin (`Eq (a,b)) when is_lambda_ a || is_lambda_ b ->
     (* extensionality: [(λx. t) = f] becomes [∀x. t = t' x] *)
-    let vars1, body1 = U.fun_unfold a in
-    let vars2, body2 = U.fun_unfold b in
+    let vars1, body1 = T.fun_unfold a in
+    let vars2, body2 = T.fun_unfold b in
     let new_vars, args1, args2, subst = complete_vars ~subst vars1 vars2 in
-    let body1 = tr_term ~state local_state subst (U.app body1 args1) in
-    let body2 = tr_term ~state local_state subst (U.app body2 args2) in
+    let body1 = tr_term ~state local_state subst (T.app body1 args1) in
+    let body2 = tr_term ~state local_state subst (T.app body2 args2) in
     (* quantify on common variables *)
-    U.forall_l new_vars (U.eq body1 body2)
+    T.forall_l new_vars (T.eq body1 body2)
   | _ ->
-    U.map subst t
+    T.map subst t
       ~bind:Var.Subst.rename_var
       ~f:(fun subst -> tr_term ~state local_state subst)
 
@@ -283,7 +281,7 @@ let pipe_with ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print ()
       ~f:(fun () ->
-        let module Ppb = Problem.Print(P)(P) in
+        let module Ppb = Problem.P in
         Format.printf "@[<v2>@{<Yellow>after λ-lifting@}: %a@]@." Ppb.pp)
     @
       Utils.singleton_if check ()

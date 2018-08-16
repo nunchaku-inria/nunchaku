@@ -11,10 +11,8 @@ open Nunchaku_core
 module TI = TermInner
 module Pol = Polarity
 module Stmt = Statement
-module T = TermInner.Default
-module U = T.U
-module P = T.P
-module PPb = Problem.Print(P)(P)
+module T = Term
+module PPb = Problem.P
 
 let name = "intro_guards"
 let section = Utils.Section.make name
@@ -37,7 +35,7 @@ let combine_guard = Builtin.merge_guard
 let wrap_guard f g =
   let asserting = match g.asserting with
     | [] -> []
-    | l -> [f (U.and_nodup l)]
+    | l -> [f (T.and_nodup l)]
   in
   { asserting; }
 
@@ -52,13 +50,13 @@ let () = Printexc.register_printer
       | TranslationFailed (t,msg) ->
         Some (CCFormat.sprintf
             "@[<2>introduction of guards in@ `@[%a@]`@ failed:@ %s@]"
-            P.pp t msg)
+            T.pp t msg)
       | _ -> None)
 
 let combine_polarized ~is_pos t g =
   if is_pos
-  then U.and_nodup (t :: g.asserting)
-  else U.imply (U.and_nodup g.asserting) t
+  then T.and_nodup (t :: g.asserting)
+  else T.imply (T.and_nodup g.asserting) t
 
 let add_asserting g p = { asserting = p::g.asserting }
 
@@ -74,8 +72,8 @@ let combine pol t g =
 
 (* is [t] of type prop? *)
 let is_prop ~state t =
-  let ty = U.ty_exn ~env:state.env t in
-  U.ty_is_Prop ty
+  let ty = T.ty_exn ~env:state.env t in
+  T.ty_is_Prop ty
 
 (* Translate term/formula recursively by removing asserting/assuming
    constructs.
@@ -88,28 +86,28 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
       begin match T.repr f, l with
         | TI.Builtin ((`DataTest _ | `DataSelect _) as b), [t] ->
           let t', conds = tr_term ~state ~pol t in
-          U.app_builtin b [t'], conds
+          T.app_builtin b [t'], conds
         | _ ->
           (* combine side conditions from every sub-term *)
           let f, g_f = tr_term ~state ~pol f in
           (* under a function: no polarity *)
           let l, g = tr_list ~state ~pol:Pol.NoPol ~acc:g_f l in
-          let t' = U.app f l in
+          let t' = T.app f l in
           if is_prop ~state t then combine pol t' g else t', g
       end
     | TI.Builtin (`Not t) ->
       let t, g = tr_term ~state ~pol:(Pol.inv pol) t in
-      combine pol (U.not_ t) g
+      combine pol (T.not_ t) g
     | TI.Builtin (`Or l) ->
       let l, g = tr_list ~state ~pol ~acc:empty_guard l in
-      combine pol (U.or_ l) g
+      combine pol (T.or_ l) g
     | TI.Builtin (`And l) ->
       let l, g = tr_list ~state ~pol ~acc:empty_guard l in
-      combine pol (U.and_ l) g
+      combine pol (T.and_ l) g
     | TI.Builtin (`Imply (a,b)) ->
       let a, g_a = tr_term ~state ~pol:(Pol.inv pol) a in
       let b, g_b = tr_term ~state ~pol b in
-      combine pol (U.imply a b) (combine_guard g_a g_b)
+      combine pol (T.imply a b) (combine_guard g_a g_b)
     | TI.Builtin
         (`True | `False | `DataSelect _ | `DataTest _) ->
       (* partially applied, or constant *)
@@ -117,7 +115,7 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
     | TI.Builtin ((`Unparsable _ | `Undefined_self _
                   | `Undefined_atom _ | `Card_at_least _) as b) ->
       let t' =
-        U.builtin (Builtin.map b ~f:(fun t-> fst(tr_term ~state ~pol t)))
+        T.builtin (Builtin.map b ~f:(fun t-> fst(tr_term ~state ~pol t)))
       in
       t', empty_guard
     | TI.Builtin (`Guard (t, g)) ->
@@ -136,7 +134,7 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
     | TI.Builtin (`Eq (a,b)) ->
       let a, g_a = tr_term ~state ~pol:Pol.NoPol a in
       let b, g_b = tr_term ~state ~pol:Pol.NoPol b in
-      combine pol (U.eq a b) (combine_guard g_a g_b)
+      combine pol (T.eq a b) (combine_guard g_a g_b)
     | TI.Builtin (`Ite (a,b,c)) ->
       let a, g_a = tr_term ~state ~pol:Pol.NoPol a in
       let b, g_b = tr_term ~state ~pol b in
@@ -151,45 +149,45 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
         in
         let b = combine_polarized ~is_pos b g_b in
         let c = combine_polarized ~is_pos c g_c in
-        combine_polarized ~is_pos (U.ite a b c) g_a, empty_guard
+        combine_polarized ~is_pos (T.ite a b c) g_a, empty_guard
       ) else (
         let asserting =
-          U.ite a (U.and_nodup g_b.asserting) (U.and_nodup g_c.asserting)
+          T.ite a (T.and_nodup g_b.asserting) (T.and_nodup g_c.asserting)
           :: g_a.asserting
         in
-        U.ite a b c, {asserting}
+        T.ite a b c, {asserting}
       )
     | TI.Bind ((Binder.Forall | Binder.Exists) as b, v, t) ->
       let t, g = tr_term ~state ~pol t in
       begin match pol with
         | Pol.Pos ->
-          U.mk_bind b v (combine_polarized ~is_pos:true t g), empty_guard
+          T.mk_bind b v (combine_polarized ~is_pos:true t g), empty_guard
         | Pol.Neg ->
-          U.mk_bind b v (combine_polarized ~is_pos:false t g), empty_guard
+          T.mk_bind b v (combine_polarized ~is_pos:false t g), empty_guard
         | Pol.NoPol ->
           (* quantify over guards, too. We always quantify universally
               because the universal guard is valid in both polarities,
               whereas the existential guard would not. *)
-          let g' = wrap_guard (U.forall v) g in
-          U.mk_bind b v t, g'
+          let g' = wrap_guard (T.forall v) g in
+          T.mk_bind b v t, g'
       end
     | TI.Bind (Binder.Fun, v, body) ->
       let body, g = tr_term ~state ~pol:Pol.NoPol body in
       begin match g.asserting with
-        | [] -> U.fun_ v body, empty_guard
+        | [] -> T.fun_ v body, empty_guard
         | _ ->
           fail_tr_ t
             "@[translation of `%a` impossible:@ cannot put guards `%a` under λ@]"
-            P.pp t (Builtin.pp_guard P.pp) g
+            T.pp t (Builtin.pp_guard T.pp) g
       end
     | TI.Bind (Binder.Mu, _, _) -> fail_tr_ t "translation of µ impossible"
     | TI.Let (v,t,u) ->
       let t, g_t = tr_term t ~state ~pol:Pol.NoPol in
       let u, g_u = tr_term u ~state ~pol in
-      let g = combine_guard (wrap_guard (U.let_ v t) g_u) g_t in
+      let g = combine_guard (wrap_guard (T.let_ v t) g_u) g_t in
       if is_prop ~state u
-      then combine pol (U.let_ v t u) g
-      else U.let_ v t u, g
+      then combine pol (T.let_ v t u) g
+      else T.let_ v t u, g
     | TI.Match (lhs, cases, def) ->
       let lhs, g_lhs = tr_term ~state ~pol lhs in
       if is_prop ~state t && pol <> Pol.NoPol
@@ -212,7 +210,7 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
                combine_polarized ~is_pos rhs g_rhs)
             def
         in
-        combine pol (U.match_with lhs cases ~def) g_lhs
+        combine pol (T.match_with lhs cases ~def) g_lhs
       ) else (
         (* wrap guards in a pattern matching *)
         let asserting = ref ID.Map.empty in
@@ -235,20 +233,20 @@ let rec tr_term ~state ~pol (t:term) : term * term guard =
         let map_to_guard m def =
           if ID.Map.exists (fun _ (_,_,l) -> l<>[]) m || fst def <> []
           then (
-            let m = ID.Map.map (fun (tys,vars,l) -> tys, vars, U.and_ l) m in
+            let m = ID.Map.map (fun (tys,vars,l) -> tys, vars, T.and_ l) m in
             let def = match def with
-              | [], _ -> TI.Default_none
+              | [], _ -> None
               | l, ids ->
                 assert (not (ID.Map.is_empty ids));
-                TI.Default_some (U.and_ l, ids)
+                Some (T.and_ l, ids)
             in
-            [U.match_with lhs m ~def]
+            [T.match_with lhs m ~def]
           ) else []
         in
         let g_cases = {
           asserting = map_to_guard !asserting !asserting_def;
         } in
-        U.match_with lhs cases ~def, combine_guard g_cases g_lhs
+        T.match_with lhs cases ~def, combine_guard g_cases g_lhs
       )
     | TI.TyBuiltin _
     | TI.TyArrow (_,_) -> t, empty_guard
@@ -267,7 +265,7 @@ and tr_list ~state ~pol ~acc l =
   l, acc
 
 let tr_root ~state t =
-  Utils.debugf ~section 5 "@[<2>intro guards in@ `@[%a@]`@]" (fun k->k P.pp t);
+  Utils.debugf ~section 5 "@[<2>intro guards in@ `@[%a@]`@]" (fun k->k T.pp t);
   let pol = Pol.Pos in
   let t', g = tr_term ~state ~pol t in
   combine_polarized ~is_pos:true t' g
@@ -290,7 +288,7 @@ let encode_pb pb =
 let pipe ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
-      let module PPb = Problem.Print(P)(P) in
+      let module PPb = Problem.P in
       Format.printf "@[<v2>@{<Yellow>after introduction of guards@}: %a@]@." PPb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->

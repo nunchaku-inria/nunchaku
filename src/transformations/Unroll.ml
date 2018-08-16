@@ -8,10 +8,8 @@ open Nunchaku_core
 module TI = TermInner
 module Stmt = Statement
 module Pol = Polarity
-module T = TI.Default
-module U = T.U
-module P = T.P
-module PStmt = Stmt.Print(P)(P)
+module T = Term
+module PStmt = Stmt.Print(T)(T)
 
 let name = "unroll"
 let section = Utils.Section.make name
@@ -60,19 +58,19 @@ let create_state() = {
   declared_nat=false;
 }
 
-let nat ~state = U.const state.nat_ty.nat
-let succ ~state x = U.app (U.const state.nat_ty.succ) [x]
-let zero ~state = U.const state.nat_ty.zero
+let nat ~state = T.const state.nat_ty.nat
+let succ ~state x = T.app (T.const state.nat_ty.succ) [x]
+let zero ~state = T.const state.nat_ty.zero
 
 (* how to declare [nat] *)
 let declare_nat ~state =
   let ty_nat = nat ~state in
   let def = Stmt.mk_data_type state.nat_ty.nat
       ~ty_vars:[]
-      ~ty:U.ty_type
+      ~ty:T.ty_type
       ~cstors:
         [ state.nat_ty.zero, [], ty_nat
-        ; state.nat_ty.succ, [ty_nat], U.ty_arrow ty_nat ty_nat]
+        ; state.nat_ty.succ, [ty_nat], T.ty_arrow ty_nat ty_nat]
   in
   Stmt.data ~info:Stmt.info_default [def]
 
@@ -85,12 +83,12 @@ let rec rewrite_term ~state t =
       begin try
           let unroll = ID.Tbl.find state.map id in
           match unroll with
-            | `Unroll id' -> U.app t [U.const id']
-            | `Unroll_in_def t' -> U.app t [t']
+            | `Unroll id' -> T.app t [T.const id']
+            | `Unroll_in_def t' -> T.app t [t']
         with Not_found -> t
       end
     | _ ->
-      U.map () t
+      T.map () t
         ~bind:(fun () v -> (), v)
         ~f:(fun () t -> rewrite_term ~state t)
 
@@ -141,7 +139,7 @@ let unroll_preds ~state v is_pos l =
             c.clause_guard;
         clause_concl =
           (* in concl, replace [pred] by [pred (Succ v)] *)
-          let additional_param = succ ~state (U.var v) in
+          let additional_param = succ ~state (T.var v) in
           with_local ~state id (`Unroll_in_def additional_param)
             ~f:(fun () -> rewrite_term ~state c.clause_concl);
       }
@@ -154,7 +152,7 @@ let unroll_preds ~state v is_pos l =
        (* modify the type of [id], add [nat_] as a first argument *)
        let defined =
          { d with
-             defined_ty = U.ty_arrow (nat ~state) d.Stmt.defined_ty;
+             defined_ty = T.ty_arrow (nat ~state) d.Stmt.defined_ty;
          } in
        (* translate the clauses *)
        let pred_clauses = List.map (tr_clause id) def.pred_clauses in
@@ -166,13 +164,13 @@ let unroll_preds ~state v is_pos l =
          if is_pos then pred_clauses
          else (
            assert (ID.polarity id |> Pol.is_neg);
-           let _, ty_args, _ = U.ty_unfold def.pred_defined.defined_ty in
+           let _, ty_args, _ = T.ty_unfold def.pred_defined.defined_ty in
            let vars = make_vars ty_args in
-           let vars_t = List.map U.var vars in
+           let vars_t = List.map T.var vars in
            let c = {
              clause_vars = vars;
              clause_guard = None;
-             clause_concl = U.app (U.const id) (zero ~state :: vars_t);
+             clause_concl = T.app (T.const id) (zero ~state :: vars_t);
            } in
            c :: pred_clauses
          )
@@ -217,7 +215,7 @@ let define_preds ~state kind l =
       (* enter in "definition mode" for every defined predicate; locally
          the unrolling shall be done with [id v] *)
       List.iter
-        (fun id -> ID.Tbl.add state.map id (`Unroll_in_def (U.var v)))
+        (fun id -> ID.Tbl.add state.map id (`Unroll_in_def (T.var v)))
         ids;
       CCFun.finally
         ~f:(fun () ->
@@ -273,13 +271,13 @@ let rec rewrite ~state t = match T.repr t with
       | TI.Const id, _ :: l' when ID.Tbl.mem state.map id ->
         (* [id] was unrolled, remove its first arg *)
         let l' = List.map (rewrite ~state) l' in
-        U.app f l'
+        T.app f l'
       | _ ->
         rewrite' ~state t
     end
   | _ -> rewrite' ~state t
 and rewrite' ~state t =
-  U.map () t
+  T.map () t
     ~f:(fun () t -> rewrite ~state t)
     ~bind:(fun () v -> (), v)
 
@@ -290,7 +288,7 @@ let filter_dt_ dt : (_,_) DT.t =
     | removed_var :: _ ->
       Utils.debugf ~section 5
         "@[<v>remove var @[%a@]@ from `@[%a@]`@]"
-        (fun k->k Var.pp_full removed_var (Model.DT.pp P.pp' P.pp) dt);
+        (fun k->k Var.pp_full removed_var (Model.DT.pp T.pp' T.pp) dt);
     | [] -> assert false
   end;
   M.DT_util.remove_first_var dt
@@ -325,7 +323,7 @@ let decode_model ~state m =
 let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
-      let module Ppb = Problem.Print(P)(P) in
+      let module Ppb = Problem.P in
       Format.printf "@[<v2>@{<Yellow>after unrolling@}:@ %a@]@." Ppb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
@@ -345,7 +343,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after unrolling@}:@ %a@]@."
-         (Problem.Res.pp P.pp' P.pp)]
+         (Problem.Res.pp T.pp' T.pp)]
     else []
   in
   pipe_with ~on_decoded

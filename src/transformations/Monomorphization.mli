@@ -25,7 +25,7 @@ val name : string
 
 exception InvalidProblem of string
 
-type term = TermInner.Default.t
+type term = Term.t
 
 type unmangle_state
 (** State used to un-mangle specialized symbols *)

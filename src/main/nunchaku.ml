@@ -285,7 +285,7 @@ let pp_input_if_needed statements =
   ()
 
 module Pipes = struct
-  module HO = TI.Default
+  module HO = Term
   module Typed = TermTyped.Default
   (* type inference *)
   module Step_tyinfer = Tr.TypeInference.Make(Typed)
@@ -565,7 +565,7 @@ let () = Printexc.register_printer
 (* model mode *)
 let main_model ~output statements =
   let open E.Infix in
-  let module T = TI.Default in
+  let module T = Term in
   let module P = TI.Print(T) in
   let module Res = Problem.Res in
   (* run pipeline *)

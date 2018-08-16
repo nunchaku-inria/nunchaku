@@ -364,19 +364,17 @@ module DT = struct
 end
 
 module DT_util = struct
-  module T = TermInner.Default
-  module U = T.U
-  module P = T.P
+  module T = Term
 
   type term = T.t
   type dt = (T.t, T.t) DT.t
   type subst = (T.t, T.t) Var.Subst.t
 
   let ite v ~then_ ~else_ =
-    DT.mk_tests v ~tests:[U.true_, then_; U.false_, else_] ~default:None
+    DT.mk_tests v ~tests:[T.true_, then_; T.false_, else_] ~default:None
 
   let rec eval_subst ~subst = function
-    | DT.Yield t -> DT.yield (U.eval ~subst t)
+    | DT.Yield t -> DT.yield (T.eval ~subst t)
     | DT.Cases {DT.var; tests; default} ->
       (* some variables are renamed (those introduced by a [match] branch),
          some other aren't *)
@@ -391,14 +389,14 @@ module DT_util = struct
         | DT.Tests l ->
           l
           |> List.map
-            (fun (lhs,rhs) -> U.eval ~subst lhs, eval_subst ~subst rhs)
+            (fun (lhs,rhs) -> T.eval ~subst lhs, eval_subst ~subst rhs)
           |> DT.tests_
         | DT.Match (m,missing) ->
           m
           |> ID.Map.map
             (fun (tys,vars, rhs) ->
-               let tys = List.map (U.eval ~subst) tys in
-               let subst, vars = CCList.fold_map U.rename_var subst vars in
+               let tys = List.map (T.eval ~subst) tys in
+               let subst, vars = CCList.fold_map T.rename_var subst vars in
                tys, vars, eval_subst ~subst rhs)
           |> DT.match_ ~missing
       in
@@ -406,20 +404,20 @@ module DT_util = struct
       DT.mk_cases var' tests ~default
 
   let rec map_vars ~subst = function
-    | DT.Yield t -> DT.yield (U.eval_renaming ~subst t)
+    | DT.Yield t -> DT.yield (T.eval_renaming ~subst t)
     | DT.Cases {DT.var; tests; default} ->
       let var = Subst.find_or ~default:var ~subst var in
       let tests = match tests with
         | DT.Tests l ->
           l
           |> List.map
-            (fun (lhs,rhs) -> U.eval_renaming ~subst lhs, map_vars ~subst rhs)
+            (fun (lhs,rhs) -> T.eval_renaming ~subst lhs, map_vars ~subst rhs)
           |> DT.tests_
         | DT.Match (m,missing) ->
           m
           |> ID.Map.map
             (fun (tys,vars,rhs) ->
-               let tys = List.map (U.eval_renaming ~subst) tys in
+               let tys = List.map (T.eval_renaming ~subst) tys in
                let subst, vars = CCList.fold_map Subst.rename_var subst vars in
                tys,vars, map_vars ~subst rhs)
           |> DT.match_ ~missing
@@ -434,7 +432,7 @@ module DT_util = struct
   let () = Printexc.register_printer
       (function
         | Case_not_found t ->
-          Some (Utils.err_sprintf "case not found: `%a`" P.pp t)
+          Some (Utils.err_sprintf "case not found: `%a`" T.pp t)
         | _ -> None)
 
   let find_cases ?(subst=Subst.empty) t cases =
@@ -446,12 +444,12 @@ module DT_util = struct
       (* search for a matching case *)
       CCList.find_map
         (fun (lhs,rhs) ->
-           if U.equal_with ~subst t lhs
+           if T.equal_with ~subst t lhs
            then Some (subst, eval_subst ~subst rhs)
            else None)
         tests
     (* lookup in match *)
-    and find_match_ m = match U.app_const_unfold t with
+    and find_match_ m = match T.app_const_unfold t with
       | None -> None
       | Some (id, args) ->
         begin match ID.Map.get id m with
@@ -548,7 +546,7 @@ module DT_util = struct
   (* merging when all decision nodes are "tests" *)
   and merge_tests_ l : (_,_) DT.t = match l with
     | (DT.Cases {DT.var; tests=DT.Tests tests; _}, subst) :: tail ->
-      let module TTbl = U.Tbl in
+      let module TTbl = T.Tbl in
       let tbl : ((_,_) DT.t * (_,_)Subst.t) list TTbl.t = TTbl.create 32 in
       (* add one case to the table *)
       let merge_into_tbl subst (lhs,rhs) =
@@ -608,7 +606,7 @@ module DT_util = struct
                (* rename variables in [tail] into [vars], all of
                   them are going to live under the same case [cstor vars -> …] *)
                let tail' =
-                 let tvars = List.map U.var vars in
+                 let tvars = List.map T.var vars in
                  List.map
                    (fun (tys',vars',rhs',subst') ->
                       (* FIXME: do not merge if types are different? *)
@@ -649,13 +647,13 @@ module DT_util = struct
     if not (is_perm_ vars cur_vars) then invalid_arg "DT_util.reorder";
     (* un-flatten in a different order *)
     let fdt' = {fdt with DT.fdt_vars=vars} in
-    DT.of_flat ~equal:U.equal ~hash:U.hash fdt'
+    DT.of_flat ~equal:T.equal ~hash:T.hash fdt'
 
   let remove_vars vars dt =
     let rec aux subst vars dt = match dt with
       | DT.Yield t ->
         assert (vars=[]);
-        DT.yield (U.eval ~subst t)
+        DT.yield (T.eval ~subst t)
       | DT.Cases {DT.tests=DT.Match _; var; _} ->
         (* TODO: maybe in some cases we can push the matching in the "yield"? *)
         Utils.invalid_argf
@@ -668,7 +666,7 @@ module DT_util = struct
           let l =
             List.map
               (fun (lhs,rhs) ->
-                 let subst' = Subst.add ~subst v (U.eval ~subst lhs) in
+                 let subst' = Subst.add ~subst v (T.eval ~subst lhs) in
                  aux subst' vars' rhs)
               l
           in
@@ -683,7 +681,7 @@ module DT_util = struct
           let l =
             List.map
               (fun (lhs,rhs) ->
-                 U.eval ~subst lhs, aux subst vars rhs)
+                 T.eval ~subst lhs, aux subst vars rhs)
               l
           and default =
             CCOpt.map (aux subst vars) default
@@ -726,11 +724,11 @@ module DT_util = struct
             (fun (tys, vars,rhs) -> tys, vars, aux rhs)
             m
         and default = match default with
-          | None -> TI.Default_none
+          | None -> None
           | Some rhs ->
-            TI.Default_some (aux rhs, missing)
+            Some (aux rhs, missing)
         in
-        U.match_with (U.var var) m ~def:default
+        T.match_with (T.var var) m ~def:default
 
     (* make a if/then/else tree *)
     and aux_ite_l var l default =
@@ -738,14 +736,14 @@ module DT_util = struct
         (fun (lhs,rhs) else_ ->
            let then_ = aux rhs in
            (* eliminate redundancies: [if a b b --> b] *)
-           if U.equal then_ else_ then else_
-           else U.ite (U.eq (U.var var) lhs) then_ else_
+           if T.equal then_ else_ then else_
+           else T.ite (T.eq (T.var var) lhs) then_ else_
         )
         l default
     in
-    U.fun_l vars (aux dt)
+    T.fun_l vars (aux dt)
 
-  let pp : dt printer = DT.pp P.pp' P.pp
+  let pp : dt printer = DT.pp T.pp' T.pp
 end
 
 (** {2 Models} *)
@@ -868,13 +866,12 @@ let to_sexp ft fty m : Sexp_lib.t =
       @ List.map value_to_sexp m.values)
 
 module Default = struct
-  module T = TermInner.Default
-  module P = T.P
+  module T = Term
 
   type term = T.t
   type t = (T.t, T.t) model
 
-  let to_sexp = to_sexp P.to_sexp P.to_sexp
+  let to_sexp = to_sexp T.to_sexp T.to_sexp
 
   type simple_atom =
     | SA_ty of T.t * ID.t list
@@ -894,10 +891,10 @@ module Default = struct
   let pp_simple_atom out = function
     | SA_ty (ty,dom) ->
       fpf out "@[<2>type @[%a@]@ :=@ {@[<hv>%a@]}@]."
-        P.pp ty (pplist ~sep:", " ID.pp) dom
+        T.pp ty (pplist ~sep:", " ID.pp) dom
     | SA_val (t,u) ->
       fpf out "@[<2>val @[%a@]@ :=@ %a@]."
-        P.pp t (P.pp' Precedence.Arrow) u
+        T.pp t (T.pp' Precedence.Arrow) u
 
   let pp_simple out = fpf out "@[<v>%a@]" (pplist ~sep:"" pp_simple_atom)
 

@@ -67,7 +67,3 @@ module Make(T : TI.REPR)
     | TI.Let _
     | TI.Bind _ -> assert false
 end
-
-let default =
-  let module M = Make(TI.Default) in
-  (module M : S with type T.t = TI.Default.t)

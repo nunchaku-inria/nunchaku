@@ -5,10 +5,8 @@ open Nunchaku_core
 
 module TI = TermInner
 module Stmt = Statement
-module T = TermInner.Default
-module U = T.U
-module P = T.P
-module PStmt = Stmt.Print(P)(P)
+module T = Term
+module PStmt = Stmt.Print(T)(T)
 module Subst = Var.Subst
 
 module Card = Cardinality
@@ -110,11 +108,11 @@ let spf = CCFormat.sprintf
 let () = Printexc.register_printer
     (function
       | TranslationFailed (t,msg) ->
-        Some (spf "@[<2>translation of `@[%a@]` failed:@ %s@]" P.pp t msg)
+        Some (spf "@[<2>translation of `@[%a@]` failed:@ %s@]" T.pp t msg)
       | DecodingFailed (None, msg) ->
         Some (spf "@[<2>decoding failed:@ %s@]" msg)
       | DecodingFailed (Some t, msg) ->
-        Some (spf "@[<2>decoding of `@[%a@]` failed:@ %s@]" P.pp t msg)
+        Some (spf "@[<2>decoding of `@[%a@]` failed:@ %s@]" T.pp t msg)
       | Error msg -> Some (spf "@[<2>Error in ElimRec:@ %s@]" msg)
       | _ -> None)
 
@@ -164,7 +162,7 @@ let gather_hof_ pb =
 
 (* list of argument types that (monomorphic) type expects *)
 let ty_args_ ty =
-  let _, args, _ = U.ty_unfold ty in
+  let _, args, _ = T.ty_unfold ty in
   args
 
 (* sort [fun_encoding.fun_concretization] *)
@@ -225,19 +223,19 @@ let rec tr_term_rec_ ~guards ~state subst t =
                     will be used in the "asserting" *)
                  let arg' = tr_term_rec_ ~guards ~state subst arg in
                  let arg'_g = tr_term_rec_ ~guards:false ~state subst arg in
-                 let eqn = U.eq arg'_g (U.app (U.const proj) [U.var alpha]) in
+                 let eqn = T.eq arg'_g (T.app (T.const proj) [T.var alpha]) in
                  eqns := eqn :: !eqns;
                  arg')
               l
               fundef.fun_concretization
           in
-          let cond = U.exists alpha (U.and_ !eqns) in
-          U.asserting (U.app f l') [cond]
+          let cond = T.exists alpha (T.and_ !eqns) in
+          T.asserting (T.app f l') [cond]
         | Some _ ->
           (* do not introduce guards *)
           let f' = tr_term_rec_ ~guards:false ~state subst f in
           let l' = List.map (tr_term_rec_ ~guards:false ~state subst) l in
-          U.app f' l'
+          T.app f' l'
         | None ->
           (* generic treatment *)
           tr_term_rec_' ~guards ~state subst t
@@ -246,11 +244,11 @@ let rec tr_term_rec_ ~guards ~state subst t =
       t (* partially applied, or constant *)
     | TI.Builtin ((`Undefined_self _ | `Undefined_atom _
                   | `Unparsable _ | `Card_at_least _) as b) ->
-      U.builtin (Builtin.map b ~f:(tr_term_rec_ ~guards ~state subst))
+      T.builtin (Builtin.map b ~f:(tr_term_rec_ ~guards ~state subst))
     | TI.Builtin (`Guard (t, g)) ->
       let t = tr_term_rec_ ~guards ~state subst t in
       let g' = Builtin.map_guard (tr_term_rec_ ~guards ~state subst) g in
-      U.guard t g'
+      T.guard t g'
     | TI.Bind (Binder.Fun,_,_) -> fail_tr_ t "translation of λ impossible"
     | TI.Builtin (`Eq _ | `Ite _ | `And _ | `Or _ | `Not _ | `Imply _)
     | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Mu), _, _)
@@ -263,13 +261,13 @@ let rec tr_term_rec_ ~guards ~state subst t =
     | TI.TyMeta _ -> assert false
 
 and tr_term_rec_' ~guards ~state subst t =
-  U.map subst t
+  T.map subst t
     ~f:(tr_term_rec_ ~guards ~state)
-    ~bind:U.rename_var
+    ~bind:T.rename_var
 
 let tr_term ~state subst t =
   Utils.debugf ~section 4
-    "@[<2>convert toplevel term@ `@[%a@]`@]" (fun k -> k P.pp t);
+    "@[<2>convert toplevel term@ `@[%a@]`@]" (fun k -> k T.pp t);
   tr_term_rec_ ~guards:true ~state subst t
 
 (* translate a top-level formula *)
@@ -297,7 +295,7 @@ let mk_fun_encoding_for_ ~state id =
   (* declare abstract type + projectors first *)
   let name = "G_" ^ ID.to_string_slug id in
   let abs_type_id = ID.make name in
-  let abs_type = U.ty_const abs_type_id in
+  let abs_type = T.ty_const abs_type_id in
   let ty = Env.find_ty_exn ~env:state.env id in
   (* projection function: one per argument. It has
      type  [abs_type -> type of arg] *)
@@ -305,7 +303,7 @@ let mk_fun_encoding_for_ ~state id =
     List.mapi
       (fun i ty_arg ->
          let id' = ID.make (Printf.sprintf "proj_%s_%d" name i) in
-         let ty' = U.ty_arrow abs_type ty_arg in
+         let ty' = T.ty_arrow abs_type ty_arg in
          i, id', ty')
       (ty_args_ ty)
   in
@@ -319,7 +317,7 @@ let mk_fun_encoding_for_ ~state id =
   add_encoding ~state fun_encoding;
   (* declare abstract type + projectors *)
   CCVector.push state.new_statements
-    (Stmt.decl ~info:Stmt.info_default abs_type_id U.ty_type ~attrs:[]);
+    (Stmt.decl ~info:Stmt.info_default abs_type_id T.ty_type ~attrs:[]);
   List.iter
     (fun (_n,proj,ty_proj) ->
        CCVector.push state.new_statements
@@ -341,9 +339,9 @@ let id_is_app_fun_ ~state id = match state.decode.hof with
    It returns an axiom instead. *)
 let tr_eqns ~state ~(encoding:fun_encoding option) id eqn : term =
   let connect pol lhs rhs = match pol with
-    | Polarity.Pos -> U.imply lhs rhs
-    | Polarity.Neg -> U.imply rhs lhs
-    | Polarity.NoPol -> U.eq lhs rhs
+    | Polarity.Pos -> T.imply lhs rhs
+    | Polarity.Neg -> T.imply rhs lhs
+    | Polarity.NoPol -> T.eq lhs rhs
   in
   (* apply the projectors of fun_encoding to alpha
      @param first if true, keep first argument, else remove it *)
@@ -351,7 +349,7 @@ let tr_eqns ~state ~(encoding:fun_encoding option) id eqn : term =
     fun_encoding.fun_concretization
     |> sort_concretization
     |> (fun l -> if keep_first then l else List.filter (fun (i,_,_) -> i<>0) l)
-    |> List.map (fun (_,proj,_) -> U.app (U.const proj) [U.var alpha])
+    |> List.map (fun (_,proj,_) -> T.app (T.const proj) [T.var alpha])
   in
   match eqn with
     | Stmt.Eqn_single (vars,rhs) ->
@@ -365,19 +363,19 @@ let tr_eqns ~state ~(encoding:fun_encoding option) id eqn : term =
           let args' = apply_projs ~keep_first:true fun_encoding alpha in
           let subst = Subst.add_list ~subst:Subst.empty vars args' in
           (* convert right-hand side and add its side conditions *)
-          let lhs = U.app_const fun_encoding.fun_encoded_fun args' in
+          let lhs = T.app_const fun_encoding.fun_encoded_fun args' in
           let rhs' = tr_term ~state subst rhs in
           (* how to connect [lhs] and [rhs]? *)
           let t = connect (ID.polarity id) lhs rhs' in
-          if vars=[] then t else U.forall alpha t
+          if vars=[] then t else T.forall alpha t
         | None ->
           (* no abstract type *)
-          let subst, vars' = Utils.fold_map U.rename_var Subst.empty vars in
-          let lhs = U.app_const id (List.map U.var vars') in
+          let subst, vars' = Utils.fold_map T.rename_var Subst.empty vars in
+          let lhs = T.app_const id (List.map T.var vars') in
           let rhs' = tr_term ~state subst rhs in
           (* how to connect [lhs] and [rhs]? *)
           let t = connect (ID.polarity id) lhs rhs' in
-          U.forall_l vars' t
+          T.forall_l vars' t
       end
     | Stmt.Eqn_app (_app_l, _vars, lhs, rhs) ->
       let root_id = id in
@@ -399,7 +397,7 @@ let tr_eqns ~state ~(encoding:fun_encoding option) id eqn : term =
                     let l'_as_vars = List.map as_var_exn_ l' in
                     let new_l' = apply_projs ~keep_first:false fun_encoding alpha in
                     let subst = Var.Subst.add_list ~subst l'_as_vars new_l' in
-                    let t' = U.app f (first_arg' :: new_l') in
+                    let t' = T.app f (first_arg' :: new_l') in
                     t', subst, alpha :: vars
                   ) else (
                     (* regular function, should have only variables as
@@ -408,7 +406,7 @@ let tr_eqns ~state ~(encoding:fun_encoding option) id eqn : term =
                     let l_as_vars = List.map as_var_exn_ l in
                     let new_args = apply_projs ~keep_first:true fun_encoding alpha in
                     let subst = Subst.add_list ~subst l_as_vars new_args in
-                    let t' = U.app f new_args in
+                    let t' = T.app f new_args in
                     t', subst, [alpha]
                   )
                 | None ->
@@ -417,14 +415,14 @@ let tr_eqns ~state ~(encoding:fun_encoding option) id eqn : term =
                        in the first argument *)
                     let first_arg', subst, vars = traverse_lhs (i+1) subst first_arg in
                     let l'_as_vars = List.map as_var_exn_ l' in
-                    let t' = U.app f (first_arg' :: List.map U.var l'_as_vars) in
+                    let t' = T.app f (first_arg' :: List.map T.var l'_as_vars) in
                     t', subst, l'_as_vars @ vars
                   ) else (
                     (* regular function, should have only variables as
                        arguments *)
                     assert (ID.equal f_id root_id);
                     let l_as_vars = List.map as_var_exn_ l in
-                    let t' = U.app f (List.map U.var l_as_vars) in
+                    let t' = T.app f (List.map T.var l_as_vars) in
                     t', subst, l_as_vars
                   )
               end
@@ -435,7 +433,7 @@ let tr_eqns ~state ~(encoding:fun_encoding option) id eqn : term =
       let lhs', subst, vars' = traverse_lhs 0 Subst.empty lhs in
       let rhs' = tr_term ~state subst rhs in
       let form = connect Polarity.NoPol lhs' rhs' in
-      U.forall_l vars' form
+      T.forall_l vars' form
     | Stmt.Eqn_nested _ -> assert false
 
 (* transform the recursive definition (mostly, its equations) *)
@@ -463,7 +461,7 @@ let should_box_ ~state id ty : bool =
   let info = Env.find_exn ~env:state.env id in
   let can_box = not (never_box_ (Env.attrs info)) in
   let module Z = Card.Z in
-  let _, args, _ = U.ty_unfold ty in
+  let _, args, _ = T.ty_unfold ty in
   let card = card_tys_ ~state args in
   let res =
     can_box
@@ -480,7 +478,7 @@ let should_box_ ~state id ty : bool =
   in
   Utils.debugf ~section 2
     "@[<2>@{<Cyan>decision to box@} `@[%a : %a@]`:@ %B (card of domain = %a)@]"
-    (fun k->k ID.pp id P.pp ty res Card.pp card);
+    (fun k->k ID.pp id T.pp ty res Card.pp card);
   res
 
 (* transform each axiom, considering case_head as rec. defined. *)
@@ -519,7 +517,7 @@ let tr_rec_defs ~info ~state l =
            Utils.debugf ~section 1
              "@[<2>recursion elimination in@ @[%a@]@ \
               failed on subterm @[%a@]:@ %s@]"
-             (fun k -> k PStmt.pp (Stmt.axiom_rec ~info l) P.pp t msg);
+             (fun k -> k PStmt.pp (Stmt.axiom_rec ~info l) T.pp t msg);
            raise e)
       l
   in
@@ -602,7 +600,7 @@ type finite_domains = finite_domain ID.Tbl.t
 
 let pp_domain out d =
   let pp_tuple out (id,l) =
-    fpf out "%a → (@[%a@])" ID.pp id (Utils.pp_list P.pp) l
+    fpf out "%a → (@[%a@])" ID.pp id (Utils.pp_list T.pp) l
   in
   fpf out "[@[<v2>`%a`:@ %a@]]"
     ID.pp d.dom_fun.fun_encoded_fun
@@ -654,7 +652,7 @@ let pass2_ projs (doms:finite_domains) =
                          ID.pp f_id ID.pp val_id
                    in
                    (* evaluate *)
-                   M.DT_util.apply proj (U.const val_id) |> M.DT_util.to_term
+                   M.DT_util.apply proj (T.const val_id) |> M.DT_util.to_term
                 )
             in
             fdom.dom_args <- ID.Map.add val_id args fdom.dom_args)
@@ -693,7 +691,7 @@ let pass3_ ~state doms m =
        TODO: if initial domain was finite, this might be unecessary,
           because CVC4 could model the whole domain? *)
     and default =
-      U.app (U.undefined_atom ~ty:dom.dom_fun.fun_ty) (List.map U.var vars)
+      T.app (T.undefined_atom ~ty:dom.dom_fun.fun_ty) (List.map T.var vars)
     in
     let fdt =
       { DT.
@@ -701,7 +699,7 @@ let pass3_ ~state doms m =
         fdt_cases=tests;
         fdt_default=Some default;
       } in
-    Model.DT.of_flat ~equal:U.equal ~hash:U.hash fdt
+    Model.DT.of_flat ~equal:T.equal ~hash:T.hash fdt
   in
   (* now remove projections and filter recursion functions's values *)
   Model.filter_map m
@@ -730,14 +728,14 @@ let pass3_ ~state doms m =
 
 let decode_model ~state m =
   Utils.debugf ~section 3 "@[<2>decode model:@ @[%a@]@]"
-    (fun k->k (Model.pp P.pp' P.pp) m);
+    (fun k->k (Model.pp T.pp' T.pp) m);
   let projs, domains = pass1_ ~state m in
   pass2_ projs domains;
   Utils.debugf ~section 2 "@[<2>domains:@ @[%a@]@]"
     (fun k->k (Utils.pp_seq pp_domain) (ID.Tbl.values domains));
   let m = pass3_ ~state domains m in
   Utils.debugf ~section 3 "@[<2>model after decoding:@ @[%a@]@]"
-    (fun k->k (Model.pp P.pp' P.pp) m);
+    (fun k->k (Model.pp T.pp' T.pp) m);
   m
 
 (** {6 Pipe} *)
@@ -745,7 +743,7 @@ let decode_model ~state m =
 let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
-      let module PPb = Problem.Print(P)(P) in
+      let module PPb = Problem.P in
       Format.printf "@[<v2>@{<Yellow>after elimination of recursion@}: %a@]@." PPb.pp)
     @
       Utils.singleton_if check () ~f:(fun () ->
@@ -768,7 +766,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after elim_rec@}:@ %a@]@."
-         (Problem.Res.pp P.pp' P.pp)]
+         (Problem.Res.pp T.pp' T.pp)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model ~state) in

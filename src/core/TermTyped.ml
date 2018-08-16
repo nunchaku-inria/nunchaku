@@ -90,7 +90,7 @@ module Util(T : S)
     val ty_meta_var : ?loc:loc -> t MetaVar.t -> t
     (** Meta-variable, ready for unif *)
 
-    include TI.UTIL_REPR with type t_ := t
+    include TI.UTIL_REPR with type t := t
 
     val is_ty: t -> bool
     (** [is_ty t] same as [is_Type (type of t)] *)

@@ -6,13 +6,11 @@
 open Nunchaku_core
 
 module TI = TermInner
-module T = TI.Default
-module U = T.U
-module P = T.P
+module T = Term
 module TyI = TypeMono
 module Ty = TypeMono.Make(T)
 module Stmt = Statement
-module PStmt = Stmt.Print(P)(P)
+module PStmt = Stmt.Print(T)(T)
 
 type term = T.t
 type ty = T.t
@@ -40,8 +38,8 @@ let create_state ~env () =
     env;
     new_sig=ID.Tbl.create 25;
   } in
-  ID.Tbl.add st.new_sig st.pseudo_prop U.ty_type;
-  let ty_pprop = U.ty_const st.pseudo_prop in
+  ID.Tbl.add st.new_sig st.pseudo_prop T.ty_type;
+  let ty_pprop = T.ty_const st.pseudo_prop in
   ID.Tbl.add st.new_sig st.true_ ty_pprop;
   ID.Tbl.add st.new_sig st.false_ ty_pprop;
   st
@@ -50,9 +48,9 @@ let create_state ~env () =
 
 (* statements that declare the pseudo-prop type *)
 let declare_ state : (_,_) Stmt.t list =
-  let ty_pprop = U.ty_const state.pseudo_prop in
-  let ptrue = U.const state.true_ in
-  let pfalse = U.const state.false_ in
+  let ty_pprop = T.ty_const state.pseudo_prop in
+  let ptrue = T.const state.true_ in
+  let pfalse = T.const state.false_ in
   let mk_decl ?(attrs=[]) id ty =
     Stmt.decl ~info:Stmt.info_default ~attrs id ty
   in
@@ -61,23 +59,23 @@ let declare_ state : (_,_) Stmt.t list =
       ~attrs:[Stmt.Attr_pseudo_prop;
               Stmt.Attr_card_min_hint 2;
               Stmt.Attr_card_max_hint 2]
-      state.pseudo_prop (U.ty_builtin `Type)
+      state.pseudo_prop (T.ty_builtin `Type)
   and decl_true =
     mk_decl state.true_ ty_pprop
       ~attrs:[Stmt.Attr_pseudo_true]
   and decl_false = mk_decl state.false_ ty_pprop
   and distinct_ax =
     Stmt.axiom1 ~info:Stmt.info_default
-      (U.neq ptrue pfalse)
+      (T.neq ptrue pfalse)
   and exhaustive_ax =
     let x = Var.make ~name:"x" ~ty:ty_pprop in
     Stmt.axiom1 ~info:Stmt.info_default
-      (U.forall x
-         (U.or_ [U.eq (U.var x) ptrue; U.eq (U.var x) pfalse]))
+      (T.forall x
+         (T.or_ [T.eq (T.var x) ptrue; T.eq (T.var x) pfalse]))
   in
   [ decl_ty; decl_true; decl_false; distinct_ax; exhaustive_ax ]
 
-let find_ty state (t:term) : ty = U.ty_exn ~env:state.env t
+let find_ty state (t:term) : ty = T.ty_exn ~env:state.env t
 
 (* translate a type
    @param top true if toplevel; only toplevel props are
@@ -86,20 +84,20 @@ let transform_ty state ~top ty =
   let rec aux top ty = match Ty.repr ty with
     | TyI.Builtin `Prop ->
       if top then ty
-      else U.const state.pseudo_prop
+      else T.const state.pseudo_prop
     | TyI.Builtin _
     | TyI.Const _ -> ty
     | TyI.Arrow (a,b) ->
       (* [b] might still be toplevel *)
-      U.ty_arrow (aux false a) (aux top b)
+      T.ty_arrow (aux false a) (aux top b)
     | TyI.App (f,l) ->
-      U.ty_app (aux false f) (List.map (aux false) l)
+      T.ty_app (aux false f) (List.map (aux false) l)
   in
   aux top ty
 
 (* find the new type of an ID *)
 let find_new_ty state (t:term) : ty =
-  U.ty_of_signature_exn t
+  T.ty_of_signature_exn t
     ~sigma:(fun id -> ID.Tbl.get state.new_sig id)
 
 (* rename [v], and maybe update its type from [prop] to [pseudo_prop], since
@@ -116,10 +114,10 @@ let rename_var state subst v =
 (* does [t : prop]? *)
 let has_ty_prop_ state t : bool =
   let ty = find_ty state t in
-  U.ty_is_Prop ty
+  T.ty_is_Prop ty
 
-let get_true_ state : T.t = U.const state.true_
-let get_false_ state : T.t = U.const state.false_
+let get_true_ state : T.t = T.const state.true_
+let get_false_ state : T.t = T.const state.false_
 
 (* TODO: rewrite this as a type-driven pass:
    - carry around old_env, new_env
@@ -129,14 +127,14 @@ let get_false_ state : T.t = U.const state.false_
      (careful with builtins, in particular boolean ones)
 *)
 
-let ty_is_pseudo_prop state ty = U.equal ty (U.const state.pseudo_prop)
+let ty_is_pseudo_prop state ty = T.equal ty (T.const state.pseudo_prop)
 
 (* traverse a term, replacing any argument [a : prop]
    with [if a then pseudo_true else pseudo_false];
    also, change variables' types: no boolean variable should remain *)
 let transform_term state subst t =
   let wrap_prop t : T.t =
-    U.ite t (get_true_ state) (get_false_ state)
+    T.ite t (get_true_ state) (get_false_ state)
   in
   (* translate [t], keeping its toplevel type unless it is
      a boolean variable *)
@@ -144,30 +142,30 @@ let transform_term state subst t =
     | TI.Const _ -> t
     | TI.Var v ->
       (* no toplevel propositional variable *)
-      if U.ty_is_Prop (Var.ty v)
-      then U.eq (aux_expect_prop' subst t) (get_true_ state)
+      if T.ty_is_Prop (Var.ty v)
+      then T.eq (aux_expect_prop' subst t) (get_true_ state)
       else (
         let v' = Var.Subst.find_exn ~subst v in
-        U.var v'
+        T.var v'
       )
     | TI.App (f, l) ->
       (* translate head and arguments *)
-      let _, ty_args, _ = find_ty state f |> U.ty_unfold in
+      let _, ty_args, _ = find_ty state f |> T.ty_unfold in
       let f' = aux_top subst f in
       assert (List.length l = List.length ty_args);
       let l' =
         List.map2
           (fun arg ty ->
-             if U.ty_is_Prop ty
+             if T.ty_is_Prop ty
              then aux_expect_prop' subst arg (* argument position *)
              else aux_top subst arg)
           l
           ty_args
       in
-      U.app f' l'
+      T.app f' l'
     | TI.Builtin (`Eq (a,b)) when has_ty_prop_ state a ->
       (* transform [a <=> b] into [a = b] where [a:prop_] *)
-      U.eq (aux_expect_prop' subst a) (aux_expect_prop' subst b)
+      T.eq (aux_expect_prop' subst a) (aux_expect_prop' subst b)
     | TI.Let (v, t, u) ->
       begin match T.repr u with
         | TI.Var v' when Var.equal v v' -> aux_top subst t (* subst on the fly *)
@@ -186,29 +184,29 @@ let transform_term state subst t =
           in
           let subst = Var.Subst.add ~subst v new_v in
           let new_u = aux_top subst u in
-          U.let_ new_v new_t new_u
+          T.let_ new_v new_t new_u
       end
-    | TI.Builtin `True -> U.true_
-    | TI.Builtin `False -> U.false_
+    | TI.Builtin `True -> T.true_
+    | TI.Builtin `False -> T.false_
     | TI.Builtin ((`Not _ | `And _ | `Or _ | `Imply _ | `Eq _) as b) ->
       (* boolean formulas are ok *)
       let b = Builtin.map b ~f:(aux_top subst) in
-      U.builtin b
-    | TI.Builtin (`Undefined_self t) -> U.undefined_self (aux_top subst t)
+      T.builtin b
+    | TI.Builtin (`Undefined_self t) -> T.undefined_self (aux_top subst t)
     | TI.Builtin (`Guard (t,g)) ->
       let t' = aux_top subst t in
       let g' = Builtin.map_guard (aux_top subst) g in
-      U.guard t' g'
+      T.guard t' g'
     | TI.Bind ((Binder.Forall | Binder.Exists) as b, v, body) ->
       let subst, v = rename_var state subst v in
-      U.mk_bind b v (aux_top subst body)
+      T.mk_bind b v (aux_top subst body)
     | TI.Builtin (`Undefined_atom _|`Ite _|`DataTest _
                  |`DataSelect _|`Unparsable _|`Card_at_least _)
     | TI.Bind ((Binder.Fun|Binder.TyForall|Binder.Mu), _, _)
     | TI.Match (_, _, _) | TI.TyBuiltin _ | TI.TyArrow (_, _)
       ->
       (* cannot have boolean args, translation can proceed *)
-      U.map subst t
+      T.map subst t
         ~bind:(rename_var state) ~f:aux_top
     | TI.TyMeta _ -> assert false
 
@@ -217,7 +215,7 @@ let transform_term state subst t =
     | TI.Var v ->
       let v' = Var.Subst.find_exn ~subst v in
       assert (ty_is_pseudo_prop state (Var.ty v'));
-      U.var v' (* no casting needed *)
+      T.var v' (* no casting needed *)
     | TI.Builtin `True -> get_true_ state
     | TI.Builtin `False -> get_false_ state
     | TI.Builtin (`Not _ | `And _ | `Or _ | `Imply _ | `Eq _) ->
@@ -227,7 +225,7 @@ let transform_term state subst t =
     | TI.Builtin (`Guard (t,g)) ->
       let new_t = aux_expect_prop' subst t in
       let new_g = Builtin.map_guard (aux_top subst) g in
-      U.guard new_t new_g
+      T.guard new_t new_g
     | _ ->
       (* we expect [prop'], see what we get by translating [t] *)
       let new_t = aux_top subst t in
@@ -235,7 +233,7 @@ let transform_term state subst t =
       if ty_is_pseudo_prop state new_ty
       then new_t
       else (
-        assert (U.ty_is_Prop new_ty);
+        assert (T.ty_is_Prop new_ty);
         wrap_prop new_t
       )
   in
@@ -322,14 +320,14 @@ let find_rewrite state m : rewrite option =
    - collapse pseudo-prop into prop *)
 let decode_term state rw t =
   let rec aux t = match T.repr t, rw with
-    | TI.Const id, _ when ID.equal id state.true_ -> U.true_
-    | TI.Const id, _ when ID.equal id state.false_ -> U.false_
-    | TI.Const id, _ when ID.equal id state.pseudo_prop -> U.ty_prop
-    | TI.Const id, Some rw when ID.equal id rw.rw_true -> U.true_
-    | TI.Const id, Some rw when ID.equal id rw.rw_false -> U.false_
-    | TI.Var v, _ -> U.var (aux_var v)
+    | TI.Const id, _ when ID.equal id state.true_ -> T.true_
+    | TI.Const id, _ when ID.equal id state.false_ -> T.false_
+    | TI.Const id, _ when ID.equal id state.pseudo_prop -> T.ty_prop
+    | TI.Const id, Some rw when ID.equal id rw.rw_true -> T.true_
+    | TI.Const id, Some rw when ID.equal id rw.rw_false -> T.false_
+    | TI.Var v, _ -> T.var (aux_var v)
     | _ ->
-      U.map () t
+      T.map () t
         ~bind:(fun () v -> (), aux_var v)
         ~f:(fun () -> aux)
   and aux_var v =
@@ -358,7 +356,7 @@ let decode_model state m =
 let pipe_with ?on_decoded ~decode ~print ~check =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
-      let module PPb = Problem.Print(P)(P) in
+      let module PPb = Problem.P in
       Format.printf "@[<v2>@{<Yellow>after %s@}: %a@]@." name PPb.pp)
     @
       Utils.singleton_if check ()
@@ -383,7 +381,7 @@ let pipe ~print ~check =
   let on_decoded = if print
     then
       [Format.printf "@[<2>@{<Yellow>res after %s@}:@ %a@]@."
-         name (Problem.Res.pp P.pp' P.pp)]
+         name (Problem.Res.pp T.pp' T.pp)]
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model state) in

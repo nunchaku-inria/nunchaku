@@ -7,17 +7,15 @@ open Nunchaku_core
 open Nunchaku_parsers
 
 module TI = TermInner
-module T = TermInner.Default
-module P = T.P
-module U = T.U
+module T = Term
 module A = Tip_ast
 module Res = Problem.Res
 module E = CCResult
 module S = Scheduling
 module Stmt = Statement
-module PStmt = Statement.Print(P)(P)
+module PStmt = Statement.Print(T)(T)
 
-type term = TermInner.Default.t
+type term = Term.t
 type ty = term
 type problem = (term,ty) Problem.t
 type env = (term,ty) Env.t
@@ -40,7 +38,7 @@ let () = Printexc.register_printer
     (function
       | Out_of_scope msg -> Some (Printf.sprintf "problem is out of scope for SMBC: %s" msg)
       | Conversion_error t ->
-        Some (Utils.err_sprintf "problem could not be converted to TIP: %a" P.pp t)
+        Some (Utils.err_sprintf "problem could not be converted to TIP: %a" T.pp t)
       | Parse_result_error msg -> Some ("could not parse result: " ^ msg)
       | _ -> None)
 
@@ -128,7 +126,7 @@ let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
       | `Guard (t,g) ->
         (* use builtin "asserting" *)
         let t = term_to_tip st t in
-        let g = U.and_nodup g.Builtin.asserting |> term_to_tip st in
+        let g = T.and_nodup g.Builtin.asserting |> term_to_tip st in
         A.app "asserting" [t; g]
       | `Card_at_least (ty,n) ->
         (* encode on the fly *)
@@ -145,7 +143,7 @@ let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
   | TI.Bind (Binder.Exists,v,body) ->
     A.exists [conv_typed_var v] (term_to_tip st body)
   | TI.Bind (Binder.TyForall,_,_)
-  | TI.Bind (Binder.Mu,_,_) -> out_of_scopef "cannot convert to TIP µ %a" P.pp t
+  | TI.Bind (Binder.Mu,_,_) -> out_of_scopef "cannot convert to TIP µ %a" T.pp t
   | TI.Let (v,t,u) ->
     A.let_ [conv_var v, term_to_tip st t] (term_to_tip st u)
   | TI.Match (u,map,def) ->
@@ -157,8 +155,8 @@ let rec term_to_tip (st:state) (t:term): A.term = match T.repr t with
            A.Match_case
              (id_to_string c, List.map conv_var vars, term_to_tip st rhs))
     and def = match def with
-      | TI.Default_none -> []
-      | TI.Default_some (rhs,_) -> [A.Match_default (term_to_tip st rhs)]
+      | None -> []
+      | Some (rhs,_) -> [A.Match_default (term_to_tip st rhs)]
     in
     A.match_ u (cases @ def)
   | TI.TyBuiltin _
@@ -172,7 +170,7 @@ and ty_to_tip(t:term): A.ty = match T.repr t with
     let l = List.map ty_to_tip l in
     begin match T.repr f with
       | TI.Const id -> A.ty_app (id_to_string id) l
-      | _ -> out_of_scopef "cannot convert to TIP ty %a" P.pp t
+      | _ -> out_of_scopef "cannot convert to TIP ty %a" T.pp t
     end
   | TI.TyArrow (a,b) -> A.ty_arrow (ty_to_tip a)(ty_to_tip b)
   | TI.TyBuiltin `Prop -> A.ty_bool
@@ -180,13 +178,13 @@ and ty_to_tip(t:term): A.ty = match T.repr t with
   | _ -> assert false
 
 and conv_typed_var v = conv_var v, ty_to_tip (Var.ty v)
-and conv_tyvar v = assert (U.ty_is_Type (Var.ty v)); conv_var v
+and conv_tyvar v = assert (T.ty_is_Type (Var.ty v)); conv_var v
 and conv_var v = id_to_string (Var.id v)
 
 (* a local function for "is-c" data tester *)
 and data_test_fun (st:state) (c:ID.t): ID.t =
   let ty_c = Env.find_ty_exn ~env:st.env c in
-  let ty_args, c_args, data_ty = U.ty_unfold ty_c in
+  let ty_args, c_args, data_ty = T.ty_unfold ty_c in
   assert (ty_args = []); (* mono *)
   try ID.Tbl.find st.data_test_tbl c
   with Not_found ->
@@ -217,10 +215,10 @@ and data_test_fun (st:state) (c:ID.t): ID.t =
 
 let decl_to_tip id ty : A.statement =
   let s = id_to_string id in
-  let ty_vars, ty_args, ty_ret = U.ty_unfold ty in
-  if U.ty_is_Type ty_ret then (
+  let ty_vars, ty_args, ty_ret = T.ty_unfold ty in
+  if T.ty_is_Type ty_ret then (
     assert (ty_vars=[]);
-    assert (List.for_all U.ty_is_Type ty_args);
+    assert (List.for_all T.ty_is_Type ty_args);
     A.decl_sort s ~arity:(List.length ty_args)
   ) else (
     A.decl_fun s
@@ -234,11 +232,11 @@ let decl_attrs_to_tip state (id:ID.t) attrs: A.statement list =
     (function
       | Stmt.Attr_card_max n ->
         let module CE = Cardinal_encode.Make(T) in
-        let ax = CE.encode_max_card (U.ty_const id) n |> term_to_tip state in
+        let ax = CE.encode_max_card (T.ty_const id) n |> term_to_tip state in
         Some (A.assert_ ax)
       | Stmt.Attr_card_min n ->
         let module CE = Cardinal_encode.Make(T) in
-        let ax = CE.encode_min_card (U.ty_const id) n |> term_to_tip state in
+        let ax = CE.encode_min_card (T.ty_const id) n |> term_to_tip state in
         Some (A.assert_ ax)
       | _ -> None)
     attrs
@@ -246,7 +244,7 @@ let decl_attrs_to_tip state (id:ID.t) attrs: A.statement list =
 let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
   let new_st = match Stmt.view st with
     | Stmt.Decl {Stmt.defined_head=id; defined_ty=ty; defined_attrs=attrs; } ->
-      let vars, _, _ = U.ty_unfold ty in
+      let vars, _, _ = T.ty_unfold ty in
       if vars=[]
       then decl_to_tip id ty :: decl_attrs_to_tip state id attrs
       else out_of_scopef "cannot encode to TIP poly statement %a" PStmt.pp st
@@ -278,7 +276,7 @@ let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
              );
              let {Stmt.defined_head=id; defined_ty=ty; _} = def.Stmt.rec_defined in
              let name = id_to_string id in
-             let _, _, ty_ret = U.ty_unfold ty in
+             let _, _, ty_ret = T.ty_unfold ty in
              let vars, body = match def.Stmt.rec_eqns with
                | Stmt.Eqn_single (vars, rhs) ->
                  List.map conv_typed_var vars, term_to_tip state rhs
@@ -300,7 +298,7 @@ let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
           [A.funs_rec decls bodies]
       end
     | Stmt.Goal g ->
-      let neg_g = term_to_tip state (U.not_ g) in
+      let neg_g = term_to_tip state (T.not_ g) in
       [A.assert_not ~ty_vars:[] neg_g]
     | Stmt.TyDef (`Codata,_) -> out_of_scopef "cannot encode Codata %a" PStmt.pp st
     | Stmt.TyDef (`Data, l) ->
@@ -388,24 +386,24 @@ let id_of_tip (penv:parse_env) (s:string):
   end
 
 let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
-  | A.True -> U.true_
-  | A.False -> U.false_
+  | A.True -> T.true_
+  | A.False -> T.false_
   | A.Const c -> term_of_id penv c
   | A.App (f,l) ->
     let f = term_of_id penv f in
-    U.app f (List.map (term_of_tip ~env penv) l)
+    T.app f (List.map (term_of_tip ~env penv) l)
   | A.HO_app (f,a) ->
-    U.app (term_of_tip ~env penv f) [term_of_tip ~env penv a]
+    T.app (term_of_tip ~env penv f) [term_of_tip ~env penv a]
   | A.Match (u,l) ->
     let u = term_of_tip ~env penv u in
     (* recover type info on [u] *)
-    let ty_u = U.ty_exn ~env u in
-    let tydef = match U.info_of_ty_exn ~env ty_u |> Env.def with
+    let ty_u = T.ty_exn ~env u in
+    let tydef = match T.info_of_ty_exn ~env ty_u |> Env.def with
       | Env.Data (_, _, tydef) -> tydef
       | _ ->
         error_parse_modelf
           "expected `@[%a@]`,@ of type `@[%a@]`,@ to be a datatype"
-          P.pp u P.pp ty_u
+          T.pp u T.pp ty_u
     in
     (* build match tree *)
     let m, def =
@@ -421,7 +419,7 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
              let c_ty_args = match ID.Map.get c_id (Stmt.data_cstors tydef) with
                | None ->
                  error_parse_modelf "id `%a` should be a constructor of `@[%a@]`"
-                   ID.pp c_id P.pp ty_u
+                   ID.pp c_id T.pp ty_u
                | Some cstor -> cstor.Stmt.cstor_args
              in
              assert (List.length c_ty_args = List.length vars);
@@ -440,18 +438,18 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
         l
     in
     let def = match def with
-      | None -> TI.Default_none
+      | None -> None
       | Some rhs ->
         let missing =
           Stmt.data_cstors tydef
           |> ID.Map.filter (fun id _ -> not (ID.Map.mem id m))
           |> ID.Map.map (fun cstor -> List.length cstor.Stmt.cstor_args)
         in
-        TI.Default_some (rhs, missing)
+        Some (rhs, missing)
     in
-    U.match_with u m ~def
+    T.match_with u m ~def
   | A.If (a,b,c) ->
-    U.No_simp.ite (term_of_tip ~env penv a)(term_of_tip ~env penv b)(term_of_tip ~env penv c)
+    T.No_simp.ite (term_of_tip ~env penv a)(term_of_tip ~env penv b)(term_of_tip ~env penv c)
   | A.Let (l,u) ->
     let penv = List.fold_left
         (fun penv (s,t) ->
@@ -463,45 +461,45 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term = match t with
   | A.Fun (v,body) ->
     let penv, v = typed_var_of_tip penv v in
     let body = term_of_tip ~env penv body in
-    U.fun_ v body
-  | A.Eq (a,b) -> U.No_simp.eq (term_of_tip ~env penv a)(term_of_tip ~env penv b)
-  | A.Imply (a,b) -> U.No_simp.imply (term_of_tip ~env penv a)(term_of_tip ~env penv b)
+    T.fun_ v body
+  | A.Eq (a,b) -> T.No_simp.eq (term_of_tip ~env penv a)(term_of_tip ~env penv b)
+  | A.Imply (a,b) -> T.No_simp.imply (term_of_tip ~env penv a)(term_of_tip ~env penv b)
   | A.And l ->
     let l = List.map (term_of_tip ~env penv) l in
-    U.No_simp.and_ l
+    T.No_simp.and_ l
   | A.Distinct l ->
     List.map (term_of_tip ~env penv) l
     |> CCList.diagonal
-    |> List.map (fun (a,b) -> U.No_simp.neq a b)
-    |> U.No_simp.and_
+    |> List.map (fun (a,b) -> T.No_simp.neq a b)
+    |> T.No_simp.and_
   | A.Or l ->
     let l = List.map (term_of_tip ~env penv) l in
-    U.No_simp.or_ l
-  | A.Not a -> U.No_simp.not_ (term_of_tip ~env penv a)
+    T.No_simp.or_ l
+  | A.Not a -> T.No_simp.not_ (term_of_tip ~env penv a)
   | A.Forall (v,body) ->
     let penv, v = CCList.fold_map typed_var_of_tip penv v in
     let body = term_of_tip ~env penv body in
-    U.forall_l v body
+    T.forall_l v body
   | A.Exists (v,body) ->
     let penv, v = CCList.fold_map typed_var_of_tip penv v in
     let body = term_of_tip ~env penv body in
-    U.exists_l v body
+    T.exists_l v body
   | A.Cast (_,_) -> assert false
 
 and term_of_id (env:parse_env) (s:string): term = match id_of_tip env s with
-  | `Const id -> U.const id
+  | `Const id -> T.const id
   | `Undef id ->
     (* FIXME: need some other primitive, e.g. "hole", to represent this? *)
-    U.undefined_self (U.const id)
+    T.undefined_self (T.const id)
   | `Subst t -> t
-  | `Var v -> U.var v
+  | `Var v -> T.var v
 
 and ty_of_tip (ty:A.ty): ty = match ty with
-  | A.Ty_bool -> U.ty_prop
+  | A.Ty_bool -> T.ty_prop
   | A.Ty_arrow (l, ret) ->
-    U.ty_arrow_l (List.map ty_of_tip l) (ty_of_tip ret)
+    T.ty_arrow_l (List.map ty_of_tip l) (ty_of_tip ret)
   | A.Ty_app (f, l) ->
-    U.ty_app (term_of_id empty_penv f) (List.map ty_of_tip l)
+    T.ty_app (term_of_id empty_penv f) (List.map ty_of_tip l)
 
 and typed_var_of_tip (env:parse_env) (s,ty) =
   let ty = ty_of_tip ty in
@@ -526,7 +524,7 @@ let extract_to_outer_function (t:term): term =
   let rec merge_ty_lists l1 l2 = match l1, l2 with
     | [], _ | _, [] -> []
     | ty1 :: tail1, ty2 :: tail2 ->
-      assert (U.equal ty1 ty2); (* by well-typedness *)
+      assert (T.equal ty1 ty2); (* by well-typedness *)
       ty1 :: merge_ty_lists tail1 tail2
   in
   (* first, find the list of variables' types that
@@ -546,8 +544,8 @@ let extract_to_outer_function (t:term): term =
           m args0
       in
       begin match def with
-        | TI.Default_none -> args
-        | TI.Default_some (rhs,_) ->
+        | None -> args
+        | Some (rhs,_) ->
           merge_ty_lists args (extract_ty_args rhs)
       end
     | _ -> []
@@ -559,19 +557,19 @@ let extract_to_outer_function (t:term): term =
   let rec transform fun_vars subst t = match T.repr t, fun_vars with
     | _, [] ->
       (* no more variables, must be a leaf, just rename variables *)
-      U.eval_renaming ~subst t
+      T.eval_renaming ~subst t
     | TI.Bind (Binder.Fun, v, body), new_v :: vars_tail ->
       assert (not (Var.Subst.mem ~subst v));
       let subst = Var.Subst.add ~subst v new_v in
       transform vars_tail subst body
     | TI.Builtin (`Ite (a,b,c)), _ ->
-      U.ite
-        (U.eval_renaming ~subst a)
+      T.ite
+        (T.eval_renaming ~subst a)
         (transform fun_vars subst b)
         (transform fun_vars subst c)
     | TI.Match (u, m, def), _ ->
-      U.match_with
-        (U.eval_renaming ~subst u)
+      T.match_with
+        (T.eval_renaming ~subst u)
         (ID.Map.map
            (fun (tys, vars, rhs) ->
               let subst, vars =
@@ -590,14 +588,14 @@ let extract_to_outer_function (t:term): term =
       (fun i ty -> Var.makef ~ty "%s_%d" (TyMo.mangle ~sep:"_" ty) i)
       ty_args
   in
-  U.fun_l vars (transform vars Var.Subst.empty t)
+  T.fun_l vars (transform vars Var.Subst.empty t)
 
 (* convert a term into a decision tree *)
 let dt_of_term (t:term): (term,ty) Model.DT.t =
   let fail_ ~vars t =
     error_parse_modelf
       "expected leaf or test against a variable in [@[%a@]],@ got: `@[%a@]`"
-      (CCFormat.list Var.pp_full) vars P.pp t
+      (CCFormat.list Var.pp_full) vars T.pp t
   in
   (* check that [t] is an equation [v = t'], return [t'].
      otherwise returns [None] *)
@@ -605,10 +603,10 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
     let fail() =
       error_parse_modelf
         "expected a test <%a = term>,@ but got `@[%a@]`@]"
-        Var.pp_full v P.pp t
+        Var.pp_full v T.pp t
     in
     Utils.debugf 5 "get_eqn var=`%a` on: `@[%a@]`"
-      (fun k->k Var.pp_full v P.pp t);
+      (fun k->k Var.pp_full v T.pp t);
     match T.repr t with
       | TI.Builtin (`Eq (t1, t2)) ->
         begin match T.repr t1, T.repr t2 with
@@ -619,13 +617,13 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
           | _ -> fail()
         end
       | TI.Var v' when Var.equal v v' ->
-        assert (U.ty_is_Prop (Var.ty v'));
-        Some U.true_
+        assert (T.ty_is_Prop (Var.ty v'));
+        Some T.true_
       | TI.Var v' when List.exists (Var.equal v') vars_tail -> None
       | TI.Var _ ->
         error_parse_modelf
           "expected a boolean variable among @[%a@],@ but got @[%a@]@]"
-          Var.pp_full v P.pp t
+          Var.pp_full v T.pp t
       | _ -> fail()
   in
   (* recursive conversion *)
@@ -633,7 +631,7 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
     match T.repr t, vars with
       | _, [] -> Model.DT.yield t
       | TI.Builtin (`Ite (_,_,_)), v :: vars_tail ->
-        let tests, else_ = U.ite_unfold t in
+        let tests, else_ = T.ite_unfold t in
         let tests_v, other_tests =
           CCList.partition_map
             (fun (a, b) ->
@@ -647,7 +645,7 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
         (* default contains both tests on [vars_tail] and the [else_] branch *)
         let default =
           let t' =
-            List.fold_right (fun (a,b) c -> U.ite a b c) other_tests else_
+            List.fold_right (fun (a,b) c -> T.ite a b c) other_tests else_
           in
           Some (conv_body ~vars:vars_tail t')
         in
@@ -665,8 +663,8 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
                    tys, local_vars, conv_body ~vars:(local_vars @ vars_tail) rhs)
                 m
             and def, missing = match def with
-              | TI.Default_none -> None, ID.Map.empty
-              | TI.Default_some (d,missing) ->
+              | None -> None, ID.Map.empty
+              | Some (d,missing) ->
                 Some (conv_body ~vars:vars_tail d), missing
             in
             Model.DT.mk_match v ~by_cstor:m ~default:def ~missing
@@ -679,12 +677,12 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
       | (TI.Let _ | TI.TyMeta _ | TI.TyArrow _ | TI.TyBuiltin _), _::_ ->
         fail_ ~vars t
   in
-  let vars, body = U.fun_unfold t in
+  let vars, body = T.fun_unfold t in
   (* change the shape of [body] so it looks more like a decision tree *)
   let dt = conv_body ~vars body in
   Utils.debugf ~section 5
     "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
-    (fun k->k P.pp body (Model.DT.pp P.pp' P.pp) dt);
+    (fun k->k T.pp body (Model.DT.pp T.pp' T.pp) dt);
   dt
 
 module A_res = A.Smbc_res
@@ -693,14 +691,14 @@ let convert_model ~env (m:A_res.model): (_,_) Model.t =
   let find_kind (t:term): Model.symbol_kind =
     let fail() =
       Utils.warningf Utils.Warn_model_parsing_error
-        "cannot find symbol_kind for `@[%a@]`" P.pp t;
+        "cannot find symbol_kind for `@[%a@]`" T.pp t;
       Model.Symbol_fun
     in
     match T.repr t with
       | TI.Const id ->
         begin match Env.find_ty ~env id with
           | Some ty ->
-            if U.ty_returns_Prop ty then Model.Symbol_prop else Model.Symbol_fun
+            if T.ty_returns_Prop ty then Model.Symbol_prop else Model.Symbol_fun
           | None -> fail()
         end
       | _ -> fail()
@@ -835,7 +833,7 @@ let call_real ~print_model ~prio problem =
          | Res.Sat (m,_) when print_model ->
            let pp_ty oc _ = CCFormat.string oc "$i" in
            Format.printf "@[<2>raw smbc model:@ @[%a@]@]@."
-             (Model.pp P.pp' pp_ty) m
+             (Model.pp T.pp' pp_ty) m
          | _ -> ()
        end;
        res, short)
@@ -843,7 +841,7 @@ let call_real ~print_model ~prio problem =
 (* solve problem before [deadline] *)
 let call ?(print_model=false) ?prio ~print ~dump problem =
   if print then (
-    let module P_pb = Problem.Print(P)(P) in
+    let module P_pb = Problem.P in
     Format.printf "@[<v2>SMBC problem:@ %a@]@." P_pb.pp problem;
   );
   begin match dump with

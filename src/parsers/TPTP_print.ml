@@ -8,10 +8,8 @@
 open Nunchaku_core
 
 module TI = TermInner
-module T = TermInner.Default
+module T = Term
 module M = Model
-module U = T.U
-module P = T.P
 
 type 'a printer = Format.formatter -> 'a -> unit
 
@@ -104,7 +102,7 @@ let rec pp_term out t = match T.repr t with
       | _ ->
         Utils.not_implementedf
           "@[<2>print_model:@ could not apply `@[%a@]`@ to arguments [@[%a@]]@]"
-          pp_term f (pp_list ~sep:","P.pp) l
+          pp_term f (pp_list ~sep:","T.pp) l
     end
   | TI.TyMeta _ -> assert false
   | TI.Builtin b -> pp_builtin pp_inner out b
@@ -168,41 +166,41 @@ let rec preprocess_term ~state t = match T.repr t with
       try ID.Tbl.find state.pre_constants id
       with Not_found -> id (* not a domain constant *)
     in
-    U.const id'
+    T.const id'
   | TI.Var v ->
     let v' = find_var_ ~state v in
-    U.var v'
+    T.var v'
   | TI.App (f,l) ->
     let f = preprocess_term ~state f in
     let l = List.map (preprocess_term ~state) l in
-    U.app f l
+    T.app f l
   | TI.Bind (Binder.Fun, v,t) ->
     preprocess_typed_var ~state v
-      (fun v -> U.fun_ v (preprocess_term ~state t))
+      (fun v -> T.fun_ v (preprocess_term ~state t))
   | TI.Let (v,t,u) ->
     let t = preprocess_term ~state t in
     let u = preprocess_term ~state u in
     let v' = find_var_ ~state v in
-    U.let_ v' t u
+    T.let_ v' t u
   | TI.Bind (Binder.Mu, _,_) ->
-    errorf_ "cannot represent `@[%a@]`@ in TPTP" P.pp t
+    errorf_ "cannot represent `@[%a@]`@ in TPTP" T.pp t
   | TI.Match _ -> Utils.not_implemented "replace in match"
   | TI.Builtin (`Ite (a,b,c)) ->
     let a = preprocess_term ~state a in
     let b = preprocess_term ~state b in
     let c = preprocess_term ~state c in
-    U.ite a b c
+    T.ite a b c
   | TI.Bind (Binder.Forall,v,t) ->
     preprocess_typed_var ~state v
-      (fun v -> U.forall v (preprocess_term ~state t))
+      (fun v -> T.forall v (preprocess_term ~state t))
   | TI.Bind (Binder.Exists,v,t) ->
     preprocess_typed_var ~state v
-      (fun v -> U.exists v (preprocess_term ~state t))
+      (fun v -> T.exists v (preprocess_term ~state t))
   | TI.TyArrow (a,b) ->
-    U.ty_arrow (preprocess_ty ~state a) (preprocess_ty ~state b)
+    T.ty_arrow (preprocess_ty ~state a) (preprocess_ty ~state b)
   | TI.Bind (Binder.TyForall,v,t) ->
     let v' = mk_var ~state v in
-    U.ty_forall v' (preprocess_ty ~state t)
+    T.ty_forall v' (preprocess_ty ~state t)
   | TI.Builtin _ -> t
   | TI.TyBuiltin _
   | TI.TyMeta _ -> t
@@ -249,34 +247,34 @@ let translate_dt kind ~vars t dt =
       (fun (tests, rhs) ->
          let subst = mk_subst tests in
          let args =
-           List.map (fun v -> Var.Subst.find_or ~subst ~default:(U.var v) v) vars
+           List.map (fun v -> Var.Subst.find_or ~subst ~default:(T.var v) v) vars
          in
-         let rhs = U.eval ~subst rhs in
+         let rhs = T.eval ~subst rhs in
          let body = match kind with
            | Model.Symbol_utype
            | Model.Symbol_data
            | Model.Symbol_codata -> assert false
-           | Model.Symbol_fun -> U.eq (U.app t args) rhs
+           | Model.Symbol_fun -> T.eq (T.app t args) rhs
            | Model.Symbol_prop ->
              (* propositions should become [p(x)] or [not p(x)] *)
              match T.repr rhs with
-               | TI.Builtin `True -> U.app t args
-               | TI.Builtin `False -> U.not_ (U.app t args)
-               | _ -> U.eq (U.app t args) rhs
+               | TI.Builtin `True -> T.app t args
+               | TI.Builtin `False -> T.not_ (T.app t args)
+               | _ -> T.eq (T.app t args) rhs
          in
-         U.forall_l vars body
+         T.forall_l vars body
       )
       fdt.M.DT.fdt_cases
   in
-  U.and_ forms
+  T.and_ forms
 
 (* the domain declaration(s): [forall X:ty, (X=c1 | ... | X=cn)] where
    the [c_i] are the elements of [l] *)
 let mk_domain ty l =
   let v = Var.make ~ty ~name:"X" in
   let form =
-    U.forall v
-      (U.or_ (List.map (fun c -> U.eq (U.var v) (U.const c)) l))
+    T.forall v
+      (T.or_ (List.map (fun c -> T.eq (T.var v) (T.const c)) l))
   in
   { role=Role_domain; form; }
 

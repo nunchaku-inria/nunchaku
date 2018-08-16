@@ -16,7 +16,7 @@
 
 open Nunchaku_core
 
-type term = TermInner.Default.t
+type term = Term.t
 
 (** Mode of operations: which matches should be removed? *)
 type mode =

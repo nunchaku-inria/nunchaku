@@ -8,7 +8,7 @@
 
 open Nunchaku_core
 
-type term = TermInner.Default.t
+type term = Term.t
 type model = (term, term) Model.t
 
 val name : string
