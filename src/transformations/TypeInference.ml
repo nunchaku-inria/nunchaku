@@ -65,9 +65,8 @@ type ('t, 'ty) term_def =
 module Convert(Term : TermTyped.S) = struct
   module TyPoly = TypePoly.Make(Term)
   module U = TermTyped.Util(Term)
-  module IU = TermInner.UtilRepr(Term)
   module Unif = TypeUnify.Make(Term)
-  module VarSet = Var.Set(struct type t = Term.t end)
+  module VarSet = Var.Set(Term)
 
   type term = Term.t
 
@@ -979,7 +978,7 @@ module Convert(Term : TermTyped.S) = struct
     let rec aux i subst args ty = match args, Term.repr ty with
       | [], TI.Bind (Binder.TyForall, v, ty') ->
         (* NOTE: can we really complete a quantified equation like that? *)
-        assert (IU.ty_returns_Type (Var.ty v));
+        assert (U.ty_returns_Type (Var.ty v));
         let v' = Var.make ~name:"v" ~ty:(Subst.eval ~subst @@ Var.ty v) in
         let l, ty = aux (i+1) (Subst.add ~subst v (U.var v')) [] ty' in
         v' :: l, ty
