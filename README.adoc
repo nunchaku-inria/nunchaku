@@ -2,6 +2,8 @@
 :toc: macro
 :source-highlighter: pygments
 
+image::https://api.travis-ci.org/nunchaku-inria/nunchaku.svg?branch=master[link="https://travis-ci.org/nunchaku-inria/nunchaku", alt="Build status on travis"]
+
 A counter-example finder for higher-order logic, designed to be used from
 various proof assistants. A spiritual successor to Nitpick.
 Documentation at https://nunchaku-inria.github.io/nunchaku/.
@@ -16,9 +18,6 @@ Alternatively, it can use other backends:
 We have https://github.com/nunchaku-inria/nunchaku-problems[a set of problems]
 for tests and regressions, that can also be helpful to grasp the input syntax
 and see how to use the constructs of Nunchaku.
-
-image::https://api.travis-ci.org/nunchaku-inria/nunchaku.svg?branch=master[link="https://travis-ci.org/nunchaku-inria/nunchaku", alt="Build status on travis"]
-https://travis-ci.org/nunchaku-inria/nunchaku[Travis build]
 
 toc::[]
 
@@ -132,3 +131,18 @@ Supported solver backends:
 - https://github.com/c-cube/smbc/[SMBC] (`opam install smbc`)
 
 
+=== How to make a release
+
+- udpate the repository itself
+  * `git checkout stable`
+  * `git merge master` to merge changes
+  * edit `nunchaku.opam` to change version number
+  * `git commit --amend` to update the commit
+  * `git tag 0.42`
+  * `git push origin stable --tags`
+
+- make an archive:
+  * tar.gz: `git archive --prefix=nunchaku/ 0.42 -o nunchaku-0.42.tar.gz`
+  * zip: `git archive --prefix=nunchaku/ 0.42 -o nunchaku-0.42.zip`
+
+- upload the archive on gforge, write some release notes, send a mail.
