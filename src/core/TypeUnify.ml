@@ -6,11 +6,13 @@
 module TI = TermInner
 module TyI = TypePoly
 module Subst = Var.Subst
+module Loc = Location
 
 let section = Utils.Section.make "unif"
 
 (*$inject
-      module TI = TermInner
+  let loc = Location.internal
+  module TI = TermInner
   module T = TermTyped.Default
   module U = TermTyped.Util(T)
     module Unif = Make(T)
@@ -21,7 +23,7 @@ let section = Utils.Section.make "unif"
 
 type 'a sequence = ('a -> unit) -> unit
 
-module Make(T : TI.REPR) = struct
+module Make(T : TI.REPR_LOC) = struct
   module P = TI.Print(T)
   module Ty = TypePoly.Make(T)
 
@@ -38,10 +40,10 @@ module Make(T : TI.REPR) = struct
       (function
         | Fail (stack, msg) ->
           let pp2 out (ty1,ty2) =
-            fpf out "@[<hv2>trying to unify@ `@[%a@]`@ and `@[%a@]`@]"
-              pp_ty ty1 pp_ty ty2
+            fpf out "@[<hv2>trying to unify@ @[<2>`@[%a@]`@ at %a@]@ @[<2>and `@[%a@]`@ at %a@]@]"
+              pp_ty ty1 Loc.pp (T.loc ty1) pp_ty ty2 Loc.pp (T.loc ty2)
           in
-          Some (spf "@[<hv2>unification error: %s:@ %a"
+          Some (spf "@[<hv2>unification error: %s:@ %a@]"
               msg (CCFormat.list pp2) stack)
         | _ -> None
       )
@@ -151,12 +153,12 @@ module Make(T : TI.REPR) = struct
     unify_ ~stack:[] ty1 ty2
 
   (*$R
-    let v = U.ty_meta_var (MetaVar.make ~name:"x") in
-    let f = U.ty_var (Var.make ~ty:U.ty_type ~name:"f") in
+    let v = U.ty_meta_var ~loc (MetaVar.make ~name:"x") in
+    let f = U.ty_var ~loc (Var.make ~ty:U.ty_type ~name:"f") in
     let a' = ID.make "a" in
-    let a = U.ty_const a' in
-    let t1 = U.ty_app f [v] in
-    let t2 = U.ty_app f [a] in
+    let a = U.ty_const ~loc a' in
+    let t1 = U.ty_app ~loc f [v] in
+    let t2 = U.ty_app ~loc f [a] in
     Unif.unify_exn t1 t2;
     assert_bool "v is a"
       (match T.repr v with

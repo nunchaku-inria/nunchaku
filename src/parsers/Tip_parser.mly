@@ -117,7 +117,8 @@ fun_rec:
   | tup=fun_def_mono body=term
     {
       let f, args, ret = tup in
-      A.mk_fun_rec ~ty_vars:[] f args ret body
+      let loc = Loc.mk_pos $startpos $endpos in 
+      A.mk_fun_rec ~loc ~ty_vars:[] f args ret body
     }
   | LEFT_PAREN
       PAR
@@ -126,14 +127,16 @@ fun_rec:
     RIGHT_PAREN
     {
       let f, args, ret = tup in
-      A.mk_fun_rec ~ty_vars:l f args ret body
+      let loc = Loc.mk_pos $startpos $endpos in 
+      A.mk_fun_rec ~loc ~ty_vars:l f args ret body
     }
 
 funs_rec_decl:
   | LEFT_PAREN tup=fun_def_mono RIGHT_PAREN
     {
       let f, args, ret = tup in
-      A.mk_fun_decl ~ty_vars:[] f args ret
+      let loc = Loc.mk_pos $startpos $endpos in
+      A.mk_fun_decl ~loc ~ty_vars:[] f args ret
     }
   | LEFT_PAREN
       PAR
@@ -142,7 +145,8 @@ funs_rec_decl:
     RIGHT_PAREN
     {
       let f, args, ret = tup in
-      A.mk_fun_decl ~ty_vars:l f args ret
+      let loc = Loc.mk_pos $startpos $endpos in
+      A.mk_fun_decl ~loc ~ty_vars:l f args ret
     }
 
 assert_not:
@@ -179,13 +183,13 @@ stmt:
   | LEFT_PAREN DECLARE_FUN tup=fun_decl RIGHT_PAREN
     {
       let loc = Loc.mk_pos $startpos $endpos in
-      let tyvars, f, args, ret = tup in
-      A.decl_fun ~loc ~tyvars f args ret
+      let ty_vars, f, args, ret = tup in
+      A.decl_fun ~loc ~ty_vars f args ret
     }
   | LEFT_PAREN DECLARE_CONST f=IDENT ty=ty RIGHT_PAREN
     {
       let loc = Loc.mk_pos $startpos $endpos in
-      A.decl_fun ~loc ~tyvars:[] f [] ty
+      A.decl_fun ~loc ~ty_vars:[] f [] ty
     }
   | LEFT_PAREN DEFINE_FUN f=fun_rec RIGHT_PAREN
     {
@@ -235,14 +239,14 @@ tyvar:
   | s=IDENT { s }
 
 ty:
-  | BOOL { A.ty_bool }
-  | s=IDENT { A.ty_const s }
+  | BOOL { let loc = Loc.mk_pos $startpos $endpos in A.ty_bool ~loc }
+  | s=IDENT { let loc = Loc.mk_pos $startpos $endpos in A.ty_const ~loc s }
   | LEFT_PAREN s=IDENT args=ty+ RIGHT_PAREN
-    { A.ty_app s args }
+    { let loc = Loc.mk_pos $startpos $endpos in A.ty_app ~loc s args }
   | LEFT_PAREN ARROW tup=ty_arrow_args RIGHT_PAREN
     {
       let args, ret = tup in
-      A.ty_arrow_l args ret }
+      let loc = Loc.mk_pos $startpos $endpos in A.ty_arrow_l ~loc args ret }
 
 ty_arrow_args:
   | a=ty ret=ty { [a], ret }
@@ -273,48 +277,49 @@ binding:
   | LEFT_PAREN v=var t=term RIGHT_PAREN { v, t }
 
 term:
-  | TRUE { A.true_ }
-  | FALSE { A.false_ }
-  | s=QUOTED { A.const s }
-  | s=IDENT { A.const s }
+  | TRUE { let loc = Loc.mk_pos $startpos $endpos in A.true_ ~loc }
+  | FALSE { let loc = Loc.mk_pos $startpos $endpos in A.false_ ~loc }
+  | s=QUOTED { let loc = Loc.mk_pos $startpos $endpos in A.const ~loc s }
+  | s=IDENT { let loc = Loc.mk_pos $startpos $endpos in A.const ~loc s }
   | LEFT_PAREN t=term RIGHT_PAREN { t }
-  | LEFT_PAREN IF a=term b=term c=term RIGHT_PAREN { A.if_ a b c }
-  | LEFT_PAREN OR l=term+ RIGHT_PAREN { A.or_ l }
-  | LEFT_PAREN AND l=term+ RIGHT_PAREN { A.and_ l }
-  | LEFT_PAREN NOT t=term RIGHT_PAREN { A.not_ t }
-  | LEFT_PAREN DISTINCT l=term+ RIGHT_PAREN { A.distinct l }
-  | LEFT_PAREN EQ a=term b=term RIGHT_PAREN { A.eq a b }
-  | LEFT_PAREN ARROW a=term b=term RIGHT_PAREN { A.imply a b }
-  | LEFT_PAREN f=IDENT args=term+ RIGHT_PAREN { A.app f args }
-  | LEFT_PAREN AT f=term t=term RIGHT_PAREN { A.ho_app f t }
+  | LEFT_PAREN IF a=term b=term c=term RIGHT_PAREN {
+    let loc = Loc.mk_pos $startpos $endpos in A.if_ ~loc a b c }
+  | LEFT_PAREN OR l=term+ RIGHT_PAREN { let loc = Loc.mk_pos $startpos $endpos in A.or_ ~loc l }
+  | LEFT_PAREN AND l=term+ RIGHT_PAREN { let loc = Loc.mk_pos $startpos $endpos in A.and_ ~loc l }
+  | LEFT_PAREN NOT t=term RIGHT_PAREN { let loc = Loc.mk_pos $startpos $endpos in A.not_ ~loc t }
+  | LEFT_PAREN DISTINCT l=term+ RIGHT_PAREN { let loc = Loc.mk_pos $startpos $endpos in A.distinct ~loc l }
+  | LEFT_PAREN EQ a=term b=term RIGHT_PAREN { let loc = Loc.mk_pos $startpos $endpos in A.eq ~loc a b }
+  | LEFT_PAREN ARROW a=term b=term RIGHT_PAREN { let loc = Loc.mk_pos $startpos $endpos in A.imply ~loc a b }
+  | LEFT_PAREN f=IDENT args=term+ RIGHT_PAREN { let loc = Loc.mk_pos $startpos $endpos in A.app ~loc f args }
+  | LEFT_PAREN AT f=term t=term RIGHT_PAREN { let loc = Loc.mk_pos $startpos $endpos in A.ho_app ~loc f t }
   | LEFT_PAREN
       MATCH
       lhs=term
       l=case+
     RIGHT_PAREN
-    { A.match_ lhs l }
+    { let loc = Loc.mk_pos $startpos $endpos in A.match_ ~loc lhs l }
   | LEFT_PAREN
       FUN
       LEFT_PAREN vars=typed_var+ RIGHT_PAREN
       body=term
     RIGHT_PAREN
-    { A.fun_l vars body }
+    { let loc = Loc.mk_pos $startpos $endpos in A.fun_l ~loc vars body }
   | LEFT_PAREN
       LET
       LEFT_PAREN l=binding+ RIGHT_PAREN
       r=term
     RIGHT_PAREN
-    { A.let_ l r }
+    { let loc = Loc.mk_pos $startpos $endpos in A.let_ ~loc l r }
   | LEFT_PAREN AS t=term ty=ty RIGHT_PAREN
-    { A.cast t ~ty }
+    { let loc = Loc.mk_pos $startpos $endpos in A.cast ~loc t ~ty }
   | LEFT_PAREN FORALL LEFT_PAREN vars=typed_var+ RIGHT_PAREN
     f=term
     RIGHT_PAREN
-    { A.forall vars f }
+    { let loc = Loc.mk_pos $startpos $endpos in A.forall ~loc vars f }
   | LEFT_PAREN EXISTS LEFT_PAREN vars=typed_var+ RIGHT_PAREN
     f=term
     RIGHT_PAREN
-    { A.exists vars f }
+    { let loc = Loc.mk_pos $startpos $endpos in A.exists ~loc vars f }
   | error
     {
       let loc = Loc.mk_pos $startpos $endpos in

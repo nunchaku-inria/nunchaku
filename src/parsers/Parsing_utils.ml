@@ -113,7 +113,7 @@ module Make(P : PARSER) : S = struct
            in
            try_files ?loc f files
              ~p:(fun f ->
-               parse_rec ?loc:st.A.stmt_loc ~mode ~basedir ~res (`File f))
+               parse_rec ~loc:st.A.stmt_loc ~mode ~basedir ~res (`File f))
          | _ ->
            (* simply keep the statement *)
            CCVector.push res st)

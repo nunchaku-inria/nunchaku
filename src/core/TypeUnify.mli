@@ -5,7 +5,7 @@
 
 type 'a sequence = ('a -> unit) -> unit
 
-module Make(T : TermInner.REPR) : sig
+module Make(T : TermInner.REPR_LOC) : sig
   exception Fail of (T.t * T.t) list * string
   (** Raised when unification fails. The list of pairs of types is the
       unification stack (with the innermost types first) *)

@@ -24,7 +24,7 @@ type state = {
   declared: unit StrTbl.t;
 }
 
-let ty_term = A.var "$i"
+let ty_term = A.var ~loc:Loc.internal "$i"
 let ty_prop = A.ty_prop (* proposition *)
 let ty_type = A.ty_type
 
@@ -42,23 +42,23 @@ let declare_sym ~state s =
   StrTbl.replace state.declared s ()
 
 (* declare symbol with default type and given [arity] *)
-let declare_sym_default ~state ~ctx s arity =
+let declare_sym_default ~loc ~state ~ctx s arity =
   let ty = match ctx with
     | Ctx_ty ->
       let args = CCList.init arity (fun _ -> ty_type) in
-      A.ty_arrow_list args ty_type
+      A.ty_arrow_list ~loc args ty_type
     | Ctx_term ->
       let args = CCList.init arity (fun _ -> ty_term) in
-      A.ty_arrow_list args ty_term
+      A.ty_arrow_list ~loc args ty_term
     | Ctx_prop ->
       let args = CCList.init arity (fun _ -> ty_term) in
-      A.ty_arrow_list args ty_prop
+      A.ty_arrow_list ~loc args ty_prop
   in
   Utils.debugf ~section 1 "declare `%s` with (default) type `%a`"
     (fun k-> k s A.pp_term ty);
   (* declare [s : ty] *)
   StrTbl.replace state.declared s ();
-  CCVector.push state.into (A.decl ~attrs:[] s ty);
+  CCVector.push state.into (A.decl ~loc ~attrs:[] s ty);
   ()
 
 let enter_var_ ~state v f =
@@ -145,18 +145,20 @@ let rec declare_missing ~ctx ~state t =
     | A.Builtin _ -> t
     | A.Var (`Var v)
     | A.AtVar v ->
-      if not (is_tptp_var_ v) && not (is_declared ~state v)
-      then declare_sym_default ~ctx ~state v 0;
+      if not (is_tptp_var_ v) && not (is_declared ~state v) then (
+        declare_sym_default ~loc ~ctx ~state v 0;
+      );
       t
     | A.App (f,l) ->
       begin match Loc.get f with
         | A.AtVar v
         | A.Var (`Var v) ->
-          if not (is_declared ~state v)
-          then declare_sym_default ~state ~ctx v (List.length l);
+          if not (is_declared ~state v) then (
+            declare_sym_default ~loc ~state ~ctx v (List.length l);
+          );
           let ctx = prop2term ctx in
           let l = List.map (declare_missing ~ctx ~state) l in
-          A.app ?loc f l
+          A.app ~loc f l
         | A.Builtin b ->
           begin match b with
             | `And
@@ -165,9 +167,9 @@ let rec declare_missing ~ctx ~state t =
             | `Imply
             | `Equiv ->
               let l = List.map (declare_missing ~ctx:Ctx_prop ~state) l in
-              A.app ?loc f l
+              A.app ~loc f l
             | `Eq ->
-              A.app ?loc f (List.map (declare_missing ~ctx:Ctx_term ~state) l)
+              A.app ~loc f (List.map (declare_missing ~ctx:Ctx_term ~state) l)
             | `Prop
             | `Type
             | `True
@@ -177,16 +179,16 @@ let rec declare_missing ~ctx ~state t =
           end
         | _ ->
           let ctx = prop2term ctx in
-          A.app ?loc f (List.map (declare_missing ~ctx ~state) l)
+          A.app ~loc f (List.map (declare_missing ~ctx ~state) l)
       end;
     | A.Fun (v,t) ->
       enter_typed_var_ ~state v
-        (fun v -> A.fun_ ?loc v (declare_missing ~ctx ~state t))
+        (fun v -> A.fun_ ~loc v (declare_missing ~ctx ~state t))
     | A.Mu _ -> assert false (* no "mu" in TPTP *)
     | A.Let (v,t,u) ->
       let t = declare_missing ~ctx ~state t in
       enter_var_ ~state v
-        (fun () -> A.let_ ?loc v t (declare_missing ~ctx ~state u))
+        (fun () -> A.let_ ~loc v t (declare_missing ~ctx ~state u))
     | A.Match (t,l,def) ->
       let t = declare_missing ~ctx ~state t in
       let l = List.map
@@ -197,23 +199,23 @@ let rec declare_missing ~ctx ~state t =
       and def =
         CCOpt.map (declare_missing ~ctx ~state) def
       in
-      A.match_with ?loc ?default:def t l
+      A.match_with ~loc ?default:def t l
     | A.Ite (a,b,c) ->
-      A.ite ?loc
+      A.ite ~loc
         (declare_missing ~state ~ctx:Ctx_prop a)
         (declare_missing ~state ~ctx b)
         (declare_missing ~state ~ctx c)
     | A.TyForall (v,t) ->
       enter_var_ ~state v
-        (fun () -> A.ty_forall ?loc v (declare_missing ~ctx:Ctx_ty ~state t))
+        (fun () -> A.ty_forall ~loc v (declare_missing ~ctx:Ctx_ty ~state t))
     | A.Forall (v,t) ->
       enter_typed_var_ ~state v
-        (fun v -> A.forall ?loc v (declare_missing ~ctx:Ctx_prop ~state t))
+        (fun v -> A.forall ~loc v (declare_missing ~ctx:Ctx_prop ~state t))
     | A.Exists (v,t) ->
       enter_typed_var_ ~state v
-        (fun v -> A.exists ?loc v (declare_missing ~ctx:Ctx_prop ~state t))
+        (fun v -> A.exists ~loc v (declare_missing ~ctx:Ctx_prop ~state t))
     | A.TyArrow (a,b) ->
-      A.ty_arrow ?loc
+      A.ty_arrow ~loc
         (declare_missing ~ctx:Ctx_ty ~state a)
         (declare_missing ~ctx:Ctx_ty ~state b)
     | A.Asserting _ -> assert false
@@ -233,11 +235,12 @@ let process_form ~state t =
 
 (* process a single statement *)
 let process_statement_ ~state st =
+  let loc = st.A.stmt_loc in
   match st.A.stmt_value with
     | A.Include (f, _) ->
       failwith (Printf.sprintf "include of `%s` has not been resolved" f)
     | A.Axiom ax_l ->
-      let l = List.map (process_form ~state) ax_l in
+      let l = List.map (process_form ~loc ~state) ax_l in
       add_stmt ~state {st with A.stmt_value=A.Axiom l}
     | A.Def (a,b) ->
       let b = declare_missing ~ctx:Ctx_prop ~state b in
@@ -247,7 +250,7 @@ let process_statement_ ~state st =
       let t = declare_missing ~ctx:Ctx_ty ~state t in
       add_stmt ~state {st with A.stmt_value=A.Decl (v,t,attrs)}
     | A.Goal f ->
-      let f = process_form ~state f in
+      let f = process_form ~loc ~state f in
       add_stmt ~state {st with A.stmt_value=A.Goal f}
     | A.Spec _
     | A.Rec _

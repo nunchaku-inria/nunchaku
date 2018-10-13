@@ -149,77 +149,77 @@ type statement_node =
   | Goal of term (* goal *)
 
 type statement = {
-  stmt_loc: Loc.t option;
+  stmt_loc: Loc.t;
   stmt_name: string option;
   stmt_value: statement_node;
 }
 
-let wildcard ?loc () = Loc.with_loc ?loc (Var `Wildcard)
-let builtin ?loc s = Loc.with_loc ?loc (Builtin s)
-let var ?loc v = Loc.with_loc ?loc (Var (`Var v))
-let at_var ?loc v = Loc.with_loc ?loc (AtVar v)
-let meta_var ?loc v = Loc.with_loc ?loc (MetaVar v)
-let rec app ?loc t l = match Loc.get t with
-  | App (f, l1) -> app ?loc f (l1 @ l)
-  | _ -> Loc.with_loc ?loc (App (t,l))
-let fun_ ?loc v t = Loc.with_loc ?loc (Fun(v,t))
-let let_ ?loc v t u = Loc.with_loc ?loc (Let (v,t,u))
-let match_with ?loc ?default t l = Loc.with_loc ?loc (Match (t,l,default))
-let ite ?loc a b c = Loc.with_loc ?loc (Ite (a,b,c))
-let ty_prop = builtin `Prop
-let ty_type = builtin `Type
-let true_ = builtin `True
-let false_ = builtin `False
-let not_ ?loc f = app ?loc (builtin ?loc `Not) [f]
+let wildcard ~loc () = Loc.with_loc ~loc (Var `Wildcard)
+let builtin ~loc s = Loc.with_loc ~loc (Builtin s)
+let var ~loc v = Loc.with_loc ~loc (Var (`Var v))
+let at_var ~loc v = Loc.with_loc ~loc (AtVar v)
+let meta_var ~loc v = Loc.with_loc ~loc (MetaVar v)
+let rec app ~loc t l = match Loc.get t with
+  | App (f, l1) -> app ~loc f (l1 @ l)
+  | _ -> Loc.with_loc ~loc (App (t,l))
+let fun_ ~loc v t = Loc.with_loc ~loc (Fun(v,t))
+let let_ ~loc v t u = Loc.with_loc ~loc (Let (v,t,u))
+let match_with ~loc ?default t l = Loc.with_loc ~loc (Match (t,l,default))
+let ite ~loc a b c = Loc.with_loc ~loc (Ite (a,b,c))
+let ty_prop = builtin ~loc:Loc.internal `Prop
+let ty_type = builtin ~loc:Loc.internal `Type
+let true_ ~loc = builtin ~loc `True
+let false_ ~loc = builtin ~loc `False
+let not_ ~loc f = app ~loc (builtin ~loc `Not) [f]
 
 (* apply [b], an infix operator, to [l], in an associative way *)
-let rec app_infix_l ?loc f l = match l with
+let rec app_infix_l ~loc f l = match l with
   | [] -> assert false
   | [t] -> t
-  | a :: tl -> app ?loc f [a; app_infix_l ?loc f tl]
+  | a :: tl -> app ~loc f [a; app_infix_l ~loc f tl]
 
-let and_ ?loc l = app_infix_l ?loc (builtin ?loc `And) l
-let or_ ?loc l = app_infix_l ?loc (builtin ?loc `Or) l
-let imply ?loc a b = app ?loc (builtin ?loc `Imply) [a;b]
-let equiv ?loc a b = app ?loc (builtin ?loc `Equiv) [a;b]
-let eq ?loc a b = app ?loc (builtin ?loc `Eq) [a;b]
-let neq ?loc a b = not_ ?loc (eq ?loc a b)
-let forall ?loc v t = Loc.with_loc ?loc (Forall (v, t))
-let exists ?loc v t = Loc.with_loc ?loc (Exists (v, t))
-let mu ?loc v t = Loc.with_loc ?loc (Mu (v,t))
-let asserting ?loc t l = match l with
+let and_ ~loc l = app_infix_l ~loc (builtin ~loc `And) l
+let or_ ~loc l = app_infix_l ~loc (builtin ~loc `Or) l
+let imply ~loc a b = app ~loc (builtin ~loc `Imply) [a;b]
+let equiv ~loc a b = app ~loc (builtin ~loc `Equiv) [a;b]
+let eq ~loc a b = app ~loc (builtin ~loc `Eq) [a;b]
+let neq ~loc a b = not_ ~loc (eq ~loc a b)
+let forall ~loc v t = Loc.with_loc ~loc (Forall (v, t))
+let exists ~loc v t = Loc.with_loc ~loc (Exists (v, t))
+let mu ~loc v t = Loc.with_loc ~loc (Mu (v,t))
+let asserting ~loc t l = match l with
   | [] -> t
-  | _::_ -> Loc.with_loc ?loc (Asserting (t,l))
-let undefined ?loc t = Loc.with_loc ?loc (Builtin (`Undefined_atom t))
-let ty_arrow ?loc a b = Loc.with_loc ?loc (TyArrow (a,b))
-let ty_forall ?loc v t = Loc.with_loc ?loc (TyForall (v,t))
+  | _::_ -> Loc.with_loc ~loc (Asserting (t,l))
+let undefined ~loc t = Loc.with_loc ~loc (Builtin (`Undefined_atom t))
+let ty_arrow ~loc a b = Loc.with_loc ~loc (TyArrow (a,b))
+let ty_forall ~loc v t = Loc.with_loc ~loc (TyForall (v,t))
 
-let ty_forall_list ?loc = List.fold_right (ty_forall ?loc)
-let ty_arrow_list ?loc = List.fold_right (ty_arrow ?loc)
+let ty_forall_list ~loc = List.fold_right (ty_forall ~loc)
+let ty_arrow_list ~loc = List.fold_right (ty_arrow ~loc)
 
-let forall_list ?loc = List.fold_right (forall ?loc)
-let exists_list ?loc = List.fold_right (exists ?loc)
-let fun_list ?loc = List.fold_right (fun_ ?loc)
+let forall_list ~loc = List.fold_right (forall ~loc)
+let exists_list ~loc = List.fold_right (exists ~loc)
+let fun_list ~loc = List.fold_right (fun_ ~loc)
 
 let forall_term = var "!!"
 let exists_term = var "??"
 
-let mk_stmt_ ?loc ?name st =
+let mk_stmt_ ~loc ?name st =
   {stmt_loc=loc; stmt_name=name; stmt_value=st }
 
-let include_ ?name ?loc ?which f = mk_stmt_ ?name ?loc (Include(f,which))
-let decl ?name ?loc ~attrs v t = mk_stmt_ ?name ?loc (Decl(v,t,attrs))
-let axiom ?name ?loc l = mk_stmt_ ?name ?loc (Axiom l)
-let spec ?name ?loc l = mk_stmt_ ?name ?loc (Spec l)
-let rec_ ?name ?loc l = mk_stmt_ ?name ?loc (Rec l)
-let def ?name ?loc a b = mk_stmt_ ?name ?loc (Def (a,b))
-let data ?name ?loc l = mk_stmt_ ?name ?loc (Data l)
-let codata ?name ?loc l = mk_stmt_ ?name ?loc (Codata l)
-let pred ?name ?loc ~wf l = mk_stmt_ ?name ?loc (Pred (wf, l))
-let copred ?name ?loc ~wf l = mk_stmt_ ?name ?loc (Copred (wf, l))
-let copy ?name ?loc ~of_ ~wrt ~abstract ~concrete id vars =
-  mk_stmt_ ?name ?loc (Copy {id; copy_vars=vars; of_; wrt; abstract; concrete })
-let goal ?name ?loc t = mk_stmt_ ?name ?loc (Goal t)
+let include_ ?name ~loc ?which f = mk_stmt_ ?name ~loc (Include(f,which))
+let decl ?name ~loc ~attrs v t = mk_stmt_ ?name ~loc (Decl(v,t,attrs))
+let axiom ?name ~loc l = mk_stmt_ ?name ~loc (Axiom l)
+let spec ?name ~loc l = mk_stmt_ ?name ~loc (Spec l)
+let rec_ ?name ~loc l = mk_stmt_ ?name ~loc (Rec l)
+let def ?name ~loc a b = mk_stmt_ ?name ~loc (Def (a,b))
+let data ?name ~loc l = mk_stmt_ ?name ~loc (Data l)
+let codata ?name ~loc l = mk_stmt_ ?name ~loc (Codata l)
+let pred ?name ~loc ~wf l = mk_stmt_ ?name ~loc (Pred (wf, l))
+let copred ?name ~loc ~wf l = mk_stmt_ ?name ~loc (Copred (wf, l))
+let copy ?name ~loc ~of_ ~wrt ~abstract ~concrete id vars =
+  mk_stmt_ ?name ~loc (Copy {id; copy_vars=vars; of_; wrt; abstract; concrete })
+let goal ?name ~loc t = mk_stmt_ ?name ~loc (Goal t)
 
 let rec head t = match Loc.get t with
   | Var (`Var v) | AtVar v | MetaVar v -> v
@@ -396,10 +396,11 @@ let pp_statement_list out l =
 module TPTP = struct
   (* additional statements for any TPTP problem *)
   let prelude =
-    let (==>) = ty_arrow in
-    let ty_term = builtin `Unitype in
-    [ decl ~attrs:[] "!!" ((ty_term ==> ty_prop) ==> ty_prop)
-    ; decl ~attrs:[] "??" ((ty_term ==> ty_prop) ==> ty_prop)
+    let loc = Loc.internal in
+    let (==>) = ty_arrow ~loc in
+    let ty_term = builtin ~loc `Unitype in
+    [ decl ~loc ~attrs:[] "!!" ((ty_term ==> ty_prop) ==> ty_prop)
+    ; decl ~loc ~attrs:[] "??" ((ty_term ==> ty_prop) ==> ty_prop)
     ]
 
   (* meta-data used in TPTP `additional_info` *)

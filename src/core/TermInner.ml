@@ -82,6 +82,11 @@ module type REPR = sig
   val repr : t repr
 end
 
+module type REPR_LOC = sig
+  include REPR
+  val loc : t -> Location.t
+end
+
 module type BUILD = sig
   type t
   val build : t build

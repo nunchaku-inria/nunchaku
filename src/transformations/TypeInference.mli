@@ -10,7 +10,7 @@ type id = ID.t
 type 'a var = 'a Var.t
 type loc = Location.t
 
-exception ScopingError of string * string * loc option
+exception ScopingError of string * string * loc
 (** Scoping error for the given variable *)
 
 (** {2 Type Inference/Checking}

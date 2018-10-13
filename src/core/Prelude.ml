@@ -42,8 +42,8 @@ let sexp_to_term : Sexp_lib.t -> A.term =
     | `List [`Atom "let"; `Atom v; t; u] -> A.let_ ~loc v (p t) (p u)
     | `Atom "prop" -> A.ty_prop
     | `Atom "type" -> A.ty_type
-    | `Atom "true" -> A.true_
-    | `Atom "false" -> A.false_
+    | `Atom "true" -> A.true_ ~loc
+    | `Atom "false" -> A.false_ ~loc
     | `Atom v -> A.var ~loc v
     | `List (`Atom v :: l) -> A.app ~loc (A.var ~loc v) (List.map p l)
     | s -> parse_errorf_ "@[<2>expected term, got @[%a@]@]" Sexp_lib.pp s
@@ -62,7 +62,7 @@ let ty_choice_ = p_term "(pi a (-> (-> a prop) a))"
 
 let mk_stmt d =
   { A.
-    stmt_loc=Some loc;
+    stmt_loc=loc;
     stmt_name=None;
     stmt_value=d;
   }

@@ -7,6 +7,7 @@ module TI = TermInner
 module Loc = Location
 
 (*$inject
+  let loc = Location.internal
   module TI = TermInner
   module U = Util(Default)
 *)
@@ -22,12 +23,12 @@ module type REPR = sig
   type t
   val repr : t -> t view
   val ty: t -> t option
-  val loc: t -> loc option
+  val loc: t -> loc
 end
 
 module type BUILD = sig
   type t
-  val build : ?loc:loc -> ty:t -> t view -> t
+  val build : loc:loc -> ty:t -> t view -> t
   val kind : t (* impossible to build otherwise *)
 end
 
@@ -49,28 +50,28 @@ module Util(T : S)
     val ty_exn : t -> t
     (** @raise Not_found if the term has no type *)
 
-    val const : ?loc:loc -> ty:t -> id -> t
-    val builtin : ?loc:loc -> ty:t -> t Builtin.t -> t
-    val var : ?loc:loc -> t var -> t
-    val app : ?loc:loc -> ty:t -> t -> t list -> t
-    val fun_ : ?loc:loc -> ty:t -> t var -> t -> t
-    val mu : ?loc:loc -> t var -> t -> t
-    val let_ : ?loc:loc -> t var -> t -> t -> t
-    val match_with : ?loc:loc -> ty:t -> t -> t TI.cases -> def:t TI.default_case -> t
-    val ite : ?loc:loc -> t -> t -> t -> t
-    val forall : ?loc:loc -> t var -> t -> t
-    val exists : ?loc:loc -> t var -> t -> t
-    val eq : ?loc:loc -> t -> t -> t
-    val asserting : ?loc:loc -> t -> t list -> t
-    val undefined_self : ?loc:loc -> t -> t
+    val const : loc:loc -> ty:t -> id -> t
+    val builtin : loc:loc -> ty:t -> t Builtin.t -> t
+    val var : loc:loc -> t var -> t
+    val app : loc:loc -> ty:t -> t -> t list -> t
+    val fun_ : loc:loc -> ty:t -> t var -> t -> t
+    val mu : loc:loc -> t var -> t -> t
+    val let_ : loc:loc -> t var -> t -> t -> t
+    val match_with : loc:loc -> ty:t -> t -> t TI.cases -> def:t TI.default_case -> t
+    val ite : loc:loc -> t -> t -> t -> t
+    val forall : loc:loc -> t var -> t -> t
+    val exists : loc:loc -> t var -> t -> t
+    val eq : loc:loc -> t -> t -> t
+    val asserting : loc:loc -> t -> t list -> t
+    val undefined_self : loc:loc -> t -> t
 
     val true_ : t
     val false_ : t
 
-    val forall_l : ?loc:loc -> t var list -> t -> t
+    val forall_l : loc:loc -> t var list -> t -> t
 
     val mk_bind :
-      ?loc:loc ->
+      loc:loc ->
       ty:t ->
       Binder.t -> t var -> t -> t
 
@@ -78,16 +79,16 @@ module Util(T : S)
     val ty_prop : t (** Propositions *)
     val ty_unitype : t  (** $i in TPTP *)
 
-    val ty_builtin : ?loc:loc -> TI.TyBuiltin.t -> t
-    val ty_const : ?loc:loc -> id -> t
-    val ty_app : ?loc:loc -> t -> t list -> t
-    val ty_arrow : ?loc:loc -> t -> t -> t
-    val ty_arrow_l : ?loc:loc -> t list -> t -> t
+    val ty_builtin : loc:loc -> TI.TyBuiltin.t -> t
+    val ty_const : loc:loc -> id -> t
+    val ty_app : loc:loc -> t -> t list -> t
+    val ty_arrow : loc:loc -> t -> t -> t
+    val ty_arrow_l : loc:loc -> t list -> t -> t
 
-    val ty_var : ?loc:loc -> t var -> t
-    val ty_forall : ?loc:loc -> t var -> t -> t
+    val ty_var : loc:loc -> t var -> t
+    val ty_forall : loc:loc -> t var -> t -> t
 
-    val ty_meta_var : ?loc:loc -> t MetaVar.t -> t
+    val ty_meta_var : loc:loc -> t MetaVar.t -> t
     (** Meta-variable, ready for unif *)
 
     include TI.UTIL_REPR with type t := t
@@ -104,85 +105,85 @@ module Util(T : S)
     | Some t -> t
 
   let ty_type =
-    build ?loc:None ~ty:T.kind (TI.TyBuiltin `Type)
+    build ~loc:Loc.internal ~ty:T.kind (TI.TyBuiltin `Type)
 
   let ty_prop =
-    build ?loc:None ~ty:ty_type (TI.TyBuiltin `Prop)
+    build ~loc:Loc.internal ~ty:ty_type (TI.TyBuiltin `Prop)
 
   let ty_unitype =
-    build ?loc:None ~ty:ty_type (TI.TyBuiltin `Unitype)
+    build ~loc:Loc.internal ~ty:ty_type (TI.TyBuiltin `Unitype)
 
-  let builtin ?loc ~ty b =
-    build ?loc ~ty (TI.Builtin b)
+  let builtin ~loc ~ty b =
+    build ~loc ~ty (TI.Builtin b)
 
-  let const ?loc ~ty id =
-    build ?loc ~ty (TI.Const id)
+  let const ~loc ~ty id =
+    build ~loc ~ty (TI.Const id)
 
-  let true_ = builtin ~ty:ty_prop `True
-  let false_ = builtin ~ty:ty_prop `False
+  let true_ : t = builtin ~loc:Loc.internal ~ty:ty_prop `True
+  let false_ : t = builtin ~loc:Loc.internal ~ty:ty_prop `False
 
-  let var ?loc v = build ?loc ~ty:(Var.ty v) (TI.Var v)
+  let var ~loc v = build ~loc ~ty:(Var.ty v) (TI.Var v)
 
-  let app ?loc ~ty t l =
-    build ?loc ~ty (TI.App(t,l))
+  let app ~loc ~ty t l =
+    build ~loc ~ty (TI.App(t,l))
 
-  let mk_bind ?loc ~ty b v t = build ?loc ~ty (TI.Bind (b,v,t))
+  let mk_bind ~loc ~ty b v t = build ~loc ~ty (TI.Bind (b,v,t))
 
-  let fun_ ?loc ~ty v t = build ?loc ~ty (TI.Bind(Binder.Fun,v, t))
+  let fun_ ~loc ~ty v t = build ~loc ~ty (TI.Bind(Binder.Fun,v, t))
 
-  let mu ?loc v t =
+  let mu ~loc v t =
     (* typeof v = typeof t = typeof µv.t *)
     let ty = Var.ty v in
-    build ?loc ~ty (TI.Bind (Binder.Mu, v, t))
+    build ~loc ~ty (TI.Bind (Binder.Mu, v, t))
 
-  let let_ ?loc v t u =
-    build ?loc ~ty:(ty_exn u) (TI.Let (v, t, u))
+  let let_ ~loc v t u =
+    build ~loc ~ty:(ty_exn u) (TI.Let (v, t, u))
 
-  let match_with ?loc ~ty t l ~def =
+  let match_with ~loc ~ty t l ~def =
     if ID.Map.is_empty l then invalid_arg "Term_typed.case: no cases";
-    build ?loc ~ty (TI.Match (t, l, def))
+    build ~loc ~ty (TI.Match (t, l, def))
 
-  let ite ?loc a b c =
-    builtin ?loc ~ty:(ty_exn b) (`Ite (a,b,c))
+  let ite ~loc a b c =
+    builtin ~loc ~ty:(ty_exn b) (`Ite (a,b,c))
 
-  let forall ?loc v t =
-    mk_bind ?loc ~ty:ty_prop Binder.Forall v t
+  let forall ~loc v t =
+    mk_bind ~loc ~ty:ty_prop Binder.Forall v t
 
-  let exists ?loc v t =
-    mk_bind ?loc ~ty:ty_prop Binder.Exists v t
+  let exists ~loc v t =
+    mk_bind ~loc ~ty:ty_prop Binder.Exists v t
 
-  let eq ?loc a b =
-    builtin ?loc ~ty:ty_prop (`Eq (a,b))
+  let eq ~loc a b =
+    builtin ~loc ~ty:ty_prop (`Eq (a,b))
 
-  let forall_l ?loc vars t = List.fold_right (forall ?loc) vars t
+  let forall_l ~loc vars t = List.fold_right (forall ~loc) vars t
 
-  let asserting ?loc t l = match l with
+  let asserting ~loc t l = match l with
     | [] -> t
     | _::_ ->
       let g = { Builtin.asserting=l; } in
-      builtin ?loc ~ty:(ty_exn t) (`Guard (t, g))
+      builtin ~loc ~ty:(ty_exn t) (`Guard (t, g))
 
-  let undefined_self ?loc t =
-    builtin ?loc ~ty:(ty_exn t) (`Undefined_self t)
+  let undefined_self ~loc t =
+    builtin ~loc ~ty:(ty_exn t) (`Undefined_self t)
 
-  let ty_builtin ?loc b =
-    build ?loc ~ty:ty_type (TI.TyBuiltin b)
+  let ty_builtin ~loc b =
+    build ~loc ~ty:ty_type (TI.TyBuiltin b)
 
-  let ty_const ?loc id =
-    const ?loc ~ty:ty_type id
+  let ty_const ~loc id =
+    const ~loc ~ty:ty_type id
 
-  let ty_var ?loc v = build ?loc ~ty:(Var.ty v) (TI.Var v)
+  let ty_var ~loc v = build ~loc ~ty:(Var.ty v) (TI.Var v)
 
-  let ty_meta_var ?loc v = build ?loc ~ty:ty_type (TI.TyMeta v)
+  let ty_meta_var ~loc v = build ~loc ~ty:ty_type (TI.TyMeta v)
 
-  let ty_app ?loc f l = app ?loc ~ty:ty_type f l
+  let ty_app ~loc f l = app ~loc ~ty:ty_type f l
 
-  let ty_arrow ?loc a b =
-    build ?loc ~ty:ty_type (TI.TyArrow (a,b))
-  let ty_arrow_l ?loc = List.fold_right (ty_arrow ?loc)
+  let ty_arrow ~loc a b =
+    build ~loc ~ty:ty_type (TI.TyArrow (a,b))
+  let ty_arrow_l ~loc = List.fold_right (ty_arrow ~loc)
 
-  let ty_forall ?loc a b =
-    mk_bind ?loc ~ty:ty_type Binder.TyForall a b
+  let ty_forall ~loc a b =
+    mk_bind ~loc ~ty:ty_type Binder.TyForall a b
 
   include TI.UtilRepr(LiftRepr(T))
 
@@ -191,14 +192,14 @@ end
 
 (*$T
   U.ty_returns_Type U.ty_type
-  U.ty_returns_Type U.(ty_arrow ty_prop ty_type)
-  not (U.ty_returns_Type U.(ty_arrow ty_type ty_prop))
+  U.ty_returns_Type U.(ty_arrow ~loc ty_prop ty_type)
+  not (U.ty_returns_Type U.(ty_arrow ~loc ty_type ty_prop))
 *)
 
 module Default = struct
   type t = {
     view : t view;
-    d_loc : Loc.t option;
+    d_loc : Loc.t;
     mutable d_ty : t option;
   }
 
@@ -218,13 +219,13 @@ module Default = struct
 
   let make_raw_ ~loc ~ty view = { view; d_loc=loc; d_ty=Some ty; }
 
-  let build ?loc ~ty view = match view with
+  let build ~loc ~ty view = match view with
     | TI.App (f, []) -> f
     | TI.App ({view=TI.App (f, l1); d_loc=loc; _}, l2) ->
       make_raw_ ~loc ~ty (TI.App (f, l1 @ l2))
     | _ -> make_raw_ ~loc ~ty view
 
-  let kind = {view=TI.TyBuiltin `Kind; d_loc=None; d_ty=None; }
+  let kind = {view=TI.TyBuiltin `Kind; d_loc=Location.internal; d_ty=None; }
 
   module Print = TI.Print(struct
       type t_ = t

@@ -14,6 +14,8 @@ type t = {
 let mk file start_line start_column stop_line stop_column =
   { file; start_line; start_column; stop_line; stop_column; }
 
+let internal = mk "<internal>" 0 0 0 0
+
 let mk_pair file (a,b)(c,d) = mk file a b c d
 
 let mk_pos start stop =
@@ -85,11 +87,11 @@ let to_string_opt = CCFormat.to_string pp_opt
 (** {2 Value bundled with Location} *)
 
 type 'a with_loc = {
-  loc: t option;
+  loc: t;
   value: 'a;
 }
 
-let with_loc ?loc value = {loc; value; }
+let with_loc ~loc value = {loc; value; }
 
 let get {value; _} = value
 let get_loc {loc; _} = loc

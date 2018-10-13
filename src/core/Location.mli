@@ -13,6 +13,8 @@ type t = {
   stop_column : int;
 }
 
+val internal : t (** Internally defined objects *)
+
 val mk : string -> int -> int -> int -> int -> t
 
 val mk_pair : string -> (int * int) -> (int * int) -> t
@@ -46,15 +48,15 @@ val to_string_opt : t option -> string
 (** {2 Value bundled with Location} *)
 
 type 'a with_loc = {
-  loc: t option;
+  loc: t;
   value: 'a;
 }
 
-val with_loc: ?loc:t -> 'a -> 'a with_loc
-(** [with_loc ?loc x] makes a value with the given location *)
+val with_loc: loc:t -> 'a -> 'a with_loc
+(** [with_loc loc x] makes a value with the given location *)
 
 val get : 'a with_loc -> 'a
-val get_loc : _ with_loc -> t option
+val get_loc : _ with_loc -> t
 
 (** {2 Lexbuf}
 

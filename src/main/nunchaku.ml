@@ -551,8 +551,11 @@ let run_tasks ~j ~deadline pipe pb =
 let negate_goal stmts =
   let module A = UntypedAST in
   CCVector.map
-    (fun st -> match st.A.stmt_value with
-       | A.Goal f -> {st with A.stmt_value=A.Goal (A.not_ f); }
+    (fun st ->
+       match st.A.stmt_value with
+         | A.Goal f ->
+           let loc = Location.get_loc f in
+           {st with A.stmt_value=A.Goal (A.not_ ~loc f); }
        | _ -> st)
     stmts
 

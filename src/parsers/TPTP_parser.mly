@@ -137,7 +137,9 @@ role_as_decl:
   | THF LEFT_PAREN name=name COMMA ROLE COMMA f=thf_formula annotations RIGHT_PAREN DOT {name,f}
   | FOF LEFT_PAREN name=name COMMA ROLE COMMA f=fof_formula annotations RIGHT_PAREN DOT {name,f}
   | CNF LEFT_PAREN name=name COMMA ROLE COMMA f=cnf_formula annotations RIGHT_PAREN DOT
-    {name, A.or_ f }
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      name, A.or_ ~loc f }
 
 statement:
   | f=toplevel_form(role_as_goal)
@@ -225,7 +227,7 @@ thf_unitary_formula:
     f=thf_unitary_formula
     {
       let loc = L.mk_pos $startpos $endpos in
-      q ?loc:(Some loc) vars f
+      q ~loc:loc vars f
     }
 
 thf_quantifier:
@@ -255,10 +257,18 @@ thf_ite:
   | ITE_F {}
 
 thf_const:
-  | TRUE { A.true_ }
-  | FALSE { A.false_ }
-  | HO_FORALL { A.forall_term }
-  | HO_EXISTS { A.exists_term }
+  | TRUE {
+      let loc = L.mk_pos $startpos $endpos in
+      A.true_ ~loc }
+  | FALSE {
+      let loc = L.mk_pos $startpos $endpos in
+      A.false_ ~loc }
+  | HO_FORALL {
+      let loc = L.mk_pos $startpos $endpos in
+      A.forall_term ~loc }
+  | HO_EXISTS {
+      let loc = L.mk_pos $startpos $endpos in
+      A.exists_term ~loc }
   | WILDCARD
     {
       let loc = L.mk_pos $startpos $endpos in
@@ -377,8 +387,12 @@ unary_connective:
   | NOT { fun ~loc t -> A.not_ ~loc t }
 
 atomic_formula:
-  | TRUE { A.true_ }
-  | FALSE { A.false_ }
+  | TRUE {
+      let loc = L.mk_pos $startpos $endpos in
+      A.true_ ~loc }
+  | FALSE {
+      let loc = L.mk_pos $startpos $endpos in
+      A.false_ ~loc }
   | l=term o=infix_connective r=term
     {
       let loc = L.mk_pos $startpos $endpos in
@@ -503,7 +517,9 @@ system_functor: s=atomic_system_word { s }
     LEFT_BRACKET vars=separated_nonempty_list(COMMA, raw_ty_variable) RIGHT_BRACKET
     COLUMN
     ty=quantified_type(TY)
-    { A.ty_forall_list vars ty }
+    {
+      let loc = L.mk_pos $startpos $endpos in
+      A.ty_forall_list ~loc vars ty }
 
 /* general type, without quantifiers */
 tff_type:

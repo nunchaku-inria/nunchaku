@@ -20,15 +20,20 @@ type var = string
 type ty_var = string
 
 (** Polymorphic types *)
-type ty =
+type ty = ty_view Loc.with_loc
+and ty_view =
   | Ty_bool
   | Ty_app of ty_var * ty list
   | Ty_arrow of ty list * ty
 
+let ty_view : ty -> ty_view = Loc.get
+let ty_loc = Loc.get_loc
+
 type typed_var = var * ty
 
 (** {2 AST: S-expressions with locations} *)
-type term =
+type term = term_view Loc.with_loc
+and term_view =
   | True
   | False
   | Const of string
@@ -62,6 +67,7 @@ type 'arg fun_decl = {
   fun_name: string;
   fun_args: 'arg list;
   fun_ret: ty;
+  fun_loc: Loc.t;
 }
 
 type fun_def = {
@@ -76,7 +82,7 @@ type funs_rec_def = {
 
 type statement = {
   stmt: stmt;
-  loc: Loc.t option;
+  loc: Loc.t;
 }
 
 and stmt =
@@ -90,55 +96,58 @@ and stmt =
   | Stmt_assert_not of ty_var list * term
   | Stmt_check_sat
 
-let ty_bool = Ty_bool
-let ty_app s l = Ty_app (s,l)
-let ty_const s = ty_app s []
-let ty_arrow_l args ret = if args=[] then ret else Ty_arrow (args, ret)
-let ty_arrow a b = ty_arrow_l [a] b
+let ty_bool ~loc : ty = Loc.with_loc ~loc @@ Ty_bool
+let ty_app ~loc s l = Loc.with_loc ~loc @@ Ty_app (s,l)
+let ty_const ~loc s = ty_app ~loc s []
+let ty_arrow_l ~loc args ret = if args=[] then ret else Loc.with_loc ~loc (Ty_arrow (args, ret))
+let ty_arrow ~loc a b = ty_arrow_l ~loc [a] b
 
-let true_ = True
-let false_ = False
-let const s = Const s
-let app f l = App (f,l)
-let ho_app a b = HO_app (a,b)
-let match_ u l = Match (u,l)
-let if_ a b c = If(a,b,c)
-let fun_ v t = Fun (v,t)
-let fun_l = List.fold_right fun_
-let let_ l t = Let (l,t)
-let eq a b = Eq (a,b)
-let imply a b = Imply(a,b)
-let and_ l = And l
-let or_ l = Or l
-let distinct l = Distinct l
-let cast t ~ty = Cast (t, ty)
-let forall vars f = match vars with [] -> f | _ -> Forall (vars, f)
-let exists vars f = match vars with [] -> f | _ -> Exists (vars, f)
-let rec not_ t = match t with
-  | Forall (vars,u) -> exists vars (not_ u)
-  | Exists (vars,u) -> forall vars (not_ u)
-  | _ -> Not t
+let t_loc t = Loc.get_loc t
+let t_view (t:term) : term_view = Loc.get t
+let mk_ ~loc x : term = Loc.with_loc ~loc x
+let true_ ~loc : term = mk_ ~loc @@ True
+let false_ ~loc = mk_ ~loc @@ False
+let const ~loc s = mk_ ~loc @@ Const s
+let app ~loc f l = mk_ ~loc @@ App (f,l)
+let ho_app ~loc a b = mk_ ~loc @@ HO_app (a,b)
+let match_ ~loc u l = mk_ ~loc @@ Match (u,l)
+let if_ ~loc a b c = mk_ ~loc @@ If(a,b,c)
+let fun_ ~loc v t = mk_ ~loc @@ Fun (v,t)
+let fun_l ~loc = List.fold_right @@ fun_ ~loc
+let let_ ~loc l t = mk_ ~loc @@ Let (l,t)
+let eq ~loc a b = mk_ ~loc @@ Eq (a,b)
+let imply ~loc a b = mk_ ~loc @@ Imply(a,b)
+let and_ ~loc l = mk_ ~loc @@ And l
+let or_ ~loc l = mk_ ~loc @@ Or l
+let distinct ~loc l = mk_ ~loc @@ Distinct l
+let cast ~loc t ~ty = mk_ ~loc @@ Cast (t, ty)
+let forall ~loc vars f = match vars with [] -> f | _ -> mk_ ~loc @@ Forall (vars, f)
+let exists ~loc vars f = match vars with [] -> f | _ -> mk_ ~loc @@ Exists (vars, f)
+let rec not_ ~loc t = match t_view t with
+  | Forall (vars,u) -> exists ~loc vars (not_ ~loc u)
+  | Exists (vars,u) -> forall ~loc vars (not_ ~loc u)
+  | _ -> mk_ ~loc @@ Not t
 
-let _mk ?loc stmt = { loc; stmt }
+let mk_st_ ~loc stmt = { loc; stmt }
 
 let mk_cstor name l : cstor = { cstor_name=name; cstor_args=l }
-let mk_fun_decl ~ty_vars f args ret =
+let mk_fun_decl ~loc ~ty_vars f args ret =
   { fun_ty_vars=ty_vars; fun_name=f;
-    fun_args=args; fun_ret=ret; }
-let mk_fun_rec ~ty_vars f args ret body =
-  { fr_decl=mk_fun_decl ~ty_vars f args ret; fr_body=body; }
+    fun_args=args; fun_ret=ret; fun_loc=loc; }
+let mk_fun_rec ~loc ~ty_vars f args ret body =
+  { fr_decl=mk_fun_decl ~loc ~ty_vars f args ret; fr_body=body; }
 
-let decl_sort ?loc s ~arity = _mk ?loc (Stmt_decl_sort (s, arity))
-let decl_fun ?loc ~tyvars f ty_args ty_ret =
-  let d = {fun_ty_vars=tyvars; fun_name=f; fun_args=ty_args; fun_ret=ty_ret} in
-  _mk ?loc (Stmt_decl d)
-let fun_def ?loc fr = _mk ?loc (Stmt_fun_def fr)
-let fun_rec ?loc fr = _mk ?loc (Stmt_fun_rec fr)
-let funs_rec ?loc decls bodies = _mk ?loc (Stmt_funs_rec {fsr_decls=decls; fsr_bodies=bodies})
-let data ?loc tyvars l = _mk ?loc (Stmt_data (tyvars,l))
-let assert_ ?loc t = _mk ?loc (Stmt_assert t)
-let assert_not ?loc ~ty_vars t = _mk ?loc (Stmt_assert_not (ty_vars, t))
-let check_sat ?loc () = _mk ?loc Stmt_check_sat
+let decl_sort ~loc s ~arity = mk_st_ ~loc (Stmt_decl_sort (s, arity))
+let decl_fun ~loc ~ty_vars f ty_args ty_ret =
+  let d = mk_fun_decl ~loc ~ty_vars f ty_args ty_ret in
+  mk_st_ ~loc (Stmt_decl d)
+let fun_def ~loc fr = mk_st_ ~loc (Stmt_fun_def fr)
+let fun_rec ~loc fr = mk_st_ ~loc (Stmt_fun_rec fr)
+let funs_rec ~loc decls bodies = mk_st_ ~loc (Stmt_funs_rec {fsr_decls=decls; fsr_bodies=bodies})
+let data ~loc tyvars l = mk_st_ ~loc (Stmt_data (tyvars,l))
+let assert_ ~loc t = mk_st_ ~loc (Stmt_assert t)
+let assert_not ~loc ~ty_vars t = mk_st_ ~loc (Stmt_assert_not (ty_vars, t))
+let check_sat ~loc () = mk_st_ ~loc Stmt_check_sat
 
 let loc t = t.loc
 let view t = t.stmt
@@ -161,14 +170,14 @@ let pp_list ?(start="") ?(stop="") ?(sep=" ") pp out l =
 
 let pp_tyvar = pp_str
 
-let rec pp_ty out (ty:ty) = match ty with
+let rec pp_ty out (ty:ty) = match Loc.get ty with
   | Ty_bool -> pp_str out "Bool"
   | Ty_app (s,[]) -> pp_str out s
   | Ty_app (s,l) -> Format.fprintf out "(@[<hv1>%s@ %a@])" s (pp_list pp_ty) l
   | Ty_arrow (args,ret) ->
     fpf out "(@[=>@ %a@ %a@])" (pp_list pp_ty) args pp_ty ret
 
-let rec pp_term out (t:term) = match t with
+let rec pp_term out (t:term) = match t_view t with
   | True -> pp_str out "true"
   | False -> pp_str out "false"
   | Const s -> pp_str out s
@@ -282,4 +291,4 @@ end
 
 (** {2 Errors} *)
 
-let parse_errorf ?loc msg = Parsing_utils.parse_error_ ?loc msg
+let parse_errorf ~loc msg = Parsing_utils.parse_error_ ~loc msg
