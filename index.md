@@ -15,7 +15,7 @@ and released under the BSD license.
 - Model format: [model_syntax](./model_syntax.html) (draft)
 - Pipeline of Transformations: [pipeline](./pipeline.html)
 - Higher Order aspects: [higher_order](./higher_order.html)
-- Inductive predicates: [inductive predicates](./inductive_predicates.html)
+- Inductive predicates: [inductive predicates](./inductive_pred.html)
 - Internal API documentation:
   * [0.5](0.5)
   * [0.4](0.4)

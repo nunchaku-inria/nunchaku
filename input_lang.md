@@ -5,7 +5,7 @@
 Input files are parsed by Nunchaku based on their file extension or on the `--input {nunchaku,tip,tptp}` command line argument
 
 - native format:
-  ML-like, reflects precisely the input logic supported by Nunchaku. File extension `.nun`. See [section\_title](#native-format).
+  ML-like, reflects precisely the input logic supported by Nunchaku. File extension `.nun`. See [native format](#native-format).
 
 - TIP:
   similar to SMT-LIB2, file extension `.smt2`. The format is documented at <https://tip-org.github.io/>.
@@ -175,7 +175,7 @@ Terms are written in a ML-like language that should be easy to read. Types are p
 - Terms:
   Terms belong to the polymorphic higher-order logic. Formulas are just terms of type `prop`, and logical connectives are function symbols of type `prop -> prop` and `prop -> prop -> prop`. In addition to basic function symbols, that are declared using `val <id>: <type>.` or defined as recursive functions or (co)inductive predicates, terms can be built using the following constructs:
 
-  *   builtins (see [section\_title](#builtins))
+  *   builtins (see [builtins](#builtins))
 
   *   basic function symbols
 
@@ -363,10 +363,10 @@ Common statements are the following:
   ```
 
 - copy types:
-  type alias, refinement types, and quotient types. See [section\_title](#copy-types) for more details.
+  type alias, refinement types, and quotient types. See [copy types](#copy-types) for more details.
 
 - includes:
-  file inclusion, used to factor commonly used axioms and definitions in a file that can be imported in many problems. See [section\_title](#includes).
+  file inclusion, used to factor commonly used axioms and definitions in a file that can be imported in many problems. See [includes](#includes).
 
   ```
     <statement> ::= <st-declaration>
