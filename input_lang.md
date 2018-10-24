@@ -1,0 +1,550 @@
+# Input Language for Nunchaku
+
+## Supported Formats
+
+Input files are parsed by Nunchaku based on their file extension or on the `--input {nunchaku,tip,tptp}` command line argument
+
+- native format:
+  ML-like, reflects precisely the input logic supported by Nunchaku. File extension `.nun`. See [section\_title](#native-format).
+
+- TIP:
+  similar to SMT-LIB2, file extension `.smt2`. The format is documented at <https://tip-org.github.io/>.
+
+- TPTP:
+  minimal support, mostly for benchmarks, file extension `.p`. See <http://www.cs.miami.edu/~tptp/>.
+
+## Native Format (`.nun`)
+
+A few example files can be found in in [examples/index.html](examples/index.html) and in the [nunchaku-problems repository](https://github.com/nunchaku-inria/nunchaku-problems).
+
+### A few examples
+
+-   An unsatisfiable problem about `append` and `cons` on lists. We first define an uninterpreted type `a` for the list elements, then the datatype of lists of `a`. `x` and `xs` are undefined symbols of type `a` and `list`. Then we define the *admissible* recursive function `append` (it is total and terminating) that concatenates two lists, and specify an (unsatisfiable) goal `∃ x ys. append (cons x []) y ≠ cons x y`.
+
+        val a : type.
+
+        data list :=
+          Nil
+        | Cons a list.
+
+        val x : a.
+        val ys : list.
+
+        rec append : list -> list -> list :=
+          forall ys. append Nil ys = ys;
+          forall x xs ys. append (Cons x xs) ys = Cons x (append xs ys).
+
+        goal ~ (append (Cons x Nil) ys = Cons x ys).
+
+    Running Nunchaku (with the CVC4 backend) on this problem will give:
+
+        $ nunchaku append.nun -s cvc4
+        UNSAT
+        {backend:cvc4, time:0.0s}
+
+-   A few datatypes, with polymorphism, recursive functions, and comments.
+
+        data nat :=
+          | zero
+          | succ nat.
+
+        rec plus : nat -> nat -> nat :=
+          forall x. plus zero x = x;
+          forall x y. plus (succ x) y = succ (plus x y).
+
+        # polymorphic list
+        data list a :=
+          | nil
+          | cons a (list a).
+
+        # rose tree (with a list of children)
+        data tree :=
+          | node (list tree).
+
+        rec size : tree -> nat :=
+          forall l. size (node l) = succ (size_list l)
+        and size_list : list tree -> nat :=
+          size_list nil = zero;
+          forall t l. size_list (cons t l) = plus (size t) (size_list l).
+
+        # compute the size of some tree
+        goal
+          let t0 := node nil in
+          let t := node (cons t0 (cons t0 nil)) in
+          let t2 := node (cons t nil) in
+          exists n. size t2 = n.
+
+    Running Nunchaku gives us a model. The model might change depending on which solver succeeds first. In this particular case, the problem is solved by [SMBC](https://github.com/c-cube/smbc/) (installable by `opam install smbc`). Note how the model defines the *witness* for the `exists n. size t2 = n` to the actual size of the tree, 4.
+
+        $ nunchaku example.nun
+        SAT: {
+          val _witness_of (exists (n/494:nat). size t2/493 = n/494) :=
+            succ (succ (succ (succ zero))).
+        }
+        {backend:smbc, time:0.0s}
+
+-   a mix of inductive predicates and `spec` (which is not going to be solved by Nunchaku because of the quantification on lists in the `spec` statement)
+
+        data nat :=
+          | z
+          | s nat.
+
+        pred [wf] even : nat -> prop :=
+          even z;
+          forall n. odd n => even (s n)
+        and odd : nat -> prop :=
+          forall n. even n => odd (s n).
+
+        data list a :=
+          | nil
+          | cons a (list a).
+
+        # partial funs
+        spec head : pi a. list a -> a
+        and tail : pi a. list a -> list a :=
+            forall x l. head (cons x l) = x;
+            forall x l. tail (cons x l) = l.
+
+        # odd number that is >= 4
+        goal exists l. (odd (head l) && (exists m. head l = s (s (s (s m))))).
+
+-   The same, but with partial definitions instead, obtaining (with CVC4) a model with `l = @cons nat (s (s (s (s (s z))))) (@cons nat z (@nil nat))` and `m = s z`:
+
+        data nat :=
+          | z
+          | s nat.
+
+        pred [wf] even : nat -> prop :=
+          even z;
+          forall n. odd n => even (s n)
+        and odd : nat -> prop :=
+          forall n. even n => odd (s n).
+
+        data list a :=
+          | nil
+          | cons a (list a).
+
+        # partial funs
+        rec head : pi a. list a -> a :=
+            forall x l. head (cons x l) = x
+        and tail : pi a. list a -> list a :=
+            forall x l. tail (cons x l) = l.
+
+        # odd number that is >= 4
+        goal exists l. (odd (head l) && (exists m. head l = s (s (s (s m))))).
+
+### BNF syntax
+
+We will use a BNF-like syntax to describe the grammar of this format. In the following, `<foo>` represents the syntactical class of foos (e.g. `<term>` represents the grammar of terms), `'foo'` is the verbatim text "foo", and `<foo> ::= a | b | c` states that the entry `<foo>` corresponds to the cases a, b, and c. `[a b c]` is used for parenthesing; `a?` makes `a` optional; `a*` represents any number of consecutive `a`; `a+` represents any non-empty sequence of `a`.
+
+The first important definition for the grammar is *identifiers* (the basic names of objects in Nunchaku’s input). Variables are just identifiers, but we add a distinct rule for them to emphasize their role:
+
+    <id> ::= [a-zA-Z][a-zA-Z0-9$_]*]
+    <var> ::= <id>
+
+> **Note**
+>
+> comments are supported. A comment starts with `'#'` and continues to the end of the line.
+
+### Terms and Types
+
+Terms are written in a ML-like language that should be easy to read. Types are polymorphic and all type quantification should be prenex.
+
+- Types:
+  Basic types can be declared by `val <id>: [type ->]* type.` or defined as (co)datatypes (see [screen\_title](#datatype-def)). Other types are built using basic types, `prop` (propositions), `a b c` (where `a : type -> type -> type` and `b, c: type`), `a -> b` where `a` and `b` are types (right associative: `a -> b -> c` is `a -> (b -> c)`) and type variables that are introduced by prenex quantification `pi a. <type>`. For example, after declaring `i:type` and `array: type -> type -> type`, the following are well-formed types:
+
+  *   `i`
+
+  *   `i->i`
+
+  *   `pi a. array a i -> a -> i -> prop`
+
+  *   `pi a. (a -> prop) -> a`
+
+  *   `pi a b c. array a b -> (array b c -> i -> prop) -> prop`
+
+        <typed-var> ::= <var> | '(' <var> ':' <type> ')'
+        <atomic-type> ::= 'type'
+                        | 'prop'
+                        | '(' <type> ')'
+        <type> ::= <atomic-type>
+                 | <atomic-type> '->' <type>
+                 | 'pi' <typed-var> '.' <type>
+
+
+- Terms:
+  Terms belong to the polymorphic higher-order logic. Formulas are just terms of type `prop`, and logical connectives are function symbols of type `prop -> prop` and `prop -> prop -> prop`. In addition to basic function symbols, that are declared using `val <id>: <type>.` or defined as recursive functions or (co)inductive predicates, terms can be built using the following constructs:
+
+  *   builtins (see [section\_title](#builtins))
+
+  *   basic function symbols
+
+  *   (bound) variables
+
+  *   lambda-abstraction `fun x. <term>` where `x` is bound in the body. The type of `x` can be explicitely specified: `fun (x:<type>). <term>`. Functions with multiple arguments can be shortened as `fun x y z. <term>`.
+
+  *   quantifiers: `forall x. <term>` and `exists x. <term>` where the body must be of type `prop`.
+
+  *   let-bindings `let x := <term> in <term>`, where `x` is bound in the second term.
+
+  *   tests `if a b c` where `a:prop` and `b,c` are terms that have the same type (which is also the type of `if a b c`).
+
+  *   shallow pattern-matching on (co)datatypes: `match <term> with <branches> end`. Each branch has the form `| <constructor> [<variable>]* -> <term>` and deals with the corresponding constructor case. Constructors must always be fully applied (no matching on functions).
+
+        example:
+
+        data foo := A | B | C.
+        rec f : foo -> prop :=
+          forall x. f x =
+            match x with
+            | A -> true
+            | B -> false
+            | C -> true
+            end.
+
+-   connectives:
+
+    *   conjunction `&&`
+
+    *   disjunction `||`
+
+    *   negation `~`
+
+    *   implication `=>`
+
+    *   equality `=` (note that equivalence is just equality on propositions)
+
+            Negation binds tightly, and `&&` takes precedence over `||` and `=>`.
+
+-   parenthesing can be used to override precedences, e.g. in `if (f a) b c`.
+
+    ```
+    <constant> ::= <id> | '@'<id>  // must be defined or declared above
+    <atomic-term> ::= <var>
+                    | <constant>
+                    | '(' <term> ')'
+                    | 'match' <term> 'with' <match-branch+> 'end'
+
+    <apply-term> ::= <atomic-term>+ | '~' <apply-term>
+    <eq-term> ::= <apply-term>
+                | <apply-term> '=' <apply-term>
+                | <apply-term> '!=' <apply-term>
+    <and-term> ::= <eq-term>
+                 | <eq-term> '&&' <and-term>
+    <or-term> ::= <and-term>
+                 | <and-term> '||' <or-term>
+                 | <and-term> '=>' <or-term>
+    <term> ::= <or-term>
+             | <term-binder> <typed-var>+ '.' <term>
+             | 'let' <var> ':=' <term> 'in' <term>
+             | 'if' <term> 'then' <term> 'else' <term>
+
+    <term-binder> ::= 'forall' | 'exists' | 'fun'
+
+    <match-branch> ::= '|' <id> <var>* '->' <term>
+    ```
+
+- Note on polymorphism:
+  The input of Nunchaku is polymorphic, and the polymorphism is explicit: a polymorphic symbol will take explicit type parameters. For example, `rec append : pi a. list a -> list a -> list a` is a binary function on lists, but it takes 3 arguments (the type `a` and the two lists).
+
+  Because Nunchaku’s native input is designed to be easy to read and write, and because Nunchaku performs type inference, type parameters can be omitted by default. However, sometimes Nunchaku might not be able to infer some type parameters and will complain. In this case, the notation `@append <type> <list> <list>` can be used to provide the type parameter explicitely. Similarly, in binders, the type of the variable is omitted by default by can be made explicit using `<binder> (x:<type>). <body>`.
+
+### Statements
+
+Common statements are the following:
+
+- declaration:
+  `val foo : bar` where `foo` is an identifier and `bar` is a type or `type` (for declaring types themselves):
+
+  ```
+    val i : type.
+    val array : type -> type -> type.
+
+    val i1 : i.
+    val i2 : i.
+    val some_array : array i prop.
+    ```
+
+- (co)datatypes definitions:
+  each datatype is declared using `data <id> [<variable>]* := [<case>]+`, cases being separated using `|`. Mutual definitions are separated by `and`. Codatatypes are introduced using `codata`. It is impossible to define datatypes and codatatypes that are mutually recursive (all mutual definitions must be of the same "kind").
+
+  ```
+  # tuples
+  data pair a b := Pair a b.
+
+  # lists
+  data list a := Nil | Cons a (list a).
+
+  # mutually recursive list and tree
+  data tree a := Tree a (tree_list a)
+  and tree_list a := T_nil | T_cons (tree a) (tree_list a).
+
+  # streams
+  codata stream a := S_cons a (stream a).
+  ```
+
+- (co)recursive definitions:
+  introduced using `rec <id> : <type> := <axioms>`. Mutual definitions are separated using `and`. Each definition declares a new identifier with its type, followed by a non-empty list of formulas (separated by `;`) that must be universally-quantified equations with the `<id>` as left-hand-side head.
+
+  Nunchaku will complain if one of the formulas is not an equation with `<id>` as its head.
+
+  ```
+    rec <id> : <type> :=
+      <form> [; <form>]*
+    [and <id> : <type> :=
+      <form> [; <form>]*]*.
+    ```
+
+  example:
+
+  ```
+    data nat := Z | S nat.
+
+    rec f : nat -> nat -> nat :=
+      forall n. f Z n = S n;
+      forall m n. f (S m) n = S (f m n).
+
+    rec hof : (nat -> nat) -> nat -> nat :=
+      forall f n. hof f n = f (f n).
+  ````
+
+- (co)inductive predicates:
+  inductive predicates are defined as least fixpoints (resp. greatest fixpoints for coinductive predicates) by a list of clauses. The modifier `[wf]` should only be used for predicates that are **known** by the user to be well-founded. For other predicates, Nunchaku will force the well-foundedness by adding a decreasing parameter in every clause.
+
+  Copredicates are introduced using the keyword `copred`.
+
+  Each clause defining a (co)predicate `p` should be of one of the following forms. We allow a guard (for recursive cases), but the conclusion of the clause must have `p` as head symbol.
+
+  ```
+  - [forall <typed-var>+ '.']? p <term>*
+  - [forall <typed-var>+ '.']? <term> '=>' p <term>*
+  ```
+
+  Examples:
+
+  ```
+    data nat := zero | Suc nat.
+
+    pred [wf] even : nat -> prop :=
+      even zero;
+      forall (n : nat). odd n => even (Suc n)
+    and odd : nat -> prop :=
+      forall (n : nat). even n => odd (Suc n).
+  ```
+
+- axioms:
+  `axiom t.` where `t : prop` is a formula. This axiom will be enforced in the model. Note that universally quantified axioms might be impossible for backend solvers to enforce. It is best to use definitions rather than axioms whenever possible.
+
+  ```
+    val i : type.
+    val a : i.
+    val p : i -> prop.
+    val q : i -> prop.
+    axiom  p i = q i.
+  ```
+
+- goals:
+  `goal t.` where `t : prop` is a formula. This is functionally equivalent to `axiom t.` but emphasizes the goal compared to the rest of the theory. The goal is where analysis of dependencies starts from; definitions that are not used in any of the goals/axioms (or, transitively, from any definition used by these) will be pruned.
+
+- spec:
+  like a set of axioms, but also defines some symbols. The syntax is `spec [<id>: <type>]+ := <axiom> [; <axiom>]*.`: a series of type declarations followed by axioms that specify the newly introduced symbols.
+
+  The intended semantics of `spec` is that the axioms are consistent together and that it is safe to omit the `spec` if the symbols it declared are not (transitively) used in the goal. Therefore, a spec declaration will be kept only if at least one symbol is transitively used from the goal. In the following example, if the goal (or some definition used in goal) does not mention `head` nor `tail`, the spec will be dropped.
+
+  ```
+    data list a :=
+      | nil
+      | cons a (list a).
+
+    spec head : pi a. list a -> a
+    and tail : pi a. list a -> list a :=
+        forall x l. head (cons x l) = x;
+        forall x l. tail (cons x l) = l.
+  ```
+
+- copy types:
+  type alias, refinement types, and quotient types. See [section\_title](#copy-types) for more details.
+
+- includes:
+  file inclusion, used to factor commonly used axioms and definitions in a file that can be imported in many problems. See [section\_title](#includes).
+
+  ```
+    <statement> ::= <st-declaration>
+                  | <st-data>
+                  | <st-codata>
+                  | <st-rec-definition>
+                  | <st-spec>
+                  | <st-axiom>
+                  | <st-pred>
+                  | <st-copred>
+                  | <st-goal>
+
+    <id-decl> ::= <id> ':' <type>
+
+    <st-declaration> ::= 'val' <id-decl> '.'
+
+    <st-data> ::= 'data' <data-entry> ['and' <data-entry>]* '.'
+    <st-codata> ::= 'codata' <data-entry> ['and' <data-entry>]* '.'
+    <data-entry> ::= <id> <var>* := <cstor>+
+    <cstor> ::= <id> <type>*
+
+    <st-rec-definition> ::= 'rec' <def-entry> ['and' <def-entry>]* '.'
+    <def-entry> ::= <id-decl> ':=' <term> [';' <term>]*
+
+    <st-spec> ::= 'spec' <id-decl> ['and' <id-decl>]* ':=' <term> [';' <term>]* '.'
+
+    <st-axiom> ::= 'axiom' <term> '.'
+
+    <st-pred> ::= 'pred' '[wf]'? <pred-entry> ['and' <pred-entry>]* '.'
+    <st-copred> ::= 'copred' '[wf]'? <pred-entry> ['and' <pred-entry>]* '.'
+    <pred-entry> ::= <id-decl> ':=' <term> [';' <term>]*
+
+    <st-goal> ::= 'goal' <term> '.'
+    ```
+
+### Problem
+
+A problem file is just a sequence of statements.
+
+    <problem> ::= <statement>*
+
+### Copy Types
+
+A copy type is used to define a type from another type. It can take the following forms:
+
+- type alias:
+  the simplest case (below, `pair1`)
+
+- refinement type:
+  a copy of a type, only retaining values of this type that satisfy a given predicate
+
+- quotient type:
+  a copy of the type, quotiented by a relation that **must** be an equivalence relation (reflexive symetric transitive).
+
+  In every case, one must declare `copy foo := bar` followed by the declarations of two conversion functions (`abstract <id>` and `concrete <id>`) that respectively convert from `bar` to `foo`, and from `foo` to `bar`.
+
+  ```
+    data pair a b := Pair a b.
+
+    copy pair1 a := pair a a
+      abstract pair1_of_pair
+      concrete pair_of_pair1.
+
+    val iota : type.
+
+    goal forall (p:pair1 iota).
+         exists (x:iota) (y:iota).
+         pair_of_pair1 p = Pair x y.
+  ```
+
+### Refinement type
+
+If the `predicate <term>` entry is present, then `<term>` must be a term of type `bar -> prop`. Only elements of `bar` that satisfy this term will be in the domain of the `abstract` function (the function is undefined on other elements).
+
+### Quotient Type
+
+If the `quotient <term>` entry is present, then `<term>` must have the type `bar -> bar -> prop` and be an equivalence relation. The `abstract` function will map elements of `bar` that are equivalent w.r.t the `quotient` relation, to the same abstract (copy) element.
+
+### Include directive
+
+It is possible to write commonly used definitions and axioms in a file, and include that file from other files:
+
+- foo.nun:
+
+  ```
+  val p : prop.
+  ```
+
+- bar.nun :
+  ```
+  include "foo.nun".
+
+  goal p || ~ p. # trivial, but needs `p` to be declared!
+  ```
+
+### Cardinality Bounds
+
+The two following problems define an uninterpreted type and put bounds on its cardinality. Both are unsatisfiable because of the bound and additional axioms:
+
+    val i : type [max_card 2].
+
+    val i1 : i.
+    val i2 : i.
+    val i3 : i.
+
+    # at least three distinct elements
+    axiom (i1 != i2 && i2 != i3 && i1 != i3).
+
+    val i : type [min_card 3].
+
+    val a : i.
+    val b : i.
+
+    # at most 2 elements, clashes with constraint on i
+    axiom forall x. x = a || x = b.
+
+There can also be an infinite uninterpreted type, typically for encoding set theory or similar untyped languages. TODO: expand on this
+
+### Builtins
+
+- choice operators:
+  with type `pi a. (a -> prop) -> a`
+
+  * `choice` picks a value that satisfies the predicate if at least one such value exists
+
+  * `unique` picks the value that satisfies the predicate, if exactly one such value exists.
+
+  * `unique_unsafe` is similar to `unique`, but to be used only if it is guaranteed that exactly one value satisfies the predicate. **NOTE** use only if you know what you are doing!
+
+### There is More than One Way of Doing It
+
+- recursive definitions with single equation:
+  Although the basic syntax gears towards Isabelle’s (and Haskell’s) way of defining functions with multiple equations, we can also define functions with a single irrefutable case. The following example demonstrates a possible way of defining functions with `match` and `fun`:
+
+  ```
+    data foo := A | B | C.
+
+    rec test_foo : foo -> prop :=
+      forall x. test_foo x =
+        match x with
+        | A -> true
+        | B -> false
+        | C -> true
+        end.
+
+    rec swap_foo : foo -> foo :=
+      swap_foo = (fun x.
+        match x with
+        | A -> B
+        | B -> C
+        | C -> A
+        end).
+
+    goal (exists x. test_foo x) && (exists x. swap_foo x = C).
+  ```
+
+### Design Goals
+
+The native language must support:
+
+-   non interpreted types
+
+-   data
+
+-   codata
+
+-   quotient type
+
+-   subtype (refinement type)
+
+-   axioms (to partially define non interpreted symbols)
+
+-   recursive fun
+
+-   corecursive fun
+
+-   inductive predicate
+
+-   coinductive predicate
+
+

@@ -1,6 +1,7 @@
 # Syntax of Generated Models
 
-The syntax for models is, by default, the [section\_title](#native-syntax). Alternative syntaxes can be picked with the `--output {nunchaku,tptp,sexp}` (or, for short, `-o`) command line option.
+The syntax for models is, by default, the [native syntax](#native-syntax).
+Alternative syntaxes can be picked with the `--output {nunchaku,tptp,sexp}` (or, for short, `-o`) command line option.
 
 ## Native Syntax (`-o nunchaku`)
 
