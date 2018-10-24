@@ -75,3 +75,7 @@ val pipes :
       Disable if you want the first instance(s) CVC4 to potentially
       use the full amount of time.
 *)
+
+val use_cvc4_1_5 : unit -> unit
+(** Assume CVC4's version is 1.5, and do not use the modern SMTLIB 2.6
+    syntax *)

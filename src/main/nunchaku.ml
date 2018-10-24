@@ -224,6 +224,7 @@ let options =
       ; "--version", Arg.Set version_, " print version and exit"
       ; "-d", Arg.Int Utils.set_debug, " alias to --debug"
       ; "-bt", Arg.Unit (fun () -> Printexc.record_backtrace true), " alias to --backtrace"
+      ; "--cvc4-1.5", Arg.Unit Backends.CVC4.use_cvc4_1_5, " use CVC4 1.5 format"
       ]
   )
 

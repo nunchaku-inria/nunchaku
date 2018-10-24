@@ -30,6 +30,11 @@ let errorf_ fmt = CCFormat.ksprintf fmt ~f:error_
 let cvc4_error_ msg = raise (Backend_err msg)
 let cvc4_errorf_ msg = CCFormat.ksprintf ~f:cvc4_error_ "@[in CVC4:@ %s@]" msg
 
+type version = V_1_5 | V_1_6
+
+let cvc4_version = ref V_1_6
+let use_cvc4_1_5 () = cvc4_version := V_1_5
+
 let () = Printexc.register_printer
     (function
       | Error msg -> Some (Utils.err_sprintf "@[in the interface to CVC4:@ %s@]" msg)
@@ -325,14 +330,19 @@ let pp_problem out (decode, pb) =
         | `Min -> pp_min_card out n
       end
     | FO.MutualTypes (k, l) ->
-      let pp_arg out (c,i,ty) =
-        fpf out "(@[<h>%a %a@])" pp_select (c,i) pp_ty ty in
-      let pp_cstor out c =
-        (* add selectors *)
-        let args = List.mapi (fun i ty -> c.FO.cstor_name,i,ty) c.FO.cstor_args in
-        fpf out "(@[<2>%a@ %a@])" pp_id c.FO.cstor_name
-          (pp_list pp_arg) args
-      in
+      pp_mutual_types out k l
+
+  and pp_mutual_types out k l =
+    let pp_arg out (c,i,ty) =
+      fpf out "(@[<h>%a %a@])" pp_select (c,i) pp_ty ty in
+    let pp_cstor out c =
+      (* add selectors *)
+      let args = List.mapi (fun i ty -> c.FO.cstor_name,i,ty) c.FO.cstor_args in
+      fpf out "(@[<2>%a@ %a@])" pp_id c.FO.cstor_name
+        (pp_list pp_arg) args
+    in
+    match !cvc4_version with
+    | V_1_5 ->
       let pp_tydef out tydef =
         fpf out "(@[<2>%a@ %a@])"
           pp_id tydef.FO.ty_name
@@ -342,6 +352,24 @@ let pp_problem out (decode, pb) =
         (match k with `Data -> "declare-datatypes"
                     | `Codata -> "declare-codatatypes")
         (pp_list pp_id) l.FO.tys_vars
+        (pp_list pp_tydef) l.FO.tys_defs
+    | V_1_6 ->
+      let n_vars = List.length l.FO.tys_vars in
+      let pp_tydef out tydef =
+        let cstors = ID.Map.to_list tydef.FO.ty_cstors |> List.map snd in
+        if l.FO.tys_vars=[] then (
+          fpf out "(@[%a@])" (pp_list pp_cstor) cstors
+        ) else (
+          fpf out "(@[par (@[%a@])@ (@[%a@])@])"
+            (pp_list pp_id) l.FO.tys_vars (pp_list pp_cstor) cstors
+        )
+      and pp_decl out tydef =
+        fpf out "(@[%a@ %d@])" pp_id tydef.FO.ty_name n_vars
+      in
+      fpf out "(@[<2>%s@ (@[%a@])@ (@[<hv>%a@])@])"
+        (match k with `Data -> "declare-datatypes"
+                    | `Codata -> "declare-codatatypes")
+        (pp_list pp_decl) l.FO.tys_defs
         (pp_list pp_tydef) l.FO.tys_defs
 
   in
@@ -454,7 +482,7 @@ and parse_term_sub_ ~decode = function
       | DataTest _
       | DataSelect _ -> error_ "expected ID, got data test/select"
     end
-  | `List [`Atom "LAMBDA"; `List bindings; body] ->
+  | `List [`Atom ("LAMBDA" | "lambda"); `List bindings; body] ->
     (* lambda term *)
     let bindings = List.map (parse_var_ ~decode) bindings in
     (* enter scope of variables *)
@@ -510,7 +538,8 @@ and parse_term_sub_ ~decode = function
         T.data_select c n t
       | DataSelect _, _ -> error_ "invalid arity for DataSelect"
     end
-  | `List (`List _ :: _) -> error_ "non first-order list"
+  | `List (`List _ :: _) as s ->
+    errorf_ "non first-order list@ %a" Sexp_lib.pp s
   | `List [] -> error_ "expected term, got empty list"
 
 and within_scope ~decode bindings f =
