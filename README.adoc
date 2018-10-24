@@ -134,8 +134,6 @@ Supported solver backends:
 === How to make a release
 
 - udpate the repository itself
-  * `git checkout stable`
-  * `git merge master` to merge changes
   * edit `nunchaku.opam` to change version number
   * `git commit --amend` to update the commit
   * `git tag 0.42`
