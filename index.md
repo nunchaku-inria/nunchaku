@@ -17,6 +17,7 @@ and released under the BSD license.
 - Higher Order aspects: [higher_order](./higher_order.html)
 - Inductive predicates: [inductive predicates](./inductive_pred.html)
 - Internal API documentation:
+  * [0.6](0.6)
   * [0.5](0.5)
   * [0.4](0.4)
   * [0.3](0.3)
