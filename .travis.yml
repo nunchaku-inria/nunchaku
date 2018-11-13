@@ -8,7 +8,6 @@ env:
   - PINS="nunchaku:."
   - DISTRO="ubuntu-16.04"
   matrix:
-  - PACKAGE="nunchaku" OCAML_VERSION="4.02.3" EXTRA_DEPS="smbc"
   - PACKAGE="nunchaku" OCAML_VERSION="4.03" EXTRA_DEPS="smbc"
   - PACKAGE="nunchaku" OCAML_VERSION="4.04" EXTRA_DEPS="smbc"
   - PACKAGE="nunchaku" OCAML_VERSION="4.05" EXTRA_DEPS="smbc"
