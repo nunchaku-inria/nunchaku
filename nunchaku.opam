@@ -5,13 +5,13 @@ authors: ["Simon Cruanes" "Jasmin Blanchette"]
 maintainer: "simon.cruanes.2007@m4x.org"
 synopsis: "A counter-example finder for higher-order logic, designed to be used from various proof assistants"
 build: [
-    ["jbuilder" "build" "-p" name "-j" jobs]
+    ["dune" "build" "-p" name "-j" jobs]
     ["strip" "_build/default/src/main/nunchaku.exe"]
-    ["jbuilder" "build" "@doc"  "-p" name] {with-doc}
-    ["jbuilder" "runtest" "-j" jobs "-p" name] {with-test}
+    ["dune" "build" "@doc"  "-p" name] {with-doc}
+    ["dune" "runtest" "-j" jobs "-p" name] {with-test}
 ]
 depends: [
-    "jbuilder" {build}
+    "dune" {build & >= "1.1" }
     "containers" { >= "1.0" }
     "menhir" {build}
     "sequence" { >= "1.0" }

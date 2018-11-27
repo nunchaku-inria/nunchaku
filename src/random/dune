@@ -1,0 +1,11 @@
+
+(library
+  (name nunchaku_random)
+  (public_name nunchaku.random)
+  (optional)
+  (synopsis "random generators")
+  (libraries nunchaku qcheck)
+  (flags :standard -w +a-4-42-44-48-50-58-32-60@8 (:include ../common.flags))
+  (ocamlopt_flags :standard -bin-annot (:include ../opt.flags))
+  )
+

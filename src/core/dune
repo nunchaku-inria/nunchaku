@@ -1,0 +1,12 @@
+
+(library
+  (name nunchaku_core)
+  (public_name nunchaku)
+  (synopsis "core data structures and algorithms for nunchaku")
+  (libraries containers containers.data sequence num unix threads)
+  (flags :standard -w +a-4-42-44-48-50-58-32-60-29@8 (:include ../common.flags))
+  (ocamlopt_flags :standard (:include ../opt.flags))
+  )
+
+(ocamllex (modules Sexp_lex))
+

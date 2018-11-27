@@ -4,20 +4,20 @@ J?=3
 all: build test
 
 build:
-	jbuilder build @install -j $J
+	@dune build @install -j $J
 
 clean:
-	jbuilder clean
+	@dune clean
 
 doc:
-	jbuilder build @doc
+	@dune build @doc
 
 test: build
-	jbuilder runtest --no-buffer --force -j $J
+	@dune runtest --no-buffer --force -j $J
 	# ./tests/quick/all.sh # FIXME?
 
-open_doc: doc
-	xdg-open _build/default/_doc/index.html
+install: build
+	@dune install
 
 watch:
 	while find src/ -print0 | xargs -0 inotifywait -e delete_self -e modify ; do \
