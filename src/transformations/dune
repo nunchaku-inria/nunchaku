@@ -3,7 +3,7 @@
   (public_name nunchaku.transformations)
   (synopsis "pipeline of nunchaku")
   (libraries containers nunchaku)
-  (flags :standard -w +a-4-42-44-48-50-58-32-60@8 (:include ../common.flags))
+  (flags :standard -warn-error -3 -w +a-4-42-44-48-50-58-32-60@8 (:include ../common.flags))
   (ocamlopt_flags :standard (:include ../opt.flags))
   )
 

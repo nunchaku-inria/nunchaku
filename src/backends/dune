@@ -4,6 +4,6 @@
   (public_name nunchaku.backends)
   (synopsis "backends for nunchaku")
   (libraries containers nunchaku nunchaku.parsers)
-  (flags :standard -w +a-4-42-44-48-50-58-32-60@8 (:include ../common.flags))
+  (flags :standard -warn-error -3 -w +a-4-42-44-48-50-58-32-60@8 (:include ../common.flags))
   (ocamlopt_flags :standard (:include ../opt.flags))
   )
