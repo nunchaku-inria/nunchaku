@@ -612,7 +612,7 @@ let parse_model_ ~decode : Sexp_lib.t -> (_,_) Model.t = function
              let ty = fobackty_of_ground_ty gty in
              (* read cardinal *)
              let n = parse_int_ n in
-             let terms = Sequence.(0 -- (n-1)
+             let terms = Iter.(0 -- (n-1)
                                    |> map
                                      (fun i ->
                                         let name = const_of_ty_nth ~decode gty i in
@@ -768,9 +768,9 @@ let preprocess pb : processed_problem =
   let add_ty_witnesses_gen stmt =
     let tys =
       FO.tys_of_statement stmt
-      |> Sequence.flat_map FO.Ty.to_seq
-      |> Sequence.sort_uniq ~cmp:FO.Ty.compare
-      |> Sequence.to_rev_list
+      |> Iter.flat_map FO.Ty.to_seq
+      |> Iter.sort_uniq ~cmp:FO.Ty.compare
+      |> Iter.to_rev_list
     in
     add_ty_witnesses stmt tys
   in

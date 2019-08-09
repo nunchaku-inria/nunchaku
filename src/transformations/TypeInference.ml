@@ -703,7 +703,7 @@ module Convert(Term : TermTyped.S) = struct
       | TI.Const _ ->  true
       | TI.Var v -> is_mono_var_ v
       | TI.App (f,l) -> is_mono_ f && List.for_all is_mono_ l
-      | TI.Builtin b -> Builtin.to_seq b |> Sequence.for_all is_mono_
+      | TI.Builtin b -> Builtin.to_seq b |> Iter.for_all is_mono_
       | TI.Let (v,t,u) ->
         is_mono_var_ v && is_mono_ t && is_mono_ u
       | TI.Match (t,l,d) ->
@@ -731,7 +731,7 @@ module Convert(Term : TermTyped.S) = struct
       | TI.Const _ -> true
       | TI.Var v -> is_mono_var_ v
       | TI.App (f,l) -> is_prenex_ f && List.for_all is_mono_ l
-      | TI.Builtin b -> Builtin.to_seq b |> Sequence.for_all is_mono_
+      | TI.Builtin b -> Builtin.to_seq b |> Iter.for_all is_mono_
       | TI.Bind (Binder.TyForall, v, t) ->
         (* pi v:_. t is prenex if t is *)
         is_mono_var_ v && is_prenex_ t
@@ -809,7 +809,7 @@ module Convert(Term : TermTyped.S) = struct
 
   let free_ty_vars t =
     U.to_seq_free_vars t
-    |> Sequence.filter
+    |> Iter.filter
       (fun v -> U.ty_returns_Type (Var.ty v))
 
   (* checks that [t] only contains free variables from [vars].
@@ -844,7 +844,7 @@ module Convert(Term : TermTyped.S) = struct
   (* does [t] contain the given [id]? *)
   let term_contains_ t ~id =
     U.to_seq t
-    |> Sequence.exists
+    |> Iter.exists
       (fun t -> match Term.repr t with
          | TI.Const id' when ID.equal id id' -> true
          | _ -> false)

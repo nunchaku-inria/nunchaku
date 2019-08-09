@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 First-Order Monomorphic Terms and Formulas}
@@ -116,7 +115,7 @@ module Ty : sig
   val compare : t -> t -> int
   val hash : t -> int
 
-  val to_seq : t -> t Sequence.t
+  val to_seq : t -> t Iter.t
 end
 
 module T : sig
@@ -159,7 +158,7 @@ module T : sig
   val forall : Ty.t var -> t -> t
   val exists : Ty.t var -> t -> t
 
-  val to_seq : t -> t Sequence.t
+  val to_seq : t -> t Iter.t
   (** subterms *)
 end
 
@@ -191,7 +190,7 @@ module Problem : sig
     ('t, 'ty) t ->
     'acc * ('t2, 'ty2) t
 
-  val to_seq : ('t,'ty) t -> ('t,'ty) statement Sequence.t
+  val to_seq : ('t,'ty) t -> ('t,'ty) statement Iter.t
 end
 
 (** {2 Utils} *)
@@ -206,9 +205,9 @@ module Util : sig
   val problem_kinds : (_,Ty.t) Problem.t -> Model.symbol_kind ID.Map.t
 end
 
-val tys_of_toplevel_ty : 'ty toplevel_ty -> 'ty Sequence.t
-val terms_of_statement : ('t, _) statement -> 't Sequence.t
-val tys_of_statement : (_, 'ty) statement -> 'ty Sequence.t
+val tys_of_toplevel_ty : 'ty toplevel_ty -> 'ty Iter.t
+val terms_of_statement : ('t, _) statement -> 't Iter.t
+val tys_of_statement : (_, 'ty) statement -> 'ty Iter.t
 
 (** {2 IO} *)
 

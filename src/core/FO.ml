@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 First-Order Monomorphic Terms} *)
@@ -313,10 +312,10 @@ let st_to_seq_ t ~term:yield_term ~ty:yield_ty = match t with
   | Axiom t -> yield_term t
   | CardBound (_,_,_) -> ()
   | MutualTypes (_,defs) ->
-    Sequence.of_list defs.tys_defs
-    |> Sequence.flat_map (fun tydef -> ID.Map.values tydef.ty_cstors)
-    |> Sequence.flat_map_l (fun cstor -> cstor.cstor_args)
-    |> Sequence.iter yield_ty
+    Iter.of_list defs.tys_defs
+    |> Iter.flat_map (fun tydef -> ID.Map.values tydef.ty_cstors)
+    |> Iter.flat_map_l (fun cstor -> cstor.cstor_args)
+    |> Iter.iter yield_ty
   | Goal t -> yield_term t
 
 let terms_of_statement st yield = st_to_seq_ st ~term:yield ~ty:(fun _ -> ())
@@ -489,20 +488,20 @@ module Util = struct
     (* returns a sequence of (conditions, 'a).
        Invariant: the last element of the sequence is exactly the only
        one with an empty list of conditions *)
-    type +'a t = (cond list * 'a) Sequence.t
+    type +'a t = (cond list * 'a) Iter.t
 
-    let return x : _ t = Sequence.return ([], x)
+    let return x : _ t = Iter.return ([], x)
 
     let (>|=)
       : 'a t -> ('a -> 'b) -> 'b t
       = fun x f ->
-        let open Sequence.Infix in
+        let open Iter.Infix in
         x >|= fun (conds, t) -> conds, f t
 
     let (>>=)
       : 'a t -> ('a -> 'b t) -> 'b t
       = fun x f ->
-        let open Sequence.Infix in
+        let open Iter.Infix in
         x >>= fun (conds, t) ->
         f t >|= fun (conds', t') -> List.rev_append conds' conds, t'
 
@@ -519,11 +518,11 @@ module Util = struct
             cond
         in
         let a' =
-          Sequence.map
+          Iter.map
             (fun (cond',ret) -> List.rev_append cond cond', ret)
             a
         in
-        Sequence.append a' b
+        Iter.append a' b
 
     let ite
       : type a. Ty.t Var.t -> a t -> a t -> a t
@@ -538,7 +537,7 @@ module Util = struct
     let to_dt ~vars t : (_,_) DT.t =
       (* tests must have >= 1 condition; otherwise they are default *)
       let tests, others =
-        Sequence.to_list t
+        Iter.to_list t
         |> List.partition (fun (tests,_) -> tests<>[])
       in
       let default = match others with

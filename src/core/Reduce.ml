@@ -369,12 +369,12 @@ module Make(T : TI.FULL)
         | last :: l' ->
           (* sequence of free variables in [f (rev l')] *)
           let fvars =
-            Sequence.of_list (f :: l')
-            |> Sequence.flat_map (T.to_seq_free_vars ?bound:None)
+            Iter.of_list (f :: l')
+            |> Iter.flat_map (T.to_seq_free_vars ?bound:None)
           in
           begin match T.repr last with
             | TI.Var v' when Var.equal v v'
-                          && not (Sequence.mem ~eq:Var.equal v fvars)  ->
+                          && not (Iter.mem ~eq:Var.equal v fvars)  ->
               (* so, [t = f (rev l' @ [v])], and neither [f] nor [l']
                  contain [v], so we can reduce to [f (rev l')] *)
               Some (T.app f (List.rev l'))

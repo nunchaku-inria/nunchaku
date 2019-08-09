@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Variable} *)
@@ -109,7 +108,7 @@ module Subst : sig
   val map : f:('a -> 'b) -> ('ty,'a) t -> ('ty,'b) t
 
   val to_list : ('ty,'a) t -> ('ty var * 'a) list
-  val to_seq : ('ty,'a) t -> ('ty var * 'a) Sequence.t
+  val to_seq : ('ty,'a) t -> ('ty var * 'a) Iter.t
 
   val pp : 'a CCFormat.printer -> (_, 'a) t CCFormat.printer
 end

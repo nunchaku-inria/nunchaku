@@ -679,7 +679,7 @@ let pass3_ ~state doms m =
       |> M.DT_util.to_term
     in
     (* set of tuples on which the function is defined *)
-    let dom_tuples = ID.Map.values dom.dom_args |> Sequence.to_rev_list in
+    let dom_tuples = ID.Map.values dom.dom_args |> Iter.to_rev_list in
     let tests =
       List.map
         (fun tup ->

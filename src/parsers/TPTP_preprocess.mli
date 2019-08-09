@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 TPTP Preprocessor}
@@ -17,9 +16,9 @@ open Nunchaku_core
 type 'a or_error = ('a, string) CCResult.t
 
 val preprocess_exn :
-  UntypedAST.statement Sequence.t ->
+  UntypedAST.statement Iter.t ->
   UntypedAST.statement CCVector.ro_vector
 
 val preprocess :
-  UntypedAST.statement Sequence.t ->
+  UntypedAST.statement Iter.t ->
   UntypedAST.statement CCVector.ro_vector or_error

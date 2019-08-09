@@ -188,27 +188,27 @@ module DT = struct
   exception Unflattenable
 
   let flatten t : (_,_) flat_dt =
-    let rec aux t : ((_,_) flat_test list * 't) Sequence.t = match t with
-      | Yield t -> Sequence.return ([], t)
+    let rec aux t : ((_,_) flat_test list * 't) Iter.t = match t with
+      | Yield t -> Iter.return ([], t)
       | Cases {tests=Match _; _} -> raise Unflattenable
       | Cases {var; tests=Tests l; default} ->
         let sub_tests =
           l
-          |> Sequence.of_list
-          |> Sequence.flat_map
+          |> Iter.of_list
+          |> Iter.flat_map
             (fun (lhs, rhs) ->
                aux rhs
-               |> Sequence.map
+               |> Iter.map
                  (fun (tests,ret) -> {ft_var=var; ft_term=lhs} :: tests, ret))
         and sub_default = match default with
-          | None -> Sequence.empty
+          | None -> Iter.empty
           | Some d -> aux d
         in
-        Sequence.append sub_tests sub_default
+        Iter.append sub_tests sub_default
     in
     let l =
       aux t
-      |> Sequence.to_rev_list
+      |> Iter.to_rev_list
     in
     let fdt_vars = vars t in
     match l with
@@ -290,12 +290,12 @@ module DT = struct
         in
         let tests =
           TTbl.to_seq by_term_tbl
-          |> Sequence.map
+          |> Iter.map
             (fun (lhs, sub_tests) ->
                assert (sub_tests<>[]);
                let fdt' = { fdt with fdt_vars=vars'; fdt_cases=sub_tests} in
                lhs, aux fdt')
-          |> Sequence.to_list
+          |> Iter.to_list
         in
         let default' = match others, fdt.fdt_default with
           | [], None -> None
@@ -565,11 +565,11 @@ module DT_util = struct
       (* now build new cases *)
       let tests =
         TTbl.to_seq tbl
-        |> Sequence.map
+        |> Iter.map
           (fun (t, sub_l) ->
              assert (sub_l <> []);
              t, merge_rec_l sub_l)
-        |> Sequence.to_list
+        |> Iter.to_list
       and default =
         merge_default l
       in
@@ -788,8 +788,8 @@ let add_value t f = {t with values = f :: t.values; }
 let add_finite_type t ty dom =
   {t with finite_types = (ty, dom) :: t.finite_types; }
 
-let values m = m.values |> Sequence.of_list
-let finite_types m = m.finite_types |> Sequence.of_list
+let values m = m.values |> Iter.of_list
+let finite_types m = m.finite_types |> Iter.of_list
 
 let map ~term:fterm ~ty:fty m = {
   m with

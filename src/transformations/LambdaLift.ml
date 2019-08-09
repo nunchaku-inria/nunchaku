@@ -67,7 +67,7 @@ type local_state = {
 (* does [t] contain any ID of [set]? *)
 let contains_some_id ~of_:set t =
   T.to_seq t
-  |> Sequence.exists
+  |> Iter.exists
     (fun t' -> match T.repr t' with
        | TI.Const id -> ID.Set.mem id set
        | _ -> false)
@@ -219,7 +219,7 @@ let tr_problem pb =
                the recursive block *)
             let ids =
               Stmt.defined_of_recs defs
-              |> Sequence.map Stmt.id_of_defined
+              |> Iter.map Stmt.id_of_defined
               |> ID.Set.of_seq
             in
             let l = ref [] in
@@ -235,7 +235,7 @@ let tr_problem pb =
                the recursive block *)
             let ids =
               Stmt.defined_of_spec spec
-              |> Sequence.map Stmt.id_of_defined
+              |> Iter.map Stmt.id_of_defined
               |> ID.Set.of_seq
             in
             let l = ref [] in

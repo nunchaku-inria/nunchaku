@@ -484,15 +484,15 @@ let encode_pb pb =
   let decls =
     let d_funs =
       ID.Tbl.to_seq state.funs
-      |> Sequence.map (CCFun.uncurry decl_of_fun)
+      |> Iter.map (CCFun.uncurry decl_of_fun)
     and d_types =
       TyTbl.values state.domains
-      |> Sequence.map (fun d -> d.dom_su)
-      |> Sequence.sort_uniq ~cmp:FO_rel.su_compare
-      |> Sequence.map decl_of_su
+      |> Iter.map (fun d -> d.dom_su)
+      |> Iter.sort_uniq ~cmp:FO_rel.su_compare
+      |> Iter.map decl_of_su
     in
-    Sequence.append d_types d_funs
-    |> Sequence.map (fun d -> d.FO_rel.decl_id, d)
+    Iter.append d_types d_funs
+    |> Iter.map (fun d -> d.FO_rel.decl_id, d)
     |> ID.Map.of_seq
   in
   (* the universe *)
@@ -501,10 +501,10 @@ let encode_pb pb =
       univ_prop=state.pprop_dom.dom_su;
       univ_l=
         TyTbl.values state.domains
-        |> Sequence.map (fun d -> d.dom_su)
-        |> Sequence.filter
+        |> Iter.map (fun d -> d.dom_su)
+        |> Iter.filter
           (fun su -> not (FO_rel.su_equal state.pprop_dom.dom_su su))
-        |> Sequence.to_list
+        |> Iter.to_list
     }
   in
   let pb' =
@@ -520,10 +520,10 @@ let encode_pb pb =
 
 module DT = Model.DT
 
-let rec tuples_of_ts ts: FO_rel.tuple Sequence.t = match ts with
-  | FO_rel.TS_list l -> Sequence.of_list l
+let rec tuples_of_ts ts: FO_rel.tuple Iter.t = match ts with
+  | FO_rel.TS_list l -> Iter.of_list l
   | FO_rel.TS_product l ->
-    let open Sequence.Infix in
+    let open Iter.Infix in
     let rec aux l = match l with
       | [] -> assert false
       | [ts] -> tuples_of_ts ts
@@ -534,10 +534,10 @@ let rec tuples_of_ts ts: FO_rel.tuple Sequence.t = match ts with
     aux l
   | FO_rel.TS_all _ -> assert false (* should not be in models *)
 
-let atoms_of_ts ts: FO_rel.atom Sequence.t =
-  tuples_of_ts ts |> Sequence.flat_map Sequence.of_list
+let atoms_of_ts ts: FO_rel.atom Iter.t =
+  tuples_of_ts ts |> Iter.flat_map Iter.of_list
 
-let atoms_of_model m: FO_rel.atom Sequence.t =
+let atoms_of_model m: FO_rel.atom Iter.t =
   fun yield ->
     Model.iter m
       ~values:(fun (_,dt,_) -> match dt with
@@ -551,8 +551,8 @@ module AM = CCMap.Make(struct
 
 let rename_atoms m: ID.t AM.t =
   atoms_of_model m
-  |> Sequence.sort_uniq ~cmp:FO_rel.atom_cmp
-  |> Sequence.map
+  |> Iter.sort_uniq ~cmp:FO_rel.atom_cmp
+  |> Iter.map
     (fun a ->
        let open FO_rel in
        let id =
@@ -630,7 +630,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
          It is true iff it holds on [ptrue] *)
       let as_bool =
         tuples_of_ts set
-        |> Sequence.exists
+        |> Iter.exists
           (function
             | [a] -> ID.equal ptrue (id_of_atom_ map a)
             | _ -> false)
@@ -643,7 +643,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
       (* the cases that lead to "true" *)
       let tests =
         tuples_of_ts set
-        |> Sequence.filter_map
+        |> Iter.filter_map
           (fun tup ->
              assert (List.length tup = List.length vars);
              match tup_to_ids tup with
@@ -654,7 +654,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
                      (fun v id -> DT.mk_flat_test v (FO.T.const id)) vars ids
                  in
                  Some (test, FO.T.true_))
-        |> Sequence.to_list
+        |> Iter.to_list
       in
       let fdt =
         {M.DT.
@@ -672,7 +672,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
     | [] -> assert false (* impossible, needs at least to return arg *)
     | [_dom_ret] ->
       (* constant: pick first element of the tuple(s) *)
-      begin match tuples_of_ts set |> Sequence.to_list with
+      begin match tuples_of_ts set |> Iter.to_list with
         | [[a]] ->
           let t = FO.T.const id in
           let u = FO.T.const (id_of_atom_ map a) in
@@ -686,7 +686,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
          set of arguments has at most one return value *)
       let tests =
         tuples_of_ts set
-        |> Sequence.filter_map
+        |> Iter.filter_map
           (fun tup -> match List.rev tup with
              | [] -> assert false
              | ret :: args ->
@@ -707,7 +707,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
                  | Some test, Some ret ->
                    Some (test, FO.T.const ret)
           )
-        |> Sequence.to_list
+        |> Iter.to_list
       in
       (* default case: undefined *)
       let default =
@@ -753,7 +753,7 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
   (* map finite types to their domain *)
   let ty_by_id : ID.t list ID.Map.t =
     M.values m
-    |> Sequence.filter_map
+    |> Iter.filter_map
       (fun (t,dt,_) -> match t, dt with
          | FO_rel.Const id, DT.Yield (FO_rel.Tuple_set set) ->
            begin match ID.Tbl.get state.dom_of_id id with

@@ -289,7 +289,7 @@ let preprocess_model (m:model) : tptp_model =
   let res = CCVector.create () in
   (* finite types *)
   Model.finite_types m
-  |> Sequence.map
+  |> Iter.map
     (fun (ty,l) ->
        (* register domain constants *)
        List.iter (fun id -> ID.Tbl.add state.pre_constants id (mk_cst id)) l;
@@ -298,7 +298,7 @@ let preprocess_model (m:model) : tptp_model =
   |> CCVector.append_seq res;
   (* constants *)
   Model.values m
-  |> Sequence.map
+  |> Iter.map
     (fun (t,dt,k) ->
        let t = preprocess_term ~state t in
        let vars = M.DT.vars dt in

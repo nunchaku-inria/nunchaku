@@ -52,7 +52,7 @@ module type SKOLEM = sig
   val find_skolem : state -> ID.t -> assoc option
   (** If the given ID a skolem symbol, return associated data *)
 
-  val all_skolems : state -> (ID.t * assoc) Sequence.t
+  val all_skolems : state -> (ID.t * assoc) Iter.t
 end
 
 module Make(Assoc : sig type t end)

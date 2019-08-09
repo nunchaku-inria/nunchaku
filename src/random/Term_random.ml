@@ -132,8 +132,8 @@ type backward_rules = backward_rule list
 let check_rule r =
   let vars_t = T.free_vars r.target in
   let vars_g =
-    Sequence.of_list r.goals
-    |> Sequence.flat_map (T.to_seq_free_vars ?bound:None)
+    Iter.of_list r.goals
+    |> Iter.flat_map (T.to_seq_free_vars ?bound:None)
     |> T.VarSet.of_seq
   in
   T.VarSet.equal vars_t (T.VarSet.of_list r.vars) &&
@@ -298,14 +298,14 @@ let random = G.(ty >>= of_ty)
 let rec shrink t = match T.repr t with
   | TI.Bind (b, v, t') ->
     (* need to keep the term closed, if it was *)
-    Sequence.map (T.mk_bind b v) (shrink t')
+    Iter.map (T.mk_bind b v) (shrink t')
   | TI.App (f, l) ->
-    Sequence.cons f (Sequence.of_list l)
-  | TI.Builtin (`Not f) -> Sequence.singleton f
-  | TI.Builtin (`Imply (a,b) | `Eq (a,b)) -> Sequence.doubleton a b
-  | TI.Builtin (`And l | `Or l) -> Sequence.of_list l
-  | TI.Builtin (`Ite (a,b,c)) -> Sequence.of_list [a;b;c]
-  | _ -> Sequence.empty
+    Iter.cons f (Iter.of_list l)
+  | TI.Builtin (`Not f) -> Iter.singleton f
+  | TI.Builtin (`Imply (a,b) | `Eq (a,b)) -> Iter.doubleton a b
+  | TI.Builtin (`And l | `Or l) -> Iter.of_list l
+  | TI.Builtin (`Ite (a,b,c)) -> Iter.of_list [a;b;c]
+  | _ -> Iter.empty
 
 let mk_arbitrary_ g =
   QCheck.make

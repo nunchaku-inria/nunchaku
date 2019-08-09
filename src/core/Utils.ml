@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 type 'a sequence = ('a -> unit) -> unit
@@ -117,12 +116,12 @@ module Section = struct
   (* CLI options to set the debug levels *)
   let cli_options () =
     iter
-    |> Sequence.map
+    |> Iter.map
       (fun (name,sec) ->
          "--debug" ^ (if name="" then "" else "."^name),
          Arg.Int (set_debug sec),
          " verbosity level for " ^ (if name="" then "all messages" else name))
-    |> Sequence.to_rev_list
+    |> Iter.to_rev_list
 end
 
 let set_debug = Section.set_debug Section.root

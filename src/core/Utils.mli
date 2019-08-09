@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Utils} *)
@@ -158,7 +157,7 @@ val warningf : warning -> ('a, Format.formatter, unit, unit) format4 -> 'a
 
 exception NotImplemented of string
 
-val pp_seq : ?sep:string -> 'a CCFormat.printer -> 'a Sequence.t CCFormat.printer
+val pp_seq : ?sep:string -> 'a CCFormat.printer -> 'a Iter.t CCFormat.printer
 val pp_list : ?sep:string -> 'a CCFormat.printer -> 'a list CCFormat.printer
 
 val pp_error_prefix : unit CCFormat.printer

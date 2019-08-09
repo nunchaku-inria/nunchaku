@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Recursive Traversal of AST} *)
@@ -19,12 +18,12 @@ end
 module type SCC_arg = sig
   type t
   module Tbl : CCHashtbl.S with type key = t
-  val deps : t -> t Sequence.t
+  val deps : t -> t Iter.t
 end
 
 (* Strongly connected components of the graph whose vertices' type is [X.t] *)
 module SCC(X : SCC_arg) : sig
-  val explore : X.t Sequence.t -> X.t list Sequence.t
+  val explore : X.t Iter.t -> X.t list Iter.t
 end = struct
   module Tbl = X.Tbl
 
@@ -57,7 +56,7 @@ end = struct
     | Exit_ of X.t * cell
 
   let explore
-    : X.t Sequence.t -> X.t list Sequence.t
+    : X.t Iter.t -> X.t list Iter.t
     = fun seq yield ->
       (* stack of nodes being explored, for the DFS *)
       let to_explore : action Stack.t = Stack.create() in
@@ -67,7 +66,7 @@ end = struct
       (* unique ID *)
       let count = ref 0 in
       (* exploration *)
-      Sequence.iter
+      Iter.iter
         (fun v ->
            Stack.push (Enter v) to_explore;
            while not (Stack.is_empty to_explore) do
@@ -83,14 +82,14 @@ end = struct
                    Stack.push cell stack;
                    Stack.push (Exit_ (v, cell)) to_explore;
                    (* explore children *)
-                   Sequence.iter
+                   Iter.iter
                      (fun e -> Stack.push (Enter e) to_explore)
                      (X.deps v)
                  )
                | Exit_ (v, cell) ->
                  (* update [min_id] *)
                  assert cell.on_stack;
-                 Sequence.iter
+                 Iter.iter
                    (fun e ->
                       (* must not fail, [dest] already explored *)
                       let dest_cell = Tbl.find tbl e in
@@ -165,20 +164,20 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
 
 
   (* set of IDs defined in this (partial) statement *)
-  let id_defined_by_ps ps : ID.t Sequence.t =
-    let yield_defined d = Stmt.id_of_defined d |> Sequence.return in
+  let id_defined_by_ps ps : ID.t Iter.t =
+    let yield_defined d = Stmt.id_of_defined d |> Iter.return in
     match ps.ps_view with
       | PS_rec d -> Stmt.defined_of_rec d |> yield_defined
       | PS_pred (_,_,d) -> Stmt.defined_of_pred d |> yield_defined
-      | PS_spec l -> Stmt.defined_of_spec l |> Sequence.map Stmt.id_of_defined
-      | PS_decl {Stmt.defined_head=id; _} -> Sequence.return id
+      | PS_spec l -> Stmt.defined_of_spec l |> Iter.map Stmt.id_of_defined
+      | PS_decl {Stmt.defined_head=id; _} -> Iter.return id
       | PS_copy c -> Stmt.ids_of_copy c
-      | PS_data (_,l) -> Stmt.defined_of_data l |> Sequence.map Stmt.id_of_defined
+      | PS_data (_,l) -> Stmt.defined_of_data l |> Iter.map Stmt.id_of_defined
       | PS_goal _
-      | PS_axiom _ -> Sequence.empty
+      | PS_axiom _ -> Iter.empty
 
   (* IDs used by the definition of this partial statement *)
-  let deps_of_ps (ps:partial_statement) : ID.t Sequence.t =
+  let deps_of_ps (ps:partial_statement) : ID.t Iter.t =
     fun yield ->
       let yield_var v = U.to_seq_consts (Var.ty v) yield in
       let yield_vars = List.iter yield_var in
@@ -338,7 +337,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
 
   let processed t =
     IDArgTbl.to_seq t.graph
-    |> Sequence.map fst
+    |> Iter.map fst
 
   let check_depth_ t d =
     if d > t.max_depth && not t.depth_reached then (
@@ -365,7 +364,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
   let add_graph_ t (ps:partial_statement) : unit =
     PSTbl.replace t.new_stmts ps ();
     id_defined_by_ps ps
-    |> Sequence.iter
+    |> Iter.iter
       (fun id -> ID.Tbl.replace t.by_id id ps);
     ()
 
@@ -630,15 +629,15 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
         module Tbl = PSTbl
         let deps ps =
           deps_of_ps ps
-          |> Sequence.map find_id_
+          |> Iter.map find_id_
       end)
     in
     (* traverse the SCC *)
     let res =
       PSTbl.to_seq t.new_stmts
-      |> Sequence.map fst
+      |> Iter.map fst
       |> Scc.explore
-      |> Sequence.map stmt_of_ps_list
+      |> Iter.map stmt_of_ps_list
       |> CCVector.of_seq ?init:None
     in
     (* return result *)

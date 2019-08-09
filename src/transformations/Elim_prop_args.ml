@@ -250,8 +250,8 @@ let transform_statement state stmt : (_,_) Stmt.t =
      easier to deal with recursive definitions *)
   begin
     Stmt.defined_seq stmt
-    |> Sequence.map tr_defined
-    |> Sequence.iter
+    |> Iter.map tr_defined
+    |> Iter.iter
       (fun d -> ID.Tbl.add state.new_sig d.Stmt.defined_head d.Stmt.defined_ty);
   end;
   (* new statement, + [true] if the statement was already declared *)

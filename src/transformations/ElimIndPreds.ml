@@ -138,9 +138,9 @@ let match_default_except ~env c_id t : _ TI.default_case =
     | Env.Cstor (_, _, ty_def, _) ->
       let map =
         ID.Map.values ty_def.Stmt.ty_cstors
-        |> Sequence.filter
+        |> Iter.filter
           (fun cstor -> not (ID.equal cstor.Stmt.cstor_name c_id))
-        |> Sequence.map
+        |> Iter.map
           (fun cstor ->
              let arity = T.ty_num_param cstor.Stmt.cstor_type in
              cstor.Stmt.cstor_name, arity)

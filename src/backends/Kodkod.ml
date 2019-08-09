@@ -67,7 +67,7 @@ let compute_univ_
     pb
   : int * (offset * FO_rel.atom IntMap.t) SUMap.t
   =
-  let open Sequence.Infix in
+  let open Iter.Infix in
   let univ = pb.FO_rel.pb_univ in
   let univ_prop = univ.FO_rel.univ_prop in
   (* sub-universe for prop *)
@@ -85,7 +85,7 @@ let compute_univ_
          (* map [n+i -> atom(su,i) for i=0...card-1] *)
          let a_to_i offset =
            0 -- (card-1)
-           |> Sequence.map (fun i -> offset+i, FO_rel.atom su i)
+           |> Iter.map (fun i -> offset+i, FO_rel.atom su i)
            |> IntMap.of_seq
          in
          begin match IntMap.get card card_to_offset_map with

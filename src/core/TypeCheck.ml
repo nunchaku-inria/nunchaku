@@ -287,8 +287,8 @@ module Make(T : TI.S) = struct
       | Stmt.Axiom (Stmt.Axiom_spec spec) ->
         let bound = VarSet.empty in
         Stmt.defined_of_spec spec
-        |> Sequence.map Stmt.ty_of_defined
-        |> Sequence.iter (fun ty -> ignore (check_is_ty ~env bound ty));
+        |> Iter.map Stmt.ty_of_defined
+        |> Iter.iter (fun ty -> ignore (check_is_ty ~env bound ty));
         let bound = List.fold_left (check_var ~env) bound spec.Stmt.spec_ty_vars in
         List.iter (check_is_prop ~env bound) spec.Stmt.spec_axioms
       | Stmt.Copy c ->

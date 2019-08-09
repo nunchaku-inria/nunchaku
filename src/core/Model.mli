@@ -266,8 +266,8 @@ val add_value : ('t,'ty) t -> 't * ('t, 'ty) DT.t * symbol_kind -> ('t,'ty) t
 val add_finite_type : ('t, 'ty) t -> 'ty -> ID.t list -> ('t, 'ty) t
 (** Map the type to its finite domain. *)
 
-val values : ('t, 'ty) t -> ('t * ('t, 'ty) DT.t * symbol_kind) Sequence.t
-val finite_types : (_, 'ty) t -> ('ty * ID.t list) Sequence.t
+val values : ('t, 'ty) t -> ('t * ('t, 'ty) DT.t * symbol_kind) Iter.t
+val finite_types : (_, 'ty) t -> ('ty * ID.t list) Iter.t
 
 val fold :
   ?values:('acc -> 'a * ('a, 'b) DT.t * symbol_kind -> 'acc) ->

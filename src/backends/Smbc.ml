@@ -265,10 +265,10 @@ let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
       assert (s.Stmt.spec_ty_vars=[]);
       let decls =
         Stmt.defined_of_spec s
-        |> Sequence.map
+        |> Iter.map
           (fun {Stmt.defined_head=id; defined_ty=ty; _} ->
              decl_to_tip id ty)
-        |> Sequence.to_list
+        |> Iter.to_list
       and axioms =
         s.Stmt.spec_axioms
         |> List.map
@@ -318,7 +318,7 @@ let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
              let name = id_to_string d.Stmt.ty_id in
              let cstors =
                ID.Map.values d.Stmt.ty_cstors
-               |> Sequence.map
+               |> Iter.map
                  (fun c ->
                     let cstor_name = id_to_string c.Stmt.cstor_name in
                     let cstor_args =
@@ -333,7 +333,7 @@ let statement_to_tip (state:state) (st:(term,ty)Stmt.t): A.statement list =
                            id_to_string id_select, ty_to_tip ty)
                     in
                     {A.cstor_name; cstor_args})
-               |> Sequence.to_list
+               |> Iter.to_list
              in
              name, cstors)
           l

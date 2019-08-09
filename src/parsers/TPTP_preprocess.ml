@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 TPTP Preprocessor} *)
@@ -274,7 +273,7 @@ let create_state () =
 
 let preprocess_exn seq =
   let state = create_state () in
-  Sequence.iter (process_statement_ ~state) seq;
+  Iter.iter (process_statement_ ~state) seq;
   CCVector.freeze state.into
 
 let preprocess seq =

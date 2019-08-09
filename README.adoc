@@ -101,7 +101,7 @@ You need to install the dependencies first, namely:
 - http://projects.camlcity.org/projects/findlib.html[ocamlfind]
 - https://github.com/c-cube/ocaml-containers/[containers]
 - http://gallium.inria.fr/~fpottier/menhir/[menhir]
-- https://github.com/c-cube/sequence[sequence]
+- https://github.com/c-cube/iter[Iter]
 - https://github.com/c-cube/tip-parser[tip-parser] (which requires menhir)
 - https://github.com/ocaml/dune/[dune] (build system)
 

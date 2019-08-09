@@ -397,19 +397,19 @@ val id_of_defined : _ defined -> ID.t
 val ty_of_defined : 'ty defined -> 'ty
 val attrs_of_defined : _ defined -> decl_attr list
 val defined_of_rec : (_, 'ty) rec_def -> 'ty defined
-val defined_of_recs : (_, 'ty) rec_defs -> 'ty defined Sequence.t
-val defined_of_spec : (_, 'ty) spec_defs -> 'ty defined Sequence.t
+val defined_of_recs : (_, 'ty) rec_defs -> 'ty defined Iter.t
+val defined_of_spec : (_, 'ty) spec_defs -> 'ty defined Iter.t
 val defined_of_pred : (_, 'ty) pred_def -> 'ty defined
-val defined_of_preds : (_, 'ty) pred_def list -> 'ty defined Sequence.t
+val defined_of_preds : (_, 'ty) pred_def list -> 'ty defined Iter.t
 val defined_of_cstor : 'ty ty_constructor -> 'ty defined
-val defined_of_data : 'ty data_type -> 'ty defined Sequence.t
-val defined_of_datas : 'ty data_types -> 'ty defined Sequence.t
-val defined_of_copy : (_, 'ty) copy -> 'ty defined Sequence.t
+val defined_of_data : 'ty data_type -> 'ty defined Iter.t
+val defined_of_datas : 'ty data_types -> 'ty defined Iter.t
+val defined_of_copy : (_, 'ty) copy -> 'ty defined Iter.t
 
-val defined_seq : (_, 'ty) t -> 'ty defined Sequence.t
+val defined_seq : (_, 'ty) t -> 'ty defined Iter.t
 (** All identifiers defined in this statement *)
 
-val ids_of_copy : (_,_) copy -> ID.t Sequence.t
+val ids_of_copy : (_,_) copy -> ID.t Iter.t
 
 (** {2 Print} *)
 

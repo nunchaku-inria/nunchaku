@@ -104,8 +104,8 @@ module CallGraph = struct
   (* view [t] as a graph *)
   let as_graph g =
     let children n =
-      try IDIntTbl.find g n |> Sequence.of_list
-      with Not_found -> Sequence.empty
+      try IDIntTbl.find g n |> Iter.of_list
+      with Not_found -> Iter.empty
     in
     CCGraph.make_tuple children
      *)
@@ -148,8 +148,8 @@ end = struct
   let make l =
     let terms = List.sort (fun (i,_)(j,_) -> Pervasives.compare i j) l in
     let vars =
-      Sequence.of_list l
-      |> Sequence.map snd
+      Iter.of_list l
+      |> Iter.map snd
       |> T.free_vars_seq ?bound:None
       |> VarSet.to_list
     in
@@ -397,7 +397,7 @@ let compute_specializable_args_def ~self (defs : (_,_) Stmt.rec_defs) =
   let state = Trav.state self in
   let ids =
     Stmt.defined_of_recs defs
-    |> Sequence.map Stmt.id_of_defined
+    |> Iter.map Stmt.id_of_defined
     |> ID.Set.of_seq
   in
   let cga = mk_cga_state ~env:(Trav.env self) ids in
@@ -423,7 +423,7 @@ let compute_specializable_args_pred ~self (preds : (_,_) Stmt.pred_def list) =
   let state = Trav.state self in
   let ids =
     Stmt.defined_of_preds preds
-    |> Sequence.map Stmt.id_of_defined
+    |> Iter.map Stmt.id_of_defined
     |> ID.Set.of_seq
   in
   let cga = mk_cga_state ~env:(Trav.env self) ids in
@@ -516,14 +516,14 @@ let fun_is_deterministic ~self (f:ID.t): bool =
          to do so, we analyze the definition of [f] *)
       let rec_ids =
         Stmt.defined_of_recs defs
-        |> Sequence.map Stmt.id_of_defined
+        |> Iter.map Stmt.id_of_defined
         |> ID.Set.of_seq
       in
       (* check if any subterm of [t] is an unknown, or one of the
          mutually recursive functions *)
       let check_def_deterministic (t:term): bool =
         T.to_seq t
-        |> Sequence.for_all
+        |> Iter.for_all
           (fun t -> match T.repr t with
              | TI.Const id -> not (ID.Set.mem id rec_ids)
              | TI.Builtin (`Undefined_self _ | `Undefined_atom _
@@ -1044,19 +1044,19 @@ module InstanceGraph = struct
     { id; ty_args; vertices; }
 
   let all_vertices g =
-    Sequence.of_list g.vertices
-    |> Sequence.map fst
+    Iter.of_list g.vertices
+    |> Iter.map fst
 
   (* nodes without parents *)
   let roots g =
-    Sequence.of_list g.vertices
-    |> Sequence.filter_map
+    Iter.of_list g.vertices
+    |> Iter.filter_map
       (function (v,None) -> Some v | (_,Some _) -> None)
 
   (* nodes that have a parent *)
   let non_roots g =
-    Sequence.of_list g.vertices
-    |> Sequence.filter_map
+    Iter.of_list g.vertices
+    |> Iter.filter_map
       (function (_,None) -> None | (v1,Some v2) -> Some (v1,v2))
 
   let pp out g =
@@ -1128,8 +1128,8 @@ let add_congruence_axioms push_stmt g =
      that are the most general) *)
   let roots = InstanceGraph.roots g in
   begin
-    Sequence.product roots roots
-    |> Sequence.iter
+    Iter.product roots roots
+    |> Iter.iter
       (fun (v1,v2) ->
          (* only emit an axiom once for every pair of distinct vertices *)
          if ID.compare v1.IG.v_spec_id v2.IG.v_spec_id < 0
@@ -1153,8 +1153,8 @@ let add_congruence_axioms push_stmt g =
   (* self-congruence axioms *)
   begin
     InstanceGraph.all_vertices g
-    |> Sequence.filter_map mk_self_congruence
-    |> Sequence.iter
+    |> Iter.filter_map mk_self_congruence
+    |> Iter.iter
       (fun ax -> push_stmt (Stmt.axiom1 ~info:Stmt.info_default ax))
   end;
   ()

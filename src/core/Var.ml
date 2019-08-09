@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 
@@ -113,7 +112,7 @@ module Subst = struct
       Format.fprintf out "@[<2>%a →@ @[%a@]@]" pp_full v pt t in
     Format.fprintf out "{@[<hv>%a@]}"
       (Utils.pp_seq ~sep:", " pp_pair)
-      (M.to_seq s |> Sequence.map snd)
+      (M.to_seq s |> Iter.map snd)
 end
 
 module Set(Ty : sig type t end) = CCSet.Make(struct

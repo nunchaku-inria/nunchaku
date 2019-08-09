@@ -476,36 +476,36 @@ let id_of_defined d = d.defined_head
 let ty_of_defined d = d.defined_ty
 let attrs_of_defined d = d.defined_attrs
 let defined_of_rec r = r.rec_defined
-let defined_of_recs l = Sequence.of_list l |> Sequence.map defined_of_rec
-let defined_of_spec spec = Sequence.of_list spec.spec_defined
+let defined_of_recs l = Iter.of_list l |> Iter.map defined_of_rec
+let defined_of_spec spec = Iter.of_list spec.spec_defined
 let defined_of_pred p = p.pred_defined
-let defined_of_preds l = Sequence.of_list l |> Sequence.map defined_of_pred
+let defined_of_preds l = Iter.of_list l |> Iter.map defined_of_pred
 let defined_of_cstor c : _ defined = mk_defined ~attrs:[] c.cstor_name c.cstor_type
 let defined_of_data d yield =
   yield (mk_defined ~attrs:[] d.ty_id d.ty_type);
   ID.Map.iter (fun _ c -> yield (defined_of_cstor c)) d.ty_cstors
 let defined_of_datas l =
-  Sequence.of_list l |> Sequence.flat_map defined_of_data
+  Iter.of_list l |> Iter.flat_map defined_of_data
 let defined_of_copy c yield : unit =
   yield (mk_defined ~attrs:[] c.copy_id c.copy_ty);
   yield (mk_defined ~attrs:[] c.copy_abstract c.copy_abstract_ty);
   yield (mk_defined ~attrs:[] c.copy_concrete c.copy_concrete_ty);
   ()
 
-let defined_seq (stmt:(_,_)t): _ defined Sequence.t =
+let defined_seq (stmt:(_,_)t): _ defined Iter.t =
   begin match view stmt with
-    | Decl d -> Sequence.return d
+    | Decl d -> Iter.return d
     | Axiom (Axiom_rec defs) -> defined_of_recs defs
     | Axiom (Axiom_spec s) -> defined_of_spec s
     | Axiom (Axiom_std _)
-    | Goal _ -> Sequence.empty
+    | Goal _ -> Iter.empty
     | TyDef (_,l) -> defined_of_datas l
     | Pred (_,_,l) -> defined_of_preds l
     | Copy c -> defined_of_copy c
   end
 
 let ids_of_copy c =
-  Sequence.of_list [c.copy_id; c.copy_concrete; c.copy_abstract]
+  Iter.of_list [c.copy_id; c.copy_concrete; c.copy_abstract]
 
 let fpf = Format.fprintf
 let pplist ~sep pp = Utils.pp_list ~sep pp

@@ -268,7 +268,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
       let def = TI.map_default_case (mono_term ~self ~local_state) def in
       let l =
         ID.Map.to_seq l
-        |> Sequence.map
+        |> Iter.map
           (fun (c, (tys, vars,rhs)) ->
             let mangled_tys = List.map (mono_type ~self ~local_state) tys in
             let c' =
@@ -308,7 +308,7 @@ and take_n_ground_atomic_types_ ~self ~local_state n = function
 (* some type variable? *)
 let term_has_ty_vars t =
   T.to_seq_vars t
-  |> Sequence.exists (fun v -> T.ty_is_Type (Var.ty v))
+  |> Iter.exists (fun v -> T.ty_is_Type (Var.ty v))
 
 let mono_defined ~self ~local_state d tup =
   let ty, _ = ArgTuple.app_poly_ty d.Stmt.defined_ty tup in
@@ -598,7 +598,7 @@ let unmangle_term ~(state:unmangle_state) (t:term):term =
       let def = TI.map_default_case aux def in
       let l =
         ID.Map.to_seq l
-        |> Sequence.map
+        |> Iter.map
           (fun (c,(tys,vars,rhs)) ->
             assert (tys=[]);
             let vars = List.map aux_var vars in

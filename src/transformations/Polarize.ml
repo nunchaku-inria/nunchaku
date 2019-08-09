@@ -37,7 +37,7 @@ type decode_state = (ID.t * bool * T.t * polarized_id) ID.Tbl.t
 
 let term_contains_undefined t =
   T.to_seq t
-  |> Sequence.exists
+  |> Iter.exists
     (fun t' -> match T.repr t' with
        | TI.Builtin (`Undefined_self _) -> true
        | _ -> false)

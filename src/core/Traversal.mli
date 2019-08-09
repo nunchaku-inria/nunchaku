@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Recursive Traversal of AST} *)
@@ -96,7 +95,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) : sig
   (** To be used by callbacks in {!dispatch} to indicate that some additional
       IDs have been processed (e.g. the conversion functions of copy types) *)
 
-  val processed : t -> (ID.t * Arg.t) Sequence.t
+  val processed : t -> (ID.t * Arg.t) Iter.t
   (** All processed pairs *)
 
   val call_dep : t -> depth:int -> ID.t -> Arg.t -> unit

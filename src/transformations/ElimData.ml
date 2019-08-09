@@ -275,7 +275,7 @@ module Make(M : sig val mode : mode end) = struct
     let add_to_deps cell =
       let fv = T.free_vars cell.sc_term in
       T.VarSet.to_seq fv
-      |> Sequence.iter
+      |> Iter.iter
         (fun v ->
            let l = Var.Subst.find_or ~subst:share.ss_terms_depending_on v ~default:[] in
            Utils.debugf ~section 5 "@[<2>deps(%a) +=@ %a (:= `@[%a@]`)@]"
@@ -295,8 +295,8 @@ module Make(M : sig val mode : mode end) = struct
       let sc_depends_on =
         T.free_vars t
         |> T.VarSet.to_seq
-        |> Sequence.filter_map (cell_of_var share)
-        |> Sequence.to_rev_list
+        |> Iter.filter_map (cell_of_var share)
+        |> Iter.to_rev_list
       in
       Utils.debugf ~section 5
         "@[<2>introduce def %a@ := `@[%a@]`@ depends on: (@[%a@])@]"
@@ -364,7 +364,7 @@ module Make(M : sig val mode : mode end) = struct
     in
     (* collect all *)
     begin match start with
-      | `All -> T.Map.values share.ss_tbl |> Sequence.iter add_cell_to_process
+      | `All -> T.Map.values share.ss_tbl |> Iter.iter add_cell_to_process
       | `Vars l -> List.iter visit_terms_depending_on l
     end;
     (* now, topological sort of [to_process] so that cells are
@@ -384,7 +384,7 @@ module Make(M : sig val mode : mode end) = struct
         all_lets := (v, u) :: !all_lets;
       )
     in
-    Var.Subst.to_seq !to_process |> Sequence.map snd |> Sequence.iter visit_cell;
+    Var.Subst.to_seq !to_process |> Iter.map snd |> Iter.iter visit_cell;
     let new_t =
       (* if [`All] was requested, also introduce the guards for
          constants that were not let-defined *)

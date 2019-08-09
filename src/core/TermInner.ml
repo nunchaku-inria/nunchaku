@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Main View for terms} *)
@@ -266,25 +265,25 @@ module type UTIL_REPR = sig
   (** Search for a head symbol
       @raise No_head if not an application/const *)
 
-  val to_seq : t -> t Sequence.t
+  val to_seq : t -> t Iter.t
   (** Iterate on sub-terms *)
 
-  val to_seq_vars : t -> t Var.t Sequence.t
+  val to_seq_vars : t -> t Var.t Iter.t
   (** Iterate on variables *)
 
-  val to_seq_consts : t -> ID.t Sequence.t
+  val to_seq_consts : t -> ID.t Iter.t
   (** IDs occurring as {!Const} *)
 
   module VarSet : CCSet.S with type elt = t Var.t
 
-  val to_seq_free_vars : ?bound:VarSet.t -> t -> t Var.t Sequence.t
+  val to_seq_free_vars : ?bound:VarSet.t -> t -> t Var.t Iter.t
   (** Iterate on free variables. *)
 
   val free_vars : ?bound:VarSet.t -> t -> VarSet.t
   (** [free_vars t] computes the set of free variables of [t].
       @param bound variables bound on the path *)
 
-  val free_vars_seq : ?bound:VarSet.t -> t Sequence.t -> VarSet.t
+  val free_vars_seq : ?bound:VarSet.t -> t Iter.t -> VarSet.t
   (** Similar to {!free_vars} but for a sequence of terms *)
 
   val free_vars_list : ?bound:VarSet.t -> t list -> VarSet.t
@@ -458,7 +457,7 @@ module UtilRepr(T : REPR)
 
   let to_seq_consts t =
     to_seq t
-    |> Sequence.filter_map
+    |> Iter.filter_map
       (fun t -> match T.repr t with
          | Const id -> Some id
          | _ -> None)
@@ -467,38 +466,38 @@ module UtilRepr(T : REPR)
     to_seq_free_vars ?bound t |> VarSet.of_seq
 
   let free_vars_seq ?bound seq =
-    seq |> Sequence.flat_map (to_seq_free_vars ?bound) |> VarSet.of_seq
+    seq |> Iter.flat_map (to_seq_free_vars ?bound) |> VarSet.of_seq
 
-  let free_vars_list ?bound l = free_vars_seq ?bound (Sequence.of_list l)
+  let free_vars_list ?bound l = free_vars_seq ?bound (Iter.of_list l)
 
   let is_var t = match T.repr t with Var _ -> true | _ -> false
   let is_const t = match T.repr t with Const _ -> true | _ -> false
 
-  let is_closed t = to_seq_free_vars t |> Sequence.is_empty
+  let is_closed t = to_seq_free_vars t |> Iter.is_empty
 
   let is_undefined t = match T.repr t with Builtin (`Undefined_self _) -> true | _ -> false
 
   let to_seq_vars t =
     to_seq t
-    |> Sequence.flat_map
+    |> Iter.flat_map
       (fun t -> match T.repr t with
          | Var v
          | Bind (_,v,_)
-         | Let (v,_,_) -> Sequence.return v
+         | Let (v,_,_) -> Iter.return v
          | Match (_,l,_) ->
-           let open Sequence.Infix in
-           ID.Map.to_seq l >>= fun (_,(_,vars,_)) -> Sequence.of_list vars
+           let open Iter.Infix in
+           ID.Map.to_seq l >>= fun (_,(_,vars,_)) -> Iter.of_list vars
          | Builtin _
          | Const _
          | App _
          | TyBuiltin _
          | TyArrow (_,_)
-         | TyMeta _ -> Sequence.empty
+         | TyMeta _ -> Iter.empty
       )
 
   let to_seq_meta_vars t =
     to_seq t
-    |> Sequence.filter_map
+    |> Iter.filter_map
       (fun t -> match T.repr t with
          | TyMeta v -> Some v
          | Var _
@@ -514,7 +513,7 @@ module UtilRepr(T : REPR)
 
   let free_meta_vars ?(init=ID.Map.empty) t =
     to_seq_meta_vars t
-    |> Sequence.fold
+    |> Iter.fold
       (fun acc v -> ID.Map.add (MetaVar.id v) v acc)
       init
 
@@ -1123,7 +1122,7 @@ module Util(T : S)
           CCHash.combine4 60
             (hash_ t)
             CCHash.(seq (triple (list hash_) (list hash_var) hash_)
-                (ID.Map.to_seq l |> Sequence.map snd))
+                (ID.Map.to_seq l |> Iter.map snd))
             (match def with
               | None -> 0x10
               | Some (t,_) -> hash_ t)

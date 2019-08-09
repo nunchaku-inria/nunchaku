@@ -382,7 +382,7 @@ let rebuild_types state m : retyping =
             uni_domain_sub
           |> ID.Map.of_list
         in
-        let dom = ID.Map.values map |> Sequence.to_list in
+        let dom = ID.Map.values map |> Iter.to_list in
         Utils.debugf ~section 3
           "@[<2>domain of type `%a`@ is {@[%a@]},@ map to @[[%a]@]@]"
           (fun k->k T.pp ty (CCFormat.list ID.pp) dom
@@ -535,7 +535,7 @@ let decode_model ~state m =
   in
   (* add new types' domains *)
   Ty.Map.to_seq rety.rety_domains
-  |> Sequence.fold
+  |> Iter.fold
     (fun m (ty,dom) -> M.add_finite_type m ty dom)
     m
 
