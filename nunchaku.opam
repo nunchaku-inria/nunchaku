@@ -11,9 +11,9 @@ build: [
     ["dune" "runtest" "-j" jobs "-p" name] {with-test}
 ]
 depends: [
-    "dune" {build & >= "1.1" }
-    "containers" { >= "1.0" }
-    "menhir" {build}
+    "dune" {>= "1.1" }
+    "containers" { >= "2.0" }
+    "menhir"
     "iter" { >= "1.0" }
     "base-unix"
     "base-threads"
