@@ -186,13 +186,13 @@ end
 *)
 
 (*$= & ~printer:pp_fut_int
-  (Fut.Fail Pervasives.Exit) ( \
-    let t = Fut.make (fun () -> Thread.delay 0.2; raise Pervasives.Exit) in \
+  (Fut.Fail Exit) ( \
+    let t = Fut.make (fun () -> Thread.delay 0.2; raise Exit) in \
     Fut.get t)
 *)
 
 (*$= & ~printer:pp_fut_int
-  (Fut.Fail Pervasives.Exit) ( \
+  (Fut.Fail Exit) ( \
     let t = Fut.make (fun () -> 0) |> Fut.map (fun _ -> raise Exit) in \
     Fut.get t)
 *)
