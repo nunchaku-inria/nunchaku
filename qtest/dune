@@ -1,22 +1,21 @@
-
 (rule
-  (targets run_qtest.ml)
-  (deps Makefile (source_tree ../src))
-  (mode fallback)
-  ;(libraries (qtest qcheck))
-  (action
-    (run make qtest-gen))
-  )
+ (targets run_qtest.ml)
+ (deps
+  Makefile
+  (source_tree ../src))
+ (mode fallback)
+ ;(libraries (qtest qcheck))
+ (action
+  (run make qtest-gen)))
 
 (executable
-  (name run_qtest)
-  (flags :standard -w -33)
-  (libraries containers nunchaku nunchaku.parsers nunchaku.transformations
-             nunchaku.random oUnit qcheck))
+ (name run_qtest)
+ (flags :standard -w -33 -warn-error -3)
+ (libraries containers nunchaku nunchaku.parsers nunchaku.transformations
+   nunchaku.random oUnit qcheck))
 
 (alias
- (name    runtest)
- (deps    run_qtest.exe)
- (action  (run %{deps}))
- )
-
+ (name runtest)
+ (deps run_qtest.exe)
+ (action
+  (run %{deps})))
