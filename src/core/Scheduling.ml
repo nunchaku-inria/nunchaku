@@ -1,4 +1,3 @@
-
 (* This file is free software, part of nunchaku. See file "license" for more details. *)
 
 (** {1 Scheduling of sub-processes} *)
@@ -165,26 +164,34 @@ module Fut = struct
     fut
 end
 
-(*$=
+(*$inject
+     let pp_fut_int = function
+       | Fut.Done x -> "done " ^ string_of_int x
+       | Fut.Stopped -> "stopped"
+       | Fut.Fail e -> "failed " ^ Printexc.to_string e
+
+*)
+
+(*$= & ~printer:pp_fut_int
   (Fut.Done 42) ( \
     let t = Fut.make (fun () -> Thread.delay 0.2; 42) in \
     Fut.get t)
 *)
 
-(*$=
+(*$= & ~printer:pp_fut_int
   Fut.Stopped ( \
     let t = Fut.make (fun () -> Thread.delay 0.2; 42) in \
     Fut.stop t; \
     Fut.get t)
 *)
 
-(*$=
+(*$= & ~printer:pp_fut_int
   (Fut.Fail Pervasives.Exit) ( \
     let t = Fut.make (fun () -> Thread.delay 0.2; raise Pervasives.Exit) in \
     Fut.get t)
 *)
 
-(*$=
+(*$= & ~printer:pp_fut_int
   (Fut.Fail Pervasives.Exit) ( \
     let t = Fut.make (fun () -> 0) |> Fut.map (fun _ -> raise Exit) in \
     Fut.get t)
