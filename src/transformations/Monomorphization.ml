@@ -267,7 +267,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
       let t = mono_term ~self ~local_state t in
       let def = TI.map_default_case (mono_term ~self ~local_state) def in
       let l =
-        ID.Map.to_seq l
+        ID.Map.to_iter l
         |> Iter.map
           (fun (c, (tys, vars,rhs)) ->
             let mangled_tys = List.map (mono_type ~self ~local_state) tys in
@@ -279,7 +279,7 @@ let rec mono_term ~self ~local_state (t:term) : term =
             in
             let vars = List.map (mono_var ~self ~local_state) vars in
             c', ([], vars, mono_term ~self ~local_state rhs))
-        |> ID.Map.of_seq
+        |> ID.Map.of_iter
       in
       T.match_with t l ~def
     | TI.TyBuiltin b -> T.ty_builtin b
@@ -597,7 +597,7 @@ let unmangle_term ~(state:unmangle_state) (t:term):term =
       let t = aux t in
       let def = TI.map_default_case aux def in
       let l =
-        ID.Map.to_seq l
+        ID.Map.to_iter l
         |> Iter.map
           (fun (c,(tys,vars,rhs)) ->
             assert (tys=[]);
@@ -608,7 +608,7 @@ let unmangle_term ~(state:unmangle_state) (t:term):term =
                 c', (tys,vars,rhs)
               with Not_found -> c, ([],vars,rhs)
             end)
-        |> ID.Map.of_seq
+        |> ID.Map.of_iter
       in
       T.match_with t l ~def
     | TI.TyBuiltin b -> T.ty_builtin b

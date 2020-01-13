@@ -76,7 +76,7 @@ module Subst = struct
 
   let of_list v t = add_list ~subst:empty v t
 
-  let concat s ~into:s2 = M.add_seq s2 (M.to_seq s)
+  let concat s ~into:s2 = M.add_iter s2 (M.to_iter s)
 
   let remove ~subst v = M.remove v.id subst
 
@@ -105,14 +105,14 @@ module Subst = struct
     add ~subst v v', v'
 
   let to_list s = M.fold (fun _ (v,x) acc -> (v,x)::acc) s []
-  let to_seq s yield = M.iter (fun _ (v,x) -> yield (v,x)) s
+  let to_iter s yield = M.iter (fun _ (v,x) -> yield (v,x)) s
 
   let pp pt out s =
     let pp_pair out (v,t) =
       Format.fprintf out "@[<2>%a →@ @[%a@]@]" pp_full v pt t in
     Format.fprintf out "{@[<hv>%a@]}"
       (Utils.pp_seq ~sep:", " pp_pair)
-      (M.to_seq s |> Iter.map snd)
+      (M.to_iter s |> Iter.map snd)
 end
 
 module Set(Ty : sig type t end) = CCSet.Make(struct

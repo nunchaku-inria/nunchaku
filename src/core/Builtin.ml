@@ -225,7 +225,7 @@ let iter : ('a -> unit) -> 'a t -> unit
       ()
     | `Card_at_least (ty,_) -> f ty
 
-let to_seq b f = iter f b
+let to_iter b f = iter f b
 
 let to_sexp
   : ('a -> Sexp_lib.t) -> 'a t -> Sexp_lib.t

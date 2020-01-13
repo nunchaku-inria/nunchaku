@@ -144,7 +144,7 @@ let match_default_except ~env c_id t : _ TI.default_case =
           (fun cstor ->
              let arity = T.ty_num_param cstor.Stmt.cstor_type in
              cstor.Stmt.cstor_name, arity)
-        |> ID.Map.of_seq
+        |> ID.Map.of_iter
       in
       Some (t, map)
     | _ -> errorf_ "`%a` should be a constructor" ID.pp c_id

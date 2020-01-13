@@ -66,7 +66,7 @@ type local_state = {
 
 (* does [t] contain any ID of [set]? *)
 let contains_some_id ~of_:set t =
-  T.to_seq t
+  T.to_iter t
   |> Iter.exists
     (fun t' -> match T.repr t' with
        | TI.Const id -> ID.Set.mem id set
@@ -220,7 +220,7 @@ let tr_problem pb =
             let ids =
               Stmt.defined_of_recs defs
               |> Iter.map Stmt.id_of_defined
-              |> ID.Set.of_seq
+              |> ID.Set.of_iter
             in
             let l = ref [] in
             local_state.in_scope <- In_rec (ids, l);
@@ -236,7 +236,7 @@ let tr_problem pb =
             let ids =
               Stmt.defined_of_spec spec
               |> Iter.map Stmt.id_of_defined
-              |> ID.Set.of_seq
+              |> ID.Set.of_iter
             in
             let l = ref [] in
             local_state.in_scope <- In_spec (ids, l);

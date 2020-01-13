@@ -120,7 +120,7 @@ module CallGraph = struct
         pp_node n (Utils.pp_list pp_node) c.cell_children
     in
     fpf out "@[<hv>@[<hv2>graph {@,@[<v>%a@]@]@,}@]"
-      (Utils.pp_seq pp_pair) (IDIntTbl.to_seq g)
+      (Utils.pp_seq pp_pair) (IDIntTbl.to_iter g)
 end
 
 (* Specialization of a function is parametrized by a set of (fixed)
@@ -398,7 +398,7 @@ let compute_specializable_args_def ~self (defs : (_,_) Stmt.rec_defs) =
   let ids =
     Stmt.defined_of_recs defs
     |> Iter.map Stmt.id_of_defined
-    |> ID.Set.of_seq
+    |> ID.Set.of_iter
   in
   let cga = mk_cga_state ~env:(Trav.env self) ids in
   (* process each definition *)
@@ -424,7 +424,7 @@ let compute_specializable_args_pred ~self (preds : (_,_) Stmt.pred_def list) =
   let ids =
     Stmt.defined_of_preds preds
     |> Iter.map Stmt.id_of_defined
-    |> ID.Set.of_seq
+    |> ID.Set.of_iter
   in
   let cga = mk_cga_state ~env:(Trav.env self) ids in
   (* process each definition *)
@@ -517,12 +517,12 @@ let fun_is_deterministic ~self (f:ID.t): bool =
       let rec_ids =
         Stmt.defined_of_recs defs
         |> Iter.map Stmt.id_of_defined
-        |> ID.Set.of_seq
+        |> ID.Set.of_iter
       in
       (* check if any subterm of [t] is an unknown, or one of the
          mutually recursive functions *)
       let check_def_deterministic (t:term): bool =
-        T.to_seq t
+        T.to_iter t
         |> Iter.for_all
           (fun t -> match T.repr t with
              | TI.Const id -> not (ID.Set.mem id rec_ids)

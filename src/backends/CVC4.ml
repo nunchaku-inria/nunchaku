@@ -380,7 +380,7 @@ let pp_problem out (decode, pb) =
   fpf out "(set-logic ALL_SUPPORTED)@,"; (* taïaut! *)
   (* write problem *)
   Utils.pp_seq ~sep:""
-    pp_statement out (CCVector.to_seq pb.FO.Problem.statements);
+    pp_statement out (CCVector.to_iter pb.FO.Problem.statements);
   fpf out "@,(check-sat)@]@.";
   ()
 
@@ -640,7 +640,7 @@ let send_get_model_ out decode =
   in
   fpf out "(@[<hv2>get-value@ (@[<hv>%a@])@])"
     (Utils.pp_seq ~sep:" " pp_mquery)
-    (ID.Tbl.to_seq decode.symbols)
+    (ID.Tbl.to_iter decode.symbols)
 
 (* read model from CVC4 instance [s] *)
 let get_model_ ~print_model ~decode s : (_,_) Model.t =
@@ -768,7 +768,7 @@ let preprocess pb : processed_problem =
   let add_ty_witnesses_gen stmt =
     let tys =
       FO.tys_of_statement stmt
-      |> Iter.flat_map FO.Ty.to_seq
+      |> Iter.flat_map FO.Ty.to_iter
       |> Iter.sort_uniq ~cmp:FO.Ty.compare
       |> Iter.to_rev_list
     in

@@ -87,7 +87,7 @@ module Print(P1 : TermInner.PRINT)(P2 : TermInner.PRINT) = struct
     fpf out "{%s@,%a@,}"
       (str_of_meta pb.metadata)
       (Utils.pp_seq ~sep:"" PStmt.pp)
-      (CCVector.to_seq pb.statements)
+      (CCVector.to_iter pb.statements)
 end
 
 module P = Print(Term)(Term)

@@ -115,7 +115,7 @@ module Ty : sig
   val compare : t -> t -> int
   val hash : t -> int
 
-  val to_seq : t -> t Iter.t
+  val to_iter : t -> t Iter.t
 end
 
 module T : sig
@@ -158,7 +158,7 @@ module T : sig
   val forall : Ty.t var -> t -> t
   val exists : Ty.t var -> t -> t
 
-  val to_seq : t -> t Iter.t
+  val to_iter : t -> t Iter.t
   (** subterms *)
 end
 
@@ -190,7 +190,7 @@ module Problem : sig
     ('t, 'ty) t ->
     'acc * ('t2, 'ty2) t
 
-  val to_seq : ('t,'ty) t -> ('t,'ty) statement Iter.t
+  val to_iter : ('t,'ty) t -> ('t,'ty) statement Iter.t
 end
 
 (** {2 Utils} *)

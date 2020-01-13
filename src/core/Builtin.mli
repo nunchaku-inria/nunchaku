@@ -62,7 +62,7 @@ val fold2 :
 
 val iter : ('a -> unit) -> 'a t -> unit
 
-val to_seq : 'a t -> ('a -> unit) -> unit
+val to_iter : 'a t -> ('a -> unit) -> unit
 
 val to_sexp : ('a -> Sexp_lib.t) -> 'a t -> Sexp_lib.t
 

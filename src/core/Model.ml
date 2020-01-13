@@ -131,7 +131,7 @@ module DT = struct
             (Utils.pp_list ~sep:" " Var.pp_full) vars
             (pp pt pty) rhs
         in
-        let pp_m out m = Utils.pp_seq ~sep:"; " pp_branch out (ID.Map.to_seq m) in
+        let pp_m out m = Utils.pp_seq ~sep:"; " pp_branch out (ID.Map.to_iter m) in
         fpf out "@[<hv1>cases (@[%a:%a@])@ {@[<v>%a%a@]@,}@]"
           Var.pp_full cases.var pty (Var.ty cases.var)
           pp_m m pp_default cases.default
@@ -289,7 +289,7 @@ module DT = struct
             fdt.fdt_cases
         in
         let tests =
-          TTbl.to_seq by_term_tbl
+          TTbl.to_iter by_term_tbl
           |> Iter.map
             (fun (lhs, sub_tests) ->
                assert (sub_tests<>[]);
@@ -564,7 +564,7 @@ module DT_util = struct
         tail;
       (* now build new cases *)
       let tests =
-        TTbl.to_seq tbl
+        TTbl.to_iter tbl
         |> Iter.map
           (fun (t, sub_l) ->
              assert (sub_l <> []);

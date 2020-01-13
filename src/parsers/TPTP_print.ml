@@ -330,4 +330,4 @@ let pp_model out (m:model) =
   Utils.debug ~section 3 "preprocess model...";
   let m' = preprocess_model m in
   fpf out "@[<v>%s@,%a@,%s@]"
-    header (Utils.pp_seq ~sep:"" pp_stmt) (CCVector.to_seq m') footer
+    header (Utils.pp_seq ~sep:"" pp_stmt) (CCVector.to_iter m') footer

@@ -134,7 +134,7 @@ let check_rule r =
   let vars_g =
     Iter.of_list r.goals
     |> Iter.flat_map (T.to_seq_free_vars ?bound:None)
-    |> T.VarSet.of_seq
+    |> T.VarSet.of_iter
   in
   T.VarSet.equal vars_t (T.VarSet.of_list r.vars) &&
   T.VarSet.subset vars_g vars_t

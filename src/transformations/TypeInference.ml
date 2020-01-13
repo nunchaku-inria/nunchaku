@@ -703,7 +703,7 @@ module Convert(Term : TermTyped.S) = struct
       | TI.Const _ ->  true
       | TI.Var v -> is_mono_var_ v
       | TI.App (f,l) -> is_mono_ f && List.for_all is_mono_ l
-      | TI.Builtin b -> Builtin.to_seq b |> Iter.for_all is_mono_
+      | TI.Builtin b -> Builtin.to_iter b |> Iter.for_all is_mono_
       | TI.Let (v,t,u) ->
         is_mono_var_ v && is_mono_ t && is_mono_ u
       | TI.Match (t,l,d) ->
@@ -731,7 +731,7 @@ module Convert(Term : TermTyped.S) = struct
       | TI.Const _ -> true
       | TI.Var v -> is_mono_var_ v
       | TI.App (f,l) -> is_prenex_ f && List.for_all is_mono_ l
-      | TI.Builtin b -> Builtin.to_seq b |> Iter.for_all is_mono_
+      | TI.Builtin b -> Builtin.to_iter b |> Iter.for_all is_mono_
       | TI.Bind (Binder.TyForall, v, t) ->
         (* pi v:_. t is prenex if t is *)
         is_mono_var_ v && is_prenex_ t
@@ -820,7 +820,7 @@ module Convert(Term : TermTyped.S) = struct
       }
   *)
   let check_vars ~vars ~rel t =
-    let fvars = free_ty_vars t |> VarSet.of_seq in
+    let fvars = free_ty_vars t |> VarSet.of_iter in
     match rel with
       | `Equal ->
         if VarSet.equal fvars vars then `Ok
@@ -843,7 +843,7 @@ module Convert(Term : TermTyped.S) = struct
 
   (* does [t] contain the given [id]? *)
   let term_contains_ t ~id =
-    U.to_seq t
+    U.to_iter t
     |> Iter.exists
       (fun t -> match Term.repr t with
          | TI.Const id' when ID.equal id id' -> true

@@ -135,7 +135,7 @@ module Ty = struct
   let compare = compare_ty
   let equal a b = compare a b = 0
 
-  let to_seq t yield =
+  let to_iter t yield =
     let rec aux t =
       yield t;
       begin match t.view with
@@ -244,7 +244,7 @@ module T = struct
 
   let is_var = function {view=Var _; _} -> true | _ -> false
 
-  let to_seq t yield =
+  let to_iter t yield =
     let rec aux t =
       yield t;
       begin match t.view with
@@ -300,7 +300,7 @@ module Problem = struct
     let pb' = make ~meta (CCVector.freeze res) in
     acc', pb'
 
-  let to_seq t = CCVector.to_seq t.statements
+  let to_iter t = CCVector.to_iter t.statements
 end
 
 let tys_of_toplevel_ty (l,ret) yield =
@@ -434,7 +434,7 @@ let pp_statement out s = match s with
 let pp_problem out pb =
   fpf out "@[<v>%a@]"
     (Utils.pp_seq ~sep:"" pp_statement)
-    (Problem.statements pb |> CCVector.to_seq)
+    (Problem.statements pb |> CCVector.to_iter)
 
 (** {2 Utils} *)
 module Util = struct

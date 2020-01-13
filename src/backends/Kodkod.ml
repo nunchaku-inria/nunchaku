@@ -86,7 +86,7 @@ let compute_univ_
          let a_to_i offset =
            0 -- (card-1)
            |> Iter.map (fun i -> offset+i, FO_rel.atom su i)
-           |> IntMap.of_seq
+           |> IntMap.of_iter
          in
          begin match IntMap.get card card_to_offset_map with
            | None ->

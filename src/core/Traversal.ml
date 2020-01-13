@@ -336,7 +336,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
   let state t = t.state
 
   let processed t =
-    IDArgTbl.to_seq t.graph
+    IDArgTbl.to_iter t.graph
     |> Iter.map fst
 
   let check_depth_ t d =
@@ -634,7 +634,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
     in
     (* traverse the SCC *)
     let res =
-      PSTbl.to_seq t.new_stmts
+      PSTbl.to_iter t.new_stmts
       |> Iter.map fst
       |> Scc.explore
       |> Iter.map stmt_of_ps_list

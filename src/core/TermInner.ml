@@ -265,7 +265,7 @@ module type UTIL_REPR = sig
   (** Search for a head symbol
       @raise No_head if not an application/const *)
 
-  val to_seq : t -> t Iter.t
+  val to_iter : t -> t Iter.t
   (** Iterate on sub-terms *)
 
   val to_seq_vars : t -> t Var.t Iter.t
@@ -403,7 +403,7 @@ module UtilRepr(T : REPR)
     try Some (head_sym_exn t)
     with No_head _ -> None
 
-  let to_seq t yield =
+  let to_iter t yield =
     let rec aux t =
       yield t;
       match T.repr t with
@@ -456,17 +456,17 @@ module UtilRepr(T : REPR)
     aux ~bound t
 
   let to_seq_consts t =
-    to_seq t
+    to_iter t
     |> Iter.filter_map
       (fun t -> match T.repr t with
          | Const id -> Some id
          | _ -> None)
 
   let free_vars ?bound t =
-    to_seq_free_vars ?bound t |> VarSet.of_seq
+    to_seq_free_vars ?bound t |> VarSet.of_iter
 
   let free_vars_seq ?bound seq =
-    seq |> Iter.flat_map (to_seq_free_vars ?bound) |> VarSet.of_seq
+    seq |> Iter.flat_map (to_seq_free_vars ?bound) |> VarSet.of_iter
 
   let free_vars_list ?bound l = free_vars_seq ?bound (Iter.of_list l)
 
@@ -478,7 +478,7 @@ module UtilRepr(T : REPR)
   let is_undefined t = match T.repr t with Builtin (`Undefined_self _) -> true | _ -> false
 
   let to_seq_vars t =
-    to_seq t
+    to_iter t
     |> Iter.flat_map
       (fun t -> match T.repr t with
          | Var v
@@ -486,7 +486,7 @@ module UtilRepr(T : REPR)
          | Let (v,_,_) -> Iter.return v
          | Match (_,l,_) ->
            let open Iter.Infix in
-           ID.Map.to_seq l >>= fun (_,(_,vars,_)) -> Iter.of_list vars
+           ID.Map.to_iter l >>= fun (_,(_,vars,_)) -> Iter.of_list vars
          | Builtin _
          | Const _
          | App _
@@ -496,7 +496,7 @@ module UtilRepr(T : REPR)
       )
 
   let to_seq_meta_vars t =
-    to_seq t
+    to_iter t
     |> Iter.filter_map
       (fun t -> match T.repr t with
          | TyMeta v -> Some v
@@ -1114,7 +1114,7 @@ module Util(T : S)
         | Const id -> decr d; ID.hash id
         | Var v -> decr d; hash_var v
         | App (f,l) -> CCHash.combine3 20 (hash_ f) (CCHash.list hash_ l)
-        | Builtin b -> CCHash.combine2 30 (CCHash.seq hash_ (Builtin.to_seq b))
+        | Builtin b -> CCHash.combine2 30 (CCHash.seq hash_ (Builtin.to_iter b))
         | Let (v,t,u) -> decr d; CCHash.combine4 40 (hash_var v) (hash_ t) (hash_ u)
         | Bind (_,v,t) -> decr d; CCHash.combine3 50 (hash_var v) (hash_ t)
         | Match (t,l,def) ->
@@ -1122,7 +1122,7 @@ module Util(T : S)
           CCHash.combine4 60
             (hash_ t)
             CCHash.(seq (triple (list hash_) (list hash_var) hash_)
-                (ID.Map.to_seq l |> Iter.map snd))
+                (ID.Map.to_iter l |> Iter.map snd))
             (match def with
               | None -> 0x10
               | Some (t,_) -> hash_ t)

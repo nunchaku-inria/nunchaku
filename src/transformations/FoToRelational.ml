@@ -483,7 +483,7 @@ let encode_pb pb =
   (* extract declarations: *)
   let decls =
     let d_funs =
-      ID.Tbl.to_seq state.funs
+      ID.Tbl.to_iter state.funs
       |> Iter.map (CCFun.uncurry decl_of_fun)
     and d_types =
       TyTbl.values state.domains
@@ -493,7 +493,7 @@ let encode_pb pb =
     in
     Iter.append d_types d_funs
     |> Iter.map (fun d -> d.FO_rel.decl_id, d)
-    |> ID.Map.of_seq
+    |> ID.Map.of_iter
   in
   (* the universe *)
   let univ =
@@ -559,7 +559,7 @@ let rename_atoms m: ID.t AM.t =
          ID.make_f "%a_%d" ID.pp_name a.a_sub_universe.su_name a.a_index
        in
        a, id)
-  |> AM.of_seq
+  |> AM.of_iter
 
 let id_of_atom_ map a : ID.t =
   try AM.find a map
@@ -606,7 +606,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
         errorf "could not find domain of type %a@ in @[%a@]"
           ID.pp su.FO_rel.su_name
           (Utils.pp_seq CCFormat.Dump.(pair ID.pp (list ID.pp)))
-          (ID.Map.to_seq ty_by_id)
+          (ID.Map.to_iter ty_by_id)
     in
     if CCList.mem ~eq:ID.equal id ids
     then Some id
@@ -766,7 +766,7 @@ let decode_constants_ state ~ptrue (map:ID.t AM.t) m: (FO.T.t, FO.Ty.t) Model.t 
              | None -> None
            end
          | _ -> None)
-    |> ID.Map.of_seq
+    |> ID.Map.of_iter
   in
   M.fold
     ~values:(fun m (t,dt,_) -> match t, dt with

@@ -252,7 +252,7 @@ let parse_file ~into ~input () =
       >|= CCVector.freeze
     | I_tptp ->
       Nunchaku_parsers.TPTP_lexer.parse ~into ~mode:(`Env "TPTP") src
-      >|= CCVector.to_seq
+      >|= CCVector.to_iter
       >>= Nunchaku_parsers.TPTP_preprocess.preprocess
     | I_tip ->
       Nunchaku_parsers.Parse_tip.parse ~into src
@@ -282,7 +282,7 @@ let pp_input_if_needed statements =
   if !pp_ then
     Format.printf "@[<v2>input: {@,@[<v>%a@]@]@,}@."
       (Utils.pp_seq ~sep:"" A.pp_statement)
-      (CCVector.to_seq statements);
+      (CCVector.to_iter statements);
   ()
 
 module Pipes = struct

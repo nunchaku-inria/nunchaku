@@ -102,7 +102,7 @@ module Make(Assoc : sig type t end)
 
   let find_skolem state id = ID.Tbl.get state.tbl id
 
-  let all_skolems state = ID.Tbl.to_seq state.tbl
+  let all_skolems state = ID.Tbl.to_iter state.tbl
 end
 
 (* for usage in this module *)

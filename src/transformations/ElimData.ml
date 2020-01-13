@@ -274,7 +274,7 @@ module Make(M : sig val mode : mode end) = struct
        list of reverse dependencies of those variables *)
     let add_to_deps cell =
       let fv = T.free_vars cell.sc_term in
-      T.VarSet.to_seq fv
+      T.VarSet.to_iter fv
       |> Iter.iter
         (fun v ->
            let l = Var.Subst.find_or ~subst:share.ss_terms_depending_on v ~default:[] in
@@ -294,7 +294,7 @@ module Make(M : sig val mode : mode end) = struct
       share.ss_globals.ss_num <- share.ss_globals.ss_num + 1;
       let sc_depends_on =
         T.free_vars t
-        |> T.VarSet.to_seq
+        |> T.VarSet.to_iter
         |> Iter.filter_map (cell_of_var share)
         |> Iter.to_rev_list
       in
@@ -384,7 +384,7 @@ module Make(M : sig val mode : mode end) = struct
         all_lets := (v, u) :: !all_lets;
       )
     in
-    Var.Subst.to_seq !to_process |> Iter.map snd |> Iter.iter visit_cell;
+    Var.Subst.to_iter !to_process |> Iter.map snd |> Iter.iter visit_cell;
     let new_t =
       (* if [`All] was requested, also introduce the guards for
          constants that were not let-defined *)
