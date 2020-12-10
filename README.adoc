@@ -2,7 +2,6 @@
 :toc: macro
 :source-highlighter: pygments
 
-image::https://api.travis-ci.org/nunchaku-inria/nunchaku.svg?branch=master[link="https://travis-ci.org/nunchaku-inria/nunchaku", alt="Build status on travis"]
 image::https://github.com/nunchaku-inria/nunchaku/workflows/build/badge.svg[Build status on github]
 
 A counter-example finder for higher-order logic, designed to be used from
