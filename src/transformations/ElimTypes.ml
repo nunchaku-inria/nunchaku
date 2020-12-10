@@ -386,7 +386,7 @@ let rebuild_types state m : retyping =
         Utils.debugf ~section 3
           "@[<2>domain of type `%a`@ is {@[%a@]},@ map to @[[%a]@]@]"
           (fun k->k T.pp ty (CCFormat.list ID.pp) dom
-              (Utils.pp_seq CCFormat.(pair ~sep:(return "@ -> ") ID.pp ID.pp))
+              (Utils.pp_iter CCFormat.(pair ~sep:(return "@ -> ") ID.pp ID.pp))
               (ID.Map.to_iter map));
         { rety_domains = Ty.Map.add ty dom rety.rety_domains;
           rety_map = Ty.Map.add ty map rety.rety_map

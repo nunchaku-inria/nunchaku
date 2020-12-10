@@ -35,7 +35,7 @@ module Features = struct
 
   module M = CCMap.Make(struct
       type t = key
-      let compare = Pervasives.compare
+      let compare = Stdlib.compare
     end)
 
   type t = value M.t
@@ -107,7 +107,7 @@ module Features = struct
     let pp_pair out (k,v) =
       Format.fprintf out "%s -> %s" (str_of_key k) (str_of_value v)
     in
-    Format.fprintf out "@[<hv>%a@]" (Utils.pp_seq pp_pair) (M.to_iter m)
+    Format.fprintf out "@[<hv>%a@]" (Utils.pp_iter pp_pair) (M.to_iter m)
 end
 
 (** {2 Single Transformation} *)

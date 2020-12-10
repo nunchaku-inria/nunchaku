@@ -64,7 +64,7 @@ let is_neutral v = v.pol = Polarity.NoPol
 let is_polarized v = not (is_neutral v)
 
 let equal v1 v2 = v1.id = v2.id
-let compare v1 v2 = Pervasives.compare v1.id v2.id
+let compare v1 v2 = Stdlib.compare v1.id v2.id
 let hash v = CCHash.int v.id
 
 (*

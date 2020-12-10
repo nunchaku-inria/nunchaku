@@ -111,7 +111,7 @@ module Subst = struct
     let pp_pair out (v,t) =
       Format.fprintf out "@[<2>%a →@ @[%a@]@]" pp_full v pt t in
     Format.fprintf out "{@[<hv>%a@]}"
-      (Utils.pp_seq ~sep:", " pp_pair)
+      (Utils.pp_iter ~sep:", " pp_pair)
       (M.to_iter s |> Iter.map snd)
 end
 

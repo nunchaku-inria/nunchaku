@@ -128,7 +128,7 @@ let call_with x f = Arg.Unit (fun () -> f x)
 
 let options =
   let open CCFun in
-  Arg.align @@ List.sort Pervasives.compare @@ (
+  Arg.align @@ List.sort Stdlib.compare @@ (
     Utils.Options.get_all () @
       [ "--pp-input", Arg.Set pp_, " print input"
       ; "--pp-all", Arg.Set pp_all_, " print every step of the pipeline"
@@ -281,7 +281,7 @@ let parse_prelude files =
 let pp_input_if_needed statements =
   if !pp_ then
     Format.printf "@[<v2>input: {@,@[<v>%a@]@]@,}@."
-      (Utils.pp_seq ~sep:"" A.pp_statement)
+      (Utils.pp_iter ~sep:"" A.pp_statement)
       (CCVector.to_iter statements);
   ()
 

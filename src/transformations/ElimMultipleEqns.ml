@@ -98,7 +98,7 @@ let dnode_add_cstor (d:(_,_,_)decision_node) c x = match d with
     if not (ID.Map.mem c allowed_cstors) then (
       errorf_ "@[<2>%a is not a constructor of %a@ (these are @[%a@])@]"
         ID.pp c ID.pp d.dn_data_ty.Stmt.ty_id
-        (CCFormat.seq ID.pp) (ID.Map.keys allowed_cstors);
+        (CCFormat.iter ID.pp) (ID.Map.keys allowed_cstors);
     );
     (* add [x] to the list [l] of subtrees already present for case [c] *)
     let l = try ID.Map.find c d.dn_by_cstor with Not_found -> [] in

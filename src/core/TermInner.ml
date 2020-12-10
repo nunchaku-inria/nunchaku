@@ -17,7 +17,7 @@ module TyBuiltin = struct
     | `Unitype (** when there is only one type *)
     ]
   let equal = (=)
-  let compare = Pervasives.compare
+  let compare = Stdlib.compare
   let to_string = function
     | `Prop -> "prop"
     | `Kind -> "kind"
@@ -1114,14 +1114,14 @@ module Util(T : S)
         | Const id -> decr d; ID.hash id
         | Var v -> decr d; hash_var v
         | App (f,l) -> CCHash.combine3 20 (hash_ f) (CCHash.list hash_ l)
-        | Builtin b -> CCHash.combine2 30 (CCHash.seq hash_ (Builtin.to_iter b))
+        | Builtin b -> CCHash.combine2 30 (CCHash.iter hash_ (Builtin.to_iter b))
         | Let (v,t,u) -> decr d; CCHash.combine4 40 (hash_var v) (hash_ t) (hash_ u)
         | Bind (_,v,t) -> decr d; CCHash.combine3 50 (hash_var v) (hash_ t)
         | Match (t,l,def) ->
           decr d;
           CCHash.combine4 60
             (hash_ t)
-            CCHash.(seq (triple (list hash_) (list hash_var) hash_)
+            CCHash.(iter (triple (list hash_) (list hash_var) hash_)
                 (ID.Map.to_iter l |> Iter.map snd))
             (match def with
               | None -> 0x10

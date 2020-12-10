@@ -18,7 +18,7 @@ module TyBuiltin = struct
     | `Unitype
     ]
   let equal = (=)
-  let compare = Pervasives.compare
+  let compare = Stdlib.compare
   let pp out = function
     | `Unitype -> CCFormat.string out "unitype"
     | `Prop -> CCFormat.string out "prop"
@@ -29,7 +29,7 @@ module Builtin = struct
     [ `Int of int
     ]
   let equal = (=)
-  let compare = Pervasives.compare
+  let compare = Stdlib.compare
   let pp out = function
     | `Int n -> CCFormat.int out n
 end
@@ -126,7 +126,7 @@ module Ty = struct
     | TyApp (c1,l1), TyApp (c2,l2) ->
       CCOrd.( ID.compare c1 c2 <?> (list compare_ty, l1, l2))
     | TyApp _, _
-    | TyBuiltin _, _ -> Pervasives.compare (to_int_ t1.view) (to_int_ t2.view)
+    | TyBuiltin _, _ -> Stdlib.compare (to_int_ t1.view) (to_int_ t2.view)
 
   let hash t = match t.view with
     | TyBuiltin _ -> 3
@@ -150,7 +150,7 @@ module T = struct
   type t = { view : (t, Ty.t) view; id: int }
 
   let view t = t.view
-  let compare a b = Pervasives.compare a.id b.id
+  let compare a b = Stdlib.compare a.id b.id
 
   let make_ =
     let n = ref 0 in
@@ -433,7 +433,7 @@ let pp_statement out s = match s with
 
 let pp_problem out pb =
   fpf out "@[<v>%a@]"
-    (Utils.pp_seq ~sep:"" pp_statement)
+    (Utils.pp_iter ~sep:"" pp_statement)
     (Problem.statements pb |> CCVector.to_iter)
 
 (** {2 Utils} *)

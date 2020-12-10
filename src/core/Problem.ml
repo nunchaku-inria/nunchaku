@@ -66,9 +66,9 @@ let map_with ?(before=fun _ -> []) ?(after=fun _ -> []) ~term ~ty p = {
     CCVector.iter
       (fun st ->
          let st' = Statement.map ~term ~ty st in
-         CCVector.append_seq res (Iter.of_list (before ()));
+         CCVector.append_iter res (Iter.of_list (before ()));
          CCVector.push res st';
-         CCVector.append_seq res (Iter.of_list (after ()));
+         CCVector.append_iter res (Iter.of_list (after ()));
       ) p.statements;
     CCVector.freeze res
   );
@@ -86,7 +86,7 @@ module Print(P1 : TermInner.PRINT)(P2 : TermInner.PRINT) = struct
     in
     fpf out "{%s@,%a@,}"
       (str_of_meta pb.metadata)
-      (Utils.pp_seq ~sep:"" PStmt.pp)
+      (Utils.pp_iter ~sep:"" PStmt.pp)
       (CCVector.to_iter pb.statements)
 end
 

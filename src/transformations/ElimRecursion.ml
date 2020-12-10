@@ -118,7 +118,7 @@ let () = Printexc.register_printer
 
 let pp_hof out hof =
   fpf out "{@[handle_cstor=`%a`,@ app_syms=@[%a@]@]}"
-    ID.pp hof.handle_ty (Utils.pp_seq ID.pp) (ID.Set.to_iter hof.app_symbs)
+    ID.pp hof.handle_ty (Utils.pp_iter ID.pp) (ID.Set.to_iter hof.app_symbs)
 
 (* find the set of HOF-elim symbols used in [pb] *)
 let gather_hof_ pb =
@@ -604,7 +604,7 @@ let pp_domain out d =
   in
   fpf out "[@[<v2>`%a`:@ %a@]]"
     ID.pp d.dom_fun.fun_encoded_fun
-    (Utils.pp_seq ~sep:" " pp_tuple) (ID.Map.to_iter d.dom_args)
+    (Utils.pp_iter ~sep:" " pp_tuple) (ID.Map.to_iter d.dom_args)
 
 type proj_fun = (T.t, T.t) DT.t
 
@@ -732,7 +732,7 @@ let decode_model ~state m =
   let projs, domains = pass1_ ~state m in
   pass2_ projs domains;
   Utils.debugf ~section 2 "@[<2>domains:@ @[%a@]@]"
-    (fun k->k (Utils.pp_seq pp_domain) (ID.Tbl.values domains));
+    (fun k->k (Utils.pp_iter pp_domain) (ID.Tbl.values domains));
   let m = pass3_ ~state domains m in
   Utils.debugf ~section 3 "@[<2>model after decoding:@ @[%a@]@]"
     (fun k->k (Model.pp T.pp' T.pp) m);

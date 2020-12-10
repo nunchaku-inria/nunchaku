@@ -120,7 +120,7 @@ module CallGraph = struct
         pp_node n (Utils.pp_list pp_node) c.cell_children
     in
     fpf out "@[<hv>@[<hv2>graph {@,@[<v>%a@]@]@,}@]"
-      (Utils.pp_seq pp_pair) (IDIntTbl.to_iter g)
+      (Utils.pp_iter pp_pair) (IDIntTbl.to_iter g)
 end
 
 (* Specialization of a function is parametrized by a set of (fixed)
@@ -146,7 +146,7 @@ end = struct
   let is_empty = function {terms=[];_} -> true | _ -> false
   let length a = List.length a.terms
   let make l =
-    let terms = List.sort (fun (i,_)(j,_) -> Pervasives.compare i j) l in
+    let terms = List.sort (fun (i,_)(j,_) -> Stdlib.compare i j) l in
     let vars =
       Iter.of_list l
       |> Iter.map snd

@@ -48,7 +48,7 @@ type arity_set = {
 }
 
 let pp_arity_set out set =
-  fpf out "{@[%a@]}" (Utils.pp_seq CCFormat.int) (IntSet.to_iter set.as_set)
+  fpf out "{@[%a@]}" (Utils.pp_iter CCFormat.int) (IntSet.to_iter set.as_set)
 
 type fun_ =
   | F_id of ID.t
@@ -80,7 +80,7 @@ let pp_arities out tbl =
       pp_fun id pp_arity_set set (List.length set.as_ty_args)
   in
   fpf out "@[<v>%a@]"
-    (Utils.pp_seq ~sep:"" pp_pair)
+    (Utils.pp_iter ~sep:"" pp_pair)
     (FunMap.to_iter tbl)
 
 (* With [id : ty_args -> ty_ret], report a use of [id] with [n] arguments
@@ -363,7 +363,7 @@ let pp_fe_tower out =
 
 let pp_fun_encoding out m =
   fpf out "[@[<v>%a@]]"
-    (Utils.pp_seq ~sep:""
+    (Utils.pp_iter ~sep:""
        CCFormat.(hvbox ~i:2 @@ pair ~sep:(return "@ -> ") int pp_fe_tower))
     (IntMap.to_iter m)
 

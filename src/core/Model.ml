@@ -131,7 +131,7 @@ module DT = struct
             (Utils.pp_list ~sep:" " Var.pp_full) vars
             (pp pt pty) rhs
         in
-        let pp_m out m = Utils.pp_seq ~sep:"; " pp_branch out (ID.Map.to_iter m) in
+        let pp_m out m = Utils.pp_iter ~sep:"; " pp_branch out (ID.Map.to_iter m) in
         fpf out "@[<hv1>cases (@[%a:%a@])@ {@[<v>%a%a@]@,}@]"
           Var.pp_full cases.var pty (Var.ty cases.var)
           pp_m m pp_default cases.default

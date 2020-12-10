@@ -163,5 +163,5 @@ let pp_statement_tptp out st =
 
 let pp_problem_tptp out pb =
   fpf out "@[<v>%a@]"
-    (Utils.pp_seq ~sep:"" pp_statement_tptp)
+    (Utils.pp_iter ~sep:"" pp_statement_tptp)
     (CCVector.to_iter pb.pb_statements)

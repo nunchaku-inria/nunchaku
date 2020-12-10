@@ -131,7 +131,7 @@ module Make(T : TI.REPR)
       CCOrd.( cmp_ty c1 c2 <?> (list cmp_ty, l1, l2))
     | Arrow (l1,r1), Arrow (l2,r2) -> CCOrd.( cmp_ty l1 l2 <?> (cmp_ty, r1, r2))
     | Const _, _ | App _, _ | Arrow _, _ | Builtin _, _ ->
-      Pervasives.compare (to_int_ (repr a)) (to_int_ (repr b))
+      Stdlib.compare (to_int_ (repr a)) (to_int_ (repr b))
 
   module Map = CCMap.Make(struct
       type t = T.t

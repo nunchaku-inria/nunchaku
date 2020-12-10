@@ -234,7 +234,7 @@ module Make(T : TI.S) = struct
         then (
           let module PStmt = Statement.Print(P)(P) in
           errorf_ "in equation `@[%a@]`,@ variables @[%a@]@ occur in RHS-term but are not bound"
-            (PStmt.pp_eqns id) eqn (Utils.pp_seq Var.pp_full) (VarSet.to_iter diff)
+            (PStmt.pp_eqns id) eqn (Utils.pp_iter Var.pp_full) (VarSet.to_iter diff)
         );
         let bound' = List.fold_left (check_var ~env) bound vars in
         check_is_prop ~env bound'

@@ -303,7 +303,7 @@ module Task = struct
     of_fut ?prio ?slice
       (fun ~deadline () -> Fut.make (fun () -> f ~deadline ()))
 
-  let compare_prio (Task t1) (Task t2) = Pervasives.compare t1.prio t2.prio
+  let compare_prio (Task t1) (Task t2) = Stdlib.compare t1.prio t2.prio
 
   let map ~f (Task t_i) =
     Task {t_i with post=(fun x -> f (t_i.post x)); }
@@ -482,5 +482,5 @@ let run ~j ~deadline tasks =
   (Res_list CCList.(1--10)) ( \
     let mk i = Task.make (fun ~deadline:_ () -> i, No_shortcut) in \
     let res = run ~j:3 ~deadline:5. CCList.(1 -- 10 |> map mk) in \
-    match res with Res_list l -> Res_list (List.sort Pervasives.compare l) | x->x)
+    match res with Res_list l -> Res_list (List.sort Stdlib.compare l) | x->x)
 *)
