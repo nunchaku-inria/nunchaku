@@ -28,7 +28,8 @@ call the tool on problem files written in one of the accepted syntaxes
 (<<supported-formats>>) as follows:
 
 ----
-$ nunchaku docs/examples/first_order.nun
+$ git clone https://github.com/nunchaku-inria/nunchaku-problems
+$ nunchaku nunchaku-problems/tests/first_order.nun
 SAT: {
   type term := {$term_0, $term_1}.
   type list := {$list_0, $list_1}.
