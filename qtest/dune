@@ -12,7 +12,7 @@
  (name run_qtest)
  (flags :standard -w -33 -warn-error -3)
  (libraries containers nunchaku nunchaku.parsers nunchaku.transformations
-   nunchaku.random oUnit qcheck))
+   nunchaku.random ounit2 qcheck))
 
 (alias
  (name runtest)
