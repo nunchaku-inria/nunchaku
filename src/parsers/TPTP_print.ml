@@ -295,7 +295,7 @@ let preprocess_model (m:model) : tptp_model =
        List.iter (fun id -> ID.Tbl.add state.pre_constants id (mk_cst id)) l;
        let ty = preprocess_ty ~state ty in
        mk_domain ty l)
-  |> CCVector.append_seq res;
+  |> CCVector.append_iter res;
   (* constants *)
   Model.values m
   |> Iter.map
@@ -307,7 +307,7 @@ let preprocess_model (m:model) : tptp_model =
            (fun vars -> translate_dt k t ~vars dt)
        in
        { role = role_of_kind k; form; })
-  |> CCVector.append_seq res;
+  |> CCVector.append_iter res;
   CCVector.freeze res
 
 (* print a model *)
@@ -330,4 +330,4 @@ let pp_model out (m:model) =
   Utils.debug ~section 3 "preprocess model...";
   let m' = preprocess_model m in
   fpf out "@[<v>%s@,%a@,%s@]"
-    header (Utils.pp_seq ~sep:"" pp_stmt) (CCVector.to_iter m') footer
+    header (Utils.pp_iter ~sep:"" pp_stmt) (CCVector.to_iter m') footer

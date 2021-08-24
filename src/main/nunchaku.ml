@@ -281,7 +281,7 @@ let parse_prelude files =
 let pp_input_if_needed statements =
   if !pp_ then
     Format.printf "@[<v2>input: {@,@[<v>%a@]@]@,}@."
-      (Utils.pp_seq ~sep:"" A.pp_statement)
+      (Utils.pp_iter ~sep:"" A.pp_statement)
       (CCVector.to_iter statements);
   ()
 

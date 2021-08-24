@@ -287,5 +287,5 @@ module Print(Pt : PRINT_TERM)(Pty : PRINT_TERM) = struct
       fpf out "@[%a %a@]" ID.pp id pp_info info
     in
     fpf out "@[<v>@[<v2>env {@,@[<v>%a@]@]@,}@]"
-      (Utils.pp_seq pp_pair) (ID.PerTbl.to_seq e.infos)
+      (Utils.pp_iter pp_pair) (ID.PerTbl.to_iter e.infos)
 end

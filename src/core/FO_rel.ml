@@ -373,5 +373,5 @@ let pp_decl out d =
 let pp_problem out pb =
   fpf out "@[<v2>problem {@,univ=%a@,decls=[@[<v>%a@]]@,goal=@[<hv>%a@]@,@]}"
     pp_universe pb.pb_univ
-    (Utils.pp_seq pp_decl) (ID.Map.values pb.pb_decls)
+    (Utils.pp_iter pp_decl) (ID.Map.values pb.pb_decls)
     (pp_list ~sep:" && " pp_form) pb.pb_goal

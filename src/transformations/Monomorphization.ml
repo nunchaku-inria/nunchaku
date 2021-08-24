@@ -538,7 +538,7 @@ let dispatch = {
 let pp_processed_ out trav =
   Trav.processed trav
   |> Format.fprintf out "@[<v>%a@]"
-    (Utils.pp_seq ~sep:""
+    (Utils.pp_iter ~sep:""
        (fun out (id,tup) ->
           Format.fprintf out "@[<h>%a (%a)@]" ID.pp id ArgTuple.pp tup))
 

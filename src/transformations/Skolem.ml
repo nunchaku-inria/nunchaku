@@ -266,7 +266,7 @@ let pp_state out st =
       ID.pp id T.pp s.sym_ty T.pp s.sym_defines
   in
   fpf out "@[<2>skolem table {@,%a@]@,}"
-    (CCFormat.seq pp_sym) (Sk.all_skolems st.sk)
+    (CCFormat.iter pp_sym) (Sk.all_skolems st.sk)
 
 let epsilon = ID.make "_witness_of"
 

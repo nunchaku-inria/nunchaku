@@ -433,7 +433,7 @@ let pp_statement out s = match s with
 
 let pp_problem out pb =
   fpf out "@[<v>%a@]"
-    (Utils.pp_seq ~sep:"" pp_statement)
+    (Utils.pp_iter ~sep:"" pp_statement)
     (Problem.statements pb |> CCVector.to_iter)
 
 (** {2 Utils} *)

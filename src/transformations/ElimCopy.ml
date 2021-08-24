@@ -385,7 +385,7 @@ let decode_model (st:decode_state) m : (_,_) Model.t =
   let map = decode_concrete_ st m in
   Utils.debugf ~section 3
     "@[<2>decode model with map@ @[<hv>%a@]@]"
-    (fun k->k (Utils.pp_seq CCFormat.(pair ~sep:(return "@ -> ") ID.pp T.pp))
+    (fun k->k (Utils.pp_iter CCFormat.(pair ~sep:(return "@ -> ") ID.pp T.pp))
         (ID.Map.to_iter map));
   let tr_term = decode_term map in
   Model.filter_map m

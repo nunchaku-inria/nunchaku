@@ -379,7 +379,7 @@ let pp_problem out (decode, pb) =
   fpf out "(set-option :interactive-mode true)@,";
   fpf out "(set-logic ALL_SUPPORTED)@,"; (* taïaut! *)
   (* write problem *)
-  Utils.pp_seq ~sep:""
+  Utils.pp_iter ~sep:""
     pp_statement out (CCVector.to_iter pb.FO.Problem.statements);
   fpf out "@,(check-sat)@]@.";
   ()
@@ -639,7 +639,7 @@ let send_get_model_ out decode =
     | Q_type _ -> fpf out "(fmf.card.val %a)" pp_id id
   in
   fpf out "(@[<hv2>get-value@ (@[<hv>%a@])@])"
-    (Utils.pp_seq ~sep:" " pp_mquery)
+    (Utils.pp_iter ~sep:" " pp_mquery)
     (ID.Tbl.to_iter decode.symbols)
 
 (* read model from CVC4 instance [s] *)

@@ -638,7 +638,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
       |> Iter.map fst
       |> Scc.explore
       |> Iter.map stmt_of_ps_list
-      |> CCVector.of_seq ?init:None
+      |> CCVector.of_iter ?init:None
     in
     (* return result *)
     res

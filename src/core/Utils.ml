@@ -303,7 +303,7 @@ let () =
 exception NotImplemented of string
 
 let pp_with_sep sep out () = Format.fprintf out "%s@," sep
-let pp_seq ?(sep=" ") p = CCFormat.seq ~sep:(pp_with_sep sep) p
+let pp_iter ?(sep=" ") p = CCFormat.iter ~sep:(pp_with_sep sep) p
 let pp_list ?(sep=" ") p = CCFormat.list ~sep:(pp_with_sep sep) p
 
 (* print error prefix *)

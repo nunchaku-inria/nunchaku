@@ -120,7 +120,7 @@ module CallGraph = struct
         pp_node n (Utils.pp_list pp_node) c.cell_children
     in
     fpf out "@[<hv>@[<hv2>graph {@,@[<v>%a@]@]@,}@]"
-      (Utils.pp_seq pp_pair) (IDIntTbl.to_iter g)
+      (Utils.pp_iter pp_pair) (IDIntTbl.to_iter g)
 end
 
 (* Specialization of a function is parametrized by a set of (fixed)

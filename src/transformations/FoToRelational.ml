@@ -605,7 +605,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
       with Not_found ->
         errorf "could not find domain of type %a@ in @[%a@]"
           ID.pp su.FO_rel.su_name
-          (Utils.pp_seq CCFormat.Dump.(pair ID.pp (list ID.pp)))
+          (Utils.pp_iter CCFormat.Dump.(pair ID.pp (list ID.pp)))
           (ID.Map.to_iter ty_by_id)
     in
     if CCList.mem ~eq:ID.equal id ids
