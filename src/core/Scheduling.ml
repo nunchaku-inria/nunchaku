@@ -210,7 +210,7 @@ type process_status = int
 let ensure_session_leader =
   let thunk = lazy (
     if not Sys.win32 && not Sys.cygwin
-    then ignore (Unix.setsid ())
+    then try ignore (Unix.setsid ()) with _ -> ()
   ) in
   fun () -> Lazy.force thunk
 
