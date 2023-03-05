@@ -11,9 +11,7 @@
 
   open Nunchaku_core
 
-  module L = Location
-  module A = UntypedAST
-  module B = A.Builtin
+  module B = UntypedAST.Builtin
 
   (* remove quote from some symbols *)
   let remove_quotes s =
@@ -138,49 +136,49 @@ role_as_decl:
   | FOF LEFT_PAREN name=name COMMA ROLE COMMA f=fof_formula annotations RIGHT_PAREN DOT {name,f}
   | CNF LEFT_PAREN name=name COMMA ROLE COMMA f=cnf_formula annotations RIGHT_PAREN DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      name, A.or_ ~loc f }
+      let loc = Location.mk_pos $startpos $endpos in
+      name, UntypedAST.or_ ~loc f }
 
 statement:
   | f=toplevel_form(role_as_goal)
     {
       let name, f = f in
-      let loc = L.mk_pos $startpos $endpos in
-      A.goal ~name ~loc f
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.goal ~name ~loc f
     }
   | f=toplevel_form(role_as_axiom)
     {
       let name, f = f in
-      let loc = L.mk_pos $startpos $endpos in
-      A.axiom ~name ~loc [f]
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.axiom ~name ~loc [f]
     }
   | THF LEFT_PAREN name=name COMMA role_as_def COMMA def=thf_def
     annotations RIGHT_PAREN DOT
     { (* parse a term definition *)
       let a, b = def in
-      let loc = L.mk_pos $startpos $endpos in
-      A.def ~name ~loc a b
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.def ~name ~loc a b
     }
   | THF LEFT_PAREN name=name COMMA role_as_decl COMMA decl=type_decl(thf_type) annotations RIGHT_PAREN DOT
   | TFF LEFT_PAREN name=name COMMA role_as_decl COMMA decl=type_decl(tff_type) annotations RIGHT_PAREN DOT
     {
       let s, ty = decl in
-      let loc = L.mk_pos $startpos $endpos in
-      A.decl ~name ~attrs:[] ~loc s ty
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.decl ~name ~attrs:[] ~loc s ty
     }
   | INCLUDE LEFT_PAREN x=SINGLE_QUOTED RIGHT_PAREN DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.include_ ~loc (remove_quotes x)
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.include_ ~loc (remove_quotes x)
     }
   | INCLUDE LEFT_PAREN x=SINGLE_QUOTED COMMA names=name_list RIGHT_PAREN DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.include_ ~loc ~which:names (remove_quotes x)
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.include_ ~loc ~which:names (remove_quotes x)
     }
   | error
     {
-      let loc = L.mk_pos $startpos $endpos in
+      let loc = Location.mk_pos $startpos $endpos in
       Parsing_utils.parse_error_ ~loc "expected statement"
     }
 
@@ -197,24 +195,24 @@ thf_formula:
   | t=thf_apply_term { t }
   | l=thf_formula o=infix_connective r=thf_unitary_formula
     {
-      let loc = L.mk_pos $startpos $endpos in
+      let loc = Location.mk_pos $startpos $endpos in
       o loc l r }
   | l=thf_formula o=binary_connective r=thf_unitary_formula
     {
-      let loc = L.mk_pos $startpos $endpos in
+      let loc = Location.mk_pos $startpos $endpos in
       o loc l r
     }
   | error
     {
-      let loc = L.mk_pos $startpos $endpos in
+      let loc = Location.mk_pos $startpos $endpos in
       Parsing_utils.parse_error_ ~loc "could not parse THF formula" }
 
 thf_apply_term:
   | t=thf_unitary_formula { t }
   | l=thf_apply_term AT r=thf_unitary_formula
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc l [r]
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.app ~loc l [r]
     }
 
 thf_unitary_formula:
@@ -226,20 +224,20 @@ thf_unitary_formula:
     COLUMN
     f=thf_unitary_formula
     {
-      let loc = L.mk_pos $startpos $endpos in
+      let loc = Location.mk_pos $startpos $endpos in
       q ~loc:loc vars f
     }
 
 thf_quantifier:
-  | FORALL { A.forall_list }
-  | EXISTS { A.exists_list }
-  | LAMBDA { A.fun_list }
+  | FORALL { UntypedAST.forall_list }
+  | EXISTS { UntypedAST.exists_list }
+  | LAMBDA { UntypedAST.fun_list }
 
 thf_unary_formula:
   | t=thf_atomic_term { t }
   | o=unary_connective LEFT_PAREN t=thf_formula RIGHT_PAREN
     {
-      let loc = L.mk_pos $startpos $endpos in
+      let loc = Location.mk_pos $startpos $endpos in
       o ~loc t
     }
 
@@ -247,8 +245,8 @@ thf_atomic_term:
   | t=thf_const { t }
   | thf_ite LEFT_PAREN a=thf_formula COMMA b=thf_formula COMMA c=thf_formula RIGHT_PAREN
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.ite ~loc a b c
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.ite ~loc a b c
     }
   | LEFT_PAREN t=thf_formula RIGHT_PAREN { t }
 
@@ -258,39 +256,39 @@ thf_ite:
 
 thf_const:
   | TRUE {
-      let loc = L.mk_pos $startpos $endpos in
-      A.true_ ~loc }
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.true_ ~loc }
   | FALSE {
-      let loc = L.mk_pos $startpos $endpos in
-      A.false_ ~loc }
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.false_ ~loc }
   | HO_FORALL {
-      let loc = L.mk_pos $startpos $endpos in
-      A.forall_term ~loc }
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.forall_term ~loc }
   | HO_EXISTS {
-      let loc = L.mk_pos $startpos $endpos in
-      A.exists_term ~loc }
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.exists_term ~loc }
   | WILDCARD
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.wildcard ~loc () (* useful as argument to a term... *)
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.wildcard ~loc () (* useful as argument to a term... *)
     }
   | s=atomic_word
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.at_var ~loc s
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.at_var ~loc s
     }
   | v=raw_variable
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.var ~loc v
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.var ~loc v
     }
 
 thf_type:
   | ty=thf_unary_type { ty }
   | l=thf_unary_type ARROW r=thf_type
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.ty_arrow ~loc l r
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.ty_arrow ~loc l r
     }
 
 thf_unary_type:
@@ -300,8 +298,8 @@ thf_unary_type:
 thf_atom_type:
   | v=raw_ty_variable
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.var ~loc v
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.var ~loc v
     }
   | v=type_const { v }
 
@@ -316,8 +314,8 @@ literal:
   | f=atomic_formula { f }
   | NOT f=atomic_formula
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.not_ ~loc f
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.not_ ~loc f
     }
 
 tff_formula:
@@ -330,8 +328,8 @@ fof_formula:
 fof_sequent:
   | l=fof_tuple GENTZEN_ARROW r=fof_tuple
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.imply ~loc (A.and_ ~loc l) (A.or_ ~loc r)
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.imply ~loc (UntypedAST.and_ ~loc l) (UntypedAST.or_ ~loc r)
     }
   | LEFT_PAREN seq=fof_sequent RIGHT_PAREN { seq }
 
@@ -342,7 +340,7 @@ fof_logic_formula:
   | f=fof_unitary_formula { f }
   | l=fof_logic_formula o=binary_connective r=fof_unitary_formula
     {
-      let loc = L.mk_pos $startpos $endpos in
+      let loc = Location.mk_pos $startpos $endpos in
       o loc l r
     }
 
@@ -360,49 +358,49 @@ fof_quantified_formula:
     COLUMN
     f=fof_unitary_formula
     {
-      let loc = L.mk_pos $startpos $endpos in
+      let loc = Location.mk_pos $startpos $endpos in
       q ~loc vars f
     }
 
 fof_unary_formula:
   | o=unary_connective f=fof_unitary_formula
     {
-     let loc = L.mk_pos $startpos $endpos in
+     let loc = Location.mk_pos $startpos $endpos in
      o ~loc f
     }
 
 binary_connective:
-  | EQUIV { fun loc a b -> A.equiv ~loc a b }
-  | IMPLY { fun loc a b -> A.imply ~loc a b }
-  | LEFT_IMPLY { fun loc l r -> A.imply ~loc r l }
-  | XOR { fun loc l r -> A.not_ ~loc (A.equiv ~loc l r) }
-  | NOTVLINE { fun loc x y -> A.not_ ~loc (A.or_ ~loc [x; y]) }
-  | NOTAND { fun loc x y -> A.not_ ~loc (A.and_ ~loc [x; y]) }
-  | AND { fun loc x y -> A.and_ ~loc [x;y] }
-  | VLINE { fun loc x y -> A.or_ ~loc [x;y] }
+  | EQUIV { fun loc a b -> UntypedAST.equiv ~loc a b }
+  | IMPLY { fun loc a b -> UntypedAST.imply ~loc a b }
+  | LEFT_IMPLY { fun loc l r -> UntypedAST.imply ~loc r l }
+  | XOR { fun loc l r -> UntypedAST.not_ ~loc (UntypedAST.equiv ~loc l r) }
+  | NOTVLINE { fun loc x y -> UntypedAST.not_ ~loc (UntypedAST.or_ ~loc [x; y]) }
+  | NOTAND { fun loc x y -> UntypedAST.not_ ~loc (UntypedAST.and_ ~loc [x; y]) }
+  | AND { fun loc x y -> UntypedAST.and_ ~loc [x;y] }
+  | VLINE { fun loc x y -> UntypedAST.or_ ~loc [x;y] }
 fol_quantifier:
-  | FORALL { fun ~loc vars t -> A.forall_list ~loc vars t }
-  | EXISTS { fun ~loc vars t -> A.exists_list ~loc vars t }
+  | FORALL { fun ~loc vars t -> UntypedAST.forall_list ~loc vars t }
+  | EXISTS { fun ~loc vars t -> UntypedAST.exists_list ~loc vars t }
 unary_connective:
-  | NOT { fun ~loc t -> A.not_ ~loc t }
+  | NOT { fun ~loc t -> UntypedAST.not_ ~loc t }
 
 atomic_formula:
   | TRUE {
-      let loc = L.mk_pos $startpos $endpos in
-      A.true_ ~loc }
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.true_ ~loc }
   | FALSE {
-      let loc = L.mk_pos $startpos $endpos in
-      A.false_ ~loc }
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.false_ ~loc }
   | l=term o=infix_connective r=term
     {
-      let loc = L.mk_pos $startpos $endpos in
+      let loc = Location.mk_pos $startpos $endpos in
       o loc l r
     }
   | t=function_term { t }
 
 %inline infix_connective:
-  | EQUAL { fun loc a b -> A.eq ~loc a b }
-  | NOT_EQUAL { fun loc a b -> A.neq ~loc a b }
+  | EQUAL { fun loc a b -> UntypedAST.eq ~loc a b }
+  | NOT_EQUAL { fun loc a b -> UntypedAST.neq ~loc a b }
 
 /* Terms */
 
@@ -410,8 +408,8 @@ term:
   | t=function_term { t }
   | v=raw_variable
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.var ~loc v
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.var ~loc v
     }
   | t=conditional_term(fof_formula,term) { t }
   /* TODO: this is actually a rewrite rule, not a let... | t=let_term { t } */
@@ -424,46 +422,46 @@ function_term:
 %public conditional_term(FORM,RES):
   | ITE_T LEFT_PAREN a=FORM COMMA b=RES COMMA c=RES RIGHT_PAREN
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.ite ~loc a b c
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.ite ~loc a b c
     }
 
 %public conditional_form(FORM):
   | ITE_F LEFT_PAREN a=FORM COMMA b=FORM COMMA c=FORM RIGHT_PAREN
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.ite_ ~loc a b c
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.ite_ ~loc a b c
     }
 
 plain_term:
   | WILDCARD
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.wildcard ~loc () (* useful as argument to a term... *)
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.wildcard ~loc () (* useful as argument to a term... *)
     }
   | s=atomic_word
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.at_var ~loc s
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.at_var ~loc s
     }
   | f=functor_ LEFT_PAREN args=arguments RIGHT_PAREN
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc f args
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.app ~loc f args
     }
 
 functor_:
   | f=atomic_word
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.at_var ~loc f
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.at_var ~loc f
     }
 
 defined_term:
   | t=defined_atom
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.at_var ~loc t
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.at_var ~loc t
     }
   | t=defined_atomic_term { t }
 
@@ -471,7 +469,7 @@ defined_atom:
   | INTEGER { Utils.not_implemented "TPTP: cannot handle integer" }
   | RATIONAL { Utils.not_implemented "TPTP: cannot handle rational" }
   | REAL {
-      let loc = L.mk_pos $startpos $endpos in
+      let loc = Location.mk_pos $startpos $endpos in
       Parsing_utils.parse_error_ ~loc "TPTP: cannot handle real numbers"
     }
   | s=DISTINCT_OBJECT { s }
@@ -483,13 +481,13 @@ defined_atomic_term:
 defined_plain_term:
   | s=defined_constant
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.at_var ~loc s
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.at_var ~loc s
     }
   | f=defined_functor LEFT_PAREN args=arguments RIGHT_PAREN
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.at_var ~loc f) args
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.app ~loc (UntypedAST.at_var ~loc f) args
     }
 
 defined_constant: t=defined_functor { t }
@@ -498,13 +496,13 @@ defined_functor: s=atomic_defined_word { s }
 system_term:
   | c=system_constant
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.at_var ~loc c
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.at_var ~loc c
     }
   | f=system_functor LEFT_PAREN args=arguments RIGHT_PAREN
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.at_var ~loc f) args
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.app ~loc (UntypedAST.at_var ~loc f) args
     }
 
 system_constant: t=system_functor { t }
@@ -518,21 +516,21 @@ system_functor: s=atomic_system_word { s }
     COLUMN
     ty=quantified_type(TY)
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.ty_forall_list ~loc vars ty }
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.ty_forall_list ~loc vars ty }
 
 /* general type, without quantifiers */
 tff_type:
   | ty=tff_unary_type { ty }
   | l=tff_unary_type ARROW r=tff_unary_type
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.ty_arrow ~loc l r
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.ty_arrow ~loc l r
     }
   | LEFT_PAREN args=ty_args RIGHT_PAREN ARROW r=tff_atom_type
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.ty_arrow_list ~loc args r
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.ty_arrow_list ~loc args r
     }
 
 ty_args:
@@ -546,14 +544,14 @@ tff_unary_type:
 tff_atom_type:
   | v=raw_ty_variable
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.var ~loc v
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.var ~loc v
     }
   | v=type_const { v }
   | f=type_const LEFT_PAREN l=separated_nonempty_list(COMMA, tff_type) RIGHT_PAREN
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc f l
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.app ~loc f l
     }
 
 raw_ty_variable:
@@ -563,16 +561,16 @@ raw_ty_variable:
 type_const:
   | WILDCARD
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.wildcard ~loc ()
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.wildcard ~loc ()
     }
-  | TY_TYPE { A.ty_type }
-  | TY_PROP { A.ty_prop }
+  | TY_TYPE { UntypedAST.ty_type }
+  | TY_PROP { UntypedAST.ty_prop }
   | v=LOWER_WORD
   | v=DOLLAR_WORD
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.var ~loc v
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.var ~loc v
     }
 
 arguments: separated_nonempty_list(COMMA, term) { $1 }
@@ -607,22 +605,22 @@ annotations:
 
 general_term:
   | x=general_data { x }
-  | l=general_data COLUMN r=general_term { A.TPTP.Column (l, r) }
+  | l=general_data COLUMN r=general_term { UntypedAST.TPTP.Column (l, r) }
   | l=general_list { l }
 
 general_data:
-  | w=atomic_word { A.TPTP.Var w }
+  | w=atomic_word { UntypedAST.TPTP.Var w }
   | f=general_function { f }
-  | i=INTEGER { A.TPTP.Int (int_of_string i) }
-  | v=UPPER_WORD { A.TPTP.Var v }
-  | w=DISTINCT_OBJECT { A.TPTP.String w }
+  | i=INTEGER { UntypedAST.TPTP.Int (int_of_string i) }
+  | v=UPPER_WORD { UntypedAST.TPTP.Var v }
+  | w=DISTINCT_OBJECT { UntypedAST.TPTP.String w }
 
 general_function:
   | f=atomic_word LEFT_PAREN l=separated_nonempty_list(COMMA, general_term) RIGHT_PAREN
-    { A.TPTP.App (f, l) }
+    { UntypedAST.TPTP.App (f, l) }
 
 general_list:
   | LEFT_BRACKET l=separated_list(COMMA, general_term) RIGHT_BRACKET
-    { A.TPTP.List l }
+    { UntypedAST.TPTP.List l }
 
 %%

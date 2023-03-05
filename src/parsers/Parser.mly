@@ -6,9 +6,7 @@
 %{
   open Nunchaku_core
 
-  module L = Location
-  module A = UntypedAST
-  module B = A.Builtin
+  module B = UntypedAST.Builtin
 
 %}
 
@@ -116,49 +114,49 @@ var_or_wildcard:
 var:
   | WILDCARD
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.wildcard ~loc ()
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.wildcard ~loc ()
     }
   | name=raw_var
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.var ~loc name
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.var ~loc name
     }
 
 at_var:
   | AT v=raw_var
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.at_var ~loc v
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.at_var ~loc v
     }
 
 meta_var:
   | META_VAR v=raw_var
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.meta_var ~loc v
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.meta_var ~loc v
     }
 
 const:
   | TYPE
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.builtin ~loc `Type
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.builtin ~loc `Type
     }
   | PROP
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.builtin ~loc `Prop
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.builtin ~loc `Prop
     }
   | LOGIC_TRUE
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.builtin ~loc `True
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.builtin ~loc `True
     }
   | LOGIC_FALSE
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.builtin ~loc `False
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.builtin ~loc `False
     }
 
 %public case(TERM):
@@ -175,103 +173,103 @@ atomic_term:
   | LEFT_PAREN t=term RIGHT_PAREN { t }
   | MATCH t=term WITH l=cases(term) END
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.match_with ~loc t l
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.match_with ~loc t l
     }
 
 apply_term:
   | t=atomic_term { t }
   | t=atomic_term u=atomic_term+
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc t u
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.app ~loc t u
     }
   | LOGIC_NOT t=apply_term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc `Not) [t]
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.app ~loc (UntypedAST.builtin ~loc `Not) [t]
     }
 
 eq_term:
   | t=apply_term { t }
   | t=apply_term LOGIC_EQ u=apply_term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.eq ~loc t u
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.eq ~loc t u
     }
   | t=apply_term LOGIC_NEQ u=apply_term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.neq ~loc t u
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.neq ~loc t u
     }
 
 and_term:
   | t=eq_term { t }
   | t=eq_term LOGIC_AND u=and_term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc `And) [t; u]
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.app ~loc (UntypedAST.builtin ~loc `And) [t; u]
     }
 
 or_term:
   | t=and_term { t }
   | t=and_term LOGIC_OR u=or_term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc `Or) [t; u]
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.app ~loc (UntypedAST.builtin ~loc `Or) [t; u]
     }
   | t=and_term LOGIC_IMPLY u=or_term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.app ~loc (A.builtin ~loc `Imply) [t; u]
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.app ~loc (UntypedAST.builtin ~loc `Imply) [t; u]
     }
 
 term:
   | t=or_term { t }
   | t=apply_term ASSERTING g=term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.asserting ~loc t [g]
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.asserting ~loc t [g]
     }
   | FUN vars=typed_var+ DOT t=term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.fun_list ~loc vars t
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.fun_list ~loc vars t
     }
   | LET v=raw_var EQDEF t=term IN u=term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.let_ ~loc v t u
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.let_ ~loc v t u
     }
   | IF a=term THEN b=term ELSE c=term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.ite ~loc a b c
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.ite ~loc a b c
     }
   | LOGIC_FORALL vars=typed_var+ DOT t=term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.forall_list ~loc vars t
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.forall_list ~loc vars t
     }
   | LOGIC_EXISTS vars=typed_var+ DOT t=term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.exists_list ~loc vars t
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.exists_list ~loc vars t
     }
   | t=apply_term ARROW u=term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.ty_arrow ~loc t u
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.ty_arrow ~loc t u
     }
   | PI vars=typed_ty_var+ DOT t=term
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.ty_forall_list ~loc vars t
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.ty_forall_list ~loc vars t
     }
   | error
     {
-      let loc = L.mk_pos $startpos $endpos in
-      raise (A.ParseError loc)
+      let loc = Location.mk_pos $startpos $endpos in
+      raise (UntypedAST.ParseError loc)
     }
 
 defined_symbol:
@@ -332,61 +330,61 @@ decl_attributes:
   | { [] }
 
 copy_wrt:
-  | { A.Wrt_nothing }
-  | SUBSET t=atomic_term { A.Wrt_subset t }
-  | QUOTIENT t=atomic_term { A.Wrt_quotient (`Total, t) }
-  | PARTIAL_QUOTIENT t=atomic_term { A.Wrt_quotient (`Partial, t) }
+  | { UntypedAST.Wrt_nothing }
+  | SUBSET t=atomic_term { UntypedAST.Wrt_subset t }
+  | QUOTIENT t=atomic_term { UntypedAST.Wrt_quotient (`Total, t) }
+  | PARTIAL_QUOTIENT t=atomic_term { UntypedAST.Wrt_quotient (`Partial, t) }
 
 statement:
   | VAL v=raw_var COLON t=term attrs=decl_attributes DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.decl ~loc ~attrs v t
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.decl ~loc ~attrs v t
     }
   | AXIOM l=separated_nonempty_list(SEMI_COLON, term) DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.axiom ~loc l
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.axiom ~loc l
     }
   | SPEC l=spec_defs DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.spec ~loc l
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.spec ~loc l
     }
   | REC l=rec_defs DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.rec_ ~loc l
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.rec_ ~loc l
     }
   | DATA l=mutual_types DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.data ~loc l
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.data ~loc l
     }
   | CODATA l=mutual_types DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.codata ~loc l
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.codata ~loc l
     }
   | PRED a=wf_attribute l=mutual_preds DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.pred ~loc ~wf:a l
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.pred ~loc ~wf:a l
     }
   | COPRED a=wf_attribute l=mutual_preds DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.copred ~loc ~wf:a l
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.copred ~loc ~wf:a l
     }
   | GOAL t=term DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.goal ~loc t
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.goal ~loc t
     }
   | INCLUDE f=FILEPATH DOT
     {
-      let loc = L.mk_pos $startpos $endpos in
-      A.include_ ~loc f
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.include_ ~loc f
     }
   | COPY id=raw_var vars=raw_var* EQDEF u=term
     wrt=copy_wrt
@@ -396,13 +394,13 @@ statement:
     {
       (* TODO: instead, parse list of "fields" and validate after parsing?
          better once we get more possible (optional) fields, in random order *)
-      let loc = L.mk_pos $startpos $endpos in
-      A.copy ~loc ~of_:u ~abstract:abs ~concrete:conc ~wrt id vars
+      let loc = Location.mk_pos $startpos $endpos in
+      UntypedAST.copy ~loc ~of_:u ~abstract:abs ~concrete:conc ~wrt id vars
     }
   | error
     {
-      let loc = L.mk_pos $startpos $endpos in
-      raise (A.ParseError loc)
+      let loc = Location.mk_pos $startpos $endpos in
+      raise (UntypedAST.ParseError loc)
     }
 
 %%

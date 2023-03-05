@@ -8,9 +8,6 @@
 
   open Nunchaku_core
 
-  module L = Location
-  module A = TPTP_model_ast
-
   (* remove quote from some symbols *)
   let remove_quotes s =
     assert (s.[0] = '\'' && s.[String.length s - 1] = '\'');
@@ -63,67 +60,67 @@ parse_statement_list: l=list(statement) EOI { l }
 
 statement:
   | FOF LEFT_PAREN name=name COMMA ROLE_FI_DOMAIN COMMA f=form RIGHT_PAREN DOT
-    { A.mk_fi_domain name f }
+    { TPTP_model_ast.mk_fi_domain name f }
   | FOF LEFT_PAREN name=name COMMA ROLE_FI_FUNCTORS
     COMMA f=form RIGHT_PAREN DOT
-    { let loc = L.mk_pos $startpos $endpos in
-      let vars, f = A.open_forall f in
-      A.mk_fi_functors ~loc name vars (A.as_and_ ~loc f) }
+    { let loc = Location.mk_pos $startpos $endpos in
+      let vars, f = TPTP_model_ast.open_forall f in
+      TPTP_model_ast.mk_fi_functors ~loc name vars (TPTP_model_ast.as_and_ ~loc f) }
   | FOF LEFT_PAREN name=name COMMA ROLE_FI_PREDICATES
     COMMA f=form RIGHT_PAREN DOT
-    { let loc = L.mk_pos $startpos $endpos in
-      let vars, f = A.open_forall f in
-      A.mk_fi_predicates ~loc name vars (A.as_and_ ~loc f) }
+    { let loc = Location.mk_pos $startpos $endpos in
+      let vars, f = TPTP_model_ast.open_forall f in
+      TPTP_model_ast.mk_fi_predicates ~loc name vars (TPTP_model_ast.as_and_ ~loc f) }
   | error
-    { let loc = L.mk_pos $startpos $endpos in
+    { let loc = Location.mk_pos $startpos $endpos in
       Parsing_utils.parse_error_ ~loc "expected statement" }
 
 form:
   | f=or_form { f }
 
 or_form:
-  | l=and_form VLINE r=or_form { A.or_ l r }
+  | l=and_form VLINE r=or_form { TPTP_model_ast.or_ l r }
   | f=and_form { f }
 
 and_form:
   | f=unary_form { f }
   | l=unary_form AND r=and_form
-    { A.and_ l r }
+    { TPTP_model_ast.and_ l r }
 
 %inline forall_vars:
   | FORALL LEFT_BRACKET l=separated_nonempty_list(COMMA,var) RIGHT_BRACKET COLON { l }
 
 unary_form:
   | vars=forall_vars f=atomic_form
-    { A.forall_l vars f }
+    { TPTP_model_ast.forall_l vars f }
   | f=atomic_form { f }
   | NOT f=unary_form
-    { A.not_ f }
+    { TPTP_model_ast.not_ f }
 
 atomic_form:
   | LEFT_PAREN f=form RIGHT_PAREN { f }
   | l=term EQUAL r=term
-    { A.eq l r }
+    { TPTP_model_ast.eq l r }
   | t=term
-    { A.atom t }
+    { TPTP_model_ast.atom t }
   | t=term EQUIV TRUE
-    { A.atom t }
+    { TPTP_model_ast.atom t }
   | t=term EQUIV FALSE
-    { A.not_ (A.atom t) }
+    { TPTP_model_ast.not_ (TPTP_model_ast.atom t) }
   | t=term EQUIV u=term
-    { A.equiv t u }
-  | TRUE { A.true_ }
-  | FALSE { A.false_ }
+    { TPTP_model_ast.equiv t u }
+  | TRUE { TPTP_model_ast.true_ }
+  | FALSE { TPTP_model_ast.false_ }
   | error
-    { let loc = L.mk_pos $startpos $endpos in
+    { let loc = Location.mk_pos $startpos $endpos in
       Parsing_utils.parse_error_ ~loc "expected atomic form" }
 
 term:
-  | v=var { A.var v }
-  | f=DISTINCT_OBJECT { A.const f }
-  | f=LOWER_WORD { A.const f }
+  | v=var { TPTP_model_ast.var v }
+  | f=DISTINCT_OBJECT { TPTP_model_ast.const f }
+  | f=LOWER_WORD { TPTP_model_ast.const f }
   | f=LOWER_WORD LEFT_PAREN l=separated_nonempty_list(COMMA, term) RIGHT_PAREN
-    { A.app f l }
+    { TPTP_model_ast.app f l }
 
 var:
   | v=UPPER_WORD { v }

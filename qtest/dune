@@ -14,8 +14,8 @@
  (libraries containers nunchaku nunchaku.parsers nunchaku.transformations
    nunchaku.random ounit2 qcheck))
 
-(alias
- (name runtest)
+(rule
+ (alias runtest)
  (deps run_qtest.exe)
  (action
   (run %{deps})))

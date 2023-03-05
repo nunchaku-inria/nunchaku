@@ -11,7 +11,7 @@ build: [
     ["dune" "runtest" "-j" jobs "-p" name] {with-test}
 ]
 depends: [
-    "dune" {>= "1.1" }
+    "dune" {>= "2.0" }
     "containers" { >= "3.0" & < "4.0" }
     "containers-data" { >= "3.0" & < "4.0" }
     "menhir"
