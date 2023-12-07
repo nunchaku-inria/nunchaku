@@ -1011,7 +1011,7 @@ module Make(M : sig val mode : mode end) = struct
     DTU.apply_l dt args |> DTU.to_term |> T.Red.whnf
 
   (* evaluate a boolean function def *)
-  let eval_bool_fundef (f:fun_def) (args:T.t list) : (bool, T.t) Result.result =
+  let eval_bool_fundef (f:fun_def) (args:T.t list) : (bool, T.t) result =
     let _, k = f in
     assert (k = Model.Symbol_prop);
     let res = eval_fundef f args in
