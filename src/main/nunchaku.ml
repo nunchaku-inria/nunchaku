@@ -127,7 +127,6 @@ let set_dump_into s = dump_ := `Into s
 let call_with x f = Arg.Unit (fun () -> f x)
 
 let options =
-  let open CCFun in
   Arg.align @@ List.sort Stdlib.compare @@ (
     Utils.Options.get_all () @
       [ "--pp-input", Arg.Set pp_, " print input"

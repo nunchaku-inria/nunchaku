@@ -17,7 +17,7 @@
     | Escaped_int_1 of int
     | Escaped_int_2 of int
 
-  let char_equal (a : char) b = Pervasives.(=) a b
+  let char_equal (a : char) b = Stdlib.(=) a b
 
   (* remove quotes + unescape *)
   let remove_quotes lexbuf s =
