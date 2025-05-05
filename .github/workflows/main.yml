@@ -15,9 +15,10 @@ jobs:
         ocaml-compiler:
           - 4.08.x
           - 4.14.x
+          - 5.03.x
     steps:
     - uses: actions/checkout@v2
-    - uses: ocaml/setup-ocaml@v2
+    - uses: ocaml/setup-ocaml@v3
       with:
         ocaml-compiler: ${{ matrix.ocaml-compiler }}
         dune-cache: true
