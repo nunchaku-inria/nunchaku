@@ -76,7 +76,7 @@ let transform_term t =
     | FO.True
     | FO.False -> return t
     | FO.Var v ->
-      return (CCOpt.get_or ~default:t (Var.Subst.find ~subst v))
+      return (CCOption.get_or ~default:t (Var.Subst.find ~subst v))
     | FO.Eq (a,b) -> return T.eq <*> aux subst a <*> aux subst b
     | FO.Equiv (a,b) -> return T.equiv <*> aux subst a <*> aux subst b
     | FO.Imply (a,b) -> return T.imply <*> aux subst a <*> aux subst b

@@ -337,13 +337,13 @@ type decode_state = {
 }
 
 type state = {
-  mutable env: (term, ty) Env.t;
+  env: (term, ty) Env.t;
   (* environment (to get signatures, etc.) *)
   arities: arity_set FunMap.t;
   (* set of arities for partially applied symbols/variables *)
   mutable app_count: int;
   (* used for generating new names *)
-  mutable new_stmts : (term, ty) Stmt.t CCVector.vector;
+  new_stmts : (term, ty) Stmt.t CCVector.vector;
   (* used for new declarations. [id, type, attribute list] *)
   mutable unsat_means_unknown: bool;
   (* did we have to do some approximation? *)
@@ -1001,7 +1001,7 @@ let as_handle_ ~state ty : handle option =
     | [], _ -> None
     | args,ret -> Some (handle_arrow_l args (H_leaf ret))
 
-let is_handle_ ~state ty : bool = CCOpt.is_some (as_handle_ ~state ty)
+let is_handle_ ~state ty : bool = CCOption.is_some (as_handle_ ~state ty)
 
 (* all domain constants whose type is a handle *)
 let all_fun_consts_ ~state m : (ty * handle) ID.Map.t =
@@ -1185,7 +1185,7 @@ let decode_model ~state m =
 
 (** {2 Pipe} *)
 
-let pipe_with ?on_decoded ~decode ~print ~check =
+let pipe_with ?on_decoded ~decode ~print ~check () =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module PPb = Problem.P in
@@ -1218,4 +1218,4 @@ let pipe ~print ~check =
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model ~state) in
-  pipe_with ~on_decoded ~print ~decode ~check
+  pipe_with ~on_decoded ~print ~decode ~check ()

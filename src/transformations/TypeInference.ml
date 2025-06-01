@@ -195,7 +195,7 @@ module Convert(Term : TermTyped.S) = struct
       if l<>[] then ID.Tbl.add env.attrs id l
 
     (* reset table of meta-variables *)
-    let reset_metas ~env = CCOpt.iter Hashtbl.clear env.metas
+    let reset_metas ~env = CCOption.iter Hashtbl.clear env.metas
   end
 
   type env = TyEnv.t
@@ -479,7 +479,7 @@ module Convert(Term : TermTyped.S) = struct
           (fun k-> k P.pp ty_var v pp_ty_opt ty_opt A.pp_term t);
         let var = Var.make ~ty:ty_var ~name:v in
         (* unify with expected type *)
-        CCOpt.iter
+        CCOption.iter
           (fun ty -> unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty))
           ty_opt;
         let env = TyEnv.add_var ~env v ~var in
@@ -493,7 +493,7 @@ module Convert(Term : TermTyped.S) = struct
         Utils.debugf ~section 3 "@[<2>new variable %a@ for @[%s%a@]@ within `@[%a@]`@]"
           (fun k-> k P.pp ty_var v pp_ty_opt ty_opt A.pp_term t);
         (* unify with expected type *)
-        CCOpt.iter
+        CCOption.iter
           (fun ty -> unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty))
           ty_opt;
         let var = Var.make ~name:v ~ty:ty_var in
@@ -557,7 +557,7 @@ module Convert(Term : TermTyped.S) = struct
         in
         (* check default case, if present *)
         let def =
-          CCOpt.map
+          CCOption.map
             (fun t ->
                let t = convert_term_ ~stack ~env t in
                unify_in_ctx_ ~stack:[] ty (U.ty_exn t);
@@ -653,7 +653,7 @@ module Convert(Term : TermTyped.S) = struct
     Utils.debugf ~section 3 "@[<2>new type variable %a@ for @[%s%a@]@ within `@[%a@]`@]"
       (fun k-> k P.pp ty_var v pp_ty_opt ty_opt A.pp_term t );
     (* unify with expected type *)
-    CCOpt.iter
+    CCOption.iter
       (fun ty -> unify_in_ctx_ ~stack ty_var (convert_ty_exn ~env ty))
       ty_opt;
     let var = Var.make ~name:v ~ty:ty_var in
@@ -931,7 +931,7 @@ module Convert(Term : TermTyped.S) = struct
   (* extract [forall vars. f args = rhs] from a prop *)
   let rec extract_eqn ~f t = match Term.repr t with
     | TI.Bind (Binder.Forall, v, t') ->
-      CCOpt.map
+      CCOption.map
         (fun (vars,args,rhs) -> v::vars,args,rhs)
         (extract_eqn ~f t')
     | TI.Builtin (`Eq (l,r)) ->
@@ -962,7 +962,7 @@ module Convert(Term : TermTyped.S) = struct
   let rec extract_clause ~f t =
     match Term.repr t with
       | TI.Bind (Binder.Forall, v, t') ->
-        CCOpt.map
+        CCOption.map
           (fun (vars, g, t) -> v::vars,g,t)
           (extract_clause ~f t')
       | TI.Builtin (`Imply (a,b)) ->
@@ -1126,7 +1126,7 @@ module Convert(Term : TermTyped.S) = struct
                         "@[<2>expected `@[forall <vars>.@ <optional guard> => %a <args>@]`@]"
                         ID.pp id
                     | Some (vars,g,rhs) ->
-                      CCOpt.iter (check_prenex_types_ ~loc) g;
+                      CCOption.iter (check_prenex_types_ ~loc) g;
                       {Stmt.
                         clause_concl=rhs; clause_guard=g; clause_vars=vars;
                       }

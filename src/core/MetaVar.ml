@@ -36,7 +36,7 @@ let rebind ~var x =
   if can_bind var then invalid_arg "MetaVar.rebind" else var.deref <- Some x
 
 let update ~f v =
-  {v with deref=CCOpt.map f v.deref; }
+  {v with deref=CCOption.map f v.deref; }
 
 let pp oc v = Format.fprintf oc "?%a" ID.pp_full v.id
 let to_string v = "?" ^ ID.to_string v.id

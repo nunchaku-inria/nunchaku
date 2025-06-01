@@ -44,6 +44,7 @@ module type S = sig
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
     check:bool ->
+    unit ->
     ((term,term) Problem.t,
      (term,term) Problem.t, 'c, 'd
     ) Transform.t

@@ -264,7 +264,7 @@ module Make(T : TI.S) = struct
     let check_top env bound _pol () t = ignore (check ~env bound t) in
     let check_ty env bound () t = ignore (check ~env bound t) in
     (* check cardinalities *)
-    CCOpt.iter
+    CCOption.iter
       (fun cache -> TyCard.check_non_zero ~cache env st)
       t.cache;
     (* basic check *)

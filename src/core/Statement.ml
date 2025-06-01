@@ -311,7 +311,7 @@ let map_clause_bind ~bind ~term acc c =
   let acc, vars = Utils.fold_map bind acc c.clause_vars in
   {
     clause_vars=vars;
-    clause_guard=CCOpt.map (term acc Polarity.Neg) c.clause_guard;
+    clause_guard=CCOption.map (term acc Polarity.Neg) c.clause_guard;
     clause_concl=term acc Polarity.Pos c.clause_concl;
   }
 
@@ -417,7 +417,7 @@ let fold_clause_bind ~bind ~term ~ty k b_acc acc (c:(_,_) pred_clause) =
   let pol = match k with `Pred -> Polarity.Pos | `Copred -> Polarity.Neg in
   let b_acc = List.fold_left bind b_acc c.clause_vars in
   let acc = term b_acc pol acc c.clause_concl in
-  CCOpt.fold (term b_acc (Polarity.inv pol)) acc c.clause_guard
+  CCOption.fold (term b_acc (Polarity.inv pol)) acc c.clause_guard
 
 let fold_pred_bind ~bind ~term ~ty k b_acc acc (def:(_,_) pred_def) =
   let acc = ty b_acc acc def.pred_defined.defined_ty in

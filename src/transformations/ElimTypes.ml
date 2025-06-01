@@ -448,7 +448,7 @@ let decode_term ?(subst=Var.Subst.empty) state rety t ty =
         | Some map ->
           (* if [id] is a unitype domain constant, replace it *)
           ID.Map.get id map
-          |> CCOpt.map_or ~default:t T.const
+          |> CCOption.map_or ~default:t T.const
       end
     | _ ->
       T.map () t
@@ -541,7 +541,7 @@ let decode_model ~state m =
 
 (** {2 Pipe} *)
 
-let pipe_with ?on_decoded ~decode ~print ~check =
+let pipe_with ?on_decoded ~decode ~print ~check () =
   let on_encoded =
     Utils.singleton_if print ()
       ~f:(fun () ->
@@ -571,5 +571,5 @@ let pipe ~print ~check =
          name (Problem.Res.pp T.pp' T.pp)]
     else []
   in
-  pipe_with ~check ~print ~on_decoded
+  pipe_with ~check ~print ~on_decoded ()
     ~decode:(fun state -> Problem.Res.map_m ~f:(decode_model ~state))

@@ -76,7 +76,7 @@ let cstor_as_fun (state:state) (id:ID.t) ~ty : ID.t * def option =
 type glob_state = {
   state: state;
   mutable env: env;
-  mutable new_stmts : (term, ty) Stmt.t CCVector.vector;
+  new_stmts : (term, ty) Stmt.t CCVector.vector;
   (* used for new declarations. [id, type, attribute list] *)
 }
 
@@ -151,7 +151,7 @@ let decode_model state m : (_,_) Model.t =
 
 (** {2 Pipe} *)
 
-let pipe_with ?on_decoded ~decode ~print ~check =
+let pipe_with ?on_decoded ~decode ~print ~check () =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module PPb = Problem.P in
@@ -181,4 +181,4 @@ let pipe ~print ~check =
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model state) in
-  pipe_with ~on_decoded ~print ~decode ~check
+  pipe_with ~on_decoded ~print ~decode ~check ()

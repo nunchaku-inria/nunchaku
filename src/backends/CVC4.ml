@@ -121,7 +121,7 @@ type t = {
   decode: decode_state;
   print_model: bool;
   options: string;
-  mutable sexp : DSexp.t;
+  sexp : DSexp.t;
   mutable closed : bool;
   mutable res : (T.t, Ty.t) Problem.Res.t option;
 }
@@ -919,7 +919,7 @@ let pipes
       let n = List.length options in
       assert (n > 0);
       (* each process' slice is only [1/n] of the global CVC4 slice *)
-      CCOpt.map (fun s -> s /. float n) slice
+      CCOption.map (fun s -> s /. float n) slice
     ) else slice
   in
   let encode pb =

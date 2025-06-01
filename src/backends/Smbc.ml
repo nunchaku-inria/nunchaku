@@ -642,7 +642,7 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
       | TI.Builtin (`Ite (_,_,_)), v :: vars_tail ->
         let tests, else_ = T.ite_unfold t in
         let tests_v, other_tests =
-          CCList.partition_map
+          CCList.partition_filter_map
             (fun (a, b) ->
                match get_eqn_exn v vars_tail a with
                  | Some t ->

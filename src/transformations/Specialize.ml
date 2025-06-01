@@ -361,7 +361,7 @@ and record_calls_clause cga id (c:(_,_) Stmt.pred_clause) =
                    fresh_var_cg ty)
           in
           (* if present, also check the clause guard *)
-          CCOpt.iter (record_calls_term cga id args) c.Stmt.clause_guard
+          CCOption.iter (record_calls_term cga id args) c.Stmt.clause_guard
         | _ -> assert false (* ill formed *)
       end
     | _ -> assert false (* ill-formed *)
@@ -598,7 +598,7 @@ let decide_if_specialize ~self f ty l : specialization_decision =
              && (Lazy.force is_deterministic || arg_has_small_ty_closure_vars ~self arg)
              then `Specialize (i, arg)
              else `Keep arg)
-        |> CCList.partition_map
+        |> CCList.partition_filter_map
           (function `Specialize x -> `Left x | `Keep y -> `Right y)
         |> (fun (a,b) -> Arg.make a, b)
       in
@@ -817,7 +817,7 @@ let specialize_clause
       (* still need to traverse the clause *)
       let subst, vars = Utils.fold_map T.rename_var Subst.empty c.Stmt.clause_vars in
       let spec_term = specialize_term ~self ~depth:(depth+1) subst in
-      let clause_guard = CCOpt.map spec_term c.Stmt.clause_guard in
+      let clause_guard = CCOption.map spec_term c.Stmt.clause_guard in
       let clause_concl = spec_term c.Stmt.clause_concl in
       {Stmt.clause_vars=vars; clause_guard; clause_concl}
     ) else (
@@ -853,7 +853,7 @@ let specialize_clause
       in
       (* if there is a guard, specialize it and β-reduce *)
       let clause_guard =
-        CCOpt.map
+        CCOption.map
           (fun t ->
              let t' = specialize_term ~self ~depth:(depth+1) subst t in
              T.Red.snf t')
@@ -862,7 +862,7 @@ let specialize_clause
       (* compute new set of free variables *)
       let new_vars =
         let v1 = T.free_vars clause_concl in
-        CCOpt.map_or ~default:v1 (fun t -> VarSet.union (T.free_vars t) v1) clause_guard
+        CCOption.map_or ~default:v1 (fun t -> VarSet.union (T.free_vars t) v1) clause_guard
         |> VarSet.to_list
       in
       {Stmt.clause_guard; clause_concl; clause_vars=new_vars}
@@ -987,7 +987,7 @@ module InstanceGraph = struct
       CCList.find_map
         (fun v' ->
            if ID.equal v.v_spec_id v'.v_spec_id then None
-           else CCOpt.map (fun sigma -> sigma, v') (subsumes_ v' v))
+           else CCOption.map (fun sigma -> sigma, v') (subsumes_ v' v))
         l
     in
     List.map (fun v -> v, find_parent v) l
@@ -1118,7 +1118,7 @@ let mk_self_congruence (v:InstanceGraph.vertex): term option =
     in
     let t = T.imply_l conds conclusion in
     T.forall_l (T.free_vars t |> VarSet.to_list) t
-    |> CCOpt.return
+    |> CCOption.return
   )
 
 (* add the congruence axioms corresponding to instance graph [g], into [push_stmt] *)
@@ -1435,7 +1435,7 @@ let decode_model state m =
 
 (** {6 Integration in Transform} *)
 
-let pipe_with ?on_decoded ~decode ~print ~check =
+let pipe_with ?on_decoded ~decode ~print ~check () =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       Format.printf "@[<v2>@{<Yellow>after specialization@}: %a@]@." Problem.P.pp)
@@ -1462,5 +1462,5 @@ let pipe ~print ~check =
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model state) in
-  pipe_with ~on_decoded ~decode ~print ~check
+  pipe_with ~on_decoded ~decode ~print ~check ()
 

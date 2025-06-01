@@ -44,6 +44,7 @@ val pipe_with :
   polarize_rec:bool ->
   print:bool ->
   check:bool ->
+  unit ->
   ((term, term) Problem.t,
    (term, term) Problem.t,
    'c, 'd

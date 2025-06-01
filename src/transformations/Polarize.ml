@@ -551,7 +551,7 @@ let filter_dt_ ~polarized ~default:d dt : (_,_) DT.t =
              | Some rhs' -> Some (lhs, rhs'))
           l
       and default =
-        CCOpt.flat_map aux default
+        CCOption.flat_map aux default
       in
       if l=[] && default=None
       then None (* empty *)
@@ -569,13 +569,13 @@ let filter_dt_ ~polarized ~default:d dt : (_,_) DT.t =
           m
           (ID.Map.empty, missing)
       and default =
-        CCOpt.flat_map aux default
+        CCOption.flat_map aux default
       in
-      if ID.Map.is_empty new_m && CCOpt.is_none default
+      if ID.Map.is_empty new_m && CCOption.is_none default
       then None
       else Some (DT.mk_match var ~by_cstor:new_m ~missing:new_missing ~default)
   in
-  CCOpt.get_lazy
+  CCOption.get_lazy
     (fun () -> DT.const (DT.vars dt) (DT.yield d))
     (aux dt)
 
@@ -653,7 +653,7 @@ let decode_model ~state m =
 
 (** {6 Pipes} *)
 
-let pipe_with ?on_decoded ~decode ~polarize_rec ~print ~check =
+let pipe_with ?on_decoded ~decode ~polarize_rec ~print ~check () =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module Ppb = Problem.P in
@@ -679,5 +679,5 @@ let pipe ~polarize_rec ~print ~check =
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model ~state) in
-  pipe_with ~decode ~on_decoded ~polarize_rec ~print ~check
+  pipe_with ~decode ~on_decoded ~polarize_rec ~print ~check ()
 

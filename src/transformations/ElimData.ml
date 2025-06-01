@@ -51,6 +51,7 @@ module type S = sig
     decode:(decode_state -> 'c -> 'd) ->
     print:bool ->
     check:bool ->
+    unit ->
     ((T.t,T.t) Problem.t,
      (T.t,T.t) Problem.t, 'c, 'd
     ) Transform.t
@@ -164,7 +165,7 @@ module Make(M : sig val mode : mode end) = struct
     | None -> errorf "could not find encoding of `is-%a`" ID.pp id
 
   let ty_id ~state (id:ID.t) : T.t option =
-    let open CCOpt in
+    let open CCOption in
     Env.find_ty ~env:state.env id
     <+> Env.find_ty ~env:state.new_env id
 
@@ -887,7 +888,7 @@ module Make(M : sig val mode : mode end) = struct
            let cs =
              List.map
                (fun {Stmt.clause_guard=g; clause_concl=t; clause_vars} ->
-                  let g = CCOpt.map (tr_term state Pol.Neg) g in
+                  let g = CCOption.map (tr_term state Pol.Neg) g in
                   (* only process under the predicate itself *)
                   let t =
                     T.map () t ~bind:(fun _ _ -> assert false)
@@ -1156,7 +1157,7 @@ module Make(M : sig val mode : mode end) = struct
     | M_codata ->
       F.(update_l [Codata, Absent; Data, Present; Ind_preds, Present])
 
-  let pipe_with ?on_decoded ~decode ~print ~check =
+  let pipe_with ?on_decoded ~decode ~print ~check () =
     let on_encoded =
       Utils.singleton_if check ()
         ~f:(fun () ->
@@ -1186,7 +1187,7 @@ module Make(M : sig val mode : mode end) = struct
       else []
     in
     let decode state = Problem.Res.map_m ~f:(decode_model state) in
-    pipe_with ~on_decoded ~check ~decode ~print
+    pipe_with ~on_decoded ~check ~decode ~print ()
 end
 
 module Data = Make(struct let mode = M_data end)

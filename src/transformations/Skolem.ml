@@ -75,7 +75,7 @@ module Make(Assoc : sig type t end)
   }
 
   let fresh_id_ ?prefix state : ID.t =
-    let prefix = CCOpt.get_or ~default:state.prefix prefix in
+    let prefix = CCOption.get_or ~default:state.prefix prefix in
     let n = state.name in
     state.name <- n+1;
     let id = ID.make (prefix ^ string_of_int n) in

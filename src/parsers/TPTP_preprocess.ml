@@ -119,7 +119,7 @@ let close_forall t =
     | `Wildcard :: l' -> enter_bvars l' f
     | `Var v :: l' -> enter_bvar v (fun () -> enter_bvars l' f)
   and enter_ty_bvar (v, tyopt) f =
-    CCOpt.iter compute_fvars tyopt;
+    CCOption.iter compute_fvars tyopt;
     enter_bvar v f
   in
   compute_fvars t;
@@ -196,7 +196,7 @@ let rec declare_missing ~ctx ~state t =
                (fun () -> c, vars, declare_missing ~ctx ~state rhs))
           l
       and def =
-        CCOpt.map (declare_missing ~ctx ~state) def
+        CCOption.map (declare_missing ~ctx ~state) def
       in
       A.match_with ~loc ?default:def t l
     | A.Ite (a,b,c) ->
