@@ -134,7 +134,7 @@ let unroll_preds ~state v is_pos l =
         clause_vars = v :: c.clause_vars;
         clause_guard =
           (* in guard, replace [pred] by [pred v)] *)
-          CCOpt.map
+          CCOption.map
             (fun g -> rewrite_term ~state g)
             c.clause_guard;
         clause_concl =
@@ -320,7 +320,7 @@ let decode_model ~state m =
 
 (** {6 Pipes} *)
 
-let pipe_with ?on_decoded ~decode ~print ~check =
+let pipe_with ?on_decoded ~decode ~print ~check () =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module Ppb = Problem.P in
@@ -346,6 +346,6 @@ let pipe ~print ~check =
          (Problem.Res.pp T.pp' T.pp)]
     else []
   in
-  pipe_with ~on_decoded
+  pipe_with ~on_decoded ()
     ~decode:(fun state -> Problem.Res.map_m ~f:(decode_model ~state))
     ~print ~check

@@ -20,7 +20,7 @@ let section = Utils.Section.make name
 type term = T.t
 
 type state = {
-  mutable lost_precision: bool;
+  lost_precision: bool;
   env: (T.t, T.t) Env.t;
 }
 

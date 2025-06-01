@@ -619,7 +619,7 @@ let decode_fun_ ~ptrue ~ty_by_id map m id (fe:fun_encoding) (set:FO_rel.tuple_se
   (* convert a tuple to a list of ID, or None if the tuple was invalid
      (out of domain) *)
   let tup_to_ids (tup:FO_rel.tuple) : ID.t list option =
-    try List.map atom_to_id_exn tup |> CCOpt.return
+    try List.map atom_to_id_exn tup |> CCOption.return
     with Exit -> None
   in
   let doms = fe.fun_ty_args in
@@ -801,7 +801,7 @@ let decode state m =
 
 (** {2 Pipes} *)
 
-let pipe_with ?on_decoded ~decode ~print =
+let pipe_with ?on_decoded ~decode ~print () =
   let input_spec =
     Transform.Features.(of_list [
         Match, Absent; Fun, Absent; Copy, Absent; Ind_preds, Absent;
@@ -823,5 +823,5 @@ let pipe ~print =
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode state) in
-  pipe_with ~on_decoded ~decode ~print
+  pipe_with ~on_decoded ~decode ~print ()
 

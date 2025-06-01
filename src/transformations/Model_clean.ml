@@ -141,7 +141,7 @@ let ground_dt doms (dt:(_,_) M.DT.t): (_,_) M.DT.t =
           in
           D.tests_ l, true
       in
-      let default = CCOpt.map (ground_dt subst) c.D.default in
+      let default = CCOption.map (ground_dt subst) c.D.default in
       let dt' = D.mk_cases ~default c.D.var tests in
       if changed then (
         Utils.debugf ~section 5
@@ -177,7 +177,7 @@ let ground_vars m : (_,_) Model.t =
     ~finite_types:(fun (ty,dom) -> T.Tbl.add doms_tbl ty dom);
   (* now ground decision trees that contain free variables *)
   Model.filter_map m
-    ~finite_types:CCOpt.return
+    ~finite_types:CCOption.return
     ~values:(fun (lhs,dt,k) ->
       let dt = ground_dt doms_tbl dt in
       Some (lhs,dt,k))
@@ -238,7 +238,7 @@ let remove_trivial_tests m : (_,_) Model.t =
       in
       DT.mk_tests var ~tests ~default
     | DT.Cases {DT.var; tests=DT.Match (m,missing); default=d} ->
-      let default = CCOpt.map aux d in
+      let default = CCOption.map aux d in
       let m = ID.Map.map (fun (tys, vars,rhs) -> tys, vars, aux rhs) m in
       DT.mk_match var ~by_cstor:m ~missing ~default
   in

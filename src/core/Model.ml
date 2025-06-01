@@ -76,7 +76,7 @@ module DT = struct
       Cases {
         var=Var.update_ty ~f:ty cases.var;
         tests;
-        default=CCOpt.map (map ~term ~ty) cases.default;
+        default=CCOption.map (map ~term ~ty) cases.default;
       }
 
   let rec filter_map ~test:ft ~yield:fy dt = match dt with
@@ -97,7 +97,7 @@ module DT = struct
             l
           |> tests_
       and default =
-        CCOpt.map (filter_map ~test:ft ~yield:fy) default
+        CCOption.map (filter_map ~test:ft ~yield:fy) default
       in
       mk_cases var tests ~default
 
@@ -245,7 +245,7 @@ module DT = struct
           | Tests l -> List.iter (fun (_,rhs) -> check_vars vars' rhs) l
           | Match (m,_) -> ID.Map.iter (fun _ (_,_,rhs) -> check_vars vars' rhs) m
         end;
-        CCOpt.iter (check_vars vars') default;
+        CCOption.iter (check_vars vars') default;
     in
     check_vars (vars t) t
 
@@ -400,7 +400,7 @@ module DT_util = struct
                tys, vars, eval_subst ~subst rhs)
           |> DT.match_ ~missing
       in
-      let default = CCOpt.map (eval_subst ~subst) default in
+      let default = CCOption.map (eval_subst ~subst) default in
       DT.mk_cases var' tests ~default
 
   let rec map_vars ~subst = function
@@ -422,7 +422,7 @@ module DT_util = struct
                tys,vars, map_vars ~subst rhs)
           |> DT.match_ ~missing
       in
-      let default = CCOpt.map (map_vars ~subst) default in
+      let default = CCOption.map (map_vars ~subst) default in
       DT.mk_cases var tests ~default
 
   let rename_vars dt = eval_subst ~subst:Subst.empty dt
@@ -491,7 +491,7 @@ module DT_util = struct
         DT.map_tests_or_match tests
           ~f:(fun sub -> join sub b) ~ty:CCFun.id ~term:CCFun.id
       and default =
-        CCOpt.map (fun d -> join d b) default
+        CCOption.map (fun d -> join d b) default
       in
       DT.mk_cases var tests ~default
 
@@ -534,7 +534,7 @@ module DT_util = struct
       CCList.filter_map
         (fun (c,subst) -> match c with
            | DT.Yield _ -> assert false
-           | DT.Cases {DT.default; _} -> CCOpt.map (fun x->x,subst) default)
+           | DT.Cases {DT.default; _} -> CCOption.map (fun x->x,subst) default)
         l
     in
     begin match l with
@@ -672,7 +672,7 @@ module DT_util = struct
           in
           (* add the default case, if needed *)
           let l =
-            let default = CCOpt.map (aux subst vars') default in
+            let default = CCOption.map (aux subst vars') default in
             CCList.cons_maybe default l
           in
           assert (l<>[]);
@@ -684,7 +684,7 @@ module DT_util = struct
                  T.eval ~subst lhs, aux subst vars rhs)
               l
           and default =
-            CCOpt.map (aux subst vars) default
+            CCOption.map (aux subst vars) default
           in
           DT.mk_tests v ~tests:l ~default
         )

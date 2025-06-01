@@ -323,7 +323,7 @@ let mk_rand() = Random.State.make_self_init ()
 let generate ?(rand=mk_rand()) g = g rand
 
 let generate_l ?n ?(rand=mk_rand()) g =
-  let n = CCOpt.get_lazy (fun () -> G.(1 -- 50) rand) n in
+  let n = CCOption.get_lazy (fun () -> G.(1 -- 50) rand) n in
   G.list_repeat n g rand
 
 let pp_rules() =

@@ -212,7 +212,7 @@ module Make(T : TermInner.S)(Arg : ARG)(State : sig type t end) = struct
           List.iter
             (fun c ->
                yield_vars c.Stmt.clause_vars;
-               CCOpt.iter yield_term c.Stmt.clause_guard;
+               CCOption.iter yield_term c.Stmt.clause_guard;
                yield_term c.Stmt.clause_concl)
             p.Stmt.pred_clauses
         | PS_spec s ->

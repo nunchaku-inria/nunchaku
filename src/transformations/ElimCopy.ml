@@ -92,7 +92,7 @@ let has_small_exact_card card_concrete = match card_concrete with
   | Cardinality.Exact n ->
     (* if [n >= threshold] we approximate *)
     if Cardinality.Z.(compare n (of_int approx_threshold_) <= 0)
-    then Some (Cardinality.Z.to_int n |> CCOpt.get_exn)
+    then Some (Cardinality.Z.to_int n |> CCOption.get_exn_or "Cardinality was too large")
     else None
 
 let attrs_of_ty state (ty:ty): Stmt.decl_attr list =

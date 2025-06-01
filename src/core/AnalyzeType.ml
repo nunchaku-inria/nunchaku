@@ -176,7 +176,7 @@ module Make(T : TI.S) = struct
             | Stmt.Attr_infinite -> Some Card.infinite
             | _ -> None)
           attrs
-        |> CCOpt.get_or ~default
+        |> CCOption.get_or ~default
       | Env.Cstor _
       | Env.Fun_def (_,_,_)
       | Env.Fun_spec (_,_)

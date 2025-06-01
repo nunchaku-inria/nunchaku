@@ -740,7 +740,7 @@ let decode_model ~state m =
 
 (** {6 Pipe} *)
 
-let pipe_with ?on_decoded ~decode ~print ~check =
+let pipe_with ?on_decoded ~decode ~print ~check () =
   let on_encoded =
     Utils.singleton_if print () ~f:(fun () ->
       let module PPb = Problem.P in
@@ -770,4 +770,4 @@ let pipe ~print ~check =
     else []
   in
   let decode state = Problem.Res.map_m ~f:(decode_model ~state) in
-  pipe_with ~on_decoded ~print ~decode ~check
+  pipe_with ~on_decoded ~print ~decode ~check ()

@@ -254,7 +254,7 @@ let mem ~env ~id = ID.PerTbl.mem env.infos id
 
 let find_ty_exn ~env id = (find_exn ~env id).ty
 
-let find_ty ~env id = CCOpt.map (fun x -> x.ty) (find ~env id)
+let find_ty ~env id = CCOption.map (fun x -> x.ty) (find ~env id)
 
 module type PRINT_TERM = sig
   type t

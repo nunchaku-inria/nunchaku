@@ -31,6 +31,7 @@ val pipe_with :
   decode:(decode_state -> 'c -> 'd) ->
   print:bool ->
   check:bool ->
+  unit ->
   ((term, term) Problem.t,
    (term, term) Problem.t,
    'c, 'd

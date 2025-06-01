@@ -44,7 +44,7 @@ let elim_match ~mode ~env t =
   in
   let rec elim_match_ ~subst t = match T.repr t with
     | TI.Var v ->
-      CCOpt.get_or ~default:t (Subst.find ~subst v)
+      CCOption.get_or ~default:t (Subst.find ~subst v)
     | TI.Const _ -> t
     | TI.App (f,l) -> T.app (elim_match_ ~subst f) (elim_match_l_ ~subst l)
     | TI.Builtin b -> T.builtin (Builtin.map b ~f:(elim_match_ ~subst))

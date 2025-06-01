@@ -27,6 +27,7 @@ val pipe_with :
   decode:(state -> 'a -> 'b) ->
   print:bool ->
   check:bool ->
+  unit ->
   (problem, problem, 'a, 'b) Transform.t
 
 val pipe :
