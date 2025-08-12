@@ -160,24 +160,12 @@ let rec polarize_term_rec
   = fun ~self pol subst t ->
     let state = Trav.state self in
     (* how to polarize an ID whose type is/returns prop *)
-    let maybe_polarize_const (id:ID.t) (ty:T.t) (l:T.t list) =
-      if T.ty_is_Prop ty then (
-        (* constant: degenerate case of (co)inductive pred, no need
-                     for polarization, and necessarily WF. *)
-        Utils.debugf ~section 5 "@[<2>do not polarize constant pred `%a`@]"
-          (fun k->k ID.pp_full id);
-        ID.Tbl.add state.St.polarized id None;
-        Trav.call_dep self ~depth:0 id `Keep;
-        assert (l = []);
-        T.const id
-      ) else (
-        (* polarize *)
-        Utils.debugf ~section 5 "@[<2>polarize pred `%a`@]"
-          (fun k->k ID.pp_full id);
-        polarize_def_of ~self id pol;
-        let p = find_polarized_exn ~state id in
-        app_polarized pol p l
-      )
+    let polarize_pred (id:ID.t) (l:T.t list) =
+      Utils.debugf ~section 5 "@[<2>polarize pred `%a`@]"
+        (fun k->k ID.pp_full id);
+      polarize_def_of ~self id pol;
+      let p = find_polarized_exn ~state id in
+      app_polarized pol p l
     and maybe_polarize_def (id:ID.t) (def:(_,_) Stmt.rec_def) (l:T.t list) =
       (* we can polarize, or not: delegate to heuristic *)
       if should_polarize_rec ~state def
@@ -214,8 +202,7 @@ let rec polarize_term_rec
           | Env.Fun_def (_,def,_) ->
             maybe_polarize_def id def []
           | Env.Pred (_,_,_,_,_) ->
-            let ty = Env.ty info in
-            maybe_polarize_const id ty []
+            polarize_pred id []
           | _ ->
             Trav.call_dep self ~depth:0 id `Keep; (* keep it as is *)
             t
@@ -255,7 +242,7 @@ let rec polarize_term_rec
                 maybe_polarize_def id def l
               | Env.Pred (_,_,pred,_preds,_) ->
                 let d = pred.Stmt.pred_defined in
-                maybe_polarize_const d.Stmt.defined_head d.Stmt.defined_ty l
+                polarize_pred d.Stmt.defined_head l
             end
           | _ ->
             polarize_term_rec' ~self pol subst t
