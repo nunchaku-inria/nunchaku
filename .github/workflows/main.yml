@@ -29,16 +29,8 @@ jobs:
     - run: opam exec -- dune build @install --profile=release
     - run: opam exec -- dune runtest --profile=release
 
-    - name: Cache CVC4 1.6
-      if: matrix.ocaml-compiler == '5.03.x'
-      id: cache-cvc4
-      uses: actions/cache@v3
-      with:
-        path: /usr/local/bin/cvc4
-        key: cvc4-1.6-x86_64-linux-opt
-
     - name: Install CVC4 1.6
-      if: matrix.ocaml-compiler == '5.03.x' && steps.cache-cvc4.outputs.cache-hit != 'true'
+      if: matrix.ocaml-compiler == '5.03.x'
       run: |
         wget http://cvc4.cs.stanford.edu/downloads/builds/x86_64-linux-opt/cvc4-1.6-x86_64-linux-opt
         chmod +x cvc4-1.6-x86_64-linux-opt
@@ -46,4 +38,6 @@ jobs:
 
     - name: Run benchmark
       if: matrix.ocaml-compiler == '5.03.x'
-      run: make bench
+      run:
+        eval $(opam env)
+        make bench
