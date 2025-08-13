@@ -285,6 +285,7 @@ let encode_clause ~mode ~env (id:ID.t) vars (c:(_,_) Stmt.pred_clause): term =
           | TI.Const id' when ID.equal id' id -> l
           | _ -> fail()
         end
+      | TI.Const id' when ID.equal id' id -> []
       | _ -> fail()
   in
   match mode with
