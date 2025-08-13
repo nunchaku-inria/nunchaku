@@ -46,7 +46,7 @@ jobs:
 
     - name: Run benchmark
       if: matrix.ocaml-compiler == '5.03.x'
-      run:
+      run: |
         export PYTHONPATH="$(pwd)/bench/benchexec/:$PYTHONPATH"
         opam exec -- make bench
         cd bench/benchexec
