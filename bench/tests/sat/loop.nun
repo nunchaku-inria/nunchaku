@@ -1,0 +1,9 @@
+# outcome: loops forever
+# expected: sat
+
+val lesseq : prop -> prop -> prop.
+
+rec max : prop -> prop -> prop :=
+  forall (a : prop) (b : prop). max a b = (if lesseq a b then b else a).
+
+goal max true true.

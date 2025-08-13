@@ -1,0 +1,16 @@
+# expected: unknown
+# status: unsat
+# outcome: sat
+
+# This example is dual to "ho_quant2.nun". Clearly, "gg" and "hh" are different functions, so
+# "gg = hh" is "false".
+
+data nat := Z | Suc nat.
+
+rec gg : (nat -> nat) -> nat :=
+  forall f. gg f = f Z.
+
+rec hh : (nat -> nat) -> nat :=
+  forall f. hh f = f (Suc Z).
+
+goal gg = hh.

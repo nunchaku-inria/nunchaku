@@ -1,0 +1,21 @@
+# outcome: CVC4 error (feature `evaluation of DataSelect` is not implemented)
+# expected: sat
+
+val a : type.
+
+codata llist :=
+  LNil
+| LCons a llist.
+
+val xs : llist.
+val ys : llist.
+
+copred lprefix : llist -> llist -> prop :=
+  forall (xs1 : llist). lprefix LNil xs1;
+  forall (xs1 : llist) (ys1 : llist) (x : a). lprefix xs1 ys1 => lprefix (LCons x xs1) (LCons x ys1).
+
+rec lnull : llist -> prop :=
+  lnull LNil = true;
+  forall (x21 : a) (x22 : llist). lnull (LCons x21 x22) = false.
+
+goal ~ (lprefix xs ys = lnull xs).

@@ -1,0 +1,16 @@
+# outcome: "Error: feature `polarization is needed before unrolling` is not implemented"
+# expected: unsat or unknown
+
+data nat :=
+  zero
+| Suc nat.
+
+pred p2 : nat -> prop :=
+  forall (n : nat). p2 n => p2 n.
+
+rec bot : prop :=
+  bot = false.
+rec bot1 : nat -> prop :=
+  bot1 = (fun x. bot).
+
+goal ~ (p2 = bot1).

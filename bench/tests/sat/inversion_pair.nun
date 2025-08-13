@@ -1,0 +1,14 @@
+
+# Test on data
+# expect: sat
+
+data pair a b := Pair a b.
+
+val a : type.
+val b : type.
+
+goal forall (p:pair a b).
+     exists (x:a) (y:b).
+	p = Pair x y.
+
+

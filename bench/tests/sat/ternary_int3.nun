@@ -1,0 +1,9 @@
+# expect: SAT
+
+# goal: `exists x. 10 * x^2 = 250`
+
+include "ternary_int.nun".
+
+#goal exists x. z_mult x x = z_mult z_5 z_5 && z_positive x.
+goal exists x. z_mult (z_mult x x) z_10 = z_plus (z_plus z_100 z_100) z_50 && z_positive x.
+

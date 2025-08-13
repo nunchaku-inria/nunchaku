@@ -1,0 +1,53 @@
+
+# expected: sat
+
+data nat :=
+  zero
+| Suc nat.
+
+copy set := nat -> prop
+  abstract Collect
+  concrete rmember.
+
+data tree :=
+  Null
+| Node nat tree tree.
+
+val t : tree.
+
+rec insert : nat -> set -> set :=
+  forall (a : nat) (B : set). insert a B = Collect (fun (x : nat). (x = a) || rmember B x).
+rec lesseq : nat -> nat -> prop :=
+  forall (n : nat). lesseq zero n = true;
+  forall (m : nat) (n : nat). lesseq (Suc m) n = ((fun uu1. fun uu2. fun uu3. match uu3 with | zero -> uu1 | Suc uu21 -> uu2 uu21 end) false (fun (na : nat). lesseq m na) n).
+rec less : nat -> nat -> prop :=
+  forall (n : nat) (m : nat). less n m = lesseq (Suc n) m.
+rec sup : prop -> prop -> prop :=
+  forall (P : prop) (Q : prop). sup P Q = (P || Q).
+rec sup1 : (nat -> prop) -> (nat -> prop) -> nat -> prop :=
+  forall (f : nat -> prop) (g : nat -> prop). sup1 f g = (fun x. sup (f x) (g x)).
+rec sup2 : set -> set -> set :=
+  forall (A : set) (B : set). sup2 A B = Collect (sup1 (fun (x : nat). rmember A x) (fun (x : nat). rmember B x)).
+rec bot : prop :=
+  bot = false.
+rec bot1 : nat -> prop :=
+  bot1 = (fun x. bot).
+rec bot2 : set :=
+  bot2 = Collect bot1.
+rec labels : tree -> set :=
+  labels Null = bot2;
+  forall (x : nat) (t1 : tree) (u : tree). labels (Node x t1 u) = sup2 (sup2 (insert x bot2) (labels t1)) (labels u).
+
+pred finite : set -> prop :=
+  finite bot2;
+  forall (A : set) (a : nat). finite A => finite (insert a A).
+pred foldgraph : (nat -> nat -> nat) -> nat -> set -> nat -> prop :=
+  forall (f : nat -> nat -> nat) (z : nat). foldgraph f z bot2 z;
+  forall (A : set) (x : nat) (f : nat -> nat -> nat) (z : nat) (y : nat). ((~ (rmember A x)) && foldgraph f z A y) => foldgraph f z (insert x A) (f x y).
+
+rec fold : (nat -> nat -> nat) -> nat -> set -> nat :=
+  forall (f : nat -> nat -> nat) (z : nat) (A : set). fold f z A = ((if finite A then unique (fun (y : nat). foldgraph f z A y) else z)).
+rec card : set -> nat :=
+  forall (A : set). card A = fold (fun (uu4 : nat). Suc) zero A.
+
+goal ~ (less zero (card (labels t))).

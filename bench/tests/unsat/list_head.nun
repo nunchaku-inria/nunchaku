@@ -1,0 +1,17 @@
+# expect: unsat
+
+# test partial function `head`
+
+data list a := Nil | Cons a (list a).
+
+rec head : pi a. list a -> a :=
+  forall x l. head (Cons x l) = x.
+
+pred[wf] is_empty : pi a. list a -> prop :=
+  is_empty Nil.
+
+val tau : type.
+
+goal exists (l1:list tau) l2.
+  is_empty l1 && is_empty l2 && ~ (head l1  = head l2).
+

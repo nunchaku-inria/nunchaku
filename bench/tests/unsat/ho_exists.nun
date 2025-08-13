@@ -1,0 +1,8 @@
+# expected: unsat
+
+val a : type.
+
+val y : a.
+
+goal ~ (exists (f : a -> a). f = (fun x. x)).
+# goal forall (f : a -> a). ~ (f = (fun x. x)).

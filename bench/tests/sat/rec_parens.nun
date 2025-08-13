@@ -1,0 +1,18 @@
+# outcome: parsing bugs in some of the following
+#   (which would not occur if the "rec" equations were extracted from the AST instead of
+#   using a dedicated parser)
+# expect: sat
+
+val a : type.
+
+rec f : a -> a :=
+  forall X. (f X) = X.
+
+rec g : a -> a -> a :=
+  forall X Y. (g X) Y = X.
+
+rec h : a -> a :=
+  (forall X. (h X) = X).
+
+rec i : a -> a -> a :=
+  (forall X Y. (i X) Y = X).

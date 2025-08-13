@@ -1,0 +1,39 @@
+# outcome: expected decision tree for wfx+ to yield only true/false
+# expected: sat
+
+data nat :=
+  zero
+| Suc nat.
+
+val x : nat.
+
+data aatree :=
+  X
+| N nat nat aatree aatree.
+
+val t : aatree.
+
+rec left : aatree -> aatree :=
+  left X = X;
+  forall (uu : nat) (uv : nat) (t092060094sub0621 : aatree) (uw : aatree). left (N uu uv t092060094sub0621 uw) = t092060094sub0621.
+rec level : aatree -> nat :=
+  level X = zero;
+  forall (uu : nat) (k : nat) (uv : aatree) (uw : aatree). level (N uu k uv uw) = k.
+rec right : aatree -> aatree :=
+  right X = X;
+  forall (uu : nat) (uv : nat) (uw : aatree) (t092060094sub0622 : aatree). right (N uu uv uw t092060094sub0622) = t092060094sub0622.
+spec one : nat :=
+  one = Suc zero.
+rec lesseq : nat -> nat -> prop :=
+  forall (n : nat). lesseq zero n = true;
+  forall (m : nat) (n : nat). lesseq (Suc m) n = (match n with | zero -> false | Suc uu21 -> lesseq m uu21 end).
+rec less : nat -> nat -> prop :=
+  forall (n : nat) (m : nat). less n m = lesseq (Suc n) m.
+rec wfx : aatree -> prop :=
+  wfx X = true;
+  forall (uu : nat) (k : nat) (t1 : aatree) (u : aatree). wfx (N uu k t1 u) = ((if t1 = X then (k = one) && ((u = X) || ((level u = one) && (left u = X) && (right u = X))) else wfx t1 && wfx u && (~ (u = X)) && less (level t1) k && lesseq (level u) k && less (level (right u)) k)).
+rec insort : aatree -> nat -> aatree :=
+  forall (x1 : nat). insort X x1 = N x1 one X X;
+  forall (y : nat) (k : nat) (t1 : aatree) (u : aatree) (x1 : nat). insort (N y k t1 u) x1 = N y k ((if less x1 y then insort t1 x1 else t1)) ((if less y x1 then insort u x1 else u)).
+
+goal ~ (wfx t => (t = N one one X X) => (x = zero) => wfx (insort t x)).

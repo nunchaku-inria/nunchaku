@@ -1,0 +1,18 @@
+
+# expect: sat
+
+# old outcome: error (alarm)
+
+val u : type.
+val emptySet : u.
+val is_in : u -> u -> prop.
+val singleton : u -> u.
+
+pred is_in : u -> u -> prop := forall x. is_in (singleton x) x.
+
+pred trans_is_in : u -> u -> prop :=
+  forall x y. is_in x y => trans_is_in x y;
+  forall x y z. is_in y x && is_in z y => trans_is_in z x.
+axiom forall x. ~ (trans_is_in x x).
+
+goal exists x.(x=emptySet).

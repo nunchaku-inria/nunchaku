@@ -1,0 +1,8 @@
+# expect: SAT
+
+# goal: `exists x. x + 10 > 10*2`
+
+include "binary_int.nun".
+
+goal exists x. b_gt (b_plus x b_10) (b_mult b_2 b_10).
+

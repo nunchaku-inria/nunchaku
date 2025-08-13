@@ -1,0 +1,23 @@
+# outcome: sat with wrong model
+# expected: sat with right model
+
+# Nunchaku prints the model
+#
+#  val alphabet :=
+#    fun v_0/70 v_1/71.
+#      if v_0/70 = Leaf a_0 && v_1/71 = a_0 then false  else ?__.
+#
+# However, "false" should be "true".
+
+val a : type.
+
+data tree :=
+  Leaf a.
+
+rec alphabet : tree -> a -> prop :=
+  forall (x : a) (y : a). alphabet (Leaf x) y = (x = y).
+
+val x : a.
+val y : a.
+
+goal ~ alphabet (Leaf y) x.

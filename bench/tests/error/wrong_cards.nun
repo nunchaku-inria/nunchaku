@@ -1,0 +1,7 @@
+
+# unsatisfiable set of bounds
+# expect: error
+
+val i : type [min_card 5; max_card 2].
+
+

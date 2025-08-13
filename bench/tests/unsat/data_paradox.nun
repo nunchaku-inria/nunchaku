@@ -1,0 +1,15 @@
+# expected: unsat
+
+# old outcome: sat with Paradox
+
+data nat :=
+  Zero
+| Suc nat.
+
+rec greater_than_one : nat -> nat :=
+  greater_than_one Zero = Zero;
+  greater_than_one (Suc Zero) = Zero;
+  forall n. greater_than_one (Suc (Suc n)) = Suc Zero.
+
+goal ~ (exists (n : nat). greater_than_one n = Suc Zero).
+

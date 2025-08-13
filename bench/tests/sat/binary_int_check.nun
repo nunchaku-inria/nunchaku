@@ -1,0 +1,37 @@
+
+# expect: SAT
+
+# sanity checks for binary.nun
+
+include "binary_int.nun".
+include "nat.nun".
+
+rec pos_num_to_nat : pos_num -> nat :=
+  pos_num_to_nat B_one = S Z;
+  forall x. pos_num_to_nat (Bit0 x) = nat_mult nat_2 (pos_num_to_nat x);
+  forall x. pos_num_to_nat (Bit1 x) = S (nat_mult nat_2 (pos_num_to_nat x)).
+
+rec b_to_nat : b_int -> nat :=
+  b_to_nat B_0 = Z;
+  forall x. b_to_nat (B_pos x) = pos_num_to_nat x;
+  forall x. b_to_nat (B_neg x) = Z. # erase
+
+rec nat_to_b : nat -> b_int :=
+  nat_to_b Z = b_0;
+  forall x. nat_to_b (S x) = b_succ (nat_to_b x).
+
+goal
+  nat_10 = S (S (S (S (S (S (S (S (S (S Z))))))))) &&
+  b_gt (b_succ (b_plus b_10 b_10)) (b_mult b_2 b_10) &&
+  ~ b_gt (b_succ (b_plus b_0 b_10)) (b_mult b_2 b_10) &&
+  nat_to_b (nat_mult nat_2 nat_10) = b_20 &&
+  nat_to_b (nat_plus (nat_mult nat_2 nat_10) nat_5) = b_mult b_5 b_5 &&
+  nat_to_b nat_100 = b_100 &&
+  nat_mult nat_2 nat_10 = b_to_nat b_20 &&
+  nat_plus (nat_mult nat_2 nat_10) nat_5 = b_to_nat (b_mult b_5 b_5) &&
+  nat_100 = b_to_nat b_100 &&
+  nat_plus nat_100 nat_100 = b_to_nat (b_mult b_2 b_100) &&
+  b_positive b_100 &&
+  true.
+
+

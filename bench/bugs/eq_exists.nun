@@ -1,0 +1,11 @@
+# outcome: unknown
+# expected: sat
+
+# "a -> prop" is a finite type (if "a" is finite), so there should be a way to
+# make this executable. Probably we need prototypes here.
+
+val a : type.
+
+val q : (a -> prop) -> prop.
+
+goal q = (fun P. exists (y : a). P y).

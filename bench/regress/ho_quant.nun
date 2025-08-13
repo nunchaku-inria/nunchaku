@@ -1,0 +1,17 @@
+# expected: unknown
+# status: unsat
+# outcome: sat
+
+# This problem is unsat because there always exists the identity function (among others)
+# that violates the property. See "Higher-Order Quantification" in "higher_order.adoc",
+# starting at "The remaining cases". For the moment, the best strategy would be to replace the
+# entire quantification by a "false assert false" (where the first "false" is irrelevant)",
+# and set the bit that makes "unsat" (for CVC4) mean "unknown" (for Nunchaku).
+#
+# I have some ideas (beyond what is written in "higher_order.adoc"), e.g. enumerate cardinalities
+# (urgl), encode a cardinality constraint on "to a a" using arithmetic, but this has low priority.
+
+val a : type.
+val x : a.
+
+goal forall (f : a -> a). ~ (f x = x).

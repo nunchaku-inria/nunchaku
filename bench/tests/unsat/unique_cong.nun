@@ -1,0 +1,6 @@
+# outcome: "type error when applying ..."
+# expected: unsat
+
+data nat := Z | S nat.
+
+goal ~ (unique (fun x. x = Z || x = S Z) = unique (fun x. x = S Z || x = Z)).

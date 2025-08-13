@@ -1,0 +1,25 @@
+# outcome: "File "src/transformations/ElimRecursion.ml", line 365, characters 6-12: Assertion failed"
+# expected: unsat
+
+val a : type.
+val b : type.
+
+val a1 : a -> b.
+
+pred rtranclp : ((a -> b) -> (a -> b) -> prop) -> (a -> b) -> (a -> b) -> prop :=
+  forall (r : (a -> b) -> (a -> b) -> prop) (a2 : a -> b). rtranclp r a2 a2;
+  forall (r : (a -> b) -> (a -> b) -> prop) (a2 : a -> b) (b1 : a -> b) (c : a -> b). (rtranclp r a2 b1 && r b1 c) => rtranclp r a2 c.
+
+data prod :=
+  Pair (a -> b) (a -> b).
+
+copy set := prod -> prop
+  abstract Collect
+  concrete rmember.
+
+rec Id : set :=
+  Id = Collect (fun (p : prod). exists (x : a -> b). p = Pair x x).
+rec rtrancl : set -> set :=
+  rtrancl = (fun r. Collect (fun (uu2 : prod). match uu2 with  | Pair uu11 uu12 -> rtranclp (fun (xb : a -> b). fun (xc : a -> b). rmember r (Pair xb xc)) uu11 uu12 end)).
+
+goal ~ (rmember (rtrancl Id) (Pair a1 a1)).

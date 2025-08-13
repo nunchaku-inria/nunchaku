@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+
+<!DOCTYPE benchmark PUBLIC "+//IDN sosy-lab.org//DTD BenchExec benchmark 3.30//EN" "https://www.sosy-lab.org/benchexec/benchmark-3.30.dtd">
+
+<benchmark tool=".nunchaku"
+           timelimit="2s"
+           hardtimelimit="3s"
+           memlimit="1000 MB"
+           cpuCores="1">
+
+<rundefinition name="cvc4">
+  <option name="-s">cvc4</option>
+</rundefinition>
+
+<tasks name="test-sat">
+  <include>tasks/sat/*.yml</include>
+  <propertyfile>${taskdef_path}/sat.prp</propertyfile>
+</tasks>
+
+<tasks name="test-unsat">
+  <include>tasks/unsat/*.yml</include>
+  <propertyfile>${taskdef_path}/unsat.prp</propertyfile>
+</tasks>
+
+</benchmark>

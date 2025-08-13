@@ -1,0 +1,7 @@
+# expected: unsat
+
+# old outcome: sat (with Kodkod)
+
+val a : type.
+
+goal forall (x : a) (y : a). ~ (x = y).

@@ -1,0 +1,32 @@
+# expected: UNSAT
+
+data num := Zero | One | Two | Three | Four.
+
+spec suc : num -> num :=
+  forall x. suc x =
+    match x with
+    | Zero -> One
+    | One -> Two
+    | Two -> Three
+    | Three -> Four
+    | Four -> Zero
+    end.
+
+rec many : num -> prop :=
+  forall x. many x =
+    (if x = One then
+       false
+     else if x = Four then
+       true
+     else
+       many (suc x)).
+
+val m1 : num.
+val m2 : num.
+val m3 : num.
+
+axiom ~ (m1 = m2).
+axiom ~ (m1 = m3).
+axiom ~ (m2 = m3).
+
+goal ~ many m1 && ~ many m2 && ~ many m3.

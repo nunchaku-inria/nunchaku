@@ -1,0 +1,27 @@
+# outcome: type error
+# expected: sat
+
+# Interestingly, the error doesn't occur if we use the axiomatization below
+# instead of "data".
+
+val a : type.
+
+data nat :=
+  zero
+| Suc nat.
+
+# Axiomatization:
+# val nat : type.
+# val zero : nat.
+# val Suc : nat -> nat.
+
+val set : type.
+
+val fold : (a -> nat -> nat) -> nat -> set -> nat.
+rec card : set -> nat :=
+  forall (A : set). card A = fold (fun (x : a). Suc) zero A.
+
+val A : set.
+val n : nat.
+
+goal ~ (card A = n).

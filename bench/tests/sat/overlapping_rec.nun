@@ -1,0 +1,26 @@
+# outcome: ambiguity error
+# expected: sat
+
+# It would be nice if Nunchaku could handle this case by e.g. picking the
+# first equation first (and, perhaps, emit a warning). These equations can
+# occur in Isabelle -- but the user has to prove that overlapping equations
+# coincide for their common values. This could be assumed in Nunchaku. Or we
+# just say that it's a sequential semantics, like in ML. (Not that it would
+# matter for the Isabelle or Coq frontends.
+
+val a : type.
+val nat : type.
+
+data tree :=
+  Leaf nat a
+| InnerNode nat tree tree.
+
+val t : tree.
+
+rec sibling : tree -> a -> a :=
+  forall (w : nat) (v : nat) (va : tree) (vb : tree) (t2 : tree) (a2 : a). sibling (InnerNode w (InnerNode v va vb) t2) a2 = sibling (InnerNode v va vb) a2;
+  forall (w : nat) (t1 : tree) (v : nat) (va : tree) (vb : tree) (a2 : a). sibling (InnerNode w t1 (InnerNode v va vb)) a2 = sibling (InnerNode v va vb) a2.
+
+val b : a.
+
+goal sibling t b = b.

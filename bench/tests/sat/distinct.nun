@@ -1,0 +1,12 @@
+# expect: SAT
+
+val a : type.
+
+data list :=
+  Nil
+| Cons a list.
+
+rec distinct : list -> prop :=
+  distinct Nil = true.
+
+goal distinct Nil.

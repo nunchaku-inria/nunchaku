@@ -1,0 +1,60 @@
+# outcome: timeout
+# expected: unsat
+# status: unsat
+
+val c : type.
+
+val ltcst : c -> c -> prop.
+
+data nat :=
+  zero
+| Suc nat.
+
+val minwt : nat.
+val wtcst : c -> nat.
+val aritycst : c -> nat.
+
+rec one : nat :=
+  one = Suc zero.
+rec plus : nat -> nat -> nat :=
+  forall (n : nat). plus zero n = n;
+  forall (m : nat) (n : nat). plus (Suc m) n = Suc (plus m n).
+rec minus : nat -> nat -> nat :=
+  forall (m : nat). minus m zero = m;
+  forall (m : nat) (n : nat). minus m (Suc n) = (match minus m n with  | zero -> zero | Suc uu21 -> uu21 end).
+rec times : nat -> nat -> nat :=
+  forall (n : nat). times zero n = zero;
+  forall (m : nat) (n : nat). times (Suc m) n = plus n (times m n).
+rec lesseq : nat -> nat -> prop :=
+  forall (n : nat). lesseq zero n = true;
+  forall (m : nat) (n : nat). lesseq (Suc m) n = (match n with  | zero -> false | Suc uu21 -> lesseq m uu21 end).
+rec less : nat -> nat -> prop :=
+  forall (n : nat) (m : nat). less n m = lesseq (Suc n) m.
+rec kboweightsaxioms : (c -> c -> prop) -> (c -> nat) -> (c -> nat) -> nat -> prop :=
+  forall (ltcst1 : c -> c -> prop) (aritycst1 : c -> nat) (wtcst1 : c -> nat) (minwt1 : nat). kboweightsaxioms ltcst1 aritycst1 wtcst1 minwt1 = ((less zero minwt1 && (forall (f : c). (wtcst1 f = zero) || lesseq minwt1 (wtcst1 f))) && (forall (f : c). (wtcst1 f = zero) => (aritycst1 f = one)) && (forall (f : c) (g : c). (wtcst1 f = zero) => (ltcst1 g f || (g = f)))).
+
+data g1 :=
+  Cg c
+| Ag g1 g1.
+
+val s : g1.
+
+rec recg : (c -> nat) -> (g1 -> g1 -> nat -> nat -> nat) -> g1 -> nat :=
+  forall (f1 : c -> nat) (f2 : g1 -> g1 -> nat -> nat -> nat) (x1 : c). recg f1 f2 (Cg x1) = f1 x1;
+  forall (f1 : c -> nat) (f2 : g1 -> g1 -> nat -> nat -> nat) (x21 : g1) (x22 : g1). recg f1 f2 (Ag x21 x22) = f2 x21 x22 (recg f1 f2 x21) (recg f1 f2 x22).
+rec wtg : (c -> nat) -> nat -> (c -> nat) -> g1 -> nat :=
+  forall (wtcst1 : c -> nat) (minwt1 : nat) (aritycst1 : c -> nat). wtg wtcst1 minwt1 aritycst1 = (fun uu. recg (fun (f : c). plus (wtcst1 f) (times minwt1 (aritycst1 f))) (fun (s1 : g1). fun (t : g1). fun (sa : nat). fun (ta : nat). plus (minus sa minwt1) ta) uu).
+rec transp : (c -> c -> prop) -> prop :=
+  forall (r : c -> c -> prop). transp r = (forall (x : c) (y : c) (z : c). (r x y && r y z) => r x z).
+rec irreflp : (c -> c -> prop) -> prop :=
+  forall (R : c -> c -> prop). irreflp R = (forall (a : c). ~ (R a a)).
+rec ltcst2 : (c -> c -> prop) -> prop :=
+  forall (ltcst1 : c -> c -> prop). ltcst2 ltcst1 = (irreflp ltcst1 && transp ltcst1 && (forall (f : c) (g : c). ltcst1 f g || ltcst1 g f || (f = g))).
+rec kboweights : (c -> c -> prop) -> (c -> nat) -> (c -> nat) -> nat -> prop :=
+  forall (ltcst1 : c -> c -> prop) (aritycst1 : c -> nat) (wtcst1 : c -> nat) (minwt1 : nat). kboweights ltcst1 aritycst1 wtcst1 minwt1 = (ltcst2 ltcst1 && kboweightsaxioms ltcst1 aritycst1 wtcst1 minwt1).
+rec kbo : (c -> c -> prop) -> (c -> nat) -> nat -> (c -> nat) -> prop :=
+  forall (ltcst1 : c -> c -> prop) (wtcst1 : c -> nat) (minwt1 : nat) (aritycst1 : c -> nat). kbo ltcst1 wtcst1 minwt1 aritycst1 = kboweights ltcst1 aritycst1 wtcst1 minwt1.
+
+axiom kbo ltcst wtcst minwt aritycst.
+
+goal ~ (lesseq minwt (wtg wtcst minwt aritycst s)).

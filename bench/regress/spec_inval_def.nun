@@ -1,0 +1,85 @@
+# outcome: unknown
+# expected: unknown
+# status: sat
+
+val c : type.
+
+val ltcst : c -> c -> prop.
+
+data g :=
+  Cg c
+| Ag g g.
+
+val s : g.
+val t : g.
+val sH : g.
+
+rec headg : g -> c :=
+  forall (f : c). headg (Cg f) = f;
+  forall (s1 : g) (t1 : g). headg (Ag s1 t1) = headg s1.
+rec notsubg : (g -> g -> prop) -> g -> g -> prop :=
+  forall (ltg : g -> g -> prop) (s1 : g) (t1 : g). notsubg ltg s1 t1 = (match s1 with  | Cg uu11 -> true | Ag uu21 uu22 -> ltg uu21 t1 && ltg uu22 t1 end).
+
+data list :=
+  Nil
+| Cons g list.
+
+rec append : list -> list -> list :=
+  forall (ys : list). append Nil ys = ys;
+  forall (x : g) (xs : list) (ys : list). append (Cons x xs) ys = Cons x (append xs ys).
+rec argsg : g -> list :=
+  forall (uu : c). argsg (Cg uu) = Nil;
+  forall (s1 : g) (t1 : g). argsg (Ag s1 t1) = append (argsg s1) (Cons t1 Nil).
+rec rev : list -> list :=
+  rev Nil = Nil;
+  forall (x : g) (xs : list). rev (Cons x xs) = append (rev xs) (Cons x Nil).
+
+pred lexordeqp : (g -> g -> prop) -> list -> list -> prop :=
+  forall (lt : g -> g -> prop) (y : g) (ys : list). lexordeqp lt Nil (Cons y ys);
+  forall (lt : g -> g -> prop) (x : g) (y : g) (xs : list) (ys : list). lt x y => lexordeqp lt (Cons x xs) (Cons y ys);
+  forall (x : g) (y : g) (lt : g -> g -> prop) (xs : list) (ys : list). ((x = y) && lexordeqp lt xs ys) => lexordeqp lt (Cons x xs) (Cons y ys).
+
+copy set := (g -> prop) -> prop
+  abstract Collect
+  concrete rmember.
+copy set1 := (g -> g -> prop) -> prop
+  abstract Collect1
+  concrete rmember1.
+
+rec image : ((g -> g -> prop) -> g -> prop) -> set1 -> set :=
+  forall (f : (g -> g -> prop) -> g -> prop) (A : set1). image f A = Collect (fun (y : g -> prop). exists (x : g -> g -> prop). rmember1 A x && (y = f x)).
+
+copy set2 := prop -> prop
+  abstract Collect2
+  concrete rmember2.
+
+rec Inf : set2 -> prop :=
+  forall (A : set2). Inf A = (~ (rmember2 A false)).
+rec image1 : ((g -> prop) -> prop) -> set -> set2 :=
+  forall (f : (g -> prop) -> prop) (A : set). image1 f A = Collect2 (fun (y : prop). exists (x : g -> prop). rmember A x && (y = f x)).
+rec Inf1 : set -> g -> prop :=
+  forall (A : set). Inf1 A = (fun x. Inf (image1 (fun (f : g -> prop). f x) A)).
+rec Inf2 : set1 -> g -> g -> prop :=
+  forall (A : set1). Inf2 A = (fun x. Inf1 (image (fun (f : g -> g -> prop). f x) A)).
+rec transp : (c -> c -> prop) -> prop :=
+  forall (r : c -> c -> prop). transp r = (forall (x : c) (y : c) (z : c). (r x y && r y z) => r x z).
+rec irreflp : (c -> c -> prop) -> prop :=
+  forall (R : c -> c -> prop). irreflp R = (forall (a : c). ~ (R a a)).
+rec ltcst1 : (c -> c -> prop) -> prop :=
+  forall (ltcst2 : c -> c -> prop). ltcst1 ltcst2 = (irreflp ltcst2 && transp ltcst2 && (forall (f : c) (g1 : c). ltcst2 f g1 || ltcst2 g1 f || (f = g1))).
+rec lpo : (c -> c -> prop) -> prop :=
+  forall (ltcst2 : c -> c -> prop). lpo ltcst2 = ltcst1 ltcst2.
+rec lesseq : prop -> prop -> prop :=
+  forall (P : prop) (Q : prop). lesseq P Q = (P => Q).
+rec lesseq1 : (g -> prop) -> (g -> prop) -> prop :=
+  forall (f : g -> prop) (g1 : g -> prop). lesseq1 f g1 = (forall (x : g). lesseq (f x) (g1 x)).
+rec lesseq2 : (g -> g -> prop) -> (g -> g -> prop) -> prop :=
+  forall (f : g -> g -> prop) (g1 : g -> g -> prop). lesseq2 f g1 = (forall (x : g). lesseq1 (f x) (g1 x)).
+rec lfp : ((g -> g -> prop) -> g -> g -> prop) -> g -> g -> prop :=
+  forall (f : (g -> g -> prop) -> g -> g -> prop). lfp f = Inf2 (Collect1 (fun (u : g -> g -> prop). lesseq2 (f u) u)).
+rec ltg1 : (c -> c -> prop) -> g -> g -> prop :=
+  forall (ltcst2 : c -> c -> prop). ltg1 ltcst2 = lfp (fun (p : g -> g -> prop). fun (x1 : g). fun (x2 : g). (exists (s1 : g) (t1 : g) (u : g). (x1 = s1) && (x2 = Ag u t1) && (p s1 t1 || (s1 = t1))) || (exists (s1 : g) (t1 : g) (u : g). (x1 = s1) && (x2 = Ag t1 u) && (p s1 t1 || (s1 = t1))) || (exists (s1 : g) (t1 : g). (x1 = s1) && (x2 = t1) && ltcst2 (headg s1) (headg t1) && notsubg (fun (z : g). fun (za : g). p z za) s1 t1) || (exists (s1 : g) (t1 : g). (x1 = s1) && (x2 = t1) && (headg s1 = headg t1) && notsubg (fun (z : g). fun (za : g). p z za) s1 t1 && lexordeqp (fun (z : g). fun (za : g). p z za) (rev (argsg s1)) (rev (argsg t1)))).
+
+axiom lpo ltcst.
+
+goal ~ (ltg1 ltcst s t => (~ (ltg1 ltcst t sH))).

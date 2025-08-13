@@ -1,0 +1,9 @@
+# expected: sat
+
+# old outcome: sat with "_witness_of" for internal things (introduced by "unique")
+
+val a : type.
+
+val P : a -> prop.
+
+goal ~ (P (unique P)).

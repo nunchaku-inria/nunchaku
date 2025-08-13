@@ -1,0 +1,14 @@
+
+# EXPECT: FAIL
+# (f declared twice)
+
+val term : type.
+
+val a : term.
+
+val f : term -> term.
+
+val b : term.
+
+val f : term -> term.  # wrong!
+

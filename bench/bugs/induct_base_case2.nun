@@ -1,0 +1,11 @@
+# outcome: "ill-formed term: inductive predicate `dummy` requires at least one base case"
+# expected: unsat
+
+val a : type.
+
+pred dummy : a -> prop :=
+  forall (x : a). (forall (y : a). false => dummy y) => dummy x.
+
+val x : a.
+
+goal ~ (dummy x).

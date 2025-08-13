@@ -1,0 +1,20 @@
+
+# expected: sat
+
+data a := Zero | One.
+
+codata llist :=
+  LNil
+| LCons a llist.
+
+val x_1010_etc : llist.
+val x_0101_etc : llist.
+val x_100100_etc : llist.
+val x_0100100_etc : llist.
+val x_1100100_etc : llist.
+
+goal x_1010_etc = LCons One x_0101_etc
+  && x_0101_etc = LCons Zero x_1010_etc
+  && x_100100_etc = LCons One (LCons Zero (LCons Zero x_100100_etc))
+  && x_0100100_etc = LCons Zero x_100100_etc
+  && x_1100100_etc = LCons One x_100100_etc.

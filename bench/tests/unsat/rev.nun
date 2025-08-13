@@ -1,0 +1,17 @@
+
+# expect: unsat
+
+data foo := A foo | B foo | Nil.
+
+rec app : foo -> foo -> foo :=
+  forall x. app Nil x = x;
+  forall x y. app (B x) y = B (app x y);
+  forall x y. app (A x) y = A (app x y).
+
+rec rev : foo -> foo :=
+  rev Nil = Nil;
+  forall x. rev (A x) = app (rev x) (A Nil);
+  forall x. rev (B x) = app (rev x) (B Nil).
+
+goal rev (A (B Nil)) != B (A Nil).
+

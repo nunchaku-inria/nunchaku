@@ -1,0 +1,11 @@
+# outcome: sat
+# expected: sat
+
+val a : type.
+val b : type.
+
+val f : a -> b.
+val g : a -> b.
+val x : a.
+
+goal ~ ((exists (x1 : a). f x1 = g x1) => (f x = g x)).

@@ -1,0 +1,13 @@
+# expect: unsat
+
+data concT := C1 | C2 concT.
+
+copy absT := concT
+  subset (fun x. x = C1)
+  abstract a4u
+  concrete u4a.
+
+val a : absT.
+val b : absT.
+
+goal ~ (a = b).

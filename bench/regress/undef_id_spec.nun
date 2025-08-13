@@ -1,0 +1,89 @@
+# outcome: "Error: env: undefined ID `foldrt_spec_12`"
+# expected: unknown
+# status: unsat
+
+# It might be related to specialization.
+
+val at : type.
+
+rec idt : at -> at :=
+  idt = (fun xt. xt).
+
+data listt :=
+  Nilt
+| Const at listt.
+
+val yst : listt.
+
+rec compt : (at -> at) -> (at -> at) -> at -> at :=
+  forall (ft : at -> at) (gt : at -> at). compt ft gt = (fun xt. ft (gt xt)).
+rec foldrt : (at -> at -> at) -> listt -> at -> at :=
+  forall (ft : at -> at -> at). foldrt ft Nilt = idt;
+  forall (ft : at -> at -> at) (xt : at) (xst : listt). foldrt ft (Const xt xst) = compt (ft xt) (foldrt ft xst).
+
+data prodt :=
+  Pairt at at.
+data list1t :=
+  Nil1t
+| Cons1t prodt list1t.
+
+rec zipt : listt -> listt -> list1t :=
+  forall (xst : listt). zipt xst Nilt = Nil1t;
+  forall (xst : listt) (yt : at) (ys1t : listt). zipt xst (Const yt ys1t) = (match xst with  | Nilt -> Nil1t | Const uu21t uu22t -> Cons1t (Pairt uu21t yt) (zipt uu22t ys1t) end).
+rec mapt : (prodt -> at) -> list1t -> listt :=
+  forall (ft : prodt -> at). mapt ft Nil1t = Nilt;
+  forall (ft : prodt -> at) (x21t : prodt) (x22t : list1t). mapt ft (Cons1t x21t x22t) = Const (ft x21t) (mapt ft x22t).
+rec multttzerot : (at -> at -> at) -> at -> prop :=
+  forall (timest : at -> at -> at) (zerot : at). multttzerot timest zerot = ((forall (a1t : at). timest zerot a1t = zerot) && (forall (a1t : at). timest a1t zerot = zerot)).
+
+val plust : at -> at -> at.
+val zero1t : at.
+
+rec listsumt : listt -> at :=
+  forall (xst : listt). listsumt xst = foldrt plust xst zero1t.
+
+val minust : at -> at -> at.
+val times1t : at -> at -> at.
+
+rec iprodt : listt -> listt -> at :=
+  forall (xst : listt) (ys1t : listt). iprodt xst ys1t = listsumt (mapt (fun (uu2t : prodt). match uu2t with  | Pairt uu11t uu12t -> times1t uu11t uu12t end) (zipt xst ys1t)).
+rec semigroupttaddt : (at -> at -> at) -> prop :=
+  forall (plus1t : at -> at -> at). semigroupttaddt plus1t = (forall (a1t : at) (bt : at) (ct : at). plus1t (plus1t a1t bt) ct = plus1t a1t (plus1t bt ct)).
+
+val uminust : at -> at.
+
+rec semigroupttmultt : (at -> at -> at) -> prop :=
+  forall (timest : at -> at -> at). semigroupttmultt timest = (forall (a1t : at) (bt : at) (ct : at). timest (timest a1t bt) ct = timest a1t (timest bt ct)).
+rec semiringttaxiomst : (at -> at -> at) -> (at -> at -> at) -> prop :=
+  forall (plus1t : at -> at -> at) (timest : at -> at -> at). semiringttaxiomst plus1t timest = ((forall (a1t : at) (bt : at) (ct : at). timest (plus1t a1t bt) ct = plus1t (timest a1t ct) (timest bt ct)) && (forall (a1t : at) (bt : at) (ct : at). timest a1t (plus1t bt ct) = plus1t (timest a1t bt) (timest a1t ct))).
+rec groupttaddttaxiomst : (at -> at -> at) -> (at -> at -> at) -> at -> (at -> at) -> prop :=
+  forall (minus1t : at -> at -> at) (plus1t : at -> at -> at) (zerot : at) (uminus1t : at -> at). groupttaddttaxiomst minus1t plus1t zerot uminus1t = ((forall (a1t : at). plus1t (uminus1t a1t) a1t = zerot) && (forall (a1t : at) (bt : at). plus1t a1t (uminus1t bt) = minus1t a1t bt)).
+rec monoidttaddttaxiomst : (at -> at -> at) -> at -> prop :=
+  forall (plus1t : at -> at -> at) (zerot : at). monoidttaddttaxiomst plus1t zerot = ((forall (a1t : at). plus1t zerot a1t = a1t) && (forall (a1t : at). plus1t a1t zerot = a1t)).
+rec abttgroupttaddttaxiomst : (at -> at -> at) -> at -> (at -> at -> at) -> (at -> at) -> prop :=
+  forall (plus1t : at -> at -> at) (zerot : at) (minus1t : at -> at -> at) (uminus1t : at -> at). abttgroupttaddttaxiomst plus1t zerot minus1t uminus1t = ((forall (a1t : at). plus1t (uminus1t a1t) a1t = zerot) && (forall (a1t : at) (bt : at). minus1t a1t bt = plus1t a1t (uminus1t bt))).
+rec commttmonoidttaddttaxiomst : (at -> at -> at) -> at -> prop :=
+  forall (plus1t : at -> at -> at) (zerot : at). commttmonoidttaddttaxiomst plus1t zerot = (forall (a1t : at). plus1t zerot a1t = a1t).
+rec abttsemigroupttaddttaxiomst : (at -> at -> at) -> prop :=
+  forall (plus1t : at -> at -> at). abttsemigroupttaddttaxiomst plus1t = (forall (a1t : at) (bt : at). plus1t a1t bt = plus1t bt a1t).
+rec cancelttsemigroupttaddttaxiomst : (at -> at -> at) -> prop :=
+  forall (plus1t : at -> at -> at). cancelttsemigroupttaddttaxiomst plus1t = ((forall (a1t : at) (bt : at) (ct : at). (plus1t a1t bt = plus1t a1t ct) => (bt = ct)) && (forall (bt : at) (a1t : at) (ct : at). (plus1t bt a1t = plus1t ct a1t) => (bt = ct))).
+rec cancelttabttsemigroupttaddttaxiomst : (at -> at -> at) -> (at -> at -> at) -> prop :=
+  forall (plus1t : at -> at -> at) (minus1t : at -> at -> at). cancelttabttsemigroupttaddttaxiomst plus1t minus1t = ((forall (a1t : at) (bt : at). minus1t (plus1t a1t bt) a1t = bt) && (forall (a1t : at) (bt : at) (ct : at). minus1t (minus1t a1t bt) ct = minus1t a1t (plus1t bt ct))).
+
+axiom semigroupttaddt plust.
+axiom cancelttsemigroupttaddttaxiomst plust.
+axiom abttsemigroupttaddttaxiomst plust.
+axiom cancelttabttsemigroupttaddttaxiomst plust minust.
+axiom monoidttaddttaxiomst plust zero1t.
+axiom commttmonoidttaddttaxiomst plust zero1t.
+axiom semigroupttmultt times1t.
+axiom multttzerot times1t zero1t.
+axiom semiringttaxiomst plust times1t.
+axiom groupttaddttaxiomst minust plust zero1t uminust.
+axiom abttgroupttaddttaxiomst plust zero1t minust uminust.
+
+goal ~ (iprodt Nilt yst = zero1t).
+
+# eval zero1t.
+# eval iprodt Nilt yst.

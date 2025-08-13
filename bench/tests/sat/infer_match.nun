@@ -1,0 +1,35 @@
+# outcome: type error
+# expected: sat
+
+val a : type.
+val b : type.
+
+data lista :=
+  Nila
+| Consa a lista.
+
+rec appenda : lista -> lista -> lista :=
+  forall (xs : lista) (ys : lista). appenda xs ys = (match xs with | Nila -> ys | Consa z zs -> Consa z (appenda zs ys) end).
+rec reva : lista -> lista :=
+  forall (xs : lista). reva xs = (match xs with | Nila -> Nila | Consa z zs -> appenda (reva zs) (Consa z Nila) end).
+
+data listb :=
+  Nilb
+| Consb b listb.
+
+data pairab :=
+  Pair a b.
+
+data listab :=
+  Nilab
+| Consab pairab listab.
+
+val undefined : listab.
+
+rec zip : lista -> listb -> listab :=
+  forall (xs : lista) (ys : listb). zip xs ys = (match xs with | Nila -> match ys with | Nilb -> Nilab | Consb z zs -> undefined end | Consa za zas -> match ys with | Nilb -> undefined | Consb zb zbs -> Consab (Pair za zb) (zip zas zbs) end end).
+
+val xs : lista.
+val ys : listb.
+
+goal ~ (zip xs ys = zip (reva xs) ys).

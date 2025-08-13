@@ -1,0 +1,41 @@
+# outcome: unknown
+# expected: sat
+
+val a : type.
+
+val a1 : a.
+val b : a.
+val c : a.
+val d : a.
+
+copy set := a -> prop
+  abstract Collect
+  concrete rmember.
+
+rec insert : a -> set -> set :=
+  forall (a2 : a) (B : set). insert a2 B = Collect (fun (x : a). (x = a2) || rmember B x).
+
+data list :=
+  Nil
+| Cons a list.
+
+rec sup : prop -> prop -> prop :=
+  forall (P : prop) (Q : prop). sup P Q = (P || Q).
+rec sup1 : (a -> prop) -> (a -> prop) -> a -> prop :=
+  forall (f : a -> prop) (g : a -> prop). sup1 f g = (fun x. sup (f x) (g x)).
+rec sup2 : set -> set -> set :=
+  forall (A : set) (B : set). sup2 A B = Collect (sup1 (fun (x : a). rmember A x) (fun (x : a). rmember B x)).
+rec bot : prop :=
+  bot = false.
+rec bot1 : a -> prop :=
+  bot1 = (fun x. bot).
+rec bot2 : set :=
+  bot2 = Collect bot1.
+rec set1 : list -> set :=
+  set1 Nil = bot2;
+  forall (x21 : a) (x22 : list). set1 (Cons x21 x22) = sup2 (insert x21 bot2) (set1 x22).
+rec distinct : list -> prop :=
+  distinct Nil = true;
+  forall (x : a) (xs : list). distinct (Cons x xs) = ((~ (rmember (set1 xs) x)) && distinct xs).
+
+goal ~ (distinct (Cons a1 (Cons b (Cons c (Cons d Nil))))).

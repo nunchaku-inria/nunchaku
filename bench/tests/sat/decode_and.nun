@@ -1,0 +1,19 @@
+# outcome: decoding of `and` failed: expected a boolean condition
+# expected: SAT
+
+val a : type.
+
+data prod :=
+  Pair a a.
+
+val p : prod.
+
+data pd :=
+  Pd prod.
+
+rec fs : pd -> a :=
+  forall (a1 : a) (uu : a). fs (Pd (Pair a1 uu)) = a1.
+rec snd : prod -> a :=
+  forall (x1 : a) (x2 : a). snd (Pair x1 x2) = x2.
+
+goal ~ (fs (Pd p) = snd p).

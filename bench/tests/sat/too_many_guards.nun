@@ -1,0 +1,26 @@
+# outcome: sat with a duplicate guard (for the two "f n" subterms)
+# expected: sat without duplicate guard
+
+# the elimination of guards phase generates:
+#
+#            ((exists a/97:G_f.
+#                (select-S-0 (proj_G_g_0 a/95)) = (proj_G_f_0 a/97))
+#             && (exists a/98:G_f.
+#                   (select-S-0 (proj_G_g_0 a/95)) = (proj_G_f_0 a/98))
+#
+# It should notice that these two constraints are equal
+# (modulo alpha-renaming).
+
+data nat := Z | S nat.
+
+rec f : nat -> nat :=
+  f Z = Z;
+  forall n. f (S n) = S (f n).
+
+rec g : nat -> nat -> nat :=
+  forall m. g Z m = Z;
+  forall m n. g (S n) m = S (g (f n) (f n)).
+
+val x : nat.
+
+goal g (S Z) x = x.

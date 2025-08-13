@@ -1,0 +1,22 @@
+# expected: SAT
+
+data a2e := A | B | C | D | E.
+
+spec is_vowel : a2e -> prop :=
+  forall x. is_vowel x = (x = A || x = E).
+
+rec is_vowel_before_consonant : a2e -> a2e -> prop :=
+  forall x y.
+    is_vowel_before_consonant x y =
+    (if is_vowel x then
+       x = A && ~ is_vowel y
+     else
+       is_vowel y && is_vowel_before_consonant y x).
+
+val x : a2e.
+val y : a2e.
+val z : a2e.
+
+axiom ~ (x = z).
+
+goal ~ is_vowel_before_consonant x y && is_vowel_before_consonant y z.

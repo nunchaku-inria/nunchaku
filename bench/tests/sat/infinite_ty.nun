@@ -1,0 +1,17 @@
+# expect: sat
+
+# small example with an infinite type and its approximation
+
+val u : type [infinite].
+
+val alpha_u : type [approx_of u].
+
+val upcast : alpha_u -> u [upcast].
+
+val f : u -> u.
+
+axiom forall x. f (upcast x) = upcast x.
+
+goal exists y. f y = y.
+
+

@@ -1,0 +1,11 @@
+# outcome: term `(if ~ x then z else y) && if ~ x then true else true` is not in the first-order fragment
+# expect: sat
+
+val a : type.
+
+val p : a -> prop.
+val x : a.
+val y : a.
+val z : a.
+
+goal p (if x = x then y else z).

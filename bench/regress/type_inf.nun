@@ -1,0 +1,63 @@
+
+# goal is inferred as polymorphic on "b" (which is not used), and
+# monomorphization requires the goal to be monomorphic
+
+# expect: error
+
+val u : type.
+
+# PROPOSITIONAL LOGIC
+
+
+val TLA_true : u.
+val TLA_false : u.
+
+axiom TLA_true!=TLA_false.
+
+rec is_true : u -> prop :=
+    forall x. is_true x = (x = TLA_true).
+
+rec cond : u -> u -> u -> u :=
+    forall x t e. cond x t e =
+    	   (if (is_true x) then t else e).
+
+rec not : u -> u :=
+    forall x. not x = cond x TLA_false TLA_true.
+
+rec conj : u -> u -> u :=
+    forall x y. conj x y =
+    	   (if (x=TLA_false)||(y=TLA_false)
+	   then TLA_false
+	   else
+	      (if (x=TLA_true)
+	      then y
+	      else (conj x y))).
+
+rec disj : u -> u -> u :=
+    forall x y. disj x y =
+    	   (if (x=TLA_true)||(y=TLA_true)
+	   then TLA_true
+	   else
+	       (if (y=TLA_false)
+	       then x
+	       else
+		(if (x=TLA_false)
+		then y
+		else (disj x y)))).
+	       
+rec imp : u -> u -> u :=
+    forall x y. imp x y =
+    	   disj (not x) y.
+	   
+rec iff : u -> u -> u :=
+    forall x y. iff x y =
+    	   (conj (imp x y) (imp y x)).
+
+rec boolify : u -> u :=
+    forall x. boolify x = cond x TLA_true TLA_false.
+
+rec isBool : u -> prop :=
+    forall x. isBool x = ((boolify x) = x).
+
+
+goal forall a b. exists c. is_true (disj (conj c (disj (not a) c)) (conj a c)).

@@ -1,0 +1,33 @@
+
+# recursive rec
+# EXPECT: SAT
+
+data nat :=
+  | z
+  | s nat.
+
+rec even : nat -> prop :=
+  even z = true ;
+  forall n. (even (s n) = odd n)
+and odd : nat -> prop :=
+  odd z = false;
+  forall n. (odd (s n) = even n).
+
+data list a :=
+  | nil
+  | cons a (list a).
+
+# take n first elements of the list
+rec take : pi a. nat -> list a -> list a :=
+  forall l. take z l = nil;
+  forall n. take (s n) nil = nil;
+  forall n x l. take (s n) (cons x l) = cons x (take n l).
+
+# create an inhabited type
+val iota : type.
+val some_term : iota.
+
+# there is a list that has at least 3 elements
+goal exists l (x1:iota) x2 x3 l2.
+  take (s (s (s z))) l = cons x1 (cons x2 (cons x3 l2)).
+

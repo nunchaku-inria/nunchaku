@@ -1,0 +1,11 @@
+# expect: unknown
+# (ideally, even unsat, but this might be lost in translation)
+
+val a : type.
+
+pred dummy : a -> prop :=
+  forall (x : a). dummy x => dummy x.
+
+val x : a.
+
+goal dummy x.

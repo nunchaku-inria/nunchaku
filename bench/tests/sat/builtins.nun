@@ -1,0 +1,13 @@
+# outcome: CVC4 error (Parse Error: <stdin>:8.21: Expecting at least 2 arguments for operator 'BITVECTOR_CONCAT', found 1)
+# expected: sat
+
+# CVC4 has some built-in symbols, imported through "set-logic ALL_SUPPORTED".
+# To avoid conflicts, add a special symbol as a suffix to all names of functions and types,
+# e.g. "$" or "_" or whatever. (The "/" infix is already quite good for bound variables.)
+
+val t : type.
+val a : t.
+val concat : t -> t.
+val const : t -> t.
+
+goal concat a = a && const a = a.

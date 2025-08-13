@@ -1,0 +1,16 @@
+
+# expected: unsat
+# solver: kodkod
+
+# With kodkod, we know that card(option foo)=3, so we should not iterate
+# cardinalities further.
+
+data foo := A | B.
+
+data option a := None | Some a.
+
+val a : option foo.
+
+goal ~ (a = None || a = Some A || a = Some B).
+
+

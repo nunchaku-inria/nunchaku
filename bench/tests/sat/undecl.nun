@@ -1,0 +1,6 @@
+# expected: SAT
+
+rec bot : prop :=
+  bot = false.
+
+goal ~ bot.

@@ -1,0 +1,43 @@
+# outcome: unknown
+# expected: sat
+
+# This used to be "sat" but slow. Then the following comment was added
+# (presumably by Simon C.):
+#   (co)inductive types with need for mutualization
+#   This used to be quite slow but appears to have gotten faster (17 s -> 2.5 s?).
+# Now it has become unknown.
+
+# What is also very worrying about the example is that the one-point rule
+# should apply, namely the goal is equivalent to true (there always exists a
+# value n such that foo bar = n, where foo bar doesn't depend on n). We need
+# to add optimizations to Nunchaku for such cases (Nitpick had them too).
+
+# prelude: nat
+data nat :=
+  | zero
+  | succ nat.
+
+rec plus : nat -> nat -> nat :=
+  forall x. plus zero x = x;
+  forall x y. plus (succ x) y = succ (plus x y).
+
+# tree and list
+data list a :=
+  | nil
+  | cons a (list a).
+
+data tree :=
+  | node (list tree).  # need to specialize list_tree here
+
+rec size : tree -> nat :=
+  forall l. size (node l) = succ (size_list l)
+and size_list : list tree -> nat :=
+  size_list nil = zero;
+  forall t l. size_list (cons t l) = plus (size t) (size_list l).
+
+# compute size of some tree
+goal
+  let t0 := node nil in
+  let t := node (cons t0 (cons t0 nil)) in
+  let t2 := node (cons t (cons t nil)) in
+  exists n. size t2 = n.

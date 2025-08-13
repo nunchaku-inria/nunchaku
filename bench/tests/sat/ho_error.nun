@@ -1,0 +1,58 @@
+# outcome: "undefined ID: split"
+# expected: SAT
+
+val a : type.
+
+val x : a.
+
+data nat :=
+  zero
+| Suc nat.
+
+data aatree :=
+  X
+| N a nat aatree aatree.
+
+val t : aatree.
+
+rec left : aatree -> aatree :=
+  left X = X;
+  forall (uu : a) (uv : nat) (t : aatree) (uw : aatree). left (N uu uv t uw) = t.
+rec level : aatree -> nat :=
+  level X = zero;
+  forall (uu : a) (k : nat) (uv : aatree) (uw : aatree). level (N uu k uv uw) = k.
+rec right : aatree -> aatree :=
+  right X = X;
+  forall (uu : a) (uv : nat) (uw : aatree) (t : aatree). right (N uu uv uw t) = t.
+rec comp : (aatree -> aatree) -> (aatree -> aatree) -> aatree -> aatree :=
+  forall (f : aatree -> aatree) (g : aatree -> aatree). comp f g = (fun x1. f (g x1)).
+spec one : nat :=
+  one = Suc zero.
+rec lesseq : nat -> nat -> prop :=
+  forall (n : nat). lesseq zero n = true;
+  forall (m : nat) (n : nat). lesseq (Suc m) n = (match n with | zero -> false | Suc uu21 -> lesseq m uu21 end).
+rec less : nat -> nat -> prop :=
+  forall (n : nat) (m : nat). less n m = lesseq (Suc n) m.
+rec wf_ : aatree -> prop :=
+  wf_ X = true;
+  forall (uu : a) (k : nat) (t1 : aatree) (u : aatree). wf_ (N uu k t1 u) = ((if t1 = X then (k = one) && ((u = X) || ((level u = one) && (left u = X) && (right u = X))) else wf_ t1 && wf_ u && (~ (u = X)) && less (level t1) k && lesseq (level u) k && less (level (right u)) k)).
+
+val undefined : a.
+
+rec data_ : aatree -> a :=
+  data_ X = undefined;
+  forall (x1 : a) (uu : nat) (uv : aatree) (uw : aatree). data_ (N x1 uu uv uw) = x1.
+rec skew : aatree -> aatree :=
+  skew X = X;
+  forall (x1 : a) (k : nat) (t1 : aatree) (u : aatree). skew (N x1 k t1 u) = ((if (~ (t1 = X)) && (k = level t1) then N (data_ t1) k (left t1) (N x1 k (right t1) u) else N x1 k t1 u)).
+rec split : aatree -> aatree :=
+  split X = X;
+  forall (x1 : a) (k : nat) (t1 : aatree) (u : aatree). split (N x1 k t1 u) = ((if (~ (u = X)) && (k = level (right u)) then N (data_ u) (Suc k) (N x1 k t1 (left u)) (right u) else N x1 k t1 u)).
+
+val less2 : a -> a -> prop.
+
+rec insort : aatree -> a -> aatree :=
+  forall (x1 : a). insort X x1 = N x1 one X X;
+  forall (y : a) (k : nat) (t1 : aatree) (u : aatree) (x1 : a). insort (N y k t1 u) x1 = comp split skew (N y k ((if less2 x1 y then insort t1 x1 else t1)) ((if less2 y x1 then insort u x1 else u))).
+
+goal wf_ (insort t x).

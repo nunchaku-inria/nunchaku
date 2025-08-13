@@ -1,0 +1,15 @@
+# outcome: Assertion failed
+# expected: UNSAT
+
+# It would be nice if "prop" were considered a built-in datatype, with two constructors.
+# "match with" expressions should also be supported.
+
+val a : type.
+
+val x : a.
+
+rec mycase : a -> a -> prop -> a :=
+  forall (y : a) (z : a). mycase y z true = y;
+  forall (y : a) (z : a). mycase y z false = z.
+
+goal ~ (x = mycase x x true).

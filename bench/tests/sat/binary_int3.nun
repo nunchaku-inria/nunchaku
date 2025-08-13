@@ -1,0 +1,9 @@
+# expect: SAT
+
+# goal: `exists x. 10 * x^2 = 250`
+
+include "binary_int.nun".
+
+goal exists x. b_mult x x = b_mult b_5 b_5 && b_positive x.
+#goal exists x. b_mult (b_mult x x) b_10 = b_plus (b_plus b_100 b_100) b_50 && b_positive x.
+

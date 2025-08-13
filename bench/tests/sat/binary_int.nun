@@ -1,0 +1,125 @@
+
+# expect: SAT
+
+# Binary Integers
+
+# strictly positive numbers
+data pos_num :=
+  | B_one
+  | Bit1 pos_num
+  | Bit0 pos_num.
+
+data b_int :=
+  | B_0
+  | B_pos pos_num
+  | B_neg pos_num.
+
+rec b_0 : b_int := b_0 = B_0.
+rec b_1 : b_int := b_1 = B_pos B_one.
+rec b_2 : b_int := b_2 = B_pos (Bit0 B_one).
+rec b_3 : b_int := b_3 = B_pos (Bit1 B_one).
+rec b_4 : b_int := b_4 = B_pos (Bit0 (Bit0 B_one)).
+rec b_5 : b_int := b_5 = B_pos (Bit1 (Bit0 B_one)).
+
+rec b_minus_1 : b_int := b_minus_1  = B_neg B_one.
+
+# addition of positive numbers
+rec pos_plus : pos_num -> pos_num -> pos_num :=
+  pos_plus B_one B_one = Bit0 B_one;
+  forall x. pos_plus B_one (Bit0 x) = Bit1 x; # 1+2x=(2x+1)
+  forall x. pos_plus B_one (Bit1 x) = Bit0 (pos_plus B_one x); # 1+(2x+1) = 2(x+1)
+  forall x. pos_plus (Bit0 x) B_one = Bit1 x;
+  forall x y. pos_plus (Bit0 x) (Bit0 y) = Bit0 (pos_plus x y); # 2x+2y = 2(x+y)
+  forall x y. pos_plus (Bit0 x) (Bit1 y) = Bit1 (pos_plus x y); # 2x+(2y+1) = 2(x+y)+1
+  forall x. pos_plus (Bit1 x) B_one = Bit0 (pos_plus B_one x);
+  forall x y. pos_plus (Bit1 x) (Bit0 y) = Bit1 (pos_plus x y); # (2x+1)+2y = 2(x+y)+1
+  forall x y. pos_plus (Bit1 x) (Bit1 y) =
+    Bit0 (pos_plus B_one (pos_plus x y)). # (2x+1)+(2y+1) = 2(x+y+1)
+
+rec pos_succ : pos_num -> pos_num :=
+  forall x. pos_succ x = pos_plus B_one x.
+
+rec pos_pred : pos_num -> pos_num :=
+  pos_pred B_one = B_one;
+  pos_pred (Bit0 B_one) = B_one;
+  forall x. pos_pred (Bit0 x) = Bit1 (pos_pred x); # 2x - 1 = 2(x-1)+1
+  forall x. pos_pred (Bit1 x) = Bit0 x.
+
+# negation
+rec b_opp : b_int -> b_int :=
+  b_opp B_0 = B_0;
+  forall x. b_opp (B_pos x) = B_neg x;
+  forall x. b_opp (B_neg x) = B_pos x.
+
+# multiplication
+rec pos_mult : pos_num -> pos_num -> pos_num :=
+  forall x. pos_mult B_one x = x;
+  forall x. pos_mult x B_one = x;
+  forall x y. pos_mult (Bit0 x) (Bit0 y) = Bit0 (Bit0 (pos_mult x y));
+  forall x y. pos_mult (Bit0 x) (Bit1 y) = Bit0 (pos_mult x (Bit1 y)); # (2x)(2y+1) = 2(x(2y+1))
+  forall x y. pos_mult (Bit1 x) (Bit0 y) = Bit0 (pos_mult (Bit1 x) y);
+  forall x y. pos_mult (Bit1 x) (Bit1 y) =
+    Bit1 (pos_plus x (pos_plus y (Bit0 (pos_mult x y)))). # (2x+1)(2y+1) = 2(x+y+2xy)+1
+
+# subtraction of positive numbers
+rec pos_sub : pos_num -> pos_num -> b_int :=
+  pos_sub B_one B_one = B_0;
+  forall x. pos_sub (Bit1 x) B_one = B_pos (Bit0 x);
+  forall x. pos_sub (Bit0 x) B_one = b_plus (B_pos x) (pos_sub x B_one); # 2x-1 = x+(x-1)
+  forall x. pos_sub B_one (Bit1 x) = B_neg (Bit0 x);
+  forall x. pos_sub B_one (Bit0 x) = b_opp (b_plus (B_pos x) (pos_sub x B_one));
+  forall x y. pos_sub (Bit0 x) (Bit0 y) = pos_sub x y;
+  forall x y. pos_sub (Bit1 x) (Bit1 y) = pos_sub x y;
+  forall x y. pos_sub (Bit1 x) (Bit0 y) = b_plus b_1 (pos_sub x y); # (2x+1)-2y = x-y+1
+  forall x y. pos_sub (Bit0 x) (Bit1 y) = b_plus b_minus_1 (pos_sub x y) # 2x-(2y+1)=(x-y)-1
+and b_plus : b_int -> b_int -> b_int :=
+  forall x. b_plus B_0 x = x;
+  forall x. b_plus x B_0 = x;
+  forall x y. b_plus (B_pos x) (B_pos y) = B_pos (pos_plus x y);
+  forall x y. b_plus (B_neg x) (B_neg y) = B_neg (pos_plus x y);
+  forall x y. b_plus (B_pos x) (B_neg y) = pos_sub x y;
+  forall x y. b_plus (B_neg x) (B_pos y) = pos_sub y x.
+
+rec b_mult : b_int -> b_int -> b_int :=
+  forall x. b_mult B_0 x = B_0;
+  forall x. b_mult x B_0 = B_0;
+  forall x y. b_mult (B_pos x) (B_pos y) = B_pos (pos_mult x y);
+  forall x y. b_mult (B_neg x) (B_neg y) = B_pos (pos_mult x y);
+  forall x y. b_mult (B_pos x) (B_neg y) = B_neg (pos_mult x y);
+  forall x y. b_mult (B_neg x) (B_pos y) = B_neg (pos_mult x y).
+
+rec b_10 : b_int := b_10 = b_plus b_5 b_5.
+rec b_20 : b_int := b_20 = b_plus b_10 b_10.
+rec b_50 : b_int := b_50 = b_plus b_10 (b_plus b_20 b_20).
+rec b_100 : b_int := b_100 = b_plus b_50 b_50.
+
+# subtraction
+rec b_minus : b_int -> b_int -> b_int :=
+  forall x y. b_minus x y = b_plus x (b_opp y).
+
+rec b_succ : b_int -> b_int :=
+  forall x. b_succ x = b_plus b_1 x.
+
+rec b_pred : b_int -> b_int :=
+  forall x. b_pred x = b_plus b_minus_1 x.
+
+# >= 0
+rec b_positive : b_int -> prop :=
+  b_positive B_0 = true;
+  forall x. b_positive (B_pos x) = true;
+  forall x. b_positive (B_neg x) = false.
+
+rec b_strictly_positive : b_int -> prop :=
+  b_strictly_positive B_0 = false;
+  forall x. b_strictly_positive (B_pos x) = true;
+  forall x. b_strictly_positive (B_neg x) = false.
+
+rec b_gt : b_int -> b_int -> prop :=
+  forall x y. b_gt x y = b_strictly_positive (b_minus x y).
+
+rec b_geq : b_int -> b_int -> prop :=
+  forall x y. b_geq x y = b_positive (b_minus x y).
+
+rec b_lt : b_int -> b_int -> prop := forall x y. b_lt x y = b_gt y x.
+
+rec b_leq : b_int -> b_int -> prop := forall x y. b_leq x y = b_geq y x.

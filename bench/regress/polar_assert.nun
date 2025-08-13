@@ -1,0 +1,12 @@
+# outcome: "File "src/transformations/Polarize.ml", line 373, characters 22-28: Assertion failed"
+# expected: unknown
+# status: unsat
+
+# Prototypes won't help here.
+
+data a := Z | S a.
+
+rec P : a -> prop :=
+  forall x. P x = (x = S (S (S (S Z)))).
+
+goal ~ P (choice P).

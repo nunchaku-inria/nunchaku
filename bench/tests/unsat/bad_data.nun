@@ -1,0 +1,6 @@
+# expect: unsat
+
+data a := A.
+
+goal exists (x:a) y. x != y.
+

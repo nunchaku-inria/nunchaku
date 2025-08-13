@@ -1,0 +1,26 @@
+# outcome: sat, but without "alphabet-" in the SMT problem
+# expected: sat
+
+# "alphabet" occurs with positive polarity in the goal, and the right-hand
+# sides of the "rec" equations of a symbol marked "+" should be done with a
+# positive polarity, not with unpolarized. There is no reason why "alphabet-"
+# should appear in the problem.
+
+val a : type.
+
+val b : a.
+
+data nat :=
+  zero
+| Suc nat.
+data tree :=
+  Leaf nat a
+| Node nat tree tree.
+
+val t : tree.
+
+rec alphabet : tree -> a -> prop :=
+  forall (w : nat) (a1 : a) (b1 : a). alphabet (Leaf w a1) b1 = (a1 = b1);
+  forall (w : nat) (t1 : tree) (t2 : tree) (a1 : a). alphabet (Node w t1 t2) a1 = (alphabet t1 a1 || alphabet t2 a1).
+
+goal alphabet t b.

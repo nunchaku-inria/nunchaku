@@ -1,0 +1,44 @@
+# outcome: Error: in polarization
+# expected: unsat or unknown
+
+# Rest of error message:
+#   expected decision tree for comp3_spec_1- to yield only true/false
+#   but branch `~ and` yields `~ and`
+
+data nat :=
+  zero
+| Suc nat.
+
+rec plus : nat -> nat -> nat :=
+  forall (n : nat). plus zero n = n;
+  forall (m : nat) (n : nat). plus (Suc m) n = Suc (plus m n).
+
+data prod :=
+  Pair nat nat.
+
+rec intrel : prod -> prod -> prop :=
+  intrel = ((fun uu1. fun uu2. match uu2 with | Pair uu11 uu12 -> uu1 uu11 uu12 end) (fun (x : nat). fun (y : nat). (fun (uu1 : nat -> nat -> prop). fun (uu2 : prod). match uu2 with | Pair uu11 uu12 -> uu1 uu11 uu12 end) (fun (u : nat). fun (v : nat). plus x v = plus u y))).
+
+copy int := prod
+  partial_quotient intrel
+  abstract AbsInteg
+  concrete RepInteg.
+
+val x1 : int.
+
+val lesseq : nat -> nat -> prop.
+rec less : nat -> nat -> prop :=
+  forall (n : nat) (m : nat). less n m = lesseq (Suc n) m.
+rec comp2 : (prod -> int -> prop) -> (int -> prod) -> int -> int -> prop :=
+  forall (f : prod -> int -> prop) (g : int -> prod). comp2 f g = (fun x. f (g x)).
+val mapfun : (int -> prod) -> (prop -> prop) -> (prod -> prop) -> int -> prop.
+rec comp3 : ((prod -> prop) -> int -> prop) -> (prod -> prod -> prop) -> prod -> int -> prop :=
+  forall (f : (prod -> prop) -> int -> prop) (g : prod -> prod -> prop). comp3 f g = (fun x. f (g x)).
+rec mapfun1 : (int -> prod) -> ((prod -> prop) -> int -> prop) -> (prod -> prod -> prop) -> int -> int -> prop :=
+  forall (f : int -> prod) (g : (prod -> prop) -> int -> prop) (h : prod -> prod -> prop). mapfun1 f g h = comp2 (comp3 g h) f.
+rec id : prop -> prop :=
+  forall x. id x = x.
+rec lessint : int -> int -> prop :=
+  lessint = mapfun1 RepInteg (mapfun RepInteg id) ((fun (uu1 : nat -> nat -> prod -> prop). fun (uu2 : prod). match uu2 with | Pair uu11 uu12 -> uu1 uu11 uu12 end) (fun (x : nat). fun (y : nat). (fun (uu1 : nat -> nat -> prop). fun (uu2 : prod). match uu2 with | Pair uu11 uu12 -> uu1 uu11 uu12 end) (fun (u : nat). fun (v : nat). less (plus x v) (plus u y)))).
+
+goal ~ (lessint x1 x1).

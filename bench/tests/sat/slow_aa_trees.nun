@@ -1,0 +1,38 @@
+# outcome: SAT after 40 s or so, and a too large countermodel
+# expected: SAT  faster, e.g. 1 s (cf. Nitpick)
+
+data nat :=
+  zero
+| Suc nat.
+
+val x : nat.
+
+data tree :=
+  X
+| N nat nat tree tree.
+
+val t : tree.
+
+rec left : tree -> tree :=
+  left X = X;
+  forall (uu : nat) (uv : nat) (l : tree) (uw : tree). left (N uu uv l uw) = l.
+rec level : tree -> nat :=
+  level X = zero;
+  forall (uu : nat) (k : nat) (uv : tree) (uw : tree). level (N uu k uv uw) = k.
+rec right : tree -> tree :=
+  right X = X;
+  forall (uu : nat) (uv : nat) (uw : tree) (r : tree). right (N uu uv uw r) = r.
+rec leq : nat -> nat -> prop :=
+  forall (n : nat). leq zero n = true;
+  forall (m : nat) (n : nat). leq (Suc m) n = (match n with | zero -> false | Suc uu21 -> leq m uu21 end).
+rec wfx : tree -> prop :=
+  wfx X = true;
+  forall (uu : nat) (k : nat) (t1 : tree) (u : tree). wfx (N uu k t1 u) = ((if t1 = X then (k = Suc zero) && ((u = X) || ((level u = Suc zero) && (left u = X) && (right u = X))) else wfx t1 && wfx u && (~ (u = X)) && leq (Suc (level t1)) k && leq (level u) k && leq (Suc (level (right u))) k)).
+rec insort : tree -> nat -> tree :=
+  forall (x1 : nat). insort X x1 = N x1 (Suc zero) X X;
+  forall (y : nat) (k : nat) (t1 : tree) (u : tree) (x1 : nat). insort (N y k t1 u) x1 = N y k ((if leq (Suc x1) y then insort t1 x1 else t1)) ((if leq (Suc y) x1 then insort u x1 else u)).
+
+# axiom t = N (Suc zero) (Suc zero) X X.
+# axiom x = zero.
+
+goal ~ (wfx t => wfx (insort t x)).

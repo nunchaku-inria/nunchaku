@@ -1,0 +1,23 @@
+# outcome: outputs "TIMEOUT" immediately
+# expected: UNSAT
+
+val a : type.
+val b : type.
+val c : type.
+val d : type.
+val e : type.
+val f : type.
+val g : type.
+
+data prod :=
+  Pair a b.
+
+val g1 : prod -> c.
+
+data prod1 :=
+  Pair1 e f.
+
+val f1 : prod -> c -> d -> prod1 -> g.
+val h : prod -> d -> prod1.
+
+goal ~ (forall (u : prod). exists (v : c). forall (w : d). exists (x : prod1). f1 u v w x = f1 u (g1 u) w (h u w)).

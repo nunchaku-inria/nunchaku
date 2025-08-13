@@ -1,0 +1,6 @@
+# expect: UNSAT
+
+val a : prop.
+val b : prop.
+
+goal ~ (a => b => a).

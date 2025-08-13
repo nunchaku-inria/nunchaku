@@ -1,0 +1,28 @@
+
+# expect: SAT
+
+# Peano natural numbers
+
+data nat :=
+  | Z
+  | S nat.
+
+rec nat_plus : nat -> nat -> nat :=
+  forall x. nat_plus Z x = x;
+  forall x y. nat_plus (S x) y = S (nat_plus x y).
+
+rec nat_mult : nat -> nat -> nat :=
+  forall x. nat_mult Z x = Z;
+  forall x y. nat_mult (S x) y = nat_plus y (nat_mult x y).
+
+# (partial) predecessor
+rec nat_pred : nat -> nat :=
+  nat_pred Z = Z;
+  forall x. nat_pred (S x) = x.
+
+rec nat_2 : nat := nat_2 = S (S Z).
+rec nat_3 : nat := nat_3 = S (S (S Z)).
+rec nat_4 : nat := nat_4 = S (S (S (S Z))).
+rec nat_5 : nat := nat_5 = S (S (S (S (S Z)))).
+rec nat_10 : nat := nat_10 = nat_mult nat_5 nat_2.
+rec nat_100 : nat := nat_100 = nat_mult nat_10 nat_10.

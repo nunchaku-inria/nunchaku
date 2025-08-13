@@ -1,0 +1,14 @@
+
+# expected: sat
+
+# old outcome: sat with "if v_0/93 = fun x/43:nat. rmember P x/43 then" in the model
+
+val nat : type.
+
+copy set := nat -> prop
+  abstract Collect
+  concrete rmember.
+
+val P : set.
+
+goal ~ (rmember P (choice (fun (x : nat). rmember P x))).

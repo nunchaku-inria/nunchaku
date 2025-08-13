@@ -1,0 +1,20 @@
+# expected: sat
+ 
+# old outcome: sat with "anon_fun"s that are used nowhere in the model
+
+# Apparently they arose from lambda-lifting, but this seems quite gratuitous
+# because there's a beta-redex before lambda-lifting. Specialization should
+# perhaps beta-reduce? Or shouldn't this be an invariant each phase tries to
+# perserve? (I'm not sure; I'm just asking.)
+
+val u : type.
+
+val mem : u -> u -> prop.
+
+rec Mem : u -> u -> prop :=
+  forall x y. Mem x y = unique_unsafe (fun P. P = mem x y).
+
+val v : u.
+val w : u.
+
+goal Mem v w.

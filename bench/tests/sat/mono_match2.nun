@@ -1,0 +1,38 @@
+# outcome: File "src/transformations/Monomorphization.ml", line 206, characters 40-46: Assertion failed
+# expected: sat
+
+### Also make sure that intrel_'s definition is properly beta-reduced
+
+data nat_ :=
+  zero_
+| Suc_ nat_.
+
+rec plus_ : nat_ -> nat_ -> nat_ :=
+  forall (n_ : nat_). plus_ zero_ n_ = n_;
+  forall (m_ : nat_) (n_ : nat_). plus_ (Suc_ m_) n_ = Suc_ (plus_ m_ n_).
+
+data prod_ :=
+  Pair_ nat_ nat_.
+
+rec intrel_ : prod_ -> prod_ -> prop :=
+  intrel_ = ((fun uu1_. fun uu2_. match uu2_ with  | Pair_ uu11_ uu12_ -> uu1_ uu11_ uu12_ end) (fun (x_ : nat_). fun (y_ : nat_). (fun (uu1_ : nat_ -> nat_ -> prop). fun (uu2_ : prod_). match uu2_ with  | Pair_ uu11_ uu12_ -> uu1_ uu11_ uu12_ end) (fun (u_ : nat_). fun (v_ : nat_). plus_ x_ v_ = plus_ u_ y_))).
+
+copy int_ := prod_
+  partial_quotient intrel_
+  abstract Abs_Integ_
+  concrete Rep_Integ_.
+
+val x1_ : int_.
+val z_ : int_.
+
+data unit_ :=
+  Unity_.
+data point2d__ext_ :=
+  point2d__ext1_ int_ int_ unit_.
+
+val p_ : point2d__ext_.
+
+rec xc__update_ : (int_ -> int_) -> point2d__ext_ -> point2d__ext_ :=
+  forall (xc_H_ : int_ -> int_) (xc_ : int_) (yc_ : int_) (more_ : unit_). xc__update_ xc_H_ (point2d__ext1_ xc_ yc_ more_) = point2d__ext1_ (xc_H_ xc_) yc_ more_.
+
+goal ~ (point2d__ext1_ x1_ z_ Unity_ = xc__update_ (fun (uu_ : int_). x1_) p_).

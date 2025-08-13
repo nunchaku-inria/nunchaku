@@ -1,0 +1,19 @@
+
+# EXPECT: UNSAT
+
+val a : type.
+
+data list :=
+  Nil
+| Cons a list.
+
+val x : a.
+val ys : list.
+
+rec append : list -> list -> list :=
+  forall ys. append Nil ys = ys;
+  forall x xs ys. append (Cons x xs) ys = Cons x (append xs ys).
+
+goal ~ (append (Cons x Nil) ys = Cons x ys).
+
+

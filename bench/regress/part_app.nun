@@ -1,0 +1,23 @@
+# outcome: defined function insert is partially applied (2 arguments, expected 3)
+# expected: sat
+
+val a : type.
+
+data list :=
+  Nil
+| Cons a list.
+
+val bot : a -> prop.
+val sup : (a -> prop) -> (a -> prop) -> a -> prop.
+val a2 : a.
+val b : a.
+
+rec insert : a -> (a -> prop) -> a -> prop :=
+  forall Va B1. insert Va B1 = (fun Vx2. Vx2 = Va || B1 Vx2).
+rec set : list -> a -> prop :=
+  set Nil = bot;
+  forall Vx21 Vx221. set (Cons Vx21 Vx221) = sup (insert Vx21 bot) (set Vx221).
+rec distinct : list -> prop :=
+  forall Vx Vxs1. distinct (Cons Vx Vxs1) = (~ (set Vxs1 Vx)).
+
+goal distinct (Cons a2 (Cons b Nil)).

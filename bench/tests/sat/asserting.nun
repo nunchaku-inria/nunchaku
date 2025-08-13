@@ -1,0 +1,16 @@
+# outcome: parse error
+# expected: sat
+
+# "asserting" would be nice for some applications. Alternative: a special
+# nullary symbol "unreachable" of type "pi a. a". Effectively, we have
+#   (t asserting p) = (if p then t else unreachable)
+# where T is the type of t.
+
+data nat := Z | Suc nat.
+
+val p : nat -> prop.
+
+goal exists x. p x asserting ~ (x = Z).
+# or:
+# goal (if x = Z then unreachable else x).
+# goal (if x = Z then @unreachable nat else x).

@@ -1,0 +1,12 @@
+# expected: sat
+
+# old outcome: type error
+# was caused by the partial application of a constructor.
+
+data nat :=
+  zero
+| Suc nat.
+
+val P : (nat -> nat) -> prop.
+
+goal ~ P Suc.

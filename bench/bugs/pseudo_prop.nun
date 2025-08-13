@@ -1,0 +1,14 @@
+# expected: sat
+# outcome: sat with "pseudo-prop" in model with Kodkod
+
+val a : type.
+
+val b : prop.
+val x : a.
+val y : a.
+
+rec f2 : a -> a -> prop -> a :=
+  forall (x1 : a) (uu : a). f2 x1 uu true = x1;
+  forall (uv : a) (y1 : a). f2 uv y1 false = y1.
+
+goal ~ (x = f2 x y b).

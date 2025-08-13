@@ -1,0 +1,19 @@
+# Expect: sat
+
+val a : type.
+
+data list :=
+  Nil
+| Cons a list.
+
+val bot : a -> prop.
+val sup : (a -> prop) -> (a -> prop) -> a -> prop.
+val a2 : a.
+val b : a.
+
+rec set : list -> a -> prop :=
+  set Nil = bot.
+rec distinct : list -> prop :=
+  forall Vx Vxs1. distinct (Cons Vx Vxs1) = (~ (set Vxs1 Vx)).
+
+goal distinct (Cons a2 (Cons b Nil)) => false.

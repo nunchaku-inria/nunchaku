@@ -1,0 +1,31 @@
+
+# expect: SAT
+
+# some sanity checks about ternary ints
+
+include "ternary_int.nun".
+include "nat.nun".
+
+rec z_to_nat : z -> nat :=
+  z_to_nat Z_0 = Z;
+  forall x. z_to_nat (Z_3 x) = nat_mult nat_3 (z_to_nat x);
+  forall x. z_to_nat (Z_3p1 x) = S (nat_mult nat_3 (z_to_nat x));
+  forall x. z_to_nat (Z_3m1 x) = nat_pred (nat_mult nat_3 (z_to_nat x)).
+
+rec nat_to_z : nat -> z :=
+  nat_to_z Z = Z_0;
+  forall x. nat_to_z (S x) = z_succ (nat_to_z x).
+
+goal
+  nat_10 = S (S (S (S (S (S (S (S (S (S Z))))))))) &&
+  nat_to_z (nat_mult nat_2 nat_10) = z_20 &&
+  nat_to_z (nat_plus (nat_mult nat_2 nat_10) nat_5) = z_mult z_5 z_5 &&
+  nat_to_z nat_100 = z_100 &&
+  nat_to_z (S nat_2) = mk_z_3 z_1 &&
+  nat_mult nat_2 nat_10 = z_to_nat z_20 &&
+  nat_plus (nat_mult nat_2 nat_10) nat_5 = z_to_nat (z_mult z_5 z_5) &&
+  nat_100 = z_to_nat z_100 &&
+  S nat_2 = z_to_nat (mk_z_3 z_1) &&
+  true.
+
+

@@ -1,0 +1,21 @@
+# expected: sat with "fun" instead (lambda!)
+# outcome: sat with "$to_a_to_a_prop_0" atom
+
+val a : type.
+
+val x : a.
+val y : a.
+val lt : a -> a -> prop.
+
+data list :=
+  Nil
+| Cons a list.
+
+val xs : list.
+val ys : list.
+
+pred lexordeqp : (a -> a -> prop) -> list -> list -> prop :=
+  forall (lt1 : a -> a -> prop) (x1 : a) (y1 : a) (xs1 : list) (ys1 : list). lt1 x1 y1 => lexordeqp lt1 (Cons x1 xs1) (Cons y1 ys1);
+  forall (x1 : a) (y1 : a) (lt1 : a -> a -> prop) (xs1 : list) (ys1 : list). ((x1 = y1) && lexordeqp lt1 xs1 ys1) => lexordeqp lt1 (Cons x1 xs1) (Cons y1 ys1).
+
+goal ~ (lexordeqp lt (Cons x xs) (Cons y ys) = (lt x y && lexordeqp lt xs ys)).

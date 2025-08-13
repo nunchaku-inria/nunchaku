@@ -1,0 +1,22 @@
+
+# stub about representation of De Bruijn indexed-terms
+# expect: sat
+
+data nat := Z | S nat.
+
+data term :=
+  | Var nat
+  | Lam term
+  | App term term.
+
+rec bump : nat -> (nat -> term) -> nat -> term :=
+  forall n rho. bump n rho Z = rho n;
+  forall n rho m. bump n rho (S m) = bump (S n) rho m.
+
+rec subst : (nat -> term) -> term -> term :=
+  forall rho j. subst rho (Var j) = rho j;
+  forall rho t. subst rho (Lam t) = Lam (subst (bump (S Z) rho) t);
+  forall rho t u. subst rho (App t u) = App (subst rho t) (subst rho u).
+
+goal exists t rho. subst rho t != t.
+

@@ -1,0 +1,15 @@
+# outcome: could not parse `zero.nun`: lexing error: lexer fails on char '0'
+# expected: ERROR line and col numbers
+
+data nat :=
+  zero
+| Suc nat.
+data tm :=
+  Var nat
+| Lam tm
+| App tm tm.
+
+val t : tm.
+val _092_060sigma_062 : tm -> tm.
+
+goal _092_060sigma_062 t = t.

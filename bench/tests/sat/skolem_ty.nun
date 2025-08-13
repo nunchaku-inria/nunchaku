@@ -1,0 +1,11 @@
+
+# expect: sat
+
+data list a := nil | cons a (list a).
+
+rec append : pi a. list a -> list a -> list a :=
+  forall l. append nil l = l;
+  forall x l1 l2. append (cons x l1) l2 = cons x (append l1 l2).
+
+goal exists (a:type) (l1:list a) l2.
+  l1 != nil && l2 != nil && append l1 l2 != append l2 l1.

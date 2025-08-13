@@ -1,0 +1,25 @@
+
+# expected: unsat
+
+# used to be wrongly found "sat"
+
+data nat :=
+  Zero
+| One.
+
+rec always_one : nat -> nat :=
+  forall n. always_one n = One.
+
+pred [wf] is_one_v1 : nat -> prop :=
+  forall (n : nat). is_one_v1 n => is_one_v1 (always_one n).
+
+rec is_one_v2 : nat -> prop :=
+  forall (n : nat). is_one_v2 n =
+    (if exists m. n = always_one m then
+       is_one_v2 n
+     else
+       false).
+
+val n : nat.
+
+goal is_one_v1 Zero.

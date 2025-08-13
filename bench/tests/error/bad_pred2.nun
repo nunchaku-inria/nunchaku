@@ -1,0 +1,13 @@
+# ill-formed inductive predicate
+# expect: error
+
+val u : type.
+val setminus : u -> u -> u.
+
+# no base case
+pred is_in : u -> u -> prop :=
+  forall a b x.
+    ((is_in a x) && (~(is_in b x)))
+    => (is_in (setminus a b) x).
+
+goal exists x a b. ~(is_in a x) && (is_in b x).

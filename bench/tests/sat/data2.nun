@@ -1,0 +1,15 @@
+
+# monomorphization trick
+# EXPECT: SAT
+
+data a :=
+    | A
+and b :=
+    | B a.
+
+val p : a -> prop.
+val q : b -> prop.
+
+axiom p A.
+
+goal (q (B A)).

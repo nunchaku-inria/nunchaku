@@ -1,0 +1,34 @@
+# outcome: unknown
+# expected: sat
+
+# Similar to, but more complicated than, "to_model.nun". It used to be sat
+# but report an ugly model. Now it has become unknown somehow.
+
+val b : type.
+
+val a : b.
+val b1 : b.
+
+data prod :=
+  Pair b b.
+
+copy set := prod -> prop
+  abstract Collect
+  concrete rmember.
+
+rec insert : prod -> set -> set :=
+  forall (a1 : prod) (B : set). insert a1 B = Collect (fun (x : prod). (x = a1) || rmember B x).
+
+pred [wf] conversep : (b -> b -> prop) -> b -> b -> prop :=
+  forall (r : b -> b -> prop) (a1 : b) (b2 : b). r a1 b2 => conversep r b2 a1.
+
+rec converse : set -> set :=
+  converse = (fun r. Collect (fun (uu2 : prod). match uu2 with  | Pair uu11 uu12 -> conversep (fun (xb : b). fun (xc : b). rmember r (Pair xb xc)) uu11 uu12 end)).
+rec bot : prop :=
+  bot = false.
+rec bot1 : prod -> prop :=
+  bot1 = (fun x. bot).
+rec bot2 : set :=
+  bot2 = Collect bot1.
+
+goal ~ (converse (insert (Pair a b1) bot2) = insert (Pair b1 b1) bot2).

@@ -1,0 +1,28 @@
+# expected: sat
+
+# old outcome: sat, with last line of model ("val one := Suc zero.") too far to the left
+
+val a : type.
+
+data nat :=
+  zero
+| Suc nat.
+
+rec one : nat :=
+  one = Suc zero.
+rec plus : nat -> nat -> nat :=
+  forall (n : nat). plus zero n = n;
+  forall (m : nat) (n : nat). plus (Suc m) n = Suc (plus m n).
+
+data list :=
+  Nil
+| Cons a list.
+
+val xs : list.
+val ys : list.
+
+rec size : list -> nat :=
+  size Nil = zero;
+  forall (x21 : a) (x22 : list). size (Cons x21 x22) = plus (size x22) (Suc zero).
+
+goal ~ (((size xs = one) && (size ys = one)) => (xs = ys)).

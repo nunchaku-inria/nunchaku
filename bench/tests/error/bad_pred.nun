@@ -1,0 +1,11 @@
+
+# ill-formed inductive predicate
+# expect: error
+
+data nat := z | s nat .
+
+val something : prop
+
+pred even : nat -> prop :=
+  forall n. even n || something.
+

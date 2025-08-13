@@ -1,0 +1,34 @@
+
+# basic tests for inductive predicates
+# expect: SAT
+
+data nat := z | s nat .
+
+pred [wf] even : nat -> prop :=
+  even z;
+  forall n. even n => even (s (s n)).
+
+# not exactly well-founded
+pred odd : nat -> prop :=
+  odd (s z);
+  forall n. odd n => odd n;
+  forall n. odd n => odd (s (s n)).
+
+val iota : type.
+val t : iota.
+
+data list a :=
+  | nil
+  | cons a (list a).
+
+# polymorphic
+pred has_len
+  : pi a. list a -> nat -> prop
+  :=
+  has_len nil z;
+  forall n x l. has_len l n => has_len (cons x l) (s n).
+
+goal even (s (s (s (s z))))
+  && odd (s (s (s (s (s z)))))
+  && has_len (cons t (cons t nil)) (s (s z)).
+
