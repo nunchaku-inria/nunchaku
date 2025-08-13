@@ -5,8 +5,7 @@
 <benchmark tool=".nunchaku"
            timelimit="2s"
            hardtimelimit="3s"
-           memlimit="1000 MB"
-           cpuCores="1">
+           memlimit="1000 MB">
 
 <rundefinition name="cvc4">
   <option name="-s">cvc4</option>
