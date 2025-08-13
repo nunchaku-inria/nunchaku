@@ -38,8 +38,13 @@ jobs:
         chmod +x cvc4-1.6-x86_64-linux-opt
         sudo mv cvc4-1.6-x86_64-linux-opt /usr/local/bin/cvc4
 
+    - name: Install benchexec
+      if: matrix.ocaml-compiler == '5.03.x'
+      run: |
+        sudo add-apt-repository ppa:sosy-lab/benchmarking
+        sudo apt-get install -y benchexec
+
     - name: Run benchmark
       if: matrix.ocaml-compiler == '5.03.x'
       run:
-        eval $(opam env)
-        make bench
+        opam exec -- make bench
