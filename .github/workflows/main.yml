@@ -47,4 +47,15 @@ jobs:
     - name: Run benchmark
       if: matrix.ocaml-compiler == '5.03.x'
       run:
+        export PYTHONPATH="$(pwd)/bench/benchexec/:$PYTHONPATH"
         opam exec -- make bench
+        cd bench/benchexec
+        table-generator results/config.*.results.cvc4.xml.bz2
+
+    - name: Upload benchmark results
+      if: matrix.ocaml-compiler == '5.03.x'
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results
+        path: bench/benchexec/results/
+        retention-days: 30
