@@ -801,7 +801,13 @@ module Convert(Term : TermTyped.S) = struct
   (* convert [t] into a prop, call [f], generalize [t] *)
   let convert_prop_ ?(before_generalize=CCFun.const ()) ~env t =
     let t = convert_term_exn ~env t in
-    unify_in_ctx_ ~stack:[] (U.ty_exn t) prop;
+    (try
+      unify_in_ctx_ ~stack:[] (U.ty_exn t) prop;
+    with TypeError(msg, stack) ->
+      type_errorf ~stack
+        "@[<hv2>Error while trying to convert the term:@,@[<v4> %a@]@,to prop: %s]"
+        P.pp t msg);
+
     before_generalize t;
     let t, _ = generalize ~close:`Forall t in
     check_prenex_types_ ~loc:(Term.loc t) t;
