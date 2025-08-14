@@ -3,8 +3,8 @@
 
 (** {1 Introduce Guards}
 
-    This transformation removes "assuming" and "asserting" constructs and
-    replaces them by boolean guards and assertions *)
+    This transformation removes "asserting" constructs and replaces them by boolean guards and
+    assertions *)
 
 open Nunchaku_core
 
@@ -75,7 +75,7 @@ let is_prop ~state t =
   let ty = T.ty_exn ~env:state.env t in
   T.ty_is_Prop ty
 
-(* Translate term/formula recursively by removing asserting/assuming
+(* Translate term/formula recursively by removing asserting
    constructs.
    @returns new term, list of assertions, list of assumptions *)
 let rec tr_term ~state ~pol (t:term) : term * term guard =

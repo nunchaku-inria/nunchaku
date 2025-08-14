@@ -3,8 +3,8 @@
 
 (** {1 Introduce Guards}
 
-    This transformation removes "assuming" and "asserting" constructs and
-    replaces them by boolean guards and assertions *)
+    This transformation removes "asserting" constructs and replaces them by boolean guards and
+    assertions *)
 
 open Nunchaku_core
 
