@@ -1,0 +1,12 @@
+
+# expected: sat with "mu (v_0/56:llist). LCons $a_0 v_0/56"
+
+val a : type.
+
+codata llist :=
+  LNil
+| LCons a llist.
+
+val xs : llist.
+
+goal exists x. xs = LCons x xs.

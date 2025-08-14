@@ -1,0 +1,32 @@
+# expected: unsat (quickly)
+# outcome: unsat (with --timeout 60) or unknown
+
+# What would help here is an invocation of CVC4 without "--finite-model-find", as one of the
+# components of the parallel strategy. In fact, in that strategy, we could (1) drop the encoding of
+# "rec" functions, encoding them as normal axioms (without alpha types and gamma functions); and
+# (2) enable induction. This might complicate your code, though, due to the alternate pipeline.
+# Let me know if this makes things too messy, in which case we do this differently. (This is also
+# connected to the use of the solver as a prover, so perhaps this is a completely different mode of
+# operation of nunchaku, where lemmas are also included as axioms and a different flag on the
+# command line.)
+
+val z : type.
+
+val a : z.
+val b : z.
+val c : z.
+val d : z.
+val e : z.
+
+data list :=
+  Nil
+| Cons z list.
+
+rec append : list -> list -> list :=
+  forall (ys : list). append Nil ys = ys;
+  forall (x : z) (xs : list) (ys : list). append (Cons x xs) ys = Cons x (append xs ys).
+rec rev : list -> list :=
+  rev Nil = Nil;
+  forall (x : z) (xs : list). rev (Cons x xs) = append (rev xs) (Cons x Nil).
+
+goal ~ (rev (Cons a (Cons b (Cons c (Cons d (Cons e Nil))))) = Cons e (Cons d (Cons c (Cons b (Cons a Nil))))).

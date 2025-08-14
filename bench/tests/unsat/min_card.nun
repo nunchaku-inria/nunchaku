@@ -1,0 +1,12 @@
+
+# test for minimum cardinality bound
+# expect: unsat
+
+val i : type [min_card 3].
+
+val a : i.
+val b : i.
+
+# at most 2 elements, clashes with constraint on i
+axiom forall x. x = a || x = b.
+

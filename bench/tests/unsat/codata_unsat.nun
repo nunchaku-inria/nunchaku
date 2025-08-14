@@ -1,0 +1,21 @@
+
+# testing equality between codata
+# expect: unsat
+
+val a : type.
+
+val a0 : a.
+
+codata astream :=
+  | LNil
+  | LCons a astream.
+
+goal
+  exists x y.
+    x = LCons a0 (LCons a0 x) &&
+    y = LCons a0 y &&
+    x != y.
+
+
+
+

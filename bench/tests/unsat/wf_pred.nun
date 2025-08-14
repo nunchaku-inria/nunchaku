@@ -1,0 +1,25 @@
+
+
+
+# NOTE (Simon C.) this is found to be unsat by at least CVC4
+# old status wat: "error because not well founded"
+# but we do not check for well-foundedness
+
+# expected: unsat
+# outcome: sat
+
+# See "wf_pred0.nun" first.
+
+data nat :=
+  Zero
+| Suc nat.
+
+rec add2 : nat -> nat :=
+  forall (n : nat). add2 n = Suc (Suc n).
+
+pred [wf] always_false : nat -> prop :=
+  forall (n : nat). always_false n => always_false (add2 n).
+
+val n : nat.
+
+goal always_false Zero.

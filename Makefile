@@ -32,4 +32,7 @@ reindent: ocp-indent
 	@find src '(' -name '*.ml' -or -name '*.mli' ')' -print0 | xargs -0 echo "reindenting: "
 	@find src '(' -name '*.ml' -or -name '*.mli' ')' -print0 | xargs -0 ocp-indent -i
 
-.PHONY: reindent ocp-indent watch
+bench: build
+	make -C bench bench
+
+.PHONY: reindent ocp-indent watch bench

@@ -1,0 +1,20 @@
+# outcome: sat
+# expected: unsat
+
+# The "exists_eq" predicate should always return "true". However, Nunchaku
+# wrongly skolemizes the right-hand side of the "if and only if", even though
+# it is unpolarized.
+
+# In contrast, with "spec" instead of "rec", the "if and only if" is expanded.
+# 
+
+val a : type.
+
+data list :=
+  Nil
+| Cons a list.
+
+rec exists_eq : list -> prop :=
+  forall (xs : list). exists_eq xs = (exists (zs : list). zs = xs).
+
+goal ~ (exists_eq Nil).

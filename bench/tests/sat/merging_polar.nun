@@ -1,0 +1,20 @@
+# outcome: SAT with wrongly printed model
+#  SAT: {
+#    val y := D.
+#    val x := E.
+#    val is_vowel :=
+#      fun v_0/54.
+#        if v_0/54 = E then true  else if v_0/53 = D then false  else ?__.
+#  }
+# expected: SAT with correctly printed model
+#   (v_0/53 and v_0/54 must be the same variable)
+
+data a2e := A | B | C | D | E.
+
+rec is_vowel : a2e -> prop :=
+  forall x. is_vowel x = (x = A || x = E).
+
+val x : a2e.
+val y : a2e.
+
+goal is_vowel x && ~ is_vowel y.

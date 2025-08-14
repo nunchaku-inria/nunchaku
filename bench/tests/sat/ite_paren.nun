@@ -1,0 +1,9 @@
+# expect: sat
+
+val a : type.
+
+val x : prop.
+val y : prop.
+val z : prop.
+
+goal (if x then y else z) && (if ~ x then y else y) && ~ x && (if ~ x then y else z).

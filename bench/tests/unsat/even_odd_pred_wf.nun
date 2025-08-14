@@ -1,0 +1,15 @@
+# expected: unknown (unsat)
+
+data nat :=
+  zero
+| Suc nat.
+
+pred [wf] even : nat -> prop :=
+  even zero;
+  forall (n : nat). odd n => even (Suc n)
+and odd : nat -> prop :=
+  forall (n : nat). even n => odd (Suc n).
+
+val m : nat.
+
+goal even m && odd m.

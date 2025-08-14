@@ -1,0 +1,48 @@
+
+# expect: SAT
+
+# See https://github.com/nunchaku-inria/nunchaku/issues/29
+# works well with smbc but not cvc4
+
+val K : type.
+val V : type.
+
+data tuple := pair K V.
+
+data list :=
+  nil
+| cons tuple list.
+
+data option :=
+  None
+| Some V.
+
+rec get : list -> K -> option :=
+  forall k. get nil k = None;
+  forall ki vi k rest. get (cons (pair ki vi) rest) k =
+    (if (ki = k) then Some vi else get rest k).
+
+rec filter : (tuple -> prop) -> list -> list :=
+  forall f. filter f nil = nil;
+  forall f h t. filter f (cons h t) =
+    (if (f h) then (cons h (filter f t)) else (filter f t)).
+
+rec remove : list -> K -> list :=
+  forall l k. remove l k = filter (fun t.
+     match t with
+     | pair ki vi -> ki != k
+     end)
+     l.
+
+rec put : list -> K -> V -> list :=
+  put = (fun l k v. cons (pair k v) (remove l k)).
+
+val l: list.
+val k1: K.
+val k2: K.
+val v: V.
+
+# Missing hypothesis:
+# axiom k1 != k2.
+
+goal ~ (get (put l k1 v) k2 = get l k2).

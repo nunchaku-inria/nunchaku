@@ -1,0 +1,12 @@
+
+# bound on cardinality
+# expected: unsat
+
+val i : type [max_card 2].
+
+val i1 : i.
+val i2 : i.
+val i3 : i.
+
+axiom (i1 != i2 && i2 != i3 && i1 != i3).
+

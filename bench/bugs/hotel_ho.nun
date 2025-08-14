@@ -1,0 +1,147 @@
+# outcome: type error (with Kodkod, CVC4, Paradox) and exception (with SMBC)
+# expected: sat
+
+# Details:
+# Error: type error
+#   when applying (to room prop)
+#   on eta_0/1882 : room
+#   in subst {}: cannot apply this type
+
+val room : type.
+val guest : type.
+val key : type.
+
+val g : guest.
+val r : room.
+
+data unit :=
+  Unity.
+
+copy set := key -> prop
+  abstract Collect
+  concrete rmember.
+
+rec insert : key -> set -> set :=
+  forall (a : key) (B : set). insert a B = Collect (fun (x : key). (x = a) || rmember B x).
+
+copy set1 := room -> prop
+  abstract Collect1
+  concrete rmember1.
+
+rec image : (room -> key) -> set1 -> set :=
+  forall (f : room -> key) (A : set1). image f A = Collect (fun (y : key). exists (x : room). rmember1 A x && (y = f x)).
+rec injon : (room -> key) -> set1 -> prop :=
+  forall (f : room -> key) (A : set1). injon f A = (forall (x : room). rmember1 A x => (forall (xa : room). (rmember1 A xa && (f x = f xa)) => (x = xa))).
+
+copy set2 := guest -> prop
+  abstract Collect2
+  concrete rmember2.
+
+rec insert1 : guest -> set2 -> set2 :=
+  forall (a : guest) (B : set2). insert1 a B = Collect2 (fun (x : guest). (x = a) || rmember2 B x).
+rec funupd : (room -> set2) -> room -> set2 -> room -> set2 :=
+  forall (f : room -> set2) (a : room) (b : set2). funupd f a b = (fun x. (if x = a then b else f x)).
+
+data option :=
+  None
+| Some guest.
+
+rec funupd1 : (room -> option) -> room -> option -> room -> option :=
+  forall (f : room -> option) (a : room) (b : option). funupd1 f a b = (fun x. (if x = a then b else f x)).
+rec sup : prop -> prop -> prop :=
+  forall (P : prop) (Q : prop). sup P Q = (P || Q).
+rec sup1 : (key -> prop) -> (key -> prop) -> key -> prop :=
+  forall (f : key -> prop) (g1 : key -> prop). sup1 f g1 = (fun x. sup (f x) (g1 x)).
+rec sup2 : set -> set -> set :=
+  forall (A : set) (B : set). sup2 A B = Collect (sup1 (fun (x : key). rmember A x) (fun (x : key). rmember B x)).
+rec sup3 : (guest -> prop) -> (guest -> prop) -> guest -> prop :=
+  forall (f : guest -> prop) (g1 : guest -> prop). sup3 f g1 = (fun x. sup (f x) (g1 x)).
+rec sup4 : set2 -> set2 -> set2 :=
+  forall (A : set2) (B : set2). sup4 A B = Collect2 (sup3 (fun (x : guest). rmember2 A x) (fun (x : guest). rmember2 B x)).
+rec bot : prop :=
+  bot = false.
+rec bot1 : key -> prop :=
+  bot1 = (fun x. bot).
+rec bot2 : key -> key -> prop :=
+  bot2 = (fun x. bot1).
+rec bot3 : guest -> prop :=
+  bot3 = (fun x. bot).
+rec top : prop :=
+  top = true.
+rec top1 : room -> prop :=
+  top1 = (fun x. top).
+rec minus : prop -> prop -> prop :=
+  forall (A : prop) (B : prop). minus A B = (A && (~ B)).
+rec minus1 : (guest -> prop) -> (guest -> prop) -> guest -> prop :=
+  forall (A : guest -> prop) (B : guest -> prop). minus1 A B = (fun x. minus (A x) (B x)).
+rec minus2 : set2 -> set2 -> set2 :=
+  forall (A : set2) (B : set2). minus2 A B = Collect2 (minus1 (fun (x : guest). rmember2 A x) (fun (x : guest). rmember2 B x)).
+rec funupd2 : (room -> prop) -> room -> prop -> room -> prop :=
+  forall (f : room -> prop) (a : room) (b : prop). funupd2 f a b = (fun x. (if x = a then b else f x)).
+rec funupd3 : (room -> key) -> room -> key -> room -> key :=
+  forall (f : room -> key) (a : room) (b : key). funupd3 f a b = (fun x. (if x = a then b else f x)).
+
+data prod :=
+  Pair key key.
+
+copy set3 := prod -> prop
+  abstract Collect3
+  concrete rmember3.
+
+data stateext :=
+  stateext1 (room -> option) (room -> key) set (guest -> set3) (room -> key) (room -> set2) (room -> prop) unit.
+
+val s : stateext.
+
+rec isin : stateext -> room -> set2 :=
+  forall (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). isin (stateext1 owns currk issued cards roomk isin1 safe more) = isin1.
+rec owns1 : stateext -> room -> option :=
+  forall (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). owns1 (stateext1 owns currk issued cards roomk isin1 safe more) = owns.
+rec safe1 : stateext -> room -> prop :=
+  forall (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). safe1 (stateext1 owns currk issued cards roomk isin1 safe more) = safe.
+rec cards1 : stateext -> guest -> set3 :=
+  forall (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). cards1 (stateext1 owns currk issued cards roomk isin1 safe more) = cards.
+rec currk1 : stateext -> room -> key :=
+  forall (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). currk1 (stateext1 owns currk issued cards roomk isin1 safe more) = currk.
+rec roomk1 : stateext -> room -> key :=
+  forall (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). roomk1 (stateext1 owns currk issued cards roomk isin1 safe more) = roomk.
+rec issued1 : stateext -> set :=
+  forall (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). issued1 (stateext1 owns currk issued cards roomk isin1 safe more) = issued.
+
+copy set4 := stateext -> prop
+  abstract Collect4
+  concrete rmember4.
+
+rec isinupdate : ((room -> set2) -> room -> set2) -> stateext -> stateext :=
+  forall (isinH : (room -> set2) -> room -> set2) (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). isinupdate isinH (stateext1 owns currk issued cards roomk isin1 safe more) = stateext1 owns currk issued cards roomk (isinH isin1) safe more.
+rec ownsupdate : ((room -> option) -> room -> option) -> stateext -> stateext :=
+  forall (ownsH : (room -> option) -> room -> option) (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). ownsupdate ownsH (stateext1 owns currk issued cards roomk isin1 safe more) = stateext1 (ownsH owns) currk issued cards roomk isin1 safe more.
+rec safeupdate : ((room -> prop) -> room -> prop) -> stateext -> stateext :=
+  forall (safeH : (room -> prop) -> room -> prop) (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). safeupdate safeH (stateext1 owns currk issued cards roomk isin1 safe more) = stateext1 owns currk issued cards roomk isin1 (safeH safe) more.
+rec cardsupdate : ((guest -> set3) -> guest -> set3) -> stateext -> stateext :=
+  forall (cardsH : (guest -> set3) -> guest -> set3) (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). cardsupdate cardsH (stateext1 owns currk issued cards roomk isin1 safe more) = stateext1 owns currk issued (cardsH cards) roomk isin1 safe more.
+rec currkupdate : ((room -> key) -> room -> key) -> stateext -> stateext :=
+  forall (currkH : (room -> key) -> room -> key) (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). currkupdate currkH (stateext1 owns currk issued cards roomk isin1 safe more) = stateext1 owns (currkH currk) issued cards roomk isin1 safe more.
+rec roomkupdate : ((room -> key) -> room -> key) -> stateext -> stateext :=
+  forall (roomkH : (room -> key) -> room -> key) (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). roomkupdate roomkH (stateext1 owns currk issued cards roomk isin1 safe more) = stateext1 owns currk issued cards (roomkH roomk) isin1 safe more.
+rec issuedupdate : (set -> set) -> stateext -> stateext :=
+  forall (issuedH : set -> set) (owns : room -> option) (currk : room -> key) (issued : set) (cards : guest -> set3) (roomk : room -> key) (isin1 : room -> set2) (safe : room -> prop) (more : unit). issuedupdate issuedH (stateext1 owns currk issued cards roomk isin1 safe more) = stateext1 owns currk (issuedH issued) cards roomk isin1 safe more.
+rec insert2 : prod -> set3 -> set3 :=
+  forall (a : prod) (B : set3). insert2 a B = Collect3 (fun (x : prod). (x = a) || rmember3 B x).
+rec sup5 : (prod -> prop) -> (prod -> prop) -> prod -> prop :=
+  forall (f : prod -> prop) (g1 : prod -> prop). sup5 f g1 = (fun x. sup (f x) (g1 x)).
+rec sup6 : set3 -> set3 -> set3 :=
+  forall (A : set3) (B : set3). sup6 A B = Collect3 (sup5 (fun (x : prod). rmember3 A x) (fun (x : prod). rmember3 B x)).
+rec funupd4 : (guest -> set3) -> guest -> set3 -> guest -> set3 :=
+  forall (f : guest -> set3) (a : guest) (b : set3). funupd4 f a b = (fun x. (if x = a then b else f x)).
+
+pred reachp : stateext -> prop :=
+  forall (initk : room -> key). injon initk (Collect1 (fun (x : room). top1 x)) => reachp (stateext1 (fun (r1 : room). None) initk (image initk (Collect1 (fun (x : room). top1 x))) (fun (g1 : guest). Collect3 ((fun (uu1 : key -> key -> prop). fun (uu2 : prod). match uu2 with | Pair uu11 uu12 -> uu1 uu11 uu12 end) (fun (x : key). fun (xa : key). bot2 x xa))) initk (fun (r1 : room). Collect2 (fun (x : guest). bot3 x)) (fun (r1 : room). true) Unity);
+  forall (s1 : stateext) (k : key) (r1 : room) (g1 : guest). (reachp s1 && (~ (rmember (issued1 s1) k))) => reachp (safeupdate (fun (uu3 : room -> prop). funupd2 (safe1 s1) r1 false) (ownsupdate (fun (uu3 : room -> option). funupd1 (owns1 s1) r1 (Some g1)) (cardsupdate (fun (uu3 : guest -> set3). funupd4 (cards1 s1) g1 (sup6 (cards1 s1 g1) (insert2 (Pair (currk1 s1 r1) k) (Collect3 ((fun (uu1 : key -> key -> prop). fun (uu2 : prod). match uu2 with | Pair uu11 uu12 -> uu1 uu11 uu12 end) (fun (x : key). fun (xa : key). bot2 x xa)))))) (issuedupdate (fun (uu3 : set). sup2 (issued1 s1) (insert k (Collect (fun (x : key). bot1 x)))) (currkupdate (fun (uu3 : room -> key). funupd3 (currk1 s1) r1 k) s1)))));
+  forall (s1 : stateext) (g1 : guest) (k : key) (kH : key) (r1 : room). (reachp s1 && rmember3 (cards1 s1 g1) (Pair k kH) && rmember (insert k (insert kH (Collect (fun (x : key). bot1 x)))) (roomk1 s1 r1)) => reachp (safeupdate (fun (uu3 : room -> prop). funupd2 (safe1 s1) r1 (((owns1 s1 r1 = Some g1) && (isin s1 r1 = Collect2 (fun (x : guest). bot3 x))) || safe1 s1 r1)) (roomkupdate (fun (uu3 : room -> key). funupd3 (roomk1 s1) r1 kH) (isinupdate (fun (uu3 : room -> set2). funupd (isin s1) r1 (sup4 (isin s1 r1) (insert1 g1 (Collect2 (fun (x : guest). bot3 x))))) s1)));
+  forall (s1 : stateext) (r1 : room) (g1 : guest). (reachp s1 && rmember2 (isin s1 r1) g1) => reachp (isinupdate (fun (uu3 : room -> set2). funupd (isin s1) r1 (minus2 (isin s1 r1) (insert1 g1 (Collect2 (fun (x : guest). bot3 x))))) s1).
+
+rec reach : set4 :=
+  reach = Collect4 (fun (x : stateext). reachp x).
+
+goal ~ ((rmember4 reach s && safe1 s r && rmember2 (isin s r) g) => (owns1 s r = Some g)).

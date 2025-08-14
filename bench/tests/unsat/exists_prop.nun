@@ -1,0 +1,4 @@
+# outcome: Fatal error: exception invalid term `?ty_P_/1`: remaining meta-variable
+# expect: unsat
+
+goal ~ (exists P_. P_).

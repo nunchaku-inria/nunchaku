@@ -1,0 +1,20 @@
+
+# expected: sat
+
+val u : type.
+
+val mem : u -> u -> prop.
+
+rec Mem : u -> u -> prop :=
+  forall x y. Mem x y = unique_unsafe (fun P. P = mem x y).
+# Version without "unique_unsafe":
+#  Mem = mem.
+
+rec union : u -> u -> u :=
+  forall A B. union A B = unique_unsafe (fun C. forall x. Mem x C = (Mem x A || Mem x B)).
+
+val x : u.
+val y : u.
+val z : u.
+
+goal ~ (x = y) && ~ (y = z) && ~ (x = z) && x = union y z.

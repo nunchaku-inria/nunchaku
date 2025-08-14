@@ -1,0 +1,15 @@
+
+# test choice operator
+# expect: sat
+
+val i : type.
+val p : i -> prop.
+val q : i -> prop.
+
+axiom exists x. q x.
+axiom forall x y. q x && q y => x=y.
+
+goal p (choice p) && q (unique q).
+
+
+

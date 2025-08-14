@@ -1,0 +1,40 @@
+
+# expected: sat
+
+# old outcome: a model with @uc_tree_... constants
+
+data a := Zero | One.
+
+spec swap : a -> a :=
+  swap Zero = One;
+  swap One = Zero.
+
+codata tree :=
+  Node a tree tree.
+
+rec cnst : a -> tree :=
+  forall x. cnst x = Node x (cnst x) (cnst x).
+
+rec alt : a -> tree :=
+  forall x. alt x = Node x (alt (swap x)) (alt (swap x)).
+
+val all0 : tree.
+axiom all0 = cnst Zero.
+
+val all1 : tree.
+axiom all1 = cnst One.
+
+val alt01 : tree.
+axiom alt01 = alt Zero.
+
+val alt10 : tree.
+axiom alt10 = alt One.
+
+val odd1 : tree.
+val odd2 : tree.
+val odd3 : tree.
+axiom odd1 = Node Zero odd2 odd3.
+axiom odd2 = Node One (Node One odd1 odd1) (Node One odd2 odd3).
+axiom odd3 = Node Zero odd2 (Node Zero odd1 odd3).
+
+goal true.

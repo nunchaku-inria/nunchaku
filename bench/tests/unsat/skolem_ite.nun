@@ -1,0 +1,7 @@
+# expected: UNSAT
+
+val a : type.
+
+val x : a.
+
+goal if exists (y : a). x = y then false else true.

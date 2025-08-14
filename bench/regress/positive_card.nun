@@ -1,0 +1,8 @@
+# expected: unknown or unsat
+# status: unsat
+
+val a : type [min_card 1].
+
+val I : (a -> prop) -> a -> prop.
+
+goal ~ ((I = (fun x. x)) => (unique = (fun x. unique (I x)))).

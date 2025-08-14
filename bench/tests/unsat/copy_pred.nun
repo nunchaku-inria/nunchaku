@@ -1,0 +1,20 @@
+
+# Test for copy with predicate:
+# there are two "small nat" (1,2), which violates the goal, hence unsat
+
+# expect: UNSAT
+
+data nat := Z | S nat.
+
+pred[wf] is_small : nat -> prop :=
+  is_small Z;
+  is_small (S Z).
+
+copy small_nat := nat
+  subset is_small
+  abstract nat_to_small
+  concrete nat_of_small.
+
+goal
+  exists a b (c:small_nat).
+    a != b && b != c && a != c.

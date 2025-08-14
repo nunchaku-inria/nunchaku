@@ -1,0 +1,23 @@
+
+# expected: sat
+
+# old outcome:
+# The "elim_quant" phase transforms "rot C = D" into "false".
+#
+# 1. It should be "true", not "false".
+# 2. Why does "elim_quant" perform such simplifications? Shouldn't it be
+#    some other function's job?
+
+data x :=
+  A
+| B
+| C
+| D.
+
+rec rot : x -> x :=
+  rot A = B;
+  rot B = C;
+  rot C = D;
+  rot D = A.
+
+goal rot C = D.

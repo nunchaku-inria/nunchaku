@@ -1,0 +1,8 @@
+# expect: SAT
+
+# goal: `exists x. x + 10 > 10*2`
+
+include "ternary_int.nun".
+
+goal exists x. z_gt (z_plus x z_10) (z_mult z_2 z_10).
+

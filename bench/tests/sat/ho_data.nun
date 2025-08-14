@@ -1,0 +1,37 @@
+
+# test a `data` containing functions
+# expect: sat
+
+data fun_comp a :=
+  | ID
+  | Comp (a -> a) (fun_comp a).
+
+rec eval_comp : pi a. fun_comp a -> a -> a :=
+  forall x. eval_comp ID x = x;
+  forall f comp x. eval_comp (Comp f comp) x = f (eval_comp comp x).
+
+data nat :=
+  | Z
+  | S nat.
+
+rec succ : nat -> nat :=
+  forall n. succ n = S n.
+
+rec add : nat -> nat -> nat :=
+  forall x. add Z x = x;
+  forall x y. add (S x) y = S (add x y).
+
+rec mult : nat -> nat -> nat :=
+  forall x. mult Z x = Z;
+  forall x y. mult (S x) y = add y (mult x y).
+
+val two : nat.
+val six : nat.
+
+axiom two = S (S Z).
+axiom six = S (S (S (S (S (S Z))))).
+
+# find "g" such that "g o (×2) 0 = 6"
+goal exists c. eval_comp (Comp (mult two) c) Z = six.
+
+

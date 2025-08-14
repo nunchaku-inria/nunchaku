@@ -1,0 +1,28 @@
+
+# designed for testing specialization
+# expect: sat
+
+data nat := Z | S nat.
+
+# `exp2 n f x` is `f^n x`
+# cannot specialize on function arg nor nat, but possible on last arg
+rec exp2 : pi a. nat -> (a -> a) -> a -> a :=
+  forall f x. exp2 Z f x = f x;
+  forall f x n. exp2 (S n) f x = exp2 n (fun x. f (f x)) x.
+
+data tree := E | N tree tree.
+
+goal
+  # try to find `f = fun t. N t t` and `t = E`
+  (exists f t.
+    exp2 (S (S (S Z))) f t
+      = N
+          (N (N E E) (N E E))
+          (N (N E E) (N E E))
+  )
+  &&
+  # try to find `n = (3+3)+(3+3)`. The λ here should be specialized.
+  (exists n. exp2 (S (S Z)) (fun x. S (S (S x))) Z = n).
+
+
+

@@ -1,0 +1,10 @@
+# outcome: a model with "?__ (g v_1/109)" in it
+# expected: SAT a model with "?__ v_1/109" (no "g")
+
+val a : type.
+val b : type.
+
+val f : a -> b.
+val g : a -> b.
+
+goal ~ ((exists (x : a). f x = g x) => (f = g)).

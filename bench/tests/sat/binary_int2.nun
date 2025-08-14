@@ -1,0 +1,8 @@
+# expect: SAT
+
+# goal: `exists x. x + 100 > 100*2`
+
+include "binary_int.nun".
+
+goal exists x. b_gt (b_plus x b_100) (b_mult b_2 b_100).
+

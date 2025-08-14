@@ -1,0 +1,16 @@
+# expected: unknown
+# status: unsat
+# outcome: sat
+
+# This example is dual to "ho_equal.nun" and similar to (but a bit more complicated than)
+# "ho_quant.nun".
+
+data nat := Z | Suc nat.
+
+rec gg : (nat -> nat) -> nat :=
+  forall f. gg f = f Z.
+
+rec hh : (nat -> nat) -> nat :=
+  forall f. hh f = f (Suc Z).
+
+goal forall f. gg f = hh f.

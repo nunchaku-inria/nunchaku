@@ -1,0 +1,20 @@
+
+# expect: sat
+
+val u : type.
+val emptySet : u.
+val is_in : u -> u -> prop.
+val singleton : u -> u.
+
+axiom forall x. (singleton x) != emptySet.
+
+pred [wf] is_in : u -> u -> prop :=
+     forall x. is_in (singleton x) x.
+axiom forall x. ~(is_in emptySet x).
+
+pred [wf] trans_is_in : u -> u -> prop :=
+  forall x y. is_in x y => trans_is_in x y;
+  forall x y z. is_in y x && is_in z y => trans_is_in z x.
+axiom forall x. ~ (trans_is_in x x).
+
+goal exists x y. is_in x y.

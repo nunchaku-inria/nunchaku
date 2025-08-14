@@ -1,0 +1,23 @@
+
+# Test for copy with predicate:
+# there are exactly two "foo" that are "bar"
+
+# expect: SAT
+
+data foo := A | B | C | D.
+
+rec is_bar : foo -> prop :=
+  is_bar A = true;
+  is_bar B = true;
+  is_bar C = false;
+  is_bar D = false.
+
+copy bar := foo
+  subset is_bar
+  abstract bar_of_foo
+  concrete foo_of_bar.
+
+goal
+  exists a (b:bar).
+  a != b && (forall c. c = a || c = b).
+

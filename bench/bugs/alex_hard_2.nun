@@ -1,0 +1,159 @@
+
+# expect: sat
+
+#############
+# Nat
+
+
+data nat := Z | S nat.
+
+
+rec gt_nat : nat -> nat -> prop :=
+  forall x. gt_nat Z x = false;
+  forall x. gt_nat (S x) Z = true;
+  forall x y. gt_nat (S x) (S y) = gt_nat x y.
+
+
+#############
+# Terms
+
+data var := X .
+data sym := F .
+
+data hd := Sym sym | Var var.
+
+data tm := Hd hd | App tm tm.
+
+#############
+# Lists
+
+
+data tmlist :=
+  Nil
+| Cons tm tmlist.
+
+rec append : tmlist -> tmlist -> tmlist :=
+  forall ys. append Nil ys = ys;
+  forall x xs ys. append (Cons x xs) ys = Cons x (append xs ys).
+
+
+rec length : tmlist -> nat :=
+  length Nil = Z;
+  forall x xs. length (Cons x xs) = S (length xs).
+
+
+#############
+# Term functions
+
+rec is_App : tm -> prop :=
+  forall x. is_App (Hd x) = false;
+  forall t s. is_App (App t s) = true.
+
+rec prop_append : tm -> (tm -> prop) -> tm -> prop :=
+  forall s p x. prop_append s p x = p (App x s).
+
+rec prop_prepend : tm -> (tm -> prop) -> tm -> prop :=
+  forall t p x. prop_prepend t p x = p (App t x).
+
+rec forall_emb : tm -> (tm -> prop) -> prop :=
+  forall x p. forall_emb (Hd x) p = true;
+  forall t s p. forall_emb (App t s) p =
+    (p t &&
+    p s &&
+    forall_emb t (prop_append s p) &&
+    forall_emb s (prop_prepend t p)).
+
+rec negate : (tm -> prop) -> tm -> prop :=
+  forall p x. negate p x = ~ p x.
+
+rec ex_emb : tm -> (tm -> prop) -> prop :=
+  forall t p. ex_emb t p = ~ (forall_emb t (negate p)).
+
+rec head : tm -> hd :=
+  forall h. head (Hd h) = h;
+  forall t s. head (App t s) = head t.
+
+
+rec args : tm -> tmlist :=
+  forall h. args (Hd h) = Nil;
+  forall t s. args (App t s) = append (args t) (Cons s Nil).
+
+rec ground : tm -> prop :=
+  forall h. ground (Hd (Var h)) = false;
+  forall h. ground (Hd (Sym h)) = true;
+  forall t s. ground (App t s) = (ground t && ground s).
+
+
+
+
+#-- +++++++++++++++++
+#-- Order
+#-- +++++++++++++++++
+
+rec prec_gt : hd -> hd -> prop :=
+# prec_gt (Sym G) (Sym F) = true;
+  forall h1 h2. prec_gt h1 h2 = false.
+
+rec chksubs : (tm -> tm -> prop) -> tm -> tm -> prop :=
+  forall gt t s. chksubs gt t s = forall_emb s (fun u. gt t u).
+
+
+rec ext_lex_ltr : (tm -> tm -> prop) -> tmlist -> tmlist -> prop :=
+  forall gt. ext_lex_ltr gt Nil Nil = false;
+  forall gt t ts s ss. ext_lex_ltr gt (Cons t ts) (Cons s ss) = (gt t s || t = s && ext_lex_ltr gt ts ss).
+
+rec ext_lenlex_ltr : (tm -> tm -> prop) -> tmlist -> tmlist -> prop :=
+  forall gt ts ss. ext_lenlex_ltr gt ts ss = (gt_nat (length ts) (length ss) || length ts = length ss && ext_lex_ltr gt ts ss).
+
+rec ext_gt : (tm -> tm -> prop) -> tmlist -> tmlist -> prop :=
+  ext_gt = ext_lenlex_ltr.
+
+
+rec gt : tm -> tm -> prop:=
+  forall t s. gt t s =(
+    ex_emb t (fun u. u = s || gt u s) ||
+    prec_gt (head t) (head s) && chksubs gt t s ||
+    head t = head s && chksubs gt t s && ext_gt gt (args t) (args s)
+).
+
+#-- +++++++++++++++++
+#-- Substitution
+#-- +++++++++++++++++
+
+rec subst : (var -> tm) -> tm -> tm :=
+  forall t s sigma. subst sigma (App t s) = App (subst sigma t) (subst sigma s);
+  forall x sigma. subst sigma (Hd (Var x)) = sigma x;
+  forall f sigma. subst sigma (Hd (Sym f)) = Hd (Sym f).
+
+#ground_subst [] = True
+#ground_subst (p:ps) = ground (snd p) && ground_subst ps
+
+
+#-- +++++++++++++++++
+#-- Creating terms
+#-- +++++++++++++++++
+
+#apps t [] = t
+#apps t (s:ss) = apps (App t s) ss
+
+
+
+#-- +++++++++++++++++
+#-- Tests
+#-- +++++++++++++++++
+
+val t : tm.
+val  s : tm.
+val  sigma : var -> tm.
+
+# Goal 1:
+#goal gt t s.
+# Goal 2:
+goal (gt t s) && ~(gt (subst sigma t) (subst sigma s)).
+
+#sus_ground t s sigma = not (ground_subst sigma) || sus t s sigma
+
+#f = (Hd (Sym F))
+#term_s t = apps f [t, apps f [t]]
+#term_t t = apps f [t, f, f]
+#mytest t = not (ground t) || gt (term_t t) (term_s t)

@@ -1,0 +1,45 @@
+# expect: SAT
+# outcome: SAT
+
+# Old outcome:
+# a model with lots of unsatisfiable conditions and lots of 'if then true else false ...'
+#   val P :=
+#     fun (v_0/58 : a) (v_1/59 : a).
+#       if v_1/59 = a_0 && v_0/58 = a_1 && v_0/58 = a_0 && v_1/59 = a_1 &&
+#         v_0/58 = a_1 && v_1/59 = a_1
+#       then false
+#       else if v_1/59 = a_0 && v_0/58 = a_1 && v_0/58 = a_0 && v_1/59 = a_1
+#       then true
+#       else if v_0/58 = a_0 && v_1/59 = a_1 && v_0/58 = a_1 && v_1/59 = a_1
+#       then false
+#       else if v_0/58 = a_0 && v_1/59 = a_1
+#       then true
+#       else if v_1/59 = a_0 && v_0/58 = a_1 && v_0/58 = a_1 && v_1/59 = a_1
+#       then false
+#       else if v_1/59 = a_0 && v_0/58 = a_1
+#       then true
+#       else if v_0/58 = a_1 && v_1/59 = a_1
+#       then false
+#       else false.
+# expected: (1) probably some of the "&&"s should be "||"s -- e.g.,
+#   "v_1/59 = a_0 && v_0/58 = a_1 && v_0/58 = a_0 && v_1/59 = a_1" should probably be
+#   "v_1/59 = a_0 && v_0/58 = a_1 || v_0/58 = a_0 && v_1/59 = a_1".
+#
+#   (2) Any formula of the form "if foo then bar else baz", where at least one of
+#     {foo,bar,baz} is "true" or "false", can be simplified; in the interest of readability,
+#     it should be done (or else you can put CVC4's or whatever backend's output in a suitable
+#     data structure and output it using whatever optimized format you like).
+#
+#   (3) It doesn't help readability that "v_1" sometimes appear before "v_0" and sometimes after.
+#     (Users of counterexample generators spend many minutes trying to make sense of counterexamples.
+#     We should make their job as easy as possible. The above formula is completely unreadable.
+#     Nitpick does a much better job here.) Again, we cannot trust the backends to do it right, but
+#     if you had your own table data structure, you could uniformize all of that.
+#
+#   (4) It's not important for the frontends, but for direct users of Nunchaku it would
+#     be nice if the names with / could be avoided in the output... (minor).
+
+val a : type.
+val P : a -> a -> prop.
+
+goal ~ (forall (x : a) (y : a) (z : a). (P x y && P y z) => P x z).

@@ -1,0 +1,10 @@
+# expected: SAT 
+
+# old outcome: model with "val a_0 := a_1" and "val a_1 := a_0"
+# need a different syntax for atoms and other identifiers
+
+val a : type.
+val a_0 : a.
+val a_1 : a.
+
+goal ~ (a_1 = a_0).

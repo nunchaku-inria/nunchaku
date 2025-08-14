@@ -1,0 +1,33 @@
+# expected: unknown
+
+val a : type.
+
+val a1 : a.
+val b : a.
+val c : a.
+
+data nat :=
+  zero
+| Suc nat.
+
+val wa : nat.
+val wb : nat.
+
+data tree :=
+  Leaf nat a
+| InnerNode nat tree tree.
+
+val t : tree.
+
+val alphabet : tree -> a -> prop.
+val plus : nat -> nat -> nat.
+
+rec depth : tree -> a -> nat :=
+  forall (w : nat) (b1 : a) (a2 : a). depth (Leaf w b1) a2 = zero;
+  forall (w : nat) (t1 : tree) (t2 : tree) (a2 : a). depth (InnerNode w t1 t2) a2 = ((if alphabet t1 a2 then Suc (depth t1 a2) else (if alphabet t2 a2 then Suc (depth t2 a2) else zero))).
+
+spec depth2 : tree -> a -> nat :=
+  forall (w : nat) (b1 : a) (a2 : a). depth2 (Leaf w b1) a2 = zero;
+  forall (w : nat) (t1 : tree) (t2 : tree) (a2 : a). depth2 (InnerNode w t1 t2) a2 = ((if alphabet t1 a2 then Suc (depth2 t1 a2) else (if alphabet t2 a2 then Suc (depth2 t2 a2) else zero))).
+
+goal ~ (c = a1) => ~ (c = b) => depth t c = depth2 t c.

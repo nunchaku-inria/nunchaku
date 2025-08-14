@@ -1,0 +1,13 @@
+
+# choice on a symmetrical predicate
+# The predicate given to choice in `any x y` is symmetrical w.r.t {x,y},
+# so necessarily `any x y = any y x`
+
+# expect: unsat
+
+val a : type.
+
+rec any : a -> a -> a :=
+  forall x y. any x y = choice (fun z. z=x || z=y).
+
+goal exists x y. any x y != any y x.

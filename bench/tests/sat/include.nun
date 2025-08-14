@@ -1,0 +1,10 @@
+
+# Test for the "include" directive
+# EXPECT: SAT
+
+include "included.ax".
+
+goal p || ~ p.
+
+
+

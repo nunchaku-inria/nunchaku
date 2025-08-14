@@ -1,0 +1,15 @@
+# outcome: SAT
+# expected: UNSAT
+
+# The bug appears to be in the skolemizer. The arguments of "if and only iff" are
+# unpolarized, because "(P = Q) == ((P ==> Q) && (Q ==> P))" -- notice that P and Q
+# occur both negatively and positively in the latter expression.
+# The most precise way to deal with "iff" in terms of polarities is to expand it.
+
+val a : type.
+val b : type.
+
+val f : a -> a -> b.
+val y : a.
+
+goal (exists (x : a). f x y = f y x) = false.

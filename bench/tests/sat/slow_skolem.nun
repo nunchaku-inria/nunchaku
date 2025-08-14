@@ -1,0 +1,26 @@
+# outcome: error "Error: in the interface to CVC4: no answer from the solver" (was: timeout)
+# expected: sat
+
+# Nitpick can do it very fast by keeping all cardinalities synchronized, and taking them to be all
+# 2. CVC4 is spinning.
+
+val a : type.
+val b : type.
+val c : type.
+val d : type.
+val e : type.
+val f : type.
+val g : type.
+
+data prod :=
+  Pair a b.
+
+val g1 : prod -> d -> c.
+
+data prod1 :=
+  Pair1 e f.
+
+val f1 : prod -> c -> d -> prod1 -> g.
+val h : prod -> prod1.
+
+goal ~ (forall (u : prod). exists (v : c). forall (w : d). exists (x : prod1). f1 u v w x = f1 u (g1 u w) w (h u)).

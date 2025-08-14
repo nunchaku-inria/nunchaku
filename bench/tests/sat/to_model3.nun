@@ -1,0 +1,11 @@
+# expected: sat
+# outcome: sat
+
+val a : type.
+
+spec swap : a -> a :=
+  forall (x : a). ~ (swap x = x).
+
+val P : (a -> a) -> prop.
+
+goal ~ (P (fun (x : a). x)) && P (fun (x : a). swap x).

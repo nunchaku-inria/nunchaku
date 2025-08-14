@@ -1,0 +1,85 @@
+# IMPORTANT: WITH OPTION: --no-specialize
+# outcome: "File "src/transformations/ElimHOF.ml", line 584, characters 6-12: Assertion failed"
+# expected: unknown or unsat
+# status: unsat
+
+val a : type.
+
+rec id : a -> a :=
+  id = (fun x. x).
+
+data list :=
+  Nil
+| Cons a list.
+
+val ys : list.
+
+rec comp : (a -> a) -> (a -> a) -> a -> a :=
+  forall (f : a -> a) (g : a -> a). comp f g = (fun x. f (g x)).
+rec foldr : (a -> a -> a) -> list -> a -> a :=
+  forall (f : a -> a -> a). foldr f Nil = id;
+  forall (f : a -> a -> a) (x : a) (xs : list). foldr f (Cons x xs) = comp (f x) (foldr f xs).
+
+data prod :=
+  Pair a a.
+data list1 :=
+  Nil1
+| Cons1 prod list1.
+
+rec zip : list -> list -> list1 :=
+  forall (xs : list). zip xs Nil = Nil1;
+  forall (xs : list) (y : a) (ys1 : list). zip xs (Cons y ys1) = (match xs with  | Nil -> Nil1 | Cons uu21 uu22 -> Cons1 (Pair uu21 y) (zip uu22 ys1) end).
+rec map : (prod -> a) -> list1 -> list :=
+  forall (f : prod -> a). map f Nil1 = Nil;
+  forall (f : prod -> a) (x21 : prod) (x22 : list1). map f (Cons1 x21 x22) = Cons (f x21) (map f x22).
+rec multzero : (a -> a -> a) -> a -> prop :=
+  forall (times : a -> a -> a) (zero : a). multzero times zero = ((forall (a1 : a). times zero a1 = zero) && (forall (a1 : a). times a1 zero = zero)).
+
+val plus : a -> a -> a.
+val zero1 : a.
+
+rec listsum : list -> a :=
+  forall (xs : list). listsum xs = foldr plus xs zero1.
+
+val minus : a -> a -> a.
+val times1 : a -> a -> a.
+
+rec iprod : list -> list -> a :=
+  forall (xs : list) (ys1 : list). iprod xs ys1 = listsum (map (fun (uu2 : prod). match uu2 with  | Pair uu11 uu12 -> times1 uu11 uu12 end) (zip xs ys1)).
+rec semigroupadd : (a -> a -> a) -> prop :=
+  forall (plus1 : a -> a -> a). semigroupadd plus1 = (forall (a1 : a) (b : a) (c : a). plus1 (plus1 a1 b) c = plus1 a1 (plus1 b c)).
+
+val uminus : a -> a.
+
+rec semigroupmult : (a -> a -> a) -> prop :=
+  forall (times : a -> a -> a). semigroupmult times = (forall (a1 : a) (b : a) (c : a). times (times a1 b) c = times a1 (times b c)).
+rec semiringaxioms : (a -> a -> a) -> (a -> a -> a) -> prop :=
+  forall (plus1 : a -> a -> a) (times : a -> a -> a). semiringaxioms plus1 times = ((forall (a1 : a) (b : a) (c : a). times (plus1 a1 b) c = plus1 (times a1 c) (times b c)) && (forall (a1 : a) (b : a) (c : a). times a1 (plus1 b c) = plus1 (times a1 b) (times a1 c))).
+rec groupaddaxioms : (a -> a -> a) -> (a -> a -> a) -> a -> (a -> a) -> prop :=
+  forall (minus1 : a -> a -> a) (plus1 : a -> a -> a) (zero : a) (uminus1 : a -> a). groupaddaxioms minus1 plus1 zero uminus1 = ((forall (a1 : a). plus1 (uminus1 a1) a1 = zero) && (forall (a1 : a) (b : a). plus1 a1 (uminus1 b) = minus1 a1 b)).
+rec monoidaddaxioms : (a -> a -> a) -> a -> prop :=
+  forall (plus1 : a -> a -> a) (zero : a). monoidaddaxioms plus1 zero = ((forall (a1 : a). plus1 zero a1 = a1) && (forall (a1 : a). plus1 a1 zero = a1)).
+rec abgroupaddaxioms : (a -> a -> a) -> a -> (a -> a -> a) -> (a -> a) -> prop :=
+  forall (plus1 : a -> a -> a) (zero : a) (minus1 : a -> a -> a) (uminus1 : a -> a). abgroupaddaxioms plus1 zero minus1 uminus1 = ((forall (a1 : a). plus1 (uminus1 a1) a1 = zero) && (forall (a1 : a) (b : a). minus1 a1 b = plus1 a1 (uminus1 b))).
+rec commmonoidaddaxioms : (a -> a -> a) -> a -> prop :=
+  forall (plus1 : a -> a -> a) (zero : a). commmonoidaddaxioms plus1 zero = (forall (a1 : a). plus1 zero a1 = a1).
+rec absemigroupaddaxioms : (a -> a -> a) -> prop :=
+  forall (plus1 : a -> a -> a). absemigroupaddaxioms plus1 = (forall (a1 : a) (b : a). plus1 a1 b = plus1 b a1).
+rec cancelsemigroupaddaxioms : (a -> a -> a) -> prop :=
+  forall (plus1 : a -> a -> a). cancelsemigroupaddaxioms plus1 = ((forall (a1 : a) (b : a) (c : a). (plus1 a1 b = plus1 a1 c) => (b = c)) && (forall (b : a) (a1 : a) (c : a). (plus1 b a1 = plus1 c a1) => (b = c))).
+rec cancelabsemigroupaddaxioms : (a -> a -> a) -> (a -> a -> a) -> prop :=
+  forall (plus1 : a -> a -> a) (minus1 : a -> a -> a). cancelabsemigroupaddaxioms plus1 minus1 = ((forall (a1 : a) (b : a). minus1 (plus1 a1 b) a1 = b) && (forall (a1 : a) (b : a) (c : a). minus1 (minus1 a1 b) c = minus1 a1 (plus1 b c))).
+
+axiom semigroupadd plus.
+axiom cancelsemigroupaddaxioms plus.
+axiom absemigroupaddaxioms plus.
+axiom cancelabsemigroupaddaxioms plus minus.
+axiom monoidaddaxioms plus zero1.
+axiom commmonoidaddaxioms plus zero1.
+axiom semigroupmult times1.
+axiom multzero times1 zero1.
+axiom semiringaxioms plus times1.
+axiom groupaddaxioms minus plus zero1 uminus.
+axiom abgroupaddaxioms plus zero1 minus uminus.
+
+goal ~ (iprod Nil ys = zero1).

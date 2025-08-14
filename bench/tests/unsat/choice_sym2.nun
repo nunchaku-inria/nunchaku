@@ -1,0 +1,12 @@
+
+# expect: unsat
+
+# Slightly altered version of `choice_sym.nun`. We hand-inline the `any`
+# predicate so that `choice` is specialized twice.
+
+val a : type.
+
+goal exists (x:a) y.
+  (choice (fun z. z=x||z=y)) !=
+  (choice (fun z. z=y||z=x)).
+

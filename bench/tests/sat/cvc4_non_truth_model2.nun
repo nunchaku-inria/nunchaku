@@ -1,0 +1,32 @@
+# outcome: expected decision tree for wfx+ to yield only true/false
+# expected: sat
+
+val a : type.
+
+val a1 : a.
+val b : a.
+
+data nat :=
+  zero
+| Suc nat.
+
+val wa : nat.
+val wb : nat.
+
+data tree :=
+  Leaf nat a
+| InnerNode nat tree tree.
+
+val t : tree.
+
+rec alphabet : tree -> a -> prop :=
+  forall (w : nat) (a2 : a) (b1 : a). alphabet (Leaf w a2) b1 = (a2 = b1);
+  forall (w : nat) (t1 : tree) (t2 : tree) (a2 : a). alphabet (InnerNode w t1 t2) a2 = (alphabet t1 a2 || alphabet t2 a2).
+rec consistent : tree -> prop :=
+  forall (w : nat) (a2 : a). consistent (Leaf w a2) = true;
+  forall (w : nat) (t1 : tree) (t2 : tree). consistent (InnerNode w t1 t2) = (consistent t1 && consistent t2 && (forall (a2 : a). (~ (alphabet t1 a2)) || (~ (alphabet t2 a2)))).
+rec swapLeaves : tree -> nat -> a -> nat -> a -> tree :=
+  forall (wc : nat) (c : a) (wa1 : nat) (a2 : a) (wb1 : nat) (b1 : a). swapLeaves (Leaf wc c) wa1 a2 wb1 b1 = ((if c = a2 then Leaf wb1 b1 else (if c = b1 then Leaf wa1 a2 else Leaf wc c)));
+  forall (w : nat) (t1 : tree) (t2 : tree) (wa1 : nat) (a2 : a) (wb1 : nat) (b1 : a). swapLeaves (InnerNode w t1 t2) wa1 a2 wb1 b1 = InnerNode w (swapLeaves t1 wa1 a2 wb1 b1) (swapLeaves t2 wa1 a2 wb1 b1).
+
+goal consistent (swapLeaves t wa a1 wb b).

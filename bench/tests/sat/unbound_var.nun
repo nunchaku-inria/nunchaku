@@ -1,0 +1,18 @@
+# outcome: "Error: broken invariant: variable w/55 not bound in scope"
+# expected: sat
+
+data nat :=
+  zero
+| Suc nat.
+
+copy set := nat -> prop
+  abstract Collect
+  concrete rmember.
+
+val P : set.
+
+goal exists x. x =
+  (fun (w : nat -> prop).
+      if w = (fun (x:nat). rmember P x)
+        then zero
+      else zero).

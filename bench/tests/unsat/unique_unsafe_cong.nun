@@ -1,0 +1,11 @@
+# outcome: "type error when applying ..."
+
+# expected: unsat
+
+# We violate "unique_unsafe"'s precondition. Nunchaku should specialize the two terms
+# independently of each other, resulting in "sat". But in an abstract, conceptual sense,
+# the problem is "unsat" just like its cousin without the "_unsafe" suffix.
+
+data nat := Z | S nat.
+
+goal ~ (unique_unsafe (fun x. x = Z || x = S Z) = unique_unsafe (fun x. x = S Z || x = Z)).

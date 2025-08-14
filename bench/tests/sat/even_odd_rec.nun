@@ -1,0 +1,26 @@
+# outcome: sat with wrong model
+# expected: sat with right model
+
+# The wrong model is
+#
+# SAT: {
+#   val m := Suc zero.
+#
+# }
+# It is doubly wrong: "even (Suc zero)" should be "false". And where are "even"
+# and "odd"?
+
+data nat :=
+  zero
+| Suc nat.
+
+rec even : nat -> prop :=
+  even zero = true;
+  forall (n : nat). even (Suc n) = odd n
+and odd : nat -> prop :=
+  odd zero = false;
+  forall (n : nat). odd (Suc n) = even n.
+
+val m : nat.
+
+goal even (Suc m).

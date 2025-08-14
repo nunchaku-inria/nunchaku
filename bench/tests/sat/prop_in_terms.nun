@@ -1,0 +1,14 @@
+# expect: sat
+
+val a : type.
+
+val p : prop.
+val q : prop -> prop.
+val r : a -> prop.
+
+axiom p = true.
+axiom q p.
+axiom q (p => p).
+axiom q (forall x. r x).
+
+goal true.

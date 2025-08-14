@@ -1,0 +1,6 @@
+# outcome: sat with "nun_sk_0" in the model
+# expected: sat with "_witness_of" in the model
+
+val a : type.
+
+goal forall (x : a). exists (y : a). ~ (x = y).

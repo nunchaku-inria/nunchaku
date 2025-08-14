@@ -1,0 +1,63 @@
+# outcome: SAT
+# expected: UNSAT
+
+# Nunchaku wrongly skolemizes an unpolarized occurrence of "exists" (see BUG
+# below).
+
+data nib :=
+  N0
+| N1.
+
+val h : type.
+val app : h -> nib -> nib.
+val proto : nib.
+
+val alpha : type.
+val g1 : alpha -> h.
+val g2 : alpha -> nib.
+
+val inapp : h -> nib -> prop.
+
+axiom
+  forall (h : h) (j : nib).
+    inapp h j = (exists (b : alpha). g1 b = h && g2 b = j).
+
+val APP : h -> nib -> nib.
+
+axiom
+  forall (h : h) (j : nib).
+### BUG CAUSED BY THIS LINE:
+    APP h j = app h (if exists (b : alpha). g1 b = h && g2 b = j then j else proto).
+### ALTERNATIVE VERSION OF THE LINE WITHOUT THE BUG:
+#    APP h j = app h (if inapp h j then j else proto).
+
+val inc : h.
+
+axiom
+  app inc N0 = N1;
+  app inc N1 = N0.
+
+data byte :=
+  Byte nib nib.
+
+val alpha_mapnibs : type.
+val g1_mapnibs : alpha_mapnibs -> h.
+val g2_mapnibs : alpha_mapnibs -> byte.
+
+val mapnibs : h -> byte -> byte.
+
+axiom
+  forall (a : alpha_mapnibs).
+    mapnibs (g1_mapnibs a) (g2_mapnibs a) =
+    match g2_mapnibs a with
+    | Byte m n -> Byte (APP (g1_mapnibs a) m) (APP (g1_mapnibs a) n)
+    end
+  &&
+    match g2_mapnibs a with
+    | Byte m n -> inapp (g1_mapnibs a) m && inapp (g1_mapnibs a) n
+    end.
+
+val b : byte.
+
+goal mapnibs inc b = b
+  && (exists (z : alpha_mapnibs). g1_mapnibs z = inc && g2_mapnibs z = b).

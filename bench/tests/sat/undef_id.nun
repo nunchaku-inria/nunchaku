@@ -1,0 +1,28 @@
+# outcome: "undefined ID: sibling"
+# expected: sat
+
+val a : type.
+
+val a1 : a.
+
+data nat :=
+  zero
+| Suc nat.
+
+data tree :=
+  Leaf nat a
+| InnerNode nat tree tree.
+
+val t : tree.
+
+rec alphabet : tree -> a -> prop :=
+  forall (w : nat) (a2 : a) (b : a). alphabet (Leaf w a2) b = (a2 = b);
+  forall (w : nat) (t1 : tree) (t2 : tree) (a2 : a). alphabet (InnerNode w t1 t2) a2 = (alphabet t1 a2 || alphabet t2 a2).
+
+rec sibling : tree -> a -> a :=
+  forall (wb : nat) (b : a) (a2 : a). sibling (Leaf wb b) a2 = a2;
+  forall (w : nat) (wb : nat) (b : a) (wc : nat) (c : a) (a2 : a). sibling (InnerNode w (Leaf wb b) (Leaf wc c)) a2 = ((if a2 = b then c else (if a2 = c then b else a2)));
+  forall (w : nat) (v : nat) (va : tree) (vb : tree) (t2 : tree) (a2 : a). sibling (InnerNode w (InnerNode v va vb) t2) a2 = ((if alphabet (InnerNode v va vb) a2 then sibling (InnerNode v va vb) a2 else (if alphabet t2 a2 then sibling t2 a2 else a2)));
+  forall (w : nat) (t1 : tree) (v : nat) (va : tree) (vb : tree) (a2 : a). sibling (InnerNode w t1 (InnerNode v va vb)) a2 = ((if alphabet t1 a2 then sibling t1 a2 else (if alphabet (InnerNode v va vb) a2 then sibling (InnerNode v va vb) a2 else a2))).
+
+goal sibling t a1 = a1.

@@ -1,0 +1,35 @@
+# outcome: timeout
+# expected: sat
+# status: sat
+
+# We had the comment (probably by Simon C.):
+#   It looks like it is CVC4's fault here.
+# But the same issue arises with the other backends. We must investigate.
+
+data nat :=
+  zero
+| Suc nat.
+
+val x : nat -> prop.
+
+rec one : nat :=
+  one = Suc zero.
+rec plus : nat -> nat -> nat :=
+  forall (n : nat). plus zero n = n;
+  forall (m : nat) (n : nat). plus (Suc m) n = Suc (plus m n).
+
+data num :=
+  One
+| Bit0 num
+| Bit1 num.
+
+rec numeral : num -> nat :=
+  numeral One = one;
+  forall (n : num). numeral (Bit0 n) = plus (numeral n) (numeral n);
+  forall (n : num). numeral (Bit1 n) = plus (plus (numeral n) (numeral n)) one.
+
+pred [wf] p1 : nat -> prop :=
+  p1 zero;
+  forall (n : nat). p1 n => p1 (plus n (numeral (Bit0 One))).
+
+goal ~ (p1 = x).

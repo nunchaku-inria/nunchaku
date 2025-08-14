@@ -1,0 +1,90 @@
+
+# expect: SAT
+
+# Ternary (balanced) integers
+
+data z :=
+  | Z_0
+  | Z_3 z # 3n
+  | Z_3p1 z # 3n+1
+  | Z_3m1 z # 3n-1
+  .
+
+# "smart" constructor for Z_3
+rec mk_z_3 : z -> z :=
+  mk_z_3 Z_0 = Z_0;
+  forall x. mk_z_3 (Z_3 x) = Z_3 (Z_3 x);
+  forall x. mk_z_3 (Z_3p1 x) = Z_3 (Z_3p1 x);
+  forall x. mk_z_3 (Z_3m1 x) = Z_3 (Z_3m1 x).
+
+rec z_1 : z := z_1 = Z_3p1 Z_0.
+rec z_minus_1 : z := z_minus_1 = Z_3m1 Z_0.
+
+# addition
+rec z_plus : z -> z -> z :=
+  forall x. z_plus Z_0 x = x;
+  forall x. z_plus x Z_0 = x;
+  forall x y. z_plus (Z_3 x) (Z_3 y) = mk_z_3 (z_plus x y);
+  forall x y. z_plus (Z_3 x) (Z_3p1 y) = Z_3p1 (z_plus x y);
+  forall x y. z_plus (Z_3p1 x) (Z_3 y) = Z_3p1 (z_plus x y);
+  forall x y. z_plus (Z_3 x) (Z_3m1 y) = Z_3m1 (z_plus x y);
+  forall x y. z_plus (Z_3m1 x) (Z_3 y) = Z_3m1 (z_plus x y);
+  forall x y. z_plus (Z_3p1 x) (Z_3m1 y) = mk_z_3 (z_plus x y);
+  forall x y. z_plus (Z_3m1 x) (Z_3p1 y) = mk_z_3 (z_plus x y);
+  forall x y. z_plus (Z_3p1 x) (Z_3p1 y) = Z_3m1 (z_plus x (z_plus y z_1));
+  forall x y. z_plus (Z_3m1 x) (Z_3m1 y) = Z_3p1 (z_plus x (z_plus y z_minus_1)).
+
+# successor
+rec z_succ : z -> z := forall x. z_succ x = z_plus z_1 x.
+
+rec z_pred : z -> z := forall x. z_pred x = z_plus z_minus_1 x.
+
+# negation
+rec z_opp : z -> z :=
+  z_opp Z_0 = Z_0;
+  forall x. z_opp (Z_3 x) = mk_z_3 (z_opp x);
+  forall x. z_opp (Z_3p1 x) = Z_3m1 (z_opp x);
+  forall x. z_opp (Z_3m1 x) = Z_3p1 (z_opp x).
+
+# subtraction
+rec z_minus : z -> z -> z :=
+  forall x y. z_minus x y = z_plus x (z_opp y).
+
+# product
+rec z_mult : z -> z -> z :=
+  forall x. z_mult x Z_0 = Z_0;
+  forall x y. z_mult x (Z_3 y) = mk_z_3 (z_mult x y);
+  forall x y. z_mult x (Z_3p1 y) = z_plus x (mk_z_3 (z_mult x y));
+  forall x y. z_mult x (Z_3m1 y) = z_minus (mk_z_3 (z_mult x y)) x.
+
+# positive or null
+rec z_positive_aux : z -> prop -> prop :=
+  forall y. z_positive_aux Z_0 y = y;
+  forall x y. z_positive_aux (Z_3 x) y = z_positive_aux x y;
+  forall x y. z_positive_aux (Z_3p1 x) y = z_positive_aux x true;
+  forall x y. z_positive_aux (Z_3m1 x) y = z_positive_aux x false.
+
+rec z_positive : z -> prop :=
+  forall x. z_positive x = z_positive_aux x true.
+
+rec z_geq : z -> z -> prop :=
+  forall x y. z_geq x y = z_positive (z_minus x y).
+
+# x>y == x-y-1>=0
+rec z_gt : z -> z -> prop :=
+  forall x y. z_gt x y = z_positive (z_pred (z_minus x y)).
+
+rec z_leq : z -> z -> prop :=
+  forall x y. z_leq x y = z_geq y x.
+
+rec z_lt : z -> z -> prop :=
+  forall x y. z_lt x y = z_gt y x.
+
+rec z_2 : z := z_2 = z_succ z_1.
+rec z_3 : z := z_3 = z_succ z_2.
+rec z_4 : z := z_4 = z_succ z_3.
+rec z_5 : z := z_5 = z_plus z_2 z_3.
+rec z_10 : z := z_10 = z_plus z_5 z_5.
+rec z_20 : z := z_20 = z_plus z_10 z_10.
+rec z_50 : z := z_50 = z_mult z_5 z_10.
+rec z_100 : z := z_100 = z_mult z_10 z_10.

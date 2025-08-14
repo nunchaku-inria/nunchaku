@@ -1,0 +1,16 @@
+# outcome: Not_found
+# expected: sat
+
+data nat :=
+  zero
+| Suc nat.
+
+pred even : nat -> prop :=
+  even zero;
+  forall (n : nat). odd n => even (Suc n)
+and odd : nat -> prop :=
+  forall (n : nat). even n => odd (Suc n).
+
+val m : nat.
+
+goal even (Suc m).

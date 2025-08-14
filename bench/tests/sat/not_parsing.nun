@@ -1,0 +1,12 @@
+# outcome: parse error
+# expected: sat
+
+# In ML-like languages, function application bids more tightly than any other
+# operators, so "~ p x x" should be parsed as "~ (p x x)", not "(~ p) x x".
+
+val i : type.
+
+val p : i -> i -> prop.
+val x : i.
+
+goal ~ p x x.

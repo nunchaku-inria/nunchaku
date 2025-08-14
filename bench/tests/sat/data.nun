@@ -1,0 +1,22 @@
+
+# (co)inductive types
+# EXPECT: SAT
+
+data list a :=
+    | nil
+    | cons a (list a).
+
+val term : type.
+
+# tree with possibly infinite branching
+codata tree :=
+    | leaf term
+    | node (llist tree)
+and llist a :=
+    | lnil
+    | lcons a (llist a).
+
+# make a tree  mu x. node [y, z, x]
+goal exists x y z. x = node (lcons (leaf y) (lcons (leaf z) (lcons x lnil))).
+
+

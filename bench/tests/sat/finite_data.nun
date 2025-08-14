@@ -1,0 +1,15 @@
+# outcome: unknown
+# expected: sat
+
+# It would be nice if CVC4 could handle quantification over finite (co)datatypes and other
+# finite interpreted types.
+
+val a : type.
+val b : type.
+
+data prod :=
+  Pair a a.
+
+val P : b -> prod -> prop.
+
+goal ~ (exists (x : prod). forall (y : b). P y x).

@@ -1,0 +1,23 @@
+# outcome: unknown, but with needless duplication in "uniq equations"
+# expected: unknown (or unsat)
+
+# Why does uniq equation introduce an "if" with two identical branches?
+#
+# after uniq equations: {
+#   val a_ : type.
+#  rec Inr__Rep_ : a_ -> a_ -> a_ -> prop -> prop :=
+#        Inr__Rep_ a__0/60:a_ a__1/61:a_ a__2/62:a_ prop_3/63:prop =
+#          if prop_3/63
+#          then a__2/62 = a__0/60 && ~ prop_3/63
+#          else a__2/62 = a__0/60 && ~ prop_3/63.
+
+val a : type.
+
+val a1 : a.
+
+rec InlRep : a -> a -> a -> prop -> prop :=
+  forall (a2 : a) (x : a) (y : a) (p : prop). InlRep a2 x y p = ((x = a2) && p).
+rec InrRep : a -> a -> a -> prop -> prop :=
+  forall (b : a) (x : a) (y : a) (p : prop). InrRep b x y p = ((y = b) && (~ p)).
+
+goal InlRep a1 = InrRep a1.

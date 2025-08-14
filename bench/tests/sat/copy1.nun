@@ -1,0 +1,17 @@
+
+# Test for copy
+# expect: sat
+
+data pair a b := Pair a b.
+
+copy pair1 a := pair a a
+  abstract pair1_of_pair
+  concrete pair_of_pair1.
+
+val iota : type.
+
+goal forall (p:pair1 iota).
+     exists (x:iota) (y:iota).
+     pair_of_pair1 p = Pair x y.
+
+

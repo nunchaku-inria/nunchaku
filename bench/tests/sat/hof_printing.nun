@@ -1,0 +1,13 @@
+# outcome: sat (with a model containing "@uc__to__a__Bool__1" etc.)
+# expected: sat (with something more meaningful, e.g. a lambda or at least $set__0 and $set__1)
+
+val a : type.
+
+copy set := a -> prop
+  abstract Collect
+  concrete rmember.
+
+val x : set.
+val y : set.
+
+goal ~ (x = y).

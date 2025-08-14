@@ -1,6 +1,8 @@
 name: build
 on:
   push:
+    branches:
+      - master
   pull_request:
     branches:
       - master
@@ -29,3 +31,36 @@ jobs:
     - run: opam exec -- dune build @install --profile=release
     - run: opam exec -- dune runtest --profile=release
 
+    - name: Install CVC4 1.6
+      if: matrix.ocaml-compiler == '5.03.x'
+      run: |
+        wget http://cvc4.cs.stanford.edu/downloads/builds/x86_64-linux-opt/cvc4-1.6-x86_64-linux-opt
+        chmod +x cvc4-1.6-x86_64-linux-opt
+        sudo mv cvc4-1.6-x86_64-linux-opt /usr/local/bin/cvc4
+
+    - name: Install benchexec
+      if: matrix.ocaml-compiler == '5.03.x'
+      run: |
+        sudo add-apt-repository ppa:sosy-lab/benchmarking
+        sudo apt-get install -y benchexec
+
+    - name: Run benchmark
+      if: matrix.ocaml-compiler == '5.03.x'
+      run: |
+        opam exec -- make bench
+        cd bench/benchexec
+        table-generator results/config.*.results.cvc4.xml.bz2
+
+    - name: Upload benchmark results
+      if: matrix.ocaml-compiler == '5.03.x'
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results
+        path: bench/benchexec/results/
+        retention-days: 30
+
+    - name: Check benchmark results
+      if: matrix.ocaml-compiler == '5.03.x'
+      run: |
+        cd bench/benchexec
+        python3 check_results.py results/config.*.results.cvc4.csv

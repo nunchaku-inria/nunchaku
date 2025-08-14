@@ -1,0 +1,7 @@
+# expect: error
+
+val a : type.
+
+val P : ((a -> prop) -> prop) -> prop.
+
+goal ~ (P (fun x. forall x. x x)).

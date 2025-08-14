@@ -1,0 +1,30 @@
+# expected: sat
+
+# old outcome: sat with "$to_a_a_0" in the model
+# "to_a_a" is not the name of a type in the input problem, so "$to_a_a_0"
+# is not a legal name for an atom in the output. Instead, an anonymous
+# function should be shown, reconstructed from the function table of
+# "$to_a_a_0". Here, I believe something like
+#
+# SAT: {
+#   type a := {$a_0}.
+#   val P :=
+#     fun (v_0/108 : a -> a).
+#       if v_0/108 = anon_fun_0
+#         then false else false.
+#   val anon_fun_0 :=
+#     fun (v_1/109 : a).
+#       if v_1/109 = $a_0
+#         then $a_0 else ?__ (anon_fun_0 v_1/109).
+# }
+#
+# is called for.
+#
+# Also, notice that the "then false else false" that I have often commented on
+# (as making models needlessly hard to read) is still an issue.
+
+val a : type.
+
+val P : (a -> a) -> prop.
+
+goal ~ (P (fun (x : a). x)).

@@ -1,0 +1,17 @@
+# outcome: sat -- the generated model is full of internal constructs like "@uc_G_append_2"
+# expected: sat -- with a human-readable model, without internal constructs
+
+val a : type.
+
+data list :=
+  Nil
+| Cons a list.
+
+rec append : list -> list -> list :=
+  forall (zs : list). append Nil zs = zs;
+  forall (x : a) (ws : list) (zs : list). append (Cons x ws) zs = Cons x (append ws zs).
+
+val xs : list.
+val ys : list.
+
+goal ~ (append xs ys = append ys xs).

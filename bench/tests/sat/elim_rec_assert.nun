@@ -1,0 +1,19 @@
+# outcome: "File "src/transformations/ElimRecursion.ml", line 365, characters 6-12: Assertion failed"
+# expected: sat
+
+val a : type.
+
+copy set := a -> prop
+  abstract Collect
+  concrete rmember.
+
+val one : a.
+val zero : a.
+
+pred [wf] Zp : a -> prop :=
+  Zp zero.
+
+rec Z : set :=
+  Z = Collect (fun (x : a). Zp x).
+
+goal ~ (rmember Z one).

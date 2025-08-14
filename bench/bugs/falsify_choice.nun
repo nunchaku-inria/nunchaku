@@ -1,0 +1,21 @@
+
+# expect: sat
+# outcome: unknown
+
+# We look for `P` such that `c ∉ (choose s. c ∈ s ∧ P S)`.
+# possible examples are: `P = fun _. false` and `P = fun S. c ∉ S`.
+
+# NOTE; there are bugs related to `specialize` in nunchaku 0.5, on the
+# congruence axiom
+
+val a : type.
+
+val c : a.
+
+rec mem : pi a. a -> (a -> prop) -> prop :=
+  forall x y. mem x y = y x.
+
+goal
+  exists (P : (a -> prop) -> prop).
+    ~ mem c (choice (fun (S:a -> prop). mem c S && P S)).
+

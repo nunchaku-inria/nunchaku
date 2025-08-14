@@ -1,0 +1,14 @@
+# old outcome: File "src/transformations/ElimCopy.ml", line 59, characters 52-58: Assertion failed
+# expected: sat
+
+val a : type.
+
+val x : a.
+
+copy set := a -> prop
+  abstract Collect
+  concrete rmember.
+
+val A : set.
+
+goal ~ (rmember A x).

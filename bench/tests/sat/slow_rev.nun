@@ -1,0 +1,52 @@
+# expected: SAT
+
+# old outcome: TIMEOUT
+
+val a : type.
+
+data list :=
+  Nil
+| Cons a list.
+
+rec append : list -> list -> list :=
+  forall (xs : list) (ys : list).
+    append xs ys =
+      match xs with
+      | Nil -> ys
+      | Cons x xs -> Cons x (append xs ys)
+      end.
+rec rev : list -> list :=
+  forall (xs : list).
+    rev xs =
+      match xs with
+      | Nil -> Nil
+      | Cons x xs -> append (rev xs) (Cons x Nil)
+      end.
+
+data prod :=
+  Pair a a.
+
+data plist :=
+  PNil
+| PCons prod plist.
+
+rec zip : list -> list -> plist :=
+  forall (xs : list) (ys : list).
+    zip xs ys =
+      match xs with
+      | Nil -> PNil
+      | Cons x xs ->
+        match ys with
+        | Nil -> PNil
+        | Cons y ys -> PCons (Pair x y) (zip xs ys)
+        end
+      end.
+
+val x : a.
+val y : a.
+val xs : list.
+val ys : list.
+
+axiom ~ (x = y).
+# axiom xs = Cons y Nil.
+goal ~ (zip (Cons x xs) ys = zip (rev (Cons x xs)) (rev ys)).

@@ -1,0 +1,8 @@
+
+# expected: unsat
+
+# careful when encoding datatypes, cardinalities matter
+
+data x := A | B | C | D | E | F | G | H | I | J | K | L.
+
+goal forall (a : x) (b : x). a = b.

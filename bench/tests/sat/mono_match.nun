@@ -1,0 +1,36 @@
+# outcome: Error: monomorphization: invalid problem:
+# expected: sat
+
+data nat :=
+  zero
+| Suc nat.
+
+rec plus : nat -> nat -> nat :=
+  forall (n : nat). plus zero n = n;
+  forall (m : nat) (n : nat). plus (Suc m) n = Suc (plus m n).
+
+data prod :=
+  Pair nat nat.
+
+rec intrel : prod -> prod -> prop :=
+  intrel = (fun uu2. match uu2 with  | Pair uu11 uu12 -> fun uu2. match uu2 with  | Pair uu11_ uu12_ -> plus uu11_ uu12_ = plus uu11 uu12 end end).
+
+copy int := prod
+  partial_quotient intrel
+  abstract AbsInteg
+  concrete RepInteg.
+
+val x : int.
+val y : int.
+
+data unit :=
+  Unity.
+data point2dext :=
+  point2dext1 int int unit.
+
+val p : point2dext.
+
+rec xcupdate : (int -> int) -> point2dext -> point2dext :=
+  forall (xcH : int -> int) (xc : int) (yc : int) (more : unit). xcupdate xcH (point2dext1 xc yc more) = point2dext1 (xcH xc) yc more.
+
+goal ~ (point2dext1 x y Unity = xcupdate (fun (uu : int). x) p).

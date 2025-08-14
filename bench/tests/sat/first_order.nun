@@ -1,0 +1,17 @@
+
+# Simple types, should have a model easily
+# EXPECT: SAT
+
+val term : type.
+val list : type.
+
+val nil : list.
+val cons : term -> list -> list.
+
+val a : term.
+val b : term.
+
+goal (~ (cons a (cons b nil) = cons b (cons a nil))).
+
+
+

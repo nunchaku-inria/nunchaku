@@ -1,0 +1,6 @@
+
+# Test for inclusion
+
+val p : prop.
+
+# vim:ft=nunchaku:

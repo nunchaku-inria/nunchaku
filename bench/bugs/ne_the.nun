@@ -1,0 +1,14 @@
+# outcome: unknown
+# expected: sat
+
+# Extensionality is needed to compare the two values here.
+# This should be easy (even without prototypes?).
+
+val a : type.
+
+val x : (a -> prop) -> a.
+
+spec The : (a -> prop) -> a :=
+  forall (P : a -> prop) (x1 : a). (exists (xa : a). P xa && (forall (y : a). P y => (y = xa))) => (P x1 = (x1 = The P)).
+
+goal ~ (x = The).

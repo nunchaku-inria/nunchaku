@@ -1,0 +1,10 @@
+# outcome: unknown
+# expect: sat
+
+# This will work once we have prototypes.
+
+val a : type.
+
+val P : a -> prop.
+
+goal ~ P (choice P).

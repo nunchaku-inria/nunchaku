@@ -1,0 +1,20 @@
+# outcome: sat
+# expected: sat
+
+# (1) Ideally, Nunchaku should recover from parsing error and put some special marker, e.g.,
+#     "?__unparsable" or whatever, so that we get a "sat"/"unsat" status and some information about
+#     the model (recall that most users most of the time won't care about the models of recursive
+#     functions, only of the uninterpreted variables, e.g. "P" below).
+#
+# (2) I honestly don't know what kind of crazy stuff CVC4 is doing here and if it's reasonable to
+#     reconstruct it. But in the worst case, we could have a small evaluator for Boolean expressions
+#     in Nunchaku and reconstruct function tables in a systematic way. I doubt we'll get much
+#     milleage from Andy here, unfortunately, so we'll probably need to roll our own (or fall back
+#     on (1)).
+
+rec trans : (prop -> prop -> prop) -> prop :=
+  forall (Q : prop -> prop -> prop). trans Q = (forall (x : prop) (y : prop) (z : prop). (Q x y && Q y z) => Q x z).
+
+val P : prop -> prop -> prop.
+
+goal ~ trans P.

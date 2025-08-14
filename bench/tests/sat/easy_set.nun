@@ -1,0 +1,20 @@
+
+# expected: sat
+
+val a : type.
+
+copy set := a -> prop
+  abstract Collect
+  concrete rmember.
+
+val A : set.
+val B : set.
+
+rec emptyset : set :=
+  emptyset = Collect (fun x. false).
+rec minus_prop : (a -> prop) -> (a -> prop) -> a -> prop :=
+  forall (A1 : a -> prop) (B1 : a -> prop). minus_prop A1 B1 = (fun x. (A1 x) && ~ (B1 x)).
+rec minus : set -> set -> set :=
+  forall (A1 : set) (B1 : set). minus A1 B1 = Collect (minus_prop (fun (x : a). rmember A1 x) (fun (x : a). rmember B1 x)).
+
+goal ~ (emptyset = minus A B).

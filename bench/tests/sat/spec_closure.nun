@@ -1,0 +1,20 @@
+
+# test specialization on non-closed terms
+# expect: sat
+
+data nat := Z | S nat.
+
+rec f : nat -> nat -> nat :=
+  forall n. f Z n = S n;
+  forall m n. f (S m) n = S (f m n).
+
+# to be specialized on a closure
+rec hof : (nat -> nat) -> nat -> nat :=
+  forall f n. hof f n = f (f n).
+
+goal
+  exists m.
+    let g := hof (f m) in
+    exists n. g n = S (S Z).
+
+

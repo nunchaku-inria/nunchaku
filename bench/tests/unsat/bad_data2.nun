@@ -1,0 +1,11 @@
+
+# expect: unsat
+
+data foo := A1 | A2 | A3.
+
+val p : foo -> prop.
+
+axiom forall x. p x => (x=A1).
+
+goal exists x y. x != y && p x && p y.
+

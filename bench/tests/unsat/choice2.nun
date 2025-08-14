@@ -1,0 +1,13 @@
+# expect: UNSAT
+
+# check that [p (choice p)] indeed holds
+
+val a : type.
+
+val p : a -> prop.
+axiom exists x. p x.
+
+rec q : a -> prop := forall x. q x = ~ p x.
+
+goal q (choice (fun x. p x)).
+

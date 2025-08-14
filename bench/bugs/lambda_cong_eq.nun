@@ -1,0 +1,14 @@
+# expected: sat (quickly, by taking x1 = x2)
+# outcome: unknown (mixture of INCOMPLETE and BACKEND_ERROR -- why?)
+
+val a : type.
+val b : type.
+
+rec pair_rep : a -> b -> a -> b -> prop :=
+  forall (x0 : a) (y0 : b). pair_rep x0 y0 = (fun x. fun y. (x = x0) && (y = y0)).
+
+val x1 : a.
+val x2 : a.
+val y : b.
+
+goal pair_rep x1 y = pair_rep x2 y.

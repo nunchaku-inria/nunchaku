@@ -1,0 +1,20 @@
+# outcome: "Error: elim HOF: rec-defined function insert should have full arity 2"
+# expected: unsat or unknown
+# status: unsat
+
+val a : type.
+
+copy set := a -> prop
+  abstract Collect
+  concrete rmember.
+
+rec insert : a -> set -> set :=
+  forall (a1 : a) (B : set). insert a1 B = Collect (fun (x : a). (x = a1) || rmember B x).
+rec sup : prop -> prop -> prop :=
+  forall (P : prop) (Q : prop). sup P Q = (P || Q).
+rec sup1 : (a -> prop) -> (a -> prop) -> a -> prop :=
+  forall (f : a -> prop) (g : a -> prop). sup1 f g = (fun x. sup (f x) (g x)).
+rec sup2 : set -> set -> set :=
+  forall (A : set) (B : set). sup2 A B = Collect (sup1 (fun (x : a). rmember A x) (fun (x : a). rmember B x)).
+
+goal ~ (insert = (fun x. fun y. insert x (sup2 y y))).

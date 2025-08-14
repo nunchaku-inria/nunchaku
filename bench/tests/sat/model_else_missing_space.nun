@@ -1,0 +1,40 @@
+# outcome: sat, with missing space before "else" (e.g. "Nibble8_else") in CVC4 model
+# expected: sat
+
+data nibble_ :=
+  Nibble0_
+| Nibble1_
+| Nibble2_
+| Nibble3_
+| Nibble4_
+| Nibble5_
+| Nibble6_
+| Nibble7_
+| Nibble8_
+| Nibble9_
+| NibbleA_
+| NibbleB_
+| NibbleC_
+| NibbleD_
+| NibbleE_
+| NibbleF_.
+
+rec rot_ : nibble_ -> nibble_ :=
+  rot_ Nibble0_ = Nibble1_;
+  rot_ Nibble1_ = Nibble2_;
+  rot_ Nibble2_ = Nibble3_;
+  rot_ Nibble3_ = Nibble4_;
+  rot_ Nibble4_ = Nibble5_;
+  rot_ Nibble5_ = Nibble6_;
+  rot_ Nibble6_ = Nibble7_;
+  rot_ Nibble7_ = Nibble8_;
+  rot_ Nibble8_ = Nibble9_;
+  rot_ Nibble9_ = NibbleA_;
+  rot_ NibbleA_ = NibbleB_;
+  rot_ NibbleB_ = NibbleC_;
+  rot_ NibbleC_ = NibbleD_;
+  rot_ NibbleD_ = NibbleE_;
+  rot_ NibbleE_ = NibbleF_;
+  rot_ NibbleF_ = Nibble0_.
+
+goal ~ (~ (rot_ Nibble2_ = Nibble3_)).

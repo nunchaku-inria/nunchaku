@@ -1,0 +1,15 @@
+# expected: unsat
+
+# old outcome: sat
+# The monomorphization phase appears to kill "asserting false".
+
+val a : type.
+
+data list :=
+  Nil
+| Cons a list.
+
+val xs : list.
+val dummy : list -> list.
+
+goal ((dummy asserting false) xs) = xs.

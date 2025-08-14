@@ -1,0 +1,51 @@
+# outcome: "Error: env: undefined ID `alphabet`"
+# expected: sat or unknown
+# status: sat
+
+val a : type.
+
+val a1 : a.
+val b : a.
+
+data nat :=
+  zero
+| Suc nat.
+data tree :=
+  Leaf nat a
+| InnerNode nat tree tree.
+
+val t : tree.
+
+rec one : nat :=
+  one = Suc zero.
+rec plus : nat -> nat -> nat :=
+  forall (n : nat). plus zero n = n;
+  forall (m : nat) (n : nat). plus (Suc m) n = Suc (plus m n).
+rec lesseq : nat -> nat -> prop :=
+  forall (n : nat). lesseq zero n = true;
+  forall (m : nat) (n : nat). lesseq (Suc m) n = (match n with  | zero -> false | Suc uu21 -> lesseq m uu21 end).
+
+copy set := a -> prop
+  abstract Collect
+  concrete rmember.
+
+rec sup : prop -> prop -> prop :=
+  forall (P : prop) (Q : prop). sup P Q = (P || Q).
+rec sup1 : (a -> prop) -> (a -> prop) -> a -> prop :=
+  forall (f : a -> prop) (g : a -> prop). sup1 f g = (fun x. sup (f x) (g x)).
+rec sup2 : set -> set -> set :=
+  forall (A : set) (B : set). sup2 A B = Collect (sup1 (fun (x : a). rmember A x) (fun (x : a). rmember B x)).
+rec bot : prop :=
+  bot = false.
+rec bot1 : a -> prop :=
+  bot1 = (fun x. bot).
+rec bot2 : set :=
+  bot2 = Collect bot1.
+rec alphabet : tree -> set :=
+  forall (w : nat) (a2 : a). alphabet (Leaf w a2) = bot2;
+  forall (w : nat) (t1 : tree) (t2 : tree). alphabet (InnerNode w t1 t2) = sup2 (alphabet t1) (alphabet t2).
+rec depth : tree -> a -> nat :=
+  forall (w : nat) (b1 : a) (a2 : a). depth (Leaf w b1) a2 = zero;
+  forall (w : nat) (t1 : tree) (t2 : tree) (a2 : a). depth (InnerNode w t1 t2) a2 = ((if rmember (alphabet t1) a2 then plus (depth t1 a2) one else (if rmember (alphabet t2) a2 then plus (depth t2 a2) one else zero))).
+
+goal ~ (lesseq (depth t a1) (depth t b)).

@@ -1,0 +1,16 @@
+# outcome: "CVC4 error"
+# expected: sat
+
+# Two issues:
+#
+# 1. The "CVC4 error" is not a CVC4 error. It is a Nunchaku error because
+#    Nunchaku cannot parse CVC4's output. This must be clarified. Otherwise,
+#    it sounds as if the error message came straight from CVC4.
+#
+# 2. The parser needs to be generalized some more. (Ask Andy to find out once
+#    and for all what's the output format.)
+
+spec my_not : prop -> prop :=
+  forall x. ~ (my_not x = x).
+
+goal my_not false && ~ (my_not true).

@@ -1,0 +1,26 @@
+# outcome: timeout
+# expected: sat
+
+# An example where CVC4 is slow.
+
+val a : type.
+
+data nat :=
+  zero
+| Suc nat.
+data tree :=
+  Leaf nat a
+| InnerNode nat tree tree.
+
+val t : tree.
+
+rec lesseq : nat -> nat -> prop :=
+  forall (n : nat). lesseq zero n = true;
+  forall (m : nat) (n : nat). lesseq (Suc m) n = (match n with | zero -> false | Suc uu21 -> lesseq m uu21 end).
+rec max : nat -> nat -> nat :=
+  forall (a1 : nat) (b : nat). max a1 b = ((if lesseq a1 b then b else a1)).
+rec height : tree -> nat :=
+  forall (w : nat) (a1 : a). height (Leaf w a1) = zero;
+  forall (w : nat) (t1 : tree) (t2 : tree). height (InnerNode w t1 t2) = Suc (max (height t1) (height t2)).
+
+goal ~ (~ (height t = Suc (Suc (Suc (Suc zero))))).

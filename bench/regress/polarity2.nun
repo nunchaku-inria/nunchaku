@@ -1,0 +1,26 @@
+
+# expected: unknown (unsat)
+
+val a : type.
+
+data nat :=
+  zero
+| Suc nat.
+
+data tree :=
+  Leaf nat a
+| Node nat tree tree.
+
+rec alphabet : tree -> a -> prop :=
+  forall (w : nat) (a2 : a) (b : a). alphabet (Leaf w a2) b = (a2 = b);
+  forall (w : nat) (t1 : tree) (t2 : tree) (a2 : a). alphabet (Node w t1 t2) a2 = (alphabet t1 a2 || alphabet t2 a2).
+
+rec setWeight : tree -> nat -> a -> tree :=
+  forall (wc : nat) (c : a) (wa1 : nat) (a2 : a). setWeight (Leaf wc c) wa1 a2 = (if c = a2 then Leaf wa1 a2 else Leaf wc c);
+  forall (w : nat) (t1 : tree) (t2 : tree) (wa1 : nat) (a2 : a). setWeight (Node w t1 t2) wa1 a2 = Node w (setWeight t1 wa1 a2) (setWeight t2 wa1 a2).
+
+val t : tree.
+val a1 : a.
+val wa : nat.
+
+goal alphabet t a1 && ~ alphabet (setWeight t wa a1) a1.
