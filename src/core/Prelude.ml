@@ -73,7 +73,7 @@ let decl_choice =
        (=
         (choice p)
         (let
-          self (?__ (choice p))
+          self (choice p)
           (asserting
             self
             (or (= p (fun x false))
@@ -86,7 +86,7 @@ let decl_unique =
       "(forall p
        (=
         (unique p)
-        (let self (?__ (unique p))
+        (let self (unique p)
           (asserting
            self
            (or
@@ -101,8 +101,7 @@ let decl_unique_unsafe =
       "(forall p
        (=
         (unique_unsafe p)
-        (let self 
-         (?__ (unique_unsafe p))
+        (let self (unique_unsafe p)
           (asserting
            self
            (p self)))))"
@@ -114,5 +113,3 @@ let decls =
   ; decl_unique
   ; decl_unique_unsafe
   ]
-
-
