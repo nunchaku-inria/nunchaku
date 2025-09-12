@@ -71,13 +71,13 @@ let decl_choice =
   let ax = p_term
       "(forall p
        (=
-        (choice p)
-        (let
-          self (choice p)
-          (asserting
-            self
-            (or (= p (fun x false))
-                (p self))))))"
+         (choice p)
+         (let
+           self (?__ (choice p))
+           (asserting
+             self
+             (or (= p (fun x false))
+                 (p self))))))"
   in
   A.Rec [ ID.name choice, ty_choice_, [ax] ] |> mk_stmt
 
@@ -85,14 +85,14 @@ let decl_unique =
   let ax = p_term
       "(forall p
        (=
-        (unique p)
-        (let self (unique p)
-          (asserting
-           self
-           (or
-             (= p (fun x (= x self)))
-             (= p (fun x false))
-             (exists x (exists y (and (!= x y) (p x) (p y)))))))))"
+         (unique p)
+         (let self (?__ (unique p))
+           (asserting
+            self
+            (or
+              (= p (fun x (= x self)))
+              (= p (fun x false))
+              (exists x (exists y (and (!= x y) (p x) (p y)))))))))"
   in
   A.Rec [ ID.name unique, ty_choice_, [ax] ] |> mk_stmt
 
@@ -100,11 +100,12 @@ let decl_unique_unsafe =
   let ax = p_term
       "(forall p
        (=
-        (unique_unsafe p)
-        (let self (unique_unsafe p)
-          (asserting
-           self
-           (p self)))))"
+         (unique_unsafe p)
+         (let self 
+          (?__ (unique_unsafe p))
+           (asserting
+            self
+            (p self)))))"
   in
   A.Rec [ ID.name unique_unsafe, ty_choice_, [ax] ] |> mk_stmt
 
