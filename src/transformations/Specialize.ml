@@ -503,10 +503,10 @@ let max_closure_var_type_card = 10 (* FUDGE *)
    functions, even if they are recursive.
 *)
 
-(* is the function deterministic?
+(* is the function fully specified?
    this should be a safe approximation, that is, only return [true] if we
    are {b sure} that the function is. When in doubt, return [false] *)
-let fun_is_deterministic ~self (f:ID.t): bool =
+let fun_is_fully_specified ~self (f:ID.t): bool =
   let info = Env.find_exn ~env:(Trav.env self) f in
   let res = match Env.def info with
     | Env.Fun_def (defs, def, _) ->
@@ -521,14 +521,14 @@ let fun_is_deterministic ~self (f:ID.t): bool =
       in
       (* check if any subterm of [t] is an unknown, or one of the
          mutually recursive functions *)
-      let check_def_deterministic (t:term): bool =
+      let check_def_fully_specified (t:term): bool =
         T.to_iter t
         |> Iter.for_all
           (fun t -> match T.repr t with
              | TI.Const id -> not (ID.Set.mem id rec_ids)
              | TI.Builtin (`Undefined_self _ | `Undefined_atom _
                           | `Unparsable _ | `Card_at_least _) ->
-               false (* not always deterministic *)
+               false (* possibly underspecified *)
              | TI.Builtin (`Ite _ | `And _ | `Or _ | `Not _ | `Eq _ |
                            `False | `True | `Imply _ | `DataTest _ |
                            `DataSelect _ | `Guard _) -> true
@@ -540,13 +540,13 @@ let fun_is_deterministic ~self (f:ID.t): bool =
       begin match def.Stmt.rec_eqns with
         | Stmt.Eqn_nested _
         | Stmt.Eqn_app (_,_,_,_) -> false (* too complicated to handle *)
-        | Stmt.Eqn_single (_,rhs) -> check_def_deterministic rhs
+        | Stmt.Eqn_single (_,rhs) -> check_def_fully_specified rhs
       end
     | Env.Copy_abstract _ | Env.Copy_concrete _
     | Env.Fun_spec _ | Env.Pred _ | Env.NoDef
     | Env.Copy_ty _ | Env.Cstor _ | Env.Data _ -> false
   in
-  Utils.debugf ~section 4 "@[<2>symbol `%a` deterministic? %B@]"
+  Utils.debugf ~section 4 "@[<2>symbol `%a` fully specified? %B@]"
     (fun k->k ID.pp_full f res);
   res
 
@@ -577,7 +577,7 @@ let arg_has_small_ty_closure_vars ~self t: bool =
 let decide_if_specialize ~self f ty l : specialization_decision =
   (* apply to type arguments *)
   let info = Env.find_exn ~env:(Trav.env self) f in
-  let is_deterministic = lazy (fun_is_deterministic ~self f) in
+  let is_fully_specified = lazy (fun_is_fully_specified ~self f) in
   match Env.def info with
     | Env.Fun_def _ ->
       (* only inline defined functions, not constructors or axiomatized symbols *)
@@ -595,7 +595,7 @@ let decide_if_specialize ~self f ty l : specialization_decision =
              && not (T.is_var arg)
              && heuristic_should_specialize_arg arg ty
              (* will we have to pay specialization with evil congruence axioms? *)
-             && (Lazy.force is_deterministic || arg_has_small_ty_closure_vars ~self arg)
+             && (Lazy.force is_fully_specified || arg_has_small_ty_closure_vars ~self arg)
              then `Specialize (i, arg)
              else `Keep arg)
         |> CCList.partition_filter_map
@@ -647,7 +647,7 @@ let add_instance ~self f i: unit =
     | None ->
       let nfs = {
         nfs_instances=[i];
-        nfs_needs_congruence=not (fun_is_deterministic ~self f);
+        nfs_needs_congruence=not (fun_is_fully_specified ~self f);
       } in
       ID.Tbl.add state.new_funs f nfs
 
@@ -1083,7 +1083,7 @@ let mk_congruence_axiom v1 v2 =
   T.close_forall ax
 
 (* add self-congruence axioms, if needed.
-   Those axioms are relevant when a non-deterministic function is
+   Those axioms are relevant when a possibly underspecified function is
    specialized with arguments that have closure variables.
 
    For instance, specializing [choice (fun x. f x y)]
