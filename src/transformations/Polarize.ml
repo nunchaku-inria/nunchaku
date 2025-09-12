@@ -153,6 +153,9 @@ let returns_prop ~self t =
   let ty = T.ty_exn ~env:(Trav.env self) t in
   T.ty_returns_Prop ty
 
+let t_eq_simp t u =
+  if T.equal t u then [] else [T.eq t u]
+
 (* traverse [t], replacing some symbols by their polarized version,
    @return the term with more internal guards and polarized symbols *)
 let rec polarize_term_rec
@@ -263,7 +266,7 @@ let rec polarize_term_rec
         let b_minus = polarize_term_rec ~self Pol.Neg subst b in
         T.asserting
           (T.eq a_plus b_plus)
-          [T.eq a_plus a_minus; T.eq b_plus b_minus]
+          (t_eq_simp a_plus a_minus @ t_eq_simp b_plus b_minus)
       | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun | Binder.Mu), _, _)
       | TI.Builtin (`Ite _ | `Eq _ | `And _ | `Or _ | `Not _  | `Imply _)
       | TI.Let _
