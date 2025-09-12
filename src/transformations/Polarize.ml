@@ -256,13 +256,13 @@ let rec polarize_term_rec
         polarize_term_rec ~self pol subst (T.and_ [T.imply a b; T.imply b a])
       | TI.Builtin (`Eq (a,b)) when returns_prop ~self a ->
         (* [f = g] when both are predicates ==>
-           [f+ = g+ ∧ f- = g- asserting (f+=f- ∧ g+=g-)] *)
+           [f+ = g+ asserting (f+ = f- ∧ g+ = g-)] *)
         let a_plus = polarize_term_rec ~self Pol.Pos subst a in
         let a_minus = polarize_term_rec ~self Pol.Neg subst a in
         let b_plus = polarize_term_rec ~self Pol.Pos subst b in
         let b_minus = polarize_term_rec ~self Pol.Neg subst b in
         T.asserting
-          (T.and_ [T.eq a_plus b_plus; T.eq a_minus b_minus])
+          (T.eq a_plus b_plus)
           [T.eq a_plus a_minus; T.eq b_plus b_minus]
       | TI.Bind ((Binder.Forall | Binder.Exists | Binder.Fun | Binder.Mu), _, _)
       | TI.Builtin (`Ite _ | `Eq _ | `And _ | `Or _ | `Not _  | `Imply _)
