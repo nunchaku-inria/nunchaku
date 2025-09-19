@@ -249,6 +249,22 @@ module DT = struct
     in
     check_vars (vars t) t
 
+  (*
+    TODO
+    This algorithm currently takes some flat decision tree with
+    switch
+     | (c11 && c12 && ...) -> body
+     | (c21 && c22 && ...) -> body
+     ...
+    assuming that each cn conjunction only carries one branch over a given variable
+    it then eliminates the variables one by one by pulling that branch out into case statements
+    however we have observed in cvc5 that different things might happen. We can encounter situations
+    where for i != j cni and cnj both bind a variable x. To account for this I propose to
+    check whether a list still contains a binding for a variable after we are done with it and if
+    yes do not yet remove the variable from the set of variables to eliminate. If the models
+    produced by this turn out to be too ugly we can still run some path sensitive data flow analysis
+    to simplify the model afterwards.
+   *)
   (* recursively build a decision tree on the given list of variables *)
   let of_flat (type a) ~equal ~hash fdt =
     let module TTbl = CCHashtbl.Make(struct

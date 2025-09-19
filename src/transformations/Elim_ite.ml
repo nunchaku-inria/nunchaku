@@ -126,6 +126,7 @@ let transform_statement st =
   Utils.debugf ~section 3 "@[<2>transform @{<cyan>statement@}@ `@[%a@]`@]"
     (fun k->k FO.pp_statement st);
   match st with
+    | FO.TyAlias _
     | FO.TyDecl _
     | FO.Decl _
     | FO.CardBound _

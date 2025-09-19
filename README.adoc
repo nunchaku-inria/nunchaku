@@ -130,6 +130,7 @@ Supported solver backends:
   http://vlsicad.eecs.umich.edu/BK/Slots/cache/www.cs.chalmers.se/~koen/paradox/[official page])
 - https://github.com/emina/kodkod[Kodkod] with its "kodkodi" parser
 - https://github.com/c-cube/smbc/[SMBC] (`opam install smbc`)
+- https://cvc5.github.io/[CVC5] (after commit b056bd2446cd3e7b8dd4fdc76b87ed0ea3b4aef0)
 
 
 === How to make a release

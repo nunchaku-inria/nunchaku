@@ -91,6 +91,7 @@ type attr =
 
 (** Statement *)
 type ('t, 'ty) statement =
+  | TyAlias of id * 'ty toplevel_ty * attr list
   | TyDecl of id * int * attr list (** number of arguments *)
   | Decl of id * 'ty toplevel_ty * attr list
   | Axiom of 't
@@ -307,7 +308,7 @@ let tys_of_toplevel_ty (l,ret) yield =
   List.iter yield l; yield ret
 
 let st_to_seq_ t ~term:yield_term ~ty:yield_ty = match t with
-  | TyDecl (_,_,_) -> ()
+  | TyDecl (_,_,_) | TyAlias (_, _, _) -> ()
   | Decl (_,ty,_) -> tys_of_toplevel_ty ty yield_ty
   | Axiom t -> yield_term t
   | CardBound (_,_,_) -> ()
@@ -399,6 +400,8 @@ let pp_attrs out = function
   | l -> fpf out " [@[%a@]]" (pp_list_ ~sep:"," pp_attr) l
 
 let pp_statement out s = match s with
+  | TyAlias (id, ty, attrs) ->
+    fpf out "@[<2>type alias %a = %a%a.@]" ID.pp id pp_toplevel_ty ty pp_attrs attrs
   | TyDecl (id, n, attrs) ->
     fpf out "@[<2>type %a (arity %d%a).@]" ID.pp id n pp_attrs attrs
   | Decl (v, ty, attrs) ->
@@ -447,7 +450,7 @@ module Util = struct
   (* evaluate the lazy -> pp a warning *)
 
   let mk_eq = DT.mk_flat_test
-  let mk_true v = mk_eq v T.true_
+  let mk_eq_true v = mk_eq v T.true_
 
   (* split [t] into a list of equations [var = t'] where [var in vars] *)
   let rec get_eqns_exn ~vars t : cond list =
@@ -470,7 +473,7 @@ module Util = struct
         end
       | Var v when List.exists (Var.equal v) vars ->
         assert (Ty.is_prop (Var.ty v));
-        [mk_true v]
+        [mk_eq_true v]
       | Var _ ->
         let msg = lazy (
           Utils.warningf Utils.Warn_model_parsing_error
@@ -526,7 +529,7 @@ module Util = struct
 
     let ite
       : type a. Ty.t Var.t -> a t -> a t -> a t
-      = fun v a b -> case [mk_true v] a b
+      = fun v a b -> case [mk_eq_true v] a b
 
     let rec fold_m f acc l = match l with
       | [] -> return acc
@@ -625,7 +628,7 @@ module Util = struct
   let problem_kinds pb =
     let module M = Model in
     let add_stmt m = function
-      | TyDecl (id, _, _) -> ID.Map.add id M.Symbol_utype m
+      | TyAlias (id, _, _) | TyDecl (id, _, _) -> ID.Map.add id M.Symbol_utype m
       | Decl (id, (_, ret), _) ->
         let k = match Ty.view ret with
           | TyBuiltin `Prop -> M.Symbol_prop
