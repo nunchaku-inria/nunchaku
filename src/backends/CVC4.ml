@@ -307,6 +307,7 @@ let pp_problem out (decode, pb) =
         Var.pp_full v pp_ty (Var.ty v) pp_term f
 
   and pp_statement out = function
+    | FO.TyAlias _ -> assert false
     | FO.TyDecl (id,arity,_) ->
       fpf out "(@[declare-sort@ %a@ %d@])" pp_id id arity
     | FO.Decl (v,ty,_) ->
@@ -777,6 +778,7 @@ let preprocess pb : processed_problem =
   let pb =
     FO.Problem.flat_map ~meta:(FO.Problem.meta pb)
       (fun stmt -> match stmt with
+         | FO.TyAlias _ -> assert false
          | FO.Decl (id,(args,_),_) ->
            let len = List.length args in
            begin if len=0
