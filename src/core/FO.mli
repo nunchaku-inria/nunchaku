@@ -89,6 +89,7 @@ type attr =
 
 (** Statement *)
 type ('t, 'ty) statement =
+  | TyAlias of id * 'ty toplevel_ty * attr list
   | TyDecl of id * int * attr list (** number of arguments *)
   | Decl of id * 'ty toplevel_ty * attr list
   | Axiom of 't
