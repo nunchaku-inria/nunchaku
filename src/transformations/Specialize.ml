@@ -1446,7 +1446,7 @@ let pipe_with ?on_decoded ~decode ~print ~check () =
   in
   Transform.make
     ~name
-    ~input_spec:Transform.Features.(of_list [Ty, Mono; Eqn, Eqn_single; Match, Present])
+    ~input_spec:Transform.Features.(of_list [Ty, Mono; Eqn, Eqn_single])
     ~on_encoded ?on_decoded
     ~encode:(fun pb ->
       let pb, decode = specialize_problem pb in
