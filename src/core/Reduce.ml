@@ -92,9 +92,18 @@ module Make(T : TI.FULL)
     open State
 
     type cstor_ =
+      | BCstor of T.t list
       | BPartial of T.t
 
-    let as_cstor_ t = BPartial t
+    let as_cstor_ wanted t =
+      match T.repr t with
+        | TI.Const id when id == wanted -> BCstor []
+        | TI.App (f, l) ->
+            begin match T.repr f with
+              | TI.Const id when id == wanted -> BCstor l
+              | _ -> BPartial t
+            end
+        | _ -> BPartial t
 
     type bool_ =
       | BTrue
@@ -212,16 +221,20 @@ module Make(T : TI.FULL)
           assert (List.length args = 1);
           let arg = List.hd args in
           begin match
-              eval_term ~subst arg |> as_cstor_
+              eval_term ~subst arg |> as_cstor_ cstor
             with
+              | BCstor _ -> State.const ~guard ~subst T.true_
               | BPartial arg -> State.make ~guard ~subst (T.data_test cstor arg) []
           end
         | `DataSelect (cstor, field) ->
           assert (List.length args = 1);
           let arg = List.hd args in
           begin match
-              eval_term ~subst arg |> as_cstor_
+              eval_term ~subst arg |> as_cstor_ cstor
             with
+              | BCstor args ->
+                  assert (field < List.length args);
+                  State.make ~guard ~subst (List.nth args field) []
               | BPartial arg -> State.make ~guard ~subst (T.data_select cstor field arg) []
           end
         | `Unparsable _
