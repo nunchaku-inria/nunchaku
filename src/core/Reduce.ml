@@ -97,10 +97,10 @@ module Make(T : TI.FULL)
 
     let as_cstor_ wanted t =
       match T.repr t with
-        | TI.Const id when id == wanted -> BCstor []
+        | TI.Const id when ID.equal id wanted -> BCstor []
         | TI.App (f, l) ->
             begin match T.repr f with
-              | TI.Const id when id == wanted -> BCstor l
+              | TI.Const id when ID.equal id wanted -> BCstor l
               | _ -> BPartial t
             end
         | _ -> BPartial t
