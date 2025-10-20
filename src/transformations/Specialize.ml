@@ -508,7 +508,8 @@ let max_closure_var_type_card = 10 (* FUDGE *)
    are {b sure} that the function is. When in doubt, return [false] *)
 let fun_is_fully_specified ~self (f:ID.t): bool =
   let info = Env.find_exn ~env:(Trav.env self) f in
-  let res = match Env.def info with
+  let attrs = Env.attrs info in
+  let res = List.mem Stmt.Attr_fully_specified attrs || match Env.def info with
     | Env.Fun_def (defs, def, _) ->
       (* check that the definitions contain none of:
          - unknown

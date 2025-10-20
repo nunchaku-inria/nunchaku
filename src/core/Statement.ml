@@ -33,6 +33,7 @@ type decl_attr =
       [handle -> a_1 -> ... -> a_n -> ret], where the proto
       has type [handle -> a_k]. *)
   | Attr_never_box (** This function should never be boxed in ElimRec *)
+  | Attr_fully_specified (** marks fully specified declarations *)
 
 type 'ty defined = {
   defined_head: id; (* symbol being defined *)
@@ -535,6 +536,7 @@ let pp_attr out = function
   | Attr_is_handle_cstor -> CCFormat.string out "handle_type"
   | Attr_proto_val (id, n) -> fpf out "proto_%d_of_%a" n ID.pp id
   | Attr_never_box -> CCFormat.string out "never_box"
+  | Attr_fully_specified -> CCFormat.string out "fully_specified"
 
 let pp_attrs out = function
   | [] -> ()
