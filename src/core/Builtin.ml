@@ -248,5 +248,11 @@ let to_sexp
       | `Undefined_atom _ -> str "?__"
       | `Unparsable ty ->
         lst [str "?__unparsable"; cterm ty]
-      | `Card_at_least _
-      | `Guard _ -> assert false (* TODO *)
+      | `Guard (a, b) ->
+          let conditions =
+            CCList.map cterm b.asserting |>
+            CCList.reduce (fun l r -> lst [str "and"; l; r]) |>
+            CCOption.get_or ~default:(str "true")
+          in
+          lst [str "asserting"; cterm a; conditions]
+      | `Card_at_least _ -> assert false (* TODO *)
