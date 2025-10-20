@@ -508,7 +508,8 @@ let max_closure_var_type_card = 10 (* FUDGE *)
    are {b sure} that the function is. When in doubt, return [false] *)
 let fun_is_fully_specified ~self (f:ID.t): bool =
   let info = Env.find_exn ~env:(Trav.env self) f in
-  let res = match Env.def info with
+  let attrs = Env.attrs info in
+  let res = List.mem Stmt.Attr_fully_specified attrs || match Env.def info with
     | Env.Fun_def (defs, def, _) ->
       (* check that the definitions contain none of:
          - unknown
@@ -1446,7 +1447,7 @@ let pipe_with ?on_decoded ~decode ~print ~check () =
   in
   Transform.make
     ~name
-    ~input_spec:Transform.Features.(of_list [Ty, Mono; Eqn, Eqn_single; Match, Present])
+    ~input_spec:Transform.Features.(of_list [Ty, Mono; Eqn, Eqn_single])
     ~on_encoded ?on_decoded
     ~encode:(fun pb ->
       let pb, decode = specialize_problem pb in

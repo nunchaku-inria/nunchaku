@@ -35,6 +35,7 @@ type decl_attr =
       [handle -> a_1 -> ... -> a_n -> ret], where the proto
       has type [handle -> a_k]. *)
   | Attr_never_box (** This function should never be boxed in ElimRec *)
+  | Attr_fully_specified (** marks fully specified declarations *)
 
 type 'ty defined = {
   defined_head: id; (* symbol being defined *)

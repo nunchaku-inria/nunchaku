@@ -412,6 +412,9 @@ let make_model_pipeline () =
       ~print:(!pp_skolem_ || !pp_all_) ~mode:`Sk_all ~check @@@
     Tr.ElimIndPreds.pipe ~print:(!pp_elim_preds_ || !pp_all_)
       ~check ~mode:`Use_selectors @@@
+    (if !enable_specialize_
+     then Tr.Specialize.pipe ~print:(!pp_specialize_ || !pp_all_) ~check
+     else Transform.nop ()) @@@
     Tr.ElimData.Data.pipe ~print:(!pp_elim_data_ || !pp_all_) ~check @@@
     Tr.LambdaLift.pipe ~print:(!pp_lambda_lift_ || !pp_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!pp_elim_hof_ || !pp_all_) ~check @@@
@@ -466,6 +469,9 @@ let make_model_pipeline () =
       ~print:(!pp_skolem_ || !pp_all_) ~mode:`Sk_all ~check @@@
     Tr.ElimIndPreds.pipe ~mode:`Use_match
       ~print:(!pp_elim_preds_ || !pp_all_) ~check @@@
+    (if !enable_specialize_
+     then Tr.Specialize.pipe ~print:(!pp_specialize_ || !pp_all_) ~check
+     else Transform.nop ()) @@@
     (*
     Tr.LambdaLift.pipe ~print:(!pp_lambda_lift_ || !pp_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!pp_elim_hof_ || !pp_all_) ~check @@@
@@ -485,6 +491,9 @@ let make_model_pipeline () =
     Tr.ElimIndPreds.pipe
       ~mode:`Use_selectors
       ~print:(!pp_elim_preds_ || !pp_all_) ~check @@@
+    (if !enable_specialize_
+     then Tr.Specialize.pipe ~print:(!pp_specialize_ || !pp_all_) ~check
+     else Transform.nop ()) @@@
     Tr.LambdaLift.pipe ~print:(!pp_lambda_lift_ || !pp_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!pp_elim_hof_ || !pp_all_) ~check @@@
     Tr.ElimRecursion.pipe ~print:(!pp_elim_recursion_ || !pp_all_) ~check @@@

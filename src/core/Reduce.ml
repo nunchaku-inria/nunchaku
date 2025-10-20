@@ -91,6 +91,20 @@ module Make(T : TI.FULL)
   module Full = struct
     open State
 
+    type cstor_ =
+      | BCstor of T.t list
+      | BPartial of T.t
+
+    let as_cstor_ wanted t =
+      match T.repr t with
+        | TI.Const id when ID.equal id wanted -> BCstor []
+        | TI.App (f, l) ->
+            begin match T.repr f with
+              | TI.Const id when ID.equal id wanted -> BCstor l
+              | _ -> BPartial t
+            end
+        | _ -> BPartial t
+
     type bool_ =
       | BTrue
       | BFalse
@@ -203,10 +217,26 @@ module Make(T : TI.FULL)
               | BFalse -> eval (State.make ~guard ~subst c args)
               | BPartial a' -> State.make ~guard ~subst (T.ite a' b c) args
           end
-        | `DataTest _ ->
-          Utils.not_implemented "evaluation of DataTest"
-        | `DataSelect (_,_) ->
-          Utils.not_implemented "evaluation of DataSelect"
+        | `DataTest cstor ->
+          assert (List.length args = 1);
+          let arg = List.hd args in
+          begin match
+              eval_term ~subst arg |> as_cstor_ cstor
+            with
+              | BCstor _ -> State.const ~guard ~subst T.true_
+              | BPartial arg -> State.make ~guard ~subst (T.data_test cstor arg) []
+          end
+        | `DataSelect (cstor, field) ->
+          assert (List.length args = 1);
+          let arg = List.hd args in
+          begin match
+              eval_term ~subst arg |> as_cstor_ cstor
+            with
+              | BCstor args ->
+                  assert (field < List.length args);
+                  State.make ~guard ~subst (List.nth args field) []
+              | BPartial arg -> State.make ~guard ~subst (T.data_select cstor field arg) []
+          end
         | `Unparsable _
         | `Undefined_self _
         | `Undefined_atom _
