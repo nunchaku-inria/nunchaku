@@ -341,7 +341,7 @@ let pred_to_def
     in
     let rhs = T.or_ cases in
     {Stmt.
-      rec_defined=d;
+      rec_defined={ d with Stmt.defined_attrs = Stmt.Attr_fully_specified :: d.Stmt.defined_attrs };
       rec_ty_vars=[];
       rec_eqns=Stmt.Eqn_single (vars,rhs);
     }

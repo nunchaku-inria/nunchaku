@@ -380,6 +380,11 @@ let make_model_pipeline () =
   let paradox = make_paradox () in
   let kodkod = make_kodkod () in
   let smbc = make_smbc () in
+  let make_specialize () =
+    if !enable_specialize_ then
+      Tr.Specialize.pipe ~print:(!pp_specialize_ || !pp_all_) ~check
+    else
+      Transform.nop () in
   let pipe_common k =
     Step_tyinfer.pipe ~print:(!pp_typed_ || !pp_all_) @@@
     Step_conv_ty.pipe () @@@
@@ -395,9 +400,7 @@ let make_model_pipeline () =
     Tr.ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~check
       ~print:(!pp_elim_multi_eqns || !pp_all_) @@@
-    (if !enable_specialize_
-     then Tr.Specialize.pipe ~print:(!pp_specialize_ || !pp_all_) ~check
-     else Transform.nop ()) @@@
+    (make_specialize ()) @@@
     Tr.Cstor_as_fun.pipe ~print:(!pp_cstor_as_fun_ || !pp_all_) ~check @@@
     k
   and pipe_common_paradox_kodkod k =
@@ -412,6 +415,7 @@ let make_model_pipeline () =
       ~print:(!pp_skolem_ || !pp_all_) ~mode:`Sk_all ~check @@@
     Tr.ElimIndPreds.pipe ~print:(!pp_elim_preds_ || !pp_all_)
       ~check ~mode:`Use_selectors @@@
+    (make_specialize ()) @@@
     Tr.ElimData.Data.pipe ~print:(!pp_elim_data_ || !pp_all_) ~check @@@
     Tr.LambdaLift.pipe ~print:(!pp_lambda_lift_ || !pp_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!pp_elim_hof_ || !pp_all_) ~check @@@
@@ -443,9 +447,7 @@ let make_model_pipeline () =
     Tr.ElimMultipleEqns.pipe
       ~decode:(fun x->x) ~check
       ~print:(!pp_elim_multi_eqns || !pp_all_) @@@
-    (if !enable_specialize_
-     then Tr.Specialize.pipe ~print:(!pp_specialize_ || !pp_all_) ~check
-     else Transform.nop ()) @@@
+    (make_specialize ()) @@@
     (*
     Tr.Skolem.pipe
       ~skolems_in_model:!skolems_in_model_
@@ -466,6 +468,7 @@ let make_model_pipeline () =
       ~print:(!pp_skolem_ || !pp_all_) ~mode:`Sk_all ~check @@@
     Tr.ElimIndPreds.pipe ~mode:`Use_match
       ~print:(!pp_elim_preds_ || !pp_all_) ~check @@@
+    (make_specialize ()) @@@
     (*
     Tr.LambdaLift.pipe ~print:(!pp_lambda_lift_ || !pp_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!pp_elim_hof_ || !pp_all_) ~check @@@
@@ -485,6 +488,7 @@ let make_model_pipeline () =
     Tr.ElimIndPreds.pipe
       ~mode:`Use_selectors
       ~print:(!pp_elim_preds_ || !pp_all_) ~check @@@
+    (make_specialize ()) @@@
     Tr.LambdaLift.pipe ~print:(!pp_lambda_lift_ || !pp_all_) ~check @@@
     Tr.Elim_HOF.pipe ~print:(!pp_elim_hof_ || !pp_all_) ~check @@@
     Tr.ElimRecursion.pipe ~print:(!pp_elim_recursion_ || !pp_all_) ~check @@@
