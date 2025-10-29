@@ -102,7 +102,9 @@ let encode_clause_selectors ~env vars args ~c_vars ~c_guard =
     List.fold_left2
       (fun (subst,conds) v arg ->
          match T.repr arg with
-           | TI.Var v' ->
+           (* The guard protects us from situations where a v' has to be made
+              equal to multiple different v *)
+           | TI.Var v' when Var.Subst.find ~subst v' |> CCOption.is_none ->
              (* [arg_i = v'], so making [arg_i = v] is as simple as [v' := v] *)
              Var.Subst.add ~subst v' (T.var v), conds
            | _ ->
