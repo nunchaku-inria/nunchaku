@@ -1,0 +1,21 @@
+
+# EXPECT: UNSAT
+
+data Nat  :=  | Nat_succ Nat | Nat_zero .
+
+pred Nat_le : Nat -> Nat -> prop :=
+       forall n. Nat_le n n;
+       forall n m. Nat_le n m => Nat_le n (Nat_succ m).
+
+data Bool  :=  | Bool_true  | Bool_false .
+
+rec Nat_ble : Nat -> Nat -> Bool :=
+    Nat_ble Nat_zero Nat_zero = Bool_true;
+    forall (n:Nat). Nat_ble Nat_zero (Nat_succ n) = Bool_true;
+    forall (n:Nat). Nat_ble (Nat_succ n) Nat_zero = Bool_false;
+    forall (n:Nat) (m:Nat). Nat_ble (Nat_succ n) (Nat_succ m) = Nat_ble n m.
+
+val a : Nat.
+val b : Nat.
+
+goal ((Nat_ble a b = Bool_true) != Nat_le a b).
