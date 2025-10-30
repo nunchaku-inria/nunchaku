@@ -340,7 +340,7 @@ module DT = struct
       | Some d, l -> mk_fun fdt.fdt_vars (mk_ite l (ft d))
       | None, ((eqns, rhs) :: tail) ->
         (* last "if" has no "else" *)
-        let d = lst [str "if"; eqns_to_sexp eqns; ft rhs] in
+        let d = lst [str "asserting"; ft rhs; eqns_to_sexp eqns] in
         mk_fun fdt.fdt_vars (mk_ite tail d)
       | None, [] -> assert false
 
