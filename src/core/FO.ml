@@ -91,6 +91,7 @@ type attr =
 
 (** Statement *)
 type ('t, 'ty) statement =
+  | TyAlias of id * 'ty toplevel_ty * attr list
   | TyDecl of id * int * attr list (** number of arguments *)
   | Decl of id * 'ty toplevel_ty * attr list
   | Axiom of 't
@@ -307,7 +308,7 @@ let tys_of_toplevel_ty (l,ret) yield =
   List.iter yield l; yield ret
 
 let st_to_seq_ t ~term:yield_term ~ty:yield_ty = match t with
-  | TyDecl (_,_,_) -> ()
+  | TyDecl (_,_,_) | TyAlias (_, _, _) -> ()
   | Decl (_,ty,_) -> tys_of_toplevel_ty ty yield_ty
   | Axiom t -> yield_term t
   | CardBound (_,_,_) -> ()
@@ -399,6 +400,8 @@ let pp_attrs out = function
   | l -> fpf out " [@[%a@]]" (pp_list_ ~sep:"," pp_attr) l
 
 let pp_statement out s = match s with
+  | TyAlias (id, ty, attrs) ->
+    fpf out "@[<2>type alias %a = %a%a.@]" ID.pp id pp_toplevel_ty ty pp_attrs attrs
   | TyDecl (id, n, attrs) ->
     fpf out "@[<2>type %a (arity %d%a).@]" ID.pp id n pp_attrs attrs
   | Decl (v, ty, attrs) ->
@@ -625,7 +628,7 @@ module Util = struct
   let problem_kinds pb =
     let module M = Model in
     let add_stmt m = function
-      | TyDecl (id, _, _) -> ID.Map.add id M.Symbol_utype m
+      | TyAlias (id, _, _) | TyDecl (id, _, _) -> ID.Map.add id M.Symbol_utype m
       | Decl (id, (_, ret), _) ->
         let k = match Ty.view ret with
           | TyBuiltin `Prop -> M.Symbol_prop
