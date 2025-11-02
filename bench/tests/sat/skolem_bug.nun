@@ -1,0 +1,10 @@
+data Nat  :=  | Nat_succ Nat | Nat_zero .
+
+pred [wf] foo : Nat -> prop :=
+  forall x. (exists y . x = y) => foo x.
+
+val n : Nat.
+val m : Nat.
+axiom n != m.
+
+goal foo n && foo m.

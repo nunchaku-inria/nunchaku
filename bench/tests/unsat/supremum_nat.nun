@@ -1,0 +1,10 @@
+data Nat  :=  | Nat_succ Nat | Nat_zero .
+pred[wf] Nat_le : Nat -> Nat -> prop :=
+           forall x1. Nat_le x1 x1;
+           forall x2 x3. Nat_le x2 x3 => Nat_le x2 (Nat_succ x3).
+
+pred [wf] supremum : Nat -> prop :=
+  forall x. (forall y . Nat_le y x) => supremum x.
+
+val n : Nat.
+goal supremum n.

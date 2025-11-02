@@ -223,23 +223,11 @@ let skolemize_stmt ~state st =
   match Stmt.view st with
     | Stmt.Axiom (Stmt.Axiom_std l) ->
       Stmt.axiom ~info (List.map (sk_term () Pol.Pos) l)
-    | Stmt.Axiom (Stmt.Axiom_spec l) ->
-      let l = Stmt.map_spec_defs ~term:(sk_term () Pol.Pos) ~ty:CCFun.id l in
-      Stmt.axiom_spec ~info l
-    | Stmt.Axiom (Stmt.Axiom_rec l) ->
-      let l = Stmt.map_rec_defs_bind () l
-          ~bind:(fun () v->(),v) ~ty:(fun () ty->ty)
-          ~term:(sk_term ~in_goal:false)
-      in
-      Stmt.axiom_rec ~info l
-    | Stmt.Pred (wf, kind, l) ->
-      let l = Stmt.map_preds_bind () l
-          ~bind:(fun () v->(),v) ~ty:(fun () ty ->ty)
-          ~term:(sk_term ~in_goal:false)
-      in
-      Stmt.mk_pred ~info ~wf kind l
     | Stmt.Goal g ->
       Stmt.goal ~info (sk_term ~in_goal:true () Pol.Pos g)
+    | Stmt.Axiom (Stmt.Axiom_spec _)
+    | Stmt.Axiom (Stmt.Axiom_rec _)
+    | Stmt.Pred _
     | Stmt.Copy _
     | Stmt.TyDef _
     | Stmt.Decl _ -> st
