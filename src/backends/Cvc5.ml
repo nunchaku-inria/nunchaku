@@ -701,7 +701,7 @@ let read_res_ ~info ~print_model ~decode s =
 
 (* the set of options given to every instance of cvc5 *)
 let basic_options =
-  "--lang smt --uf-ss-fair-monotone --no-condense-function-values"
+  "--lang smt --finite-model-find"
 
 let mk_info ~options (decode : decode_state) : Res.info =
   let time = Utils.Time.get_timer decode.timer in
@@ -865,13 +865,13 @@ let is_available () =
     res
   with Sys_error _ -> false
 
-(* TODO: Ask cvc5 team about wich options to use for portfolio *)
 let options_l =
   [
-    "";
-    "--uf-ss=no-minimal --decision=internal";
-    "--uf-ss=none";
     "--fmf-mbqi=none";
+    "--decision=internal";
+    "--macros-quant --macros-quant-mode=all";
+    "--e-matching";
+    "--mbqi --fmf-mbqi=none";
   ]
 
 (* solve problem using cvc5 before [deadline] *)
