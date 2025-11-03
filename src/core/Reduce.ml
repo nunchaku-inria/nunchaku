@@ -227,15 +227,21 @@ module Make(T : TI.FULL)
               | BPartial arg -> State.make ~guard ~subst (T.data_test cstor arg) []
           end
         | `DataSelect (cstor, field) ->
-          assert (List.length args = 1);
+          (* While performing reduction we might encounter something along the lines of:
+            `(fun x . x a) (select-i v)` which beta reduces to `(select-i v a)`, instead of
+            handling this complexity at the substitution site we decided to handle it here
+            for simplicity *)
+          assert (List.length args >= 1);
           let arg = List.hd args in
+          let remainingArgs = List.tl args in
           begin match
               eval_term ~subst arg |> as_cstor_ cstor
             with
-              | BCstor args ->
-                  assert (field < List.length args);
-                  State.make ~guard ~subst (List.nth args field) []
-              | BPartial arg -> State.make ~guard ~subst (T.data_select cstor field arg) []
+              | BCstor ctorArgs ->
+                  assert (field < List.length ctorArgs);
+                  State.make ~guard ~subst (List.nth ctorArgs field) remainingArgs
+              | BPartial arg ->
+                  State.make ~guard ~subst (T.data_select cstor field arg) remainingArgs
           end
         | `Unparsable _
         | `Undefined_self _
@@ -320,6 +326,8 @@ module Make(T : TI.FULL)
     (* strong normal form *)
     let rec snf_ st =
       (* first, head reduction *)
+
+      Utils.debugf 3 "snf of: %a" (fun k -> k T.pp (State.to_term st));
       let st = whnf_ st in
       let st = State.map_guard (snf_term ~subst:st.subst) st in
       let reduce_args st =
