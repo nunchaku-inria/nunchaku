@@ -322,10 +322,14 @@ module Make(T : TI.FULL)
       (* first, head reduction *)
       let st = whnf_ st in
       let st = State.map_guard (snf_term ~subst:st.subst) st in
+      let reduce_args st =
+        let args = List.map (snf_term ~subst:st.subst) st.args in
+        State.make ~guard:st.guard ~subst:st.subst st.head args
+      in
       (* then, reduce subterms *)
       match T.repr st.head with
-        | TI.TyBuiltin _
-        | TI.Const _ -> st
+        | TI.TyBuiltin _ -> st
+        | TI.Const _ -> reduce_args st
         | TI.Builtin (`Guard _) -> assert false
         | TI.Builtin b ->
           eval_app_builtin ~guard:st.guard ~eval:snf_ ~subst:st.subst b st.args
@@ -334,7 +338,7 @@ module Make(T : TI.FULL)
           st (* NOTE: depend types might require beta-reduction in types *)
         | TI.Var v ->
           assert (not (Subst.mem ~subst:st.subst v));
-          st
+          reduce_args st
         | TI.App (_,_) -> assert false  (* not WHNF *)
         | TI.Bind (Binder.Fun, v, body) ->
           assert (st.args = []);
