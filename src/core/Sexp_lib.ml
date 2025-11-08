@@ -18,21 +18,7 @@ type sexp = t
 let atom s = `Atom s
 let list l = `List l
 
-(* shall we escape the string because of one of its chars? *)
-let _must_escape s =
-  try
-    for i = 0 to String.length s - 1 do
-      let c = String.unsafe_get s i in
-      match c with
-        | ' ' | ';' | ')' | '(' | '"' | '\\' | '\n' | '\t' -> raise Exit
-        | _ when Char.code c > 127 -> raise Exit  (* non-ascii *)
-        | _ -> ()
-    done;
-    false
-  with Exit -> true
-
 let rec pp out t = match t with
-  | `Atom s when _must_escape s -> Format.fprintf out "\"%s\"" (String.escaped s)
   | `Atom s -> Format.pp_print_string out s
   | `List [] -> Format.pp_print_string out "()"
   | `List [x] -> Format.fprintf out "@[<hov2>(%a)@]" pp x
@@ -117,6 +103,9 @@ module Decoder = struct
       | E_error msg ->
         let loc = Location.of_lexbuf t.buf in
         `Error (CCFormat.sprintf "parse error at %a: %s" Location.pp loc msg)
+      | Sexp_lex.Error (loc, msg) ->
+        `Error (CCFormat.sprintf "lexer error at %a: %s" Location.pp loc msg)
+
 end
 
 let parse_string s : t or_error =
@@ -126,9 +115,10 @@ let parse_string s : t or_error =
     | `End -> `Error "unexpected end of file"
     | (`Ok _ | `Error _) as res -> res
 
+
 (*$T
-  match parse_string "(abc d/e/f \"hello \\\" () world\" )" with `Error _ -> false | `Ok _ -> true
-  match parse_string "(abc ( d e ffff   ) \"hello/world\")" with `Error _ -> false | `Ok _ -> true
+  match parse_string "(abc d/e/f |hello \\| () world| )" with `Error _ -> false | `Ok _ -> true
+  match parse_string "(abc ( d e ffff   ) |hello/world|)" with `Error _ -> false | `Ok _ -> true
 *)
 
 (*$inject
@@ -160,7 +150,17 @@ let parse_string s : t or_error =
 
   let rec sexp_valid  = function
     | `Atom "" -> false
-    | `Atom _ -> true
+    | `Atom content ->
+        let is_simple_char c =
+          let is_num c = c >= '0' && c <= '9' in
+          let is_letter c = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') in
+          let special_chars = [|
+            '~'; '!'; '@'; '$'; '%'; '^'; '&'; '*'; '_'; '-'; '+';
+            '='; '<'; '>'; '.'; '?'; '/'
+          |] in
+          is_num c || is_letter c || Array.exists ((=) c) special_chars
+        in
+        content |> String.for_all is_simple_char
     | `List l -> List.for_all sexp_valid l
 *)
 
