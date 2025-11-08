@@ -217,8 +217,8 @@ module Make(T : TI.FULL)
               | BFalse -> eval (State.make ~guard ~subst c args)
               | BPartial a' -> State.make ~guard ~subst (T.ite a' b c) args
           end
-        | `DataTest cstor when not (List.is_empty args) ->
-          assert (List.length args = 1);
+        | `DataTest cstor when not (List.length args == 0) ->
+          assert (List.length args == 1);
           let arg = List.hd args in
           begin match
               eval_term ~subst arg |> as_cstor_ cstor
@@ -226,7 +226,7 @@ module Make(T : TI.FULL)
               | BCstor _ -> State.const ~guard ~subst T.true_
               | BPartial arg -> State.make ~guard ~subst (T.data_test cstor arg) []
           end
-        | `DataSelect (cstor, field) when not (List.is_empty args) ->
+        | `DataSelect (cstor, field) when not (List.length args == 0) ->
           (* While performing reduction we might encounter something along the lines of:
             `(fun x . x a) (select-i v)` which beta reduces to `(select-i v a)`, instead of
             handling this complexity at the substitution site we decided to handle it here
