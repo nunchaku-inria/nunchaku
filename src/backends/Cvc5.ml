@@ -523,7 +523,7 @@ and within_let_scope ~decode bindings f =
       List.iter (fun (var, _) -> Hashtbl.remove decode.let_vars var) bindings)
 
 (* parse a function with [n] arguments *)
-let parse_fun_ ~decode ~arity:n term =
+let parse_fun_ ~decode ~arity:n ~env term =
   (* split [t] into [n]-ary function arguments and body *)
   let rec get_args t n =
     if n = 0 then ([], t)
@@ -540,7 +540,9 @@ let parse_fun_ ~decode ~arity:n term =
   (* change the shape of [body] so it looks more like a decision tree *)
   Utils.debugf ~section 1 "@[<2>turn term `@[%a@]`@ @]" (fun k ->
       k FO.pp_term body);
-  let dt = FO.Util.dt_of_term ~vars body in
+  let fdt = FO.Util.flat_dt_of_term ~vars body in
+  let fdt = FO.Util.simplify_flat_dt fdt env in
+  let dt = Model.DT.of_flat ~equal:T.equal ~hash:T.hash fdt in
   Utils.debug ~section 1 "END";
   Utils.debugf ~section 5 "@[<2>turn term `@[%a@]`@ into DT `@[%a@]`@]"
     (fun k -> k FO.pp_term body (Model.DT.pp FO.pp_term' FO.pp_ty) dt);
@@ -562,7 +564,7 @@ let get_kind ~decode id =
   with Not_found -> errorf_ "could not find kind of %a" ID.pp id
 
 (* state: decode_state *)
-let parse_simple_model_ ~decode : Sexp_lib.t -> (_, _) Model.t = function
+let parse_simple_model_ ~decode ~env : Sexp_lib.t -> (_, _) Model.t = function
   | `Atom _ -> error_ "expected model, got atom"
   | `List assoc ->
       (* parse model *)
@@ -577,7 +579,7 @@ let parse_simple_model_ ~decode : Sexp_lib.t -> (_, _) Model.t = function
                     let t = parse_term_ ~decode term in
                     Model.add_const m (T.const id, t, kind)
                 | `Fun n ->
-                    let dt = parse_fun_ ~decode ~arity:n term in
+                    let dt = parse_fun_ ~decode ~arity:n ~env term in
                     Model.add_value m (T.const id, dt, kind))
             | _ -> error_ "expected pair key/value in the model")
           Model.empty assoc
@@ -634,7 +636,7 @@ let send_get_simple_model_ out decode =
     |> Iter.filter (fun (_, q) -> is_simple_query q))
 
 (* read model from cvc5 instance [s] *)
-let get_model_ ~print_model ~decode s : (_, _) Model.t =
+let get_model_ ~print_model ~decode ~env s : (_, _) Model.t =
   Utils.debugf ~section 3 "@[<2>ask for simple part of model with@ %a@]"
     (fun k -> k send_get_simple_model_ decode);
   fpf s.fmt "%a@." send_get_simple_model_ decode;
@@ -646,7 +648,7 @@ let get_model_ ~print_model ~decode s : (_, _) Model.t =
     | `Ok sexp ->
         if print_model then
           Format.eprintf "@[raw model:@ @[<hv>%a@]@]@." Sexp_lib.pp sexp;
-        let m = parse_simple_model_ ~decode sexp in
+        let m = parse_simple_model_ ~decode ~env sexp in
         m
   in
   let m =
@@ -667,7 +669,7 @@ let get_model_ ~print_model ~decode s : (_, _) Model.t =
   m
 
 (* read the result *)
-let read_res_ ~info ~print_model ~decode s =
+let read_res_ ~info ~print_model ~decode ~env s =
   try
     match DSexp.next s.sexp with
     | `Ok (`Atom "unsat") ->
@@ -677,7 +679,7 @@ let read_res_ ~info ~print_model ~decode s =
         Utils.debug ~section 5 "cvc5 returned `sat`";
         let m =
           if ID.Tbl.length decode.symbols = 0 then Model.empty
-          else get_model_ ~print_model ~decode s
+          else get_model_ ~print_model ~decode ~env s
         in
         Res.Sat (m, Lazy.force info)
     | `Ok (`Atom "unknown") ->
@@ -708,7 +710,7 @@ let mk_info ~options (decode : decode_state) : Res.info =
   let message = Printf.sprintf "options: `%s %s`" basic_options options in
   Res.mk_info ~backend:"cvc5" ~time ~message ()
 
-let res t =
+let res ~env t =
   match t.res with
   | Some r -> r
   | None when t.closed ->
@@ -720,7 +722,7 @@ let res t =
   | None ->
       let info = lazy (mk_info ~options:t.options t.decode) in
       let r =
-        try read_res_ ~info ~print_model:t.print_model ~decode:t.decode t
+        try read_res_ ~info ~print_model:t.print_model ~decode:t.decode ~env t
         with e -> Res.Error (e, Lazy.force info)
       in
       t.res <- Some r;
@@ -815,7 +817,7 @@ let mk_cvc5_cmd_ timeout options =
   Printf.sprintf "ulimit -t %d; exec cvc5 --tlimit=%d %s %s" timeout_hard
     timeout_ms basic_options options
 
-let solve ?(options = "") ?deadline ?(print = false) ?(print_model = false) pb =
+let solve ?(options = "") ?deadline ?(print = false) ?(print_model = false) ~env pb =
   let now = Unix.gettimeofday () in
   let deadline = match deadline with Some s -> s | None -> now +. 30. in
   (* preprocess first *)
@@ -835,7 +837,7 @@ let solve ?(options = "") ?deadline ?(print = false) ?(print_model = false) pb =
     S.popen cmd ~f:(fun (oc, ic) ->
         let s = create_ ~options ~print_model ~decode (ic, oc) in
         send_ s problem';
-        let r = res s in
+        let r = res ~env s in
         Utils.debugf ~lock:true ~section 3 "@[<2>result: %a@]" (fun k ->
             k (Res.pp FO.pp_term' FO.pp_ty) r);
         close s;
@@ -875,13 +877,13 @@ let options_l =
   ]
 
 (* solve problem using cvc5 before [deadline] *)
-let call ?(options = "") ?prio ?slice ~print ~dump ~print_smt ~print_model
+let call ?(options = "") ?prio ?slice ~print ~dump ~print_smt ~print_model ~env
     problem =
   if print then Format.printf "@[<v2>FO problem:@ %a@]@." FO.pp_problem problem;
   match dump with
   | None ->
       Scheduling.Task.of_fut ?prio ?slice (fun ~deadline () ->
-          solve ~options ~deadline ~print:print_smt ~print_model problem)
+          solve ~options ~deadline ~print:print_smt ~print_model ~env problem)
   | Some file ->
       let file = file ^ ".cvc5.smt2" in
       Utils.debugf ~section 1 "output cvc5 problem into `%s`" (fun k -> k file);
@@ -906,13 +908,14 @@ let pipes ?(options = [ "" ]) ?slice ?(schedule_options = true) ~print ~dump
     else slice
   in
   let encode pb =
+    let env = FO.Problem.env pb in
     ( List.mapi
         (fun i options ->
           (* only print for the first task *)
           let print = print && i = 0 in
           let print_smt = print_smt && i = 0 in
           let prio = 30 + (10 * i) in
-          call ?slice ~options ~prio ~print ~dump ~print_smt ~print_model pb)
+          call ?slice ~options ~prio ~print ~dump ~print_smt ~print_model ~env pb)
         options,
       () )
   in

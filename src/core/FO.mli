@@ -163,6 +163,29 @@ module T : sig
   (** subterms *)
 end
 
+(** {2 Environment} *)
+module Env : sig
+  type (+'t, +'ty) def =
+    | Cstor
+    | Other
+
+  type (+'t, +'ty) info = {
+    def: ('t, 'ty) def;
+  }
+
+  type ('t, 'ty) t = private {
+    infos: ('t, 'ty) info ID.PerTbl.t;
+  }
+
+  exception UndefinedID of ID.t
+
+  val create: ?size:int -> unit -> (_,_) t
+  val find_exn : env:('t, 'ty) t -> id -> ('t, 'ty) info
+  val is_cstor : (_,_) info -> bool
+
+  val add_statement : env:('t,'ty) t -> ('t,'ty) statement -> ('t,'ty) t
+end
+
 (** {2 Problem} *)
 module Problem : sig
   type ('t, 'ty) t = {
@@ -192,6 +215,7 @@ module Problem : sig
     'acc * ('t2, 'ty2) t
 
   val to_iter : ('t,'ty) t -> ('t,'ty) statement Iter.t
+  val env : ?init:('t,'ty) Env.t -> ('t, 'ty) t -> ('t,'ty) Env.t
 end
 
 (** {2 Utils} *)
@@ -202,6 +226,13 @@ module Util : sig
     (T.t, Ty.t) Model.DT.t
   (** Convert a term into a decision tree, or emit a warning and
       return a trivial tree with "unparsable" inside *)
+
+  val flat_dt_of_term :
+    vars:Ty.t Var.t list ->
+    T.t ->
+    (T.t, Ty.t) Model.DT.flat_dt
+
+  val simplify_flat_dt : (T.t, Ty.t) Model.DT.flat_dt -> (T.t, Ty.t) Env.t -> (T.t, Ty.t) Model.DT.flat_dt
 
   val problem_kinds : (_,Ty.t) Problem.t -> Model.symbol_kind ID.Map.t
 end

@@ -17,6 +17,7 @@ val solve :
   ?deadline:float ->
   ?print:bool ->
   ?print_model:bool ->
+  env:(model_term, model_ty) FO.Env.t ->
   problem ->
   ((model_term, model_ty) Problem.Res.t * Scheduling.shortcut) Scheduling.Fut.t
 (** [solve pb] returns a {b task} that, when executed, will return a model or
@@ -40,6 +41,7 @@ val call :
   dump:string option ->
   print_smt:bool ->
   print_model:bool ->
+  env:(model_term, model_ty) FO.Env.t ->
   problem ->
   (model_term, model_ty) Problem.Res.t Scheduling.Task.t
 (** Task for running cvc5 on a problem, with a set of options
