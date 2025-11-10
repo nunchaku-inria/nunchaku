@@ -91,6 +91,7 @@ type attr =
 
 (** Statement *)
 type ('t, 'ty) statement =
+  | TyAlias of id * 'ty toplevel_ty * attr list
   | TyDecl of id * int * attr list (** number of arguments *)
   | Decl of id * 'ty toplevel_ty * attr list
   | Axiom of 't
@@ -270,6 +271,45 @@ module T = struct
     aux t
 end
 
+module Env = struct
+  type (+'t, +'ty) def =
+    | Cstor
+    | Other
+
+  type (+'t, +'ty) info = {
+    def: ('t, 'ty) def;
+  }
+
+  type ('t, 'ty) t = {
+    infos: ('t, 'ty) info ID.PerTbl.t;
+  }
+
+  exception UndefinedID of ID.t
+
+  let create ?(size=64) () = {infos=ID.PerTbl.create size}
+
+  let find_exn ~env:t (id : id) : (_, _) info =
+    try ID.PerTbl.find t.infos id
+    with Not_found -> raise (UndefinedID id)
+
+  let is_cstor (info : (_, _) info) : bool =
+    match info.def with
+    | Cstor -> true
+    | _ -> false
+
+  let add_statement ~env:t (st : ('t,'ty) statement) : ('t,'ty) t =
+    match st with
+    | MutualTypes (_, decls) ->
+        let new_ids =
+          Iter.flat_map (fun def -> ID.Map.keys def.ty_cstors) (Iter.of_list decls.tys_defs) in
+        let infos =
+          Iter.fold (fun acc id -> ID.PerTbl.replace acc id { def = Cstor }) t.infos new_ids in
+        {infos}
+    | TyAlias (id, _, _) | TyDecl (id, _, _) | Decl (id, _, _) ->
+        {infos=ID.PerTbl.replace t.infos id {def=Other}}
+    | Axiom _ | CardBound _ | Goal _ -> t
+end
+
 (** {2 The Problems sent to Solvers} *)
 module Problem = struct
   type ('t, 'ty) t = {
@@ -301,13 +341,17 @@ module Problem = struct
     acc', pb'
 
   let to_iter t = CCVector.to_iter t.statements
+  let env ?init:(env=Env.create()) pb =
+    CCVector.fold
+      (fun env st -> Env.add_statement ~env st)
+      env pb.statements
 end
 
 let tys_of_toplevel_ty (l,ret) yield =
   List.iter yield l; yield ret
 
 let st_to_seq_ t ~term:yield_term ~ty:yield_ty = match t with
-  | TyDecl (_,_,_) -> ()
+  | TyDecl (_,_,_) | TyAlias (_, _, _) -> ()
   | Decl (_,ty,_) -> tys_of_toplevel_ty ty yield_ty
   | Axiom t -> yield_term t
   | CardBound (_,_,_) -> ()
@@ -399,6 +443,8 @@ let pp_attrs out = function
   | l -> fpf out " [@[%a@]]" (pp_list_ ~sep:"," pp_attr) l
 
 let pp_statement out s = match s with
+  | TyAlias (id, ty, attrs) ->
+    fpf out "@[<2>type alias %a = %a%a.@]" ID.pp id pp_toplevel_ty ty pp_attrs attrs
   | TyDecl (id, n, attrs) ->
     fpf out "@[<2>type %a (arity %d%a).@]" ID.pp id n pp_attrs attrs
   | Decl (v, ty, attrs) ->
@@ -447,7 +493,7 @@ module Util = struct
   (* evaluate the lazy -> pp a warning *)
 
   let mk_eq = DT.mk_flat_test
-  let mk_true v = mk_eq v T.true_
+  let mk_eq_true v = mk_eq v T.true_
 
   (* split [t] into a list of equations [var = t'] where [var in vars] *)
   let rec get_eqns_exn ~vars t : cond list =
@@ -470,7 +516,7 @@ module Util = struct
         end
       | Var v when List.exists (Var.equal v) vars ->
         assert (Ty.is_prop (Var.ty v));
-        [mk_true v]
+        [mk_eq_true v]
       | Var _ ->
         let msg = lazy (
           Utils.warningf Utils.Warn_model_parsing_error
@@ -526,36 +572,31 @@ module Util = struct
 
     let ite
       : type a. Ty.t Var.t -> a t -> a t -> a t
-      = fun v a b -> case [mk_true v] a b
+      = fun v a b -> case [mk_eq_true v] a b
 
     let rec fold_m f acc l = match l with
       | [] -> return acc
       | x :: tail ->
         f acc x >>= fun acc -> fold_m f acc tail
 
-    (* convert to a decision tree. *)
-    let to_dt ~vars t : (_,_) DT.t =
+    let to_flat_dt ~vars t : (_,_) DT.flat_dt =
       (* tests must have >= 1 condition; otherwise they are default *)
       let tests, others =
-        Iter.to_list t
-        |> List.partition (fun (tests,_) -> tests<>[])
+        t |> List.partition (fun (tests,_) -> tests<>[])
       in
       let default = match others with
         | [] -> None
         | ([],t)::_ -> Some t
         | _ -> assert false
       in
-      let fdt =
-        {DT.
-          fdt_vars=vars;
-          fdt_cases=tests;
-          fdt_default=default;
-        }
-      in
-      DT.of_flat ~equal:T.equal ~hash:T.hash fdt
-  end
+      {DT.
+        fdt_vars=vars;
+        fdt_cases=tests;
+        fdt_default=default;
+      }
 
-  let dt_of_term ~vars t =
+  end
+  let flat_dt_of_term ~vars t =
     let open Ite_M in
     let rec aux t : T.t Ite_M.t =
       match T.view t with
@@ -605,7 +646,14 @@ module Util = struct
               case cond (return T.true_) (return T.false_)
             | None -> aux_l l >|= T.and_
           end
-        | Or l -> aux_l l >|= T.or_
+        | Or [] -> return T.false_
+        | Or [x] -> aux x
+        | Or (x :: xs) ->
+            begin match get_eqns ~vars x with
+            | Some conds ->
+              case conds (return T.true_) (aux (T.or_ xs))
+            | None -> return t
+            end
         | Not t -> aux t >|= T.not_
         | App (id,l) -> aux_l l >|= T.app id
     and aux_l l =
@@ -614,18 +662,82 @@ module Util = struct
         [] l
       >|= List.rev
     in
+    let res = aux t in
+    let res = Iter.to_list res in
+    let res = Ite_M.to_flat_dt ~vars res in
+    res
+
+  let dt_of_term ~vars t =
     try
-      let res = aux t in
-      Ite_M.to_dt ~vars res
+      let fdt = flat_dt_of_term ~vars t in
+      DT.of_flat ~equal:T.equal ~hash:T.hash fdt
     with Parse_err msg ->
       (* return "unparsable" *)
       Lazy.force msg;
       DT.yield (T.unparsable (Ty.builtin `Prop))
 
+  module VarMap = Var.Map(Ty)
+
+  let simplify_flat_dt fdt env =
+    (* This is in essence a very simple unifier, designed for the problems that
+       cvc5 creates here *)
+    let terms_equal lhs rhs =
+      let rec aux = function
+        | [] -> Some true
+        | (lhs, rhs) :: todo ->
+          match T.view lhs, T.view rhs with
+          | App (lid, largs), App (rid, rargs) ->
+            let linfo = Env.find_exn ~env lid in
+            let rinfo = Env.find_exn ~env rid in
+            begin match linfo.Env.def, rinfo.Env.def with
+              | Env.Cstor, Env.Cstor ->
+                  if ID.equal lid rid then
+                    aux @@ List.append (List.combine largs rargs) todo
+                  else
+                    Some false
+              | _, _ -> None
+            end
+          | _, _ ->
+            if T.equal lhs rhs then
+              aux todo
+            else
+              None
+      in
+      aux [(lhs, rhs)]
+    in
+    let rec process_tests acc map = function
+      | [] -> Some (List.rev acc)
+      | test :: rest ->
+        let var = test.DT.ft_var in
+        let term = test.DT.ft_term in
+
+        match VarMap.find_opt var map with
+        | None -> process_tests (test :: acc) (VarMap.add var term map) rest
+        | Some prev_term ->
+          match terms_equal prev_term term with
+          | Some false ->
+            (* Contradiction found, drop entire branch *)
+            None
+          | Some true ->
+            (* Redundant constraint, skip it *)
+            process_tests acc map rest
+          | None ->
+            (* Can't determine equality, keep both constraints *)
+            process_tests (test :: acc) map rest
+    in
+    let simplified_cases =
+      fdt.DT.fdt_cases
+      |> List.filter_map (fun (tests, body) ->
+          match process_tests [] VarMap.empty tests with
+          | None -> None
+          | Some simplified_tests -> Some (simplified_tests, body))
+    in
+    {fdt with DT.fdt_cases=simplified_cases}
+
   let problem_kinds pb =
     let module M = Model in
     let add_stmt m = function
-      | TyDecl (id, _, _) -> ID.Map.add id M.Symbol_utype m
+      | TyAlias (id, _, _) | TyDecl (id, _, _) -> ID.Map.add id M.Symbol_utype m
       | Decl (id, (_, ret), _) ->
         let k = match Ty.view ret with
           | TyBuiltin `Prop -> M.Symbol_prop

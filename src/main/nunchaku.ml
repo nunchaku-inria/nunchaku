@@ -36,12 +36,13 @@ let outputs_ =
 
 (* NOTE: also modify list_solvers_ below if you modify this *)
 type solver =
+  | S_cvc5
   | S_CVC4
   | S_kodkod
   | S_paradox
   | S_smbc
 
-let list_solvers_ () = "(available choices: cvc4 kodkod paradox smbc)"
+let list_solvers_ () = "(available choices: cvc5 cvc4 kodkod paradox smbc)"
 
 (** {2 Options} *)
 
@@ -89,7 +90,7 @@ let timeout_ = ref 30
 let version_ = ref false
 let dump_ : [`No | `Yes | `Into of string] ref = ref `No
 let file = ref ""
-let solvers = ref [S_CVC4; S_kodkod; S_paradox; S_smbc]
+let solvers = ref [S_cvc5; S_CVC4; S_kodkod; S_paradox; S_smbc]
 let j = ref 3
 let prelude_ = ref []
 
@@ -109,6 +110,7 @@ let parse_solvers_ s =
   let l = CCString.Split.list_cpy ~by:"," s in
   List.map
     (function
+      | "cvc5" -> S_cvc5
       | "cvc4" -> S_CVC4
       | "paradox" -> S_paradox
       | "kodkod" -> S_kodkod
@@ -315,6 +317,22 @@ let get_dump_file () = match !dump_ with
         Some (Filename.chop_extension (Filename.basename f) ^ ".nunchaku")
     end
 
+let make_cvc5 ~j () =
+  let open Transform.Pipe in
+  if List.mem S_cvc5 !solvers && Backends.Cvc5.is_available ()
+  then
+    Backends.Cvc5.pipes
+      ~options:Backends.Cvc5.options_l
+      ~slice:(1. *. float j)
+      ~dump:(get_dump_file ())
+      ~print:!pp_all_
+      ~schedule_options:!cvc4_schedule_ (* TODO: rename once we kill cvc4 *)
+      ~print_smt:(!pp_all_ || !pp_smt_)
+      ~print_model:(!pp_all_ || !pp_raw_model_)
+      ()
+    @@@ id
+  else fail
+
 let make_cvc4 ~j () =
   let open Transform.Pipe in
   if List.mem S_CVC4 !solvers && Backends.CVC4.is_available ()
@@ -376,6 +394,7 @@ let make_model_pipeline () =
   (* setup pipeline *)
   let check = !check_all_ in
   (* solvers *)
+  let cvc5 = make_cvc5 ~j:!j () in
   let cvc4 = make_cvc4 ~j:!j () in
   let paradox = make_paradox () in
   let kodkod = make_kodkod () in
@@ -476,7 +495,7 @@ let make_model_pipeline () =
     Tr.Lift_undefined.pipe ~print:!pp_all_ ~check @@@
     Tr.Model_clean.pipe ~print:(!pp_model_ || !pp_all_) @@@
     close_task smbc
-  and pipe_cvc4 =
+  and pipe_cvc_common k =
     (if !enable_polarize_
      then Tr.Polarize.pipe ~print:(!pp_polarize_ || !pp_all_)
          ~check ~polarize_rec:!polarize_rec_
@@ -494,11 +513,19 @@ let make_model_pipeline () =
     Tr.ElimRecursion.pipe ~print:(!pp_elim_recursion_ || !pp_all_) ~check @@@
     Tr.IntroGuards.pipe ~print:(!pp_intro_guards_ || !pp_all_) ~check @@@
     Tr.Model_clean.pipe ~print:(!pp_model_ || !pp_all_) @@@
+    k
+  and pipe_cvc4 =
     close_task (
       Step_tofo.pipe ~print:!pp_all_ () @@@
       Transform.Pipe.flatten cvc4
     )
+  and pipe_cvc5 =
+    close_task (
+      Step_tofo.pipe ~print:!pp_all_ () @@@
+      Transform.Pipe.flatten cvc5
+    )
   in
+
   let pipe =
     pipe_common
       (fork
@@ -508,7 +535,7 @@ let make_model_pipeline () =
             ~print:(!pp_elim_match_ || !pp_all_) ~check @@@
           fork
             (pipe_common_paradox_kodkod (fork pipe_paradox pipe_kodkod))
-            pipe_cvc4))
+            (pipe_cvc_common (fork pipe_cvc4 pipe_cvc5))))
   in
   pipe
 

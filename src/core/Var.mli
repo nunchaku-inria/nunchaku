@@ -116,5 +116,6 @@ end
 (** {2 Data structures} *)
 
 module Set(Ty : sig type t end) : CCSet.S with type elt = Ty.t t
+module Map(Ty : sig type t end) : CCMap.S with type key = Ty.t t
 
 

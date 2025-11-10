@@ -347,6 +347,7 @@ let encode_statement state st : FO_rel.form list =
     |> FO_rel.ts_product
   in
   match st with
+    | FO.TyAlias (_, _, _) -> assert false
     | FO.TyDecl (_, 0, attrs) when List.mem FO.Attr_pseudo_prop attrs ->
       []
     | FO.Decl (_, ([], _), attrs) when List.mem FO.Attr_pseudo_true attrs ->

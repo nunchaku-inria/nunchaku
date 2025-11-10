@@ -14,6 +14,7 @@ Alternatively, it can use other backends:
 - https://github.com/c-cube/smbc[smbc], a solver written in OCaml, for computational logic
 - kodkod with its https://github.com/nunchaku-inria/kodkodi-pkg[kodkodi frontend]
 - Paradox (https://github.com/c-cube/paradox[snapshot here])
+- cvc5 (after commit [724682fa53aae3d870377065bbe3bed37ae9697c](https://github.com/cvc5/cvc5/commit/724682fa53aae3d870377065bbe3bed37ae9697c))
 
 We have https://github.com/nunchaku-inria/nunchaku-problems[a set of problems]
 for tests and regressions, that can also be helpful to grasp the input syntax
@@ -130,6 +131,7 @@ Supported solver backends:
   http://vlsicad.eecs.umich.edu/BK/Slots/cache/www.cs.chalmers.se/~koen/paradox/[official page])
 - https://github.com/emina/kodkod[Kodkod] with its "kodkodi" parser
 - https://github.com/c-cube/smbc/[SMBC] (`opam install smbc`)
+- https://cvc5.github.io/[CVC5] (after commit b056bd2446cd3e7b8dd4fdc76b87ed0ea3b4aef0)
 
 
 === How to make a release

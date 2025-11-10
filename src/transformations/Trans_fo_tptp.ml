@@ -87,6 +87,7 @@ module To_tptp = struct
   let conv_form = conv_as_form Var.Subst.empty
 
   let conv_statement st = match st with
+    | FO.TyAlias _ -> assert false
     | TyDecl _
     | Decl _ -> None
     | MutualTypes _ -> errorf_ "@[cannot convert@ statement `@[%a@]`@]" pp_statement st
