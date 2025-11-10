@@ -160,7 +160,7 @@ let parse_string s : t or_error =
           |] in
           is_num c || is_letter c || Array.exists ((=) c) special_chars
         in
-        content |> String.for_all is_simple_char
+        content |> CCString.for_all is_simple_char
     | `List l -> List.for_all sexp_valid l
 *)
 
