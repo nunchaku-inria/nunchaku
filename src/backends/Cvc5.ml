@@ -810,12 +810,16 @@ let preprocess pb : processed_problem =
   in
   (state, pb)
 
+(* the cvc5 binary: $NUNCHAKU_CVC5 (a path) overrides PATH lookup *)
+let cvc5_program_ () =
+  Utils.external_program ~env_var:"NUNCHAKU_CVC5" ~default:"cvc5"
+
 (* the command line to invoke cvc5 *)
 let mk_cvc5_cmd_ timeout options =
   let timeout_hard = int_of_float (timeout +. 1.50001) in
   let timeout_ms = int_of_float (timeout *. 1000.) in
-  Printf.sprintf "ulimit -t %d; exec cvc5 --tlimit=%d %s %s" timeout_hard
-    timeout_ms basic_options options
+  Printf.sprintf "ulimit -t %d; exec %s --tlimit=%d %s %s" timeout_hard
+    (Filename.quote (cvc5_program_ ())) timeout_ms basic_options options
 
 let solve ?(options = "") ?deadline ?(print = false) ?(print_model = false) ~env pb =
   let now = Unix.gettimeofday () in
@@ -861,11 +865,9 @@ let solve ?(options = "") ?deadline ?(print = false) ?(print_model = false) ~env
              (Res.Error (e, info), S.Shortcut)))
 
 let is_available () =
-  try
-    let res = Sys.command "which cvc5 > /dev/null 2> /dev/null" = 0 in
-    if res then Utils.debug ~section 3 "cvc5 is available";
-    res
-  with Sys_error _ -> false
+  let res = Utils.external_program_available (cvc5_program_ ()) in
+  if res then Utils.debug ~section 3 "cvc5 is available";
+  res
 
 let options_l =
   [

@@ -23,12 +23,14 @@ type env = (term,ty) Env.t
 let name = "smbc"
 let section = Utils.Section.make name
 
+(* the smbc binary: $NUNCHAKU_SMBC (a path) overrides PATH lookup *)
+let smbc_program_ () =
+  Utils.external_program ~env_var:"NUNCHAKU_SMBC" ~default:"smbc"
+
 let is_available () =
-  try
-    let res = Sys.command "smbc --help > /dev/null 2> /dev/null" = 0 in
-    if res then Utils.debug ~section 3 "smbc is available";
-    res
-  with Sys_error _ -> false
+  let res = Utils.external_program_available (smbc_program_ ()) in
+  if res then Utils.debug ~section 3 "smbc is available";
+  res
 
 exception Out_of_scope of string
 exception Conversion_error of T.t
@@ -785,8 +787,8 @@ let solve ~deadline pb =
     let timeout = (int_of_float (deadline -. now +. 1.5)) in
     (* call solver and communicate over stdin *)
     let cmd =
-      Printf.sprintf "smbc -t %d -nc --depth-step %d --check --stdin 2>&1"
-        timeout depth_step_
+      Printf.sprintf "%s -t %d -nc --depth-step %d --check --stdin 2>&1"
+        (Filename.quote (smbc_program_ ())) timeout depth_step_
     in
     Utils.debugf ~section 5 "smbc call: `%s`" (fun k->k cmd);
     (* print problem into a TIP string;

@@ -342,3 +342,16 @@ let invalid_argf fmt = exn_ksprintf fmt ~f:invalid_arg
 let ignore_catch f x =
   try ignore (f x)
   with _ -> ()
+
+let external_program ~env_var ~default =
+  match Sys.getenv_opt env_var with
+  | Some s when s <> "" -> s
+  | _ -> default
+
+let external_program_available prog =
+  let cmd =
+    if String.contains prog '/'
+    then Printf.sprintf "test -x %s" (Filename.quote prog)
+    else Printf.sprintf "which %s > /dev/null 2> /dev/null" (Filename.quote prog)
+  in
+  try Sys.command cmd = 0 with Sys_error _ -> false

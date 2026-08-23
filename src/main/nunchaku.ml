@@ -44,6 +44,13 @@ type solver =
 
 let list_solvers_ () = "(available choices: cvc5 cvc4 kodkod paradox smbc)"
 
+let string_of_solver_ = function
+  | S_cvc5 -> "cvc5"
+  | S_CVC4 -> "cvc4"
+  | S_kodkod -> "kodkod"
+  | S_paradox -> "paradox"
+  | S_smbc -> "smbc"
+
 (** {2 Options} *)
 
 let input_ = ref I_guess
@@ -91,6 +98,7 @@ let version_ = ref false
 let dump_ : [`No | `Yes | `Into of string] ref = ref `No
 let file = ref ""
 let solvers = ref [S_cvc5; S_CVC4; S_kodkod; S_paradox; S_smbc]
+let solvers_explicit_ = ref false (* did --solvers appear on the command line? *)
 let j = ref 3
 let prelude_ = ref []
 
@@ -121,7 +129,8 @@ let parse_solvers_ s =
 
 let set_solvers_ s =
   let l = parse_solvers_ s |> CCList.uniq ~eq:(=) in
-  solvers := l
+  solvers := l;
+  solvers_explicit_ := true
 
 let set_dump () = dump_ := `Yes
 let set_dump_into s = dump_ := `Into s
@@ -317,9 +326,20 @@ let get_dump_file () = match !dump_ with
         Some (Filename.chop_extension (Filename.basename f) ^ ".nunchaku")
     end
 
+(* is the solver requested and usable? A solver that was requested by an
+   explicit --solvers but is not available is reported on stderr:
+   silently dropping the arm would hide a broken installation. *)
+let solver_usable_ sel avail =
+  let requested = List.mem sel !solvers in
+  let ok = requested && avail () in
+  if requested && not ok && !solvers_explicit_ then
+    Format.eprintf "Warning: requested solver '%s' is not available@."
+      (string_of_solver_ sel);
+  ok
+
 let make_cvc5 ~j () =
   let open Transform.Pipe in
-  if List.mem S_cvc5 !solvers && Backends.Cvc5.is_available ()
+  if solver_usable_ S_cvc5 Backends.Cvc5.is_available
   then
     Backends.Cvc5.pipes
       ~options:Backends.Cvc5.options_l
@@ -335,7 +355,7 @@ let make_cvc5 ~j () =
 
 let make_cvc4 ~j () =
   let open Transform.Pipe in
-  if List.mem S_CVC4 !solvers && Backends.CVC4.is_available ()
+  if solver_usable_ S_CVC4 Backends.CVC4.is_available
   then
     Backends.CVC4.pipes
       ~options:Backends.CVC4.options_l
@@ -351,7 +371,7 @@ let make_cvc4 ~j () =
 
 let make_paradox () =
   let open Transform.Pipe in
-  if List.mem S_paradox !solvers && Backends.Paradox.is_available ()
+  if solver_usable_ S_paradox Backends.Paradox.is_available
   then
     Backends.Paradox.pipe
       ~print_model:(!pp_all_ || !pp_raw_model_)
@@ -362,7 +382,7 @@ let make_paradox () =
 
 let make_kodkod () =
   let open Transform.Pipe in
-  if List.mem S_kodkod !solvers && Backends.Kodkod.is_available ()
+  if solver_usable_ S_kodkod Backends.Kodkod.is_available
   then
     Backends.Kodkod.pipe
       ~min_size:!kodkod_min_bound_
@@ -377,7 +397,7 @@ let make_kodkod () =
 
 let make_smbc () =
   let open Transform.Pipe in
-  if List.mem S_smbc !solvers && Backends.Smbc.is_available ()
+  if solver_usable_ S_smbc Backends.Smbc.is_available
   then
     Backends.Smbc.pipe
       ~print:!pp_all_
@@ -607,7 +627,10 @@ let main_model ~output statements =
   Transform.Pipe.check pipe;
   (* check that there is something in the pipeline *)
   begin match pipe with
-    | Transform.Pipe.Fail -> failwith "solvers are unavailable"
+    | Transform.Pipe.Fail ->
+      failwith
+        ("no usable solver among: "
+         ^ String.concat ", " (List.map string_of_solver_ !solvers))
     | _ -> ()
   end;
   assert (not !pp_pipeline_);

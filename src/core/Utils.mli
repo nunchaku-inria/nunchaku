@@ -190,3 +190,13 @@ val exn_ksprintf :
 val ignore_catch : ('a -> 'b) -> 'a -> unit
 (** [ignore_catch f x] computes [f x], ignores the result, and also
     ignores any exception raised by [f x]. *)
+
+val external_program : env_var:string -> default:string -> string
+(** [external_program ~env_var ~default] is the program to invoke for an
+    external tool: the value of the environment variable [env_var], when set
+    and non-empty (typically an absolute path), otherwise [default] (a plain
+    name, looked up in the PATH). *)
+
+val external_program_available : string -> bool
+(** Whether the given program (as returned by {!external_program}) can be
+    invoked: an executable file for a path, found in the PATH for a name. *)
