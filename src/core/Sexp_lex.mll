@@ -42,6 +42,9 @@ let simple_symbol =
 
 let invbars = '|' ([^ '\\' '|' '\n'] | '\\' '|')+ '|'
 
+(* SMT-LIB string literal: quotes are escaped by doubling them *)
+let string_lit = '"' ([^ '"'] | "\"\"")* '"'
+
 rule token = parse
   | comment_line { token lexbuf }
   | newline { Lexing.new_line lexbuf; token lexbuf }
@@ -51,6 +54,11 @@ rule token = parse
   | ')' { LIST_CLOSE }
   | simple_symbol { ATOM (Lexing.lexeme lexbuf) }
   | invbars {
+      let s = Lexing.lexeme lexbuf in
+      count_newlines lexbuf s;
+      ATOM(s)
+    }
+  | string_lit {
       let s = Lexing.lexeme lexbuf in
       count_newlines lexbuf s;
       ATOM(s)
