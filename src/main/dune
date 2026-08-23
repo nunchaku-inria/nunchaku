@@ -4,7 +4,7 @@
   (action
     (with-stdout-to %{targets}
     (progn
-      (echo "let version = \"${version:nunchaku}\"\n"))
+      (echo "let version = \"%{version:nunchaku}\"\n"))
     )))
 
 (rule
