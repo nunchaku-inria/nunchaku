@@ -86,7 +86,7 @@ let cvc4_schedule_ = ref true
 let kodkod_min_bound_ = ref Backends.Kodkod.default_min_size
 let kodkod_max_bound_ = ref None
 let kodkod_bound_increment_ = ref Backends.Kodkod.default_size_increment
-let timeout_ = ref 30
+let timeout_ = ref 30.
 let version_ = ref false
 let dump_ : [`No | `Yes | `Into of string] ref = ref `No
 let file = ref ""
@@ -214,8 +214,8 @@ let options =
       ; "--solvers", Arg.String set_solvers_,
         " solvers to use (comma-separated list) " ^ list_solvers_ ()
       ; "-s", Arg.String set_solvers_, " synonym for --solvers"
-      ; "--timeout", Arg.Set_int timeout_, " set timeout (in s)"
-      ; "-t", Arg.Set_int timeout_, " alias to --timeout"
+      ; "--timeout", Arg.Set_float timeout_, " set timeout (in s)"
+      ; "-t", Arg.Set_float timeout_, " alias to --timeout"
       ; "--input", input_opt , " set input format"
       ; "-i", input_opt, " synonym for --input"
       ; "--output", output_opt, " set output format"
@@ -611,7 +611,7 @@ let main_model ~output statements =
     | _ -> ()
   end;
   assert (not !pp_pipeline_);
-  let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
+  let deadline = Utils.Time.start () +. !timeout_ in
   run_tasks ~j:!j ~deadline pipe statements
   >|= fun res ->
   match res, output with
