@@ -393,16 +393,32 @@ let id_of_tip (penv:parse_env) (s:string):
       end
   end
 
-let rec term_of_tip ~env (penv:parse_env) (t:A.term): term =
+(* [ty], when known, is the expected type of [t]; it is threaded down so
+   that unknowns ("?…" constants of smbc) can be given a type, see
+   {!term_of_id} *)
+let rec term_of_tip ~env ?ty (penv:parse_env) (t:A.term): term =
   match A.t_view t with
   | A.True -> T.true_
   | A.False -> T.false_
-  | A.Const c -> term_of_id penv c
+  | A.Const c -> term_of_id ?ty penv c
   | A.App (f,l) ->
     let f = term_of_id penv f in
-    T.app f (List.map (term_of_tip ~env penv) l)
+    (* expected type of each argument, from the head's type when known *)
+    let ty_args = match E.to_opt (T.ty ~env f) with
+      | Some ty_f -> let _, args, _ = T.ty_unfold ty_f in args
+      | None -> []
+    in
+    T.app f
+      (List.mapi
+         (fun i a -> term_of_tip ~env ?ty:(List.nth_opt ty_args i) penv a)
+         l)
   | A.HO_app (f,a) ->
-    T.app (term_of_tip ~env penv f) [term_of_tip ~env penv a]
+    let f = term_of_tip ~env penv f in
+    let ty_a = match E.to_opt (T.ty ~env f) with
+      | Some ty_f -> let _, args, _ = T.ty_unfold ty_f in List.nth_opt args 0
+      | None -> None
+    in
+    T.app f [term_of_tip ~env ?ty:ty_a penv a]
   | A.Match (u,l) ->
     let u = term_of_tip ~env penv u in
     (* recover type info on [u] *)
@@ -435,14 +451,14 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term =
              let penv, vars =
                CCList.fold_map add_typed_var penv (List.combine vars c_ty_args)
              in
-             let rhs = term_of_tip ~env penv rhs in
+             let rhs = term_of_tip ~env ?ty penv rhs in
              ID.Map.add c_id ([],vars,rhs) m, def
            | A.Match_default _, Some _ ->
              error_parse_modelf
                "two distinct \"default\" clauses in `@[%a@]`"
                A.pp_term t
            | A.Match_default rhs, None ->
-             m, Some (term_of_tip ~env penv rhs))
+             m, Some (term_of_tip ~env ?ty penv rhs))
         (ID.Map.empty, None)
         l
     in
@@ -458,7 +474,8 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term =
     in
     T.match_with u m ~def
   | A.If (a,b,c) ->
-    T.No_simp.ite (term_of_tip ~env penv a)(term_of_tip ~env penv b)(term_of_tip ~env penv c)
+    T.No_simp.ite (term_of_tip ~env ~ty:T.ty_prop penv a)
+      (term_of_tip ~env ?ty penv b) (term_of_tip ~env ?ty penv c)
   | A.Let (l,u) ->
     let penv = List.fold_left
         (fun penv (s,t) ->
@@ -466,15 +483,25 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term =
            StrMap.add s (`Subst t) penv)
         penv l
     in
-    term_of_tip ~env penv u
+    term_of_tip ~env ?ty penv u
   | A.Fun (v,body) ->
+    let ty_body = match ty with
+      | Some ty_f ->
+        (match T.repr ty_f with TI.TyArrow (_, r) -> Some r | _ -> None)
+      | None -> None
+    in
     let penv, v = typed_var_of_tip penv v in
-    let body = term_of_tip ~env penv body in
+    let body = term_of_tip ~env ?ty:ty_body penv body in
     T.fun_ v body
-  | A.Eq (a,b) -> T.No_simp.eq (term_of_tip ~env penv a)(term_of_tip ~env penv b)
-  | A.Imply (a,b) -> T.No_simp.imply (term_of_tip ~env penv a)(term_of_tip ~env penv b)
+  | A.Eq (a,b) ->
+    let a = term_of_tip ~env penv a in
+    let b = term_of_tip ~env ?ty:(E.to_opt (T.ty ~env a)) penv b in
+    T.No_simp.eq a b
+  | A.Imply (a,b) ->
+    T.No_simp.imply (term_of_tip ~env ~ty:T.ty_prop penv a)
+      (term_of_tip ~env ~ty:T.ty_prop penv b)
   | A.And l ->
-    let l = List.map (term_of_tip ~env penv) l in
+    let l = List.map (term_of_tip ~env ~ty:T.ty_prop penv) l in
     T.No_simp.and_ l
   | A.Distinct l ->
     List.map (term_of_tip ~env penv) l
@@ -482,24 +509,30 @@ let rec term_of_tip ~env (penv:parse_env) (t:A.term): term =
     |> List.map (fun (a,b) -> T.No_simp.neq a b)
     |> T.No_simp.and_
   | A.Or l ->
-    let l = List.map (term_of_tip ~env penv) l in
+    let l = List.map (term_of_tip ~env ~ty:T.ty_prop penv) l in
     T.No_simp.or_ l
-  | A.Not a -> T.No_simp.not_ (term_of_tip ~env penv a)
+  | A.Not a -> T.No_simp.not_ (term_of_tip ~env ~ty:T.ty_prop penv a)
   | A.Forall (v,body) ->
     let penv, v = CCList.fold_map typed_var_of_tip penv v in
-    let body = term_of_tip ~env penv body in
+    let body = term_of_tip ~env ~ty:T.ty_prop penv body in
     T.forall_l v body
   | A.Exists (v,body) ->
     let penv, v = CCList.fold_map typed_var_of_tip penv v in
-    let body = term_of_tip ~env penv body in
+    let body = term_of_tip ~env ~ty:T.ty_prop penv body in
     T.exists_l v body
   | A.Cast (_,_) -> assert false
 
-and term_of_id (env:parse_env) (s:string): term = match id_of_tip env s with
+and term_of_id ?ty (env:parse_env) (s:string): term = match id_of_tip env s with
   | `Const id -> T.const id
   | `Undef id ->
-    (* FIXME: need some other primitive, e.g. "hole", to represent this? *)
-    T.undefined_self (T.const id)
+    (* an unknown constant of smbc's, e.g. "?a__2". When the expected type
+       is known, make it an [`Undefined_atom], which prints as "?__<n>" --
+       a form model consumers can parse back. [id] was freshly allocated by
+       [id_of_tip], so it cannot clash with any other id. With no type at
+       hand, fall back to the old opaque hole. *)
+    (match ty with
+     | Some ty -> T.builtin (`Undefined_atom (id, ty))
+     | None -> T.undefined_self (T.const id))
   | `Subst t -> t
   | `Var v -> T.var v
 
@@ -730,7 +763,7 @@ let convert_model ~env (m:A_res.model): (_,_) Model.t =
          let a = term_of_tip ~env empty_penv a in
          (* conversion of [b] into a proper decision tree *)
          let b =
-           term_of_tip ~env empty_penv b
+           term_of_tip ~env ?ty:(E.to_opt (T.ty ~env a)) empty_penv b
            |> extract_to_outer_function
            |> dt_of_term
          in
