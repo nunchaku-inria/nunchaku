@@ -375,6 +375,17 @@ let id_of_tip (penv:parse_env) (s:string):
   begin match StrMap.get s penv with
     | Some (`Var v) -> `Var v
     | Some (`Subst t) -> `Subst t
+    | None when s<>"" && s.[0] = '?' ->
+      (* unknown. Tested before the erase table: every occurrence must take
+         the `Undef branch (so it can become a typed hole, see term_of_id),
+         and repeated occurrences share one id *)
+      begin match id_of_string s with
+        | Some id -> `Undef id
+        | None ->
+          let id = ID.make s in
+          ID.Erase.add_name erase s id;
+          `Undef id
+      end
     | None ->
       begin match id_of_string s with
         | None when s.[0] = '$' ->
@@ -382,11 +393,6 @@ let id_of_tip (penv:parse_env) (s:string):
           let id = ID.make_full ~needs_at:false ~distinct:true s in
           ID.Erase.add_name erase s id;
           `Const id
-        | None when s.[0] = '?' ->
-          (* unknown *)
-          let id = ID.make s in
-          ID.Erase.add_name erase s id;
-          `Undef id
         | Some id -> `Const id
         | None ->
           error_parse_modelf "expected ID, got unknown `%s`" s
@@ -402,27 +408,90 @@ let rec term_of_tip ~env ?ty (penv:parse_env) (t:A.term): term =
   | A.False -> T.false_
   | A.Const c -> term_of_id ?ty penv c
   | A.App (f,l) ->
-    let f = term_of_id penv f in
-    (* expected type of each argument, from the head's type when known *)
-    let ty_args = match E.to_opt (T.ty ~env f) with
-      | Some ty_f -> let _, args, _ = T.ty_unfold ty_f in args
-      | None -> []
-    in
-    T.app f
-      (List.mapi
-         (fun i a -> term_of_tip ~env ?ty:(List.nth_opt ty_args i) penv a)
-         l)
+    (match id_of_tip penv f with
+     | `Undef id ->
+       (* unknown in head position: synthesize its arrow type from the
+          argument types and the expected result type (the same inference
+          {!ElimTypes.decode_term} performs); nothing is invented.  With any
+          component missing, keep the old opaque hole. *)
+       let l = List.map (term_of_tip ~env penv) l in
+       let head = match ty with
+         | Some ret ->
+           (match CCList.all_some (List.map (fun a -> E.to_opt (T.ty ~env a)) l) with
+            | Some tys -> T.builtin (`Undefined_atom (id, T.ty_arrow_l tys ret))
+            | None -> T.undefined_self (T.const id))
+         | None -> T.undefined_self (T.const id)
+       in
+       T.app head l
+     | _ ->
+       let f = term_of_id penv f in
+       (* expected type of each argument, from the head's type when known *)
+       let ty_args = match E.to_opt (T.ty ~env f) with
+         | Some ty_f -> let _, args, _ = T.ty_unfold ty_f in args
+         | None -> []
+       in
+       T.app f
+         (List.mapi
+            (fun i a -> term_of_tip ~env ?ty:(List.nth_opt ty_args i) penv a)
+            l))
   | A.HO_app (f,a) ->
-    let f = term_of_tip ~env penv f in
-    let ty_a = match E.to_opt (T.ty ~env f) with
-      | Some ty_f -> let _, args, _ = T.ty_unfold ty_f in List.nth_opt args 0
-      | None -> None
-    in
-    T.app f [term_of_tip ~env ?ty:ty_a penv a]
+    (match A.t_view f with
+     | A.Const c when (match id_of_tip penv c with `Undef _ -> true | _ -> false) ->
+       (* unknown head of a unary application: same synthesis as A.App *)
+       let a = term_of_tip ~env penv a in
+       let id = (match id_of_tip penv c with `Undef id -> id | _ -> assert false) in
+       let head = match ty, E.to_opt (T.ty ~env a) with
+         | Some ret, Some ty_a -> T.builtin (`Undefined_atom (id, T.ty_arrow_l [ty_a] ret))
+         | _ -> T.undefined_self (T.const id)
+       in
+       T.app head [a]
+     | _ ->
+       (* propagate the expected type into the function: converting the
+          argument first gives its type, and [ty_a -> ty] is the function's
+          expected type -- this is what carries expectations through the
+          [(fun x. ...) arg] redexes smbc emits *)
+       let a0 = term_of_tip ~env penv a in
+       let ty_f = match E.to_opt (T.ty ~env a0), ty with
+         | Some ty_a, Some ret -> Some (T.ty_arrow ty_a ret)
+         | _ -> None
+       in
+       let f = term_of_tip ~env ?ty:ty_f penv f in
+       let a = match ty_f with
+         | Some _ -> a0
+         | None ->
+           (* no expectation built; recover the argument's expected type
+              from the function's, as before *)
+           (match E.to_opt (T.ty ~env f) with
+            | Some ty_f -> (match T.ty_unfold ty_f with
+                | _, ty_a :: _, _ -> term_of_tip ~env ~ty:ty_a penv a
+                | _ -> a0)
+            | None -> a0)
+       in
+       T.app f [a])
   | A.Match (u,l) ->
-    let u = term_of_tip ~env penv u in
-    (* recover type info on [u] *)
-    let ty_u = T.ty_exn ~env u in
+    (* recover type info on the scrutinee; when it has none of its own
+       (e.g. it is an unknown), its datatype is the result type of any
+       branch constructor *)
+    let ty_of_branches () =
+      l |> CCList.find_map
+        (function
+          | A.Match_case (c_str, _, _) ->
+            (match id_of_string c_str with
+             | Some c_id ->
+               (match Env.find_ty ~env c_id with
+                | Some ty_c -> let _, _, ret = T.ty_unfold ty_c in Some ret
+                | None -> None)
+             | None -> None)
+          | A.Match_default _ -> None)
+    in
+    let u0 = term_of_tip ~env penv u in
+    let u, ty_u = match E.to_opt (T.ty ~env u0) with
+      | Some ty_u -> u0, ty_u
+      | None ->
+        (match ty_of_branches () with
+         | Some ty_u -> term_of_tip ~env ~ty:ty_u penv u, ty_u
+         | None -> u0, T.ty_exn ~env u0 (* no recovery: fail as before *))
+    in
     let tydef = match T.info_of_ty_exn ~env ty_u |> Env.def with
       | Env.Data (_, _, tydef) -> tydef
       | _ ->
@@ -494,9 +563,17 @@ let rec term_of_tip ~env ?ty (penv:parse_env) (t:A.term): term =
     let body = term_of_tip ~env ?ty:ty_body penv body in
     T.fun_ v body
   | A.Eq (a,b) ->
-    let a = term_of_tip ~env penv a in
-    let b = term_of_tip ~env ?ty:(E.to_opt (T.ty ~env a)) penv b in
-    T.No_simp.eq a b
+    (* both sides share a type: take the expectation from whichever side
+       has one (conversion is stable, ids are memoised, so re-converting
+       the other side is safe) *)
+    let a0 = term_of_tip ~env penv a in
+    (match E.to_opt (T.ty ~env a0) with
+     | Some ty_a -> T.No_simp.eq a0 (term_of_tip ~env ~ty:ty_a penv b)
+     | None ->
+       let b0 = term_of_tip ~env penv b in
+       (match E.to_opt (T.ty ~env b0) with
+        | Some ty_b -> T.No_simp.eq (term_of_tip ~env ~ty:ty_b penv a) b0
+        | None -> T.No_simp.eq a0 b0))
   | A.Imply (a,b) ->
     T.No_simp.imply (term_of_tip ~env ~ty:T.ty_prop penv a)
       (term_of_tip ~env ~ty:T.ty_prop penv b)
@@ -504,8 +581,13 @@ let rec term_of_tip ~env ?ty (penv:parse_env) (t:A.term): term =
     let l = List.map (term_of_tip ~env ~ty:T.ty_prop penv) l in
     T.No_simp.and_ l
   | A.Distinct l ->
-    List.map (term_of_tip ~env penv) l
-    |> CCList.diagonal
+    (* all elements share one type: any typed element determines it *)
+    let l0 = List.map (term_of_tip ~env penv) l in
+    let l = match CCList.find_map (fun t -> E.to_opt (T.ty ~env t)) l0 with
+      | Some ty_elt -> List.map (term_of_tip ~env ~ty:ty_elt penv) l
+      | None -> l0
+    in
+    CCList.diagonal l
     |> List.map (fun (a,b) -> T.No_simp.neq a b)
     |> T.No_simp.and_
   | A.Or l ->
@@ -730,6 +812,28 @@ let dt_of_term (t:term): (term,ty) Model.DT.t =
 module A_res = A.Smbc_res
 
 let convert_model ~env (m:A_res.model): (_,_) Model.t =
+  (* Pre-scan: declare every domain element ("$a__0") with its type.
+     Domain elements are minted by {!id_of_tip} and appear in no problem
+     statement, so without this the expected-type recovery in
+     {!term_of_tip} cannot see through them.  A pre-scan (rather than
+     relying on Ty entries preceding Val entries in smbc's output) makes
+     the invariant independent of emission order. *)
+  let env =
+    List.fold_left
+      (fun env e -> match e with
+         | A_res.Ty (ty, dom) ->
+           let ty = ty_of_tip ty in
+           List.fold_left
+             (fun env s -> match id_of_tip empty_penv s with
+                | `Const id | `Undef id ->
+                  if Env.find_ty ~env id = None
+                  then Env.declare ~attrs:[] ~env id ty
+                  else env
+                | `Subst _ | `Var _ -> env)
+             env dom
+         | A_res.Val _ -> env)
+      env m
+  in
   let find_kind (t:term): Model.symbol_kind =
     let fail() =
       Utils.warningf Utils.Warn_model_parsing_error
