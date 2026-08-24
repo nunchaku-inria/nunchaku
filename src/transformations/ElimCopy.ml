@@ -25,6 +25,7 @@ type state = {
   copy_as_uninterpreted: unit ID.Tbl.t; (* copy types mapped to uninterpreted types *)
   at_cache: AT.cache;
   mutable unsat_means_unknown: bool;
+  mutable sat_means_unknown: bool;
 }
 
 type decode_state = state
@@ -36,6 +37,7 @@ let create_state ~env = {
   abstract_types=TyTbl.create 16;
   copy_as_uninterpreted=ID.Tbl.create 16;
   unsat_means_unknown=false;
+  sat_means_unknown=false;
 }
 
 let error msg = failwith ("in " ^ name ^ ": " ^ msg)
@@ -119,6 +121,11 @@ let copy_subset_as_uninterpreted_ty state ~info ~(pred:term) c : (_, _) Stmt.t l
   (* be sure to register approximated types *)
   if incomplete then (
     TyTbl.add state.incomplete_types ty_c ();
+    (* without [ax_defined], [abstract] is unconstrained outside the
+       image of [concrete]: an operation copied through
+       [abstract o raw o concrete] can misevaluate there, so models may
+       be spurious (same hole as the quotient case below) *)
+    state.sat_means_unknown <- true;
   );
   (* declare the new (uninterpreted) type and functions *)
   let decl_c =
@@ -193,6 +200,12 @@ let copy_quotient_as_uninterpreted_ty state ~info ~tty ~(rel:term) c : (_, _) St
     (fun k -> k ID.pp id_c incomplete);
   if incomplete then (
     TyTbl.add state.incomplete_types ty_c ();
+    (* without [ax_defined] below, [concrete] is underconstrained on the
+       abstract type's image: a backend can pick an interpretation under
+       which the copied operations misevaluate, i.e. models may be
+       spurious (witnessed: smbc "refuting" [(a:int) * a >= a] with a=0
+       through Isabelle's nat-pair quotient encoding of int) *)
+    state.sat_means_unknown <- true;
   );
   TyTbl.add state.abstract_types ty_c ();
   (* declare the new (uninterpreted) type and functions *)
@@ -313,6 +326,7 @@ let elim pb =
       )
   in
   let pb' = Problem.add_unsat_means_unknown state.unsat_means_unknown pb' in
+  let pb' = Problem.add_sat_means_unknown state.sat_means_unknown pb' in
   pb', state
 
 (** {2 Decoding} *)

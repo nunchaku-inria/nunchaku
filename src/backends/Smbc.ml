@@ -746,6 +746,11 @@ let convert_res ~env ~info ~meta (res:A_res.t): (_,_) Res.t * S.shortcut = match
   | A_res.Unsat -> Res.Unsat info, S.Shortcut
   | A_res.Sat m ->
     let m = convert_model ~env m in
+    (* the encoding pipeline may know that models cannot be trusted
+       (e.g. an incomplete quotient encoding); surface that on the model *)
+    let m = {m with Model.potentially_spurious =
+                      m.Model.potentially_spurious
+                      || meta.ProblemMetadata.sat_means_unknown} in
     Res.Sat (m,info), S.Shortcut
 
 (* parse [stdout, errcode] into a proper result *)

@@ -89,6 +89,10 @@ let kodkod_bound_increment_ = ref Backends.Kodkod.default_size_increment
 let timeout_ = ref 30
 let version_ = ref false
 let dump_ : [`No | `Yes | `Into of string] ref = ref `No
+(* report UNKNOWN instead of a potentially spurious model: for consumers
+   that classify on the first output token and never see the
+   "(potentially spurious)" marker *)
+let no_spurious_models_ = ref false
 let file = ref ""
 let solvers = ref [S_cvc5; S_CVC4; S_kodkod; S_paradox; S_smbc]
 let j = ref 3
@@ -131,7 +135,9 @@ let call_with x f = Arg.Unit (fun () -> f x)
 let options =
   Arg.align @@ List.sort Stdlib.compare @@ (
     Utils.Options.get_all () @
-      [ "--pp-input", Arg.Set pp_, " print input"
+      [ "--no-spurious-models", Arg.Set no_spurious_models_,
+        " report UNKNOWN instead of a potentially spurious model"
+      ; "--pp-input", Arg.Set pp_, " print input"
       ; "--pp-all", Arg.Set pp_all_, " print every step of the pipeline"
       ; "--pp-pipeline", Arg.Set pp_pipeline_, " print full pipeline and exit"
       ; "--pp-typed", Arg.Set pp_typed_, " print input after typing"
@@ -614,6 +620,11 @@ let main_model ~output statements =
   let deadline = Utils.Time.start () +. (float_of_int !timeout_) in
   run_tasks ~j:!j ~deadline pipe statements
   >|= fun res ->
+  let res = match res with
+    | Res.Sat (m, i) when m.Model.potentially_spurious && !no_spurious_models_ ->
+      Res.Unknown [Res.U_other (i, "potentially spurious model suppressed (--no-spurious-models)")]
+    | r -> r
+  in
   match res, output with
     | _, O_sexp ->
       let s = Problem.Res.to_sexp P.to_sexp P.to_sexp res in
